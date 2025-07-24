@@ -39,3 +39,16 @@ def db_test():
         return render_template('db_test.html', records=records)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
+
+@app.route('/sessions')
+def sessions():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT name, path, city, state, country FROM session ORDER BY name;')
+        sessions = cur.fetchall()
+        cur.close()
+        conn.close()
+        return render_template('sessions.html', sessions=sessions)
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
