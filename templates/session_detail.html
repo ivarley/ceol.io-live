@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ session.name }} - Irish Music Session</title>
+</head>
+<body>
+    <h1>{{ session.name }}</h1>
+    
+    <div class="session-details">
+        {% if session.location_name and session.location_name != session.name %}
+        <p><strong>Location:</strong> {{ session.location_name }}</p>
+        {% endif %}
+        
+        <p><strong>Address:</strong> {{ session.city }}, {{ session.state }}, {{ session.country }}</p>
+        
+        {% if session.location_website %}
+        <p><strong>Website:</strong> <a href="{{ session.location_website }}" target="_blank">{{ session.location_website }}</a></p>
+        {% endif %}
+        
+        {% if session.location_phone %}
+        <p><strong>Phone:</strong> {{ session.location_phone }}</p>
+        {% endif %}
+        
+        {% if session.recurrence %}
+        <p><strong>Schedule:</strong> {{ session.recurrence }}</p>
+        {% endif %}
+        
+        {% if session.thesession_id %}
+        <p><strong>More information about this session on </strong> 
+           <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">TheSession.org</a>
+        </p>
+        {% endif %}
+
+        {% if session.comments %}
+        <div class="comments">
+            <h3>About this session:</h3>
+            <p>{{ session.comments }}</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <p><a href="/sessions">← Back to all sessions</a></p>
+</body>
+</html>

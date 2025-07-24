@@ -52,3 +52,44 @@ def sessions():
         return render_template('sessions.html', sessions=sessions)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
+
+@app.route('/sessions/<path:session_path>')
+def session_detail(session_path):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT session_id, thesession_id, name, path, location_name, location_website, 
+                   location_phone, city, state, country, comments, unlisted_address, 
+                   initiation_date, termination_date, recurrence 
+            FROM session 
+            WHERE path = %s
+        ''', (session_path,))
+        session = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if session:
+            # Convert tuple to dictionary with column names
+            session_dict = {
+                'session_id': session[0],
+                'thesession_id': session[1],
+                'name': session[2],
+                'path': session[3],
+                'location_name': session[4],
+                'location_website': session[5],
+                'location_phone': session[6],
+                'city': session[7],
+                'state': session[8],
+                'country': session[9],
+                'comments': session[10],
+                'unlisted_address': session[11],
+                'initiation_date': session[12],
+                'termination_date': session[13],
+                'recurrence': session[14]
+            }
+            return render_template('session_detail.html', session=session_dict)
+        else:
+            return f"Session not found: {session_path}", 404
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
