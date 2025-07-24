@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session</title>
+</head>
+<body>
+    <h1>{{ session_instance.session_name }}</h1>
+    <h2>{{ session_instance.date }}</h2>
+    
+    {% if session_instance.comments %}
+    <div class="session-instance-comments">
+        <h3>Notes from this session:</h3>
+        <p>{{ session_instance.comments }}</p>
+    </div>
+    {% endif %}
+    
+    <p><a href="/sessions">← Back to all sessions</a></p>
+</body>
+</html>
