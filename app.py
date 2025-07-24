@@ -66,8 +66,6 @@ def session_detail(session_path):
             WHERE path = %s
         ''', (session_path,))
         session = cur.fetchone()
-        cur.close()
-        conn.close()
         
         if session:
             # Convert tuple to dictionary with column names
@@ -88,8 +86,23 @@ def session_detail(session_path):
                 'termination_date': session[13],
                 'recurrence': session[14]
             }
-            return render_template('session_detail.html', session=session_dict)
+            
+            # Fetch past session instances in descending date order
+            cur.execute('''
+                SELECT date 
+                FROM session_instance 
+                WHERE session_id = %s AND date < CURRENT_DATE
+                ORDER BY date DESC
+            ''', (session[0],))
+            past_instances = cur.fetchall()
+            
+            cur.close()
+            conn.close()
+            
+            return render_template('session_detail.html', session=session_dict, past_instances=past_instances)
         else:
+            cur.close()
+            conn.close()
             return f"Session not found: {session_path}", 404
     except Exception as e:
         return f"Database connection failed: {str(e)}"

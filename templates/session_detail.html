@@ -41,6 +41,17 @@
         {% endif %}
     </div>
     
+    {% if past_instances %}
+    <div class="past-instances">
+        <h3>Past Sessions:</h3>
+        <ul>
+        {% for instance in past_instances %}
+            <li><a href="/sessions/{{ session.path }}/{{ instance[0] }}">{{ instance[0] }}</a></li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
     <p><a href="/sessions">← Back to all sessions</a></p>
 </body>
 </html>
