@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Test</title>
+</head>
+<body>
+    <h1>Database Connection Test</h1>
+    <p>Records from test_table:</p>
+    
+    {% if records %}
+        <table border="1">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+            </tr>
+            {% for record in records %}
+            <tr>
+                <td>{{ record[0] }}</td>
+                <td>{{ record[1] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No records found in test_table.</p>
+    {% endif %}
+    
+    <p><a href="/">Back to home</a></p>
+</body>
+</html>

@@ -105,3 +105,6 @@ venv.bak/
 
 # Claude Code configuration
 CLAUDE.md
+
+# Environment variables
+.env
