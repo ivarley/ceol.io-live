@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 import random
 import os
 import psycopg2
@@ -25,8 +25,45 @@ def hello_world():
 
 @app.route('/magic')
 def magic():
-    magic_number = random.randint(1, 8)
-    return render_template('magic.html', number=magic_number)
+    tune_type = request.args.get('type', 'reel')
+    # Convert URL parameter back to database format
+    db_tune_type = tune_type.replace('+', ' ')
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+            FROM tune t
+            JOIN session_tune st ON t.tune_id = st.tune_id
+            WHERE st.session_id = 1 AND lower(t.tune_type) = lower(%s)
+        ''', (db_tune_type,))
+        
+        all_tunes = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if len(all_tunes) >= 3:
+            # Randomly select 3 tunes
+            selected_tunes = random.sample(all_tunes, 3)
+            
+            # Sort by tunebook_count_cached to get low, middle, high
+            sorted_tunes = sorted(selected_tunes, key=lambda x: x[3])
+            
+            # Reorder as middle, low, high
+            if len(sorted_tunes) == 3:
+                ordered_tunes = [sorted_tunes[1], sorted_tunes[0], sorted_tunes[2]]  # middle, low, high
+            else:
+                ordered_tunes = sorted_tunes
+        else:
+            ordered_tunes = all_tunes
+        
+        tune_types = ['reel', 'jig', 'slip+jig', 'slide', 'polka']
+        
+        return render_template('magic.html', tunes=ordered_tunes, tune_types=tune_types, current_type=tune_type)
+    
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
 
 @app.route('/db-test')
 def db_test():

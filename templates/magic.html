@@ -3,11 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic Number</title>
+    <title>Magic Tunes</title>
 </head>
 <body>
-    <h1>Your Magic Number</h1>
-    <p>The magic number is: <strong>{{ number }}</strong></p>
-    <p><a href="/magic">Get another magic number</a></p>
+    <h1>Magic Tunes - {{ current_type.replace('+', ' ').title() }}s</h1>
+    
+    <div>
+        <h2>Tune Types:</h2>
+        {% for tune_type in tune_types %}
+            <a href="/magic?type={{ tune_type }}">{{ tune_type.replace('+', ' ').title() }}</a>
+            {% if not loop.last %} | {% endif %}
+        {% endfor %}
+    </div>
+    
+    <div>
+        <h2>Selected Tunes:</h2>
+        {% if tunes %}
+            <ol>
+            {% for tune in tunes %}
+                <li>
+                    <a href="https://thesession.org/tunes/{{ tune[0] }}" target="_blank">{{ tune[1] }}</a>
+                    (Tunebook Count: {{ tune[3] }})
+                </li>
+            {% endfor %}
+            </ol>
+        {% else %}
+            <p>No tunes found for {{ current_type.replace('+', ' ') }}.</p>
+        {% endif %}
+    </div>
+    
+    <p><a href="/magic?type={{ current_type }}">Get another set of {{ current_type.replace('+', ' ') }}s</a></p>
 </body>
 </html>
