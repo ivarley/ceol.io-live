@@ -43,7 +43,7 @@ def magic():
             ) AND st.tune_id = sit.tune_id
             WHERE st.session_id = 1 AND lower(t.tune_type) = lower(%s)
             GROUP BY t.tune_id, t.name, t.tune_type
-            HAVING COUNT(sit.session_instance_tune_id) > 0
+            HAVING COUNT(sit.session_instance_tune_id) > 1
         ''', (db_tune_type,))
         
         all_tunes = cur.fetchall()
