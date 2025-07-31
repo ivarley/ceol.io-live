@@ -33,10 +33,17 @@ def magic():
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute('''
-            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+            SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS instance_count
             FROM tune t
             JOIN session_tune st ON t.tune_id = st.tune_id
+            LEFT JOIN session_instance_tune sit ON st.session_id = (
+                SELECT si.session_id 
+                FROM session_instance si 
+                WHERE si.session_instance_id = sit.session_instance_id
+            ) AND st.tune_id = sit.tune_id
             WHERE st.session_id = 1 AND lower(t.tune_type) = lower(%s)
+            GROUP BY t.tune_id, t.name, t.tune_type
+            HAVING COUNT(sit.session_instance_tune_id) > 0
         ''', (db_tune_type,))
         
         all_tunes = cur.fetchall()
@@ -47,7 +54,7 @@ def magic():
             # Randomly select 3 tunes
             selected_tunes = random.sample(all_tunes, 3)
             
-            # Sort by tunebook_count_cached to get low, middle, high
+            # Sort by instance_count to get low, middle, high
             sorted_tunes = sorted(selected_tunes, key=lambda x: x[3])
             
             # Reorder as middle, low, high
