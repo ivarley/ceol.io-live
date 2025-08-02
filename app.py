@@ -114,23 +114,62 @@ def session_handler(full_path):
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute('''
-                SELECT s.name, si.date, si.comments
+                SELECT s.name, si.date, si.comments, si.session_instance_id
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE s.path = %s AND si.date = %s
             ''', (session_path, date))
             session_instance = cur.fetchone()
-            cur.close()
-            conn.close()
             
             if session_instance:
                 session_instance_dict = {
                     'session_name': session_instance[0],
                     'date': session_instance[1],
-                    'comments': session_instance[2]
+                    'comments': session_instance[2],
+                    'session_instance_id': session_instance[3],
+                    'session_path': session_path
                 }
-                return render_template('session_instance_detail.html', session_instance=session_instance_dict)
+                
+                # Get tunes played in this session instance
+                cur.execute('''
+                    SELECT 
+                        sit.order_number,
+                        sit.continues_set,
+                        sit.tune_id,
+                        COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                        COALESCE(sit.setting_override, st.setting_id) AS setting
+                    FROM session_instance_tune sit
+                    LEFT JOIN tune t ON sit.tune_id = t.tune_id
+                    LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
+                        SELECT si2.session_id 
+                        FROM session_instance si2 
+                        WHERE si2.session_instance_id = %s
+                    )
+                    WHERE sit.session_instance_id = %s
+                    ORDER BY sit.order_number
+                ''', (session_instance[3], session_instance[3]))
+                
+                tunes = cur.fetchall()
+                cur.close()
+                conn.close()
+                
+                # Group tunes into sets
+                sets = []
+                current_set = []
+                for tune in tunes:
+                    if not tune[1] and current_set:  # continues_set is False and we have a current set
+                        sets.append(current_set)
+                        current_set = []
+                    current_set.append(tune)
+                if current_set:
+                    sets.append(current_set)
+                
+                return render_template('session_instance_detail.html', 
+                                     session_instance=session_instance_dict, 
+                                     tune_sets=sets)
             else:
+                cur.close()
+                conn.close()
                 return f"Session instance not found: {session_path} on {date}", 404
         except Exception as e:
             return f"Database connection failed: {str(e)}"
