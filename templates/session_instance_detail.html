@@ -9,6 +9,16 @@
     <h1>{{ session_instance.session_name }}</h1>
     <h2>{{ session_instance.date }}</h2>
     
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div style="padding: 10px; margin: 10px 0; border: 1px solid #ccc; background-color: #f9f9f9;">
+                {% for message in messages %}
+                    <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
     {% if session_instance.comments %}
     <div class="session-instance-comments">
         <h3>Notes from this session:</h3>
@@ -37,6 +47,27 @@
             </li>
         {% endfor %}
         </ul>
+        
+        <div style="margin-top: 20px;">
+            <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
+                <label for="tune_id">Add tune by ID:</label>
+                <input type="number" id="tune_id" name="tune_id" placeholder="Enter tune ID" required style="margin: 0 10px;">
+                <button type="submit">Add</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div>
+        <h3>Tunes Played:</h3>
+        <p>No tunes recorded for this session yet.</p>
+        
+        <div style="margin-top: 20px;">
+            <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
+                <label for="tune_id">Add tune by ID:</label>
+                <input type="number" id="tune_id" name="tune_id" placeholder="Enter tune ID" required style="margin: 0 10px;">
+                <button type="submit">Add</button>
+            </form>
+        </div>
     </div>
     {% endif %}
     

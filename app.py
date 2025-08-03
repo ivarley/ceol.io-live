@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for, flash
 import random
 import os
 import psycopg2
@@ -8,6 +8,8 @@ import re
 load_dotenv()
 
 app = Flask(__name__)
+# Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
+app.secret_key = os.environ.get('FLASK_SESSION_SECRET_KEY', 'dev-secret-key-change-in-production')
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -173,6 +175,51 @@ def session_handler(full_path):
                 return f"Session instance not found: {session_path} on {date}", 404
         except Exception as e:
             return f"Database connection failed: {str(e)}"
+
+@app.route('/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
+def add_tune_to_session_instance(session_path, date):
+    tune_id = request.form.get('tune_id')
+    if not tune_id or not tune_id.isdigit():
+        flash('Please enter a valid tune ID')
+        return redirect(f'/sessions/{session_path}/{date}')
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if tune exists
+        cur.execute('SELECT tune_id FROM tune WHERE tune_id = %s', (int(tune_id),))
+        if not cur.fetchone():
+            flash(f'Tune ID {tune_id} not found in database')
+            cur.close()
+            conn.close()
+            return redirect(f'/sessions/{session_path}/{date}')
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            flash('Session not found')
+            cur.close()
+            conn.close()
+            return redirect(f'/sessions/{session_path}/{date}')
+        
+        session_id = session_result[0]
+        
+        # Call the stored procedure to insert the tune
+        cur.execute('SELECT insert_session_instance_tune(%s, %s, %s, %s, %s, %s)', 
+                   (session_id, date, int(tune_id), None, None, True))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash('Tune added successfully!')
+        return redirect(f'/sessions/{session_path}/{date}')
+    
+    except Exception as e:
+        flash(f'Failed to add tune: {str(e)}')
+        return redirect(f'/sessions/{session_path}/{date}')
     
     else:
         # This is a session detail request
