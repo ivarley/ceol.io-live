@@ -48,6 +48,7 @@
         {% endfor %}
         </ul>
         
+        {% if edit_mode %}
         <div style="margin-top: 20px;">
             <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
                 <label for="tune_id">Add tune by ID:</label>
@@ -55,12 +56,14 @@
                 <button type="submit">Add</button>
             </form>
         </div>
+        {% endif %}
     </div>
     {% else %}
     <div>
         <h3>Tunes Played:</h3>
         <p>No tunes recorded for this session yet.</p>
         
+        {% if edit_mode %}
         <div style="margin-top: 20px;">
             <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
                 <label for="tune_id">Add tune by ID:</label>
@@ -68,8 +71,17 @@
                 <button type="submit">Add</button>
             </form>
         </div>
+        {% endif %}
     </div>
     {% endif %}
+    
+    <div style="margin-top: 30px;">
+        {% if edit_mode %}
+            <a href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">View</a>
+        {% else %}
+            <a href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}?edit=true" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Edit</a>
+        {% endif %}
+    </div>
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
 </body>

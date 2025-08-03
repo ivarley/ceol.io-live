@@ -166,9 +166,13 @@ def session_handler(full_path):
                 if current_set:
                     sets.append(current_set)
                 
+                # Check if we're in edit mode
+                edit_mode = request.args.get('edit', '').lower() == 'true'
+                
                 return render_template('session_instance_detail.html', 
                                      session_instance=session_instance_dict, 
-                                     tune_sets=sets)
+                                     tune_sets=sets,
+                                     edit_mode=edit_mode)
             else:
                 cur.close()
                 conn.close()
@@ -215,11 +219,11 @@ def add_tune_to_session_instance(session_path, date):
         conn.close()
         
         flash('Tune added successfully!')
-        return redirect(f'/sessions/{session_path}/{date}')
+        return redirect(f'/sessions/{session_path}/{date}?edit=true')
     
     except Exception as e:
         flash(f'Failed to add tune: {str(e)}')
-        return redirect(f'/sessions/{session_path}/{date}')
+        return redirect(f'/sessions/{session_path}/{date}?edit=true')
     
     else:
         # This is a session detail request
