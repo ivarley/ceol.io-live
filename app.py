@@ -224,6 +224,68 @@ def add_tune_to_session_instance(session_path, date):
     except Exception as e:
         flash(f'Failed to add tune: {str(e)}')
         return redirect(f'/sessions/{session_path}/{date}?edit=true')
+
+@app.route('/sessions/<path:session_path>/<date>/delete_tune/<int:tune_id>/<int:order_number>', methods=['POST'])
+def delete_tune_from_session_instance(session_path, date, tune_id, order_number):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get the tune name and check if this tune starts a set
+        cur.execute('''
+            SELECT 
+                COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                sit.continues_set,
+                sit.session_instance_id
+            FROM session_instance_tune sit
+            LEFT JOIN tune t ON sit.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
+                SELECT si.session_id 
+                FROM session_instance si 
+                WHERE si.session_instance_id = sit.session_instance_id
+            )
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s AND sit.tune_id = %s AND sit.order_number = %s
+        ''', (session_path, date, tune_id, order_number))
+        
+        tune_info = cur.fetchone()
+        if not tune_info:
+            flash('Tune not found')
+            cur.close()
+            conn.close()
+            return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        
+        tune_name, continues_set, session_instance_id = tune_info
+        
+        # If this tune starts a set (continues_set = False) and there's a next tune,
+        # update the next tune to start the set
+        if not continues_set:
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET continues_set = FALSE 
+                WHERE session_instance_id = %s 
+                AND order_number = %s
+            ''', (session_instance_id, order_number + 1))
+        
+        # Delete the tune
+        cur.execute('''
+            DELETE FROM session_instance_tune 
+            WHERE session_instance_id = %s 
+            AND tune_id = %s 
+            AND order_number = %s
+        ''', (session_instance_id, tune_id, order_number))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash(f'{tune_name} deleted from position {order_number} in the set.')
+        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+    
+    except Exception as e:
+        flash(f'Failed to delete tune: {str(e)}')
+        return redirect(f'/sessions/{session_path}/{date}?edit=true')
     
     else:
         # This is a session detail request
