@@ -56,8 +56,8 @@
         {% if edit_mode %}
         <div style="margin-top: 20px;">
             <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
-                <label for="tune_id">Add tune by ID:</label>
-                <input type="number" id="tune_id" name="tune_id" placeholder="Enter tune ID" required style="margin: 0 10px;">
+                <label for="tune_id">Add tune(s) by ID:</label>
+                <input type="text" id="tune_id" name="tune_id" placeholder="Enter tune ID or comma-separated IDs (e.g., 123 or 123,456,789)" required style="margin: 0 10px; width: 300px;">
                 <button type="submit">Add</button>
             </form>
         </div>
@@ -71,8 +71,8 @@
         {% if edit_mode %}
         <div style="margin-top: 20px;">
             <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
-                <label for="tune_id">Add tune by ID:</label>
-                <input type="number" id="tune_id" name="tune_id" placeholder="Enter tune ID" required style="margin: 0 10px;">
+                <label for="tune_id">Add tune(s) by ID:</label>
+                <input type="text" id="tune_id" name="tune_id" placeholder="Enter tune ID or comma-separated IDs (e.g., 123 or 123,456,789)" required style="margin: 0 10px; width: 300px;">
                 <button type="submit">Add</button>
             </form>
         </div>

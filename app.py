@@ -179,25 +179,93 @@ def session_handler(full_path):
                 return f"Session instance not found: {session_path} on {date}", 404
         except Exception as e:
             return f"Database connection failed: {str(e)}"
+    
+    else:
+        # This is a session detail request
+        session_path = full_path
+        
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT session_id, thesession_id, name, path, location_name, location_website, 
+                       location_phone, city, state, country, comments, unlisted_address, 
+                       initiation_date, termination_date, recurrence 
+                FROM session 
+                WHERE path = %s
+            ''', (session_path,))
+            session = cur.fetchone()
+            
+            if session:
+                # Convert tuple to dictionary with column names
+                session_dict = {
+                    'session_id': session[0],
+                    'thesession_id': session[1],
+                    'name': session[2],
+                    'path': session[3],
+                    'location_name': session[4],
+                    'location_website': session[5],
+                    'location_phone': session[6],
+                    'city': session[7],
+                    'state': session[8],
+                    'country': session[9],
+                    'comments': session[10],
+                    'unlisted_address': session[11],
+                    'initiation_date': session[12],
+                    'termination_date': session[13],
+                    'recurrence': session[14]
+                }
+                
+                # Fetch past session instances in descending date order
+                cur.execute('''
+                    SELECT date 
+                    FROM session_instance 
+                    WHERE session_id = %s AND date < CURRENT_DATE
+                    ORDER BY date DESC
+                ''', (session[0],))
+                past_instances = cur.fetchall()
+                
+                cur.close()
+                conn.close()
+                
+                return render_template('session_detail.html', session=session_dict, past_instances=past_instances)
+            else:
+                cur.close()
+                conn.close()
+                return f"Session not found: {session_path}", 404
+        except Exception as e:
+            return f"Database connection failed: {str(e)}"
 
 @app.route('/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
 def add_tune_to_session_instance(session_path, date):
-    tune_id = request.form.get('tune_id')
-    if not tune_id or not tune_id.isdigit():
-        flash('Please enter a valid tune ID')
-        return redirect(f'/sessions/{session_path}/{date}')
+    tune_ids_input = request.form.get('tune_id', '').strip()
+    if not tune_ids_input:
+        flash('Please enter tune ID(s)')
+        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+    
+    # Parse comma-separated tune IDs
+    tune_ids_str = [t.strip() for t in tune_ids_input.split(',')]
+    tune_ids = []
+    
+    # Validate all tune IDs
+    for tune_id_str in tune_ids_str:
+        if not tune_id_str.isdigit():
+            flash(f'Invalid tune ID: "{tune_id_str}". Please enter numeric IDs only.')
+            return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        tune_ids.append(int(tune_id_str))
     
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Check if tune exists
-        cur.execute('SELECT tune_id FROM tune WHERE tune_id = %s', (int(tune_id),))
-        if not cur.fetchone():
-            flash(f'Tune ID {tune_id} not found in database')
-            cur.close()
-            conn.close()
-            return redirect(f'/sessions/{session_path}/{date}')
+        # Check if all tunes exist
+        for tune_id in tune_ids:
+            cur.execute('SELECT tune_id FROM tune WHERE tune_id = %s', (tune_id,))
+            if not cur.fetchone():
+                flash(f'Tune ID {tune_id} not found in database')
+                cur.close()
+                conn.close()
+                return redirect(f'/sessions/{session_path}/{date}?edit=true')
         
         # Get session_id for this session_path
         cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
@@ -206,23 +274,30 @@ def add_tune_to_session_instance(session_path, date):
             flash('Session not found')
             cur.close()
             conn.close()
-            return redirect(f'/sessions/{session_path}/{date}')
+            return redirect(f'/sessions/{session_path}/{date}?edit=true')
         
         session_id = session_result[0]
         
-        # Call the stored procedure to insert the tune
-        cur.execute('SELECT insert_session_instance_tune(%s, %s, %s, %s, %s, %s)', 
-                   (session_id, date, int(tune_id), None, None, True))
+        # Add all tunes in the set
+        for i, tune_id in enumerate(tune_ids):
+            # First tune starts a new set (True), subsequent tunes continue the set (False)
+            starts_set = (i == 0)
+            
+            cur.execute('SELECT insert_session_instance_tune(%s, %s, %s, %s, %s, %s)', 
+                       (session_id, date, tune_id, None, None, starts_set))
         
         conn.commit()
         cur.close()
         conn.close()
         
-        flash('Tune added successfully!')
+        if len(tune_ids) == 1:
+            flash('Tune added successfully!')
+        else:
+            flash(f'Set of {len(tune_ids)} tunes added successfully!')
         return redirect(f'/sessions/{session_path}/{date}?edit=true')
     
     except Exception as e:
-        flash(f'Failed to add tune: {str(e)}')
+        flash(f'Failed to add tune(s): {str(e)}')
         return redirect(f'/sessions/{session_path}/{date}?edit=true')
 
 @app.route('/sessions/<path:session_path>/<date>/delete_tune/<int:tune_id>/<int:order_number>', methods=['POST'])
@@ -286,59 +361,3 @@ def delete_tune_from_session_instance(session_path, date, tune_id, order_number)
     except Exception as e:
         flash(f'Failed to delete tune: {str(e)}')
         return redirect(f'/sessions/{session_path}/{date}?edit=true')
-    
-    else:
-        # This is a session detail request
-        session_path = full_path
-        
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute('''
-                SELECT session_id, thesession_id, name, path, location_name, location_website, 
-                       location_phone, city, state, country, comments, unlisted_address, 
-                       initiation_date, termination_date, recurrence 
-                FROM session 
-                WHERE path = %s
-            ''', (session_path,))
-            session = cur.fetchone()
-            
-            if session:
-                # Convert tuple to dictionary with column names
-                session_dict = {
-                    'session_id': session[0],
-                    'thesession_id': session[1],
-                    'name': session[2],
-                    'path': session[3],
-                    'location_name': session[4],
-                    'location_website': session[5],
-                    'location_phone': session[6],
-                    'city': session[7],
-                    'state': session[8],
-                    'country': session[9],
-                    'comments': session[10],
-                    'unlisted_address': session[11],
-                    'initiation_date': session[12],
-                    'termination_date': session[13],
-                    'recurrence': session[14]
-                }
-                
-                # Fetch past session instances in descending date order
-                cur.execute('''
-                    SELECT date 
-                    FROM session_instance 
-                    WHERE session_id = %s AND date < CURRENT_DATE
-                    ORDER BY date DESC
-                ''', (session[0],))
-                past_instances = cur.fetchall()
-                
-                cur.close()
-                conn.close()
-                
-                return render_template('session_detail.html', session=session_dict, past_instances=past_instances)
-            else:
-                cur.close()
-                conn.close()
-                return f"Session not found: {session_path}", 404
-        except Exception as e:
-            return f"Database connection failed: {str(e)}"
