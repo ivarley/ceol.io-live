@@ -216,7 +216,7 @@ def session_handler(full_path):
                 cur.execute('''
                     SELECT date 
                     FROM session_instance 
-                    WHERE session_id = %s AND date < CURRENT_DATE
+                    WHERE session_id = %s
                     ORDER BY date DESC
                 ''', (session[0],))
                 past_instances = cur.fetchall()
