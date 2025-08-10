@@ -25,6 +25,24 @@
             opacity: 0.6;
             pointer-events: none;
         }
+        .loading-ellipsis {
+            display: inline-block;
+            color: #666;
+        }
+        .loading-ellipsis:after {
+            content: '...';
+            animation: ellipsis 1.5s infinite;
+            width: 1em;
+            text-align: left;
+            display: inline-block;
+        }
+        @keyframes ellipsis {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+            100% { content: ''; }
+        }
     </style>
 
     <!-- Meta -->
@@ -91,7 +109,7 @@
     <div id="tunes-container">
         <h3>Tunes Played:</h3>
         <div id="tune-sets">
-            <!-- Content will be dynamically loaded -->
+            <p>Loading tunes<span class="loading-ellipsis"></span></p>
         </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
