@@ -4,20 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session</title>
+    <style>
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .message.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .hidden {
+            display: none;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
     <h1>{{ session_instance.session_name }}</h1>
     <h2>{{ session_instance.date }}</h2>
     
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div style="padding: 10px; margin: 10px 0; border: 1px solid #ccc; background-color: #f9f9f9;">
-                {% for message in messages %}
-                    <p>{{ message }}</p>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+    <div id="message-container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="message success">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
     
     {% if session_instance.comments %}
     <div class="session-instance-comments">
@@ -26,68 +52,211 @@
     </div>
     {% endif %}
     
-    {% if tune_sets %}
-    <div>
+    <div id="tunes-container">
         <h3>Tunes Played:</h3>
-        <ul>
-        {% for tune_set in tune_sets %}
-            <li>
-            {% for tune in tune_set -%}
-                {%- if tune[2] -%} {# tune_id exists - create link #}
-                    {%- set link = "https://thesession.org/tunes/" + tune[2]|string -%}
-                    {%- if tune[4] -%} {# setting exists #}
-                        {%- set link = link + "#setting" + tune[4]|string -%}
-                    {%- endif -%}
-                    <a href="{{ link }}" target="_blank">{{ tune[3] }}</a>
-                {%- else -%} {# no tune_id - just show name #}
-                    {{ tune[3] }}
-                {%- endif -%}
-                {%- if edit_mode and tune[2] -%}
-                    <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/delete_tune/{{ tune[2] }}/{{ tune[0] }}" style="display: inline; margin-left: 5px;">
-                        <button type="submit" style="background: none; border: none; color: #dc3545; font-size: 0.8em; cursor: pointer; text-decoration: underline;" onclick="return confirm('Delete {{ tune[3] }}?')">[x]</button>
-                    </form>
-                {%- endif -%}
-                {%- if not loop.last %}, {% endif -%}
-            {%- endfor %}
-            </li>
-        {% endfor %}
-        </ul>
+        <div id="tune-sets">
+            <!-- Content will be dynamically loaded -->
+        </div>
         
-        {% if edit_mode %}
-        <div style="margin-top: 20px;">
-            <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
-                <label for="tune_id">Add tune(s) by ID:</label>
-                <input type="text" id="tune_id" name="tune_id" placeholder="Enter tune ID or comma-separated IDs (e.g., 123 or 123,456,789)" required style="margin: 0 10px; width: 300px;">
+        <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
+            <form id="tune-form">
+                <label for="tune_id_input">Add tune(s) by ID:</label>
+                <input type="text" id="tune_id_input" placeholder="Enter tune ID or comma-separated IDs (e.g., 123 or 123,456,789)" required style="margin: 0 10px; width: 300px;">
                 <button type="submit">Add</button>
             </form>
         </div>
-        {% endif %}
     </div>
-    {% else %}
-    <div>
-        <h3>Tunes Played:</h3>
-        <p>No tunes recorded for this session yet.</p>
-        
-        {% if edit_mode %}
-        <div style="margin-top: 20px;">
-            <form method="POST" action="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/add_tune">
-                <label for="tune_id">Add tune(s) by ID:</label>
-                <input type="text" id="tune_id" name="tune_id" placeholder="Enter tune ID or comma-separated IDs (e.g., 123 or 123,456,789)" required style="margin: 0 10px; width: 300px;">
-                <button type="submit">Add</button>
-            </form>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
     
     <div style="margin-top: 30px;">
-        {% if edit_mode %}
-            <a href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">View</a>
-        {% else %}
-            <a href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}?edit=true" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Edit</a>
-        {% endif %}
+        <button id="toggle-edit-btn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
     </div>
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
+
+    <script>
+        const sessionPath = '{{ session_instance.session_path }}';
+        const sessionDate = '{{ session_instance.date }}';
+        let editMode = false;
+        
+        // Load tunes on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTunes();
+            updateUI();
+        });
+        
+        // Toggle edit mode
+        document.getElementById('toggle-edit-btn').addEventListener('click', function() {
+            editMode = !editMode;
+            updateUI();
+        });
+        
+        // Handle add tune form submission
+        document.getElementById('tune-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const tuneId = document.getElementById('tune_id_input').value.trim();
+            if (tuneId) {
+                addTune(tuneId);
+            }
+        });
+        
+        function updateUI() {
+            const toggleBtn = document.getElementById('toggle-edit-btn');
+            const addForm = document.getElementById('add-tune-form');
+            
+            if (editMode) {
+                toggleBtn.textContent = 'View';
+                toggleBtn.style.backgroundColor = '#007bff';
+                addForm.classList.remove('hidden');
+            } else {
+                toggleBtn.textContent = 'Edit';
+                toggleBtn.style.backgroundColor = '#28a745';
+                addForm.classList.add('hidden');
+            }
+            
+            loadTunes(); // Reload tunes to show/hide delete buttons
+        }
+        
+        function showMessage(message, type = 'success') {
+            const container = document.getElementById('message-container');
+            container.innerHTML = `<div class="message ${type}"><p>${message}</p></div>`;
+            
+            // Auto-hide message after 5 seconds
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+        
+        function loadTunes() {
+            const container = document.getElementById('tune-sets');
+            container.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/tunes`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderTunes(data.tune_sets);
+                    } else {
+                        showMessage(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showMessage('Failed to load tunes', 'error');
+                    console.error('Error:', error);
+                })
+                .finally(() => {
+                    container.classList.remove('loading');
+                });
+        }
+        
+        function renderTunes(tuneSets) {
+            const container = document.getElementById('tune-sets');
+            
+            if (!tuneSets || tuneSets.length === 0) {
+                container.innerHTML = '<p>No tunes recorded for this session yet.</p>';
+                return;
+            }
+            
+            const ul = document.createElement('ul');
+            
+            tuneSets.forEach(tuneSet => {
+                const li = document.createElement('li');
+                
+                tuneSet.forEach((tune, index) => {
+                    const [orderNumber, continuesSet, tuneId, tuneName, setting] = tune;
+                    
+                    if (tuneId) {
+                        let link = `https://thesession.org/tunes/${tuneId}`;
+                        if (setting) {
+                            link += `#setting${setting}`;
+                        }
+                        
+                        const a = document.createElement('a');
+                        a.href = link;
+                        a.target = '_blank';
+                        a.textContent = tuneName;
+                        li.appendChild(a);
+                    } else {
+                        li.appendChild(document.createTextNode(tuneName));
+                    }
+                    
+                    if (editMode && tuneId) {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = '[x]';
+                        deleteBtn.style.cssText = 'background: none; border: none; color: #dc3545; font-size: 0.8em; cursor: pointer; text-decoration: underline; margin-left: 5px;';
+                        deleteBtn.onclick = function() {
+                            if (confirm(`Delete ${tuneName}?`)) {
+                                deleteTune(tuneId, orderNumber);
+                            }
+                        };
+                        li.appendChild(deleteBtn);
+                    }
+                    
+                    if (index < tuneSet.length - 1) {
+                        li.appendChild(document.createTextNode(', '));
+                    }
+                });
+                
+                ul.appendChild(li);
+            });
+            
+            container.innerHTML = '';
+            container.appendChild(ul);
+        }
+        
+        function addTune(tuneId) {
+            const form = document.getElementById('tune-form');
+            form.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/add_tune`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tune_id: tuneId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    document.getElementById('tune_id_input').value = '';
+                    loadTunes();
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to add tune', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                form.classList.remove('loading');
+            });
+        }
+        
+        function deleteTune(tuneId, orderNumber) {
+            const container = document.getElementById('tune-sets');
+            container.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete_tune/${tuneId}/${orderNumber}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    loadTunes();
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to delete tune', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                container.classList.remove('loading');
+            });
+        }
+    </script>
 </body>
 </html>

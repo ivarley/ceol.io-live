@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import random
 import os
 import psycopg2
@@ -166,13 +166,9 @@ def session_handler(full_path):
                 if current_set:
                     sets.append(current_set)
                 
-                # Check if we're in edit mode
-                edit_mode = request.args.get('edit', '').lower() == 'true'
-                
                 return render_template('session_instance_detail.html', 
                                      session_instance=session_instance_dict, 
-                                     tune_sets=sets,
-                                     edit_mode=edit_mode)
+                                     tune_sets=sets)
             else:
                 cur.close()
                 conn.close()
@@ -236,12 +232,12 @@ def session_handler(full_path):
         except Exception as e:
             return f"Database connection failed: {str(e)}"
 
-@app.route('/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
-def add_tune_to_session_instance(session_path, date):
-    tune_ids_input = request.form.get('tune_id', '').strip()
+
+@app.route('/api/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
+def add_tune_ajax(session_path, date):
+    tune_ids_input = request.json.get('tune_id', '').strip()
     if not tune_ids_input:
-        flash('Please enter tune ID(s)')
-        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        return jsonify({'success': False, 'message': 'Please enter tune ID(s)'})
     
     # Parse comma-separated tune IDs
     tune_ids_str = [t.strip() for t in tune_ids_input.split(',')]
@@ -250,8 +246,7 @@ def add_tune_to_session_instance(session_path, date):
     # Validate all tune IDs
     for tune_id_str in tune_ids_str:
         if not tune_id_str.isdigit():
-            flash(f'Invalid tune ID: "{tune_id_str}". Please enter numeric IDs only.')
-            return redirect(f'/sessions/{session_path}/{date}?edit=true')
+            return jsonify({'success': False, 'message': f'Invalid tune ID: "{tune_id_str}". Please enter numeric IDs only.'})
         tune_ids.append(int(tune_id_str))
     
     try:
@@ -262,19 +257,17 @@ def add_tune_to_session_instance(session_path, date):
         for tune_id in tune_ids:
             cur.execute('SELECT tune_id FROM tune WHERE tune_id = %s', (tune_id,))
             if not cur.fetchone():
-                flash(f'Tune ID {tune_id} not found in database')
                 cur.close()
                 conn.close()
-                return redirect(f'/sessions/{session_path}/{date}?edit=true')
+                return jsonify({'success': False, 'message': f'Tune ID {tune_id} not found in database'})
         
         # Get session_id for this session_path
         cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            flash('Session not found')
             cur.close()
             conn.close()
-            return redirect(f'/sessions/{session_path}/{date}?edit=true')
+            return jsonify({'success': False, 'message': 'Session not found'})
         
         session_id = session_result[0]
         
@@ -290,18 +283,14 @@ def add_tune_to_session_instance(session_path, date):
         cur.close()
         conn.close()
         
-        if len(tune_ids) == 1:
-            flash('Tune added successfully!')
-        else:
-            flash(f'Set of {len(tune_ids)} tunes added successfully!')
-        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        message = 'Tune added successfully!' if len(tune_ids) == 1 else f'Set of {len(tune_ids)} tunes added successfully!'
+        return jsonify({'success': True, 'message': message})
     
     except Exception as e:
-        flash(f'Failed to add tune(s): {str(e)}')
-        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        return jsonify({'success': False, 'message': f'Failed to add tune(s): {str(e)}'})
 
-@app.route('/sessions/<path:session_path>/<date>/delete_tune/<int:tune_id>/<int:order_number>', methods=['POST'])
-def delete_tune_from_session_instance(session_path, date, tune_id, order_number):
+@app.route('/api/sessions/<path:session_path>/<date>/delete_tune/<int:tune_id>/<int:order_number>', methods=['DELETE'])
+def delete_tune_ajax(session_path, date, tune_id, order_number):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -326,10 +315,9 @@ def delete_tune_from_session_instance(session_path, date, tune_id, order_number)
         
         tune_info = cur.fetchone()
         if not tune_info:
-            flash('Tune not found')
             cur.close()
             conn.close()
-            return redirect(f'/sessions/{session_path}/{date}?edit=true')
+            return jsonify({'success': False, 'message': 'Tune not found'})
         
         tune_name, continues_set, session_instance_id = tune_info
         
@@ -355,9 +343,68 @@ def delete_tune_from_session_instance(session_path, date, tune_id, order_number)
         cur.close()
         conn.close()
         
-        flash(f'{tune_name} deleted from position {order_number} in the set.')
-        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        return jsonify({'success': True, 'message': f'{tune_name} deleted from position {order_number} in the set.'})
     
     except Exception as e:
-        flash(f'Failed to delete tune: {str(e)}')
-        return redirect(f'/sessions/{session_path}/{date}?edit=true')
+        return jsonify({'success': False, 'message': f'Failed to delete tune: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/<date>/tunes')
+def get_session_tunes_ajax(session_path, date):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT si.session_instance_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        session_instance = cur.fetchone()
+        
+        if not session_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance[0]
+        
+        # Get tunes played in this session instance
+        cur.execute('''
+            SELECT 
+                sit.order_number,
+                sit.continues_set,
+                sit.tune_id,
+                COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                COALESCE(sit.setting_override, st.setting_id) AS setting
+            FROM session_instance_tune sit
+            LEFT JOIN tune t ON sit.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
+                SELECT si2.session_id 
+                FROM session_instance si2 
+                WHERE si2.session_instance_id = %s
+            )
+            WHERE sit.session_instance_id = %s
+            ORDER BY sit.order_number
+        ''', (session_instance_id, session_instance_id))
+        
+        tunes = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Group tunes into sets
+        sets = []
+        current_set = []
+        for tune in tunes:
+            if not tune[1] and current_set:  # continues_set is False and we have a current set
+                sets.append(current_set)
+                current_set = []
+            current_set.append(tune)
+        if current_set:
+            sets.append(current_set)
+        
+        return jsonify({'success': True, 'tune_sets': sets})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to get tunes: {str(e)}'})
