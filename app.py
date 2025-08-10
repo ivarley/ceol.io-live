@@ -221,10 +221,22 @@ def session_handler(full_path):
                 ''', (session[0],))
                 past_instances = cur.fetchall()
                 
+                # Group past instances by year
+                instances_by_year = {}
+                for instance in past_instances:
+                    date = instance[0]
+                    year = date.year
+                    if year not in instances_by_year:
+                        instances_by_year[year] = []
+                    instances_by_year[year].append(date)
+                
+                # Sort years in descending order
+                sorted_years = sorted(instances_by_year.keys(), reverse=True)
+                
                 cur.close()
                 conn.close()
                 
-                return render_template('session_detail.html', session=session_dict, past_instances=past_instances)
+                return render_template('session_detail.html', session=session_dict, instances_by_year=instances_by_year, sorted_years=sorted_years)
             else:
                 cur.close()
                 conn.close()

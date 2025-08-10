@@ -77,14 +77,27 @@
         {% endif %}
     </div>
     
-    {% if past_instances %}
+    {% if instances_by_year %}
     <div class="past-instances">
-        <h3>Past Sessions:</h3>
-        <ul>
-        {% for instance in past_instances %}
-            <li><a href="/sessions/{{ session.path }}/{{ instance[0] }}">{{ instance[0] }}</a></li>
-        {% endfor %}
-        </ul>
+        <h2>Session Logs:</h2>
+        {% if sorted_years|length > 1 %}
+            {% for year in sorted_years %}
+            <h3>{{ year }}</h3>
+            <ul>
+            {% for date in instances_by_year[year] %}
+                <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+            {% endfor %}
+            </ul>
+            {% endfor %}
+        {% else %}
+            <ul>
+            {% for year in sorted_years %}
+                {% for date in instances_by_year[year] %}
+                <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                {% endfor %}
+            {% endfor %}
+            </ul>
+        {% endif %}
     </div>
     {% endif %}
     
