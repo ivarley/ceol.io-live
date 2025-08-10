@@ -233,13 +233,13 @@
                         li.appendChild(document.createTextNode(tuneName));
                     }
                     
-                    if (editMode && tuneId) {
+                    if (editMode) {
                         const deleteBtn = document.createElement('button');
                         deleteBtn.textContent = '[x]';
                         deleteBtn.style.cssText = 'background: none; border: none; color: #dc3545; font-size: 0.8em; cursor: pointer; text-decoration: underline; margin-left: 5px;';
                         deleteBtn.onclick = function() {
                             if (confirm(`Delete ${tuneName}?`)) {
-                                deleteTune(tuneId, orderNumber);
+                                deleteTune(orderNumber);
                             }
                         };
                         li.appendChild(deleteBtn);
@@ -287,11 +287,11 @@
             });
         }
         
-        function deleteTune(tuneId, orderNumber) {
+        function deleteTune(orderNumber) {
             const container = document.getElementById('tune-sets');
             container.classList.add('loading');
             
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete_tune/${tuneId}/${orderNumber}`, {
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete_tune_by_order/${orderNumber}`, {
                 method: 'DELETE'
             })
             .then(response => response.json())

@@ -301,8 +301,8 @@ def add_tune_ajax(session_path, date):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to add tune(s): {str(e)}'})
 
-@app.route('/api/sessions/<path:session_path>/<date>/delete_tune/<int:tune_id>/<int:order_number>', methods=['DELETE'])
-def delete_tune_ajax(session_path, date, tune_id, order_number):
+@app.route('/api/sessions/<path:session_path>/<date>/delete_tune_by_order/<int:order_number>', methods=['DELETE'])
+def delete_tune_by_order_ajax(session_path, date, order_number):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -312,7 +312,8 @@ def delete_tune_ajax(session_path, date, tune_id, order_number):
             SELECT 
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
                 sit.continues_set,
-                sit.session_instance_id
+                sit.session_instance_id,
+                sit.tune_id
             FROM session_instance_tune sit
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
             LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -322,8 +323,8 @@ def delete_tune_ajax(session_path, date, tune_id, order_number):
             )
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
             JOIN session s ON si.session_id = s.session_id
-            WHERE s.path = %s AND si.date = %s AND sit.tune_id = %s AND sit.order_number = %s
-        ''', (session_path, date, tune_id, order_number))
+            WHERE s.path = %s AND si.date = %s AND sit.order_number = %s
+        ''', (session_path, date, order_number))
         
         tune_info = cur.fetchone()
         if not tune_info:
@@ -331,7 +332,7 @@ def delete_tune_ajax(session_path, date, tune_id, order_number):
             conn.close()
             return jsonify({'success': False, 'message': 'Tune not found'})
         
-        tune_name, continues_set, session_instance_id = tune_info
+        tune_name, continues_set, session_instance_id, tune_id = tune_info
         
         # If this tune starts a set (continues_set = False) and there's a next tune,
         # update the next tune to start the set
@@ -343,13 +344,12 @@ def delete_tune_ajax(session_path, date, tune_id, order_number):
                 AND order_number = %s
             ''', (session_instance_id, order_number + 1))
         
-        # Delete the tune
+        # Delete the tune by order number (works for both tune_id and name-based records)
         cur.execute('''
             DELETE FROM session_instance_tune 
             WHERE session_instance_id = %s 
-            AND tune_id = %s 
             AND order_number = %s
-        ''', (session_instance_id, tune_id, order_number))
+        ''', (session_instance_id, order_number))
         
         conn.commit()
         cur.close()
