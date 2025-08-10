@@ -247,31 +247,19 @@ def session_handler(full_path):
 
 @app.route('/api/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
 def add_tune_ajax(session_path, date):
-    tune_ids_input = request.json.get('tune_id', '').strip()
-    if not tune_ids_input:
-        return jsonify({'success': False, 'message': 'Please enter tune ID(s)'})
+    tune_names_input = request.json.get('tune_name', '').strip()
+    if not tune_names_input:
+        return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
     
-    # Parse comma-separated tune IDs
-    tune_ids_str = [t.strip() for t in tune_ids_input.split(',')]
-    tune_ids = []
+    # Parse comma-separated tune names
+    tune_names = [name.strip() for name in tune_names_input.split(',') if name.strip()]
     
-    # Validate all tune IDs
-    for tune_id_str in tune_ids_str:
-        if not tune_id_str.isdigit():
-            return jsonify({'success': False, 'message': f'Invalid tune ID: "{tune_id_str}". Please enter numeric IDs only.'})
-        tune_ids.append(int(tune_id_str))
+    if not tune_names:
+        return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
     
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Check if all tunes exist
-        for tune_id in tune_ids:
-            cur.execute('SELECT tune_id FROM tune WHERE tune_id = %s', (tune_id,))
-            if not cur.fetchone():
-                cur.close()
-                conn.close()
-                return jsonify({'success': False, 'message': f'Tune ID {tune_id} not found in database'})
         
         # Get session_id for this session_path
         cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
@@ -283,19 +271,63 @@ def add_tune_ajax(session_path, date):
         
         session_id = session_result[0]
         
+        # Process each tune name to determine tune_id or use as name-only
+        tune_data = []  # List of (tune_id, name) tuples
+        
+        for tune_name in tune_names:
+            tune_id = None
+            final_name = tune_name
+            
+            # First, search session_tune table for alias match (case insensitive)
+            cur.execute('''
+                SELECT tune_id 
+                FROM session_tune 
+                WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+            ''', (session_id, tune_name))
+            
+            session_tune_matches = cur.fetchall()
+            
+            if len(session_tune_matches) > 1:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'})
+            elif len(session_tune_matches) == 1:
+                tune_id = session_tune_matches[0][0]
+            else:
+                # No alias match, search tune table by name (case insensitive)
+                cur.execute('''
+                    SELECT tune_id, name 
+                    FROM tune 
+                    WHERE LOWER(name) = LOWER(%s)
+                ''', (tune_name,))
+                
+                tune_matches = cur.fetchall()
+                
+                if len(tune_matches) > 1:
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'})
+                elif len(tune_matches) == 1:
+                    tune_id = tune_matches[0][0]
+                    final_name = tune_matches[0][1]  # Use the actual tune name from database
+                # If no matches found, tune_id stays None and we'll save as name-only
+            
+            tune_data.append((tune_id, final_name))
+        
         # Add all tunes in the set
-        for i, tune_id in enumerate(tune_ids):
-            # First tune starts a new set (True), subsequent tunes continue the set (False)
+        for i, (tune_id, name) in enumerate(tune_data):
+            # First tune starts a new set (continues_set = False), subsequent tunes continue the set (continues_set = True)
             starts_set = (i == 0)
             
+            # Use the existing stored procedure for both tune_id and name-based records
             cur.execute('SELECT insert_session_instance_tune(%s, %s, %s, %s, %s, %s)', 
-                       (session_id, date, tune_id, None, None, starts_set))
+                       (session_id, date, tune_id, None, name if tune_id is None else None, starts_set))
         
         conn.commit()
         cur.close()
         conn.close()
         
-        message = 'Tune added successfully!' if len(tune_ids) == 1 else f'Set of {len(tune_ids)} tunes added successfully!'
+        message = 'Tune added successfully!' if len(tune_data) == 1 else f'Set of {len(tune_data)} tunes added successfully!'
         return jsonify({'success': True, 'message': message})
     
     except Exception as e:
