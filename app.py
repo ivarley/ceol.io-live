@@ -233,10 +233,33 @@ def session_handler(full_path):
                 # Sort years in descending order
                 sorted_years = sorted(instances_by_year.keys(), reverse=True)
                 
+                # Get top 40 most popular tunes for this session
+                cur.execute('''
+                    WITH tune_counts AS (
+                        SELECT 
+                            COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                            sit.tune_id,
+                            COUNT(*) AS play_count,
+                            COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+                        FROM session_instance_tune sit
+                        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                        LEFT JOIN tune t ON sit.tune_id = t.tune_id
+                        LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
+                        WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
+                        GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
+                    )
+                    SELECT tune_name, tune_id, play_count, tunebook_count
+                    FROM tune_counts
+                    ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+                    LIMIT 40
+                ''', (session[0], session[0]))
+                
+                popular_tunes = cur.fetchall()
+                
                 cur.close()
                 conn.close()
                 
-                return render_template('session_detail.html', session=session_dict, instances_by_year=instances_by_year, sorted_years=sorted_years)
+                return render_template('session_detail.html', session=session_dict, instances_by_year=instances_by_year, sorted_years=sorted_years, popular_tunes=popular_tunes)
             else:
                 cur.close()
                 conn.close()

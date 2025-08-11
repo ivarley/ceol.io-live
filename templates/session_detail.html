@@ -77,6 +77,44 @@
         {% endif %}
     </div>
     
+    {% if popular_tunes %}
+    <div class="popular-tunes">
+        <h2>Most Popular Tunes ({{ popular_tunes|length }})</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div style="flex: 1; min-width: 300px;">
+                <ol>
+                {% for tune in popular_tunes[:20] %}
+                    <li>
+                        {% if tune[1] %}
+                            <a href="https://thesession.org/tunes/{{ tune[1] }}" target="_blank">{{ tune[0] }}</a>
+                        {% else %}
+                            {{ tune[0] }}
+                        {% endif %}
+                        ({{ tune[2] }} time{{ 's' if tune[2] != 1 else '' }})
+                    </li>
+                {% endfor %}
+                </ol>
+            </div>
+            {% if popular_tunes|length > 20 %}
+            <div style="flex: 1; min-width: 300px;">
+                <ol start="21">
+                {% for tune in popular_tunes[20:40] %}
+                    <li>
+                        {% if tune[1] %}
+                            <a href="https://thesession.org/tunes/{{ tune[1] }}" target="_blank">{{ tune[0] }}</a>
+                        {% else %}
+                            {{ tune[0] }}
+                        {% endif %}
+                        ({{ tune[2] }} time{{ 's' if tune[2] != 1 else '' }})
+                    </li>
+                {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
     {% if instances_by_year %}
     <div class="past-instances">
         <h2>Session Logs:</h2>
