@@ -62,3 +62,36 @@ INSERT INTO session (
     '3/1/2025', -- termination_date
     'bi-weekly on Sundays from 4-8pm' -- recurrence
 );
+
+
+INSERT INTO session (
+    thesession_id,
+    name,
+    path,
+    location_name,
+    location_website,
+    location_phone,
+    city,
+    state,
+    country,
+    comments,
+    unlisted_address,
+    initiation_date,
+    termination_date,
+    recurrence
+) VALUES (
+    7219, -- thesession_id
+    'O''Donnell''s', -- name
+    'lockhart/odonnells', -- path
+    'O''Donnell''s Irish Pub', -- location_name
+    'https://odonnellstexas.com/', -- location_website
+    '(512) 668-4166', -- location_phone
+    'Lockhart', -- city
+    'Texas', -- state
+    'USA', -- country
+    '', -- comments
+    FALSE, -- unlisted_address
+    '3/25/2025', -- initiation_date
+    NULL, -- termination_date
+    'monthly on Sundays from 4-8pm' -- recurrence
+);
