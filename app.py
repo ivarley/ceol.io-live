@@ -11,6 +11,13 @@ app = Flask(__name__)
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
 app.secret_key = os.environ.get('FLASK_SESSION_SECRET_KEY', 'dev-secret-key-change-in-production')
 
+def normalize_apostrophes(text):
+    """Normalize smart apostrophes and quotes to standard ASCII characters."""
+    if not text:
+        return text
+    # Replace various smart apostrophes and quotes with standard apostrophe
+    return text.replace('’', "'").replace('‘', "'").replace('“', '"').replace('”', '"')
+
 def get_db_connection():
     conn = psycopg2.connect(
         host=os.environ.get('PGHOST'),
@@ -274,8 +281,8 @@ def add_tune_ajax(session_path, date):
     if not tune_names_input:
         return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
     
-    # Parse comma-separated tune names
-    tune_names = [name.strip() for name in tune_names_input.split(',') if name.strip()]
+    # Parse comma-separated tune names and normalize apostrophes
+    tune_names = [normalize_apostrophes(name.strip()) for name in tune_names_input.split(',') if name.strip()]
     
     if not tune_names:
         return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
