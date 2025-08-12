@@ -150,6 +150,54 @@ def sessions():
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
+@app.route('/sessions/<path:session_path>/tune')
+def session_tunes(session_path):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session info
+        cur.execute('''
+            SELECT session_id, name FROM session WHERE path = %s
+        ''', (session_path,))
+        session_info = cur.fetchone()
+        
+        if not session_info:
+            cur.close()
+            conn.close()
+            return f"Session not found: {session_path}", 404
+            
+        session_id, session_name = session_info
+        
+        # Get session tunes with play counts and popularity data
+        cur.execute('''
+            SELECT 
+                st.tune_id,
+                COALESCE(st.alias, t.name) AS tune_name,
+                t.tune_type,
+                COUNT(sit.session_instance_tune_id) AS play_count,
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+            FROM session_tune st
+            LEFT JOIN tune t ON st.tune_id = t.tune_id
+            LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id
+            LEFT JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE st.session_id = %s AND (si.session_id = %s OR si.session_id IS NULL)
+            GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached
+            ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+        ''', (session_id, session_id))
+        
+        tunes = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return render_template('session_tunes.html', 
+                             session_path=session_path,
+                             session_name=session_name, 
+                             tunes=tunes)
+                             
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
+
 @app.route('/sessions/<path:full_path>')
 def session_handler(full_path):
     # Check if the last part of the path looks like a date (yyyy-mm-dd)

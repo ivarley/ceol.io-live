@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head>
+    <title>{{ session_name }} - Tunes - Irish Music Session Details</title>
+    <style>
+        .sort-links {
+            margin: 20px 0;
+        }
+        .sort-links a {
+            margin-right: 15px;
+            padding: 8px 12px;
+            background-color: #f8f9fa;
+            color: #007bff;
+            text-decoration: none;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            cursor: pointer;
+        }
+        .sort-links a:hover {
+            background-color: #e9ecef;
+        }
+        .sort-links a.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .tunes-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .tunes-table th, .tunes-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .tunes-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .tunes-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .tune-link {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .tune-link:hover {
+            text-decoration: underline;
+        }
+        .numeric {
+            text-align: right;
+        }
+    </style>
+
+    <!-- Meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="description" content="Session Tunes">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/ceol.io.1.ico') }}" >
+    
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700&display=swap" rel="stylesheet">
+    
+    <!-- Theme CSS -->  
+    <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+</head> 
+
+<header class="header fixed-top">	    
+    <div class="branding docs-branding">
+        <div class="container-fluid position-relative py-2">
+            <div class="docs-logo-wrapper">
+                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('hello_world') }}"><img width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
+            </div><!--//docs-logo-wrapper-->
+            <div class="docs-top-utilities d-flex justify-content-end align-items-center">
+                <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
+                    <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
+                </ul><!--//social-list-->
+            </div><!--//docs-top-utilities-->
+        </div><!--//container-->
+    </div><!--//branding-->
+</header><!--//header-->
+
+<body class="docs-page">    
+    <div class="docs-wrapper">
+	    <div class="docs-content">
+        <div class="landing-page" style="display: block;">
+
+    <h1>{{ session_name }} - Tunes</h1>
+
+    <p><a href="/sessions/{{ session_path }}">← Back to {{ session_name }}</a></p>
+
+    <div class="sort-links">
+        <a href="#" id="sort-name" onclick="sortTable('name')">Sort by Name</a>
+        <a href="#" id="sort-session-popularity" onclick="sortTable('session_popularity')" class="active">Sort by Popularity At This Session</a>
+        <a href="#" id="sort-thesession-popularity" onclick="sortTable('thesession_popularity')">Sort by TheSession.org Tunebook Count</a>
+    </div>
+    
+    <table class="tunes-table" id="tunes-table">
+        <thead>
+            <tr>
+                <th>Tune Name</th>
+                <th>Type</th>
+                <th class="numeric">Times Played</th>
+                <th class="numeric">TheSession.org Tunebook Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tune in tunes %}
+            <tr data-name="{{ tune[1] or '' }}" data-session-popularity="{{ tune[3] }}" data-thesession-popularity="{{ tune[4] }}">
+                <td>
+                    {% if tune[0] %}
+                        <a href="https://thesession.org/tunes/{{ tune[0] }}" target="_blank" class="tune-link">{{ tune[1] or 'Unknown' }}</a>
+                    {% else %}
+                        {{ tune[1] or 'Unknown' }}
+                    {% endif %}
+                </td>
+                <td>{{ tune[2] or 'Unknown' }}</td>
+                <td class="numeric">{{ tune[3] }}</td>
+                <td class="numeric">{{ tune[4] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+
+    <script>
+        let currentSort = 'session_popularity';
+        let sortOrder = 'desc'; // desc for session_popularity default
+        
+        function sortTable(sortBy) {
+            // Toggle sort order if clicking the same sort button
+            if (currentSort === sortBy) {
+                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                // Set default sort order for each column
+                if (sortBy === 'name') {
+                    sortOrder = 'asc';
+                } else {
+                    sortOrder = 'desc';
+                }
+            }
+            
+            currentSort = sortBy;
+            
+            // Update active button
+            document.querySelectorAll('.sort-links a').forEach(link => link.classList.remove('active'));
+            document.getElementById(`sort-${sortBy.replace('_', '-')}`).classList.add('active');
+            
+            // Get table body and rows
+            const tbody = document.querySelector('#tunes-table tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                
+                if (sortBy === 'name') {
+                    aVal = a.dataset.name.toLowerCase();
+                    bVal = b.dataset.name.toLowerCase();
+                    return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                } else if (sortBy === 'session_popularity') {
+                    aVal = parseInt(a.dataset.sessionPopularity);
+                    bVal = parseInt(b.dataset.sessionPopularity);
+                } else if (sortBy === 'thesession_popularity') {
+                    aVal = parseInt(a.dataset.thesessionPopularity);
+                    bVal = parseInt(b.dataset.thesessionPopularity);
+                }
+                
+                if (sortBy !== 'name') {
+                    return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+            });
+            
+            // Clear table body and re-append sorted rows
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    </script>
+
+<!-- end landing page -->
+</div>
+
+</div>
+</div>
+
+</body>
+</html>
