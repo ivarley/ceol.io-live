@@ -30,7 +30,50 @@ def get_db_connection():
 
 @app.route('/')
 def hello_world():
-    return 'Hello, World!!'
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get active sessions (null or future termination dates)
+        cur.execute('''
+            SELECT session_id, name, path, city, state, country
+            FROM session 
+            WHERE termination_date IS NULL OR termination_date > CURRENT_DATE
+            ORDER BY name
+        ''')
+        active_sessions = cur.fetchall()
+        
+        # For each active session, get the 3 most recent session instances
+        sessions_with_instances = []
+        for session in active_sessions:
+            session_id, name, path, city, state, country = session
+            
+            cur.execute('''
+                SELECT date
+                FROM session_instance
+                WHERE session_id = %s
+                ORDER BY date DESC
+                LIMIT 3
+            ''', (session_id,))
+            recent_instances = cur.fetchall()
+            
+            sessions_with_instances.append({
+                'session_id': session_id,
+                'name': name,
+                'path': path,
+                'city': city,
+                'state': state,
+                'country': country,
+                'recent_instances': [instance[0] for instance in recent_instances]
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return render_template('home.html', active_sessions=sessions_with_instances)
+    
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
 
 @app.route('/magic')
 def magic():

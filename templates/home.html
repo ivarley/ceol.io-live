@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head>
+    <title>Irish Music Sessions</title>
+    
+    <!-- Meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="description" content="Index">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/ceol.io.1.ico') }}" >
+    <!-- <link rel="shortcut icon" href="favicon.ico"> -->
+    
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700&display=swap" rel="stylesheet">
+    
+    <!-- Theme CSS -->  
+    <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+</head> 
+
+<header class="header fixed-top">	    
+    <div class="branding docs-branding">
+        <div class="container-fluid position-relative py-2">
+            <div class="docs-logo-wrapper">
+                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('hello_world') }}"><img width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
+            </div><!--//docs-logo-wrapper-->
+            <div class="docs-top-utilities d-flex justify-content-end align-items-center">
+
+                <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
+                    <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
+                </ul><!--//social-list-->
+                
+            </div><!--//docs-top-utilities-->
+        </div><!--//container-->
+    </div><!--//branding-->
+</header><!--//header-->
+
+<body class="docs-page">    
+    <div class="docs-wrapper">
+	    <div class="docs-content">
+        <div class="landing-page" style="display: block;">
+<p>Welcome to <strong>ceol.io</strong>, an online repository of traditional Irish session setlists and recordings.</p>
+<p>If you're new to traditional Irish music, there's a brief guide <a href="guide.html">here</a>.</p>
+<p>For now, we just have session logs from one session (the <a href="sessions/austin/mueller/">BD Riley's Mueller</a> session, in Austin TX). But we hope someday to expand to more!</p>
+<h2 id="subcategories">Latest Session Logs</h2>
+
+{% if active_sessions %}
+    {% for session in active_sessions %}
+        <div style="margin-bottom: 20px;">
+            <h3><a href="/sessions/{{ session.path }}">{{ session.name }}</a></h3>
+            {% if session.city or session.state or session.country %}
+                <p style="margin: 5px 0; color: #666; font-size: 0.9em;">
+                    {% if session.city %}{{ session.city }}{% endif %}{% if session.city and (session.state or session.country) %}, {% endif %}{% if session.state %}{{ session.state }}{% endif %}{% if session.state and session.country %}, {% endif %}{% if session.country %}{{ session.country }}{% endif %}
+                </p>
+            {% endif %}
+            {% if session.recent_instances %}
+                <ul style="margin: 5px 0 0 20px;">
+                    {% for instance_date in session.recent_instances %}
+                        <li><a href="/sessions/{{ session.path }}/{{ instance_date }}">{{ instance_date }}</a></li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p style="margin: 5px 0; color: #999; font-style: italic;">No session instances recorded yet.</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+{% else %}
+    <p>No active sessions found.</p>
+{% endif %}
+    
+<!-- end landing page -->
+</div>
+
+</div>
+</div>
+
+</body>
+</html>
