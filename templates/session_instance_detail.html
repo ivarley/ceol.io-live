@@ -4,9 +4,17 @@
     <title>{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session Details</title>
     <style>
         .message {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
+            position: fixed;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 6px;
+            z-index: 1100;
+            min-width: 300px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: top 0.3s ease-in-out;
         }
         .message.success {
             background-color: #d4edda;
@@ -17,6 +25,9 @@
             background-color: #f8d7da;
             border: 1px solid #f5c6cb;
             color: #721c24;
+        }
+        .message.show {
+            top: 20px;
         }
         .hidden {
             display: none;
@@ -172,12 +183,28 @@
         
         function showMessage(message, type = 'success') {
             const container = document.getElementById('message-container');
-            container.innerHTML = `<div class="message ${type}"><p>${message}</p></div>`;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
             
-            // Auto-hide message after 5 seconds
+            container.innerHTML = '';
+            container.appendChild(messageDiv);
+            
+            // Trigger animation by adding show class after a brief delay
             setTimeout(() => {
-                container.innerHTML = '';
-            }, 5000);
+                messageDiv.classList.add('show');
+            }, 10);
+            
+            // Auto-hide message after 3 seconds
+            setTimeout(() => {
+                messageDiv.classList.remove('show');
+                // Remove from DOM after animation completes
+                setTimeout(() => {
+                    if (container.contains(messageDiv)) {
+                        container.removeChild(messageDiv);
+                    }
+                }, 300);
+            }, 3000);
         }
         
         function loadTunes() {
