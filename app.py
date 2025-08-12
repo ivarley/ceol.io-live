@@ -324,12 +324,14 @@ def add_tune_ajax(session_path, date):
             elif len(session_tune_matches) == 1:
                 tune_id = session_tune_matches[0][0]
             else:
-                # No alias match, search tune table by name (case insensitive)
+                # No alias match, search tune table by name with flexible "The " matching
                 cur.execute('''
                     SELECT tune_id, name 
                     FROM tune 
-                    WHERE LOWER(name) = LOWER(%s)
-                ''', (tune_name,))
+                    WHERE (LOWER(name) = LOWER(%s) 
+                    OR LOWER(name) = LOWER('The ' || %s) 
+                    OR LOWER('The ' || name) = LOWER(%s))
+                ''', (tune_name, tune_name, tune_name))
                 
                 tune_matches = cur.fetchall()
                 
