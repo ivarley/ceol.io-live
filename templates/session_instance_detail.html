@@ -658,15 +658,15 @@
             currentLinkingOrder = null;
         }
         
-        function extractTuneId(input) {
-            // Extract tune ID from URL or return the input if it's already a number
-            const urlPattern = /thesession\.org\/tunes\/(\d+)/;
-            const match = input.match(urlPattern);
+        function validateTuneInput(input) {
+            // Validate input format - either a number or a thesession.org URL
+            const urlPattern = /thesession\.org\/tunes\/\d+(?:#setting\d+)?/;
+            const numberPattern = /^\d+$/;
             
-            if (match) {
-                return match[1];
-            } else if (/^\d+$/.test(input.trim())) {
-                return input.trim();
+            const trimmed = input.trim();
+            
+            if (urlPattern.test(trimmed) || numberPattern.test(trimmed)) {
+                return trimmed;
             }
             
             return null;
@@ -674,21 +674,21 @@
         
         function linkTune() {
             const input = document.getElementById('tune-link-input');
-            const tuneId = extractTuneId(input.value);
+            const validatedInput = validateTuneInput(input.value);
             
-            if (!tuneId) {
+            if (!validatedInput) {
                 showMessage('Please enter a valid tune ID or thesession.org URL', 'error');
                 return;
             }
             
-            // Call API to link the tune
+            // Call API to link the tune (pass full input for backend parsing)
             fetch(`/api/sessions/${sessionPath}/${sessionDate}/link_tune`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    tune_id: tuneId,
+                    tune_id: validatedInput,
                     tune_name: currentLinkingTune,
                     order_number: currentLinkingOrder
                 })

@@ -609,12 +609,28 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
 
 @app.route('/api/sessions/<path:session_path>/<date>/link_tune', methods=['POST'])
 def link_tune_ajax(session_path, date):
-    tune_id = request.json.get('tune_id')
+    tune_input = request.json.get('tune_id', '').strip()
     tune_name = request.json.get('tune_name', '').strip()
     order_number = request.json.get('order_number')
     
-    if not tune_id or not tune_name or order_number is None:
+    if not tune_input or not tune_name or order_number is None:
         return jsonify({'success': False, 'message': 'Missing required parameters'})
+    
+    # Parse tune ID and setting ID from input
+    # Check if it's a URL with setting
+    url_pattern = r'.*thesession\.org\/tunes\/(\d+)(?:#setting(\d+))?'
+    url_match = re.search(url_pattern, tune_input)
+    
+    if url_match:
+        tune_id = url_match.group(1)
+        setting_id = int(url_match.group(2)) if url_match.group(2) else None
+    elif re.match(r'^\d+$', tune_input):
+        # Just a tune ID number
+        tune_id = tune_input
+        setting_id = None
+    else:
+        return jsonify({'success': False, 'message': 'Invalid tune ID or URL format'})
+    
     
     try:
         conn = get_db_connection()
@@ -652,24 +668,26 @@ def link_tune_ajax(session_path, date):
         
         if session_tune_exists:
             # Tune already in session_tune, just update session_instance_tune
+            # Use setting_id as setting_override if provided
             cur.execute('''
                 UPDATE session_instance_tune 
-                SET tune_id = %s, name = %s
+                SET tune_id = %s, name = %s, setting_override = %s
                 WHERE session_instance_id = %s AND order_number = %s
-            ''', (tune_id, tune_name, session_instance_id, order_number))
+            ''', (tune_id, tune_name, setting_id, session_instance_id, order_number))
             
-            message = f'Linked "{tune_name}" to existing tune in session'
+            setting_msg = f' with setting #{setting_id}' if setting_id else ''
+            message = f'Linked "{tune_name}" to existing tune in session{setting_msg}'
         else:
             # Check if tune exists in tune table
             cur.execute('SELECT name FROM tune WHERE tune_id = %s', (tune_id,))
             tune_exists = cur.fetchone()
             
             if tune_exists:
-                # Add to session_tune with alias
+                # Add to session_tune with alias and setting_id
                 cur.execute('''
-                    INSERT INTO session_tune (session_id, tune_id, alias)
-                    VALUES (%s, %s, %s)
-                ''', (session_id, tune_id, tune_name))
+                    INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
+                    VALUES (%s, %s, %s, %s)
+                ''', (session_id, tune_id, tune_name, setting_id))
                 
                 # Update session_instance_tune
                 cur.execute('''
@@ -678,7 +696,8 @@ def link_tune_ajax(session_path, date):
                     WHERE session_instance_id = %s AND order_number = %s
                 ''', (tune_id, session_instance_id, order_number))
                 
-                message = f'Added "{tune_name}" to session and linked'
+                setting_msg = f' with setting #{setting_id}' if setting_id else ''
+                message = f'Added "{tune_name}" to session and linked{setting_msg}'
             else:
                 cur.close()
                 conn.close()
