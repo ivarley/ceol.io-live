@@ -54,6 +54,34 @@
             75% { content: '...'; }
             100% { content: ''; }
         }
+        .tune-context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
+            display: none;
+            min-width: 100px;
+        }
+        .tune-context-menu a {
+            display: block;
+            padding: 6px 12px;
+            text-decoration: none;
+            color: #333;
+        }
+        .tune-context-menu a:hover {
+            background-color: #f5f5f5;
+            color: #007bff;
+        }
+        .tune-name-wrapper {
+            position: relative;
+            display: inline;
+        }
     </style>
 
     <!-- Meta -->
@@ -245,6 +273,10 @@
                 tuneSet.forEach((tune, index) => {
                     const [orderNumber, continuesSet, tuneId, tuneName, setting] = tune;
                     
+                    // Create wrapper for tune name with context menu
+                    const wrapper = document.createElement('span');
+                    wrapper.className = 'tune-name-wrapper';
+                    
                     if (tuneId) {
                         let link = `https://thesession.org/tunes/${tuneId}`;
                         if (setting) {
@@ -255,10 +287,15 @@
                         a.href = link;
                         a.target = '_blank';
                         a.textContent = tuneName;
-                        li.appendChild(a);
+                        wrapper.appendChild(a);
                     } else {
-                        li.appendChild(document.createTextNode(tuneName));
+                        wrapper.appendChild(document.createTextNode(tuneName));
                     }
+                    
+                    // Add context menu functionality
+                    setupTuneContextMenu(wrapper, tuneName, tuneId, setting);
+                    
+                    li.appendChild(wrapper);
                     
                     if (editMode) {
                         const deleteBtn = document.createElement('button');
@@ -338,6 +375,120 @@
                 container.classList.remove('loading');
             });
         }
+        
+        function setupTuneContextMenu(wrapper, tuneName, tuneId, setting) {
+            let hoverTimeout;
+            let touchStartTime;
+            let contextMenu;
+            
+            // Create context menu element
+            function createContextMenu() {
+                if (contextMenu) {
+                    contextMenu.remove();
+                }
+                contextMenu = document.createElement('div');
+                contextMenu.className = 'tune-context-menu';
+                
+                // Only show options if we have a tuneId (linked tune)
+                if (tuneId) {
+                    // Dots option - link to thesession.org
+                    const dotsLink = document.createElement('a');
+                    dotsLink.href = `https://thesession.org/tunes/${tuneId}${setting ? '#setting' + setting : ''}`;
+                    dotsLink.target = '_blank';
+                    dotsLink.textContent = 'Dots';
+                    contextMenu.appendChild(dotsLink);
+                    
+                    // Info option - link to our tune info page
+                    const infoLink = document.createElement('a');
+                    infoLink.href = `${sessionPath}/tunes/${tuneId}`;
+                    infoLink.textContent = 'Info';
+                    contextMenu.appendChild(infoLink);
+                } else {
+                    // For tunes without tuneId, just show the name
+                    const nameDiv = document.createElement('div');
+                    nameDiv.style.cssText = 'padding: 6px 12px; color: #666; font-style: italic;';
+                    nameDiv.textContent = 'No tune data available';
+                    contextMenu.appendChild(nameDiv);
+                }
+                
+                wrapper.appendChild(contextMenu);
+                return contextMenu;
+            }
+            
+            // Show context menu
+            function showContextMenu(event) {
+                const menu = createContextMenu();
+                
+                // Position menu below the tune name
+                const rect = wrapper.getBoundingClientRect();
+                menu.style.top = '100%';
+                menu.style.left = '0';
+                menu.style.display = 'block';
+                
+                // Hide menu after 3 seconds
+                setTimeout(() => {
+                    if (menu && menu.parentNode) {
+                        menu.style.display = 'none';
+                    }
+                }, 3000);
+            }
+            
+            // Hide context menu
+            function hideContextMenu() {
+                if (contextMenu) {
+                    contextMenu.style.display = 'none';
+                }
+            }
+            
+            // Desktop: Hover for 3 seconds
+            wrapper.addEventListener('mouseenter', () => {
+                hoverTimeout = setTimeout(() => {
+                    showContextMenu();
+                }, 3000);
+            });
+            
+            wrapper.addEventListener('mouseleave', () => {
+                clearTimeout(hoverTimeout);
+                setTimeout(hideContextMenu, 100); // Small delay before hiding
+            });
+            
+            // Desktop: Right click
+            wrapper.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                showContextMenu(event);
+            });
+            
+            // Mobile: Long press (touch for 1 second)
+            wrapper.addEventListener('touchstart', (event) => {
+                touchStartTime = Date.now();
+                hoverTimeout = setTimeout(() => {
+                    showContextMenu(event);
+                }, 1000);
+            });
+            
+            wrapper.addEventListener('touchend', () => {
+                clearTimeout(hoverTimeout);
+                const touchDuration = Date.now() - touchStartTime;
+                if (touchDuration < 1000) {
+                    // Short tap, don't show menu, let normal behavior continue
+                    hideContextMenu();
+                }
+            });
+            
+            wrapper.addEventListener('touchmove', () => {
+                clearTimeout(hoverTimeout);
+                hideContextMenu();
+            });
+        }
+        
+        // Hide context menus when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.tune-name-wrapper')) {
+                document.querySelectorAll('.tune-context-menu').forEach(menu => {
+                    menu.style.display = 'none';
+                });
+            }
+        });
     </script>
 
 <!-- end landing page -->
