@@ -494,8 +494,11 @@
         
         function setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber) {
             let hoverTimeout;
+            let hideTimeout;
+            let autoHideTimeout;
             let touchStartTime;
             let contextMenu;
+            let isMouseOverArea = false; // Track if mouse is over wrapper or menu
             
             // Create context menu element
             function createContextMenu() {
@@ -609,8 +612,11 @@
                 menu.style.left = '0';
                 menu.style.display = 'block';
                 
-                // Hide menu after 3 seconds
-                setTimeout(() => {
+                // Add mouse event listeners to the menu
+                addContextMenuListeners();
+                
+                // Hide menu after 3 seconds (but can be cancelled by mouse hover)
+                autoHideTimeout = setTimeout(() => {
                     if (menu && menu.parentNode) {
                         menu.style.display = 'none';
                     }
@@ -624,17 +630,48 @@
                 }
             }
             
+            // Start hide timer - only hides if mouse is still away when timer expires
+            function startHideTimer() {
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(() => {
+                    // Only hide if mouse is not over the area
+                    if (!isMouseOverArea) {
+                        hideContextMenu();
+                    }
+                }, 500);
+            }
+            
             // Desktop: Hover for 3 seconds
             wrapper.addEventListener('mouseenter', () => {
+                isMouseOverArea = true;
+                clearTimeout(hideTimeout); // Cancel any pending hide
+                clearTimeout(autoHideTimeout); // Cancel auto-hide when hovering
                 hoverTimeout = setTimeout(() => {
                     showContextMenu();
                 }, 3000);
             });
             
             wrapper.addEventListener('mouseleave', () => {
+                isMouseOverArea = false;
                 clearTimeout(hoverTimeout);
-                setTimeout(hideContextMenu, 100); // Small delay before hiding
+                startHideTimer(); // Start the conditional hide timer
             });
+            
+            // Add mouse events to context menu itself to prevent hiding
+            function addContextMenuListeners() {
+                if (contextMenu) {
+                    contextMenu.addEventListener('mouseenter', () => {
+                        isMouseOverArea = true;
+                        clearTimeout(hideTimeout); // Cancel hide when entering menu
+                        clearTimeout(autoHideTimeout); // Cancel auto-hide when entering menu
+                    });
+                    
+                    contextMenu.addEventListener('mouseleave', () => {
+                        isMouseOverArea = false;
+                        startHideTimer(); // Start the conditional hide timer
+                    });
+                }
+            }
             
             // Desktop: Right click - also suppresses mobile context menu
             wrapper.addEventListener('contextmenu', (event) => {
