@@ -61,18 +61,22 @@
             border-radius: 4px;
             padding: 4px 0;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            z-index: 1000;
+            z-index: 1500;
             font-size: 14px;
             color: #333;
             white-space: nowrap;
             display: none;
             min-width: 100px;
+            pointer-events: auto;
+            touch-action: manipulation;
         }
         .tune-context-menu a {
             display: block;
             padding: 6px 12px;
             text-decoration: none;
             color: #333;
+            cursor: pointer;
+            user-select: none;
         }
         .tune-context-menu a:hover {
             background-color: #f5f5f5;
@@ -81,6 +85,72 @@
         .tune-name-wrapper {
             position: relative;
             display: inline;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            margin-bottom: 16px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .modal-body input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .modal-footer {
+            text-align: right;
+        }
+        .modal-footer button {
+            margin-left: 8px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .modal-footer .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .modal-footer .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .modal-footer button:hover {
+            opacity: 0.9;
         }
     </style>
 
@@ -138,6 +208,24 @@
         {% endwith %}
     </div>
     
+    <!-- Link Tune Modal -->
+    <div id="link-tune-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Link Tune</h3>
+            </div>
+            <div class="modal-body">
+                <p>Enter a URL or tune ID from thesession.org to link for this name:</p>
+                <label for="tune-link-input">Tune ID or URL:</label>
+                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="link-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="link-confirm-btn">Link</button>
+            </div>
+        </div>
+    </div>
+    
     {% if session_instance.comments %}
     <div class="session-instance-comments">
         <h3>Notes from this session:</h3>
@@ -152,9 +240,9 @@
         </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
-            <form id="tune-form">
+            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                 <label for="tune_name_input">Add tune(s) by name:</label>
-                <input type="text" id="tune_name_input" placeholder="Enter tune name or comma-separated names (e.g., Cooley's Reel or Cooley's, The Tarbolton)" required style="margin: 0 10px; width: 400px;">
+                <input type="text" id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 8px;">
                 <button type="submit">Add</button>
             </form>
         </div>
@@ -381,48 +469,77 @@
                 if (tuneId) {
                     // Dots option - link to thesession.org
                     const dotsLink = document.createElement('a');
-                    dotsLink.href = `https://thesession.org/tunes/${tuneId}${setting ? '#setting' + setting : ''}`;
-                    dotsLink.target = '_blank';
                     dotsLink.textContent = 'Dots';
+                    const dotsHandler = function(event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        window.open(`https://thesession.org/tunes/${tuneId}${setting ? '#setting' + setting : ''}`, '_blank');
+                        contextMenu.style.display = 'none';
+                    };
+                    dotsLink.addEventListener('click', dotsHandler);
+                    dotsLink.addEventListener('touchend', dotsHandler);
                     contextMenu.appendChild(dotsLink);
                     
                     // Info option - link to our tune info page
                     const infoLink = document.createElement('a');
-                    infoLink.href = `/sessions/${sessionPath}/tunes/${tuneId}`;
                     infoLink.textContent = 'Info';
+                    const infoHandler = function(event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        window.location.href = `/sessions/${sessionPath}/tunes/${tuneId}`;
+                    };
+                    infoLink.addEventListener('click', infoHandler);
+                    infoLink.addEventListener('touchend', infoHandler);
                     contextMenu.appendChild(infoLink);
                     
                     // Delete option - only in edit mode
                     if (editMode) {
                         const deleteLink = document.createElement('a');
-                        deleteLink.href = '#';
                         deleteLink.textContent = 'Delete';
                         deleteLink.style.color = '#dc3545';
-                        deleteLink.onclick = function(event) {
+                        const deleteHandler = function(event) {
                             event.preventDefault();
+                            event.stopPropagation();
                             if (confirm(`Delete ${tuneName}?`)) {
                                 deleteTune(orderNumber);
                             }
-                            // Hide the menu after action
                             contextMenu.style.display = 'none';
                         };
+                        deleteLink.addEventListener('click', deleteHandler);
+                        deleteLink.addEventListener('touchend', deleteHandler);
                         contextMenu.appendChild(deleteLink);
                     }
                 } else {
                     // For tunes without tuneId, show limited options
                     if (editMode) {
+                        // Link option for name-only tunes in edit mode
+                        const linkLink = document.createElement('a');
+                        linkLink.textContent = 'Link';
+                        linkLink.style.color = '#28a745';
+                        const linkHandler = function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showLinkTuneModal(tuneName, orderNumber);
+                            contextMenu.style.display = 'none';
+                        };
+                        linkLink.addEventListener('click', linkHandler);
+                        linkLink.addEventListener('touchend', linkHandler);
+                        contextMenu.appendChild(linkLink);
+                        
                         // Still allow delete for name-only tunes in edit mode
                         const deleteLink = document.createElement('a');
-                        deleteLink.href = '#';
                         deleteLink.textContent = 'Delete';
                         deleteLink.style.color = '#dc3545';
-                        deleteLink.onclick = function(event) {
+                        const deleteHandler2 = function(event) {
                             event.preventDefault();
+                            event.stopPropagation();
                             if (confirm(`Delete ${tuneName}?`)) {
                                 deleteTune(orderNumber);
                             }
                             contextMenu.style.display = 'none';
                         };
+                        deleteLink.addEventListener('click', deleteHandler2);
+                        deleteLink.addEventListener('touchend', deleteHandler2);
                         contextMenu.appendChild(deleteLink);
                     } else {
                         // For non-edit mode, show info message
@@ -432,6 +549,11 @@
                         contextMenu.appendChild(nameDiv);
                     }
                 }
+                
+                // Prevent touch events on the menu from propagating to underlying elements
+                contextMenu.addEventListener('touchstart', function(event) {
+                    event.stopPropagation();
+                });
                 
                 wrapper.appendChild(contextMenu);
                 return contextMenu;
@@ -484,11 +606,12 @@
             wrapper.addEventListener('touchstart', (event) => {
                 touchStartTime = Date.now();
                 hoverTimeout = setTimeout(() => {
+                    event.preventDefault(); // Prevent default touch behavior when showing menu
                     showContextMenu(event);
                 }, 1000);
-            });
+            }, { passive: false });
             
-            wrapper.addEventListener('touchend', () => {
+            wrapper.addEventListener('touchend', (event) => {
                 clearTimeout(hoverTimeout);
                 const touchDuration = Date.now() - touchStartTime;
                 if (touchDuration < 1000) {
@@ -509,6 +632,105 @@
                 document.querySelectorAll('.tune-context-menu').forEach(menu => {
                     menu.style.display = 'none';
                 });
+            }
+        });
+        
+        // Modal functionality
+        let currentLinkingTune = null;
+        let currentLinkingOrder = null;
+        
+        function showLinkTuneModal(tuneName, orderNumber) {
+            currentLinkingTune = tuneName;
+            currentLinkingOrder = orderNumber;
+            
+            const modal = document.getElementById('link-tune-modal');
+            const input = document.getElementById('tune-link-input');
+            
+            input.value = '';
+            modal.style.display = 'flex';
+            input.focus();
+        }
+        
+        function hideLinkTuneModal() {
+            const modal = document.getElementById('link-tune-modal');
+            modal.style.display = 'none';
+            currentLinkingTune = null;
+            currentLinkingOrder = null;
+        }
+        
+        function extractTuneId(input) {
+            // Extract tune ID from URL or return the input if it's already a number
+            const urlPattern = /thesession\.org\/tunes\/(\d+)/;
+            const match = input.match(urlPattern);
+            
+            if (match) {
+                return match[1];
+            } else if (/^\d+$/.test(input.trim())) {
+                return input.trim();
+            }
+            
+            return null;
+        }
+        
+        function linkTune() {
+            const input = document.getElementById('tune-link-input');
+            const tuneId = extractTuneId(input.value);
+            
+            if (!tuneId) {
+                showMessage('Please enter a valid tune ID or thesession.org URL', 'error');
+                return;
+            }
+            
+            // Call API to link the tune
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/link_tune`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tune_id: tuneId,
+                    tune_name: currentLinkingTune,
+                    order_number: currentLinkingOrder
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    hideLinkTuneModal();
+                    loadTunes(); // Reload the tunes to show the new link
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to link tune', 'error');
+                console.error('Error:', error);
+            });
+        }
+        
+        // Modal event listeners
+        document.getElementById('link-cancel-btn').addEventListener('click', hideLinkTuneModal);
+        document.getElementById('link-confirm-btn').addEventListener('click', linkTune);
+        
+        // Close modal on escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideLinkTuneModal();
+            }
+        });
+        
+        // Close modal when clicking outside
+        document.getElementById('link-tune-modal').addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) {
+                hideLinkTuneModal();
+            }
+        });
+        
+        // Handle enter key in input
+        document.getElementById('tune-link-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                linkTune();
             }
         });
     </script>

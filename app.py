@@ -607,6 +607,92 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to delete tune: {str(e)}'})
 
+@app.route('/api/sessions/<path:session_path>/<date>/link_tune', methods=['POST'])
+def link_tune_ajax(session_path, date):
+    tune_id = request.json.get('tune_id')
+    tune_name = request.json.get('tune_name', '').strip()
+    order_number = request.json.get('order_number')
+    
+    if not tune_id or not tune_name or order_number is None:
+        return jsonify({'success': False, 'message': 'Missing required parameters'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT session_instance_id FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        session_instance_result = cur.fetchone()
+        if not session_instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance_result[0]
+        
+        # Check if tune_id is already in session_tune for this session
+        cur.execute('''
+            SELECT tune_id FROM session_tune 
+            WHERE session_id = %s AND tune_id = %s
+        ''', (session_id, tune_id))
+        session_tune_exists = cur.fetchone()
+        
+        if session_tune_exists:
+            # Tune already in session_tune, just update session_instance_tune
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET tune_id = %s, name = %s
+                WHERE session_instance_id = %s AND order_number = %s
+            ''', (tune_id, tune_name, session_instance_id, order_number))
+            
+            message = f'Linked "{tune_name}" to existing tune in session'
+        else:
+            # Check if tune exists in tune table
+            cur.execute('SELECT name FROM tune WHERE tune_id = %s', (tune_id,))
+            tune_exists = cur.fetchone()
+            
+            if tune_exists:
+                # Add to session_tune with alias
+                cur.execute('''
+                    INSERT INTO session_tune (session_id, tune_id, alias)
+                    VALUES (%s, %s, %s)
+                ''', (session_id, tune_id, tune_name))
+                
+                # Update session_instance_tune
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET tune_id = %s, name = NULL
+                    WHERE session_instance_id = %s AND order_number = %s
+                ''', (tune_id, session_instance_id, order_number))
+                
+                message = f'Added "{tune_name}" to session and linked'
+            else:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': 'Fetching new tunes from thesession.org not yet implemented'})
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': message})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to link tune: {str(e)}'})
+
 @app.route('/api/sessions/<path:session_path>/<date>/tunes')
 def get_session_tunes_ajax(session_path, date):
     try:
