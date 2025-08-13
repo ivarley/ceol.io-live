@@ -54,6 +54,18 @@
             75% { content: '...'; }
             100% { content: ''; }
         }
+        .cancelled-date {
+            color: #dc3545;
+            text-decoration: line-through;
+        }
+        .cancelled-message {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #dc3545;
+            margin: 20px 0;
+            color: #495057;
+            font-style: italic;
+        }
         .tune-context-menu {
             position: absolute;
             background: white;
@@ -199,7 +211,7 @@
         <div class="landing-page" style="display: block;">
 
     <h1>{{ session_instance.session_name }}</h1>
-    <h2>{{ session_instance.date }}</h2>
+    <h2{% if session_instance.is_cancelled %} class="cancelled-date"{% endif %}>{{ session_instance.date }}</h2>
     
     <div id="message-container">
         {% with messages = get_flashed_messages() %}
@@ -238,6 +250,11 @@
     </div>
     {% endif %}
     
+    {% if session_instance.is_cancelled %}
+    <div class="cancelled-message">
+        <strong>This session instance was cancelled.</strong>
+    </div>
+    {% else %}
     <div id="tunes-container">
         <h3>Tunes Played:</h3>
         <div id="tune-sets">
@@ -256,22 +273,26 @@
     <div style="margin-top: 30px;">
         <button id="toggle-edit-btn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
     </div>
+    {% endif %}
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
 
     <script>
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';
+        const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
         
         // Check if we should start in edit mode (for newly created instances)
         const urlParams = new URLSearchParams(window.location.search);
-        let editMode = urlParams.get('edit') === 'true';
+        let editMode = !isCancelled && urlParams.get('edit') === 'true';
         
         // Load tunes on page load
         document.addEventListener('DOMContentLoaded', function() {
-            loadTunes();
-            updateUI();
-            setupTextareaAutoExpand();
+            if (!isCancelled) {
+                loadTunes();
+                updateUI();
+                setupTextareaAutoExpand();
+            }
             
             // Clean up URL by removing the edit parameter if present
             if (urlParams.get('edit') === 'true') {
@@ -280,20 +301,24 @@
             }
         });
         
-        // Toggle edit mode
-        document.getElementById('toggle-edit-btn').addEventListener('click', function() {
-            editMode = !editMode;
-            updateUI();
-        });
+        // Toggle edit mode (only if not cancelled)
+        if (!isCancelled) {
+            document.getElementById('toggle-edit-btn').addEventListener('click', function() {
+                editMode = !editMode;
+                updateUI();
+            });
+        }
         
-        // Handle add tune form submission
-        document.getElementById('tune-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const tuneName = document.getElementById('tune_name_input').value.trim();
-            if (tuneName) {
-                addTune(tuneName);
-            }
-        });
+        // Handle add tune form submission (only if not cancelled)
+        if (!isCancelled) {
+            document.getElementById('tune-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const tuneName = document.getElementById('tune_name_input').value.trim();
+                if (tuneName) {
+                    addTune(tuneName);
+                }
+            });
+        }
         
         function updateUI() {
             const toggleBtn = document.getElementById('toggle-edit-btn');

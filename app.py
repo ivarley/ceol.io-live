@@ -426,7 +426,7 @@ def session_handler(full_path):
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute('''
-                SELECT s.name, si.date, si.comments, si.session_instance_id
+                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE s.path = %s AND si.date = %s
@@ -439,6 +439,7 @@ def session_handler(full_path):
                     'date': session_instance[1],
                     'comments': session_instance[2],
                     'session_instance_id': session_instance[3],
+                    'is_cancelled': session_instance[4],
                     'session_path': session_path
                 }
                 
