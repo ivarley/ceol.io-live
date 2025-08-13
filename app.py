@@ -1260,3 +1260,324 @@ def get_session_tunes_ajax(session_path, date):
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to get tunes: {str(e)}'})
+# Move Set endpoint
+@app.route('/api/sessions/<path:session_path>/<date>/move_set', methods=['POST'])
+def move_set_ajax(session_path, date):
+    data = request.get_json()
+    order_number = data.get('order_number')
+    direction = data.get('direction')  # 'up' or 'down'
+    
+    if not order_number or not direction or direction not in ['up', 'down']:
+        return jsonify({'success': False, 'message': 'Invalid parameters'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT si.session_instance_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        session_instance = cur.fetchone()
+        
+        if not session_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance[0]
+        
+        # Get all tunes ordered by order_number
+        cur.execute('''
+            SELECT order_number, continues_set, session_instance_tune_id
+            FROM session_instance_tune 
+            WHERE session_instance_id = %s 
+            ORDER BY order_number
+        ''', (session_instance_id,))
+        
+        all_tunes = cur.fetchall()
+        if not all_tunes:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'No tunes found'})
+        
+        # Find the tune and its set
+        target_tune_index = next((i for i, tune in enumerate(all_tunes) if tune[0] == order_number), -1)
+        if target_tune_index == -1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Tune not found'})
+        
+        # Group tunes into sets to identify set boundaries
+        sets = []
+        current_set = []
+        for tune in all_tunes:
+            if not tune[1] and current_set:  # continues_set is False and we have a current set
+                sets.append(current_set)
+                current_set = []
+            current_set.append(tune)
+        if current_set:
+            sets.append(current_set)
+        
+        # Find which set the target tune belongs to
+        target_set_index = -1
+        for set_index, tune_set in enumerate(sets):
+            if any(tune[0] == order_number for tune in tune_set):
+                target_set_index = set_index
+                break
+        
+        if target_set_index == -1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Tune set not found'})
+        
+        # Check if move is possible
+        if direction == 'up' and target_set_index == 0:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot move first set up'})
+        
+        if direction == 'down' and target_set_index == len(sets) - 1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot move last set down'})
+        
+        # Save to history before making changes
+        for tune_set in sets:
+            for tune in tune_set:
+                save_to_history(cur, 'session_instance_tune', 'UPDATE', tune[2], 'move_set')
+        
+        # Perform the move
+        target_set = sets[target_set_index]
+        
+        if direction == 'up':
+            # Move set up - swap with previous set
+            prev_set = sets[target_set_index - 1]
+            
+            # Get the order numbers where each set should go
+            prev_set_start_order = prev_set[0][0]
+            target_set_start_order = target_set[0][0]
+            
+            # Update order numbers - target set goes where prev set was
+            for i, tune in enumerate(target_set):
+                new_order = prev_set_start_order + i
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET order_number = %s 
+                    WHERE session_instance_tune_id = %s
+                ''', (new_order, tune[2]))
+            
+            # Previous set goes after target set
+            for i, tune in enumerate(prev_set):
+                new_order = prev_set_start_order + len(target_set) + i
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET order_number = %s 
+                    WHERE session_instance_tune_id = %s
+                ''', (new_order, tune[2]))
+                
+        else:  # direction == 'down'
+            # Move set down - swap with next set
+            next_set = sets[target_set_index + 1]
+            
+            # Get the order numbers where each set should go
+            target_set_start_order = target_set[0][0]
+            next_set_start_order = next_set[0][0]
+            
+            # Next set goes where target set was
+            for i, tune in enumerate(next_set):
+                new_order = target_set_start_order + i
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET order_number = %s 
+                    WHERE session_instance_tune_id = %s
+                ''', (new_order, tune[2]))
+            
+            # Target set goes after next set
+            for i, tune in enumerate(target_set):
+                new_order = target_set_start_order + len(next_set) + i
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET order_number = %s 
+                    WHERE session_instance_tune_id = %s
+                ''', (new_order, tune[2]))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Set moved {direction} successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to move set: {str(e)}'})
+
+
+# Move Tune endpoint  
+@app.route('/api/sessions/<path:session_path>/<date>/move_tune', methods=['POST'])
+def move_tune_ajax(session_path, date):
+    data = request.get_json()
+    order_number = data.get('order_number')
+    direction = data.get('direction')  # 'left' or 'right'
+    
+    if not order_number or not direction or direction not in ['left', 'right']:
+        return jsonify({'success': False, 'message': 'Invalid parameters'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT si.session_instance_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        session_instance = cur.fetchone()
+        
+        if not session_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance[0]
+        
+        # Get all tunes ordered by order_number
+        cur.execute('''
+            SELECT order_number, continues_set, session_instance_tune_id
+            FROM session_instance_tune 
+            WHERE session_instance_id = %s 
+            ORDER BY order_number
+        ''', (session_instance_id,))
+        
+        all_tunes = cur.fetchall()
+        if not all_tunes:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'No tunes found'})
+        
+        # Group tunes into sets
+        sets = []
+        current_set = []
+        for tune in all_tunes:
+            if not tune[1] and current_set:  # continues_set is False and we have a current set
+                sets.append(current_set)
+                current_set = []
+            current_set.append(tune)
+        if current_set:
+            sets.append(current_set)
+        
+        # Find which set and position the target tune is in
+        target_set_index = -1
+        target_tune_index_in_set = -1
+        for set_index, tune_set in enumerate(sets):
+            for tune_index, tune in enumerate(tune_set):
+                if tune[0] == order_number:
+                    target_set_index = set_index
+                    target_tune_index_in_set = tune_index
+                    break
+            if target_set_index != -1:
+                break
+        
+        if target_set_index == -1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Tune not found'})
+        
+        target_set = sets[target_set_index]
+        
+        # Check if move is possible
+        if direction == 'left' and target_tune_index_in_set == 0:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot move leftmost tune in set left'})
+        
+        if direction == 'right' and target_tune_index_in_set == len(target_set) - 1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot move rightmost tune in set right'})
+        
+        # Save to history before making changes
+        for tune in target_set:
+            save_to_history(cur, 'session_instance_tune', 'UPDATE', tune[2], 'move_tune')
+        
+        # Perform the move - swap order numbers and potentially continues_set values
+        if direction == 'left':
+            # Swap with previous tune in set
+            prev_tune = target_set[target_tune_index_in_set - 1]
+            target_tune = target_set[target_tune_index_in_set]
+            
+            # Swap order numbers
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET order_number = %s 
+                WHERE session_instance_tune_id = %s
+            ''', (target_tune[0], prev_tune[2]))
+            
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET order_number = %s 
+                WHERE session_instance_tune_id = %s
+            ''', (prev_tune[0], target_tune[2]))
+            
+            # Update continues_set if moving to first position
+            if target_tune_index_in_set - 1 == 0:
+                # Target tune becomes the first in set (continues_set = False)
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET continues_set = FALSE 
+                    WHERE session_instance_tune_id = %s
+                ''', (target_tune[2],))
+                
+                # Previous tune is no longer first (continues_set = True)
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET continues_set = TRUE 
+                    WHERE session_instance_tune_id = %s
+                ''', (prev_tune[2],))
+                
+        else:  # direction == 'right'
+            # Swap with next tune in set
+            target_tune = target_set[target_tune_index_in_set]
+            next_tune = target_set[target_tune_index_in_set + 1]
+            
+            # Swap order numbers
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET order_number = %s 
+                WHERE session_instance_tune_id = %s
+            ''', (next_tune[0], target_tune[2]))
+            
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET order_number = %s 
+                WHERE session_instance_tune_id = %s
+            ''', (target_tune[0], next_tune[2]))
+            
+            # Update continues_set if moving from first position
+            if target_tune_index_in_set == 0:
+                # Next tune becomes the first in set (continues_set = False)
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET continues_set = FALSE 
+                    WHERE session_instance_tune_id = %s
+                ''', (next_tune[2],))
+                
+                # Target tune is no longer first (continues_set = True)
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET continues_set = TRUE 
+                    WHERE session_instance_tune_id = %s
+                ''', (target_tune[2],))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Tune moved {direction} successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to move tune: {str(e)}'})

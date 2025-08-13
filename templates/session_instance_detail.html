@@ -124,6 +124,47 @@
             background-color: #f5f5f5;
             color: #007bff;
         }
+        .tune-context-menu .menu-item-with-submenu {
+            position: relative;
+        }
+        .tune-context-menu .menu-item-with-submenu:hover .submenu {
+            display: block;
+        }
+        .tune-context-menu .submenu {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 4px 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 1600;
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
+            display: none;
+            min-width: 120px;
+        }
+        .tune-context-menu .submenu a {
+            display: block;
+            padding: 6px 12px;
+            text-decoration: none;
+            color: #333;
+            cursor: pointer;
+        }
+        .tune-context-menu .submenu a:hover {
+            background-color: #f5f5f5;
+            color: #007bff;
+        }
+        .tune-context-menu .submenu a.disabled {
+            color: #999;
+            cursor: not-allowed;
+        }
+        .tune-context-menu .submenu a.disabled:hover {
+            background-color: transparent;
+            color: #999;
+        }
         .tune-name-wrapper {
             position: relative;
             display: inline;
@@ -540,8 +581,12 @@
         function renderTunes(tuneSets) {
             const container = document.getElementById('tune-sets');
             
+            // Cache tune data for move operations
+            cachedTuneData = tuneSets;
+            
             if (!tuneSets || tuneSets.length === 0) {
                 container.innerHTML = '<p>No tunes recorded for this session yet.</p>';
+                cachedTuneData = [];
                 return;
             }
             
@@ -644,6 +689,127 @@
             });
         }
         
+        // Global variable to cache tune data for move operations
+        let cachedTuneData = null;
+        
+        function getCurrentTuneData(orderNumber) {
+            if (!cachedTuneData) {
+                return {
+                    canMoveSetUp: false,
+                    canMoveSetDown: false,
+                    canMoveTuneLeft: false,
+                    canMoveTuneRight: false
+                };
+            }
+            
+            // Find the tune with this order number
+            const allTunes = [];
+            cachedTuneData.forEach(tuneSet => {
+                tuneSet.forEach(tune => {
+                    allTunes.push(tune);
+                });
+            });
+            
+            const currentTuneIndex = allTunes.findIndex(tune => tune[0] === orderNumber);
+            if (currentTuneIndex === -1) {
+                return {
+                    canMoveSetUp: false,
+                    canMoveSetDown: false,
+                    canMoveTuneLeft: false,
+                    canMoveTuneRight: false
+                };
+            }
+            
+            const currentTune = allTunes[currentTuneIndex];
+            const isFirstTuneInSet = !currentTune[1]; // continues_set is False
+            
+            // Find which set this tune belongs to
+            let currentSetIndex = -1;
+            let currentTuneIndexInSet = -1;
+            for (let setIndex = 0; setIndex < cachedTuneData.length; setIndex++) {
+                const tuneSet = cachedTuneData[setIndex];
+                for (let tuneIndex = 0; tuneIndex < tuneSet.length; tuneIndex++) {
+                    if (tuneSet[tuneIndex][0] === orderNumber) {
+                        currentSetIndex = setIndex;
+                        currentTuneIndexInSet = tuneIndex;
+                        break;
+                    }
+                }
+                if (currentSetIndex !== -1) break;
+            }
+            
+            return {
+                canMoveSetUp: currentSetIndex > 0,
+                canMoveSetDown: currentSetIndex < cachedTuneData.length - 1,
+                canMoveTuneLeft: currentTuneIndexInSet > 0,
+                canMoveTuneRight: currentTuneIndexInSet < cachedTuneData[currentSetIndex].length - 1
+            };
+        }
+        
+        function moveSet(orderNumber, direction) {
+            const container = document.getElementById('tune-sets');
+            container.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/move_set`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_number: orderNumber,
+                    direction: direction
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    loadTunes();
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to move set', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                container.classList.remove('loading');
+            });
+        }
+        
+        function moveTune(orderNumber, direction) {
+            const container = document.getElementById('tune-sets');
+            container.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/move_tune`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_number: orderNumber,
+                    direction: direction
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    loadTunes();
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to move tune', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                container.classList.remove('loading');
+            });
+        }
+        
         function setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber) {
             let hoverTimeout;
             let hideTimeout;
@@ -687,6 +853,90 @@
                     infoLink.addEventListener('touchend', infoHandler);
                     contextMenu.appendChild(infoLink);
                     
+                    // Move options - only in edit mode
+                    if (editMode) {
+                        const moveContainer = document.createElement('div');
+                        moveContainer.className = 'menu-item-with-submenu';
+                        
+                        const moveLink = document.createElement('a');
+                        moveLink.textContent = 'Move ...';
+                        moveLink.style.cursor = 'default'; // Don't show pointer since it's a submenu trigger
+                        
+                        const submenu = document.createElement('div');
+                        submenu.className = 'submenu';
+                        
+                        // Get current tune data for move logic
+                        const tuneData = getCurrentTuneData(orderNumber);
+                        
+                        // Move Set Up
+                        const moveSetUpLink = document.createElement('a');
+                        moveSetUpLink.textContent = 'Move Set Up';
+                        if (tuneData.canMoveSetUp) {
+                            const moveSetUpHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveSet(orderNumber, 'up');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveSetUpLink.addEventListener('click', moveSetUpHandler);
+                            moveSetUpLink.addEventListener('touchend', moveSetUpHandler);
+                        } else {
+                            moveSetUpLink.className = 'disabled';
+                        }
+                        submenu.appendChild(moveSetUpLink);
+                        
+                        // Move Set Down
+                        const moveSetDownLink = document.createElement('a');
+                        moveSetDownLink.textContent = 'Move Set Down';
+                        if (tuneData.canMoveSetDown) {
+                            const moveSetDownHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveSet(orderNumber, 'down');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveSetDownLink.addEventListener('click', moveSetDownHandler);
+                            moveSetDownLink.addEventListener('touchend', moveSetDownHandler);
+                        } else {
+                            moveSetDownLink.className = 'disabled';
+                        }
+                        submenu.appendChild(moveSetDownLink);
+                        
+                        // Move Tune Left
+                        if (tuneData.canMoveTuneLeft) {
+                            const moveTuneLeftLink = document.createElement('a');
+                            moveTuneLeftLink.textContent = 'Move Tune Left';
+                            const moveTuneLeftHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveTune(orderNumber, 'left');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveTuneLeftLink.addEventListener('click', moveTuneLeftHandler);
+                            moveTuneLeftLink.addEventListener('touchend', moveTuneLeftHandler);
+                            submenu.appendChild(moveTuneLeftLink);
+                        }
+                        
+                        // Move Tune Right
+                        if (tuneData.canMoveTuneRight) {
+                            const moveTuneRightLink = document.createElement('a');
+                            moveTuneRightLink.textContent = 'Move Tune Right';
+                            const moveTuneRightHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveTune(orderNumber, 'right');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveTuneRightLink.addEventListener('click', moveTuneRightHandler);
+                            moveTuneRightLink.addEventListener('touchend', moveTuneRightHandler);
+                            submenu.appendChild(moveTuneRightLink);
+                        }
+                        
+                        moveContainer.appendChild(moveLink);
+                        moveContainer.appendChild(submenu);
+                        contextMenu.appendChild(moveContainer);
+                    }
+                    
                     // Delete option - only in edit mode
                     if (editMode) {
                         const deleteLink = document.createElement('a');
@@ -720,6 +970,88 @@
                         linkLink.addEventListener('click', linkHandler);
                         linkLink.addEventListener('touchend', linkHandler);
                         contextMenu.appendChild(linkLink);
+                        
+                        // Move options for name-only tunes
+                        const moveContainer = document.createElement('div');
+                        moveContainer.className = 'menu-item-with-submenu';
+                        
+                        const moveLink = document.createElement('a');
+                        moveLink.textContent = 'Move ...';
+                        moveLink.style.cursor = 'default'; // Don't show pointer since it's a submenu trigger
+                        
+                        const submenu = document.createElement('div');
+                        submenu.className = 'submenu';
+                        
+                        // Get current tune data for move logic
+                        const tuneData = getCurrentTuneData(orderNumber);
+                        
+                        // Move Set Up
+                        const moveSetUpLink = document.createElement('a');
+                        moveSetUpLink.textContent = 'Move Set Up';
+                        if (tuneData.canMoveSetUp) {
+                            const moveSetUpHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveSet(orderNumber, 'up');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveSetUpLink.addEventListener('click', moveSetUpHandler);
+                            moveSetUpLink.addEventListener('touchend', moveSetUpHandler);
+                        } else {
+                            moveSetUpLink.className = 'disabled';
+                        }
+                        submenu.appendChild(moveSetUpLink);
+                        
+                        // Move Set Down
+                        const moveSetDownLink = document.createElement('a');
+                        moveSetDownLink.textContent = 'Move Set Down';
+                        if (tuneData.canMoveSetDown) {
+                            const moveSetDownHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveSet(orderNumber, 'down');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveSetDownLink.addEventListener('click', moveSetDownHandler);
+                            moveSetDownLink.addEventListener('touchend', moveSetDownHandler);
+                        } else {
+                            moveSetDownLink.className = 'disabled';
+                        }
+                        submenu.appendChild(moveSetDownLink);
+                        
+                        // Move Tune Left
+                        if (tuneData.canMoveTuneLeft) {
+                            const moveTuneLeftLink = document.createElement('a');
+                            moveTuneLeftLink.textContent = 'Move Tune Left';
+                            const moveTuneLeftHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveTune(orderNumber, 'left');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveTuneLeftLink.addEventListener('click', moveTuneLeftHandler);
+                            moveTuneLeftLink.addEventListener('touchend', moveTuneLeftHandler);
+                            submenu.appendChild(moveTuneLeftLink);
+                        }
+                        
+                        // Move Tune Right
+                        if (tuneData.canMoveTuneRight) {
+                            const moveTuneRightLink = document.createElement('a');
+                            moveTuneRightLink.textContent = 'Move Tune Right';
+                            const moveTuneRightHandler = function(event) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                moveTune(orderNumber, 'right');
+                                contextMenu.style.display = 'none';
+                            };
+                            moveTuneRightLink.addEventListener('click', moveTuneRightHandler);
+                            moveTuneRightLink.addEventListener('touchend', moveTuneRightHandler);
+                            submenu.appendChild(moveTuneRightLink);
+                        }
+                        
+                        moveContainer.appendChild(moveLink);
+                        moveContainer.appendChild(submenu);
+                        contextMenu.appendChild(moveContainer);
                         
                         // Still allow delete for name-only tunes in edit mode
                         const deleteLink = document.createElement('a');
