@@ -85,6 +85,11 @@
         .tune-name-wrapper {
             position: relative;
             display: inline;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
         .modal-overlay {
             position: fixed;
@@ -596,7 +601,7 @@
                 setTimeout(hideContextMenu, 100); // Small delay before hiding
             });
             
-            // Desktop: Right click
+            // Desktop: Right click - also suppresses mobile context menu
             wrapper.addEventListener('contextmenu', (event) => {
                 event.preventDefault();
                 showContextMenu(event);
