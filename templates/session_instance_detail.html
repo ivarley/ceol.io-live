@@ -293,21 +293,9 @@
                     }
                     
                     // Add context menu functionality
-                    setupTuneContextMenu(wrapper, tuneName, tuneId, setting);
+                    setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber);
                     
                     li.appendChild(wrapper);
-                    
-                    if (editMode) {
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.textContent = '[x]';
-                        deleteBtn.style.cssText = 'background: none; border: none; color: #dc3545; font-size: 0.8em; cursor: pointer; text-decoration: underline; margin-left: 5px;';
-                        deleteBtn.onclick = function() {
-                            if (confirm(`Delete ${tuneName}?`)) {
-                                deleteTune(orderNumber);
-                            }
-                        };
-                        li.appendChild(deleteBtn);
-                    }
                     
                     if (index < tuneSet.length - 1) {
                         li.appendChild(document.createTextNode(', '));
@@ -376,7 +364,7 @@
             });
         }
         
-        function setupTuneContextMenu(wrapper, tuneName, tuneId, setting) {
+        function setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber) {
             let hoverTimeout;
             let touchStartTime;
             let contextMenu;
@@ -403,12 +391,46 @@
                     infoLink.href = `/sessions/${sessionPath}/tunes/${tuneId}`;
                     infoLink.textContent = 'Info';
                     contextMenu.appendChild(infoLink);
+                    
+                    // Delete option - only in edit mode
+                    if (editMode) {
+                        const deleteLink = document.createElement('a');
+                        deleteLink.href = '#';
+                        deleteLink.textContent = 'Delete';
+                        deleteLink.style.color = '#dc3545';
+                        deleteLink.onclick = function(event) {
+                            event.preventDefault();
+                            if (confirm(`Delete ${tuneName}?`)) {
+                                deleteTune(orderNumber);
+                            }
+                            // Hide the menu after action
+                            contextMenu.style.display = 'none';
+                        };
+                        contextMenu.appendChild(deleteLink);
+                    }
                 } else {
-                    // For tunes without tuneId, just show the name
-                    const nameDiv = document.createElement('div');
-                    nameDiv.style.cssText = 'padding: 6px 12px; color: #666; font-style: italic;';
-                    nameDiv.textContent = 'No tune data available';
-                    contextMenu.appendChild(nameDiv);
+                    // For tunes without tuneId, show limited options
+                    if (editMode) {
+                        // Still allow delete for name-only tunes in edit mode
+                        const deleteLink = document.createElement('a');
+                        deleteLink.href = '#';
+                        deleteLink.textContent = 'Delete';
+                        deleteLink.style.color = '#dc3545';
+                        deleteLink.onclick = function(event) {
+                            event.preventDefault();
+                            if (confirm(`Delete ${tuneName}?`)) {
+                                deleteTune(orderNumber);
+                            }
+                            contextMenu.style.display = 'none';
+                        };
+                        contextMenu.appendChild(deleteLink);
+                    } else {
+                        // For non-edit mode, show info message
+                        const nameDiv = document.createElement('div');
+                        nameDiv.style.cssText = 'padding: 6px 12px; color: #666; font-style: italic;';
+                        nameDiv.textContent = 'No tune data available';
+                        contextMenu.appendChild(nameDiv);
+                    }
                 }
                 
                 wrapper.appendChild(contextMenu);
