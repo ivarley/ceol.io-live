@@ -547,7 +547,7 @@ def session_handler(full_path):
                 # Sort years in descending order
                 sorted_years = sorted(instances_by_year.keys(), reverse=True)
                 
-                # Get top 40 most popular tunes for this session
+                # Get top 20 most popular tunes for this session
                 cur.execute('''
                     WITH tune_counts AS (
                         SELECT 
@@ -565,7 +565,7 @@ def session_handler(full_path):
                     SELECT tune_name, tune_id, play_count, tunebook_count
                     FROM tune_counts
                     ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
-                    LIMIT 40
+                    LIMIT 20
                 ''', (session[0], session[0]))
                 
                 popular_tunes = cur.fetchall()

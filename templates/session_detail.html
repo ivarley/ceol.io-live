@@ -196,7 +196,7 @@
         <div style="display: flex; flex-wrap: wrap; gap: 20px;">
             <div style="flex: 1; min-width: 300px;">
                 <ol>
-                {% for tune in popular_tunes[:20] %}
+                {% for tune in popular_tunes[:10] %}
                     <li>
                         {% if tune[1] %}
                             <a href="https://thesession.org/tunes/{{ tune[1] }}" target="_blank">{{ tune[0] }}</a>
@@ -208,10 +208,10 @@
                 {% endfor %}
                 </ol>
             </div>
-            {% if popular_tunes|length > 20 %}
+            {% if popular_tunes|length > 10 %}
             <div style="flex: 1; min-width: 300px;">
-                <ol start="21">
-                {% for tune in popular_tunes[20:40] %}
+                <ol start="11">
+                {% for tune in popular_tunes[10:20] %}
                     <li>
                         {% if tune[1] %}
                             <a href="https://thesession.org/tunes/{{ tune[1] }}" target="_blank">{{ tune[0] }}</a>
