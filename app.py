@@ -580,6 +580,10 @@ def session_handler(full_path):
 @app.route('/api/sessions/<path:session_path>/add_instance', methods=['POST'])
 def add_session_instance_ajax(session_path):
     date = request.json.get('date', '').strip()
+    location = request.json.get('location', '').strip() if request.json.get('location') else None
+    comments = request.json.get('comments', '').strip() if request.json.get('comments') else None
+    cancelled = request.json.get('cancelled', False)
+    
     if not date:
         return jsonify({'success': False, 'message': 'Please enter a session date'})
     
@@ -587,15 +591,15 @@ def add_session_instance_ajax(session_path):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get session_id for this session_path
-        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        # Get session_id and location_name for this session_path
+        cur.execute('SELECT session_id, location_name FROM session WHERE path = %s', (session_path,))
         session_result = cur.fetchone()
         if not session_result:
             cur.close()
             conn.close()
             return jsonify({'success': False, 'message': 'Session not found'})
         
-        session_id = session_result[0]
+        session_id, session_location_name = session_result
         
         # Check if session instance already exists for this date
         cur.execute('''
@@ -609,12 +613,17 @@ def add_session_instance_ajax(session_path):
             conn.close()
             return jsonify({'success': False, 'message': f'Session instance for {date} already exists'})
         
+        # Determine location_override: only set if location is provided AND different from session's location_name
+        location_override = None
+        if location and location != session_location_name:
+            location_override = location
+        
         # Insert new session instance
         cur.execute('''
-            INSERT INTO session_instance (session_id, date)
-            VALUES (%s, %s)
+            INSERT INTO session_instance (session_id, date, location_override, is_cancelled, comments)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING session_instance_id
-        ''', (session_id, date))
+        ''', (session_id, date, location_override, cancelled, comments))
         
         session_instance_result = cur.fetchone()
         if not session_instance_result:

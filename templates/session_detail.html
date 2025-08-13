@@ -81,13 +81,16 @@
             font-weight: bold;
             color: #555;
         }
-        .modal-body input {
+        .modal-body input[type="date"],
+        .modal-body input[type="text"],
+        .modal-body textarea {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
+            font-family: inherit;
         }
         .modal-footer {
             text-align: right;
@@ -273,6 +276,19 @@
             <div class="modal-body">
                 <label for="session-date-input">Session Date:</label>
                 <input type="date" id="session-date-input" required>
+                
+                <label for="session-location-input" style="margin-top: 16px;">Location:</label>
+                <input type="text" id="session-location-input" placeholder="The usual: {{ session.location_name }}">
+                
+                <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
+                <textarea id="session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
+                
+                <div style="margin-top: 16px;">
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" id="session-cancelled-input" style="margin-right: 8px; width: auto;">
+                        Cancelled?
+                    </label>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="add-session-cancel-btn">Cancel</button>
@@ -337,9 +353,6 @@
         const mostRecentDateStr = recentDates[0];
         const mostRecentDate = new Date(mostRecentDateStr + 'T00:00:00');
         
-        console.log('Most recent date:', mostRecentDateStr, 'Parsed as:', mostRecentDate, 'Day of week:', mostRecentDate.getDay());
-        console.log('Session recurrence:', sessionRecurrence);
-        
         if (!sessionRecurrence) {
             // No recurrence info, suggest one week from most recent
             const nextDate = new Date(mostRecentDate);
@@ -398,20 +411,26 @@
             nextDate.setDate(nextDate.getDate() + 7);
         }
         
-        const result = nextDate.toISOString().split('T')[0];
-        console.log('Calculated next date:', result, 'Day of week:', nextDate.getDay());
-        return result;
+        return nextDate.toISOString().split('T')[0];
     }
     
     function showAddSessionModal() {
         const modal = document.getElementById('add-session-instance-modal');
-        const input = document.getElementById('session-date-input');
+        const dateInput = document.getElementById('session-date-input');
+        const locationInput = document.getElementById('session-location-input');
+        const commentsInput = document.getElementById('session-comments-input');
+        const cancelledInput = document.getElementById('session-cancelled-input');
         
         // Pre-fill the date input with suggested next session date
-        input.value = calculateNextSessionDate();
+        dateInput.value = calculateNextSessionDate();
+        
+        // Clear other fields
+        locationInput.value = '';
+        commentsInput.value = '';
+        cancelledInput.checked = false;
         
         modal.style.display = 'flex';
-        input.focus();
+        dateInput.focus();
     }
     
     function hideAddSessionModal() {
@@ -421,11 +440,34 @@
     
     function addSessionInstance() {
         const dateInput = document.getElementById('session-date-input');
+        const locationInput = document.getElementById('session-location-input');
+        const commentsInput = document.getElementById('session-comments-input');
+        const cancelledInput = document.getElementById('session-cancelled-input');
+        
         const date = dateInput.value.trim();
+        const location = locationInput.value.trim();
+        const comments = commentsInput.value.trim();
+        const cancelled = cancelledInput.checked;
         
         if (!date) {
             showMessage('Please enter a session date', 'error');
             return;
+        }
+        
+        // Prepare request data
+        const requestData = { 
+            date: date,
+            cancelled: cancelled
+        };
+        
+        // Only include location if it's provided
+        if (location) {
+            requestData.location = location;
+        }
+        
+        // Only include comments if provided
+        if (comments) {
+            requestData.comments = comments;
         }
         
         // Call API to create the session instance
@@ -434,7 +476,7 @@
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ date: date })
+            body: JSON.stringify(requestData)
         })
         .then(response => response.json())
         .then(data => {
