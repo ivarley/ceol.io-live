@@ -577,6 +577,64 @@ def session_handler(full_path):
         except Exception as e:
             return f"Database connection failed: {str(e)}"
 
+@app.route('/api/sessions/<path:session_path>/add_instance', methods=['POST'])
+def add_session_instance_ajax(session_path):
+    date = request.json.get('date', '').strip()
+    if not date:
+        return jsonify({'success': False, 'message': 'Please enter a session date'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Check if session instance already exists for this date
+        cur.execute('''
+            SELECT session_instance_id FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        existing_instance = cur.fetchone()
+        
+        if existing_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': f'Session instance for {date} already exists'})
+        
+        # Insert new session instance
+        cur.execute('''
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, %s)
+            RETURNING session_instance_id
+        ''', (session_id, date))
+        
+        session_instance_result = cur.fetchone()
+        if not session_instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Failed to create session instance'})
+        
+        session_instance_id = session_instance_result[0]
+        
+        # Save the newly created session instance to history
+        save_to_history(cur, 'session_instance', 'INSERT', session_instance_id)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Session instance for {date} created successfully!'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to create session instance: {str(e)}'})
 
 @app.route('/api/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
 def add_tune_ajax(session_path, date):

@@ -17,6 +17,116 @@
     
     <!-- Theme CSS -->  
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    
+    <style>
+        .message {
+            position: fixed;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 6px;
+            z-index: 1100;
+            min-width: 300px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: top 0.3s ease-in-out;
+        }
+        .message.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .message.show {
+            top: 20px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            margin-bottom: 16px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .modal-body input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .modal-footer {
+            text-align: right;
+        }
+        .modal-footer button {
+            margin-left: 8px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .modal-footer .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .modal-footer .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .modal-footer button:hover {
+            opacity: 0.9;
+        }
+        .add-link {
+            color: #007bff;
+            text-decoration: none;
+            margin-left: 10px;
+            font-size: 0.9em;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .add-link:hover {
+            text-decoration: underline;
+        }
+        .session-logs-heading:hover .add-link {
+            opacity: 1;
+        }
+    </style>
 
 </head> 
 
@@ -116,9 +226,21 @@
     </div>
     {% endif %}
     
+    <div id="message-container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="message success">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+
     {% if instances_by_year %}
     <div class="past-instances">
-        <h2>Session Logs:</h2>
+        <h2 class="session-logs-heading">Session Logs:<span class="add-link" id="add-session-btn">Add</span></h2>
         {% if sorted_years|length > 1 %}
             {% for year in sorted_years %}
             <h3>{{ year }}</h3>
@@ -142,11 +264,231 @@
     
     <p><a href="/sessions">← Back to all sessions</a></p>
 
+    <!-- Add Session Instance Modal -->
+    <div id="add-session-instance-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Session Instance</h3>
+            </div>
+            <div class="modal-body">
+                <label for="session-date-input">Session Date:</label>
+                <input type="date" id="session-date-input" required>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="add-session-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="add-session-confirm-btn">Add Session</button>
+            </div>
+        </div>
+    </div>
+
 <!-- end landing page -->
 </div>
 
 </div>
 </div>
+
+<script>
+    const sessionPath = '{{ session.path }}';
+    const sessionRecurrence = {{ session.recurrence|tojson if session.recurrence else 'null' }};
+    
+    // Get most recent session date
+    const recentDates = [
+        {% if instances_by_year %}
+            {% for year in sorted_years %}
+                {% for date in instances_by_year[year] %}
+                    '{{ date }}',
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+    ];
+    
+    function showMessage(message, type = 'success') {
+        const container = document.getElementById('message-container');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.textContent = message;
+        
+        container.innerHTML = '';
+        container.appendChild(messageDiv);
+        
+        // Trigger animation by adding show class after a brief delay
+        setTimeout(() => {
+            messageDiv.classList.add('show');
+        }, 10);
+        
+        // Auto-hide message after 3 seconds
+        setTimeout(() => {
+            messageDiv.classList.remove('show');
+            // Remove from DOM after animation completes
+            setTimeout(() => {
+                if (container.contains(messageDiv)) {
+                    container.removeChild(messageDiv);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    function calculateNextSessionDate() {
+        if (recentDates.length === 0) {
+            return new Date().toISOString().split('T')[0];
+        }
+        
+        // Parse the date string properly - dates from the template are in 'YYYY-MM-DD' format
+        const mostRecentDateStr = recentDates[0];
+        const mostRecentDate = new Date(mostRecentDateStr + 'T00:00:00');
+        
+        console.log('Most recent date:', mostRecentDateStr, 'Parsed as:', mostRecentDate, 'Day of week:', mostRecentDate.getDay());
+        console.log('Session recurrence:', sessionRecurrence);
+        
+        if (!sessionRecurrence) {
+            // No recurrence info, suggest one week from most recent
+            const nextDate = new Date(mostRecentDate);
+            nextDate.setDate(nextDate.getDate() + 7);
+            return nextDate.toISOString().split('T')[0];
+        }
+        
+        // Parse recurrence pattern and suggest next date
+        const recurrence = sessionRecurrence.toLowerCase();
+        const nextDate = new Date(mostRecentDate);
+        
+        if (recurrence.includes('weekly') || recurrence.includes('every week')) {
+            nextDate.setDate(nextDate.getDate() + 7);
+        } else if (recurrence.includes('biweekly') || recurrence.includes('every other week') || recurrence.includes('every 2 weeks')) {
+            nextDate.setDate(nextDate.getDate() + 14);
+        } else if (recurrence.includes('monthly') || recurrence.includes('every month')) {
+            nextDate.setMonth(nextDate.getMonth() + 1);
+        } else if (recurrence.includes('tuesday') || recurrence.includes('tues')) {
+            // Find next Tuesday after the most recent session date
+            nextDate.setDate(nextDate.getDate() + 1); // Start from the day after the last session
+            while (nextDate.getDay() !== 2) { // 2 = Tuesday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('wednesday') || recurrence.includes('wed')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 3) { // 3 = Wednesday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('thursday') || recurrence.includes('thurs')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 4) { // 4 = Thursday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('friday') || recurrence.includes('fri')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 5) { // 5 = Friday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('saturday') || recurrence.includes('sat')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 6) { // 6 = Saturday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('sunday') || recurrence.includes('sun')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 0) { // 0 = Sunday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else if (recurrence.includes('monday') || recurrence.includes('mon')) {
+            nextDate.setDate(nextDate.getDate() + 1);
+            while (nextDate.getDay() !== 1) { // 1 = Monday
+                nextDate.setDate(nextDate.getDate() + 1);
+            }
+        } else {
+            // Default: one week from most recent
+            nextDate.setDate(nextDate.getDate() + 7);
+        }
+        
+        const result = nextDate.toISOString().split('T')[0];
+        console.log('Calculated next date:', result, 'Day of week:', nextDate.getDay());
+        return result;
+    }
+    
+    function showAddSessionModal() {
+        const modal = document.getElementById('add-session-instance-modal');
+        const input = document.getElementById('session-date-input');
+        
+        // Pre-fill the date input with suggested next session date
+        input.value = calculateNextSessionDate();
+        
+        modal.style.display = 'flex';
+        input.focus();
+    }
+    
+    function hideAddSessionModal() {
+        const modal = document.getElementById('add-session-instance-modal');
+        modal.style.display = 'none';
+    }
+    
+    function addSessionInstance() {
+        const dateInput = document.getElementById('session-date-input');
+        const date = dateInput.value.trim();
+        
+        if (!date) {
+            showMessage('Please enter a session date', 'error');
+            return;
+        }
+        
+        // Call API to create the session instance
+        fetch(`/api/sessions/${sessionPath}/add_instance`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ date: date })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message);
+                hideAddSessionModal();
+                // Redirect to the new session instance with edit mode parameter
+                window.location.href = `/sessions/${sessionPath}/${date}?edit=true`;
+            } else {
+                showMessage(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showMessage('Failed to add session instance', 'error');
+            console.error('Error:', error);
+        });
+    }
+    
+    // Event listeners
+    document.getElementById('add-session-btn').addEventListener('click', showAddSessionModal);
+    document.getElementById('add-session-cancel-btn').addEventListener('click', hideAddSessionModal);
+    document.getElementById('add-session-confirm-btn').addEventListener('click', addSessionInstance);
+    
+    // Close modal on escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            hideAddSessionModal();
+        }
+    });
+    
+    // Close modal when clicking outside
+    document.getElementById('add-session-instance-modal').addEventListener('click', (event) => {
+        if (event.target === event.currentTarget) {
+            hideAddSessionModal();
+        }
+    });
+    
+    // Handle enter key in input
+    document.getElementById('session-date-input').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            addSessionInstance();
+        }
+    });
+    
+    // Show initial flash messages if any
+    document.addEventListener('DOMContentLoaded', function() {
+        const existingMessage = document.querySelector('.message');
+        if (existingMessage) {
+            setTimeout(() => {
+                existingMessage.classList.add('show');
+            }, 10);
+        }
+    });
+</script>
 
 </body>
 </html>

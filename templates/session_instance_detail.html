@@ -262,13 +262,22 @@
     <script>
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';
-        let editMode = false;
+        
+        // Check if we should start in edit mode (for newly created instances)
+        const urlParams = new URLSearchParams(window.location.search);
+        let editMode = urlParams.get('edit') === 'true';
         
         // Load tunes on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadTunes();
             updateUI();
             setupTextareaAutoExpand();
+            
+            // Clean up URL by removing the edit parameter if present
+            if (urlParams.get('edit') === 'true') {
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            }
         });
         
         // Toggle edit mode
