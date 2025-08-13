@@ -858,6 +858,9 @@ def link_tune_ajax(session_path, date):
                     VALUES (%s, %s, %s, %s)
                 ''', (session_id, tune_id, tune_name, setting_id))
                 
+                # Save the newly inserted record to history
+                save_to_history(cur, 'session_tune', 'INSERT', (session_id, tune_id))
+                
                 # Get the session_instance_tune_id for history before update
                 cur.execute('''
                     SELECT session_instance_tune_id 
@@ -913,6 +916,9 @@ def link_tune_ajax(session_path, date):
                         VALUES (%s, %s, %s, %s)
                     ''', (tune_id, tune_name_from_api, tune_type, tunebook_count))
                     
+                    # Save the newly inserted tune to history
+                    save_to_history(cur, 'tune', 'INSERT', tune_id)
+                    
                     # Determine if we need to use an alias
                     alias = tune_name if tune_name != tune_name_from_api else None
                     
@@ -921,6 +927,9 @@ def link_tune_ajax(session_path, date):
                         INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
                         VALUES (%s, %s, %s, %s)
                     ''', (session_id, tune_id, alias, setting_id))
+                    
+                    # Save the newly inserted session_tune to history
+                    save_to_history(cur, 'session_tune', 'INSERT', (session_id, tune_id))
                     
                     # Update session_instance_tune
                     cur.execute('''
