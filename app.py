@@ -198,6 +198,98 @@ def session_tunes(session_path):
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
+@app.route('/sessions/<path:session_path>/tunes/<int:tune_id>')
+def session_tune_info(session_path, tune_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session info
+        cur.execute('''
+            SELECT session_id, name FROM session WHERE path = %s
+        ''', (session_path,))
+        session_info = cur.fetchone()
+        
+        if not session_info:
+            cur.close()
+            conn.close()
+            return f"Session not found: {session_path}", 404
+            
+        session_id, session_name = session_info
+        
+        # Get tune basic info
+        cur.execute('''
+            SELECT name, tune_type, tunebook_count_cached 
+            FROM tune 
+            WHERE tune_id = %s
+        ''', (tune_id,))
+        tune_info = cur.fetchone()
+        
+        if not tune_info:
+            cur.close()
+            conn.close()
+            return f"Tune not found: {tune_id}", 404
+            
+        tune_name, tune_type, tunebook_count = tune_info
+        
+        # Get session_tune info (setting, overridden key, alias)
+        cur.execute('''
+            SELECT setting_id, key, alias 
+            FROM session_tune 
+            WHERE session_id = %s AND tune_id = %s
+        ''', (session_id, tune_id))
+        session_tune_info = cur.fetchone()
+        
+        if not session_tune_info:
+            cur.close()
+            conn.close()
+            return f"Tune not found in this session: {tune_id}", 404
+        
+        setting_id, overridden_key, alias = session_tune_info
+        
+        # Get play count for this session
+        cur.execute('''
+            SELECT COUNT(*) 
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+        ''', (session_id, tune_id))
+        play_count = cur.fetchone()[0]
+        
+        # Get session instances where this tune was played
+        cur.execute('''
+            SELECT DISTINCT 
+                si.date,
+                sit.order_number,
+                sit.name AS overridden_name,
+                sit.key_override,
+                sit.setting_override
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+            ORDER BY si.date DESC, sit.order_number ASC
+        ''', (session_id, tune_id))
+        
+        play_instances = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return render_template('session_tune_info.html',
+                             session_path=session_path,
+                             session_name=session_name,
+                             tune_name=tune_name,
+                             tune_type=tune_type,
+                             tunebook_count=tunebook_count,
+                             setting_id=setting_id,
+                             overridden_key=overridden_key,
+                             alias=alias,
+                             play_count=play_count,
+                             play_instances=play_instances,
+                             tune_id=tune_id)
+                             
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
+
 @app.route('/sessions/<path:full_path>')
 def session_handler(full_path):
     # Check if the last part of the path looks like a date (yyyy-mm-dd)
