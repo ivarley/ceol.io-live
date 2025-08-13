@@ -110,7 +110,10 @@
             </tr>
             <tr>
                 <th>TheSession.org Popularity</th>
-                <td>{{ tunebook_count }} tunebook{{ 's' if tunebook_count != 1 else '' }}</td>
+                <td>
+                    <span id="tunebook-count">{{ tunebook_count }} tunebook{{ 's' if tunebook_count != 1 else '' }}</span>
+                    <button id="refresh-tunebook" onclick="refreshTunebookCount()" style="margin-left: 10px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;">refresh</button>
+                </td>
             </tr>
         </table>
     </div>
@@ -186,6 +189,66 @@
 
 </div>
 </div>
+
+<script>
+function refreshTunebookCount() {
+    const button = document.getElementById('refresh-tunebook');
+    const countSpan = document.getElementById('tunebook-count');
+    
+    // Disable button and show loading state
+    button.disabled = true;
+    button.textContent = 'refreshing...';
+    
+    // Make API call
+    fetch(`/api/sessions/{{ session_path }}/tunes/{{ tune_id }}/refresh_tunebook_count`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the display with new count
+            const newCount = data.new_count;
+            const suffix = newCount === 1 ? '' : 's';
+            countSpan.textContent = `${newCount} tunebook${suffix}`;
+            
+            // Show a temporary success message
+            if (data.old_count !== data.new_count) {
+                button.textContent = 'updated!';
+                button.style.backgroundColor = '#28a745';
+                button.style.color = 'white';
+            } else {
+                button.textContent = 'unchanged';
+                button.style.backgroundColor = '#6c757d';
+                button.style.color = 'white';
+            }
+        } else {
+            // Show error message
+            button.textContent = 'error';
+            button.style.backgroundColor = '#dc3545';
+            button.style.color = 'white';
+            console.error('Error:', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        button.textContent = 'error';
+        button.style.backgroundColor = '#dc3545';
+        button.style.color = 'white';
+    })
+    .finally(() => {
+        // Reset button after 2 seconds
+        setTimeout(() => {
+            button.disabled = false;
+            button.textContent = 'refresh';
+            button.style.backgroundColor = '';
+            button.style.color = '';
+        }, 2000);
+    });
+}
+</script>
 
 </body>
 </html>

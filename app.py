@@ -4,6 +4,7 @@ import os
 import psycopg2
 from dotenv import load_dotenv
 import re
+import requests
 
 load_dotenv()
 
@@ -289,6 +290,65 @@ def session_tune_info(session_path, tune_id):
                              
     except Exception as e:
         return f"Database connection failed: {str(e)}"
+
+@app.route('/api/sessions/<path:session_path>/tunes/<int:tune_id>/refresh_tunebook_count', methods=['POST'])
+def refresh_tunebook_count_ajax(session_path, tune_id):
+    try:
+        # Fetch data from thesession.org API
+        api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'message': f'Failed to fetch data from thesession.org (status: {response.status_code})'})
+        
+        data = response.json()
+        
+        # Check if tunebooks property exists in the response
+        if 'tunebooks' not in data:
+            return jsonify({'success': False, 'message': 'No tunebooks data found in API response'})
+        
+        new_tunebook_count = data['tunebooks']
+        
+        # Update the database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get current cached count
+        cur.execute('SELECT tunebook_count_cached FROM tune WHERE tune_id = %s', (tune_id,))
+        result = cur.fetchone()
+        
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Tune not found in database'})
+        
+        current_count = result[0]
+        
+        # Update if different
+        if current_count != new_tunebook_count:
+            cur.execute(
+                'UPDATE tune SET tunebook_count_cached = %s WHERE tune_id = %s',
+                (new_tunebook_count, tune_id)
+            )
+            conn.commit()
+            message = f'Updated tunebook count from {current_count} to {new_tunebook_count}'
+        else:
+            message = f'Tunebook count unchanged ({current_count})'
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': message,
+            'old_count': current_count,
+            'new_count': new_tunebook_count
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({'success': False, 'message': f'Error connecting to thesession.org: {str(e)}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error updating tunebook count: {str(e)}'})
 
 @app.route('/sessions/<path:full_path>')
 def session_handler(full_path):
