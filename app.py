@@ -201,6 +201,9 @@ def session_tunes(session_path):
 
 @app.route('/sessions/<path:session_path>/tunes/<int:tune_id>')
 def session_tune_info(session_path, tune_id):
+    # Get optional session_instance_date from query parameter
+    session_instance_date = request.args.get('from_date')
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -286,7 +289,8 @@ def session_tune_info(session_path, tune_id):
                              alias=alias,
                              play_count=play_count,
                              play_instances=play_instances,
-                             tune_id=tune_id)
+                             tune_id=tune_id,
+                             session_instance_date=session_instance_date)
                              
     except Exception as e:
         return f"Database connection failed: {str(e)}"

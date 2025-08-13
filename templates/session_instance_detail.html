@@ -491,7 +491,7 @@
                     const infoHandler = function(event) {
                         event.preventDefault();
                         event.stopPropagation();
-                        window.location.href = `/sessions/${sessionPath}/tunes/${tuneId}`;
+                        window.location.href = `/sessions/${sessionPath}/tunes/${tuneId}?from_date=${sessionDate}`;
                     };
                     infoLink.addEventListener('click', infoHandler);
                     infoLink.addEventListener('touchend', infoHandler);

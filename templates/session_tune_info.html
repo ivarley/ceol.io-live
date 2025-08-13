@@ -49,6 +49,10 @@
             font-style: italic;
             color: #856404;
         }
+        .highlighted-instance {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
     </style>
 
     <!-- Meta -->
@@ -86,6 +90,12 @@
     <div class="docs-wrapper">
 	    <div class="docs-content">
         <div class="landing-page" style="display: block;">
+
+    {% if session_instance_date %}
+    <div style="margin-bottom: 20px;">
+        <p><a href="/sessions/{{ session_path }}/{{ session_instance_date }}">← Back to {{ session_name }} on {{ session_instance_date }}</a></p>
+    </div>
+    {% endif %}
 
     <h1>Information about {{ alias or tune_name }} as played in {{ session_name }}</h1>
     
@@ -151,7 +161,7 @@
         <h4>Session Instances:</h4>
         <ul class="instance-list">
             {% for instance in play_instances %}
-            <li>
+            <li {% if session_instance_date and instance[0]|string == session_instance_date %}class="highlighted-instance"{% endif %}>
                 <div class="instance-date">
                     <a href="/sessions/{{ session_path }}/{{ instance[0] }}">{{ instance[0] }}</a>
                 </div>
