@@ -320,6 +320,24 @@
         </div>
     </div>
     
+    <!-- Add Tune to Set Modal -->
+    <div id="add-tune-to-set-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Tunes to Set</h3>
+            </div>
+            <div class="modal-body">
+                <p>Enter comma-separated tune names to add to the end of this set:</p>
+                <label for="add-tune-to-set-input">Tune names:</label>
+                <textarea id="add-tune-to-set-input" placeholder="e.g. The Humours of Whiskey, Morrison's Jig" rows="3" style="resize: vertical; width: 100%; box-sizing: border-box;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="add-to-set-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="add-to-set-confirm-btn">Add</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Edit Session Instance Modal -->
     <div id="edit-session-instance-modal" class="modal-overlay">
         <div class="modal-content">
@@ -935,6 +953,20 @@
                         moveContainer.appendChild(moveLink);
                         moveContainer.appendChild(submenu);
                         contextMenu.appendChild(moveContainer);
+                        
+                        // Add option - only in edit mode
+                        const addLink = document.createElement('a');
+                        addLink.textContent = 'Add';
+                        addLink.style.color = '#28a745';
+                        const addHandler = function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showAddTuneToSetModal(orderNumber);
+                            contextMenu.style.display = 'none';
+                        };
+                        addLink.addEventListener('click', addHandler);
+                        addLink.addEventListener('touchend', addHandler);
+                        contextMenu.appendChild(addLink);
                     }
                     
                     // Delete option - only in edit mode
@@ -1052,6 +1084,20 @@
                         moveContainer.appendChild(moveLink);
                         moveContainer.appendChild(submenu);
                         contextMenu.appendChild(moveContainer);
+                        
+                        // Add option for name-only tunes
+                        const addLink = document.createElement('a');
+                        addLink.textContent = 'Add';
+                        addLink.style.color = '#28a745';
+                        const addHandler = function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showAddTuneToSetModal(orderNumber);
+                            contextMenu.style.display = 'none';
+                        };
+                        addLink.addEventListener('click', addHandler);
+                        addLink.addEventListener('touchend', addHandler);
+                        contextMenu.appendChild(addLink);
                         
                         // Still allow delete for name-only tunes in edit mode
                         const deleteLink = document.createElement('a');
@@ -1196,6 +1242,73 @@
             }
         });
         
+        // Add to Set Modal functionality
+        let currentAddToSetOrder = null;
+        
+        function showAddTuneToSetModal(orderNumber) {
+            currentAddToSetOrder = orderNumber;
+            
+            const modal = document.getElementById('add-tune-to-set-modal');
+            const textarea = document.getElementById('add-tune-to-set-input');
+            
+            textarea.value = '';
+            modal.style.display = 'flex';
+            textarea.focus();
+        }
+        
+        function hideAddTuneToSetModal() {
+            const modal = document.getElementById('add-tune-to-set-modal');
+            modal.style.display = 'none';
+            currentAddToSetOrder = null;
+        }
+        
+        function addTunesToSet() {
+            const textarea = document.getElementById('add-tune-to-set-input');
+            const tuneNames = textarea.value.trim();
+            
+            if (!tuneNames) {
+                showMessage('Please enter tune names', 'error');
+                return;
+            }
+            
+            if (!currentAddToSetOrder) {
+                showMessage('Invalid set selection', 'error');
+                return;
+            }
+            
+            // Call API to add tunes to the specific set
+            const container = document.getElementById('tune-sets');
+            container.classList.add('loading');
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/add_tunes_to_set`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tune_names: tuneNames,
+                    reference_order_number: currentAddToSetOrder
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    hideAddTuneToSetModal();
+                    loadTunes();
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to add tunes to set', 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                container.classList.remove('loading');
+            });
+        }
+        
         // Modal functionality
         let currentLinkingTune = null;
         let currentLinkingOrder = null;
@@ -1274,10 +1387,15 @@
         document.getElementById('link-cancel-btn').addEventListener('click', hideLinkTuneModal);
         document.getElementById('link-confirm-btn').addEventListener('click', linkTune);
         
+        // Add to Set Modal event listeners
+        document.getElementById('add-to-set-cancel-btn').addEventListener('click', hideAddTuneToSetModal);
+        document.getElementById('add-to-set-confirm-btn').addEventListener('click', addTunesToSet);
+        
         // Close modal on escape key
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
                 hideLinkTuneModal();
+                hideAddTuneToSetModal();
             }
         });
         
@@ -1288,11 +1406,25 @@
             }
         });
         
+        document.getElementById('add-tune-to-set-modal').addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) {
+                hideAddTuneToSetModal();
+            }
+        });
+        
         // Handle enter key in input
         document.getElementById('tune-link-input').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 linkTune();
             }
+        });
+        
+        document.getElementById('add-tune-to-set-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && event.ctrlKey) {
+                // Ctrl+Enter to submit
+                addTunesToSet();
+            }
+            // Regular Enter allows new lines in textarea
         });
         
         // Edit Session Instance Modal Functions

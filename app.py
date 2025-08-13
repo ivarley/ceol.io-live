@@ -1581,3 +1581,190 @@ def move_tune_ajax(session_path, date):
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to move tune: {str(e)}'})
+
+# Add Tunes to Set endpoint
+@app.route('/api/sessions/<path:session_path>/<date>/add_tunes_to_set', methods=['POST'])
+def add_tunes_to_set_ajax(session_path, date):
+    data = request.get_json()
+    tune_names_input = data.get('tune_names', '').strip()
+    reference_order_number = data.get('reference_order_number')
+    
+    if not tune_names_input or reference_order_number is None:
+        return jsonify({'success': False, 'message': 'Missing required parameters'})
+    
+    # Parse comma-separated tune names - same logic as existing add_tune function
+    tune_names_in_set = [normalize_apostrophes(name.strip()) for name in tune_names_input.split(',') if name.strip()]
+    
+    if not tune_names_in_set:
+        return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT si.session_instance_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        session_instance = cur.fetchone()
+        
+        if not session_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance[0]
+        
+        # Get all tunes ordered by order_number to determine set structure
+        cur.execute('''
+            SELECT order_number, continues_set, session_instance_tune_id
+            FROM session_instance_tune 
+            WHERE session_instance_id = %s 
+            ORDER BY order_number
+        ''', (session_instance_id,))
+        
+        all_tunes = cur.fetchall()
+        if not all_tunes:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'No tunes found'})
+        
+        # Find the reference tune and determine its set
+        reference_tune_index = next((i for i, tune in enumerate(all_tunes) if tune[0] == reference_order_number), -1)
+        if reference_tune_index == -1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Reference tune not found'})
+        
+        # Group tunes into sets to find where to insert
+        sets = []
+        current_set = []
+        for tune in all_tunes:
+            if not tune[1] and current_set:  # continues_set is False and we have a current set
+                sets.append(current_set)
+                current_set = []
+            current_set.append(tune)
+        if current_set:
+            sets.append(current_set)
+        
+        # Find which set the reference tune belongs to
+        target_set_index = -1
+        for set_index, tune_set in enumerate(sets):
+            if any(tune[0] == reference_order_number for tune in tune_set):
+                target_set_index = set_index
+                break
+        
+        if target_set_index == -1:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Reference tune set not found'})
+        
+        # Determine the insertion point (end of the target set)
+        target_set = sets[target_set_index]
+        last_order_in_set = target_set[-1][0]  # Order number of last tune in set
+        
+        # Calculate how many order numbers we need to shift
+        num_tunes_to_add = len(tune_names_in_set)
+        
+        # Save all affected tunes to history before making changes
+        # This includes all tunes after the insertion point
+        for tune_set in sets[target_set_index + 1:]:  # All sets after target set
+            for tune in tune_set:
+                save_to_history(cur, 'session_instance_tune', 'UPDATE', tune[2], 'add_tunes_to_set')
+        
+        # Update order numbers for all tunes after the insertion point
+        cur.execute('''
+            UPDATE session_instance_tune 
+            SET order_number = order_number + %s
+            WHERE session_instance_id = %s AND order_number > %s
+        ''', (num_tunes_to_add, session_instance_id, last_order_in_set))
+        
+        # Process each tune name to determine tune_id or use as name-only
+        tune_data = []  # List of (tune_id, name) tuples for the new tunes
+        
+        for tune_name in tune_names_in_set:
+            tune_id = None
+            final_name = tune_name
+            
+            # First, search session_tune table for alias match (case insensitive)
+            cur.execute('''
+                SELECT tune_id 
+                FROM session_tune 
+                WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+            ''', (session_id, tune_name))
+            
+            session_tune_matches = cur.fetchall()
+            
+            if len(session_tune_matches) > 1:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'})
+            elif len(session_tune_matches) == 1:
+                tune_id = session_tune_matches[0][0]
+            else:
+                # No alias match, search tune table by name with flexible "The " matching
+                cur.execute('''
+                    SELECT tune_id, name 
+                    FROM tune 
+                    WHERE (LOWER(name) = LOWER(%s) 
+                    OR LOWER(name) = LOWER('The ' || %s) 
+                    OR LOWER('The ' || name) = LOWER(%s))
+                ''', (tune_name, tune_name, tune_name))
+                
+                tune_matches = cur.fetchall()
+                
+                if len(tune_matches) > 1:
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'})
+                elif len(tune_matches) == 1:
+                    tune_id = tune_matches[0][0]
+                    final_name = tune_matches[0][1]  # Use the actual tune name from database
+                # If no matches found, tune_id stays None and we'll save as name-only
+            
+            tune_data.append((tune_id, final_name))
+        
+        # Insert new tunes at the end of the target set
+        for i, (tune_id, name) in enumerate(tune_data):
+            new_order_number = last_order_in_set + 1 + i
+            continues_set = True  # All added tunes continue the existing set
+            
+            # Insert the new tune
+            cur.execute('''
+                INSERT INTO session_instance_tune 
+                (session_instance_id, tune_id, name, order_number, continues_set, played_timestamp, inserted_timestamp)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING session_instance_tune_id
+            ''', (session_instance_id, tune_id, name if tune_id is None else None, new_order_number, continues_set))
+            
+            new_tune_result = cur.fetchone()
+            if new_tune_result:
+                new_tune_id = new_tune_result[0]
+                save_to_history(cur, 'session_instance_tune', 'INSERT', new_tune_id, 'add_tunes_to_set')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if len(tune_names_in_set) == 1:
+            message = f'Added "{tune_names_in_set[0]}" to the set successfully!'
+        else:
+            message = f'Added {len(tune_names_in_set)} tunes to the set successfully!'
+        
+        return jsonify({'success': True, 'message': message})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to add tunes to set: {str(e)}'})
