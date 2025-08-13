@@ -829,7 +829,8 @@ def add_tune_ajax(session_path, date):
     # Build sets structure: list of lists, where each inner list is tunes in a set
     tune_sets = []
     for line in lines:
-        tune_names_in_set = [normalize_apostrophes(name.strip()) for name in line.split(',') if name.strip()]
+        # Split by comma, semicolon, or forward slash
+        tune_names_in_set = [normalize_apostrophes(name.strip()) for name in re.split('[,;/]', line) if name.strip()]
         if tune_names_in_set:
             tune_sets.append(tune_names_in_set)
     
@@ -1592,8 +1593,8 @@ def add_tunes_to_set_ajax(session_path, date):
     if not tune_names_input or reference_order_number is None:
         return jsonify({'success': False, 'message': 'Missing required parameters'})
     
-    # Parse comma-separated tune names - same logic as existing add_tune function
-    tune_names_in_set = [normalize_apostrophes(name.strip()) for name in tune_names_input.split(',') if name.strip()]
+    # Parse comma, semicolon, or forward slash separated tune names - same logic as existing add_tune function
+    tune_names_in_set = [normalize_apostrophes(name.strip()) for name in re.split('[,;/]', tune_names_input) if name.strip()]
     
     if not tune_names_in_set:
         return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
