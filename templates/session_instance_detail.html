@@ -388,10 +388,10 @@
         </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
-            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px;">
+            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                 <label for="tune_name_input">Add tune(s) by name:</label>
-                <textarea id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit;"></textarea>
-                <button type="submit" style="align-self: flex-start;">Add</button>
+                <textarea id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 6px 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit; line-height: 1.2; box-sizing: border-box; vertical-align: top;"></textarea>
+                <button type="submit">Add</button>
             </form>
         </div>
     </div>
@@ -514,6 +514,8 @@
             loadTunes(); // Reload tunes to show/hide delete buttons
         }
         
+        let adjustTextareaHeight; // Global reference to the adjust function
+        
         function setupTextareaAutoExpand() {
             const textarea = document.getElementById('tune_name_input');
             
@@ -521,6 +523,9 @@
                 textarea.style.height = 'auto';
                 textarea.style.height = Math.max(36, textarea.scrollHeight) + 'px';
             }
+            
+            // Make adjustHeight accessible globally
+            adjustTextareaHeight = adjustHeight;
             
             // Auto-expand on input
             textarea.addEventListener('input', adjustHeight);
@@ -667,7 +672,12 @@
             .then(data => {
                 if (data.success) {
                     showMessage(data.message);
-                    document.getElementById('tune_name_input').value = '';
+                    const textarea = document.getElementById('tune_name_input');
+                    textarea.value = '';
+                    // Reset textarea height using the existing adjust function
+                    if (adjustTextareaHeight) {
+                        setTimeout(adjustTextareaHeight, 0);
+                    }
                     loadTunes();
                 } else {
                     showMessage(data.message, 'error');
