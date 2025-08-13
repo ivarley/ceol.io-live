@@ -99,6 +99,12 @@
 
     <h1>Information about {{ alias or tune_name }} as played in {{ session_name }}</h1>
     
+    {% if not session_instance_date %}
+    <div style="margin-bottom: 20px;">
+        <p><a href="/sessions/{{ session_path }}/tunes">← Back to tunes for {{ session_name }}</a></p>
+    </div>
+    {% endif %}
+    
     <div class="tune-info-section">
         <h3>Tune Information</h3>
         <table class="info-table">

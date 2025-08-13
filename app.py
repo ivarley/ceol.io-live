@@ -233,13 +233,14 @@ def session_tunes(session_path):
                 COALESCE(st.alias, t.name) AS tune_name,
                 t.tune_type,
                 COUNT(sit.session_instance_tune_id) AS play_count,
-                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
+                st.setting_id
             FROM session_tune st
             LEFT JOIN tune t ON st.tune_id = t.tune_id
             LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id
             LEFT JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
             WHERE st.session_id = %s AND (si.session_id = %s OR si.session_id IS NULL)
-            GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached
+            GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached, st.setting_id
             ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
         ''', (session_id, session_id))
         

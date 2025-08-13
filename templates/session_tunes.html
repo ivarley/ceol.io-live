@@ -125,11 +125,11 @@
             {% for tune in tunes %}
             <tr data-name="{{ tune[1] or '' }}" data-session-popularity="{{ tune[3] }}" data-thesession-popularity="{{ tune[4] }}">
                 <td>
+                    <span style="margin-right: 10px;">{{ tune[1] or 'Unknown' }}</span>
                     {% if tune[0] %}
-                        <a href="https://thesession.org/tunes/{{ tune[0] }}" target="_blank" class="tune-link">{{ tune[1] or 'Unknown' }}</a>
-                    {% else %}
-                        {{ tune[1] or 'Unknown' }}
+                        <a href="https://thesession.org/tunes/{{ tune[0] }}{% if tune[5] %}#setting{{ tune[5] }}{% endif %}" target="_blank" class="tune-link" style="margin-right: 8px;">Dots</a>
                     {% endif %}
+                    <a href="/sessions/{{ session_path }}/tunes/{{ tune[0] }}" class="tune-link">Info</a>
                 </td>
                 <td>{{ tune[2] or 'Unknown' }}</td>
                 <td class="numeric">{{ tune[3] }}</td>
