@@ -245,10 +245,10 @@
         </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
-            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px;">
                 <label for="tune_name_input">Add tune(s) by name:</label>
-                <input type="text" id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 8px;">
-                <button type="submit">Add</button>
+                <textarea id="tune_name_input" placeholder="Enter tune name(s), comma-separated for sets, newlines for set breaks" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit;"></textarea>
+                <button type="submit" style="align-self: flex-start;">Add</button>
             </form>
         </div>
     </div>
@@ -268,6 +268,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadTunes();
             updateUI();
+            setupTextareaAutoExpand();
         });
         
         // Toggle edit mode
@@ -300,6 +301,40 @@
             }
             
             loadTunes(); // Reload tunes to show/hide delete buttons
+        }
+        
+        function setupTextareaAutoExpand() {
+            const textarea = document.getElementById('tune_name_input');
+            
+            function adjustHeight() {
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.max(36, textarea.scrollHeight) + 'px';
+            }
+            
+            // Auto-expand on input
+            textarea.addEventListener('input', adjustHeight);
+            
+            // Auto-expand on paste
+            textarea.addEventListener('paste', function() {
+                setTimeout(adjustHeight, 0);
+            });
+            
+            // Handle Shift+Enter for new lines, Enter for form submission
+            textarea.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    if (event.shiftKey) {
+                        // Shift+Enter: Allow new line and adjust height
+                        setTimeout(adjustHeight, 0);
+                    } else {
+                        // Regular Enter: Submit form
+                        event.preventDefault();
+                        document.getElementById('tune-form').dispatchEvent(new Event('submit'));
+                    }
+                }
+            });
+            
+            // Initial adjustment in case there's already content
+            adjustHeight();
         }
         
         function showMessage(message, type = 'success') {
