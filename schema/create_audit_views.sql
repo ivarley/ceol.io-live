@@ -48,7 +48,7 @@ CREATE OR REPLACE VIEW recent_changes_detail AS
 SELECT 
     changed_at,
     'session' AS table_name,
-    session_id AS record_id,
+    session_id::TEXT AS record_id,
     operation,
     changed_by,
     name AS record_name
@@ -58,7 +58,7 @@ UNION ALL
 SELECT 
     changed_at,
     'session_instance' AS table_name,
-    session_instance_id AS record_id,
+    session_instance_id::TEXT AS record_id,
     operation,
     changed_by,
     CAST(date AS TEXT) AS record_name
@@ -68,7 +68,7 @@ UNION ALL
 SELECT 
     changed_at,
     'tune' AS table_name,
-    tune_id AS record_id,
+    tune_id::TEXT AS record_id,
     operation,
     changed_by,
     name AS record_name
@@ -78,7 +78,7 @@ UNION ALL
 SELECT 
     changed_at,
     'session_tune' AS table_name,
-    (session_id::TEXT || '/' || tune_id::TEXT)::INTEGER AS record_id,
+    (session_id::TEXT || '/' || tune_id::TEXT) AS record_id,
     operation,
     changed_by,
     alias AS record_name
@@ -88,7 +88,7 @@ UNION ALL
 SELECT 
     changed_at,
     'session_instance_tune' AS table_name,
-    session_instance_tune_id AS record_id,
+    session_instance_tune_id::TEXT AS record_id,
     operation,
     changed_by,
     name AS record_name
