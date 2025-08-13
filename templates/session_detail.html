@@ -162,7 +162,7 @@
         <p><strong>Location:</strong> {{ session.location_name }}</p>
         {% endif %}
         
-        <p><strong>Address:</strong> {{ session.city }}, {{ session.state }}, {{ session.country }}</p>
+        <p><strong>Address:</strong> {% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}</p>
         
         {% if session.location_website %}
         <p><strong>Website:</strong> <a href="{{ session.location_website }}" target="_blank">{{ session.location_website }}</a></p>

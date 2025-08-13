@@ -500,7 +500,7 @@ def session_handler(full_path):
             cur = conn.cursor()
             cur.execute('''
                 SELECT session_id, thesession_id, name, path, location_name, location_website, 
-                       location_phone, city, state, country, comments, unlisted_address, 
+                       location_phone, location_street, city, state, country, comments, unlisted_address, 
                        initiation_date, termination_date, recurrence 
                 FROM session 
                 WHERE path = %s
@@ -517,14 +517,15 @@ def session_handler(full_path):
                     'location_name': session[4],
                     'location_website': session[5],
                     'location_phone': session[6],
-                    'city': session[7],
-                    'state': session[8],
-                    'country': session[9],
-                    'comments': session[10],
-                    'unlisted_address': session[11],
-                    'initiation_date': session[12],
-                    'termination_date': session[13],
-                    'recurrence': session[14]
+                    'location_street': session[7],
+                    'city': session[8],
+                    'state': session[9],
+                    'country': session[10],
+                    'comments': session[11],
+                    'unlisted_address': session[12],
+                    'initiation_date': session[13],
+                    'termination_date': session[14],
+                    'recurrence': session[15]
                 }
                 
                 # Fetch past session instances in descending date order
