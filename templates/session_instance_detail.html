@@ -329,7 +329,7 @@
             <div class="modal-body">
                 <p>Enter comma-separated tune names to add to the end of this set:</p>
                 <label for="add-tune-to-set-input">Tune names:</label>
-                <textarea id="add-tune-to-set-input" placeholder="e.g. The Humours of Whiskey, Morrison's Jig" rows="3" style="resize: vertical; width: 100%; box-sizing: border-box;"></textarea>
+                <input type="text" id="add-tune-to-set-input" placeholder="e.g. The Humours of Whiskey, Morrison's Jig" style="width: 100%; box-sizing: border-box;">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="add-to-set-cancel-btn">Cancel</button>
@@ -1249,11 +1249,11 @@
             currentAddToSetOrder = orderNumber;
             
             const modal = document.getElementById('add-tune-to-set-modal');
-            const textarea = document.getElementById('add-tune-to-set-input');
+            const input = document.getElementById('add-tune-to-set-input');
             
-            textarea.value = '';
+            input.value = '';
             modal.style.display = 'flex';
-            textarea.focus();
+            input.focus();
         }
         
         function hideAddTuneToSetModal() {
@@ -1263,8 +1263,8 @@
         }
         
         function addTunesToSet() {
-            const textarea = document.getElementById('add-tune-to-set-input');
-            const tuneNames = textarea.value.trim();
+            const input = document.getElementById('add-tune-to-set-input');
+            const tuneNames = input.value.trim();
             
             if (!tuneNames) {
                 showMessage('Please enter tune names', 'error');
@@ -1420,11 +1420,9 @@
         });
         
         document.getElementById('add-tune-to-set-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && event.ctrlKey) {
-                // Ctrl+Enter to submit
+            if (event.key === 'Enter') {
                 addTunesToSet();
             }
-            // Regular Enter allows new lines in textarea
         });
         
         // Edit Session Instance Modal Functions
