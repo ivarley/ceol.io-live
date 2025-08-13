@@ -426,7 +426,8 @@ def session_handler(full_path):
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute('''
-                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled
+                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled, 
+                       si.location_override, s.location_name
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE s.path = %s AND si.date = %s
@@ -440,6 +441,8 @@ def session_handler(full_path):
                     'comments': session_instance[2],
                     'session_instance_id': session_instance[3],
                     'is_cancelled': session_instance[4],
+                    'location_override': session_instance[5],
+                    'default_location': session_instance[6],
                     'session_path': session_path
                 }
                 
@@ -645,6 +648,169 @@ def add_session_instance_ajax(session_path):
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to create session instance: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/<date>/update', methods=['PUT'])
+def update_session_instance_ajax(session_path, date):
+    new_date = request.json.get('date', '').strip()
+    location = request.json.get('location', '').strip() if request.json.get('location') else None
+    comments = request.json.get('comments', '').strip() if request.json.get('comments') else None
+    cancelled = request.json.get('cancelled', False)
+    
+    if not new_date:
+        return jsonify({'success': False, 'message': 'Please enter a session date'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id and location_name for this session_path
+        cur.execute('SELECT session_id, location_name FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id, session_location_name = session_result
+        
+        # Get the session instance ID
+        cur.execute('''
+            SELECT session_instance_id FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        instance_result = cur.fetchone()
+        
+        if not instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = instance_result[0]
+        
+        # If date is changing, check if new date conflicts with existing instance
+        if new_date != date:
+            cur.execute('''
+                SELECT session_instance_id FROM session_instance 
+                WHERE session_id = %s AND date = %s
+            ''', (session_id, new_date))
+            existing_instance = cur.fetchone()
+            
+            if existing_instance:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': f'Session instance for {new_date} already exists'})
+        
+        # Determine location_override: only set if location is provided AND different from session's location_name
+        location_override = None
+        if location and location != session_location_name:
+            location_override = location
+        
+        # Save current state to history before update
+        save_to_history(cur, 'session_instance', 'UPDATE', session_instance_id)
+        
+        # Update the session instance
+        cur.execute('''
+            UPDATE session_instance 
+            SET date = %s, location_override = %s, is_cancelled = %s, comments = %s
+            WHERE session_instance_id = %s
+        ''', (new_date, location_override, cancelled, comments, session_instance_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Session instance updated successfully!'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to update session instance: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/<date>/tune_count')
+def get_session_tune_count_ajax(session_path, date):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get tune count for this session instance
+        cur.execute('''
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        
+        tune_count = cur.fetchone()[0]
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'tune_count': tune_count})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to get tune count: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/<date>/delete', methods=['DELETE'])
+def delete_session_instance_ajax(session_path, date):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get the session instance ID
+        cur.execute('''
+            SELECT session_instance_id FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        instance_result = cur.fetchone()
+        
+        if not instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = instance_result[0]
+        
+        # Save to history before deletion
+        save_to_history(cur, 'session_instance', 'DELETE', session_instance_id)
+        
+        # Get all session_instance_tune records to save to history before deletion
+        cur.execute('''
+            SELECT session_instance_tune_id FROM session_instance_tune 
+            WHERE session_instance_id = %s
+        ''', (session_instance_id,))
+        tune_records = cur.fetchall()
+        
+        # Save each tune record to history before deletion
+        for tune_record in tune_records:
+            save_to_history(cur, 'session_instance_tune', 'DELETE', tune_record[0])
+        
+        # Explicitly delete session_instance_tune records first
+        cur.execute('''
+            DELETE FROM session_instance_tune WHERE session_instance_id = %s
+        ''', (session_instance_id,))
+        
+        # Then delete the session instance
+        cur.execute('''
+            DELETE FROM session_instance WHERE session_instance_id = %s
+        ''', (session_instance_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Session instance for {date} deleted successfully!'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to delete session instance: {str(e)}'})
 
 @app.route('/api/sessions/<path:session_path>/<date>/add_tune', methods=['POST'])
 def add_tune_ajax(session_path, date):

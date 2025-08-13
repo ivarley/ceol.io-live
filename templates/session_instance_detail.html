@@ -66,6 +66,36 @@
             color: #495057;
             font-style: italic;
         }
+        .edit-link {
+            color: #007bff;
+            text-decoration: none;
+            margin-left: 15px;
+            font-size: 0.7em;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .edit-link:hover {
+            text-decoration: underline;
+        }
+        .editable-header:hover .edit-link {
+            opacity: 1;
+        }
+        .delete-link {
+            color: #dc3545;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e9ecef;
+        }
+        .delete-link:hover {
+            text-decoration: underline;
+        }
         .tune-context-menu {
             position: absolute;
             background: white;
@@ -210,8 +240,14 @@
 	    <div class="docs-content">
         <div class="landing-page" style="display: block;">
 
-    <h1>{{ session_instance.session_name }}</h1>
-    <h2{% if session_instance.is_cancelled %} class="cancelled-date"{% endif %}>{{ session_instance.date }}</h2>
+    <h1 class="editable-header">{{ session_instance.session_name }}<span class="edit-link" id="edit-name-btn">Edit</span></h1>
+    <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
+    
+    {% if session_instance.location_override %}
+    <p style="margin: 10px 0; color: #666; font-style: italic;">
+        <strong>Note</strong> - actual location of this session: {{ session_instance.location_override }}
+    </p>
+    {% endif %}
     
     <div id="message-container">
         {% with messages = get_flashed_messages() %}
@@ -239,6 +275,37 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="link-cancel-btn">Cancel</button>
                 <button type="button" class="btn-primary" id="link-confirm-btn">Link</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Session Instance Modal -->
+    <div id="edit-session-instance-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Session Instance</h3>
+            </div>
+            <div class="modal-body">
+                <label for="edit-session-date-input">Session Date:</label>
+                <input type="date" id="edit-session-date-input" required>
+                
+                <label for="edit-session-location-input" style="margin-top: 16px;">Location:</label>
+                <input type="text" id="edit-session-location-input" placeholder="The usual: {{ session_instance.session_name }}">
+                
+                <label for="edit-session-comments-input" style="margin-top: 16px;">Comments:</label>
+                <textarea id="edit-session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
+                
+                <div style="margin-top: 16px;">
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" id="edit-session-cancelled-input" style="margin-right: 8px; width: auto;">
+                        Cancelled?
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" class="delete-link" id="delete-session-btn">Delete this session instance</a>
+                <button type="button" class="btn-secondary" id="edit-session-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="edit-session-save-btn">Save</button>
             </div>
         </div>
     </div>
@@ -282,6 +349,15 @@
         const sessionDate = '{{ session_instance.date }}';
         const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
         
+        // Session instance data for editing
+        const sessionInstanceData = {
+            date: '{{ session_instance.date }}',
+            location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
+            default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
+            comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
+            is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
+        };
+        
         // Check if we should start in edit mode (for newly created instances)
         const urlParams = new URLSearchParams(window.location.search);
         let editMode = !isCancelled && urlParams.get('edit') === 'true';
@@ -308,6 +384,48 @@
                 updateUI();
             });
         }
+        
+        // Edit session instance event listeners (always available)
+        document.getElementById('edit-name-btn').addEventListener('click', showEditSessionModal);
+        document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
+        document.getElementById('edit-session-cancel-btn').addEventListener('click', hideEditSessionModal);
+        document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
+        document.getElementById('delete-session-btn').addEventListener('click', confirmDeleteSession);
+        
+        // Close edit modal on escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideEditSessionModal();
+            }
+        });
+        
+        // Close edit modal when clicking outside
+        document.getElementById('edit-session-instance-modal').addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) {
+                hideEditSessionModal();
+            }
+        });
+        
+        // Handle enter key in edit session modal inputs
+        document.getElementById('edit-session-date-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                saveSessionInstance();
+            }
+        });
+        
+        document.getElementById('edit-session-location-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                saveSessionInstance();
+            }
+        });
+        
+        document.getElementById('edit-session-comments-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent new line in textarea
+                saveSessionInstance();
+            }
+            // Shift+Enter allows new lines in the comments textarea
+        });
         
         // Handle add tune form submission (only if not cancelled)
         if (!isCancelled) {
@@ -844,6 +962,140 @@
                 linkTune();
             }
         });
+        
+        // Edit Session Instance Modal Functions
+        function showEditSessionModal() {
+            const modal = document.getElementById('edit-session-instance-modal');
+            const dateInput = document.getElementById('edit-session-date-input');
+            const locationInput = document.getElementById('edit-session-location-input');
+            const commentsInput = document.getElementById('edit-session-comments-input');
+            const cancelledInput = document.getElementById('edit-session-cancelled-input');
+            
+            // Populate fields with current values
+            dateInput.value = sessionInstanceData.date;
+            locationInput.value = sessionInstanceData.location_override || '';
+            commentsInput.value = sessionInstanceData.comments || '';
+            cancelledInput.checked = sessionInstanceData.is_cancelled;
+            
+            modal.style.display = 'flex';
+            dateInput.focus();
+        }
+        
+        function hideEditSessionModal() {
+            const modal = document.getElementById('edit-session-instance-modal');
+            modal.style.display = 'none';
+        }
+        
+        function saveSessionInstance() {
+            const dateInput = document.getElementById('edit-session-date-input');
+            const locationInput = document.getElementById('edit-session-location-input');
+            const commentsInput = document.getElementById('edit-session-comments-input');
+            const cancelledInput = document.getElementById('edit-session-cancelled-input');
+            
+            const date = dateInput.value.trim();
+            const location = locationInput.value.trim();
+            const comments = commentsInput.value.trim();
+            const cancelled = cancelledInput.checked;
+            
+            if (!date) {
+                showMessage('Please enter a session date', 'error');
+                return;
+            }
+            
+            // Prepare request data
+            const requestData = { 
+                date: date,
+                cancelled: cancelled
+            };
+            
+            // Only include location if it's provided
+            if (location) {
+                requestData.location = location;
+            }
+            
+            // Only include comments if provided
+            if (comments) {
+                requestData.comments = comments;
+            }
+            
+            // Call API to update the session instance
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/update`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    hideEditSessionModal();
+                    // If date changed, redirect to new URL, otherwise reload current page
+                    if (date !== sessionDate) {
+                        window.location.href = `/sessions/${sessionPath}/${date}`;
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to update session instance', 'error');
+                console.error('Error:', error);
+            });
+        }
+        
+        function confirmDeleteSession() {
+            // First get the tune count for this session instance
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/tune_count`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let confirmMessage = `Delete the ${sessionDate} instance of this session?`;
+                        if (data.tune_count > 0) {
+                            confirmMessage += `\n\nThere are ${data.tune_count} tunes recorded for this session.`;
+                        }
+                        
+                        if (confirm(confirmMessage)) {
+                            deleteSessionInstance();
+                        }
+                    } else {
+                        showMessage('Failed to get session info', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Proceed with delete confirmation without tune count
+                    if (confirm(`Delete the ${sessionDate} instance of this session?`)) {
+                        deleteSessionInstance();
+                    }
+                });
+        }
+        
+        function deleteSessionInstance() {
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    hideEditSessionModal();
+                    // Redirect back to session detail page after a short delay
+                    setTimeout(() => {
+                        window.location.href = `/sessions/${sessionPath}`;
+                    }, 1500);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to delete session instance', 'error');
+                console.error('Error:', error);
+            });
+        }
     </script>
 
 <!-- end landing page -->
