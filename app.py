@@ -763,9 +763,71 @@ def link_tune_ajax(session_path, date):
                 setting_msg = f' with setting #{setting_id}' if setting_id else ''
                 message = f'Added "{tune_name}" to session and linked{setting_msg}'
             else:
-                cur.close()
-                conn.close()
-                return jsonify({'success': False, 'message': 'Fetching new tunes from thesession.org not yet implemented'})
+                # Tune doesn't exist in our database, fetch from thesession.org
+                try:
+                    # Fetch data from thesession.org API
+                    api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+                    response = requests.get(api_url, timeout=10)
+                    
+                    if response.status_code == 404:
+                        cur.close()
+                        conn.close()
+                        return jsonify({'success': False, 'message': f'Tune #{tune_id} not found on thesession.org'})
+                    elif response.status_code != 200:
+                        cur.close()
+                        conn.close()
+                        return jsonify({'success': False, 'message': f'Failed to fetch tune data from thesession.org (status: {response.status_code})'})
+                    
+                    data = response.json()
+                    
+                    # Extract required fields
+                    if 'name' not in data or 'type' not in data:
+                        cur.close()
+                        conn.close()
+                        return jsonify({'success': False, 'message': 'Invalid tune data received from thesession.org'})
+                    
+                    tune_name_from_api = data['name']
+                    tune_type = data['type'].title()  # Convert to title case
+                    tunebook_count = data.get('tunebooks', 0)  # Default to 0 if not present
+                    
+                    # Insert new tune into tune table
+                    cur.execute('''
+                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (tune_id, tune_name_from_api, tune_type, tunebook_count))
+                    
+                    # Determine if we need to use an alias
+                    alias = tune_name if tune_name != tune_name_from_api else None
+                    
+                    # Add to session_tune with alias and setting_id
+                    cur.execute('''
+                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
+                        VALUES (%s, %s, %s, %s)
+                    ''', (session_id, tune_id, alias, setting_id))
+                    
+                    # Update session_instance_tune
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET tune_id = %s, name = NULL
+                        WHERE session_instance_id = %s AND order_number = %s
+                    ''', (tune_id, session_instance_id, order_number))
+                    
+                    setting_msg = f' with setting #{setting_id}' if setting_id else ''
+                    message = f'Fetched "{tune_name_from_api}" from thesession.org and added to session{setting_msg}'
+                    
+                except requests.exceptions.Timeout:
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': 'Timeout connecting to thesession.org'})
+                except requests.exceptions.RequestException as e:
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': f'Error connecting to thesession.org: {str(e)}'})
+                except Exception as e:
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': f'Error processing tune data: {str(e)}'})
+        
         
         conn.commit()
         cur.close()
