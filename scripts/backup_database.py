@@ -45,13 +45,16 @@ def get_db_connection():
         sys.exit(1)
 
 def get_all_tables(cursor):
-    """Get list of all user tables in the database"""
+    """Get list of all user tables in the database, ordered for proper restore"""
     cursor.execute("""
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
         AND table_type = 'BASE TABLE'
-        ORDER BY table_name;
+        ORDER BY 
+            -- Base tables first, then history tables
+            CASE WHEN table_name LIKE '%_history' THEN 2 ELSE 1 END,
+            table_name;
     """)
     return [row[0] for row in cursor.fetchall()]
 
@@ -162,7 +165,12 @@ def create_backup():
     try:
         # Get all tables
         tables = get_all_tables(cursor)
-        print(f"Found {len(tables)} tables: {', '.join(tables)}")
+        base_tables = [t for t in tables if not t.endswith('_history')]
+        history_tables = [t for t in tables if t.endswith('_history')]
+        
+        print(f"Found {len(tables)} tables:")
+        print(f"  Base tables ({len(base_tables)}): {', '.join(base_tables)}")
+        print(f"  History/audit tables ({len(history_tables)}): {', '.join(history_tables)}")
         print()
         
         # Create backup file
@@ -175,6 +183,13 @@ def create_backup():
             f.write("-- \n")
             f.write("-- This file contains INSERT statements to restore all data.\n")
             f.write("-- Run this against an empty database with the same schema.\n")
+            f.write("-- \n")
+            f.write(f"-- Tables included:\n")
+            f.write(f"--   Base tables ({len(base_tables)}): {', '.join(base_tables)}\n")
+            f.write(f"--   History/audit tables ({len(history_tables)}): {', '.join(history_tables)}\n")
+            f.write("-- \n")
+            f.write("-- NOTE: History tables contain audit trails for undo/diff functionality.\n")
+            f.write("--       All base tables have created_date and last_modified_date columns.\n")
             f.write("-- \n\n")
             
             f.write("-- Disable triggers and constraints during restore for speed\n")

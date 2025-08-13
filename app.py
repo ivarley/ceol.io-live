@@ -29,6 +29,62 @@ def get_db_connection():
     )
     return conn
 
+def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
+    """Save a record to its history table before modification/deletion"""
+    history_table = f"{table_name}_history"
+    
+    if table_name == 'session':
+        cur.execute('''
+            INSERT INTO session_history 
+            (session_id, operation, changed_by, thesession_id, name, path, location_name, 
+             location_website, location_phone, city, state, country, comments, 
+             unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date)
+            SELECT session_id, %s, %s, thesession_id, name, path, location_name, 
+                   location_website, location_phone, city, state, country, comments, 
+                   unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date
+            FROM session WHERE session_id = %s
+        ''', (operation, changed_by, record_id))
+    
+    elif table_name == 'session_instance':
+        cur.execute('''
+            INSERT INTO session_instance_history 
+            (session_instance_id, operation, changed_by, session_id, date, start_time, 
+             end_time, location_override, is_cancelled, comments, created_date, last_modified_date)
+            SELECT session_instance_id, %s, %s, session_id, date, start_time, 
+                   end_time, location_override, is_cancelled, comments, created_date, last_modified_date
+            FROM session_instance WHERE session_instance_id = %s
+        ''', (operation, changed_by, record_id))
+    
+    elif table_name == 'tune':
+        cur.execute('''
+            INSERT INTO tune_history 
+            (tune_id, operation, changed_by, name, tune_type, tunebook_count_cached, created_date, last_modified_date)
+            SELECT tune_id, %s, %s, name, tune_type, tunebook_count_cached, created_date, last_modified_date
+            FROM tune WHERE tune_id = %s
+        ''', (operation, changed_by, record_id))
+    
+    elif table_name == 'session_tune':
+        # For session_tune, record_id should be a tuple (session_id, tune_id)
+        session_id, tune_id = record_id
+        cur.execute('''
+            INSERT INTO session_tune_history 
+            (session_id, tune_id, operation, changed_by, setting_id, key, alias, created_date, last_modified_date)
+            SELECT session_id, tune_id, %s, %s, setting_id, key, alias, created_date, last_modified_date
+            FROM session_tune WHERE session_id = %s AND tune_id = %s
+        ''', (operation, changed_by, session_id, tune_id))
+    
+    elif table_name == 'session_instance_tune':
+        cur.execute('''
+            INSERT INTO session_instance_tune_history 
+            (session_instance_tune_id, operation, changed_by, session_instance_id, tune_id, 
+             name, order_number, continues_set, played_timestamp, inserted_timestamp, 
+             key_override, setting_override, created_date, last_modified_date)
+            SELECT session_instance_tune_id, %s, %s, session_instance_id, tune_id, 
+                   name, order_number, continues_set, played_timestamp, inserted_timestamp, 
+                   key_override, setting_override, created_date, last_modified_date
+            FROM session_instance_tune WHERE session_instance_tune_id = %s
+        ''', (operation, changed_by, record_id))
+
 @app.route('/')
 def hello_world():
     try:
@@ -639,13 +695,14 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get the tune name and check if this tune starts a set
+        # Get the tune info and session_instance_tune_id for history
         cur.execute('''
             SELECT 
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
                 sit.continues_set,
                 sit.session_instance_id,
-                sit.tune_id
+                sit.tune_id,
+                sit.session_instance_tune_id
             FROM session_instance_tune sit
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
             LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -664,11 +721,26 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
             conn.close()
             return jsonify({'success': False, 'message': 'Tune not found'})
         
-        tune_name, continues_set, session_instance_id, tune_id = tune_info
+        tune_name, continues_set, session_instance_id, tune_id, session_instance_tune_id = tune_info
+        
+        # Save to history before making changes
+        save_to_history(cur, 'session_instance_tune', 'DELETE', session_instance_tune_id)
         
         # If this tune starts a set (continues_set = False) and there's a next tune,
         # update the next tune to start the set
         if not continues_set:
+            # Get the next tune's ID for history
+            cur.execute('''
+                SELECT session_instance_tune_id 
+                FROM session_instance_tune 
+                WHERE session_instance_id = %s AND order_number = %s
+            ''', (session_instance_id, order_number + 1))
+            next_tune_result = cur.fetchone()
+            
+            if next_tune_result:
+                next_tune_id = next_tune_result[0]
+                save_to_history(cur, 'session_instance_tune', 'UPDATE', next_tune_id)
+                
             cur.execute('''
                 UPDATE session_instance_tune 
                 SET continues_set = FALSE 
@@ -752,6 +824,18 @@ def link_tune_ajax(session_path, date):
         session_tune_exists = cur.fetchone()
         
         if session_tune_exists:
+            # Get the session_instance_tune_id for history
+            cur.execute('''
+                SELECT session_instance_tune_id 
+                FROM session_instance_tune 
+                WHERE session_instance_id = %s AND order_number = %s
+            ''', (session_instance_id, order_number))
+            sit_result = cur.fetchone()
+            
+            if sit_result:
+                sit_id = sit_result[0]
+                save_to_history(cur, 'session_instance_tune', 'UPDATE', sit_id)
+            
             # Tune already in session_tune, just update session_instance_tune
             # Use setting_id as setting_override if provided
             cur.execute('''
@@ -773,6 +857,18 @@ def link_tune_ajax(session_path, date):
                     INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
                     VALUES (%s, %s, %s, %s)
                 ''', (session_id, tune_id, tune_name, setting_id))
+                
+                # Get the session_instance_tune_id for history before update
+                cur.execute('''
+                    SELECT session_instance_tune_id 
+                    FROM session_instance_tune 
+                    WHERE session_instance_id = %s AND order_number = %s
+                ''', (session_instance_id, order_number))
+                sit_result = cur.fetchone()
+                
+                if sit_result:
+                    sit_id = sit_result[0]
+                    save_to_history(cur, 'session_instance_tune', 'UPDATE', sit_id)
                 
                 # Update session_instance_tune
                 cur.execute('''
