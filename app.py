@@ -207,7 +207,7 @@ def sessions():
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
-@app.route('/sessions/<path:session_path>/tune')
+@app.route('/sessions/<path:session_path>/tunes')
 def session_tunes(session_path):
     try:
         conn = get_db_connection()
