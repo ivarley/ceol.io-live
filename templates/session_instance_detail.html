@@ -54,6 +54,10 @@
             75% { content: '...'; }
             100% { content: ''; }
         }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         .cancelled-date {
             color: #dc3545;
             text-decoration: line-through;
@@ -386,7 +390,10 @@
             <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                 <label for="tune_name_input">Add tune(s) by name:</label>
                 <textarea id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 6px 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit; line-height: 1.2; box-sizing: border-box; vertical-align: top;"></textarea>
-                <button type="submit">Add</button>
+                <button type="submit" id="add-tune-btn">Add</button>
+                <span id="add-tune-spinner" class="loading-spinner" style="display: none; margin-left: 8px;">
+                    <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                </span>
             </form>
         </div>
     </div>
@@ -654,6 +661,12 @@
         
         function addTune(tuneName) {
             const form = document.getElementById('tune-form');
+            const addButton = document.getElementById('add-tune-btn');
+            const spinner = document.getElementById('add-tune-spinner');
+            
+            // Show spinner and disable button
+            addButton.disabled = true;
+            spinner.style.display = 'inline-block';
             form.classList.add('loading');
             
             fetch(`/api/sessions/${sessionPath}/${sessionDate}/add_tune`, {
@@ -683,6 +696,9 @@
                 console.error('Error:', error);
             })
             .finally(() => {
+                // Hide spinner and re-enable button
+                addButton.disabled = false;
+                spinner.style.display = 'none';
                 form.classList.remove('loading');
             });
         }
