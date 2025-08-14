@@ -173,6 +173,12 @@
         .tune-name-wrapper {
             position: relative;
             display: inline;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
         .modal-overlay {
             position: fixed;
@@ -1343,12 +1349,11 @@
             
             // Mobile: Long press (touch for 1 second)
             wrapper.addEventListener('touchstart', (event) => {
-                event.preventDefault(); // Prevent default touch behavior immediately
                 touchStartTime = Date.now();
                 hoverTimeout = setTimeout(() => {
                     showContextMenu(event);
                 }, 1000);
-            }, { passive: false });
+            });
             
             wrapper.addEventListener('touchend', (event) => {
                 clearTimeout(hoverTimeout);
@@ -1371,6 +1376,13 @@
                 document.querySelectorAll('.tune-context-menu').forEach(menu => {
                     menu.style.display = 'none';
                 });
+            }
+        });
+        
+        // Prevent OS context menu on tune wrappers (for mobile long press)
+        document.addEventListener('contextmenu', (event) => {
+            if (event.target.closest('.tune-name-wrapper')) {
+                event.preventDefault();
             }
         });
         
