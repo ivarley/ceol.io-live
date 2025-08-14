@@ -1329,9 +1329,9 @@
             
             // Mobile: Long press (touch for 1 second)
             wrapper.addEventListener('touchstart', (event) => {
+                event.preventDefault(); // Prevent default touch behavior immediately
                 touchStartTime = Date.now();
                 hoverTimeout = setTimeout(() => {
-                    event.preventDefault(); // Prevent default touch behavior when showing menu
                     showContextMenu(event);
                 }, 1000);
             }, { passive: false });
