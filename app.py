@@ -538,7 +538,8 @@ def session_handler(full_path):
                         sit.continues_set,
                         sit.tune_id,
                         COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                        COALESCE(sit.setting_override, st.setting_id) AS setting
+                        COALESCE(sit.setting_override, st.setting_id) AS setting,
+                        t.tune_type
                     FROM session_instance_tune sit
                     LEFT JOIN tune t ON sit.tune_id = t.tune_id
                     LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -1366,7 +1367,8 @@ def get_session_tunes_ajax(session_path, date):
                 sit.continues_set,
                 sit.tune_id,
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                COALESCE(sit.setting_override, st.setting_id) AS setting
+                COALESCE(sit.setting_override, st.setting_id) AS setting,
+                t.tune_type
             FROM session_instance_tune sit
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
             LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (

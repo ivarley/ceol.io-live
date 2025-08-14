@@ -246,6 +246,11 @@
             border-radius: 3px;
             border-left: 3px solid #ffc107;
         }
+        .tune-types {
+            font-size: 0.8em;
+            color: #999;
+            font-style: italic;
+        }
     </style>
 {% endblock %}
 
@@ -622,7 +627,7 @@
                 const li = document.createElement('li');
                 
                 tuneSet.forEach((tune, index) => {
-                    const [orderNumber, continuesSet, tuneId, tuneName, setting] = tune;
+                    const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType] = tune;
                     
                     // Create wrapper for tune name with context menu
                     const wrapper = document.createElement('span');
@@ -657,6 +662,64 @@
                         li.appendChild(document.createTextNode(', '));
                     }
                 });
+                
+                // Add tune types display (only in view mode)
+                if (!editMode && tuneSet.some(tune => tune[5] !== null)) {
+                    const tuneTypes = tuneSet.map(tune => tune[5]).filter(type => type !== null);
+                    
+                    if (tuneTypes.length > 0) {
+                        // Function to pluralize tune types
+                        function pluralizeTuneType(type) {
+                            if (!type) return type;
+                            // Handle special cases
+                            if (type === 'Three-Two') return 'Three-Twos';
+                            // For most types, just add 's'
+                            return type + 's';
+                        }
+                        
+                        let typeText;
+                        const uniqueTypes = [...new Set(tuneTypes)];
+                        
+                        if (uniqueTypes.length === 1) {
+                            // Single type: use singular if only one tune, plural if multiple tunes
+                            const type = uniqueTypes[0];
+                            typeText = tuneSet.length === 1 ? type : pluralizeTuneType(type);
+                        } else {
+                            // Multiple types: walk through in order and coalesce consecutive same types
+                            const coalescedTypes = [];
+                            let currentType = null;
+                            let currentCount = 0;
+                            
+                            for (const type of tuneTypes) {
+                                if (type === currentType) {
+                                    currentCount++;
+                                } else {
+                                    // Output previous type if any
+                                    if (currentType !== null) {
+                                        const displayType = currentCount === 1 ? currentType : pluralizeTuneType(currentType);
+                                        coalescedTypes.push(displayType);
+                                    }
+                                    // Start new type
+                                    currentType = type;
+                                    currentCount = 1;
+                                }
+                            }
+                            
+                            // Output final type
+                            if (currentType !== null) {
+                                const displayType = currentCount === 1 ? currentType : pluralizeTuneType(currentType);
+                                coalescedTypes.push(displayType);
+                            }
+                            
+                            typeText = coalescedTypes.join(', ');
+                        }
+                        
+                        const typeSpan = document.createElement('span');
+                        typeSpan.className = 'tune-types';
+                        typeSpan.textContent = ` (${typeText})`;
+                        li.appendChild(typeSpan);
+                    }
+                }
                 
                 ul.appendChild(li);
             });
