@@ -40,6 +40,8 @@
     {% else %}
         <p id="no-sessions" style="display: none;">No sessions found.</p>
     {% endif %}
+
+    <p><a href="/">← Back to home</a></p>
 {% endblock %}
 
 {% block extra_js %}
@@ -133,6 +135,4 @@
             updateSessionDisplay();
         });
     </script>
-    
-    <p><a href="/">Back to home</a></p>
 {% endblock %}

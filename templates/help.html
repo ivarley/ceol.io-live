@@ -3,6 +3,14 @@
 {% block title %}Help - Irish Music Sessions{% endblock %}
 {% block description %}Help{% endblock %}
 
+{% block extra_css %}
+<style>
+    #whats-a-session {
+        scroll-margin-top: 80px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="landing-page" style="display: block;">
             <h1>What Is This Site For?</h1>
@@ -10,12 +18,35 @@
 
             <p>We track a few facts about your session, like the address and how often it happens (like "Every Thursday"). All sessions have to be linked to a session record on TheSession.org, and we can import the details from there.</p>
 
-            <p>Each time you hold a session, you can <strong>log</strong> the tunes you played here. We call that particular session an <strong>instance</strong> of your session (to avoid confusion with the ongoing session series). Instances have a date, a list of tunes, and a few other pieces of information (like an optional comment for the session, like "It was John's birthday and we celebrated with cake.").</p>
+            <p>Each time you hold a session, you can <strong>log</strong> the tunes you played on this site. We call that particular session an <strong>instance</strong> of your session (to avoid confusion with the ongoing session series). Instances have a date, a list of tunes, and a little other info.</p>
 
             <p>To add a session log, click on "Add" on the Session details page, and it'll ask for the date (making its best guess based on the most recent one you've tracked and your session recurrence).</p>
 
             <p>You can then add tunes by typing or pasting the tune names into the text box on the page. It'll automatically link any tunes it can; right click any tune names to see your options on editing, relinking, moving, etc.</p>
 
             <p>If you'd like to add your session to our list, feel free!</p>
+
+            <h1 id="whats-a-session">What's A Session?</h1>
+
+            <p>A session (or ”seisiún” in Irish) is a regular pick-up gathering of folks who play traditional music (usually Irish).</p>
+
+            <p>If you're new to playing in traditional Irish music, this page has a little more info for you.</p>
+
+            <p>The music is based on a repertoire of many thousands of melodies (we call them “tunes”), most of them quite old. The tunes are traditionally played unaccompanied (i.e. just the melody instruments), all in unison. Someone in the circle will start a “set” of 2 or 3 tunes played back to back (usually 3 times through each), and anyone who happens to know those tunes will play along.</p>
+
+            <p>We don't read from sheet music while we play, as a general rule—the tunes are played from memory. That means that we've spent countless hours learning these tunes, which is a big part of the fun. It doesn't take that long to get started, though; there's a repertoire of ~50 tunes that are particularly common for us, so if you want to be playing a lot, that's a good set to learn; you can find links to all of them on this site.</p>
+
+            <p>A few quick guidelines:</p>
+
+            <ul>
+            <li>If you <strong>don't know the tune being played</strong>, it's usually correct to remain tacit (i.e. not play). This style of music doesn't really have “jamming” in the way you might find in Bluegrass, and the harmonic structure of the tunes is often far from predictable.</li>
+            <li>The usual <strong>melody instruments</strong> that play in Irish sessions are: fiddle, flute, whistle, concertina, button accordion, piano accordion, banjo, mandolin, harp, and uilliean pipes. (And common accompanying instruments include guitar, bouzouki, piano, and bodhran.) If you play an instrument outside that list, and you've got a lot of experience playing Irish music, then by all means, come and play it. If you play an instrument outside that list and you don't already play Irish music, then this might not be your venue.</li>
+            <li>Folks generally prefer only <strong>one or two accompaniment instruments at a time</strong> (piano and / or guitar). This is because the harmonization is shaped by, but not strictly dictated by, the melody. When you get more than a couple harmony instruments going at once, they almost always clash.</li>
+            <li>Most sessions love <strong>percussion</strong>, but go easy—<strong>don't play on every tune</strong>. (Especially with loud instruments like the spoons.) For other instruments, there's a natural backpressure to not play continuously, because hardly anybody knows all the tunes. Not so for percussion instruments, so you have to exercise self-control. :)</li>
+            <li>Sessions have a range of <strong>tempos</strong>; most will usually play as slow as anyone requests to play (especially new learners). As the night progresses, tunes do tend to speed up a little bit, but don't go overboard–when you play tunes crazy fast, it often loses most of the musicality and enjoyment.</li>
+            </ul>
+
+            <p>Have a good time!</p>
+
         </div>
 {% endblock %}
