@@ -12,6 +12,9 @@ app = Flask(__name__)
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
 app.secret_key = os.environ.get('FLASK_SESSION_SECRET_KEY', 'dev-secret-key-change-in-production')
 
+# Configure Flask to handle trailing slashes consistently
+app.url_map.strict_slashes = False
+
 def normalize_apostrophes(text):
     """Normalize smart apostrophes and quotes to standard ASCII characters."""
     if not text:
@@ -468,6 +471,9 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
 
 @app.route('/sessions/<path:full_path>')
 def session_handler(full_path):
+    # Strip trailing slash to normalize the path
+    full_path = full_path.rstrip('/')
+    
     # Check if the last part of the path looks like a date (yyyy-mm-dd)
     path_parts = full_path.split('/')
     last_part = path_parts[-1]
