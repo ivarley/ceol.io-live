@@ -7,9 +7,13 @@
     <header class="docs-header">
         <h1 class="docs-heading">Add A New Session</h1>
         <section class="docs-intro">
-            <p>We'd love for you to add your new session to the site. You can either paste the full URL or just enter the session ID from TheSession.org:</p>
-            <p><code>https://thesession.org/sessions/6247</code> or just <code>6247</code></p>
-            <p>We'll pull all the details from there. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
+            <p>We'd love for you to add your new session to the site. You can:</p>
+            <ul>
+                <li>Paste the full URL: <code>https://thesession.org/sessions/6247</code></li>
+                <li>Enter just the session ID: <code>6247</code></li>
+                <li>Search by name or location: <code>memphis</code> or <code>murphy's pub</code></li>
+            </ul>
+            <p>We'll pull all the details from TheSession.org. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
         </section>
     </header>
     <div class="docs-body">
@@ -22,11 +26,20 @@
             
             <form id="sessionUrlForm">
                 <div class="mb-3">
-                    <label for="sessionUrl" class="form-label">Session URL or ID from TheSession.org:</label>
-                    <input type="text" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247 or just 6247" required>
+                    <label for="sessionUrl" class="form-label">Session URL, ID, or search term:</label>
+                    <input type="text" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247, 6247, or 'memphis'" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Next</button>
             </form>
+            
+            <!-- Search Results Dropdown -->
+            <div id="searchResults" style="display: none; margin-top: 20px;">
+                <h4>Search Results:</h4>
+                <div class="search-results-container">
+                    <div id="searchResultsList"></div>
+                    <button type="button" class="btn btn-secondary" id="newSearchBtn" style="margin-top: 10px;">Search again</button>
+                </div>
+            </div>
         </section>
     </div>
 </article>
@@ -86,6 +99,23 @@
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" onclick="closeSessionModal()">Cancel</button>
             <button type="button" class="btn btn-primary" id="saveSessionBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Existing Session Confirmation Modal -->
+<div id="existingSessionModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>Session Already Exists</h3>
+            <button type="button" onclick="closeExistingSessionModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="existingSessionMessage">This session is already in ceol.io; click here to view.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeExistingSessionModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="goToExistingBtn">Go</button>
         </div>
     </div>
 </div>
@@ -192,6 +222,47 @@
         outline: 0;
         box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
     }
+
+    .search-results-container {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+    }
+
+    .search-result-item {
+        padding: 10px;
+        margin-bottom: 8px;
+        background-color: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .search-result-item:hover {
+        background-color: #e9ecef;
+    }
+
+    .search-result-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .search-result-item.existing {
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+    }
+
+    .search-result-item.existing:hover {
+        background-color: #ffeaa7;
+    }
+
+    .existing-indicator {
+        color: #856404;
+        font-size: 12px;
+        font-style: italic;
+        margin-top: 4px;
+    }
 </style>
 {% endblock %}
 
@@ -215,7 +286,8 @@ document.getElementById('sessionUrlForm').addEventListener('submit', function(e)
         if (idPattern.test(input)) {
             sessionId = input;
         } else {
-            showError('Please enter a valid TheSession.org session URL (e.g., https://thesession.org/sessions/6247) or just the session ID (e.g., 6247)');
+            // If it's not a URL or ID, treat it as a search query
+            searchSessions(input);
             return;
         }
     }
@@ -267,6 +339,74 @@ function checkExistingSession(sessionId) {
     });
 }
 
+function searchSessions(query) {
+    showLoading(true);
+    hideSearchResults();
+    
+    fetch('/api/search-sessions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: query })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showLoading(false);
+        
+        if (data.success) {
+            if (data.results.length === 0) {
+                showError(`No sessions found for "${query}". Try a different search term.`);
+            } else {
+                showSearchResults(data.results, query);
+            }
+        } else {
+            showError(data.message || 'Failed to search sessions');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        console.error('Error:', error);
+        showError('Error searching sessions. Please try again.');
+    });
+}
+
+function showSearchResults(results, query) {
+    const searchResults = document.getElementById('searchResults');
+    const searchResultsList = document.getElementById('searchResultsList');
+    
+    // Clear previous results
+    searchResultsList.innerHTML = '';
+    
+    // Add search results
+    results.forEach(result => {
+        const resultItem = document.createElement('div');
+        resultItem.className = result.exists_in_db ? 'search-result-item existing' : 'search-result-item';
+        
+        let innerHTML = `<strong>${result.name}</strong><br>${result.display_text}`;
+        if (result.exists_in_db) {
+            innerHTML += `<div class="existing-indicator">Already in ceol.io</div>`;
+        }
+        resultItem.innerHTML = innerHTML;
+        
+        resultItem.addEventListener('click', () => {
+            if (result.exists_in_db) {
+                showExistingSessionModal(result.session_path, result.name);
+            } else {
+                hideSearchResults();
+                checkExistingSession(result.id);
+            }
+        });
+        searchResultsList.appendChild(resultItem);
+    });
+    
+    searchResults.style.display = 'block';
+}
+
+function hideSearchResults() {
+    document.getElementById('searchResults').style.display = 'none';
+}
+
 function fetchSessionData(sessionId) {
     showLoading(true);
     
@@ -314,6 +454,20 @@ function populateModal(sessionData) {
 
 function closeSessionModal() {
     document.getElementById('sessionModal').style.display = 'none';
+}
+
+function showExistingSessionModal(sessionPath, sessionName) {
+    document.getElementById('existingSessionMessage').textContent = 
+        `"${sessionName}" is already in ceol.io; click "Go" to view it.`;
+    
+    // Store the session path for the Go button
+    document.getElementById('goToExistingBtn').setAttribute('data-session-path', sessionPath);
+    
+    document.getElementById('existingSessionModal').style.display = 'flex';
+}
+
+function closeExistingSessionModal() {
+    document.getElementById('existingSessionModal').style.display = 'none';
 }
 
 function generatePath(city, sessionName) {
@@ -390,7 +544,28 @@ document.getElementById('saveSessionBtn').addEventListener('click', function() {
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeSessionModal();
+        closeExistingSessionModal();
     }
+});
+
+// Handle "Search again" button
+document.getElementById('newSearchBtn').addEventListener('click', function() {
+    hideSearchResults();
+    document.getElementById('sessionUrl').focus();
+});
+
+// Handle "Go" button in existing session modal
+document.getElementById('goToExistingBtn').addEventListener('click', function() {
+    const sessionPath = this.getAttribute('data-session-path');
+    if (sessionPath) {
+        window.location.href = sessionPath;
+    }
+});
+
+// Handle "Cancel" button in existing session modal (returns to search results)
+document.querySelector('#existingSessionModal .btn-secondary').addEventListener('click', function() {
+    closeExistingSessionModal();
+    // Search results should still be visible when modal closes
 });
 </script>
 {% endblock %}

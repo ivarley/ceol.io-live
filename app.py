@@ -2113,6 +2113,62 @@ def check_existing_session_ajax():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
+@app.route('/api/search-sessions', methods=['POST'])
+def search_sessions_ajax():
+    search_query = request.json.get('query')
+    if not search_query:
+        return jsonify({'success': False, 'message': 'Search query is required'})
+    
+    try:
+        # Search sessions on thesession.org API
+        api_url = f"https://thesession.org/sessions/search?q={search_query}&format=json"
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'success': False, 'message': f'Failed to search sessions (status: {response.status_code})'})
+        
+        data = response.json()
+        sessions = data.get('sessions', [])
+        
+        # Get database connection to check existing sessions
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Return first 5 results with formatted data and existence check
+        results = []
+        for session in sessions[:5]:
+            session_id = session.get('id')
+            venue_name = session.get('venue', {}).get('name', '') if session.get('venue') else ''
+            city = session.get('town', {}).get('name', '') if session.get('town') else ''
+            state = session.get('area', {}).get('name', '') if session.get('area') else ''
+            country = session.get('country', {}).get('name', '') if session.get('country') else ''
+            
+            # Check if this session already exists in our database
+            cur.execute('SELECT path FROM session WHERE thesession_id = %s', (session_id,))
+            existing_session = cur.fetchone()
+            
+            result = {
+                'id': session_id,
+                'name': venue_name,
+                'city': city,
+                'state': state,
+                'country': country,
+                'display_text': f"{venue_name}, {city}, {state}, {country}".replace(', , ', ', ').strip(', '),
+                'exists_in_db': existing_session is not None,
+                'session_path': f'/sessions/{existing_session[0]}' if existing_session else None
+            }
+            results.append(result)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'results': results})
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({'success': False, 'message': f'Error connecting to TheSession.org: {str(e)}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error processing search results: {str(e)}'})
+
 @app.route('/api/fetch-session-data', methods=['POST'])
 def fetch_session_data_ajax():
     session_id = request.json.get('session_id')
