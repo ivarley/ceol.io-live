@@ -138,15 +138,7 @@
         <p><strong>Location:</strong> {{ session.location_name }}</p>
         {% endif %}
         
-        <p><strong>Address:</strong> {% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}</p>
-        
-        {% if session.location_website %}
-        <p><strong>Website:</strong> <a href="{{ session.location_website }}" target="_blank">{{ session.location_website }}</a></p>
-        {% endif %}
-        
-        {% if session.location_phone %}
-        <p><strong>Phone:</strong> {{ session.location_phone }}</p>
-        {% endif %}
+        <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}</p>
         
         {% if session.recurrence %}
         <p><strong>Schedule:</strong> {{ session.recurrence }}</p>
