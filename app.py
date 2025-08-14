@@ -1769,3 +1769,178 @@ def add_tunes_to_set_ajax(session_path, date):
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to add tunes to set: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/<date>/edit_tune', methods=['POST'])
+def edit_tune_ajax(session_path, date):
+    order_number = request.json.get('order_number')
+    new_name = request.json.get('new_name', '').strip()
+    original_name = request.json.get('original_name', '').strip()
+    tune_id = request.json.get('tune_id')
+    setting_id = request.json.get('setting_id')
+    
+    if order_number is None or not new_name:
+        return jsonify({'success': False, 'message': 'Missing required parameters'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get session instance ID
+        cur.execute('''
+            SELECT si.session_instance_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        session_instance = cur.fetchone()
+        
+        if not session_instance:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id = session_instance[0]
+        
+        # Get the session_instance_tune_id for history
+        cur.execute('''
+            SELECT session_instance_tune_id 
+            FROM session_instance_tune 
+            WHERE session_instance_id = %s AND order_number = %s
+        ''', (session_instance_id, order_number))
+        sit_result = cur.fetchone()
+        
+        if not sit_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Tune not found'})
+        
+        sit_id = sit_result[0]
+        
+        # Save to history before making changes
+        save_to_history(cur, 'session_instance_tune', 'UPDATE', sit_id)
+        
+        # Determine what changes need to be made based on the requirements
+        if tune_id:  # This is a linked tune
+            # Get the tune name from the tune table
+            cur.execute('SELECT name FROM tune WHERE tune_id = %s', (tune_id,))
+            tune_result = cur.fetchone()
+            if not tune_result:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': 'Tune not found in database'})
+            
+            actual_tune_name = tune_result[0]
+            
+            # Get the current session_tune alias
+            cur.execute('''
+                SELECT alias FROM session_tune 
+                WHERE session_id = %s AND tune_id = %s
+            ''', (session_id, tune_id))
+            session_tune_result = cur.fetchone()
+            
+            if not session_tune_result:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': 'Session tune not found'})
+            
+            current_alias = session_tune_result[0]
+            
+            if new_name != actual_tune_name:
+                # The new name is different from the tune.name
+                if not current_alias:
+                    # No alias exists, so set the new name as the alias
+                    # First save session_tune to history
+                    save_to_history(cur, 'session_tune', 'UPDATE', (session_id, tune_id))
+                    
+                    cur.execute('''
+                        UPDATE session_tune 
+                        SET alias = %s
+                        WHERE session_id = %s AND tune_id = %s
+                    ''', (new_name, session_id, tune_id))
+                    
+                    # Clear any name override in session_instance_tune
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET name = NULL
+                        WHERE session_instance_tune_id = %s
+                    ''', (sit_id,))
+                    
+                    message = f'Set alias to "{new_name}" for this session'
+                    
+                elif current_alias == new_name:
+                    # The alias matches the entered name, clear the session_instance_tune name
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET name = NULL
+                        WHERE session_instance_tune_id = %s
+                    ''', (sit_id,))
+                    
+                    message = f'Using session alias "{new_name}"'
+                    
+                else:
+                    # The alias exists but doesn't match, update session_instance_tune.name
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET name = %s
+                        WHERE session_instance_tune_id = %s
+                    ''', (new_name, sit_id))
+                    
+                    message = f'Set instance name to "{new_name}"'
+            else:
+                # New name matches the tune.name from the tune table
+                if current_alias == new_name:
+                    # Clear the alias since it's the same as the tune name
+                    # First save session_tune to history
+                    save_to_history(cur, 'session_tune', 'UPDATE', (session_id, tune_id))
+                    
+                    cur.execute('''
+                        UPDATE session_tune 
+                        SET alias = NULL
+                        WHERE session_id = %s AND tune_id = %s
+                    ''', (session_id, tune_id))
+                    
+                    # Clear any name override in session_instance_tune
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET name = NULL
+                        WHERE session_instance_tune_id = %s
+                    ''', (sit_id,))
+                    
+                    message = f'Using original tune name "{new_name}"'
+                else:
+                    # Just clear any session_instance_tune name override since we want the tune name
+                    cur.execute('''
+                        UPDATE session_instance_tune 
+                        SET name = NULL
+                        WHERE session_instance_tune_id = %s
+                    ''', (sit_id,))
+                    
+                    message = f'Using original tune name "{new_name}"'
+        else:
+            # This is a name-only tune, just update the session_instance_tune.name
+            cur.execute('''
+                UPDATE session_instance_tune 
+                SET name = %s
+                WHERE session_instance_tune_id = %s
+            ''', (new_name, sit_id))
+            
+            message = f'Updated name to "{new_name}"'
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': message})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to edit tune: {str(e)}'})

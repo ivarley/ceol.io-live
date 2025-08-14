@@ -337,6 +337,26 @@
         </div>
     </div>
     
+    <!-- Edit Tune Modal -->
+    <div id="edit-tune-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Tune</h3>
+            </div>
+            <div class="modal-body">
+                <label for="edit-tune-name-input">Tune Name:</label>
+                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name" style="width: 100%; box-sizing: border-box; margin-bottom: 16px;">
+                
+                <label for="edit-tune-url-display">TheSession.org URL:</label>
+                <input type="text" id="edit-tune-url-display" readonly style="width: 100%; box-sizing: border-box; background-color: #f8f9fa; color: #666;">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="edit-tune-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="edit-tune-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Edit Session Instance Modal -->
     <div id="edit-session-instance-modal" class="modal-overlay">
         <div class="modal-content">
@@ -975,6 +995,20 @@
                         moveContainer.appendChild(submenu);
                         contextMenu.appendChild(moveContainer);
                         
+                        // Edit option - only in edit mode
+                        const editLink = document.createElement('a');
+                        editLink.textContent = 'Edit';
+                        editLink.style.color = '#007bff';
+                        const editHandler = function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showEditTuneModal(tuneName, tuneId, setting, orderNumber);
+                            contextMenu.style.display = 'none';
+                        };
+                        editLink.addEventListener('click', editHandler);
+                        editLink.addEventListener('touchend', editHandler);
+                        contextMenu.appendChild(editLink);
+                        
                         // Add option - only in edit mode
                         const addLink = document.createElement('a');
                         addLink.textContent = 'Add';
@@ -1105,6 +1139,20 @@
                         moveContainer.appendChild(moveLink);
                         moveContainer.appendChild(submenu);
                         contextMenu.appendChild(moveContainer);
+                        
+                        // Edit option for name-only tunes
+                        const editLink = document.createElement('a');
+                        editLink.textContent = 'Edit';
+                        editLink.style.color = '#007bff';
+                        const editHandler = function(event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showEditTuneModal(tuneName, tuneId, setting, orderNumber);
+                            contextMenu.style.display = 'none';
+                        };
+                        editLink.addEventListener('click', editHandler);
+                        editLink.addEventListener('touchend', editHandler);
+                        contextMenu.appendChild(editLink);
                         
                         // Add option for name-only tunes
                         const addLink = document.createElement('a');
@@ -1263,6 +1311,88 @@
             }
         });
         
+        // Edit Tune Modal functionality
+        let currentEditingTune = null;
+        let currentEditingOrder = null;
+        let currentEditingTuneId = null;
+        let currentEditingSetting = null;
+        
+        function showEditTuneModal(tuneName, tuneId, setting, orderNumber) {
+            currentEditingTune = tuneName;
+            currentEditingOrder = orderNumber;
+            currentEditingTuneId = tuneId;
+            currentEditingSetting = setting;
+            
+            const modal = document.getElementById('edit-tune-modal');
+            const nameInput = document.getElementById('edit-tune-name-input');
+            const urlInput = document.getElementById('edit-tune-url-display');
+            
+            nameInput.value = tuneName;
+            
+            // Set URL field
+            if (tuneId) {
+                let url = `https://thesession.org/tunes/${tuneId}`;
+                if (setting) {
+                    url += `?setting=${setting}`;
+                }
+                urlInput.value = url;
+            } else {
+                urlInput.value = '';
+            }
+            
+            modal.style.display = 'flex';
+            nameInput.focus();
+            nameInput.select();
+        }
+        
+        function hideEditTuneModal() {
+            const modal = document.getElementById('edit-tune-modal');
+            modal.style.display = 'none';
+            currentEditingTune = null;
+            currentEditingOrder = null;
+            currentEditingTuneId = null;
+            currentEditingSetting = null;
+        }
+        
+        function saveEditedTune() {
+            const nameInput = document.getElementById('edit-tune-name-input');
+            const newName = nameInput.value.trim();
+            
+            if (!newName) {
+                showMessage('Please enter a tune name', 'error');
+                return;
+            }
+            
+            // Call API to save the edited tune name
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/edit_tune`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_number: currentEditingOrder,
+                    new_name: newName,
+                    original_name: currentEditingTune,
+                    tune_id: currentEditingTuneId,
+                    setting_id: currentEditingSetting
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    hideEditTuneModal();
+                    loadTunes(); // Reload to show the updated name
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to save tune edit', 'error');
+                console.error('Error:', error);
+            });
+        }
+        
         // Add to Set Modal functionality
         let currentAddToSetOrder = null;
         
@@ -1408,6 +1538,10 @@
         document.getElementById('link-cancel-btn').addEventListener('click', hideLinkTuneModal);
         document.getElementById('link-confirm-btn').addEventListener('click', linkTune);
         
+        // Edit Tune Modal event listeners
+        document.getElementById('edit-tune-cancel-btn').addEventListener('click', hideEditTuneModal);
+        document.getElementById('edit-tune-save-btn').addEventListener('click', saveEditedTune);
+        
         // Add to Set Modal event listeners
         document.getElementById('add-to-set-cancel-btn').addEventListener('click', hideAddTuneToSetModal);
         document.getElementById('add-to-set-confirm-btn').addEventListener('click', addTunesToSet);
@@ -1417,6 +1551,7 @@
             if (event.key === 'Escape') {
                 hideLinkTuneModal();
                 hideAddTuneToSetModal();
+                hideEditTuneModal();
             }
         });
         
@@ -1433,6 +1568,12 @@
             }
         });
         
+        document.getElementById('edit-tune-modal').addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) {
+                hideEditTuneModal();
+            }
+        });
+        
         // Handle enter key in input
         document.getElementById('tune-link-input').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -1443,6 +1584,12 @@
         document.getElementById('add-tune-to-set-input').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 addTunesToSet();
+            }
+        });
+        
+        document.getElementById('edit-tune-name-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                saveEditedTune();
             }
         });
         
