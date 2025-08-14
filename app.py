@@ -994,17 +994,6 @@ def add_tune_ajax(session_path, date):
     if not lines:
         return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
     
-    # Build sets structure: list of lists, where each inner list is tunes in a set
-    tune_sets = []
-    for line in lines:
-        # Split by comma, semicolon, or forward slash
-        tune_names_in_set = [normalize_apostrophes(name.strip()) for name in re.split('[,;/]', line) if name.strip()]
-        if tune_names_in_set:
-            tune_sets.append(tune_names_in_set)
-    
-    if not tune_sets:
-        return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
-    
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1018,6 +1007,83 @@ def add_tune_ajax(session_path, date):
             return jsonify({'success': False, 'message': 'Session not found'})
         
         session_id = session_result[0]
+        
+        # Check if the very first line starts with a delimiter
+        first_line_starts_with_delimiter = lines[0].startswith((',', ';', '/'))
+        
+        # If first line starts with delimiter, we need to append to the existing last set
+        if first_line_starts_with_delimiter:
+            # Get the highest order number (last tune) to find the last set
+            cur.execute('''
+                SELECT order_number
+                FROM session_instance_tune sit
+                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                WHERE si.session_id = %s AND si.date = %s
+                ORDER BY sit.order_number DESC
+                LIMIT 1
+            ''', (session_id, date))
+            
+            last_tune_result = cur.fetchone()
+            if last_tune_result:
+                # There are existing tunes, so we can append to the last set
+                last_order_number = last_tune_result[0]
+                
+                # Parse all the tune names from all lines and add them to the existing last set
+                all_tune_names = []
+                for line in lines:
+                    tune_names_in_line = [normalize_apostrophes(name.strip()) for name in re.split('[,;/]', line) if name.strip()]
+                    all_tune_names.extend(tune_names_in_line)
+                
+                if all_tune_names:
+                    # Use the add_tunes_to_set logic
+                    total_tunes_added = 0
+                    for tune_name in all_tune_names:
+                        # Use the refactored tune matching function
+                        tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
+                        
+                        if error_message:
+                            cur.close()
+                            conn.close()
+                            return jsonify({'success': False, 'message': error_message})
+                        
+                        # Add tune to continue the existing set
+                        cur.execute('SELECT insert_session_instance_tune(%s, %s, %s, %s, %s, %s)', 
+                                   (session_id, date, tune_id, None, final_name if tune_id is None else None, False))  # starts_set = False (continues existing set)
+                        total_tunes_added += 1
+                    
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                    
+                    if total_tunes_added == 1:
+                        message = 'Tune added to existing set successfully!'
+                    else:
+                        message = f'{total_tunes_added} tunes added to existing set successfully!'
+                    
+                    return jsonify({'success': True, 'message': message})
+            # If no existing tunes, fall through to normal processing (treat as if no delimiter)
+        
+        # Build sets structure: list of lists, where each inner list is tunes in a set
+        tune_sets = []
+        for line in lines:
+            # Check if line starts with a delimiter (comma, semicolon, or slash)
+            starts_with_delimiter = line.startswith((',', ';', '/'))
+            
+            # Split by comma, semicolon, or forward slash
+            tune_names_in_set = [normalize_apostrophes(name.strip()) for name in re.split('[,;/]', line) if name.strip()]
+            
+            if tune_names_in_set:
+                if starts_with_delimiter and tune_sets:
+                    # Add to the previous set if line starts with delimiter and there's a previous set
+                    tune_sets[-1].extend(tune_names_in_set)
+                else:
+                    # Create a new set
+                    tune_sets.append(tune_names_in_set)
+        
+        if not tune_sets:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
         
         # Process each set of tunes
         total_tunes_added = 0
