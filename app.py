@@ -2084,6 +2084,128 @@ def edit_tune_ajax(session_path, date):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to edit tune: {str(e)}'})
 
+@app.route('/add-session')
+def add_session():
+    return render_template('add_session.html')
+
+@app.route('/api/fetch-session-data', methods=['POST'])
+def fetch_session_data_ajax():
+    session_id = request.json.get('session_id')
+    if not session_id:
+        return jsonify({'success': False, 'message': 'Session ID is required'})
+    
+    try:
+        # Fetch data from thesession.org API
+        api_url = f"https://thesession.org/sessions/{session_id}?format=json"
+        response = requests.get(api_url, timeout=10)
+        
+        if response.status_code == 404:
+            return jsonify({'success': False, 'message': 'Session not found on TheSession.org'})
+        elif response.status_code != 200:
+            return jsonify({'success': False, 'message': f'Failed to fetch session data (status: {response.status_code})'})
+        
+        data = response.json()
+        
+        # Map TheSession.org data to our format
+        venue_name = data.get('venue', {}).get('name', '') if data.get('venue') else ''
+        
+        # Extract just the date part from the datetime string (format: "2017-04-21 16:33:23")
+        date_str = data.get('date', '')
+        inception_date = date_str.split(' ')[0] if date_str else ''
+        
+        session_data = {
+            'id': data.get('id'),
+            'name': venue_name,  # Default session name to location name
+            'inception_date': inception_date,
+            'location_name': venue_name,
+            'location_phone': data.get('venue', {}).get('phone', '') if data.get('venue') else '',
+            'location_website': data.get('venue', {}).get('web', '') if data.get('venue') else '',
+            'city': data.get('town', {}).get('name', '') if data.get('town') else '',
+            'state': data.get('area', {}).get('name', '') if data.get('area') else '',
+            'country': data.get('country', {}).get('name', '') if data.get('country') else '',
+            'recurrence': data.get('schedule', '')
+        }
+        
+        return jsonify({'success': True, 'session_data': session_data})
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({'success': False, 'message': f'Error connecting to TheSession.org: {str(e)}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error processing session data: {str(e)}'})
+
+@app.route('/api/add-session', methods=['POST'])
+def add_session_ajax():
+    data = request.json
+    
+    # Validate required fields
+    required_fields = ['name', 'path', 'city', 'state', 'country']
+    for field in required_fields:
+        if not data.get(field, '').strip():
+            return jsonify({'success': False, 'message': f'{field.title()} is required'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if path is already taken
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (data['path'],))
+        existing_session = cur.fetchone()
+        if existing_session:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': f'Path "{data["path"]}" is already taken'})
+        
+        # Check if TheSession.org ID is already used
+        if data.get('thesession_id'):
+            cur.execute('SELECT session_id FROM session WHERE thesession_id = %s', (data['thesession_id'],))
+            existing_thesession = cur.fetchone()
+            if existing_thesession:
+                cur.close()
+                conn.close()
+                return jsonify({'success': False, 'message': f'TheSession.org session {data["thesession_id"]} is already in the database'})
+        
+        # Insert new session
+        cur.execute('''
+            INSERT INTO session (
+                thesession_id, name, path, location_name, location_phone, location_website,
+                city, state, country, initiation_date, recurrence, created_date, last_modified_date
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            ) RETURNING session_id
+        ''', (
+            data.get('thesession_id') or None,
+            data['name'],
+            data['path'],
+            data.get('location_name') or None,
+            data.get('location_phone') or None,
+            data.get('location_website') or None,
+            data['city'],
+            data['state'],
+            data['country'],
+            data.get('inception_date') or None,
+            data.get('recurrence') or None
+        ))
+        
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Failed to create session'})
+        
+        session_id = session_result[0]
+        
+        # Save the newly created session to history
+        save_to_history(cur, 'session', 'INSERT', session_id)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Session "{data["name"]}" created successfully!'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to create session: {str(e)}'})
+
 @app.route('/help')
 def help_page():
     return render_template('help.html')

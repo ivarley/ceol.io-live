@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}Add Session{% endblock %}
+
+{% block content %}
+<article class="docs-article">
+    <header class="docs-header">
+        <h1 class="docs-heading">Add A New Session</h1>
+        <section class="docs-intro">
+            <p>We'd love for you to add your new session to the site. Paste in the link to this session on TheSession.org. It should something like this:</p>
+            <p><code>https://thesession.org/sessions/6247</code></p>
+            <p>We'll pull all the details from there. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
+        </section>
+    </header>
+    <div class="docs-body">
+        <section class="docs-section">
+            <div class="alert alert-info" id="loadingSpinner" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> Fetching session data from TheSession.org...
+            </div>
+            
+            <div class="alert alert-danger" id="errorAlert" style="display: none;"></div>
+            
+            <form id="sessionUrlForm">
+                <div class="mb-3">
+                    <label for="sessionUrl" class="form-label">Session URL on TheSession.org:</label>
+                    <input type="url" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Next</button>
+            </form>
+        </section>
+    </div>
+</article>
+
+<!-- Session Details Modal -->
+<div id="sessionModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3>Session Details</h3>
+            <button type="button" onclick="closeSessionModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="sessionDetailsForm">
+                <div class="mb-3">
+                    <label for="sessionName">Session Name:</label>
+                    <input type="text" id="sessionName" required>
+                </div>
+                <div class="mb-3">
+                    <label for="sessionPath">Path (URL slug):</label>
+                    <input type="text" id="sessionPath" required>
+                </div>
+                <div class="mb-3">
+                    <label for="locationName">Location Name:</label>
+                    <input type="text" id="locationName">
+                </div>
+                <div class="mb-3">
+                    <label for="locationPhone">Location Phone:</label>
+                    <input type="text" id="locationPhone">
+                </div>
+                <div class="mb-3">
+                    <label for="locationWebsite">Location Website:</label>
+                    <input type="url" id="locationWebsite">
+                </div>
+                <div class="mb-3">
+                    <label for="cityName">City:</label>
+                    <input type="text" id="cityName" required>
+                </div>
+                <div class="mb-3">
+                    <label for="stateName">State/Area:</label>
+                    <input type="text" id="stateName" required>
+                </div>
+                <div class="mb-3">
+                    <label for="countryName">Country:</label>
+                    <input type="text" id="countryName" required>
+                </div>
+                <div class="mb-3">
+                    <label for="inceptionDate">Inception Date:</label>
+                    <input type="date" id="inceptionDate">
+                </div>
+                <div class="mb-3">
+                    <label for="recurrence">Recurrence:</label>
+                    <input type="text" id="recurrence" placeholder="e.g., Weekly on Tuesdays">
+                </div>
+                <input type="hidden" id="thesessionId">
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeSessionModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="saveSessionBtn">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background-color: white;
+        border-radius: 8px;
+        padding: 0;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        max-height: 90vh;
+        overflow-y: auto;
+        max-width: 500px;
+        width: 90%;
+    }
+
+    .modal-header {
+        background-color: #f8f9fa;
+        padding: 16px 20px;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: #252930;
+        font-size: 1.5rem;
+    }
+
+    .modal-body {
+        padding: 20px;
+    }
+
+    .modal-body label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .modal-body input[type="date"],
+    .modal-body input[type="text"],
+    .modal-body input[type="url"] {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+
+    .modal-footer {
+        background-color: #f8f9fa;
+        padding: 12px 20px;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        border-radius: 0 0 8px 8px;
+    }
+
+    .modal-footer button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .modal-footer .btn-primary {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .modal-footer .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+
+    .modal-footer button:hover {
+        opacity: 0.9;
+    }
+
+    .modal-body input:focus {
+        border-color: #80bdff;
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('sessionUrlForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const url = document.getElementById('sessionUrl').value.trim();
+    
+    // Validate URL format
+    const urlPattern = /^https?:\/\/thesession\.org\/sessions\/(\d+)(?:\/.*)?$/i;
+    const match = url.match(urlPattern);
+    
+    if (!match) {
+        showError('Please enter a valid TheSession.org session URL (e.g., https://thesession.org/sessions/6247)');
+        return;
+    }
+    
+    const sessionId = match[1];
+    fetchSessionData(sessionId);
+});
+
+function showError(message) {
+    const errorAlert = document.getElementById('errorAlert');
+    errorAlert.textContent = message;
+    errorAlert.style.display = 'block';
+    
+    // Hide after 5 seconds
+    setTimeout(() => {
+        errorAlert.style.display = 'none';
+    }, 5000);
+}
+
+function showLoading(show) {
+    document.getElementById('loadingSpinner').style.display = show ? 'block' : 'none';
+}
+
+function fetchSessionData(sessionId) {
+    showLoading(true);
+    
+    fetch('/api/fetch-session-data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: sessionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showLoading(false);
+        
+        if (data.success) {
+            populateModal(data.session_data);
+        } else {
+            showError(data.message || 'Failed to fetch session data');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        console.error('Error:', error);
+        showError('Error fetching session data. Please try again.');
+    });
+}
+
+function populateModal(sessionData) {
+    // Populate the modal fields with the fetched data
+    document.getElementById('thesessionId').value = sessionData.id || '';
+    document.getElementById('sessionName').value = sessionData.name || '';
+    document.getElementById('sessionPath').value = generatePath(sessionData.city || '', sessionData.name || '');
+    document.getElementById('locationName').value = sessionData.location_name || '';
+    document.getElementById('locationPhone').value = sessionData.location_phone || '';
+    document.getElementById('locationWebsite').value = sessionData.location_website || '';
+    document.getElementById('cityName').value = sessionData.city || '';
+    document.getElementById('stateName').value = sessionData.state || '';
+    document.getElementById('countryName').value = sessionData.country || '';
+    document.getElementById('inceptionDate').value = sessionData.inception_date || '';
+    document.getElementById('recurrence').value = sessionData.recurrence || '';
+    
+    // Show the modal
+    document.getElementById('sessionModal').style.display = 'flex';
+}
+
+function closeSessionModal() {
+    document.getElementById('sessionModal').style.display = 'none';
+}
+
+function generatePath(city, sessionName) {
+    // Generate URL-friendly components
+    const cleanCity = city.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    
+    const cleanSessionName = sessionName.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    
+    // Combine as city/session-name
+    if (cleanCity && cleanSessionName) {
+        return `${cleanCity}/${cleanSessionName}`;
+    } else if (cleanSessionName) {
+        return cleanSessionName;
+    } else {
+        return cleanCity;
+    }
+}
+
+// Handle save button click
+document.getElementById('saveSessionBtn').addEventListener('click', function() {
+    const formData = {
+        thesession_id: document.getElementById('thesessionId').value,
+        name: document.getElementById('sessionName').value.trim(),
+        path: document.getElementById('sessionPath').value.trim(),
+        location_name: document.getElementById('locationName').value.trim() || null,
+        location_phone: document.getElementById('locationPhone').value.trim() || null,
+        location_website: document.getElementById('locationWebsite').value.trim() || null,
+        city: document.getElementById('cityName').value.trim(),
+        state: document.getElementById('stateName').value.trim(),
+        country: document.getElementById('countryName').value.trim(),
+        inception_date: document.getElementById('inceptionDate').value || null,
+        recurrence: document.getElementById('recurrence').value.trim() || null
+    };
+    
+    // Validate required fields
+    if (!formData.name || !formData.path || !formData.city || !formData.state || !formData.country) {
+        showError('Please fill in all required fields (Name, Path, City, State, Country)');
+        return;
+    }
+    
+    // Save the session
+    fetch('/api/add-session', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Close modal and redirect to the new session
+            closeSessionModal();
+            window.location.href = `/sessions/${formData.path}`;
+        } else {
+            showError(data.message || 'Failed to save session');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Error saving session. Please try again.');
+    });
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeSessionModal();
+    }
+});
+</script>
+{% endblock %}
