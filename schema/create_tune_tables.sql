@@ -4,6 +4,7 @@ CREATE TABLE tune (
     name VARCHAR(255) NOT NULL,
     tune_type VARCHAR(50) CHECK (tune_type IN ('Jig', 'Reel', 'Slip Jig', 'Hop Jig', 'Hornpipe', 'Polka', 'Set Dance', 'Slide', 'Waltz', 'Barndance', 'Strathspey', 'Three-Two', 'Mazurka', 'March', 'Air')),
     tunebook_count_cached INTEGER DEFAULT 0,
+    tunebook_count_cached_date DATE DEFAULT CURRENT_DATE,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

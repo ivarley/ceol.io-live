@@ -63,6 +63,7 @@ CREATE TABLE tune_history (
     name VARCHAR(255),
     tune_type VARCHAR(50),
     tunebook_count_cached INTEGER,
+    tunebook_count_cached_date DATE,
     created_date TIMESTAMP,
     last_modified_date TIMESTAMP
 );

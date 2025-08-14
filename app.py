@@ -58,8 +58,8 @@ def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
     elif table_name == 'tune':
         cur.execute('''
             INSERT INTO tune_history 
-            (tune_id, operation, changed_by, name, tune_type, tunebook_count_cached, created_date, last_modified_date)
-            SELECT tune_id, %s, %s, name, tune_type, tunebook_count_cached, created_date, last_modified_date
+            (tune_id, operation, changed_by, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_date, last_modified_date)
+            SELECT tune_id, %s, %s, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_date, last_modified_date
             FROM tune WHERE tune_id = %s
         ''', (operation, changed_by, record_id))
     
@@ -323,7 +323,7 @@ def session_tune_info(session_path, tune_id):
         
         # Get tune basic info
         cur.execute('''
-            SELECT name, tune_type, tunebook_count_cached 
+            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date 
             FROM tune 
             WHERE tune_id = %s
         ''', (tune_id,))
@@ -334,7 +334,7 @@ def session_tune_info(session_path, tune_id):
             conn.close()
             return f"Tune not found: {tune_id}", 404
             
-        tune_name, tune_type, tunebook_count = tune_info
+        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
         
         # Get session_tune info (setting, overridden key, alias)
         cur.execute('''
@@ -384,6 +384,7 @@ def session_tune_info(session_path, tune_id):
                              tune_name=tune_name,
                              tune_type=tune_type,
                              tunebook_count=tunebook_count,
+                             tunebook_count_cached_date=tunebook_count_cached_date,
                              setting_id=setting_id,
                              overridden_key=overridden_key,
                              alias=alias,
@@ -428,16 +429,26 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         
         current_count = result[0]
         
-        # Update if different
+        # Always update the cached date, and update count if different
         if current_count != new_tunebook_count:
             cur.execute(
-                'UPDATE tune SET tunebook_count_cached = %s WHERE tune_id = %s',
+                'UPDATE tune SET tunebook_count_cached = %s, tunebook_count_cached_date = CURRENT_DATE WHERE tune_id = %s',
                 (new_tunebook_count, tune_id)
             )
-            conn.commit()
             message = f'Updated tunebook count from {current_count} to {new_tunebook_count}'
         else:
+            cur.execute(
+                'UPDATE tune SET tunebook_count_cached_date = CURRENT_DATE WHERE tune_id = %s',
+                (tune_id,)
+            )
             message = f'Tunebook count unchanged ({current_count})'
+        
+        conn.commit()
+        
+        # Get the current cached date (whether updated or not)
+        cur.execute('SELECT tunebook_count_cached_date FROM tune WHERE tune_id = %s', (tune_id,))
+        cached_date_result = cur.fetchone()
+        cached_date = cached_date_result[0] if cached_date_result else None
         
         cur.close()
         conn.close()
@@ -446,7 +457,8 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
             'success': True, 
             'message': message,
             'old_count': current_count,
-            'new_count': new_tunebook_count
+            'new_count': new_tunebook_count,
+            'cached_date': cached_date.isoformat() if cached_date else None
         })
         
     except requests.exceptions.RequestException as e:
@@ -1161,8 +1173,8 @@ def link_tune_ajax(session_path, date):
                     
                     # Insert new tune into tune table
                     cur.execute('''
-                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
+                        VALUES (%s, %s, %s, %s, CURRENT_DATE)
                     ''', (tune_id, tune_name_from_api, tune_type, tunebook_count))
                     
                     # Save the newly inserted tune to history
