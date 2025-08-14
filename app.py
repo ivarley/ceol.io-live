@@ -2081,3 +2081,7 @@ def edit_tune_ajax(session_path, date):
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to edit tune: {str(e)}'})
+
+@app.route('/help')
+def help_page():
+    return render_template('help.html')

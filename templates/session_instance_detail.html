@@ -1,8 +1,9 @@
-<!DOCTYPE html>
-<html lang="en"> 
-<head>
-    <title>{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session Details</title>
-    <style>
+{% extends "base.html" %}
+
+{% block title %}{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session Details{% endblock %}
+
+{% block extra_css %}
+<style>
         .message {
             position: fixed;
             top: -60px;
@@ -246,45 +247,10 @@
             border-left: 3px solid #ffc107;
         }
     </style>
+{% endblock %}
 
-    <!-- Meta -->
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <meta name="description" content="Index">
-    <link rel="shortcut icon" href="{{ url_for('static', filename='images/ceol.io.1.ico') }}" >
-    <!-- <link rel="shortcut icon" href="favicon.ico"> -->
-    
-    <!-- Google Font -->
-    <link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700&display=swap" rel="stylesheet">
-    
-    <!-- Theme CSS -->  
-    <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
-
-</head> 
-
-<header class="header fixed-top">	    
-    <div class="branding docs-branding">
-        <div class="container-fluid position-relative py-2">
-            <div class="docs-logo-wrapper">
-                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('hello_world') }}"><img width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
-            </div><!--//docs-logo-wrapper-->
-            <div class="docs-top-utilities d-flex justify-content-end align-items-center">
-
-                <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
-                    <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
-                </ul><!--//social-list-->
-                
-            </div><!--//docs-top-utilities-->
-        </div><!--//container-->
-    </div><!--//branding-->
-</header><!--//header-->
-
-<body class="docs-page">    
-    <div class="docs-wrapper">
-	    <div class="docs-content">
-        <div class="landing-page" style="display: block;">
+{% block content %}
+<div class="landing-page" style="display: block;">
 
     <h1 class="editable-header">{{ session_instance.session_name }}<span class="edit-link" id="edit-name-btn">Edit</span></h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
@@ -430,8 +396,10 @@
     {% endif %}
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
+{% endblock %}
 
-    <script>
+{% block extra_js %}
+<script>
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';
         const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
@@ -1741,12 +1709,4 @@
             });
         }
     </script>
-
-<!-- end landing page -->
-</div>
-
-</div>
-</div>
-
-</body>
-</html>
+{% endblock %}

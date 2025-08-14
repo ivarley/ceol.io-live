@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic Tunes</title>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Magic Tunes{% endblock %}
+
+{% block content %}
+<div class="landing-page" style="display: block;">
     <h1>Magic Tunes - {{ current_type.replace('+', ' ').title() }}s</h1>
     
     <div>
@@ -33,5 +31,5 @@
     </div>
     
     <p><a href="/magic?type={{ current_type }}">Get another set of {{ current_type.replace('+', ' ') }}s</a></p>
-</body>
-</html>
+</div>
+{% endblock %}
