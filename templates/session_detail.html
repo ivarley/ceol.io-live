@@ -243,6 +243,11 @@
             </ul>
         {% endif %}
     </div>
+    {% else %}
+    <div class="past-instances">
+        <h2>Session Logs:</h2>
+        <p><a href="#" id="add-first-session-btn" style="color: #007bff; text-decoration: none;">Add your first session log</a></p>
+    </div>
     {% endif %}
     
     <p><a href="/sessions">← Back to all sessions</a></p>
@@ -662,7 +667,16 @@
     // Show initial flash messages and setup event listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         // Event listeners for buttons and modals
-        document.getElementById('add-session-btn').addEventListener('click', showAddSessionModal);
+        const addSessionBtn = document.getElementById('add-session-btn');
+        if (addSessionBtn) {
+            addSessionBtn.addEventListener('click', showAddSessionModal);
+        }
+        
+        const addFirstSessionBtn = document.getElementById('add-first-session-btn');
+        if (addFirstSessionBtn) {
+            addFirstSessionBtn.addEventListener('click', showAddSessionModal);
+        }
+        
         document.getElementById('add-session-cancel-btn').addEventListener('click', hideAddSessionModal);
         document.getElementById('add-session-confirm-btn').addEventListener('click', addSessionInstance);
         
