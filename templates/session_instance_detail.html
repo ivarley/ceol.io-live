@@ -239,6 +239,12 @@
         .modal-footer button:hover {
             opacity: 0.9;
         }
+        .highlighted-tune {
+            background-color: #fff3cd !important;
+            padding: 2px 4px;
+            border-radius: 3px;
+            border-left: 3px solid #ffc107;
+        }
     </style>
 
     <!-- Meta -->
@@ -443,6 +449,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         let editMode = !isCancelled && urlParams.get('edit') === 'true';
         
+        // Check if a specific tune should be highlighted
+        const highlightTuneId = urlParams.get('highlight_tune');
+        
         // Load tunes on page load
         document.addEventListener('DOMContentLoaded', function() {
             if (!isCancelled) {
@@ -451,8 +460,8 @@
                 setupTextareaAutoExpand();
             }
             
-            // Clean up URL by removing the edit parameter if present
-            if (urlParams.get('edit') === 'true') {
+            // Clean up URL by removing the edit or highlight_tune parameters if present
+            if (urlParams.get('edit') === 'true' || urlParams.get('highlight_tune')) {
                 const newUrl = window.location.pathname;
                 window.history.replaceState({}, document.title, newUrl);
             }
@@ -646,6 +655,11 @@
                     // Create wrapper for tune name with context menu
                     const wrapper = document.createElement('span');
                     wrapper.className = 'tune-name-wrapper';
+                    
+                    // Check if this tune should be highlighted
+                    if (highlightTuneId && tuneId && tuneId.toString() === highlightTuneId) {
+                        wrapper.classList.add('highlighted-tune');
+                    }
                     
                     if (tuneId) {
                         let link = `https://thesession.org/tunes/${tuneId}`;

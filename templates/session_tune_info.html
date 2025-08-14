@@ -172,7 +172,7 @@
             {% for instance in play_instances %}
             <li {% if session_instance_date and instance[0]|string == session_instance_date %}class="highlighted-instance"{% endif %}>
                 <div class="instance-date">
-                    <a href="/sessions/{{ session_path }}/{{ instance[0] }}">{{ instance[0] }}</a>
+                    <a href="/sessions/{{ session_path }}/{{ instance[0] }}?highlight_tune={{ tune_id }}">{{ instance[0] }}</a>
                 </div>
                 <div class="instance-details">
                     Position in set: #{{ instance[1] }}
