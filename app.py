@@ -245,13 +245,36 @@ def sessions():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute('SELECT name, path, city, state, country FROM session ORDER BY name;')
+        cur.execute('SELECT name, path, city, state, country, termination_date FROM session ORDER BY name;')
         sessions = cur.fetchall()
         cur.close()
         conn.close()
         return render_template('sessions.html', sessions=sessions)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
+
+@app.route('/api/sessions/data')
+def sessions_data():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT name, path, city, state, country, termination_date FROM session ORDER BY name;')
+        sessions = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Convert to list format for JSON serialization, handling dates
+        sessions_list = []
+        for session in sessions:
+            session_data = list(session)
+            # Convert date to string if it exists
+            if session_data[5]:  # termination_date
+                session_data[5] = session_data[5].isoformat()
+            sessions_list.append(session_data)
+        
+        return jsonify({'sessions': sessions_list})
+    except Exception as e:
+        return jsonify({'error': f"Database connection failed: {str(e)}"}), 500
 
 @app.route('/sessions/<path:session_path>/tunes')
 def session_tunes(session_path):

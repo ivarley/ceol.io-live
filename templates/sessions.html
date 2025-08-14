@@ -17,6 +17,18 @@
     
     <!-- Theme CSS -->  
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    
+    <style>
+        .loading-spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
 
 </head> 
 
@@ -44,18 +56,118 @@
 
     <h1>Irish Music Sessions</h1>
     
+    <div id="loading-state">
+        <p>Loading sessions... <span class="loading-spinner">⟳</span></p>
+    </div>
+    
+    <p id="filter-info" style="display: none;">
+        There are <span id="session-count">0</span> <span id="filter-type">active</span> sessions on the site. 
+        (<a href="#" id="toggle-filter">Show all sessions</a>)
+    </p>
+    
     {% if sessions %}
-        <ul>
+        <ul id="sessions-list" style="display: none;">
             {% for session in sessions %}
-            <li>
+            <li data-session='{{ session | tojson }}'>
                 <a href="/sessions/{{ session[1] }}">{{ session[0] }}</a>, 
                 {{ session[2] }}, {{ session[3] }}, {{ session[4] }}
             </li>
             {% endfor %}
         </ul>
     {% else %}
-        <p>No sessions found.</p>
+        <p id="no-sessions" style="display: none;">No sessions found.</p>
     {% endif %}
+
+    <script>
+        let allSessions = [];
+        let showingAllSessions = false;
+
+        // Load session data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            parseExistingSessionData();
+        });
+
+        function parseExistingSessionData() {
+            try {
+                const sessionItems = document.querySelectorAll('#sessions-list li[data-session]');
+                allSessions = Array.from(sessionItems).map(item => {
+                    return JSON.parse(item.getAttribute('data-session'));
+                });
+                console.log('Parsed sessions:', allSessions);
+                updateSessionDisplay();
+            } catch (error) {
+                console.error('Error parsing session data:', error);
+                // If all else fails, just show the loading content and hide loading state
+                document.getElementById('loading-state').style.display = 'none';
+                document.getElementById('filter-info').style.display = 'block';
+                document.getElementById('sessions-list').style.display = 'block';
+                document.getElementById('session-count').textContent = '0';
+            }
+        }
+
+        function updateSessionDisplay() {
+            let sessionsToShow;
+            
+            if (showingAllSessions) {
+                sessionsToShow = allSessions;
+                document.getElementById('filter-type').textContent = '';
+                document.getElementById('toggle-filter').textContent = 'Show only active sessions';
+            } else {
+                // Filter for active sessions (no termination_date or termination_date > today)
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                sessionsToShow = allSessions.filter(session => {
+                    if (!session[5]) return true; // No termination_date means active
+                    const terminationDate = new Date(session[5]);
+                    return terminationDate > today;
+                });
+                
+                document.getElementById('filter-type').textContent = 'active ';
+                document.getElementById('toggle-filter').textContent = 'Show all sessions';
+            }
+
+            // Update count
+            document.getElementById('session-count').textContent = sessionsToShow.length;
+
+            // Update the session list
+            const sessionsList = document.getElementById('sessions-list');
+            const noSessionsMsg = document.getElementById('no-sessions');
+            
+            sessionsList.innerHTML = '';
+            sessionsList.style.display = 'none';
+            if (noSessionsMsg) {
+                noSessionsMsg.style.display = 'none';
+            }
+            
+            sessionsToShow.forEach(session => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="/sessions/${session[1]}">${session[0]}</a>, 
+                    ${session[2]}, ${session[3]}, ${session[4]}
+                `;
+                sessionsList.appendChild(li);
+            });
+            
+            // Hide loading state and show the content
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('filter-info').style.display = 'block';
+            
+            // Show the appropriate content
+            if (sessionsToShow.length > 0) {
+                sessionsList.style.display = 'block';
+            } else if (noSessionsMsg) {
+                noSessionsMsg.style.display = 'block';
+            }
+        }
+
+        // Toggle filter when link is clicked
+        document.getElementById('toggle-filter').addEventListener('click', function(e) {
+            e.preventDefault();
+            showingAllSessions = !showingAllSessions;
+            updateSessionDisplay();
+        });
+    </script>
     
     <p><a href="/">Back to home</a></p>
 
