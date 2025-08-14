@@ -2088,6 +2088,31 @@ def edit_tune_ajax(session_path, date):
 def add_session():
     return render_template('add_session.html')
 
+@app.route('/api/check-existing-session', methods=['POST'])
+def check_existing_session_ajax():
+    session_id = request.json.get('session_id')
+    if not session_id:
+        return jsonify({'success': False, 'message': 'Session ID is required'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if session ID already exists in our database
+        cur.execute('SELECT path FROM session WHERE thesession_id = %s', (session_id,))
+        existing_session = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if existing_session:
+            return jsonify({'exists': True, 'session_path': f'/sessions/{existing_session[0]}'})
+        else:
+            return jsonify({'exists': False})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
+
 @app.route('/api/fetch-session-data', methods=['POST'])
 def fetch_session_data_ajax():
     session_id = request.json.get('session_id')

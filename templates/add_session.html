@@ -7,8 +7,8 @@
     <header class="docs-header">
         <h1 class="docs-heading">Add A New Session</h1>
         <section class="docs-intro">
-            <p>We'd love for you to add your new session to the site. Paste in the link to this session on TheSession.org. It should something like this:</p>
-            <p><code>https://thesession.org/sessions/6247</code></p>
+            <p>We'd love for you to add your new session to the site. You can either paste the full URL or just enter the session ID from TheSession.org:</p>
+            <p><code>https://thesession.org/sessions/6247</code> or just <code>6247</code></p>
             <p>We'll pull all the details from there. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
         </section>
     </header>
@@ -22,8 +22,8 @@
             
             <form id="sessionUrlForm">
                 <div class="mb-3">
-                    <label for="sessionUrl" class="form-label">Session URL on TheSession.org:</label>
-                    <input type="url" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247" required>
+                    <label for="sessionUrl" class="form-label">Session URL or ID from TheSession.org:</label>
+                    <input type="text" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247 or just 6247" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Next</button>
             </form>
@@ -200,24 +200,33 @@
 document.getElementById('sessionUrlForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    const url = document.getElementById('sessionUrl').value.trim();
+    const input = document.getElementById('sessionUrl').value.trim();
+    let sessionId = null;
     
-    // Validate URL format
+    // Check if it's a full URL
     const urlPattern = /^https?:\/\/thesession\.org\/sessions\/(\d+)(?:\/.*)?$/i;
-    const match = url.match(urlPattern);
+    const urlMatch = input.match(urlPattern);
     
-    if (!match) {
-        showError('Please enter a valid TheSession.org session URL (e.g., https://thesession.org/sessions/6247)');
-        return;
+    if (urlMatch) {
+        sessionId = urlMatch[1];
+    } else {
+        // Check if it's just a number (session ID)
+        const idPattern = /^\d+$/;
+        if (idPattern.test(input)) {
+            sessionId = input;
+        } else {
+            showError('Please enter a valid TheSession.org session URL (e.g., https://thesession.org/sessions/6247) or just the session ID (e.g., 6247)');
+            return;
+        }
     }
     
-    const sessionId = match[1];
-    fetchSessionData(sessionId);
+    // Check if this session ID is already in our database
+    checkExistingSession(sessionId);
 });
 
 function showError(message) {
     const errorAlert = document.getElementById('errorAlert');
-    errorAlert.textContent = message;
+    errorAlert.innerHTML = message;
     errorAlert.style.display = 'block';
     
     // Hide after 5 seconds
@@ -228,6 +237,34 @@ function showError(message) {
 
 function showLoading(show) {
     document.getElementById('loadingSpinner').style.display = show ? 'block' : 'none';
+}
+
+function checkExistingSession(sessionId) {
+    showLoading(true);
+    
+    fetch('/api/check-existing-session', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: sessionId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showLoading(false);
+        
+        if (data.exists) {
+            showError(`Session ${sessionId} is already in the database at: <a href="${data.session_path}" style="color: #007bff; text-decoration: underline;">${data.session_path}</a>`);
+        } else {
+            // Session doesn't exist, proceed to fetch data from thesession.org
+            fetchSessionData(sessionId);
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        console.error('Error:', error);
+        showError('Error checking existing session. Please try again.');
+    });
 }
 
 function fetchSessionData(sessionId) {
