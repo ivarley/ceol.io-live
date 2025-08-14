@@ -961,6 +961,20 @@
                     infoLink.addEventListener('touchend', infoHandler);
                     contextMenu.appendChild(infoLink);
                     
+                    // Relink option - relink to different URL
+                    const relinkLink = document.createElement('a');
+                    relinkLink.textContent = 'Relink';
+                    relinkLink.style.color = '#ffc107';
+                    const relinkHandler = function(event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        showLinkTuneModal(tuneName, orderNumber, tuneId, setting);
+                        contextMenu.style.display = 'none';
+                    };
+                    relinkLink.addEventListener('click', relinkHandler);
+                    relinkLink.addEventListener('touchend', relinkHandler);
+                    contextMenu.appendChild(relinkLink);
+                    
                     // Move options - only in edit mode
                     if (editMode) {
                         const moveContainer = document.createElement('div');
@@ -1513,16 +1527,35 @@
         let currentLinkingTune = null;
         let currentLinkingOrder = null;
         
-        function showLinkTuneModal(tuneName, orderNumber) {
+        function showLinkTuneModal(tuneName, orderNumber, currentTuneId = null, currentSetting = null) {
             currentLinkingTune = tuneName;
             currentLinkingOrder = orderNumber;
             
             const modal = document.getElementById('link-tune-modal');
             const input = document.getElementById('tune-link-input');
             
-            input.value = '';
+            // Pre-populate with current URL if relinking
+            if (currentTuneId) {
+                let currentUrl = `https://thesession.org/tunes/${currentTuneId}`;
+                if (currentSetting) {
+                    currentUrl += `#setting${currentSetting}`;
+                }
+                input.value = currentUrl;
+                
+                // Update modal title to indicate relinking
+                const modalTitle = modal.querySelector('h3');
+                modalTitle.textContent = 'Relink Tune';
+            } else {
+                input.value = '';
+                
+                // Reset modal title to original
+                const modalTitle = modal.querySelector('h3');
+                modalTitle.textContent = 'Link Tune';
+            }
+            
             modal.style.display = 'flex';
             input.focus();
+            input.select(); // Select all text for easy replacement
         }
         
         function hideLinkTuneModal() {
