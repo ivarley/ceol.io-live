@@ -375,7 +375,7 @@
     <div id="tunes-container">
         <h3>Tunes Played:</h3>
         <div id="tune-sets">
-            <p>Loading tunes<span class="loading-ellipsis"></span></p>
+            <!-- Tunes will be rendered immediately from server-side data -->
         </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
@@ -423,7 +423,9 @@
         // Load tunes on page load
         document.addEventListener('DOMContentLoaded', function() {
             if (!isCancelled) {
-                loadTunes();
+                // Use server-side data instead of API call for initial load
+                const initialTuneSets = {{ tune_sets|tojson }};
+                renderTunes(initialTuneSets);
                 updateUI();
                 setupTextareaAutoExpand();
             }
@@ -439,7 +441,7 @@
         if (!isCancelled) {
             document.getElementById('toggle-edit-btn').addEventListener('click', function() {
                 editMode = !editMode;
-                updateUI();
+                updateUI(true); // Pass true to reload tunes when toggling edit mode
             });
         }
         
@@ -496,7 +498,7 @@
             });
         }
         
-        function updateUI() {
+        function updateUI(reloadTunes = false) {
             const toggleBtn = document.getElementById('toggle-edit-btn');
             const addForm = document.getElementById('add-tune-form');
             
@@ -510,7 +512,9 @@
                 addForm.classList.add('hidden');
             }
             
-            loadTunes(); // Reload tunes to show/hide delete buttons
+            if (reloadTunes) {
+                loadTunes(); // Only reload tunes when explicitly requested
+            }
         }
         
         let adjustTextareaHeight; // Global reference to the adjust function
