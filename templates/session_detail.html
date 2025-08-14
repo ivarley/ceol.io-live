@@ -125,6 +125,18 @@
             border-color: #007bff;
             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
         }
+        @media (max-width: 767.98px) {
+            .popular-tunes div[style*="display: flex"] {
+                gap: 0 !important;
+            }
+            .popular-tunes div[style*="flex: 1"] {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+            .popular-tunes ol {
+                margin-bottom: 0 !important;
+            }
+        }
     </style>
 {% endblock %}
 
