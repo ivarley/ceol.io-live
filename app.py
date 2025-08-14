@@ -85,6 +85,49 @@ def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
             FROM session_instance_tune WHERE session_instance_tune_id = %s
         ''', (operation, changed_by, record_id))
 
+def find_matching_tune(cur, session_id, tune_name, allow_multiple_session_aliases=False):
+    """
+    Find a matching tune by searching session aliases and tune names.
+    
+    Returns:
+        tuple: (tune_id, final_name, error_message) where:
+        - tune_id: The matched tune ID or None if no match
+        - final_name: The actual tune name from database or original name
+        - error_message: Error message if multiple matches found, None otherwise
+    """
+    # First, search session_tune table for alias match (case insensitive)
+    cur.execute('''
+        SELECT tune_id 
+        FROM session_tune 
+        WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+    ''', (session_id, tune_name))
+    
+    session_tune_matches = cur.fetchall()
+    
+    if len(session_tune_matches) > 1 and not allow_multiple_session_aliases:
+        return None, tune_name, f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'
+    elif len(session_tune_matches) == 1:
+        return session_tune_matches[0][0], tune_name, None
+    elif len(session_tune_matches) == 0:
+        # No alias match, search tune table by name with flexible "The " matching
+        cur.execute('''
+            SELECT tune_id, name 
+            FROM tune 
+            WHERE (LOWER(name) = LOWER(%s) 
+            OR LOWER(name) = LOWER('The ' || %s) 
+            OR LOWER('The ' || name) = LOWER(%s))
+        ''', (tune_name, tune_name, tune_name))
+        
+        tune_matches = cur.fetchall()
+        
+        if len(tune_matches) > 1:
+            return None, tune_name, f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'
+        elif len(tune_matches) == 1:
+            return tune_matches[0][0], tune_matches[0][1], None
+    
+    # No matches found
+    return None, tune_name, None
+
 @app.route('/')
 def hello_world():
     try:
@@ -859,44 +902,13 @@ def add_tune_ajax(session_path, date):
             tune_data = []  # List of (tune_id, name) tuples for this set
             
             for tune_name in tune_names_in_set:
-                tune_id = None
-                final_name = tune_name
+                # Use the refactored tune matching function
+                tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
                 
-                # First, search session_tune table for alias match (case insensitive)
-                cur.execute('''
-                    SELECT tune_id 
-                    FROM session_tune 
-                    WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
-                ''', (session_id, tune_name))
-                
-                session_tune_matches = cur.fetchall()
-                
-                if len(session_tune_matches) > 1:
+                if error_message:
                     cur.close()
                     conn.close()
-                    return jsonify({'success': False, 'message': f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'})
-                elif len(session_tune_matches) == 1:
-                    tune_id = session_tune_matches[0][0]
-                else:
-                    # No alias match, search tune table by name with flexible "The " matching
-                    cur.execute('''
-                        SELECT tune_id, name 
-                        FROM tune 
-                        WHERE (LOWER(name) = LOWER(%s) 
-                        OR LOWER(name) = LOWER('The ' || %s) 
-                        OR LOWER('The ' || name) = LOWER(%s))
-                    ''', (tune_name, tune_name, tune_name))
-                    
-                    tune_matches = cur.fetchall()
-                    
-                    if len(tune_matches) > 1:
-                        cur.close()
-                        conn.close()
-                        return jsonify({'success': False, 'message': f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'})
-                    elif len(tune_matches) == 1:
-                        tune_id = tune_matches[0][0]
-                        final_name = tune_matches[0][1]  # Use the actual tune name from database
-                    # If no matches found, tune_id stays None and we'll save as name-only
+                    return jsonify({'success': False, 'message': error_message})
                 
                 tune_data.append((tune_id, final_name))
             
@@ -1697,44 +1709,13 @@ def add_tunes_to_set_ajax(session_path, date):
         tune_data = []  # List of (tune_id, name) tuples for the new tunes
         
         for tune_name in tune_names_in_set:
-            tune_id = None
-            final_name = tune_name
+            # Use the refactored tune matching function
+            tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
             
-            # First, search session_tune table for alias match (case insensitive)
-            cur.execute('''
-                SELECT tune_id 
-                FROM session_tune 
-                WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
-            ''', (session_id, tune_name))
-            
-            session_tune_matches = cur.fetchall()
-            
-            if len(session_tune_matches) > 1:
+            if error_message:
                 cur.close()
                 conn.close()
-                return jsonify({'success': False, 'message': f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'})
-            elif len(session_tune_matches) == 1:
-                tune_id = session_tune_matches[0][0]
-            else:
-                # No alias match, search tune table by name with flexible "The " matching
-                cur.execute('''
-                    SELECT tune_id, name 
-                    FROM tune 
-                    WHERE (LOWER(name) = LOWER(%s) 
-                    OR LOWER(name) = LOWER('The ' || %s) 
-                    OR LOWER('The ' || name) = LOWER(%s))
-                ''', (tune_name, tune_name, tune_name))
-                
-                tune_matches = cur.fetchall()
-                
-                if len(tune_matches) > 1:
-                    cur.close()
-                    conn.close()
-                    return jsonify({'success': False, 'message': f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'})
-                elif len(tune_matches) == 1:
-                    tune_id = tune_matches[0][0]
-                    final_name = tune_matches[0][1]  # Use the actual tune name from database
-                # If no matches found, tune_id stays None and we'll save as name-only
+                return jsonify({'success': False, 'message': error_message})
             
             tune_data.append((tune_id, final_name))
         
@@ -1927,14 +1908,46 @@ def edit_tune_ajax(session_path, date):
                     
                     message = f'Using original tune name "{new_name}"'
         else:
-            # This is a name-only tune, just update the session_instance_tune.name
-            cur.execute('''
-                UPDATE session_instance_tune 
-                SET name = %s
-                WHERE session_instance_tune_id = %s
-            ''', (new_name, sit_id))
+            # This is a name-only tune, try to match it with existing tunes before updating
+            # Use the refactored tune matching function (allow multiple session aliases since we're in edit mode)
+            matched_tune_id, final_name, error_message = find_matching_tune(cur, session_id, new_name, allow_multiple_session_aliases=True)
             
-            message = f'Updated name to "{new_name}"'
+            if matched_tune_id:
+                # We found a match! Need to link this tune
+                # First check if this tune is already in session_tune for this session
+                cur.execute('''
+                    SELECT tune_id FROM session_tune 
+                    WHERE session_id = %s AND tune_id = %s
+                ''', (session_id, matched_tune_id))
+                existing_session_tune = cur.fetchone()
+                
+                if not existing_session_tune:
+                    # Add to session_tune (no alias needed since we're using the exact match)
+                    cur.execute('''
+                        INSERT INTO session_tune (session_id, tune_id)
+                        VALUES (%s, %s)
+                    ''', (session_id, matched_tune_id))
+                    
+                    # Save the newly inserted record to history
+                    save_to_history(cur, 'session_tune', 'INSERT', (session_id, matched_tune_id))
+                
+                # Update session_instance_tune to link to the tune and clear the name field
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET tune_id = %s, name = NULL
+                    WHERE session_instance_tune_id = %s
+                ''', (matched_tune_id, sit_id))
+                
+                message = f'Linked "{final_name}" to existing tune (ID: {matched_tune_id})'
+            else:
+                # No match found, just update the name as before
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET name = %s
+                    WHERE session_instance_tune_id = %s
+                ''', (new_name, sit_id))
+                
+                message = f'Updated name to "{new_name}"'
         
         conn.commit()
         cur.close()
