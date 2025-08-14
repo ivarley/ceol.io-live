@@ -1766,7 +1766,7 @@ def add_tunes_to_set_ajax(session_path, date):
 @app.route('/api/sessions/<path:session_path>/<date>/edit_tune', methods=['POST'])
 def edit_tune_ajax(session_path, date):
     order_number = request.json.get('order_number')
-    new_name = request.json.get('new_name', '').strip()
+    new_name = normalize_apostrophes(request.json.get('new_name', '').strip())
     original_name = request.json.get('original_name', '').strip()
     tune_id = request.json.get('tune_id')
     setting_id = request.json.get('setting_id')
