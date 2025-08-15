@@ -132,6 +132,32 @@
     </div>
     
     <div class="tune-info-section">
+        <h3>Session Aliases</h3>
+        <div id="aliases-container">
+            {% if aliases %}
+                <ul id="aliases-list" style="list-style: none; padding: 0;">
+                    {% for alias in aliases %}
+                    <li data-alias-id="{{ alias[0] }}" style="margin: 8px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                        <span class="alias-text">{{ alias[1] }}</span>
+                        <button class="delete-alias-btn" data-alias-id="{{ alias[0] }}" data-alias-name="{{ alias[1] }}" style="background-color: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Delete</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p id="no-aliases-message" style="color: #666; font-style: italic;">No additional aliases for this tune in this session.</p>
+            {% endif %}
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <div id="add-alias-form" style="display: flex; gap: 10px; align-items: center; max-width: 500px;">
+                <input type="text" id="alias-input" placeholder="Enter new alias for this tune..." style="flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <button id="add-alias-btn" style="background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; white-space: nowrap;">Add Alias</button>
+            </div>
+            <div id="alias-message" style="margin-top: 10px; padding: 8px 12px; border-radius: 4px; display: none;"></div>
+        </div>
+    </div>
+    
+    <div class="tune-info-section">
         <h3>Play History</h3>
         <p><strong>Total times played in this session:</strong> {{ play_count }}</p>
         
@@ -181,6 +207,162 @@
 
 {% block extra_js %}
 <script>
+// Alias management functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add alias functionality
+    const addAliasBtn = document.getElementById('add-alias-btn');
+    const aliasInput = document.getElementById('alias-input');
+    const aliasMessage = document.getElementById('alias-message');
+    
+    // Handle add alias button click
+    addAliasBtn.addEventListener('click', addAlias);
+    
+    // Handle enter key in alias input
+    aliasInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addAlias();
+        }
+    });
+    
+    // Handle delete alias button clicks (using event delegation)
+    document.addEventListener('click', function(event) {
+        if (event.target.classList.contains('delete-alias-btn')) {
+            const aliasId = event.target.getAttribute('data-alias-id');
+            const aliasName = event.target.getAttribute('data-alias-name');
+            deleteAlias(aliasId, aliasName);
+        }
+    });
+});
+
+function showAliasMessage(message, type = 'success') {
+    const messageDiv = document.getElementById('alias-message');
+    messageDiv.textContent = message;
+    messageDiv.style.display = 'block';
+    
+    if (type === 'success') {
+        messageDiv.style.backgroundColor = '#d4edda';
+        messageDiv.style.borderColor = '#c3e6cb';
+        messageDiv.style.color = '#155724';
+    } else {
+        messageDiv.style.backgroundColor = '#f8d7da';
+        messageDiv.style.borderColor = '#f5c6cb';
+        messageDiv.style.color = '#721c24';
+    }
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 3000);
+}
+
+function addAlias() {
+    const aliasInput = document.getElementById('alias-input');
+    const addButton = document.getElementById('add-alias-btn');
+    const alias = aliasInput.value.trim();
+    
+    if (!alias) {
+        showAliasMessage('Please enter an alias', 'error');
+        return;
+    }
+    
+    // Disable button and show loading state
+    addButton.disabled = true;
+    addButton.textContent = 'Adding...';
+    
+    fetch(`/api/sessions/{{ session_path }}/tunes/{{ tune_id }}/aliases`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ alias: alias })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAliasMessage(data.message);
+            aliasInput.value = '';
+            
+            // Add the new alias to the list
+            const aliasesList = document.getElementById('aliases-list');
+            const noAliasesMessage = document.getElementById('no-aliases-message');
+            
+            if (noAliasesMessage) {
+                noAliasesMessage.style.display = 'none';
+            }
+            
+            if (!aliasesList) {
+                // Create the list if it doesn't exist
+                const aliasesContainer = document.getElementById('aliases-container');
+                const newList = document.createElement('ul');
+                newList.id = 'aliases-list';
+                newList.style.cssText = 'list-style: none; padding: 0;';
+                aliasesContainer.insertBefore(newList, aliasesContainer.firstChild);
+            }
+            
+            // Create new alias list item
+            const li = document.createElement('li');
+            li.setAttribute('data-alias-id', data.alias.id);
+            li.style.cssText = 'margin: 8px 0; padding: 10px; background-color: #f8f9fa; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+            
+            li.innerHTML = `
+                <span class="alias-text">${data.alias.alias}</span>
+                <button class="delete-alias-btn" data-alias-id="${data.alias.id}" data-alias-name="${data.alias.alias}" style="background-color: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Delete</button>
+            `;
+            
+            document.getElementById('aliases-list').appendChild(li);
+        } else {
+            showAliasMessage(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showAliasMessage('Failed to add alias', 'error');
+        console.error('Error:', error);
+    })
+    .finally(() => {
+        // Reset button
+        addButton.disabled = false;
+        addButton.textContent = 'Add Alias';
+    });
+}
+
+function deleteAlias(aliasId, aliasName) {
+    if (!confirm(`Delete alias "${aliasName}"?`)) {
+        return;
+    }
+    
+    fetch(`/api/sessions/{{ session_path }}/tunes/{{ tune_id }}/aliases/${aliasId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAliasMessage(data.message);
+            
+            // Remove the alias from the list
+            const aliasItem = document.querySelector(`li[data-alias-id="${aliasId}"]`);
+            if (aliasItem) {
+                aliasItem.remove();
+            }
+            
+            // Check if list is empty and show message
+            const aliasesList = document.getElementById('aliases-list');
+            if (aliasesList && aliasesList.children.length === 0) {
+                const noAliasesMessage = document.getElementById('no-aliases-message');
+                if (noAliasesMessage) {
+                    noAliasesMessage.style.display = 'block';
+                }
+            }
+        } else {
+            showAliasMessage(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showAliasMessage('Failed to delete alias', 'error');
+        console.error('Error:', error);
+    });
+}
+
 function refreshTunebookCount() {
     const button = document.getElementById('refresh-tunebook');
     const countSpan = document.getElementById('tunebook-count');

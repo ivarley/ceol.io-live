@@ -417,6 +417,16 @@ def session_tune_info(session_path, tune_id):
         ''', (session_id, tune_id))
         
         play_instances = cur.fetchall()
+        
+        # Get all aliases for this tune in this session
+        cur.execute('''
+            SELECT session_tune_alias_id, alias, created_date
+            FROM session_tune_alias 
+            WHERE session_id = %s AND tune_id = %s
+            ORDER BY created_date ASC
+        ''', (session_id, tune_id))
+        
+        aliases = cur.fetchall()
         cur.close()
         conn.close()
         
@@ -433,7 +443,8 @@ def session_tune_info(session_path, tune_id):
                              play_count=play_count,
                              play_instances=play_instances,
                              tune_id=tune_id,
-                             session_instance_date=session_instance_date)
+                             session_instance_date=session_instance_date,
+                             aliases=aliases)
                              
     except Exception as e:
         return f"Database connection failed: {str(e)}"
@@ -507,6 +518,170 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         return jsonify({'success': False, 'message': f'Error connecting to thesession.org: {str(e)}'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error updating tunebook count: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases', methods=['GET'])
+def get_session_tune_aliases(session_path, tune_id):
+    """Get all aliases for a tune in a session"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get all aliases for this tune in this session
+        cur.execute('''
+            SELECT session_tune_alias_id, alias, created_date
+            FROM session_tune_alias 
+            WHERE session_id = %s AND tune_id = %s
+            ORDER BY created_date ASC
+        ''', (session_id, tune_id))
+        
+        aliases = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        aliases_list = [{'id': alias[0], 'alias': alias[1], 'created_date': alias[2].isoformat()} for alias in aliases]
+        
+        return jsonify({'success': True, 'aliases': aliases_list})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error retrieving aliases: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases', methods=['POST'])
+def add_session_tune_alias(session_path, tune_id):
+    """Add a new alias for a tune in a session"""
+    alias = request.json.get('alias', '').strip()
+    if not alias:
+        return jsonify({'success': False, 'message': 'Please enter an alias'})
+    
+    # Normalize the alias
+    normalized_alias = normalize_apostrophes(alias)
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Check if alias already exists for this session
+        cur.execute('''
+            SELECT tune_id 
+            FROM session_tune_alias 
+            WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+        ''', (session_id, normalized_alias))
+        
+        existing_alias = cur.fetchone()
+        if existing_alias:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': f'Alias "{normalized_alias}" already exists in this session'})
+        
+        # Check if this would conflict with session_tune aliases
+        cur.execute('''
+            SELECT tune_id 
+            FROM session_tune 
+            WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+        ''', (session_id, normalized_alias))
+        
+        existing_session_tune_alias = cur.fetchone()
+        if existing_session_tune_alias:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': f'Alias "{normalized_alias}" already exists as a session tune alias'})
+        
+        # Insert the new alias
+        cur.execute('''
+            INSERT INTO session_tune_alias (session_id, tune_id, alias, created_date, last_modified_date)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING session_tune_alias_id, created_date
+        ''', (session_id, tune_id, normalized_alias))
+        
+        result = cur.fetchone()
+        new_id, created_date = result
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Alias "{normalized_alias}" added successfully',
+            'alias': {'id': new_id, 'alias': normalized_alias, 'created_date': created_date.isoformat()}
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error adding alias: {str(e)}'})
+
+@app.route('/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases/<int:alias_id>', methods=['DELETE'])
+def delete_session_tune_alias(session_path, tune_id, alias_id):
+    """Delete an alias for a tune in a session"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Get the alias info before deleting for the response message
+        cur.execute('''
+            SELECT alias 
+            FROM session_tune_alias 
+            WHERE session_tune_alias_id = %s AND session_id = %s AND tune_id = %s
+        ''', (alias_id, session_id, tune_id))
+        
+        alias_info = cur.fetchone()
+        if not alias_info:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Alias not found'})
+        
+        alias_name = alias_info[0]
+        
+        # Delete the alias
+        cur.execute('''
+            DELETE FROM session_tune_alias 
+            WHERE session_tune_alias_id = %s AND session_id = %s AND tune_id = %s
+        ''', (alias_id, session_id, tune_id))
+        
+        if cur.rowcount == 0:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Alias not found'})
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Alias "{alias_name}" deleted successfully'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting alias: {str(e)}'})
 
 @app.route('/sessions/<path:full_path>')
 def session_handler(full_path):
