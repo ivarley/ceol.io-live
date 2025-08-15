@@ -98,12 +98,14 @@ def find_matching_tune(cur, session_id, tune_name, allow_multiple_session_aliase
         - final_name: The actual tune name from database or original name
         - error_message: Error message if multiple matches found, None otherwise
     """
+    # Normalize the search string the same way we normalize input
+    normalized_tune_name = normalize_apostrophes(tune_name.strip())
     # First, search session_tune table for alias match (case insensitive)
     cur.execute('''
         SELECT tune_id 
         FROM session_tune 
         WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
-    ''', (session_id, tune_name))
+    ''', (session_id, normalized_tune_name))
     
     session_tune_matches = cur.fetchall()
     
@@ -112,21 +114,35 @@ def find_matching_tune(cur, session_id, tune_name, allow_multiple_session_aliase
     elif len(session_tune_matches) == 1:
         return session_tune_matches[0][0], tune_name, None
     elif len(session_tune_matches) == 0:
-        # No alias match, search tune table by name with flexible "The " matching
+        # No session_tune alias match, search session_tune_alias table
         cur.execute('''
-            SELECT tune_id, name 
-            FROM tune 
-            WHERE (LOWER(name) = LOWER(%s) 
-            OR LOWER(name) = LOWER('The ' || %s) 
-            OR LOWER('The ' || name) = LOWER(%s))
-        ''', (tune_name, tune_name, tune_name))
+            SELECT tune_id 
+            FROM session_tune_alias 
+            WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+        ''', (session_id, normalized_tune_name))
         
-        tune_matches = cur.fetchall()
+        alias_matches = cur.fetchall()
         
-        if len(tune_matches) > 1:
-            return None, tune_name, f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'
-        elif len(tune_matches) == 1:
-            return tune_matches[0][0], tune_matches[0][1], None
+        if len(alias_matches) > 1:
+            return None, tune_name, f'Multiple tunes found with alias "{tune_name}" in this session. Please be more specific.'
+        elif len(alias_matches) == 1:
+            return alias_matches[0][0], tune_name, None
+        elif len(alias_matches) == 0:
+            # No alias match in either table, search tune table by name with flexible "The " matching
+            cur.execute('''
+                SELECT tune_id, name 
+                FROM tune 
+                WHERE (LOWER(name) = LOWER(%s) 
+                OR LOWER(name) = LOWER('The ' || %s) 
+                OR LOWER('The ' || name) = LOWER(%s))
+            ''', (normalized_tune_name, normalized_tune_name, normalized_tune_name))
+            
+            tune_matches = cur.fetchall()
+            
+            if len(tune_matches) > 1:
+                return None, tune_name, f'Multiple tunes found with name "{tune_name}". Please be more specific or use an alias.'
+            elif len(tune_matches) == 1:
+                return tune_matches[0][0], tune_matches[0][1], None
     
     # No matches found
     return None, tune_name, None

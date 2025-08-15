@@ -126,3 +126,22 @@ CREATE INDEX idx_session_tune_history_operation ON session_tune_history(operatio
 CREATE INDEX idx_session_instance_tune_history_session_instance_tune_id ON session_instance_tune_history(session_instance_tune_id);
 CREATE INDEX idx_session_instance_tune_history_changed_at ON session_instance_tune_history(changed_at);
 CREATE INDEX idx_session_instance_tune_history_operation ON session_instance_tune_history(operation);
+
+-- Session tune alias history table
+CREATE TABLE session_tune_alias_history (
+    history_id SERIAL PRIMARY KEY,
+    session_tune_alias_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by VARCHAR(255),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy of all session_tune_alias fields at time of change
+    session_id INTEGER,
+    tune_id INTEGER,
+    alias VARCHAR(255),
+    created_date TIMESTAMP,
+    last_modified_date TIMESTAMP
+);
+
+CREATE INDEX idx_session_tune_alias_history_session_tune_alias_id ON session_tune_alias_history(session_tune_alias_id);
+CREATE INDEX idx_session_tune_alias_history_changed_at ON session_tune_alias_history(changed_at);
+CREATE INDEX idx_session_tune_alias_history_operation ON session_tune_alias_history(operation);
