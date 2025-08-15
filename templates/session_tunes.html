@@ -6,10 +6,12 @@
 <style>
         .sort-links {
             margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
         }
         .sort-links a {
-            margin-right: 15px;
-            margin-bottom: 10px;
             padding: 8px 12px;
             background-color: #f8f9fa;
             color: #007bff;
@@ -19,16 +21,40 @@
             cursor: pointer;
             white-space: nowrap;
         }
+        .search-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .search-input {
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        .clear-search {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .clear-search:hover {
+            text-decoration: underline;
+        }
         @media (max-width: 768px) {
             .sort-links {
-                display: flex;
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: stretch;
             }
             .sort-links a {
-                margin-right: 0;
-                width: 100%;
                 text-align: center;
+            }
+            .search-container {
+                justify-content: flex-start;
+            }
+            .search-input {
+                min-width: 150px;
             }
         }
         .sort-links a:hover {
@@ -79,6 +105,11 @@
         <a href="#" id="sort-name" onclick="sortTable('name')">Sort by Name</a>
         <a href="#" id="sort-session-popularity" onclick="sortTable('session_popularity')" class="active">Sort by Popularity At This Session</a>
         <a href="#" id="sort-thesession-popularity" onclick="sortTable('thesession_popularity')">Sort by TheSession.org Tunebook Count</a>
+        
+        <div class="search-container">
+            <input type="text" id="tune-search" class="search-input" placeholder="Search tunes by name...">
+            <a href="#" id="clear-search" class="clear-search" style="display: none;">clear</a>
+        </div>
     </div>
     
     <table class="tunes-table" id="tunes-table">
@@ -112,6 +143,90 @@
     <script>
         let currentSort = 'session_popularity';
         let sortOrder = 'desc'; // desc for session_popularity default
+        let allRows = []; // Store all table rows for filtering
+        let currentFilter = ''; // Current search filter
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Store all table rows
+            const tbody = document.querySelector('#tunes-table tbody');
+            allRows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Set up search functionality
+            const searchInput = document.getElementById('tune-search');
+            const clearButton = document.getElementById('clear-search');
+            
+            searchInput.addEventListener('input', function() {
+                filterTable(this.value);
+            });
+            
+            clearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearSearch();
+            });
+        });
+        
+        function filterTable(searchTerm) {
+            currentFilter = searchTerm.toLowerCase().trim();
+            const clearButton = document.getElementById('clear-search');
+            
+            // Show/hide clear button
+            if (currentFilter) {
+                clearButton.style.display = 'inline';
+            } else {
+                clearButton.style.display = 'none';
+            }
+            
+            // Filter and display rows
+            const filteredRows = allRows.filter(row => {
+                if (!currentFilter) return true;
+                
+                const tuneName = row.dataset.name.toLowerCase();
+                return tuneName.includes(currentFilter);
+            });
+            
+            // Apply current sort to filtered rows
+            const sortedRows = applySortToRows(filteredRows);
+            
+            // Update table display
+            const tbody = document.querySelector('#tunes-table tbody');
+            tbody.innerHTML = '';
+            sortedRows.forEach(row => tbody.appendChild(row));
+        }
+        
+        function clearSearch() {
+            const searchInput = document.getElementById('tune-search');
+            const clearButton = document.getElementById('clear-search');
+            
+            searchInput.value = '';
+            currentFilter = '';
+            clearButton.style.display = 'none';
+            
+            // Show all rows with current sort applied
+            filterTable('');
+        }
+        
+        function applySortToRows(rows) {
+            return rows.sort((a, b) => {
+                let aVal, bVal;
+                
+                if (currentSort === 'name') {
+                    aVal = a.dataset.name.toLowerCase();
+                    bVal = b.dataset.name.toLowerCase();
+                    return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                } else if (currentSort === 'session_popularity') {
+                    aVal = parseInt(a.dataset.sessionPopularity);
+                    bVal = parseInt(b.dataset.sessionPopularity);
+                } else if (currentSort === 'thesession_popularity') {
+                    aVal = parseInt(a.dataset.thesessionPopularity);
+                    bVal = parseInt(b.dataset.thesessionPopularity);
+                }
+                
+                if (currentSort !== 'name') {
+                    return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+            });
+        }
         
         function sortTable(sortBy) {
             // Toggle sort order if clicking the same sort button
@@ -132,34 +247,8 @@
             document.querySelectorAll('.sort-links a').forEach(link => link.classList.remove('active'));
             document.getElementById(`sort-${sortBy.replace('_', '-')}`).classList.add('active');
             
-            // Get table body and rows
-            const tbody = document.querySelector('#tunes-table tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            
-            // Sort rows
-            rows.sort((a, b) => {
-                let aVal, bVal;
-                
-                if (sortBy === 'name') {
-                    aVal = a.dataset.name.toLowerCase();
-                    bVal = b.dataset.name.toLowerCase();
-                    return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                } else if (sortBy === 'session_popularity') {
-                    aVal = parseInt(a.dataset.sessionPopularity);
-                    bVal = parseInt(b.dataset.sessionPopularity);
-                } else if (sortBy === 'thesession_popularity') {
-                    aVal = parseInt(a.dataset.thesessionPopularity);
-                    bVal = parseInt(b.dataset.thesessionPopularity);
-                }
-                
-                if (sortBy !== 'name') {
-                    return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-                }
-            });
-            
-            // Clear table body and re-append sorted rows
-            tbody.innerHTML = '';
-            rows.forEach(row => tbody.appendChild(row));
+            // Re-apply filter with new sort
+            filterTable(currentFilter);
         }
     </script>
 
