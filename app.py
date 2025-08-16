@@ -40,10 +40,10 @@ def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
         cur.execute('''
             INSERT INTO session_history 
             (session_id, operation, changed_by, thesession_id, name, path, location_name, 
-             location_website, location_phone, city, state, country, comments, 
+             location_website, location_phone, location_street, city, state, country, comments, 
              unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date)
             SELECT session_id, %s, %s, thesession_id, name, path, location_name, 
-                   location_website, location_phone, city, state, country, comments, 
+                   location_website, location_phone, location_street, city, state, country, comments, 
                    unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date
             FROM session WHERE session_id = %s
         ''', (operation, changed_by, record_id))

@@ -21,6 +21,7 @@ CREATE TABLE session_history (
     location_name VARCHAR(255),
     location_website TEXT,
     location_phone VARCHAR(50),
+    location_street VARCHAR(255),
     city VARCHAR(100),
     state VARCHAR(100),
     country VARCHAR(100),
