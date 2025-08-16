@@ -583,6 +583,9 @@ def login():
             
             # Create session record
             ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+            # Handle comma-separated IPs from X-Forwarded-For header (take the first one)
+            if ip_address and ',' in ip_address:
+                ip_address = ip_address.split(',')[0].strip()
             user_agent = request.headers.get('User-Agent')
             session_id = create_session(user.user_id, ip_address, user_agent)
             
