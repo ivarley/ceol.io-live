@@ -47,6 +47,7 @@ app.add_url_rule('/change-password', 'change_password', change_password, methods
 app.add_url_rule('/verify-email/<token>', 'verify_email', verify_email)
 app.add_url_rule('/resend-verification', 'resend_verification', resend_verification, methods=['GET', 'POST'])
 app.add_url_rule('/admin', 'admin', admin)
+app.add_url_rule('/admin/login-history', 'admin_login_history', admin_login_history)
 
 # Register API routes
 app.add_url_rule('/api/sessions/data', 'sessions_data', sessions_data)

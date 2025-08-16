@@ -978,7 +978,126 @@ def admin():
                 'ip_address': ip_address or 'Unknown'
             })
         
-        return render_template('admin.html', active_sessions=active_sessions)
+        return render_template('user_sessions.html', active_sessions=active_sessions, active_tab='sessions')
+        
+    finally:
+        conn.close()
+
+
+@login_required
+def admin_login_history():
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return "You must be authorized to view this page.", 403
+    
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+    
+    # Get filter parameters
+    event_type = request.args.get('event_type', '')
+    username_filter = request.args.get('username', '')
+    hours_filter = request.args.get('hours', 24, type=int)  # Default to last 24 hours
+    
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Build WHERE conditions
+        where_conditions = ['lh.timestamp > %s']
+        params = [datetime.utcnow() - timedelta(hours=hours_filter)]
+        
+        if event_type:
+            where_conditions.append('lh.event_type = %s')
+            params.append(event_type)
+        
+        if username_filter:
+            where_conditions.append('lh.username ILIKE %s')
+            params.append(f'%{username_filter}%')
+        
+        where_clause = ' AND '.join(where_conditions)
+        
+        # Get total count for pagination
+        count_query = f'''
+            SELECT COUNT(*) FROM login_history lh
+            WHERE {where_clause}
+        '''
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()[0]
+        
+        # Get login history with user details
+        query = f'''
+            SELECT 
+                lh.login_history_id,
+                lh.user_id,
+                lh.username,
+                lh.event_type,
+                lh.ip_address,
+                lh.user_agent,
+                lh.session_id,
+                lh.failure_reason,
+                lh.timestamp,
+                lh.additional_data,
+                p.first_name,
+                p.last_name
+            FROM login_history lh
+            LEFT JOIN user_account ua ON lh.user_id = ua.user_id
+            LEFT JOIN person p ON ua.person_id = p.person_id
+            WHERE {where_clause}
+            ORDER BY lh.timestamp DESC
+            LIMIT %s OFFSET %s
+        '''
+        params.extend([per_page, offset])
+        cur.execute(query, params)
+        
+        login_history = []
+        for row in cur.fetchall():
+            (history_id, user_id, username, row_event_type, ip_address, user_agent, 
+             session_id, failure_reason, timestamp, additional_data, 
+             first_name, last_name) = row
+            
+            # Format the timestamp
+            formatted_time = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Get full name if available
+            full_name = f"{first_name} {last_name}" if first_name and last_name else "Unknown"
+            
+            # Truncate user agent for display
+            display_user_agent = user_agent[:50] + "..." if user_agent and len(user_agent) > 50 else user_agent
+            
+            login_history.append({
+                'history_id': history_id,
+                'user_id': user_id,
+                'username': username,
+                'full_name': full_name,
+                'event_type': row_event_type,
+                'ip_address': ip_address or 'Unknown',
+                'user_agent': display_user_agent or 'Unknown',
+                'session_id': session_id,
+                'failure_reason': failure_reason,
+                'timestamp': formatted_time,
+                'additional_data': additional_data
+            })
+        
+        # Calculate pagination info
+        total_pages = (total_count + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
+        
+        return render_template('admin_login_history.html', 
+                             login_history=login_history,
+                             active_tab='login_history',
+                             page=page,
+                             total_pages=total_pages,
+                             has_prev=has_prev,
+                             has_next=has_next,
+                             total_count=total_count,
+                             event_type=event_type,
+                             username_filter=username_filter,
+                             hours_filter=hours_filter)
         
     finally:
         conn.close()

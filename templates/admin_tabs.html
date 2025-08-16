@@ -1,0 +1,56 @@
+<!-- Admin Tab Navigation -->
+<nav class="admin-tabs-nav">
+    <div class="nav nav-tabs" id="admin-tabs" role="tablist">
+        <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
+           href="{{ url_for('admin') }}" 
+           role="tab">
+            Active Sessions
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'login_history' else '' }}" 
+           href="{{ url_for('admin_login_history') }}" 
+           role="tab">
+            Login History
+        </a>
+    </div>
+</nav>
+
+<style>
+.admin-tabs-nav {
+    margin-bottom: 2rem;
+}
+
+.nav-tabs {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 1rem 1.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-bottom-color: #007bff;
+    color: #007bff;
+    background: none;
+}
+
+.nav-tabs .nav-link.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background: none;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .nav-tabs .nav-link {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+}
+</style>

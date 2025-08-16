@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Login History{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Admin Dashboard</h1>
+                <section class="docs-intro">
+                    <p>Manage user sessions and view system activity.</p>
+                </section>
+            </header>
+            
+            {% include 'admin_tabs.html' %}
+            
+            <!-- Filters -->
+            <section class="docs-section" id="login-history-filters">
+                <form method="GET" class="login-history-filters" autocomplete="off">
+                    <div class="row align-items-end">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <label for="hours" class="form-label">Time Period</label>
+                            <select name="hours" id="hours" class="form-select">
+                                <option value="1" {{ 'selected' if hours_filter == 1 }}>Last Hour</option>
+                                <option value="24" {{ 'selected' if hours_filter == 24 }}>Last 24 Hours</option>
+                                <option value="168" {{ 'selected' if hours_filter == 168 }}>Last Week</option>
+                                <option value="720" {{ 'selected' if hours_filter == 720 }}>Last Month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <label for="event_type" class="form-label">Event Type</label>
+                            <select name="event_type" id="event_type" class="form-select" autocomplete="off">
+                                <option value="" {% if not event_type or event_type == '' %}selected{% endif %}>All Events</option>
+                                <option value="LOGIN_SUCCESS" {% if event_type == 'LOGIN_SUCCESS' %}selected{% endif %}>Login Success</option>
+                                <option value="LOGIN_FAILURE" {% if event_type == 'LOGIN_FAILURE' %}selected{% endif %}>Login Failure</option>
+                                <option value="LOGOUT" {% if event_type == 'LOGOUT' %}selected{% endif %}>Logout</option>
+                                <option value="PASSWORD_RESET" {% if event_type == 'PASSWORD_RESET' %}selected{% endif %}>Password Reset</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 col-sm-8 mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" name="username" id="username" class="form-control" 
+                                   value="{{ username_filter }}" placeholder="Search username...">
+                        </div>
+                        <div class="col-md-2 col-sm-4 mb-3">
+                            <button type="submit" class="btn btn-primary w-100">Filter</button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+            
+            <section class="docs-section" id="login-history">
+                <h2 class="section-heading">
+                    Login History 
+                    <span class="docs-time">({{ total_count }} entries)</span>
+                </h2>
+                
+                {% if login_history %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Username</th>
+                                <th>Full Name</th>
+                                <th>Event</th>
+                                <th>IP Address</th>
+                                <th>User Agent</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in login_history %}
+                            <tr class="event-{{ entry.event_type.lower() }}">
+                                <td class="timestamp">{{ entry.timestamp }}</td>
+                                <td class="username">
+                                    <strong>{{ entry.username }}</strong>
+                                    {% if entry.user_id %}
+                                        <small class="text-muted">(ID: {{ entry.user_id }})</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ entry.full_name }}</td>
+                                <td>
+                                    <span class="badge event-badge-{{ entry.event_type.lower() }}">
+                                        {{ entry.event_type.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td class="ip-address">{{ entry.ip_address }}</td>
+                                <td class="user-agent" title="{{ entry.user_agent }}">
+                                    {{ entry.user_agent }}
+                                </td>
+                                <td class="details">
+                                    {% if entry.failure_reason %}
+                                        <span class="text-danger">{{ entry.failure_reason.replace('_', ' ').title() }}</span>
+                                    {% elif entry.session_id %}
+                                        <small class="text-muted">Session: {{ entry.session_id[:8] }}...</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if total_pages > 1 %}
+                <nav aria-label="Login history pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin_login_history', page=page-1, event_type=event_type, username=username_filter, hours=hours_filter) }}">
+                                    Previous
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in range(1, total_pages + 1) %}
+                            {% if page_num == page %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                            {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= page - 2 and page_num <= page + 2) %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('admin_login_history', page=page_num, event_type=event_type, username=username_filter, hours=hours_filter) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                            {% elif page_num == 4 or page_num == total_pages - 3 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin_login_history', page=page+1, event_type=event_type, username=username_filter, hours=hours_filter) }}">
+                                    Next
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <div class="alert alert-info" role="alert">
+                    <h4 class="alert-heading">No Login History</h4>
+                    <p>No login events found for the selected criteria.</p>
+                </div>
+                {% endif %}
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.table {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background-color: #f8f9fa;
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-responsive {
+    margin-top: 1rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.login-history-filters {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+
+.login-history-filters .form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Event type styling */
+.event-badge-login_success {
+    background-color: #28a745;
+}
+
+.event-badge-login_failure {
+    background-color: #dc3545;
+}
+
+.event-badge-logout {
+    background-color: #6c757d;
+}
+
+.event-badge-password_reset {
+    background-color: #fd7e14;
+}
+
+/* Row highlighting */
+.event-login_failure {
+    background-color: rgba(220, 53, 69, 0.05) !important;
+}
+
+.event-login_success {
+    background-color: rgba(40, 167, 69, 0.05) !important;
+}
+
+.timestamp {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.username {
+    font-weight: 500;
+}
+
+.ip-address {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.user-agent {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.details {
+    font-size: 0.85rem;
+}
+
+.alert {
+    margin-top: 2rem;
+}
+
+.pagination {
+    margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+    
+    .user-agent {
+        max-width: 100px;
+    }
+    
+    .login-history-filters .row > div {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+
+{% endblock %}
