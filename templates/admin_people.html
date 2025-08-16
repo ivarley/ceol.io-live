@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - People{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Admin Dashboard</h1>
+                <section class="docs-intro">
+                    <p>Manage user sessions and view system activity.</p>
+                </section>
+            </header>
+            
+            {% include 'admin_tabs.html' %}
+            
+            <section class="docs-section" id="people">
+                <h2 class="section-heading">People ({{ people|length }})</h2>
+                
+                {% if people %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Location</th>
+                                <th>TheSession.org Member</th>
+                                <th>Username</th>
+                                <th>Last Login</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for person in people %}
+                            <tr>
+                                <td class="person-name">{{ person.name }}</td>
+                                <td class="person-email">{{ person.email }}</td>
+                                <td class="person-location">{{ person.location }}</td>
+                                <td class="person-thesession">
+                                    {% if person.thesession_user_id %}
+                                        <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
+                                            TheSession.org ({{ person.thesession_user_id }})
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">No member</span>
+                                    {% endif %}
+                                </td>
+                                <td class="person-username">
+                                    {% if person.username != 'No account' %}
+                                        <strong>{{ person.username }}</strong>
+                                        {% if person.is_system_admin %}
+                                            <span class="admin-indicator">(admin)</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">{{ person.username }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="person-last-login">
+                                    {% if person.last_login == 'Never' %}
+                                        <span class="text-warning">{{ person.last_login }}</span>
+                                    {% elif person.last_login == 'N/A' %}
+                                        <span class="text-muted">{{ person.last_login }}</span>
+                                    {% else %}
+                                        {{ person.last_login }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info" role="alert">
+                    <h4 class="alert-heading">No People Found</h4>
+                    <p>There are currently no people records in the system.</p>
+                </div>
+                {% endif %}
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.table {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background-color: #f8f9fa;
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.table-responsive {
+    margin-top: 1rem;
+}
+
+.person-name {
+    font-weight: 500;
+}
+
+.person-email {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.person-location {
+    font-size: 0.9rem;
+}
+
+.person-thesession {
+    font-size: 0.9rem;
+}
+
+.person-thesession a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.person-thesession a:hover {
+    text-decoration: underline;
+}
+
+.person-username {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.admin-indicator {
+    color: #888;
+    font-style: italic;
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
+.person-last-login {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.alert {
+    margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+    
+    .person-email,
+    .person-username,
+    .person-last-login {
+        font-size: 0.8rem;
+    }
+    
+    .person-location,
+    .person-thesession {
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}

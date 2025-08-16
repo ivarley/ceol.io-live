@@ -2,26 +2,34 @@
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
     <div class="nav nav-tabs" id="admin-tabs" role="tablist">
-        <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
-           href="{{ url_for('admin') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}" 
+           href="{{ url_for('admin_people') }}" 
            role="tab">
-            Active Sessions
+            People
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'login_history' else '' }}" 
            href="{{ url_for('admin_login_history') }}" 
            role="tab">
             Login History
         </a>
+        <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
+           href="{{ url_for('admin') }}" 
+           role="tab">
+            Active Sessions
+        </a>
     </div>
     
     <!-- Mobile Dropdown Navigation -->
     <div class="admin-tabs-mobile">
         <select class="form-select" onchange="location = this.value">
-            <option value="{{ url_for('admin') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
-                Active Sessions
+            <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
+                People
             </option>
             <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
                 Login History
+            </option>
+            <option value="{{ url_for('admin') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
+                Active Sessions
             </option>
         </select>
     </div>

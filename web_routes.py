@@ -1101,3 +1101,75 @@ def admin_login_history():
         
     finally:
         conn.close()
+
+
+@login_required
+def admin_people():
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return "You must be authorized to view this page.", 403
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get all people with outer join to user_account and their most recent login
+        cur.execute('''
+            SELECT 
+                p.person_id,
+                p.first_name,
+                p.last_name,
+                p.email,
+                p.city,
+                p.country,
+                p.thesession_user_id,
+                ua.username,
+                ua.is_system_admin,
+                us.last_login
+            FROM person p
+            LEFT JOIN user_account ua ON p.person_id = ua.person_id
+            LEFT JOIN (
+                SELECT 
+                    user_id,
+                    MAX(last_accessed) as last_login
+                FROM user_session
+                GROUP BY user_id
+            ) us ON ua.user_id = us.user_id
+            ORDER BY p.last_name, p.first_name
+        ''')
+        
+        people = []
+        for row in cur.fetchall():
+            person_id, first_name, last_name, email, city, country, thesession_user_id, username, is_system_admin, last_login = row
+            
+            # Format location
+            location_parts = []
+            if city:
+                location_parts.append(city)
+            if country:
+                location_parts.append(country)
+            location = ', '.join(location_parts) if location_parts else 'Unknown'
+            
+            # Format last login
+            if last_login:
+                formatted_last_login = last_login.strftime('%Y-%m-%d %H:%M')
+            else:
+                formatted_last_login = 'Never' if username else 'N/A'
+            
+            people.append({
+                'person_id': person_id,
+                'name': f"{first_name} {last_name}",
+                'email': email or 'Not provided',
+                'location': location,
+                'thesession_user_id': thesession_user_id,
+                'username': username or 'No account',
+                'is_system_admin': is_system_admin,
+                'last_login': formatted_last_login
+            })
+        
+        return render_template('admin_people.html', 
+                             people=people,
+                             active_tab='people')
+        
+    finally:
+        conn.close()
