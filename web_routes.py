@@ -8,7 +8,7 @@ import re
 
 # Import from local modules
 from database import get_db_connection, normalize_apostrophes
-from auth import User, create_session, cleanup_expired_sessions, generate_password_reset_token, generate_verification_token
+from auth import User, create_session, cleanup_expired_sessions, generate_password_reset_token, generate_verification_token, log_login_event
 from email_utils import send_password_reset_email, send_verification_email
 
 
@@ -568,25 +568,35 @@ def login():
         password = request.form.get('password', '')
         remember_me = request.form.get('remember_me') == 'on'
         
+        # Get client info for logging
+        ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+        # Handle comma-separated IPs from X-Forwarded-For header (take the first one)
+        if ip_address and ',' in ip_address:
+            ip_address = ip_address.split(',')[0].strip()
+        user_agent = request.headers.get('User-Agent')
+        
         if not username or not password:
+            log_login_event(None, username, 'LOGIN_FAILURE', ip_address, user_agent, 
+                          failure_reason='MISSING_CREDENTIALS')
             flash('Username and password are required.', 'error')
             return render_template('auth/login.html')
         
         user = User.get_by_username(username)
         if user and user.is_active and user.check_password(password):
             if not user.email_verified:
+                log_login_event(user.user_id, username, 'LOGIN_FAILURE', ip_address, user_agent,
+                              failure_reason='EMAIL_NOT_VERIFIED')
                 flash('Please verify your email address before logging in. Check your email for a verification link.', 'warning')
                 return render_template('auth/login.html')
             
             login_user(user, remember=remember_me)
             
             # Create session record
-            ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
-            # Handle comma-separated IPs from X-Forwarded-For header (take the first one)
-            if ip_address and ',' in ip_address:
-                ip_address = ip_address.split(',')[0].strip()
-            user_agent = request.headers.get('User-Agent')
             session_id = create_session(user.user_id, ip_address, user_agent)
+            
+            # Log successful login
+            log_login_event(user.user_id, username, 'LOGIN_SUCCESS', ip_address, user_agent,
+                          session_id=session_id, additional_data={'remember_me': remember_me})
             
             # Store session_id in Flask session to identify this specific session
             session['db_session_id'] = session_id
@@ -601,6 +611,16 @@ def login():
                 return redirect(next_page)
             return redirect(url_for('home'))
         else:
+            # Determine failure reason
+            if user and not user.is_active:
+                failure_reason = 'ACCOUNT_INACTIVE'
+            elif user:
+                failure_reason = 'INVALID_PASSWORD'
+            else:
+                failure_reason = 'USER_NOT_FOUND'
+            
+            log_login_event(user.user_id if user else None, username, 'LOGIN_FAILURE', 
+                          ip_address, user_agent, failure_reason=failure_reason)
             flash('Invalid username or password.', 'error')
     
     return render_template('auth/login.html')
@@ -608,7 +628,20 @@ def login():
 
 @login_required
 def logout():
+    user_id = None
+    username = None
+    db_session_id = None
+    
     if current_user.is_authenticated:
+        user_id = current_user.user_id
+        username = current_user.username
+        
+        # Get client info for logging
+        ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+        if ip_address and ',' in ip_address:
+            ip_address = ip_address.split(',')[0].strip()
+        user_agent = request.headers.get('User-Agent')
+        
         # Remove only the current session from database
         db_session_id = session.get('db_session_id')
         if db_session_id:
@@ -619,6 +652,9 @@ def logout():
                 conn.commit()
             finally:
                 conn.close()
+        
+        # Log logout event
+        log_login_event(user_id, username, 'LOGOUT', ip_address, user_agent, session_id=db_session_id)
     
     logout_user()
     flash('You have been logged out successfully.', 'info')
@@ -708,6 +744,11 @@ def reset_password(token):
             user_data = cur.fetchone()
             
             if user_data:
+                # Get username for logging
+                cur.execute('SELECT username FROM user_account WHERE user_id = %s', (user_data[0],))
+                username_row = cur.fetchone()
+                username = username_row[0] if username_row else 'unknown'
+                
                 # Update password and clear reset token
                 hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 cur.execute('''
@@ -716,6 +757,13 @@ def reset_password(token):
                     WHERE user_id = %s
                 ''', (hashed_password, user_data[0]))
                 conn.commit()
+                
+                # Log password reset event
+                ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+                if ip_address and ',' in ip_address:
+                    ip_address = ip_address.split(',')[0].strip()
+                user_agent = request.headers.get('User-Agent')
+                log_login_event(user_data[0], username, 'PASSWORD_RESET', ip_address, user_agent)
                 
                 flash('Password has been reset successfully. Please log in.', 'success')
                 return redirect(url_for('login'))

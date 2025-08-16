@@ -1,6 +1,7 @@
 import os
 import secrets
 import bcrypt
+import json
 from datetime import datetime, timedelta
 from flask_login import UserMixin
 from database import get_db_connection
@@ -162,3 +163,41 @@ def generate_password_reset_token():
 
 def generate_verification_token():
     return secrets.token_urlsafe(32)
+
+
+def log_login_event(user_id, username, event_type, ip_address=None, user_agent=None, 
+                   session_id=None, failure_reason=None, additional_data=None):
+    """
+    Log login/logout events to the login_history table.
+    
+    Args:
+        user_id: User ID (can be None for failed logins)
+        username: Username attempted
+        event_type: 'LOGIN_SUCCESS', 'LOGIN_FAILURE', 'LOGOUT', 'PASSWORD_RESET', 'ACCOUNT_LOCKED'
+        ip_address: Client IP address
+        user_agent: Client user agent string
+        session_id: Session ID for successful logins
+        failure_reason: Reason for failed login ('INVALID_PASSWORD', 'USER_NOT_FOUND', 'ACCOUNT_LOCKED', etc.)
+        additional_data: Dict of additional context data
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Convert additional_data to JSON if provided
+        additional_data_json = json.dumps(additional_data) if additional_data else None
+        
+        cur.execute('''
+            INSERT INTO login_history (
+                user_id, username, event_type, ip_address, user_agent,
+                session_id, failure_reason, additional_data
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            user_id, username, event_type, ip_address, user_agent,
+            session_id, failure_reason, additional_data_json
+        ))
+        conn.commit()
+    except Exception as e:
+        print(f"Failed to log login event: {str(e)}")
+    finally:
+        conn.close()
