@@ -1173,3 +1173,54 @@ def admin_people():
         
     finally:
         conn.close()
+
+
+@login_required
+def session_admin(session_path):
+    """Session admin page with tabbed interface"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return "You must be authorized to view this page.", 403
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get session details
+        cur.execute('''
+            SELECT session_id, name, path, location_name, location_website, location_phone,
+                   location_street, city, state, country, comments, unlisted_address,
+                   initiation_date, termination_date, recurrence
+            FROM session 
+            WHERE path = %s
+        ''', (session_path,))
+        
+        session_row = cur.fetchone()
+        if not session_row:
+            return "Session not found", 404
+            
+        session_id = session_row[0]
+        session_data = {
+            'session_id': session_id,
+            'name': session_row[1],
+            'path': session_row[2],
+            'location_name': session_row[3],
+            'location_website': session_row[4],
+            'location_phone': session_row[5],
+            'location_street': session_row[6],
+            'city': session_row[7],
+            'state': session_row[8],
+            'country': session_row[9],
+            'comments': session_row[10],
+            'unlisted_address': session_row[11],
+            'initiation_date': session_row[12],
+            'termination_date': session_row[13],
+            'recurrence': session_row[14]
+        }
+        
+        return render_template('session_admin.html', 
+                             session=session_data,
+                             session_path=session_path)
+        
+    finally:
+        conn.close()

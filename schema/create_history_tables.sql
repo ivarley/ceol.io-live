@@ -146,3 +146,47 @@ CREATE TABLE session_tune_alias_history (
 CREATE INDEX idx_session_tune_alias_history_session_tune_alias_id ON session_tune_alias_history(session_tune_alias_id);
 CREATE INDEX idx_session_tune_alias_history_changed_at ON session_tune_alias_history(changed_at);
 CREATE INDEX idx_session_tune_alias_history_operation ON session_tune_alias_history(operation);
+
+-- Session person history table
+CREATE TABLE session_person_history (
+    history_id SERIAL PRIMARY KEY,
+    session_person_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by VARCHAR(255),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy of all session_person fields at time of change
+    session_id INTEGER,
+    person_id INTEGER,
+    is_regular BOOLEAN,
+    is_admin BOOLEAN,
+    gets_email_reminder BOOLEAN,
+    gets_email_followup BOOLEAN,
+    created_date TIMESTAMP,
+    last_modified_date TIMESTAMP
+);
+
+-- Session instance person history table
+CREATE TABLE session_instance_person_history (
+    history_id SERIAL PRIMARY KEY,
+    session_instance_person_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by VARCHAR(255),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy of all session_instance_person fields at time of change
+    session_instance_id INTEGER,
+    person_id INTEGER,
+    attended BOOLEAN,
+    plans_to_attend VARCHAR(10),
+    comment TEXT,
+    created_date TIMESTAMP,
+    last_modified_date TIMESTAMP
+);
+
+-- Create indexes for the new history tables
+CREATE INDEX idx_session_person_history_session_person_id ON session_person_history(session_person_id);
+CREATE INDEX idx_session_person_history_changed_at ON session_person_history(changed_at);
+CREATE INDEX idx_session_person_history_operation ON session_person_history(operation);
+
+CREATE INDEX idx_session_instance_person_history_session_instance_person_id ON session_instance_person_history(session_instance_person_id);
+CREATE INDEX idx_session_instance_person_history_changed_at ON session_instance_person_history(changed_at);
+CREATE INDEX idx_session_instance_person_history_operation ON session_instance_person_history(operation);

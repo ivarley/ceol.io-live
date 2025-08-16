@@ -1705,3 +1705,129 @@ def edit_tune_ajax(session_path, date):
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to edit tune: {str(e)}'})
+
+
+def get_session_players_ajax(session_path):
+    """Get all players associated with a session"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session ID first
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({'error': 'Session not found'}), 404
+            
+        session_id = session_result[0]
+        
+        # Get session players with person details and attendance stats
+        cur.execute('''
+            SELECT 
+                sp.session_person_id,
+                sp.person_id,
+                p.first_name,
+                p.last_name,
+                p.email,
+                sp.is_regular,
+                sp.is_admin,
+                sp.gets_email_reminder,
+                sp.gets_email_followup,
+                u.username,
+                u.is_system_admin,
+                COUNT(sip.session_instance_person_id) as attendance_count,
+                MAX(si.date) as last_attended
+            FROM session_person sp
+            JOIN person p ON sp.person_id = p.person_id
+            LEFT JOIN user_account u ON p.person_id = u.person_id
+            LEFT JOIN session_instance_person sip ON sp.person_id = sip.person_id
+            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id 
+                AND si.session_id = %s AND sip.attended = true
+            WHERE sp.session_id = %s
+            GROUP BY sp.session_person_id, sp.person_id, p.first_name, p.last_name, 
+                     p.email, sp.is_regular, sp.is_admin, sp.gets_email_reminder, 
+                     sp.gets_email_followup, u.username, u.is_system_admin
+            ORDER BY sp.is_regular DESC, p.last_name, p.first_name
+        ''', (session_id, session_id))
+        
+        players = []
+        for row in cur.fetchall():
+            players.append({
+                'session_person_id': row[0],
+                'person_id': row[1],
+                'name': f"{row[2]} {row[3]}",
+                'email': row[4] or '',
+                'is_regular': row[5],
+                'is_admin': row[6],
+                'gets_email_reminder': row[7],
+                'gets_email_followup': row[8],
+                'username': row[9] or '',
+                'is_system_admin': row[10] or False,
+                'attendance_count': row[11] or 0,
+                'last_attended': row[12].isoformat() if row[12] else None
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'players': players})
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get session players: {str(e)}'}), 500
+
+
+def get_session_logs_ajax(session_path):
+    """Get session instance logs with tune counts"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session ID first
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({'error': 'Session not found'}), 404
+            
+        session_id = session_result[0]
+        
+        # Get session instances with tune counts and attendance counts
+        cur.execute('''
+            SELECT 
+                si.session_instance_id,
+                si.date,
+                si.start_time,
+                si.end_time,
+                si.is_cancelled,
+                si.comments,
+                COUNT(DISTINCT sit.session_instance_tune_id) as tune_count,
+                COUNT(DISTINCT sip.session_instance_person_id) as attendance_count
+            FROM session_instance si
+            LEFT JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
+            LEFT JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id 
+                AND sip.attended = true
+            WHERE si.session_id = %s
+            GROUP BY si.session_instance_id, si.date, si.start_time, si.end_time, 
+                     si.is_cancelled, si.comments
+            ORDER BY si.date DESC
+        ''', (session_id,))
+        
+        logs = []
+        for row in cur.fetchall():
+            logs.append({
+                'session_instance_id': row[0],
+                'date': row[1].isoformat(),
+                'start_time': row[2].strftime('%H:%M') if row[2] else None,
+                'end_time': row[3].strftime('%H:%M') if row[3] else None,
+                'is_cancelled': row[4],
+                'comments': row[5] or '',
+                'tune_count': row[6] or 0,
+                'attendance_count': row[7] or 0
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'logs': logs})
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get session logs: {str(e)}'}), 500
