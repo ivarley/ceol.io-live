@@ -591,6 +591,8 @@ def login():
             
             # Store session_id in Flask session to identify this specific session
             session['db_session_id'] = session_id
+            # Cache admin status for menu display
+            session['is_system_admin'] = user.is_system_admin
             
             # Clean up expired sessions
             cleanup_expired_sessions()
@@ -877,3 +879,59 @@ def resend_verification():
         return redirect(url_for('login'))
     
     return render_template('auth/resend_verification.html')
+
+
+@login_required
+def admin():
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return "You must be authorized to view this page.", 403
+    
+    # Get list of currently logged in users from user_session table
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT 
+                us.user_id,
+                p.first_name,
+                p.last_name,
+                us.created_date,
+                us.last_accessed,
+                us.ip_address
+            FROM user_session us
+            JOIN user_account ua ON us.user_id = ua.user_id
+            JOIN person p ON ua.person_id = p.person_id
+            WHERE us.expires_at > %s
+            ORDER BY us.last_accessed DESC
+        ''', (datetime.utcnow(),))
+        
+        active_sessions = []
+        for row in cur.fetchall():
+            user_id, first_name, last_name, created_date, last_accessed, ip_address = row
+            
+            # Calculate how long they've been logged in
+            login_duration = datetime.utcnow() - created_date
+            days = login_duration.days
+            hours, remainder = divmod(login_duration.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            
+            if days > 0:
+                duration_str = f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                duration_str = f"{hours}h {minutes}m"
+            else:
+                duration_str = f"{minutes}m"
+            
+            active_sessions.append({
+                'user_id': user_id,
+                'name': f"{first_name} {last_name}",
+                'login_date': created_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'duration': duration_str,
+                'ip_address': ip_address or 'Unknown'
+            })
+        
+        return render_template('admin.html', active_sessions=active_sessions)
+        
+    finally:
+        conn.close()

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Active Sessions{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Admin Dashboard <span class="docs-time">Active User Sessions</span></h1>
+                <section class="docs-intro">
+                    <p>View currently logged in users and their session information.</p>
+                </section>
+            </header>
+            
+            <section class="docs-section" id="active-sessions">
+                <h2 class="section-heading">Active Sessions ({{ active_sessions|length }})</h2>
+                
+                {% if active_sessions %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Name</th>
+                                <th>Login Date</th>
+                                <th>Duration</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in active_sessions %}
+                            <tr>
+                                <td>{{ session.user_id }}</td>
+                                <td>{{ session.name }}</td>
+                                <td>{{ session.login_date }}</td>
+                                <td>{{ session.duration }}</td>
+                                <td>{{ session.ip_address }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info" role="alert">
+                    <h4 class="alert-heading">No Active Sessions</h4>
+                    <p>There are currently no users logged in to the system.</p>
+                </div>
+                {% endif %}
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.table {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background-color: #f8f9fa;
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+}
+
+.table-responsive {
+    margin-top: 1rem;
+}
+
+.alert {
+    margin-top: 2rem;
+}
+</style>
+{% endblock %}
