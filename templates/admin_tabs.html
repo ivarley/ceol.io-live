@@ -1,6 +1,7 @@
 <!-- Admin Tab Navigation -->
 <nav class="admin-tabs-nav">
-    <div class="nav nav-tabs" id="admin-tabs" role="tablist">
+    <!-- Desktop Tab Navigation -->
+    <div class="nav nav-tabs admin-tabs-desktop" id="admin-tabs" role="tablist">
         <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
            href="{{ url_for('admin') }}" 
            role="tab">
@@ -12,11 +13,32 @@
             Login History
         </a>
     </div>
+    
+    <!-- Mobile Dropdown Navigation -->
+    <div class="admin-tabs-mobile">
+        <select class="form-select" onchange="location = this.value">
+            <option value="{{ url_for('admin') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
+                Active Sessions
+            </option>
+            <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
+                Login History
+            </option>
+        </select>
+    </div>
 </nav>
 
 <style>
 .admin-tabs-nav {
     margin-bottom: 2rem;
+}
+
+/* Desktop tabs */
+.admin-tabs-desktop {
+    display: block;
+}
+
+.admin-tabs-mobile {
+    display: none;
 }
 
 .nav-tabs {
@@ -47,7 +69,64 @@
     font-weight: 600;
 }
 
+/* Mobile optimizations */
 @media (max-width: 768px) {
+    /* Hide desktop tabs, show mobile dropdown */
+    .admin-tabs-desktop {
+        display: none;
+    }
+    
+    .admin-tabs-mobile {
+        display: block;
+    }
+    
+    /* AGGRESSIVE margin reduction for mobile */
+    
+    /* Remove docs-content padding completely */
+    .docs-content {
+        padding: 0.5rem !important;
+    }
+    
+    /* Remove docs-article padding */
+    .docs-article {
+        padding: 0.5rem !important;
+    }
+    
+    /* Reduce container padding to minimal */
+    .docs-content-inner .container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Make admin dashboard text smaller */
+    .docs-article .docs-heading {
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Reduce section padding */
+    .docs-section {
+        padding: 1rem 0 !important;
+    }
+    
+    /* Style the mobile dropdown */
+    .admin-tabs-mobile .form-select {
+        background-color: #f8f9fa;
+        border: 2px solid #dee2e6;
+        font-weight: 500;
+        padding: 0.75rem 1rem;
+    }
+    
+    .admin-tabs-nav {
+        margin-bottom: 1rem !important;
+    }
+}
+
+/* Tablet adjustments */
+@media (max-width: 992px) and (min-width: 769px) {
     .nav-tabs .nav-link {
         padding: 0.75rem 1rem;
         font-size: 0.9rem;
