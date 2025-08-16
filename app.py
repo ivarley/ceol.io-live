@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 import random
 import os
 import psycopg2
@@ -7,6 +7,13 @@ import re
 import requests
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import bcrypt
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+# Flask-Mail removed - now using SendGrid directly
+import secrets
+from datetime import datetime, timedelta
+from functools import wraps
+import ipaddress
 
 load_dotenv()
 
@@ -16,6 +23,19 @@ app.secret_key = os.environ.get('FLASK_SESSION_SECRET_KEY', 'dev-secret-key-chan
 
 # Configure Flask to handle trailing slashes consistently
 app.url_map.strict_slashes = False
+
+# Configure Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
+# SendGrid configuration (via environment variable)
+# SENDGRID_API_KEY should be set in environment
+# MAIL_DEFAULT_SENDER should be set for the from address
+
+# Session configuration
+SESSION_LIFETIME_WEEKS = 6
 
 def normalize_apostrophes(text):
     """Normalize smart apostrophes and quotes to standard ASCII characters."""
@@ -148,6 +168,257 @@ def find_matching_tune(cur, session_id, tune_name, allow_multiple_session_aliase
     
     # No matches found
     return None, tune_name, None
+
+
+# User authentication classes and functions
+class User(UserMixin):
+    def __init__(self, user_id, person_id, username, is_active=True, is_system_admin=False, 
+                 first_name='', last_name='', email='', time_zone='UTC', email_verified=False):
+        self.id = str(user_id)
+        self.user_id = user_id
+        self.person_id = person_id
+        self.username = username
+        self._is_active = is_active  # Store internally to avoid conflict with UserMixin
+        self.is_system_admin = is_system_admin
+        self.first_name = first_name
+        self.last_name = last_name
+        self.email = email
+        self.time_zone = time_zone
+        self.email_verified = email_verified
+
+    @property
+    def is_active(self):
+        """Override UserMixin's is_active property"""
+        return self._is_active
+
+    def get_id(self):
+        return str(self.user_id)
+
+    @staticmethod
+    def get_by_id(user_id):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
+                       ua.time_zone, ua.email_verified, p.first_name, p.last_name, p.email
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE ua.user_id = %s AND ua.is_active = TRUE
+            ''', (user_id,))
+            user_data = cur.fetchone()
+            if user_data:
+                return User(
+                    user_id=user_data[0],
+                    person_id=user_data[1],
+                    username=user_data[2],
+                    is_active=user_data[3],
+                    is_system_admin=user_data[4],
+                    time_zone=user_data[5],
+                    email_verified=user_data[6],
+                    first_name=user_data[7],
+                    last_name=user_data[8],
+                    email=user_data[9]
+                )
+            return None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_by_username(username):
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active, 
+                       ua.is_system_admin, ua.time_zone, ua.email_verified, p.first_name, p.last_name, p.email
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE ua.username = %s
+            ''', (username,))
+            user_data = cur.fetchone()
+            if user_data:
+                user = User(
+                    user_id=user_data[0],
+                    person_id=user_data[1],
+                    username=user_data[2],
+                    is_active=user_data[4],
+                    is_system_admin=user_data[5],
+                    time_zone=user_data[6],
+                    email_verified=user_data[7],
+                    first_name=user_data[8],
+                    last_name=user_data[9],
+                    email=user_data[10]
+                )
+                user.hashed_password = user_data[3]
+                return user
+            return None
+        finally:
+            conn.close()
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
+
+    @staticmethod
+    def create_user(username, password, person_id, time_zone='UTC'):
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO user_account (person_id, username, hashed_password, time_zone)
+                VALUES (%s, %s, %s, %s)
+                RETURNING user_id
+            ''', (person_id, username, hashed_password, time_zone))
+            user_id = cur.fetchone()[0]
+            conn.commit()
+            return user_id
+        finally:
+            conn.close()
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get_by_id(int(user_id))
+
+
+def create_session(user_id, ip_address=None, user_agent=None):
+    session_id = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(weeks=SESSION_LIFETIME_WEEKS)
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT INTO user_session (session_id, user_id, expires_at, ip_address, user_agent)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (session_id, user_id, expires_at, ip_address, user_agent))
+        conn.commit()
+        return session_id
+    finally:
+        conn.close()
+
+
+def cleanup_expired_sessions():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM user_session WHERE expires_at < %s', (datetime.utcnow(),))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_session_activity(session_id):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            UPDATE user_session 
+            SET last_accessed = %s 
+            WHERE session_id = %s AND expires_at > %s
+        ''', (datetime.utcnow(), session_id, datetime.utcnow()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def generate_password_reset_token():
+    return secrets.token_urlsafe(32)
+
+
+def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
+    """Send email using SendGrid API"""
+    try:
+        api_key = os.environ.get('SENDGRID_API_KEY')
+        if not api_key:
+            print("SendGrid API key not configured")
+            return False
+            
+        from_email = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@ceol.io')
+        
+        sg = SendGridAPIClient(api_key=api_key)
+        message = Mail(
+            from_email=from_email,
+            to_emails=to_email,
+            subject=subject,
+            plain_text_content=body_text,
+            html_content=body_html
+        )
+        
+        response = sg.send(message)
+        
+        # Check response status
+        if response.status_code in [200, 201, 202]:
+            print(f"Email sent successfully to {to_email}")
+            return True
+        else:
+            print(f"SendGrid returned status {response.status_code}: {response.body}")
+            return False
+            
+    except Exception as e:
+        print(f"SendGrid email error: {str(e)}")
+        # Log more specific error types
+        if "unauthorized" in str(e).lower():
+            print("Check your SENDGRID_API_KEY")
+        elif "forbidden" in str(e).lower():
+            print("Check that sender email is verified in SendGrid")
+        return False
+
+
+def send_password_reset_email(user, token):
+    reset_url = url_for('reset_password', token=token, _external=True)
+    
+    subject = 'Password Reset Request - Irish Music Sessions'
+    body_text = f'''To reset your password, visit the following link:
+{reset_url}
+
+If you did not make this request, please ignore this email and no changes will be made.
+
+This link will expire in 1 hour.
+'''
+    
+    body_html = f'''
+    <h2>Password Reset Request</h2>
+    <p>To reset your password, click the following link:</p>
+    <p><a href="{reset_url}">Reset Your Password</a></p>
+    <p>If you did not make this request, please ignore this email and no changes will be made.</p>
+    <p><strong>This link will expire in 1 hour.</strong></p>
+    '''
+    
+    return send_email_via_sendgrid(user.email, subject, body_text, body_html)
+
+
+def generate_verification_token():
+    return secrets.token_urlsafe(32)
+
+
+def send_verification_email(user, token):
+    verification_url = url_for('verify_email', token=token, _external=True)
+    
+    subject = 'Verify Your Email Address - Irish Music Sessions'
+    body_text = f'''Welcome to Irish Music Sessions!
+
+Please click the following link to verify your email address and activate your account:
+{verification_url}
+
+If you did not create this account, please ignore this email.
+
+This link will expire in 24 hours.
+'''
+    
+    body_html = f'''
+    <h2>Welcome to Irish Music Sessions!</h2>
+    <p>Thank you for registering with us. Please verify your email address to activate your account.</p>
+    <p><a href="{verification_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email Address</a></p>
+    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <p>{verification_url}</p>
+    <p>If you did not create this account, please ignore this email.</p>
+    <p><strong>This link will expire in 24 hours.</strong></p>
+    '''
+    
+    return send_email_via_sendgrid(user.email, subject, body_text, body_html)
+
 
 @app.route('/')
 def hello_world():
@@ -2550,3 +2821,409 @@ def add_session_ajax():
 def help_page():
     return render_template('help.html')
 
+
+# Authentication routes
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        email = request.form.get('email', '').strip()
+        time_zone = request.form.get('time_zone', 'UTC')
+        
+        # Validation
+        if not username or not password or not first_name or not last_name or not email:
+            flash('Username, password, first name, last name, and email are required.', 'error')
+            return render_template('auth/register.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('auth/register.html')
+        
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long.', 'error')
+            return render_template('auth/register.html')
+        
+        # Check if username already exists
+        existing_user = User.get_by_username(username)
+        if existing_user:
+            flash('Username already exists. Please choose a different one.', 'error')
+            return render_template('auth/register.html')
+        
+        # Check if email already exists
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT person_id FROM person WHERE email = %s', (email,))
+            if cur.fetchone():
+                flash('Email address already registered. Please use a different email or try logging in.', 'error')
+                return render_template('auth/register.html')
+        finally:
+            conn.close()
+        
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # Create person record
+            cur.execute('''
+                INSERT INTO person (first_name, last_name, email)
+                VALUES (%s, %s, %s)
+                RETURNING person_id
+            ''', (first_name, last_name, email))
+            person_id = cur.fetchone()[0]
+            
+            # Create user record (unverified)
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            verification_token = generate_verification_token()
+            verification_expires = datetime.utcnow() + timedelta(hours=24)
+            
+            cur.execute('''
+                INSERT INTO user_account (person_id, username, hashed_password, time_zone, 
+                                        email_verified, verification_token, verification_token_expires)
+                VALUES (%s, %s, %s, %s, FALSE, %s, %s)
+                RETURNING user_id
+            ''', (person_id, username, hashed_password, time_zone, verification_token, verification_expires))
+            user_id = cur.fetchone()[0]
+            
+            conn.commit()
+            
+            # Send verification email
+            user = User(user_id, person_id, username, email=email, first_name=first_name, last_name=last_name)
+            if send_verification_email(user, verification_token):
+                flash('Registration successful! Please check your email to verify your account before logging in.', 'success')
+            else:
+                flash('Registration successful, but failed to send verification email. Please contact support.', 'warning')
+            
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"Registration error: {str(e)}")
+            flash('Registration failed. Please try again.', 'error')
+            return render_template('auth/register.html')
+        finally:
+            conn.close()
+    
+    return render_template('auth/register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        remember_me = request.form.get('remember_me') == 'on'
+        
+        if not username or not password:
+            flash('Username and password are required.', 'error')
+            return render_template('auth/login.html')
+        
+        user = User.get_by_username(username)
+        if user and user.is_active and user.check_password(password):
+            if not user.email_verified:
+                flash('Please verify your email address before logging in. Check your email for a verification link.', 'warning')
+                return render_template('auth/login.html')
+            
+            login_user(user, remember=remember_me)
+            
+            # Create session record
+            ip_address = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR'))
+            user_agent = request.headers.get('User-Agent')
+            session_id = create_session(user.user_id, ip_address, user_agent)
+            
+            # Clean up expired sessions
+            cleanup_expired_sessions()
+            
+            next_page = request.args.get('next')
+            if next_page:
+                return redirect(next_page)
+            return redirect(url_for('hello_world'))
+        else:
+            flash('Invalid username or password.', 'error')
+    
+    return render_template('auth/login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    if current_user.is_authenticated:
+        # Remove user sessions from database
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('DELETE FROM user_session WHERE user_id = %s', (current_user.user_id,))
+            conn.commit()
+        finally:
+            conn.close()
+    
+    logout_user()
+    flash('You have been logged out successfully.', 'info')
+    return redirect(url_for('login'))
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        
+        if not email:
+            flash('Email address is required.', 'error')
+            return render_template('auth/forgot_password.html')
+        
+        # Find user by email
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT ua.user_id, ua.username, p.email, p.first_name
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE p.email = %s AND ua.is_active = TRUE
+            ''', (email,))
+            user_data = cur.fetchone()
+            
+            if user_data:
+                # Generate reset token
+                token = generate_password_reset_token()
+                expires = datetime.utcnow() + timedelta(hours=1)
+                
+                # Save token to database
+                cur.execute('''
+                    UPDATE user_account 
+                    SET password_reset_token = %s, password_reset_expires = %s
+                    WHERE user_id = %s
+                ''', (token, expires, user_data[0]))
+                conn.commit()
+                
+                # Create user object for email sending
+                user = User(user_data[0], None, user_data[1], email=user_data[2], first_name=user_data[3])
+                
+                # Send reset email
+                if send_password_reset_email(user, token):
+                    flash('Password reset instructions have been sent to your email.', 'info')
+                else:
+                    flash('Failed to send reset email. Please try again later.', 'error')
+            else:
+                # Don't reveal whether email exists
+                flash('If an account with that email exists, password reset instructions have been sent.', 'info')
+                
+        finally:
+            conn.close()
+        
+        return redirect(url_for('login'))
+    
+    return render_template('auth/forgot_password.html')
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not password or not confirm_password:
+            flash('Both password fields are required.', 'error')
+            return render_template('auth/reset_password.html', token=token)
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('auth/reset_password.html', token=token)
+        
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long.', 'error')
+            return render_template('auth/reset_password.html', token=token)
+        
+        # Verify token and update password
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT user_id FROM user_account 
+                WHERE password_reset_token = %s 
+                AND password_reset_expires > %s
+                AND is_active = TRUE
+            ''', (token, datetime.utcnow()))
+            user_data = cur.fetchone()
+            
+            if user_data:
+                # Update password and clear reset token
+                hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                cur.execute('''
+                    UPDATE user_account 
+                    SET hashed_password = %s, password_reset_token = NULL, password_reset_expires = NULL
+                    WHERE user_id = %s
+                ''', (hashed_password, user_data[0]))
+                conn.commit()
+                
+                flash('Password has been reset successfully. Please log in.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Invalid or expired reset token.', 'error')
+                return redirect(url_for('forgot_password'))
+                
+        finally:
+            conn.close()
+    
+    # Verify token is valid for GET request
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT user_id FROM user_account 
+            WHERE password_reset_token = %s 
+            AND password_reset_expires > %s
+            AND is_active = TRUE
+        ''', (token, datetime.utcnow()))
+        if not cur.fetchone():
+            flash('Invalid or expired reset token.', 'error')
+            return redirect(url_for('forgot_password'))
+    finally:
+        conn.close()
+    
+    return render_template('auth/reset_password.html', token=token)
+
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not current_password or not new_password or not confirm_password:
+            flash('All password fields are required.', 'error')
+            return render_template('auth/change_password.html')
+        
+        if new_password != confirm_password:
+            flash('New passwords do not match.', 'error')
+            return render_template('auth/change_password.html')
+        
+        if len(new_password) < 8:
+            flash('Password must be at least 8 characters long.', 'error')
+            return render_template('auth/change_password.html')
+        
+        # Get current user with hashed password
+        user = User.get_by_username(current_user.username)
+        if not user.check_password(current_password):
+            flash('Current password is incorrect.', 'error')
+            return render_template('auth/change_password.html')
+        
+        # Update password
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            cur.execute('''
+                UPDATE user_account 
+                SET hashed_password = %s, last_modified_date = %s
+                WHERE user_id = %s
+            ''', (hashed_password, datetime.utcnow(), current_user.user_id))
+            conn.commit()
+            
+            flash('Password changed successfully.', 'success')
+            return redirect(url_for('hello_world'))
+            
+        finally:
+            conn.close()
+    
+    return render_template('auth/change_password.html')
+
+
+@app.route('/verify-email/<token>')
+def verify_email(token):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Find user with valid verification token
+        cur.execute('''
+            SELECT user_id, username FROM user_account 
+            WHERE verification_token = %s 
+            AND verification_token_expires > %s
+            AND email_verified = FALSE
+        ''', (token, datetime.utcnow()))
+        user_data = cur.fetchone()
+        
+        if user_data:
+            # Mark email as verified and clear token
+            cur.execute('''
+                UPDATE user_account 
+                SET email_verified = TRUE, 
+                    verification_token = NULL, 
+                    verification_token_expires = NULL,
+                    last_modified_date = %s
+                WHERE user_id = %s
+            ''', (datetime.utcnow(), user_data[0]))
+            conn.commit()
+            
+            flash('Email verified successfully! You can now log in.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Invalid or expired verification link. Please request a new verification email.', 'error')
+            return redirect(url_for('resend_verification'))
+            
+    finally:
+        conn.close()
+
+
+@app.route('/resend-verification', methods=['GET', 'POST'])
+def resend_verification():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        
+        if not email:
+            flash('Email address is required.', 'error')
+            return render_template('auth/resend_verification.html')
+        
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            
+            # Find unverified user by email
+            cur.execute('''
+                SELECT ua.user_id, ua.username, p.first_name, p.last_name, p.email
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE p.email = %s AND ua.email_verified = FALSE AND ua.is_active = TRUE
+            ''', (email,))
+            user_data = cur.fetchone()
+            
+            if user_data:
+                # Generate new verification token
+                verification_token = generate_verification_token()
+                verification_expires = datetime.utcnow() + timedelta(hours=24)
+                
+                # Update token in database
+                cur.execute('''
+                    UPDATE user_account 
+                    SET verification_token = %s, verification_token_expires = %s
+                    WHERE user_id = %s
+                ''', (verification_token, verification_expires, user_data[0]))
+                conn.commit()
+                
+                # Send verification email
+                user = User(user_data[0], None, user_data[1], email=user_data[4], 
+                          first_name=user_data[2], last_name=user_data[3])
+                if send_verification_email(user, verification_token):
+                    flash('Verification email sent! Please check your email.', 'success')
+                else:
+                    flash('Failed to send verification email. Please try again later.', 'error')
+            else:
+                # Don't reveal whether email exists or is already verified
+                flash('If an unverified account with that email exists, a verification email has been sent.', 'info')
+                
+        finally:
+            conn.close()
+        
+        return redirect(url_for('login'))
+    
+    return render_template('auth/resend_verification.html')
+
+
+# To test SendGrid email sending, use the registration flow or create a simple test script

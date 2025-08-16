@@ -2,6 +2,20 @@
 
 {% block content %}
 <div class="landing-page" style="display: block;">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert" style="margin-bottom: 20px;">
+                {{ message }}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
 <p>Welcome to <strong>ceol.io</strong>, an online repository of traditional music session setlists and recordings.</p>
 <p>If you're new to traditional Irish music, there's a brief guide <a href="/help#whats-a-session">here</a>.</p>
 <h2 id="subcategories">Latest Session Logs</h2>

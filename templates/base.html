@@ -114,7 +114,14 @@
                         <span class="hamburger-line"></span>
                     </button>
                     <div class="hamburger-dropdown" id="hamburgerDropdown">
-                        <a href="#" class="hamburger-item disabled">Login</a>
+                        {% if current_user.is_authenticated %}
+                            <span class="hamburger-item disabled">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</span>
+                            <a href="/change-password" class="hamburger-item">Change Password</a>
+                            <a href="/logout" class="hamburger-item">Logout</a>
+                        {% else %}
+                            <a href="/login" class="hamburger-item">Login</a>
+                            <a href="/register" class="hamburger-item">Register</a>
+                        {% endif %}
                         <a href="/add-session" class="hamburger-item">Add A Session</a>
                         <a href="/help" class="hamburger-item">Help</a>
                     </div>
