@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import render_template, request, redirect, url_for, flash, jsonify, session
 import random
 import requests
 import bcrypt
@@ -589,6 +589,9 @@ def login():
             user_agent = request.headers.get('User-Agent')
             session_id = create_session(user.user_id, ip_address, user_agent)
             
+            # Store session_id in Flask session to identify this specific session
+            session['db_session_id'] = session_id
+            
             # Clean up expired sessions
             cleanup_expired_sessions()
             
@@ -605,14 +608,16 @@ def login():
 @login_required
 def logout():
     if current_user.is_authenticated:
-        # Remove user sessions from database
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute('DELETE FROM user_session WHERE user_id = %s', (current_user.user_id,))
-            conn.commit()
-        finally:
-            conn.close()
+        # Remove only the current session from database
+        db_session_id = session.get('db_session_id')
+        if db_session_id:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute('DELETE FROM user_session WHERE session_id = %s', (db_session_id,))
+                conn.commit()
+            finally:
+                conn.close()
     
     logout_user()
     flash('You have been logged out successfully.', 'info')
