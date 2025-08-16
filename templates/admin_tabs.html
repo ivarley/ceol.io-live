@@ -1,7 +1,7 @@
 <!-- Admin Tab Navigation -->
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
-    <div class="nav nav-tabs admin-tabs-desktop" id="admin-tabs" role="tablist">
+    <div class="nav nav-tabs" id="admin-tabs" role="tablist">
         <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
            href="{{ url_for('admin') }}" 
            role="tab">
@@ -32,11 +32,7 @@
     margin-bottom: 2rem;
 }
 
-/* Desktop tabs */
-.admin-tabs-desktop {
-    display: block;
-}
-
+/* Desktop/Mobile visibility */
 .admin-tabs-mobile {
     display: none;
 }
@@ -72,28 +68,28 @@
 /* Mobile optimizations */
 @media (max-width: 768px) {
     /* Hide desktop tabs, show mobile dropdown */
-    .admin-tabs-desktop {
-        display: none;
+    .nav-tabs {
+        display: none !important;
     }
     
     .admin-tabs-mobile {
         display: block;
     }
     
-    /* AGGRESSIVE margin reduction for mobile */
+    /* AGGRESSIVE margin reduction for mobile ONLY */
     
-    /* Remove docs-content padding completely */
-    .docs-content {
+    /* Remove docs-content padding completely - mobile only */
+    body .docs-content {
         padding: 0.5rem !important;
     }
     
-    /* Remove docs-article padding */
-    .docs-article {
+    /* Remove docs-article padding - mobile only */
+    body .docs-article {
         padding: 0.5rem !important;
     }
     
-    /* Reduce container padding to minimal */
-    .docs-content-inner .container {
+    /* Reduce container padding to minimal - mobile only */
+    body .docs-content-inner .container {
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
         padding-top: 0 !important;
@@ -101,14 +97,14 @@
         margin-right: 0 !important;
     }
     
-    /* Make admin dashboard text smaller */
-    .docs-article .docs-heading {
+    /* Make admin dashboard text smaller - mobile only */
+    body .docs-article .docs-heading {
         font-size: 1.75rem !important;
         margin-bottom: 1rem !important;
     }
     
-    /* Reduce section padding */
-    .docs-section {
+    /* Reduce section padding - mobile only */
+    body .docs-section {
         padding: 1rem 0 !important;
     }
     
