@@ -12,7 +12,6 @@ from auth import User, create_session, cleanup_expired_sessions, generate_passwo
 from email_utils import send_password_reset_email, send_verification_email
 
 
-@login_required
 def home():
     try:
         conn = get_db_connection()
