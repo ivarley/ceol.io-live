@@ -29,7 +29,7 @@ def load_user(user_id):
     return User.get_by_id(int(user_id))
 
 # Register web page routes
-app.add_url_rule('/', 'hello_world', hello_world)
+app.add_url_rule('/', 'home', home)
 app.add_url_rule('/magic', 'magic', magic)
 app.add_url_rule('/db-test', 'db_test', db_test)
 app.add_url_rule('/sessions', 'sessions', sessions)

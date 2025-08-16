@@ -13,7 +13,7 @@ from email_utils import send_password_reset_email, send_verification_email
 
 
 @login_required
-def hello_world():
+def home():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -600,7 +600,7 @@ def login():
             next_page = request.args.get('next')
             if next_page:
                 return redirect(next_page)
-            return redirect(url_for('hello_world'))
+            return redirect(url_for('home'))
         else:
             flash('Invalid username or password.', 'error')
     
@@ -784,7 +784,7 @@ def change_password():
             conn.commit()
             
             flash('Password changed successfully.', 'success')
-            return redirect(url_for('hello_world'))
+            return redirect(url_for('home'))
             
         finally:
             conn.close()
