@@ -28,6 +28,9 @@
                                 <th>Location</th>
                                 <th>TheSession.org Member</th>
                                 <th>Username</th>
+                                <th>Sessions</th>
+                                <th>Instances</th>
+                                <th>Latest Session</th>
                                 <th>Last Login</th>
                             </tr>
                         </thead>
@@ -54,6 +57,27 @@
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">{{ person.username }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="person-session-count">
+                                    {% if person.session_count > 0 %}
+                                        <span class="badge bg-primary">{{ person.session_count }}</span>
+                                    {% else %}
+                                        <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="person-instance-count">
+                                    {% if person.session_instance_count > 0 %}
+                                        <span class="badge bg-success">{{ person.session_instance_count }}</span>
+                                    {% else %}
+                                        <span class="text-muted">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="person-latest-session">
+                                    {% if person.latest_session_info != 'None' %}
+                                        <span class="latest-session-info">{{ person.latest_session_info }}</span>
+                                    {% else %}
+                                        <span class="text-muted">None</span>
                                     {% endif %}
                                 </td>
                                 <td class="person-last-login">
@@ -143,6 +167,26 @@
     white-space: nowrap;
 }
 
+.person-session-count,
+.person-instance-count {
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.person-latest-session {
+    font-size: 0.9rem;
+    font-family: 'Courier New', monospace;
+}
+
+.latest-session-info {
+    white-space: nowrap;
+}
+
+.badge {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
 .alert {
     margin-top: 2rem;
 }
@@ -159,8 +203,19 @@
     }
     
     .person-location,
-    .person-thesession {
+    .person-thesession,
+    .person-latest-session {
         font-size: 0.8rem;
+    }
+    
+    .person-session-count,
+    .person-instance-count {
+        font-size: 0.8rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
     }
 }
 </style>

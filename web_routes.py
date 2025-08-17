@@ -1148,6 +1148,7 @@ def admin_people():
         cur = conn.cursor()
         
         # Get all people with outer join to user_account and their most recent login
+        # Also get session counts and latest session instance info
         cur.execute('''
             SELECT 
                 p.person_id,
@@ -1159,7 +1160,11 @@ def admin_people():
                 p.thesession_user_id,
                 ua.username,
                 ua.is_system_admin,
-                us.last_login
+                us.last_login,
+                COALESCE(sp.session_count, 0) as session_count,
+                COALESCE(sip.session_instance_count, 0) as session_instance_count,
+                latest_si.latest_date,
+                latest_si.session_name
             FROM person p
             LEFT JOIN user_account ua ON p.person_id = ua.person_id
             LEFT JOIN (
@@ -1169,12 +1174,36 @@ def admin_people():
                 FROM user_session
                 GROUP BY user_id
             ) us ON ua.user_id = us.user_id
+            LEFT JOIN (
+                SELECT 
+                    person_id,
+                    COUNT(*) as session_count
+                FROM session_person
+                GROUP BY person_id
+            ) sp ON p.person_id = sp.person_id
+            LEFT JOIN (
+                SELECT 
+                    person_id,
+                    COUNT(*) as session_instance_count
+                FROM session_instance_person
+                GROUP BY person_id
+            ) sip ON p.person_id = sip.person_id
+            LEFT JOIN (
+                SELECT DISTINCT ON (sip.person_id)
+                    sip.person_id,
+                    si.date as latest_date,
+                    s.name as session_name
+                FROM session_instance_person sip
+                JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                JOIN session s ON si.session_id = s.session_id
+                ORDER BY sip.person_id, si.date DESC
+            ) latest_si ON p.person_id = latest_si.person_id
             ORDER BY p.last_name, p.first_name
         ''')
         
         people = []
         for row in cur.fetchall():
-            person_id, first_name, last_name, email, city, country, thesession_user_id, username, is_system_admin, last_login = row
+            person_id, first_name, last_name, email, city, country, thesession_user_id, username, is_system_admin, last_login, session_count, session_instance_count, latest_date, session_name = row
             
             # Format location
             location_parts = []
@@ -1190,6 +1219,13 @@ def admin_people():
             else:
                 formatted_last_login = 'Never' if username else 'N/A'
             
+            # Format latest session date
+            if latest_date:
+                formatted_latest_date = latest_date.strftime('%Y-%m-%d')
+                latest_session_info = f"{formatted_latest_date} - {session_name}"
+            else:
+                latest_session_info = 'None'
+            
             people.append({
                 'person_id': person_id,
                 'name': f"{first_name} {last_name}",
@@ -1198,7 +1234,10 @@ def admin_people():
                 'thesession_user_id': thesession_user_id,
                 'username': username or 'No account',
                 'is_system_admin': is_system_admin,
-                'last_login': formatted_last_login
+                'last_login': formatted_last_login,
+                'session_count': session_count,
+                'session_instance_count': session_instance_count,
+                'latest_session_info': latest_session_info
             })
         
         return render_template('admin_people.html', 
