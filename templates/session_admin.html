@@ -157,17 +157,18 @@
                 <!-- Players Tab -->
                 <div class="tab-pane fade" id="players" role="tabpanel">
                     <section class="docs-section">
-                        <h2 class="section-heading">Session Players</h2>
+                        <!-- Header with filter dropdown -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="section-heading mb-0">Players</h2>
+                            <select class="form-select players-filter-select" id="players-filter">
+                                <option value="regulars">Regulars Only</option>
+                                <option value="everyone">Everyone</option>
+                            </select>
+                        </div>
                         
-                        <!-- Filter Controls -->
+                        <!-- Search Controls -->
                         <div class="mb-3">
                             <div class="row">
-                                <div class="col-md-6">
-                                    <select class="form-select" id="players-filter">
-                                        <option value="regulars">Regulars Only</option>
-                                        <option value="everyone">Everyone</option>
-                                    </select>
-                                </div>
                                 <div class="col-md-6">
                                     <input type="text" class="form-control" id="players-search" placeholder="Search by name...">
                                 </div>
@@ -247,6 +248,11 @@
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
+.players-filter-select {
+    width: auto;
+    min-width: 150px;
+}
+
 /* Mobile optimizations */
 @media (max-width: 768px) {
     /* Hide desktop tabs, show mobile dropdown */
@@ -256,6 +262,38 @@
     
     .session-admin-tabs-mobile {
         display: block;
+    }
+    
+    /* AGGRESSIVE margin reduction for mobile ONLY - matching admin_tabs.html */
+    
+    /* Remove docs-content padding completely - mobile only */
+    body .docs-content {
+        padding: 0.5rem !important;
+    }
+    
+    /* Remove docs-article padding - mobile only */
+    body .docs-article {
+        padding: 0.5rem !important;
+    }
+    
+    /* Reduce container padding to minimal - mobile only */
+    body .docs-content-inner .container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Make admin dashboard text smaller - mobile only */
+    body .docs-article .docs-heading {
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Reduce section padding - mobile only */
+    body .docs-section {
+        padding: 1rem 0 !important;
     }
     
     /* Style the mobile dropdown */
@@ -273,6 +311,13 @@
     /* Adjust form spacing on mobile */
     .row .col-md-6:first-child {
         margin-bottom: 1rem;
+    }
+    
+    /* Keep heading and filter on same line on mobile, but adjust spacing */
+    .players-filter-select {
+        min-width: 120px !important;
+        width: auto !important;
+        font-size: 0.9rem;
     }
 }
 
