@@ -158,6 +158,84 @@
                 margin-bottom: 0 !important;
             }
         }
+        
+        /* Year section toggle styles */
+        .year-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .year-header {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+            user-select: none;
+        }
+        
+        .year-header:hover {
+            opacity: 0.8;
+        }
+        
+        .year-header-left {
+            display: flex;
+            align-items: center;
+        }
+        
+        .year-toggle {
+            display: inline-block;
+            margin-right: 0.5rem;
+            transition: transform 0.2s ease;
+            font-size: 0.85rem;
+            color: var(--disabled-text);
+            font-weight: bold;
+        }
+        
+        .year-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+        
+        .year-title {
+            margin: 0;
+            font-size: 1.17rem;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+        
+        .year-view-link {
+            font-size: 0.9rem;
+            color: var(--primary);
+            text-decoration: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            margin-left: 0.5rem;
+        }
+        
+        .year-view-link.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .year-view-link:hover {
+            text-decoration: underline;
+        }
+        
+        .year-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            max-height: 1000px;
+            opacity: 1;
+        }
+        
+        .year-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+        }
+        
+        .year-content ul {
+            margin-bottom: 0;
+        }
     </style>
 {% endblock %}
 
@@ -240,12 +318,22 @@
         <h2 class="session-logs-heading">Session Logs:<span class="add-link" id="add-session-btn">Add</span></h2>
         {% if sorted_years|length > 1 %}
             {% for year in sorted_years %}
-            <h3>{{ year }}</h3>
-            <ul>
-            {% for date in instances_by_year[year] %}
-                <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
-            {% endfor %}
-            </ul>
+            <div class="year-section">
+                <div class="year-header" data-year="{{ year }}">
+                    <div class="year-header-left">
+                        <span class="year-toggle" data-year="{{ year }}">⌄</span>
+                        <h3 class="year-title">{{ year }}</h3>
+                        <a href="#" class="year-view-link" data-year="{{ year }}">view</a>
+                    </div>
+                </div>
+                <div class="year-content" data-year="{{ year }}">
+                    <ul>
+                    {% for date in instances_by_year[year] %}
+                        <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
             {% endfor %}
         {% else %}
             <ul>
@@ -676,6 +764,41 @@
         }
     });
     
+    // Year section toggle functionality
+    function toggleYearSection(year) {
+        const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
+        const content = document.querySelector(`.year-content[data-year="${year}"]`);
+        const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
+        
+        if (!toggle || !content || !viewLink) return;
+        
+        const isCollapsed = content.classList.contains('collapsed');
+        
+        if (isCollapsed) {
+            // Expand
+            content.classList.remove('collapsed');
+            toggle.classList.remove('collapsed');
+            viewLink.classList.remove('visible');
+        } else {
+            // Collapse
+            content.classList.add('collapsed');
+            toggle.classList.add('collapsed');
+            viewLink.classList.add('visible');
+        }
+    }
+    
+    function expandYearSection(year) {
+        const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
+        const content = document.querySelector(`.year-content[data-year="${year}"]`);
+        const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
+        
+        if (!toggle || !content || !viewLink) return;
+        
+        content.classList.remove('collapsed');
+        toggle.classList.remove('collapsed');
+        viewLink.classList.remove('visible');
+    }
+
     // Show initial flash messages and setup event listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         // Event listeners for buttons and modals
@@ -702,6 +825,48 @@
                 addSessionInstance();
             }
         });
+        
+        // Setup year section toggle functionality
+        document.querySelectorAll('.year-header').forEach(header => {
+            header.addEventListener('click', function(e) {
+                e.preventDefault();
+                const year = this.getAttribute('data-year');
+                toggleYearSection(year);
+            });
+        });
+        
+        // Setup view links
+        document.querySelectorAll('.year-view-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const year = this.getAttribute('data-year');
+                expandYearSection(year);
+            });
+        });
+        
+        // Collapse all years except the latest one by default
+        const yearHeaders = document.querySelectorAll('.year-header');
+        if (yearHeaders.length > 1) {
+            // Get all years and find the latest (first in the list since they're sorted newest first)
+            const years = Array.from(yearHeaders).map(header => header.getAttribute('data-year'));
+            const latestYear = years[0];
+            
+            // Collapse all years except the latest
+            years.forEach(year => {
+                if (year !== latestYear) {
+                    const content = document.querySelector(`.year-content[data-year="${year}"]`);
+                    const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
+                    const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
+                    
+                    if (content && toggle && viewLink) {
+                        content.classList.add('collapsed');
+                        toggle.classList.add('collapsed');
+                        viewLink.classList.add('visible');
+                    }
+                }
+            });
+        }
         
         // Show initial flash messages if any
         const existingMessage = document.querySelector('.message');
