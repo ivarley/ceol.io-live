@@ -36,6 +36,35 @@
       "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
       "Liberation Mono", "Courier New", monospace;
+    
+    /* Dark mode variables */
+    --bg-color: #fff;
+    --text-color: #252930;
+    --header-bg: #fff;
+    --border-color: #ddd;
+    --dropdown-bg: #fff;
+    --dropdown-border: #ddd;
+    --dropdown-shadow: rgba(0,0,0,0.15);
+    --hover-bg: #f8f9fa;
+    --disabled-text: #adb4c0;
+    --hamburger-line-color: #747f94;
+  }
+
+  [data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --header-bg: #2d2d2d;
+    --border-color: #444;
+    --dropdown-bg: #2d2d2d;
+    --dropdown-border: #444;
+    --dropdown-shadow: rgba(0,0,0,0.3);
+    --hover-bg: #3d3d3d;
+    --disabled-text: #888;
+    --hamburger-line-color: #e0e0e0;
+    --primary: #4da6ff;
+    --secondary: #8a95a8;
+    --light: #2d2d2d;
+    --dark: #e0e0e0;
   }
   *,
   *::before,
@@ -68,9 +97,10 @@
     font-size: 1rem;
     font-weight: 400;
     line-height: 1.5;
-    color: #252930;
+    color: var(--text-color);
     text-align: left;
-    background-color: #fff;
+    background-color: var(--bg-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   [tabindex="-1"]:focus:not(:focus-visible) {
     outline: 0 !important;
@@ -9221,7 +9251,7 @@
   }
   .header {
     box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.1);
-    background: #fff;
+    background: var(--header-bg);
   }
   .footer .copyright {
     font-size: 0.875rem;
@@ -9606,5 +9636,78 @@
     .site-logo .logo-text {
       display: none;
     }
+  }
+
+  /* Additional dark mode styles */
+  [data-theme="dark"] .card {
+    background-color: var(--dropdown-bg);
+    border-color: var(--border-color);
+  }
+
+  [data-theme="dark"] .table {
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .table th,
+  [data-theme="dark"] .table td {
+    border-color: var(--border-color);
+  }
+
+  /* Fix table striping for dark mode */
+  [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  [data-theme="dark"] .table-hover tbody tr:hover {
+    color: var(--text-color);
+    background-color: rgba(255, 255, 255, 0.075);
+  }
+
+  /* Fix heading visibility in dark mode */
+  [data-theme="dark"] h1,
+  [data-theme="dark"] h2,
+  [data-theme="dark"] h3,
+  [data-theme="dark"] h4,
+  [data-theme="dark"] h5,
+  [data-theme="dark"] h6,
+  [data-theme="dark"] .h1,
+  [data-theme="dark"] .h2,
+  [data-theme="dark"] .h3,
+  [data-theme="dark"] .h4,
+  [data-theme="dark"] .h5,
+  [data-theme="dark"] .h6,
+  [data-theme="dark"] .docs-heading {
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .docs-article strong {
+    color: var(--text-color);
+  }
+
+  /* Fix logo text visibility in dark mode */
+  [data-theme="dark"] .site-logo .logo-text {
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .btn-outline-primary {
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+
+  [data-theme="dark"] .btn-outline-primary:hover {
+    background-color: var(--primary);
+    border-color: var(--primary);
+  }
+
+  [data-theme="dark"] .form-control {
+    background-color: var(--dropdown-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+  }
+
+  [data-theme="dark"] .form-control:focus {
+    background-color: var(--dropdown-bg);
+    border-color: var(--primary);
+    color: var(--text-color);
   }
   

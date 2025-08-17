@@ -17,6 +17,34 @@
     <!-- Theme CSS -->  
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 
+    <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // Set logo based on theme once DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    updateLogo(savedTheme);
+                });
+            } else {
+                updateLogo(savedTheme);
+            }
+            
+            function updateLogo(theme) {
+                const logoImg = document.getElementById('logo-img');
+                if (logoImg) {
+                    if (theme === 'dark') {
+                        logoImg.src = logoImg.src.replace('logo1.png', 'logo1-dark-transparent.png');
+                    } else {
+                        logoImg.src = logoImg.src.replace('logo1-dark-transparent.png', 'logo1.png');
+                    }
+                }
+            }
+        })();
+    </script>
+
     <style>
         /* Hamburger Menu Styles */
         .hamburger-menu {
@@ -38,7 +66,7 @@
         .hamburger-line {
             width: 24px;
             height: 4px;
-            background-color: #747f94;
+            background-color: var(--hamburger-line-color);
             margin: 0;
             transition: 0.3s;
             align-self: center;
@@ -48,10 +76,10 @@
             position: absolute;
             top: 100%;
             right: -16px;
-            background-color: white;
-            border: 1px solid #ddd;
+            background-color: var(--dropdown-bg);
+            border: 1px solid var(--dropdown-border);
             border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px var(--dropdown-shadow);
             min-width: 160px;
             z-index: 1000;
             display: none;
@@ -65,8 +93,8 @@
             display: block;
             padding: 12px 16px;
             text-decoration: none;
-            color: #252930;
-            border-bottom: 1px solid #f0f0f0;
+            color: var(--text-color);
+            border-bottom: 1px solid var(--border-color);
             transition: background-color 0.2s;
         }
 
@@ -75,13 +103,13 @@
         }
 
         .hamburger-item:hover {
-            background-color: #f8f9fa;
+            background-color: var(--hover-bg);
             text-decoration: none;
-            color: #252930;
+            color: var(--text-color);
         }
 
         .hamburger-item.disabled {
-            color: #adb4c0;
+            color: var(--disabled-text);
             cursor: not-allowed;
         }
 
@@ -98,7 +126,7 @@
     <div class="branding docs-branding">
         <div class="container-fluid position-relative py-2">
             <div class="docs-logo-wrapper">
-                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
+                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img id="logo-img" width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
             </div><!--//docs-logo-wrapper-->
             <div class="docs-top-utilities d-flex justify-content-end align-items-center">
 
@@ -127,6 +155,9 @@
                         {% endif %}
                         <a href="/add-session" class="hamburger-item">Add A Session</a>
                         <a href="/help" class="hamburger-item">Help</a>
+                        <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
+                            <span id="dark-mode-text">🌙 Dark Mode</span>
+                        </a>
                     </div>
                 </div>
                 
@@ -163,6 +194,45 @@ document.addEventListener('click', function(event) {
     if (event.target.classList.contains('disabled')) {
         event.preventDefault();
     }
+});
+
+// Dark mode functionality
+function toggleDarkMode() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    updateDarkModeText(newTheme);
+    updateLogo(newTheme);
+}
+
+function updateLogo(theme) {
+    const logoImg = document.getElementById('logo-img');
+    if (logoImg) {
+        if (theme === 'dark') {
+            logoImg.src = logoImg.src.replace('logo1.png', 'logo1-dark-transparent.png');
+        } else {
+            logoImg.src = logoImg.src.replace('logo1-dark-transparent.png', 'logo1.png');
+        }
+    }
+}
+
+function updateDarkModeText(theme) {
+    const darkModeText = document.getElementById('dark-mode-text');
+    if (theme === 'dark') {
+        darkModeText.textContent = '☀️ Light Mode';
+    } else {
+        darkModeText.textContent = '🌙 Dark Mode';
+    }
+}
+
+// Initialize theme toggle text and logo on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    updateDarkModeText(savedTheme);
+    updateLogo(savedTheme);
 });
 </script>
 
