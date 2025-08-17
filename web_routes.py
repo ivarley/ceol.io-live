@@ -690,6 +690,7 @@ def logout():
         log_login_event(user_id, username, 'LOGOUT', ip_address, user_agent, session_id=db_session_id)
     
     logout_user()
+    session.clear()  # Clear all session variables
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
