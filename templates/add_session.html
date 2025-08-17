@@ -123,6 +123,34 @@
 
 {% block extra_css %}
 <style>
+    /* Fix code elements for dark mode */
+    code {
+        background-color: var(--hover-bg);
+        color: var(--text-color);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        border: 1px solid var(--border-color);
+    }
+    
+    /* Fix form controls for dark mode */
+    .form-control {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+    }
+    
+    .form-control:focus {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 0.2rem var(--dropdown-shadow);
+    }
+    
+    .form-control::placeholder {
+        color: var(--disabled-text);
+        opacity: 1;
+    }
+
     .modal-overlay {
         position: fixed;
         top: 0;

@@ -1279,6 +1279,86 @@ def admin_people():
         conn.close()
 
 
+@login_required 
+def admin_test_links():
+    """Admin test links page with sample URLs for testing"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get a sample session (try to find session_id=1 first, fallback to any session)
+        cur.execute('''
+            SELECT session_id, path, name 
+            FROM session 
+            WHERE session_id = 1
+            LIMIT 1
+        ''')
+        sample_session = cur.fetchone()
+        
+        if not sample_session:
+            # Fallback to any session
+            cur.execute('''
+                SELECT session_id, path, name 
+                FROM session 
+                ORDER BY session_id
+                LIMIT 1
+            ''')
+            sample_session = cur.fetchone()
+        
+        # Get a random tune from that session
+        sample_tune_id = None
+        if sample_session:
+            cur.execute('''
+                SELECT tune_id 
+                FROM session_tune 
+                WHERE session_id = %s 
+                ORDER BY RANDOM()
+                LIMIT 1
+            ''', (sample_session[0],))
+            tune_result = cur.fetchone()
+            if tune_result:
+                sample_tune_id = tune_result[0]
+        
+        # Get latest session instance for that session
+        latest_instance_date = None
+        if sample_session:
+            cur.execute('''
+                SELECT date 
+                FROM session_instance 
+                WHERE session_id = %s 
+                ORDER BY date DESC
+                LIMIT 1
+            ''', (sample_session[0],))
+            instance_result = cur.fetchone()
+            if instance_result:
+                latest_instance_date = instance_result[0]
+        
+        # Get a random person
+        cur.execute('''
+            SELECT person_id 
+            FROM person 
+            ORDER BY RANDOM()
+            LIMIT 1
+        ''')
+        person_result = cur.fetchone()
+        sample_person_id = person_result[0] if person_result else None
+        
+        return render_template('admin_test_links.html',
+                             active_tab='test_links',
+                             sample_session=sample_session,
+                             sample_tune_id=sample_tune_id,
+                             latest_instance_date=latest_instance_date,
+                             sample_person_id=sample_person_id)
+        
+    finally:
+        conn.close()
+
+
 @login_required
 def person_details(person_id):
     """Person details page showing person info, user account, and activity data"""
@@ -1405,6 +1485,13 @@ def session_admin(session_path):
         flash('You must be authorized to view this page.', 'error')
         return redirect(url_for('home'))
     
+    # Get tab parameter from query string, default to 'details'
+    active_tab = request.args.get('tab', 'details')
+    # Validate tab parameter
+    valid_tabs = ['details', 'players', 'logs']
+    if active_tab not in valid_tabs:
+        active_tab = 'details'
+    
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -1443,7 +1530,8 @@ def session_admin(session_path):
         
         return render_template('session_admin.html', 
                              session=session_data,
-                             session_path=session_path)
+                             session_path=session_path,
+                             active_tab=active_tab)
         
     finally:
         conn.close()

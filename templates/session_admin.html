@@ -17,7 +17,7 @@
             <nav class="session-admin-tabs-nav">
                 <!-- Desktop Tab Navigation -->
                 <div class="nav nav-tabs" id="session-admin-tabs" role="tablist">
-                    <button class="nav-link active" 
+                    <button class="nav-link {{ 'active' if active_tab == 'details' else '' }}" 
                            id="details-tab" 
                            data-bs-toggle="tab" 
                            data-bs-target="#details" 
@@ -25,7 +25,7 @@
                            role="tab">
                         Details
                     </button>
-                    <button class="nav-link" 
+                    <button class="nav-link {{ 'active' if active_tab == 'players' else '' }}" 
                            id="players-tab" 
                            data-bs-toggle="tab" 
                            data-bs-target="#players" 
@@ -33,7 +33,7 @@
                            role="tab">
                         Players
                     </button>
-                    <button class="nav-link" 
+                    <button class="nav-link {{ 'active' if active_tab == 'logs' else '' }}" 
                            id="logs-tab" 
                            data-bs-toggle="tab" 
                            data-bs-target="#logs" 
@@ -46,9 +46,9 @@
                 <!-- Mobile Dropdown Navigation -->
                 <div class="session-admin-tabs-mobile">
                     <select class="form-select" id="session-admin-mobile-select">
-                        <option value="details" selected>Details</option>
-                        <option value="players">Players</option>
-                        <option value="logs">Logs</option>
+                        <option value="details" {{ 'selected' if active_tab == 'details' else '' }}>Details</option>
+                        <option value="players" {{ 'selected' if active_tab == 'players' else '' }}>Players</option>
+                        <option value="logs" {{ 'selected' if active_tab == 'logs' else '' }}>Logs</option>
                     </select>
                 </div>
             </nav>
@@ -56,7 +56,7 @@
             <!-- Tab Content -->
             <div class="tab-content" id="session-admin-tab-content">
                 <!-- Details Tab -->
-                <div class="tab-pane fade show active" id="details" role="tabpanel">
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'details' else '' }}" id="details" role="tabpanel">
                     <section class="docs-section">
                         <h2 class="section-heading">Session Details</h2>
                         
@@ -155,7 +155,7 @@
                 </div>
                 
                 <!-- Players Tab -->
-                <div class="tab-pane fade" id="players" role="tabpanel">
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'players' else '' }}" id="players" role="tabpanel">
                     <section class="docs-section">
                         <!-- Header with filter dropdown -->
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -182,7 +182,7 @@
                 </div>
                 
                 <!-- Logs Tab -->
-                <div class="tab-pane fade" id="logs" role="tabpanel">
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'logs' else '' }}" id="logs" role="tabpanel">
                     <section class="docs-section">
                         <h2 class="section-heading">Session Instance History</h2>
                         <div id="logs-content">
@@ -332,6 +332,14 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize content for the active tab on page load
+    const activeTab = '{{ active_tab }}';
+    if (activeTab === 'players') {
+        loadPlayersContent();
+    } else if (activeTab === 'logs') {
+        loadLogsContent();
+    }
+    
     // Mobile dropdown functionality
     const mobileSelect = document.getElementById('session-admin-mobile-select');
     if (mobileSelect) {
@@ -352,6 +360,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (this.value === 'logs') {
                     loadLogsContent();
                 }
+                
+                // Update URL with tab parameter
+                const url = new URL(window.location);
+                url.searchParams.set('tab', this.value);
+                window.history.pushState({}, '', url);
             }
         });
     }
@@ -382,6 +395,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (targetId === 'logs') {
                     loadLogsContent();
                 }
+                
+                // Update URL with tab parameter
+                const url = new URL(window.location);
+                url.searchParams.set('tab', targetId);
+                window.history.pushState({}, '', url);
             }
         });
     });

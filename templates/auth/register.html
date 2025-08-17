@@ -2,6 +2,34 @@
 
 {% block title %}Register - Irish Music Sessions{% endblock %}
 
+{% block extra_css %}
+<style>
+.form-select {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.form-select:focus {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--primary);
+}
+
+.form-control {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.form-control:focus {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--primary);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-wrapper">
     <div class="container">

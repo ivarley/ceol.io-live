@@ -8,6 +8,32 @@
     #whats-a-session {
         scroll-margin-top: 80px;
     }
+    
+    /* Reset UL color completely and inherit from body */
+    .landing-page ul {
+        color: unset !important;
+        color: inherit !important;
+    }
+    
+    .landing-page ul li {
+        color: unset !important;
+        color: inherit !important;
+    }
+    
+    /* Try to match the computed style of paragraphs exactly */
+    .landing-page p {
+        color: var(--text-color);
+    }
+    
+    .landing-page ul {
+        color: var(--text-color) !important;
+        opacity: 0.9;
+    }
+    
+    .landing-page ul li {
+        color: var(--text-color) !important;
+        opacity: 0.9;
+    }
 </style>
 {% endblock %}
 

@@ -17,6 +17,11 @@
            role="tab">
             Active Sessions
         </a>
+        <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}" 
+           href="{{ url_for('admin_test_links') }}" 
+           role="tab">
+            Test Links
+        </a>
     </div>
     
     <!-- Mobile Dropdown Navigation -->
@@ -30,6 +35,9 @@
             </option>
             <option value="{{ url_for('admin_sessions') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
                 Active Sessions
+            </option>
+            <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>
+                Test Links
             </option>
         </select>
     </div>

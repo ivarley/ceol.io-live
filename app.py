@@ -50,6 +50,7 @@ app.add_url_rule('/admin', 'admin', admin)
 app.add_url_rule('/admin/sessions', 'admin_sessions', admin_sessions)
 app.add_url_rule('/admin/login-history', 'admin_login_history', admin_login_history)
 app.add_url_rule('/admin/people', 'admin_people', admin_people)
+app.add_url_rule('/admin/test-links', 'admin_test_links', admin_test_links)
 app.add_url_rule('/admin/people/<int:person_id>', 'person_details', person_details)
 app.add_url_rule('/admin/sessions/<path:session_path>', 'session_admin', session_admin)
 

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Test Links{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Admin Dashboard</h1>
+                <section class="docs-intro">
+                    <p>Test links for all major site functionality. All links open in new windows.</p>
+                </section>
+            </header>
+            
+            {% include 'admin_tabs.html' %}
+            
+            <section class="docs-section" id="test-links">
+                <h2 class="section-heading">Test Links</h2>
+                
+                <div class="test-links-container">
+                    <div class="test-section">
+                        <h3>Core Pages</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/" target="_blank">Home Page</a></li>
+                            <li><a href="/help" target="_blank">Help Page</a></li>
+                        </ul>
+                    </div>
+
+                    {% if sample_session %}
+                    <div class="test-section">
+                        <h3>Session Pages ({{ sample_session[2] }})</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/sessions/{{ sample_session[1] }}" target="_blank">Session Home</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}/tunes" target="_blank">Session Tunes</a></li>
+                            {% if sample_tune_id %}
+                            <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
+                            {% endif %}
+                            {% if latest_instance_date %}
+                            <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}" target="_blank">Session Instance ({{ latest_instance_date }})</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% else %}
+                    <div class="test-section">
+                        <h3>Session Pages</h3>
+                        <p class="text-muted">No sessions found in database</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="test-section">
+                        <h3>Admin Pages</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/admin/people" target="_blank">Admin - People</a></li>
+                            <li><a href="/admin/login-history" target="_blank">Admin - Login History</a></li>
+                            <li><a href="/admin/sessions" target="_blank">Admin - Active Sessions</a></li>
+                            <li><a href="/admin/test-links" target="_blank">Admin - Test Links (this page)</a></li>
+                            {% if sample_person_id %}
+                            <li><a href="/admin/people/{{ sample_person_id }}" target="_blank">Person Details (ID: {{ sample_person_id }})</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    {% if sample_session %}
+                    <div class="test-section">
+                        <h3>Session Admin Pages ({{ sample_session[2] }})</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}?tab=details" target="_blank">Session Admin - Details Tab</a></li>
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}?tab=players" target="_blank">Session Admin - Players Tab</a></li>
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}?tab=logs" target="_blank">Session Admin - Logs Tab</a></li>
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="test-section">
+                        <h3>User Account Pages</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/login" target="_blank">Login Page</a></li>
+                            <li><a href="/register" target="_blank">Register Page</a></li>
+                            <li><a href="/forgot-password" target="_blank">Forgot Password</a></li>
+                            <li><a href="/add-session" target="_blank">Add Session</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="test-section">
+                        <h3>API Endpoints (for testing)</h3>
+                        <ul class="test-links-list">
+                            <li><code>/api/sessions</code> - Sessions API</li>
+                            <li><code>/api/tunes</code> - Tunes API</li>
+                            <li><code>/api/search-sessions</code> - Session Search API</li>
+                            <li><code>/api/check-existing-session</code> - Check Session API</li>
+                        </ul>
+                        <p class="text-muted"><em>Note: API endpoints require appropriate POST data</em></p>
+                    </div>
+                </div>
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.test-links-container {
+    margin-top: 1.5rem;
+}
+
+.test-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+}
+
+.test-section h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--primary);
+    font-size: 1.25rem;
+}
+
+.test-links-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.test-links-list li {
+    margin: 0.75rem 0;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--hover-bg);
+}
+
+.test-links-list li:last-child {
+    border-bottom: none;
+}
+
+.test-links-list a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.test-links-list a:hover {
+    background-color: var(--hover-bg);
+    text-decoration: underline;
+}
+
+.test-links-list code {
+    background-color: var(--hover-bg);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .test-section {
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .test-section h3 {
+        font-size: 1.1rem;
+    }
+    
+    .test-links-list a {
+        font-size: 0.9rem;
+    }
+}
+</style>
+{% endblock %}
