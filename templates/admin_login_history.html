@@ -187,24 +187,24 @@
 
 .login-history-filters .form-label {
     font-weight: 600;
-    color: #495057;
+    color: var(--text-color);
 }
 
 /* Event type styling */
 .event-badge-login_success {
-    background-color: #28a745;
+    background-color: var(--success, #28a745);
 }
 
 .event-badge-login_failure {
-    background-color: #dc3545;
+    background-color: var(--danger, #dc3545);
 }
 
 .event-badge-logout {
-    background-color: #6c757d;
+    background-color: var(--secondary, #6c757d);
 }
 
 .event-badge-password_reset {
-    background-color: #fd7e14;
+    background-color: var(--warning, #fd7e14);
 }
 
 /* Row highlighting */
@@ -237,7 +237,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--disabled-text);
 }
 
 .details {

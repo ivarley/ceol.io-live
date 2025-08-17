@@ -116,9 +116,9 @@
                 <th>TheSession.org Popularity</th>
                 <td>
                     <span id="tunebook-count">{{ tunebook_count }} tunebook{{ 's' if tunebook_count != 1 else '' }}</span>
-                    <button id="refresh-tunebook" onclick="refreshTunebookCount()" style="margin-left: 10px; padding: 2px 6px; font-size: 0.8em; cursor: pointer;">refresh</button>
+                    <button id="refresh-tunebook" onclick="refreshTunebookCount()" style="margin-left: 10px; padding: 2px 6px; font-size: 0.8em; cursor: pointer; background-color: var(--light); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 3px;">refresh</button>
                     {% if tunebook_count_cached_date %}
-                    <span class="cached-date-display" style="margin-left: 10px; color: #999; font-style: italic; font-size: 0.8em;">Last Updated: {{ tunebook_count_cached_date }}</span>
+                    <span class="cached-date-display" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;">Last Updated: {{ tunebook_count_cached_date }}</span>
                     {% endif %}
                 </td>
             </tr>
@@ -144,7 +144,7 @@
             {% endif %}
             {% if not setting_id and not overridden_key %}
             <tr>
-                <td colspan="2" style="color: #666; font-style: italic;">No specific session preferences set</td>
+                <td colspan="2" style="color: var(--disabled-text); font-style: italic;">No specific session preferences set</td>
             </tr>
             {% endif %}
         </table>
@@ -163,13 +163,13 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <p id="no-aliases-message" style="color: #666; font-style: italic;">No additional aliases for this tune in this session.</p>
+                <p id="no-aliases-message" style="color: var(--disabled-text); font-style: italic;">No additional aliases for this tune in this session.</p>
             {% endif %}
         </div>
         
         <div style="margin-top: 15px;">
             <div id="add-alias-form" style="display: flex; gap: 10px; align-items: center; max-width: 500px;">
-                <input type="text" id="alias-input" placeholder="Enter new alias for this tune..." style="flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <input type="text" id="alias-input" placeholder="Enter new alias for this tune..." style="flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color);">
                 <button id="add-alias-btn" style="background-color: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; white-space: nowrap;">Add Alias</button>
             </div>
             <div id="alias-message" style="margin-top: 10px; padding: 8px 12px; border-radius: 4px; display: none;"></div>
@@ -208,7 +208,7 @@
             {% endfor %}
         </ul>
         {% else %}
-        <p style="color: #666; font-style: italic;">No instances recorded yet.</p>
+        <p style="color: var(--disabled-text); font-style: italic;">No instances recorded yet.</p>
         {% endif %}
     </div>
     
@@ -412,7 +412,7 @@ function refreshTunebookCount() {
                     // Create the date span if it doesn't exist
                     dateSpan = document.createElement('span');
                     dateSpan.className = 'cached-date-display';
-                    dateSpan.style.cssText = 'margin-left: 10px; color: #999; font-style: italic; font-size: 0.8em;';
+                    dateSpan.style.cssText = 'margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;';
                     button.parentNode.appendChild(dateSpan);
                 }
                 dateSpan.textContent = `Last Updated: ${data.cached_date}`;

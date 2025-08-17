@@ -109,7 +109,7 @@
 .table {
     background-color: var(--bg-color);
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px var(--dropdown-shadow);
 }
 
 .table th {
@@ -128,14 +128,14 @@
 }
 
 .person-link {
-    color: #007bff;
+    color: var(--primary);
     text-decoration: none;
     font-weight: 500;
 }
 
 .person-link:hover {
     text-decoration: underline;
-    color: #0056b3;
+    color: var(--primary);
 }
 
 
@@ -148,7 +148,7 @@
 }
 
 .person-thesession a {
-    color: #007bff;
+    color: var(--primary);
     text-decoration: none;
 }
 
@@ -162,7 +162,7 @@
 }
 
 .admin-indicator {
-    color: #888;
+    color: var(--disabled-text);
     font-style: italic;
     font-weight: normal;
     margin-left: 0.5rem;

@@ -129,7 +129,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: var(--dropdown-shadow);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -137,10 +137,10 @@
     }
 
     .modal-content {
-        background-color: white;
+        background-color: var(--bg-color);
         border-radius: 8px;
         padding: 0;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 20px var(--dropdown-shadow);
         max-height: 90vh;
         overflow-y: auto;
         max-width: 500px;
@@ -148,9 +148,9 @@
     }
 
     .modal-header {
-        background-color: #f8f9fa;
+        background-color: var(--light);
         padding: 16px 20px;
-        border-bottom: 1px solid #dee2e6;
+        border-bottom: 1px solid var(--border-color);
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -159,7 +159,7 @@
 
     .modal-header h3 {
         margin: 0;
-        color: #252930;
+        color: var(--text-color);
         font-size: 1.5rem;
     }
 
@@ -171,7 +171,7 @@
         display: block;
         margin-bottom: 5px;
         font-weight: 500;
-        color: #495057;
+        color: var(--text-color);
     }
 
     .modal-body input[type="date"],
@@ -179,16 +179,16 @@
     .modal-body input[type="url"] {
         width: 100%;
         padding: 8px 12px;
-        border: 1px solid #ced4da;
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         margin-bottom: 15px;
         font-size: 14px;
     }
 
     .modal-footer {
-        background-color: #f8f9fa;
+        background-color: var(--light);
         padding: 12px 20px;
-        border-top: 1px solid #dee2e6;
+        border-top: 1px solid var(--border-color);
         display: flex;
         justify-content: flex-end;
         gap: 10px;
@@ -204,12 +204,12 @@
     }
 
     .modal-footer .btn-primary {
-        background-color: #007bff;
+        background-color: var(--primary);
         color: white;
     }
 
     .modal-footer .btn-secondary {
-        background-color: #6c757d;
+        background-color: var(--secondary);
         color: white;
     }
 
@@ -218,14 +218,14 @@
     }
 
     .modal-body input:focus {
-        border-color: #80bdff;
+        border-color: var(--primary);
         outline: 0;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        box-shadow: 0 0 0 0.2rem var(--dropdown-shadow);
     }
 
     .search-results-container {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
+        background-color: var(--light);
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         padding: 15px;
     }
@@ -233,15 +233,15 @@
     .search-result-item {
         padding: 10px;
         margin-bottom: 8px;
-        background-color: white;
-        border: 1px solid #dee2e6;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.2s;
     }
 
     .search-result-item:hover {
-        background-color: #e9ecef;
+        background-color: var(--hover-bg);
     }
 
     .search-result-item:last-child {
@@ -249,16 +249,16 @@
     }
 
     .search-result-item.existing {
-        background-color: #fff3cd;
-        border-color: #ffeaa7;
+        background-color: var(--warning-bg, #fff3cd);
+        border-color: var(--warning-border, #ffeaa7);
     }
 
     .search-result-item.existing:hover {
-        background-color: #ffeaa7;
+        background-color: var(--warning-hover, #ffeaa7);
     }
 
     .existing-indicator {
-        color: #856404;
+        color: var(--warning-text, #856404);
         font-size: 12px;
         font-style: italic;
         margin-top: 4px;
@@ -326,7 +326,7 @@ function checkExistingSession(sessionId) {
         showLoading(false);
         
         if (data.exists) {
-            showError(`Session ${sessionId} is already in the database at: <a href="${data.session_path}" style="color: #007bff; text-decoration: underline;">${data.session_path}</a>`);
+            showError(`Session ${sessionId} is already in the database at: <a href="${data.session_path}" style="color: var(--primary); text-decoration: underline;">${data.session_path}</a>`);
         } else {
             // Session doesn't exist, proceed to fetch data from thesession.org
             fetchSessionData(sessionId);

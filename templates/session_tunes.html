@@ -13,11 +13,11 @@
         }
         .sort-links a {
             padding: 8px 12px;
-            background-color: #f8f9fa;
-            color: #007bff;
+            background-color: var(--light);
+            color: var(--primary);
             text-decoration: none;
             border-radius: 4px;
-            border: 1px solid #dee2e6;
+            border: 1px solid var(--border-color);
             cursor: pointer;
             white-space: nowrap;
         }
@@ -28,13 +28,15 @@
         }
         .search-input {
             padding: 8px 12px;
-            border: 1px solid #dee2e6;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 14px;
             min-width: 200px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
         .clear-search {
-            color: #007bff;
+            color: var(--primary);
             text-decoration: none;
             font-size: 14px;
             cursor: pointer;
@@ -58,10 +60,10 @@
             }
         }
         .sort-links a:hover {
-            background-color: #e9ecef;
+            background-color: var(--hover-bg);
         }
         .sort-links a.active {
-            background-color: #007bff;
+            background-color: var(--primary);
             color: white;
         }
         .tunes-table {
@@ -72,17 +74,17 @@
         .tunes-table th, .tunes-table td {
             padding: 10px;
             text-align: left;
-            border-bottom: 1px solid #dee2e6;
+            border-bottom: 1px solid var(--border-color);
         }
         .tunes-table th {
-            background-color: #f8f9fa;
+            background-color: var(--light);
             font-weight: bold;
         }
         .tunes-table tr:hover {
-            background-color: #f5f5f5;
+            background-color: var(--hover-bg);
         }
         .tune-link {
-            color: #007bff;
+            color: var(--primary);
             text-decoration: none;
         }
         .tune-link:hover {

@@ -156,7 +156,7 @@
                     <div class="tab-pane fade" id="attended" role="tabpanel" aria-labelledby="attended-tab">
                         <div class="mt-3">
                             <div id="attended-loading" class="text-center">
-                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
                                 <span style="margin-left: 8px;">Loading attendance data...</span>
                             </div>
                             <div id="attended-content"></div>
@@ -168,7 +168,7 @@
                     <div class="tab-pane fade" id="logins" role="tabpanel" aria-labelledby="logins-tab">
                         <div class="mt-3">
                             <div id="logins-loading" class="text-center">
-                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
                                 <span style="margin-left: 8px;">Loading login history...</span>
                             </div>
                             <div id="logins-content"></div>
@@ -355,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .admin-indicator {
-    color: #888;
+    color: var(--disabled-text);
     font-style: italic;
     font-weight: normal;
     margin-left: 0.5rem;
@@ -412,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .alert-info {
     background-color: var(--bg-color);
-    border-color: var(--primary-color, #007bff);
+    border-color: var(--primary);
     color: var(--text-color);
 }
 
@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .back-link {
     display: inline-block;
-    color: var(--primary-color, #007bff);
+    color: var(--primary);
     text-decoration: none;
     font-size: 0.9rem;
     margin-top: 0.5rem;
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .back-link:hover {
-    color: var(--primary-color-dark, #0056b3);
+    color: var(--primary);
     text-decoration: underline;
 }
 

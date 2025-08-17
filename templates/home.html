@@ -25,7 +25,7 @@
         <div style="margin-bottom: 20px;">
             <h3><a href="/sessions/{{ session.path }}">{{ session.name }}</a></h3>
             {% if session.city or session.state or session.country %}
-                <p style="margin: 5px 0; color: #666; font-size: 0.9em;">
+                <p style="margin: 5px 0; color: var(--disabled-text); font-size: 0.9em;">
                     {% if session.city %}{{ session.city }}{% endif %}{% if session.city and (session.state or session.country) %}, {% endif %}{% if session.state %}{{ session.state }}{% endif %}{% if session.state and session.country %}, {% endif %}{% if session.country %}{{ session.country }}{% endif %}
                 </p>
             {% endif %}
@@ -36,7 +36,7 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <p style="margin: 5px 0; color: #999; font-style: italic;">No session instances recorded yet.</p>
+                <p style="margin: 5px 0; color: var(--disabled-text); font-style: italic;">No session instances recorded yet.</p>
             {% endif %}
         </div>
     {% endfor %}

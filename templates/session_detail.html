@@ -14,18 +14,18 @@
             z-index: 1100;
             min-width: 300px;
             text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px var(--dropdown-shadow);
             transition: top 0.3s ease-in-out;
         }
         .message.success {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
+            background-color: var(--success-bg, #d4edda);
+            border: 1px solid var(--success-border, #c3e6cb);
+            color: var(--success-text, #155724);
         }
         .message.error {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
+            background-color: var(--error-bg, #f8d7da);
+            border: 1px solid var(--error-border, #f5c6cb);
+            color: var(--error-text, #721c24);
         }
         .message.show {
             top: 20px;
@@ -36,7 +36,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: var(--dropdown-shadow);
             z-index: 2000;
             display: none;
             align-items: center;
@@ -48,7 +48,7 @@
             padding: 24px;
             max-width: 500px;
             width: 90%;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            box-shadow: 0 8px 24px var(--dropdown-shadow);
             color: var(--text-color);
         }
         .modal-header {
@@ -56,7 +56,7 @@
         }
         .modal-header h3 {
             margin: 0;
-            color: #333;
+            color: var(--text-color);
         }
         .modal-body {
             margin-bottom: 20px;
@@ -65,14 +65,14 @@
             display: block;
             margin-bottom: 8px;
             font-weight: bold;
-            color: #555;
+            color: var(--text-color);
         }
         .modal-body input[type="date"],
         .modal-body input[type="text"],
         .modal-body textarea {
             width: 100%;
             padding: 8px 12px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
@@ -90,18 +90,18 @@
             font-size: 14px;
         }
         .modal-footer .btn-primary {
-            background-color: #007bff;
+            background-color: var(--primary);
             color: white;
         }
         .modal-footer .btn-secondary {
-            background-color: #6c757d;
+            background-color: var(--secondary);
             color: white;
         }
         .modal-footer button:hover {
             opacity: 0.9;
         }
         .add-link {
-            color: #007bff;
+            color: var(--primary);
             text-decoration: none;
             margin-left: 10px;
             font-size: 0.9em;
@@ -123,7 +123,7 @@
         .modal-body input:focus,
         .modal-body textarea:focus {
             outline: none;
-            border-color: #007bff;
+            border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
         }
         
@@ -267,7 +267,7 @@
     {% else %}
     <div class="past-instances">
         <h2>Session Logs:</h2>
-        <p><a href="#" id="add-first-session-btn" style="color: #007bff; text-decoration: none;">Add your first session log</a></p>
+        <p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session log</a></p>
     </div>
     {% endif %}
     
@@ -362,7 +362,7 @@
                                 <input type="checkbox" id="edit-unlisted-address" name="unlisted_address" style="margin-right: 8px; width: auto;" {{ 'checked' if session.unlisted_address }}>
                                 Unlisted address
                             </label>
-                            <div style="font-size: 12px; color: #666; font-style: italic; margin-top: 4px;">Check this if you only want logged in members of your session to see the address</div>
+                            <div style="font-size: 12px; color: var(--disabled-text); font-style: italic; margin-top: 4px;">Check this if you only want logged in members of your session to see the address</div>
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -379,7 +379,7 @@
                         <div>
                             <label for="edit-recurrence">Recurrence:</label>
                             <input type="text" id="edit-recurrence" name="recurrence" placeholder="e.g. Thursdays at 7, Monthly on Sundays at 4pm" value="{{ session.recurrence or '' }}">
-                            <div style="font-size: 12px; color: #666; font-style: italic; margin-top: 4px;">e.g. Thursdays at 7, Monthly on Sundays at 4pm</div>
+                            <div style="font-size: 12px; color: var(--disabled-text); font-style: italic; margin-top: 4px;">e.g. Thursdays at 7, Monthly on Sundays at 4pm</div>
                         </div>
                         
                         <div>

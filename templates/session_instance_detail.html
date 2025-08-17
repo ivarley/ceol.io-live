@@ -14,18 +14,18 @@
             z-index: 1100;
             min-width: 300px;
             text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px var(--dropdown-shadow);
             transition: top 0.3s ease-in-out;
         }
         .message.success {
-            background-color: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
+            background-color: var(--success-bg, #d4edda);
+            border: 1px solid var(--success-border, #c3e6cb);
+            color: var(--success-text, #155724);
         }
         .message.error {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
+            background-color: var(--error-bg, #f8d7da);
+            border: 1px solid var(--error-border, #f5c6cb);
+            color: var(--error-text, #721c24);
         }
         .message.show {
             top: 20px;
@@ -39,7 +39,7 @@
         }
         .loading-ellipsis {
             display: inline-block;
-            color: #666;
+            color: var(--disabled-text);
         }
         .loading-ellipsis:after {
             content: '...';
@@ -60,19 +60,19 @@
             100% { transform: rotate(360deg); }
         }
         .cancelled-date {
-            color: #dc3545;
+            color: var(--danger, #dc3545);
             text-decoration: line-through;
         }
         .cancelled-message {
             padding: 20px;
-            background-color: #f8f9fa;
-            border-left: 4px solid #dc3545;
+            background-color: var(--light);
+            border-left: 4px solid var(--danger, #dc3545);
             margin: 20px 0;
-            color: #495057;
+            color: var(--text-color);
             font-style: italic;
         }
         .edit-link {
-            color: #007bff;
+            color: var(--primary);
             text-decoration: none;
             margin-left: 15px;
             font-size: 0.7em;
@@ -88,7 +88,7 @@
             opacity: 1;
         }
         .delete-link {
-            color: #dc3545;
+            color: var(--danger, #dc3545);
             text-decoration: none;
             cursor: pointer;
             font-size: 14px;
@@ -96,7 +96,7 @@
             text-align: center;
             margin-top: 16px;
             padding-top: 16px;
-            border-top: 1px solid #e9ecef;
+            border-top: 1px solid var(--border-color);
         }
         .delete-link:hover {
             text-decoration: underline;
@@ -104,13 +104,13 @@
         .tune-context-menu {
             position: absolute;
             background: white;
-            border: 1px solid #ccc;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 4px 0;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             z-index: 1500;
             font-size: 14px;
-            color: #333;
+            color: var(--text-color);
             white-space: nowrap;
             display: none;
             min-width: 100px;
@@ -121,13 +121,13 @@
             display: block;
             padding: 6px 12px;
             text-decoration: none;
-            color: #333;
+            color: var(--text-color);
             cursor: pointer;
             user-select: none;
         }
         .tune-context-menu a:hover {
-            background-color: #f5f5f5;
-            color: #007bff;
+            background-color: var(--hover-bg);
+            color: var(--primary);
         }
         .tune-context-menu .menu-item-with-submenu {
             position: relative;
@@ -140,13 +140,13 @@
             left: 100%;
             top: 0;
             background: white;
-            border: 1px solid #ccc;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 4px 0;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             z-index: 1600;
             font-size: 14px;
-            color: #333;
+            color: var(--text-color);
             white-space: nowrap;
             display: none;
             min-width: 120px;
@@ -155,20 +155,20 @@
             display: block;
             padding: 6px 12px;
             text-decoration: none;
-            color: #333;
+            color: var(--text-color);
             cursor: pointer;
         }
         .tune-context-menu .submenu a:hover {
-            background-color: #f5f5f5;
-            color: #007bff;
+            background-color: var(--hover-bg);
+            color: var(--primary);
         }
         .tune-context-menu .submenu a.disabled {
-            color: #999;
+            color: var(--disabled-text);
             cursor: not-allowed;
         }
         .tune-context-menu .submenu a.disabled:hover {
             background-color: transparent;
-            color: #999;
+            color: var(--disabled-text);
         }
         .tune-name-wrapper {
             position: relative;
@@ -202,7 +202,7 @@
         }
         .modal-header h3 {
             margin: 0;
-            color: #333;
+            color: var(--text-color);
         }
         .modal-body {
             margin-bottom: 20px;
@@ -211,12 +211,12 @@
             display: block;
             margin-bottom: 8px;
             font-weight: bold;
-            color: #555;
+            color: var(--text-color);
         }
         .modal-body input {
             width: 100%;
             padding: 8px 12px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
@@ -254,25 +254,25 @@
             font-size: 14px;
         }
         .modal-footer .btn-primary {
-            background-color: #007bff;
+            background-color: var(--primary);
             color: white;
         }
         .modal-footer .btn-secondary {
-            background-color: #6c757d;
+            background-color: var(--secondary);
             color: white;
         }
         .modal-footer button:hover {
             opacity: 0.9;
         }
         .highlighted-tune {
-            background-color: #fff3cd !important;
+            background-color: var(--warning-bg, #fff3cd) !important;
             padding: 2px 4px;
             border-radius: 3px;
-            border-left: 3px solid #ffc107;
+            border-left: 3px solid var(--warning, #ffc107);
         }
         .tune-types {
             font-size: 0.8em;
-            color: #999;
+            color: var(--disabled-text);
             font-style: italic;
         }
     </style>
@@ -285,7 +285,7 @@
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
     
     {% if session_instance.location_override %}
-    <p style="margin: 10px 0; color: #666; font-style: italic;">
+    <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
         <strong>Note</strong> - actual location of this session: {{ session_instance.location_override }}
     </p>
     {% endif %}
@@ -349,7 +349,7 @@
                 <input type="text" id="edit-tune-name-input" placeholder="Enter tune name" style="width: 100%; box-sizing: border-box; margin-bottom: 16px;">
                 
                 <label for="edit-tune-url-display">TheSession.org URL:</label>
-                <input type="text" id="edit-tune-url-display" readonly style="width: 100%; box-sizing: border-box; background-color: #f8f9fa; color: #666;">
+                <input type="text" id="edit-tune-url-display" readonly style="width: 100%; box-sizing: border-box; background-color: var(--light); color: var(--disabled-text);">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="edit-tune-cancel-btn">Cancel</button>
@@ -413,14 +413,14 @@
                 <textarea id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 6px 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit; line-height: 1.2; box-sizing: border-box; vertical-align: top;"></textarea>
                 <button type="submit" id="add-tune-btn">Add</button>
                 <span id="add-tune-spinner" class="loading-spinner" style="display: none; margin-left: 8px;">
-                    <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                    <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
                 </span>
             </form>
         </div>
     </div>
     
     <div style="margin-top: 30px;">
-        <button id="toggle-edit-btn" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
+        <button id="toggle-edit-btn" style="background-color: var(--success, #28a745); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
     </div>
     {% endif %}
     
@@ -533,11 +533,11 @@
             
             if (editMode) {
                 toggleBtn.textContent = 'View';
-                toggleBtn.style.backgroundColor = '#007bff';
+                toggleBtn.style.backgroundColor = 'var(--primary)';
                 addForm.classList.remove('hidden');
             } else {
                 toggleBtn.textContent = 'Edit';
-                toggleBtn.style.backgroundColor = '#28a745';
+                toggleBtn.style.backgroundColor = 'var(--success, #28a745)';
                 addForm.classList.add('hidden');
             }
             
@@ -988,7 +988,7 @@
                     // Relink option - relink to different URL
                     const relinkLink = document.createElement('a');
                     relinkLink.textContent = 'Relink';
-                    relinkLink.style.color = '#ffc107';
+                    relinkLink.style.color = 'var(--warning, #ffc107)';
                     const relinkHandler = function(event) {
                         event.preventDefault();
                         event.stopPropagation();
@@ -1085,7 +1085,7 @@
                         // Edit option - only in edit mode
                         const editLink = document.createElement('a');
                         editLink.textContent = 'Edit';
-                        editLink.style.color = '#007bff';
+                        editLink.style.color = 'var(--primary)';
                         const editHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1099,7 +1099,7 @@
                         // Add option - only in edit mode
                         const addLink = document.createElement('a');
                         addLink.textContent = 'Add';
-                        addLink.style.color = '#28a745';
+                        addLink.style.color = 'var(--success, #28a745)';
                         const addHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1115,7 +1115,7 @@
                     if (editMode) {
                         const deleteLink = document.createElement('a');
                         deleteLink.textContent = 'Delete';
-                        deleteLink.style.color = '#dc3545';
+                        deleteLink.style.color = 'var(--danger, #dc3545)';
                         const deleteHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1134,7 +1134,7 @@
                         // Link option for name-only tunes in edit mode
                         const linkLink = document.createElement('a');
                         linkLink.textContent = 'Link';
-                        linkLink.style.color = '#28a745';
+                        linkLink.style.color = 'var(--success, #28a745)';
                         const linkHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1230,7 +1230,7 @@
                         // Edit option for name-only tunes
                         const editLink = document.createElement('a');
                         editLink.textContent = 'Edit';
-                        editLink.style.color = '#007bff';
+                        editLink.style.color = 'var(--primary)';
                         const editHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1244,7 +1244,7 @@
                         // Add option for name-only tunes
                         const addLink = document.createElement('a');
                         addLink.textContent = 'Add';
-                        addLink.style.color = '#28a745';
+                        addLink.style.color = 'var(--success, #28a745)';
                         const addHandler = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1258,7 +1258,7 @@
                         // Still allow delete for name-only tunes in edit mode
                         const deleteLink = document.createElement('a');
                         deleteLink.textContent = 'Delete';
-                        deleteLink.style.color = '#dc3545';
+                        deleteLink.style.color = 'var(--danger, #dc3545)';
                         const deleteHandler2 = function(event) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -1273,7 +1273,7 @@
                     } else {
                         // For non-edit mode, show info message
                         const nameDiv = document.createElement('div');
-                        nameDiv.style.cssText = 'padding: 6px 12px; color: #666; font-style: italic;';
+                        nameDiv.style.cssText = 'padding: 6px 12px; color: var(--disabled-text); font-style: italic;';
                         nameDiv.textContent = 'No tune data available';
                         contextMenu.appendChild(nameDiv);
                     }
