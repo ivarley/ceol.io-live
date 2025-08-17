@@ -43,12 +43,13 @@
             justify-content: center;
         }
         .modal-content {
-            background: white;
+            background: var(--bg-color, white);
             border-radius: 8px;
             padding: 24px;
             max-width: 500px;
             width: 90%;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            color: var(--text-color);
         }
         .modal-header {
             margin-bottom: 16px;
@@ -124,6 +125,26 @@
             outline: none;
             border-color: #007bff;
             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
+        /* Dark mode styles for modal form elements */
+        [data-theme="dark"] .modal-body input[type="date"],
+        [data-theme="dark"] .modal-body input[type="text"],
+        [data-theme="dark"] .modal-body textarea {
+            background-color: var(--dropdown-bg);
+            border-color: var(--border-color);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .modal-body input:focus,
+        [data-theme="dark"] .modal-body textarea:focus {
+            background-color: var(--dropdown-bg);
+            border-color: var(--primary);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .modal-body label {
+            color: var(--text-color);
         }
         @media (max-width: 767.98px) {
             .popular-tunes div[style*="display: flex"] {

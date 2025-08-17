@@ -46,14 +46,14 @@
 }
 
 .nav-tabs {
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--border-color);
 }
 
 .nav-tabs .nav-link {
     border: none;
     border-bottom: 3px solid transparent;
     background: none;
-    color: #6c757d;
+    color: var(--disabled-text);
     font-weight: 500;
     padding: 1rem 1.5rem;
     text-decoration: none;
@@ -61,14 +61,14 @@
 }
 
 .nav-tabs .nav-link:hover {
-    border-bottom-color: #007bff;
-    color: #007bff;
+    border-bottom-color: var(--primary, #007bff);
+    color: var(--primary, #007bff);
     background: none;
 }
 
 .nav-tabs .nav-link.active {
-    color: #007bff;
-    border-bottom-color: #007bff;
+    color: var(--primary, #007bff);
+    border-bottom-color: var(--primary, #007bff);
     background: none;
     font-weight: 600;
 }
@@ -118,8 +118,9 @@
     
     /* Style the mobile dropdown */
     .admin-tabs-mobile .form-select {
-        background-color: #f8f9fa;
-        border: 2px solid #dee2e6;
+        background-color: var(--bg-color);
+        border: 2px solid var(--border-color);
+        color: var(--text-color);
         font-weight: 500;
         padding: 0.75rem 1rem;
     }

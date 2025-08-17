@@ -189,12 +189,13 @@
             justify-content: center;
         }
         .modal-content {
-            background: white;
+            background: var(--bg-color, white);
             border-radius: 8px;
             padding: 24px;
             max-width: 500px;
             width: 90%;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            color: var(--text-color);
         }
         .modal-header {
             margin-bottom: 16px;
@@ -219,6 +220,27 @@
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
+        }
+        
+        /* Dark mode styles for modal form elements */
+        [data-theme="dark"] .modal-body input,
+        [data-theme="dark"] .modal-body textarea,
+        [data-theme="dark"] .modal-body select {
+            background-color: var(--dropdown-bg);
+            border-color: var(--border-color);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .modal-body input:focus,
+        [data-theme="dark"] .modal-body textarea:focus,
+        [data-theme="dark"] .modal-body select:focus {
+            background-color: var(--dropdown-bg);
+            border-color: var(--primary);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .modal-body label {
+            color: var(--text-color);
         }
         .modal-footer {
             text-align: right;

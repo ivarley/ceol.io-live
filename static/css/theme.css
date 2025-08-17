@@ -9710,4 +9710,34 @@
     border-color: var(--primary);
     color: var(--text-color);
   }
+
+  /* Dark mode text improvements */
+  [data-theme="dark"] .landing-page p {
+    color: #b8b8b8; /* Lighter text for welcome paragraphs */
+  }
+
+  [data-theme="dark"] h2#subcategories,
+  [data-theme="dark"] .section-heading,
+  [data-theme="dark"] h2 {
+    color: #c8c8c8; /* Slightly darker than main text for section headings */
+  }
+
+  /* Lighter blue hyperlinks for dark mode */
+  [data-theme="dark"] a {
+    color: #66b3ff; /* Lighter shade of blue */
+  }
+
+  [data-theme="dark"] a:hover {
+    color: #80c1ff; /* Even lighter on hover */
+  }
+
+  /* Ensure visited links are also light blue in dark mode */
+  [data-theme="dark"] a:visited {
+    color: #66b3ff;
+  }
+
+  /* Make modal headers lighter in dark mode */
+  [data-theme="dark"] .modal-header h3 {
+    color: #d0d0d0; /* Lighter than main text for better readability */
+  }
   
