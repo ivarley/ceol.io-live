@@ -171,25 +171,18 @@
         <p><strong>Location:</strong> {{ session.location_name }}</p>
         {% endif %}
         
-        <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}</p>
+        <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
         
         {% if session.recurrence %}
         <p><strong>Schedule:</strong> {{ session.recurrence }}</p>
         {% endif %}
-        
-        {% if session.thesession_id %}
-        <p><strong>More information about this session on </strong> 
-           <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">TheSession.org</a>
-        </p>
-        {% endif %}
 
         {% if session.comments %}
-        <div class="comments">
-            <h3>About this session:</h3>
-            <p>{{ session.comments }}</p>
-        </div>
+        <p><strong>About this session:</strong> {{ session.comments }}</p>
         {% endif %}
     </div>
+    
+    <p><a href="/sessions">← Back to all sessions</a></p>
     
     {% if popular_tunes %}
     <div class="popular-tunes">
@@ -270,8 +263,6 @@
         <p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session log</a></p>
     </div>
     {% endif %}
-    
-    <p><a href="/sessions">← Back to all sessions</a></p>
 
     <!-- Add Session Instance Modal -->
     <div id="add-session-instance-modal" class="modal-overlay">

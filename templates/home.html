@@ -34,6 +34,9 @@
                     {% for instance_date in session.recent_instances %}
                         <li><a href="/sessions/{{ session.path }}/{{ instance_date }}">{{ instance_date }}</a></li>
                     {% endfor %}
+                    {% if session.total_instances > 3 %}
+                        <li><a href="/sessions/{{ session.path }}">{{ session.total_instances - 3 }} more...</a></li>
+                    {% endif %}
                 </ul>
             {% else %}
                 <p style="margin: 5px 0; color: var(--disabled-text); font-style: italic;">No session instances recorded yet.</p>

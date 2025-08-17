@@ -26,11 +26,20 @@ def home():
         ''')
         active_sessions = cur.fetchall()
         
-        # For each active session, get the 3 most recent session instances
+        # For each active session, get the 3 most recent session instances and total count
         sessions_with_instances = []
         for session in active_sessions:
             session_id, name, path, city, state, country = session
             
+            # Get total count of instances
+            cur.execute('''
+                SELECT COUNT(*)
+                FROM session_instance
+                WHERE session_id = %s
+            ''', (session_id,))
+            total_instances = cur.fetchone()[0]
+            
+            # Get the 3 most recent instances
             cur.execute('''
                 SELECT date
                 FROM session_instance
@@ -47,7 +56,8 @@ def home():
                 'city': city,
                 'state': state,
                 'country': country,
-                'recent_instances': [instance[0] for instance in recent_instances]
+                'recent_instances': [instance[0] for instance in recent_instances],
+                'total_instances': total_instances
             })
         
         cur.close()

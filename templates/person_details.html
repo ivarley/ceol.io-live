@@ -453,6 +453,38 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 @media (max-width: 768px) {
+    /* Match other admin pages - aggressive margin reduction for mobile ONLY */
+    
+    /* Remove docs-content padding completely - mobile only */
+    body .docs-content {
+        padding: 0.5rem !important;
+    }
+    
+    /* Remove docs-article padding - mobile only */
+    body .docs-article {
+        padding: 0.5rem !important;
+    }
+    
+    /* Reduce container padding to minimal - mobile only */
+    body .docs-content-inner .container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Make admin dashboard text smaller - mobile only */
+    body .docs-article .docs-heading {
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Reduce section padding - mobile only */
+    body .docs-section {
+        padding: 1rem 0 !important;
+    }
+    
     .card-body {
         padding: 1rem;
     }
