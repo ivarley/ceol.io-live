@@ -191,6 +191,26 @@ CREATE INDEX idx_session_instance_person_history_session_instance_person_id ON s
 CREATE INDEX idx_session_instance_person_history_changed_at ON session_instance_person_history(changed_at);
 CREATE INDEX idx_session_instance_person_history_operation ON session_instance_person_history(operation);
 
+-- Person history table
+CREATE TABLE person_history (
+    history_id SERIAL PRIMARY KEY,
+    person_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by VARCHAR(255),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy of all person fields at time of change
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    email VARCHAR(255),
+    sms_number VARCHAR(20),
+    city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
+    thesession_user_id INTEGER,
+    created_date TIMESTAMP,
+    last_modified_date TIMESTAMP
+);
+
 -- User account history table
 CREATE TABLE user_account_history (
     history_id SERIAL PRIMARY KEY,
@@ -214,6 +234,10 @@ CREATE TABLE user_account_history (
     created_date TIMESTAMP,
     last_modified_date TIMESTAMP
 );
+
+CREATE INDEX idx_person_history_person_id ON person_history(person_id);
+CREATE INDEX idx_person_history_changed_at ON person_history(changed_at);
+CREATE INDEX idx_person_history_operation ON person_history(operation);
 
 CREATE INDEX idx_user_account_history_user_id ON user_account_history(user_id);
 CREATE INDEX idx_user_account_history_changed_at ON user_account_history(changed_at);

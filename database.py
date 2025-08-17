@@ -77,6 +77,16 @@ def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
             FROM session_instance_tune WHERE session_instance_tune_id = %s
         ''', (operation, changed_by, record_id))
     
+    elif table_name == 'person':
+        cur.execute('''
+            INSERT INTO person_history 
+            (person_id, operation, changed_by, first_name, last_name, email, sms_number, 
+             city, state, country, thesession_user_id, created_date, last_modified_date)
+            SELECT person_id, %s, %s, first_name, last_name, email, sms_number, 
+                   city, state, country, thesession_user_id, created_date, last_modified_date
+            FROM person WHERE person_id = %s
+        ''', (operation, changed_by, record_id))
+    
     elif table_name == 'user_account':
         cur.execute('''
             INSERT INTO user_account_history 

@@ -1202,6 +1202,7 @@ def admin_people():
                 p.last_name,
                 p.email,
                 p.city,
+                p.state,
                 p.country,
                 p.thesession_user_id,
                 ua.username,
@@ -1249,15 +1250,17 @@ def admin_people():
         
         people = []
         for row in cur.fetchall():
-            person_id, first_name, last_name, email, city, country, thesession_user_id, username, is_system_admin, last_login, session_count, session_instance_count, latest_date, session_name = row
+            person_id, first_name, last_name, email, city, state, country, thesession_user_id, username, is_system_admin, last_login, session_count, session_instance_count, latest_date, session_name = row
             
-            # Format location
+            # Format full location for tooltip
             location_parts = []
             if city:
                 location_parts.append(city)
+            if state:
+                location_parts.append(state)
             if country:
                 location_parts.append(country)
-            location = ', '.join(location_parts) if location_parts else 'Unknown'
+            full_location = ', '.join(location_parts) if location_parts else 'Unknown'
             
             # Format last login
             if last_login:
@@ -1276,7 +1279,8 @@ def admin_people():
                 'person_id': person_id,
                 'name': f"{first_name} {last_name}",
                 'email': email or 'Not provided',
-                'location': location,
+                'city': city or 'Unknown',
+                'full_location': full_location,
                 'thesession_user_id': thesession_user_id,
                 'username': username or 'No account',
                 'is_system_admin': is_system_admin,
@@ -1388,7 +1392,7 @@ def person_details(person_id):
         
         # Get person details
         cur.execute('''
-            SELECT person_id, first_name, last_name, email, sms_number, city, country, thesession_user_id
+            SELECT person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id
             FROM person
             WHERE person_id = %s
         ''', (person_id,))
@@ -1397,12 +1401,14 @@ def person_details(person_id):
         if not person_row:
             return "Person not found.", 404
         
-        person_id, first_name, last_name, email, sms_number, city, country, thesession_user_id = person_row
+        person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id = person_row
         
         # Format location
         location_parts = []
         if city:
             location_parts.append(city)
+        if state:
+            location_parts.append(state)
         if country:
             location_parts.append(country)
         location = ', '.join(location_parts) if location_parts else None
@@ -1415,6 +1421,7 @@ def person_details(person_id):
             'email': email,
             'sms_number': sms_number,
             'city': city,
+            'state': state,
             'country': country,
             'location': location,
             'thesession_user_id': thesession_user_id

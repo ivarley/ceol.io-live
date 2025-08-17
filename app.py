@@ -83,6 +83,9 @@ app.add_url_rule('/api/person/<int:person_id>/attendance', 'get_person_attendanc
 app.add_url_rule('/api/person/<int:person_id>/logins', 'get_person_logins_ajax', get_person_logins_ajax)
 app.add_url_rule('/api/check-username-availability', 'check_username_availability', check_username_availability, methods=['POST'])
 app.add_url_rule('/api/person/<int:person_id>/update', 'update_person_details', update_person_details, methods=['PUT'])
+app.add_url_rule('/api/person/<int:person_id>/available-sessions', 'get_available_sessions_for_person', get_available_sessions_for_person)
+app.add_url_rule('/api/person/<int:person_id>/search-sessions', 'search_sessions_for_person', search_sessions_for_person, methods=['POST'])
+app.add_url_rule('/api/add-person-to-session', 'add_person_to_session', add_person_to_session, methods=['POST'])
 
 if __name__ == '__main__':
     app.run(debug=True)

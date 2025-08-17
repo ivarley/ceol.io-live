@@ -40,11 +40,14 @@
                             </div>
                             <div class="col-md-6">
                                 <dl class="row">
-                                    <dt class="col-sm-4">Country:</dt>
-                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
-                                    
                                     <dt class="col-sm-4">City:</dt>
                                     <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">State:</dt>
+                                    <dd class="col-sm-8">{{ person.state or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">Country:</dt>
+                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
                                     
                                     <dt class="col-sm-4">TheSession.org:</dt>
                                     <dd class="col-sm-8">
@@ -84,12 +87,16 @@
                                             <input type="text" class="form-control" id="sms_number" name="sms_number" value="{{ person.sms_number or '' }}">
                                         </div>
                                         <div class="mb-3">
-                                            <label for="country" class="form-label">Country</label>
-                                            <input type="text" class="form-control" id="country" name="country" value="{{ person.country or '' }}">
-                                        </div>
-                                        <div class="mb-3">
                                             <label for="city" class="form-label">City</label>
                                             <input type="text" class="form-control" id="city" name="city" value="{{ person.city or '' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="state" class="form-label">State</label>
+                                            <input type="text" class="form-control" id="state" name="state" value="{{ person.state or '' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="country" class="form-label">Country</label>
+                                            <input type="text" class="form-control" id="country" name="country" value="{{ person.country or '' }}">
                                         </div>
                                         <div class="mb-3">
                                             <label for="thesession_user_id" class="form-label">TheSession User ID</label>
@@ -245,9 +252,15 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                <div class="mt-3">
+                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
+                                </div>
                             {% else %}
                                 <div class="alert alert-info" role="alert">
                                     No sessions associated with this person.
+                                </div>
+                                <div class="mt-3">
+                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
                                 </div>
                             {% endif %}
                         </div>
@@ -282,6 +295,45 @@
     </div>
 </div>
 
+<!-- Add to Session Modal -->
+<div id="addToSessionModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add {{ person.name }} to a Session</h3>
+            <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="search-section">
+                <div class="mb-3">
+                    <label for="session-search" class="form-label">Search Sessions:</label>
+                    <input type="text" id="session-search" class="form-control" placeholder="Type to search sessions...">
+                </div>
+            </div>
+            <div class="role-section mb-3">
+                <label class="form-label">Add as:</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="user-role" id="role-regular" value="regular" checked>
+                    <label class="form-check-label" for="role-regular">Regular</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="user-role" id="role-attendee" value="attendee">
+                    <label class="form-check-label" for="role-attendee">Attendee</label>
+                </div>
+            </div>
+            <div id="sessions-loading" class="text-center" style="display: none;">
+                <span class="loading-spinner"></span>
+                <span style="margin-left: 8px;">Loading sessions...</span>
+            </div>
+            <div id="sessions-results">
+                <!-- Sessions will be populated here -->
+            </div>
+            <div id="no-sessions-message" style="display: none;">
+                <p>Don't see the session here? <a href="/add-session" target="_blank">Add it!</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const personId = {{ person.id }};
@@ -294,6 +346,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const referer = document.referrer;
     if (referer && (referer.includes('/admin/people') || referer.includes('/admin'))) {
         document.getElementById('back-link-container').style.display = 'block';
+    }
+
+    // Check for flash messages from sessionStorage
+    const flashMessage = sessionStorage.getItem('flashMessage');
+    const flashType = sessionStorage.getItem('flashType');
+    if (flashMessage) {
+        showFlashMessage(flashMessage, flashType);
+        sessionStorage.removeItem('flashMessage');
+        sessionStorage.removeItem('flashType');
     }
 
     // Edit functionality
@@ -622,6 +683,226 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     {% endif %}
+
+    // Add to Session Modal functionality
+    const addToSessionLink = document.getElementById('add-to-session-link');
+    const addToSessionModal = document.getElementById('addToSessionModal');
+    const modalClose = document.querySelector('.modal-close');
+    const sessionSearch = document.getElementById('session-search');
+    const sessionsResults = document.getElementById('sessions-results');
+    const sessionsLoading = document.getElementById('sessions-loading');
+    const noSessionsMessage = document.getElementById('no-sessions-message');
+    let searchTimeout;
+
+    if (addToSessionLink) {
+        addToSessionLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            openSessionModal();
+        });
+    }
+
+    if (modalClose) {
+        modalClose.addEventListener('click', function() {
+            closeSessionModal();
+        });
+    }
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(e) {
+        if (e.target === addToSessionModal) {
+            closeSessionModal();
+        }
+    });
+
+    if (sessionSearch) {
+        sessionSearch.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchSessions(this.value.trim());
+            }, 300);
+        });
+    }
+
+    function openSessionModal() {
+        addToSessionModal.style.display = 'block';
+        sessionSearch.value = '';
+        loadInitialSessions();
+    }
+
+    function closeSessionModal() {
+        addToSessionModal.style.display = 'none';
+    }
+
+    function loadInitialSessions() {
+        showLoading(true);
+        fetch(`/api/person/${personId}/available-sessions`)
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    displaySessions(data.sessions);
+                } else {
+                    showError('Failed to load sessions: ' + data.message);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                showError('Error loading sessions: ' + error.message);
+            });
+    }
+
+    function searchSessions(searchTerm) {
+        showLoading(true);
+        fetch(`/api/person/${personId}/search-sessions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                search_term: searchTerm
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    displaySessions(data.sessions);
+                } else {
+                    showError('Failed to search sessions: ' + data.message);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                showError('Error searching sessions: ' + error.message);
+            });
+    }
+
+    function displaySessions(sessions) {
+        if (sessions.length === 0) {
+            sessionsResults.innerHTML = '<p class="text-muted">No sessions found.</p>';
+            noSessionsMessage.style.display = 'block';
+            return;
+        }
+
+        noSessionsMessage.style.display = 'none';
+        
+        let html = '<div class="sessions-list">';
+        sessions.forEach(session => {
+            const locationInfo = session.location_name && session.location_name !== session.location_display 
+                ? `${session.location_name} - ${session.location_display}`
+                : session.location_display;
+            
+            html += `
+                <div class="session-item">
+                    <div class="session-info">
+                        <div class="session-name">${session.name}</div>
+                        <div class="session-location">${locationInfo}</div>
+                    </div>
+                    <button class="btn btn-sm btn-primary add-session-btn" 
+                            data-session-id="${session.session_id}"
+                            data-session-name="${session.name}">
+                        Add
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        if (sessions.length === 10) {
+            html += '<p class="text-muted mt-2"><small>Showing top 10 results. Use search to narrow down.</small></p>';
+        }
+        
+        html += '<p class="mt-3">Don\'t see the session here? <a href="/add-session" target="_blank">Add it!</a></p>';
+        
+        sessionsResults.innerHTML = html;
+        
+        // Add event listeners to add buttons
+        document.querySelectorAll('.add-session-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const sessionId = this.dataset.sessionId;
+                const sessionName = this.dataset.sessionName;
+                addPersonToSession(sessionId, sessionName);
+            });
+        });
+    }
+
+    function addPersonToSession(sessionId, sessionName) {
+        const selectedRole = document.querySelector('input[name="user-role"]:checked').value;
+        
+        if (!confirm(`Add {{ person.name }} to "${sessionName}" as a ${selectedRole}?`)) {
+            return;
+        }
+        
+        fetch('/api/add-person-to-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                person_id: personId,
+                session_id: parseInt(sessionId),
+                role: selectedRole
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Store success message for display after reload
+                    sessionStorage.setItem('flashMessage', data.message);
+                    sessionStorage.setItem('flashType', 'success');
+                    closeSessionModal();
+                    // Reload the page to show updated sessions list
+                    window.location.reload();
+                } else {
+                    showFlashMessage('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showFlashMessage('Error adding person to session: ' + error.message, 'error');
+            });
+    }
+
+    function showLoading(show) {
+        if (show) {
+            sessionsLoading.style.display = 'block';
+            sessionsResults.innerHTML = '';
+            noSessionsMessage.style.display = 'none';
+        } else {
+            sessionsLoading.style.display = 'none';
+        }
+    }
+
+    function showError(message) {
+        sessionsResults.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+        noSessionsMessage.style.display = 'none';
+    }
+
+    function showFlashMessage(message, type) {
+        // Create flash message element
+        const flashDiv = document.createElement('div');
+        flashDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show flash-message`;
+        flashDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" aria-label="Close">&times;</button>
+        `;
+        
+        // Add close button functionality
+        const closeBtn = flashDiv.querySelector('.btn-close');
+        closeBtn.addEventListener('click', function() {
+            flashDiv.remove();
+        });
+        
+        // Insert at the top of the main content
+        const mainContent = document.querySelector('.docs-content-inner');
+        mainContent.insertBefore(flashDiv, mainContent.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (flashDiv.parentNode) {
+                flashDiv.remove();
+            }
+        }, 5000);
+    }
 });
 </script>
 
@@ -853,9 +1134,203 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-top: 1.5rem;
 }
 
+/* Modal Styles */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: var(--bg-color);
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 80%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-color);
+}
+
+.modal-close {
+    color: var(--text-color);
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* Session List Styles */
+.sessions-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.session-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.session-item:last-child {
+    border-bottom: none;
+}
+
+.session-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.session-info {
+    flex-grow: 1;
+}
+
+.session-name {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.25rem;
+}
+
+.session-location {
+    font-size: 0.9rem;
+    color: var(--disabled-text);
+}
+
+.add-session-btn {
+    margin-left: 1rem;
+}
+
+.btn-outline-primary {
+    color: var(--primary);
+    border-color: var(--primary);
+    background-color: transparent;
+}
+
+.btn-outline-primary:hover {
+    color: white;
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.2rem;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top: 2px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+.flash-message {
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 100;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    font-weight: bold;
+    line-height: 1;
+    color: #000;
+    opacity: 0.5;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    float: right;
+}
+
+.btn-close:hover {
+    opacity: 0.75;
+}
+
+.alert-success {
+    color: #0f5132;
+    background-color: #d1e7dd;
+    border-color: #badbcc;
+}
+
+.alert-danger {
+    color: #842029;
+    background-color: #f8d7da;
+    border-color: #f5c2c7;
+}
+
+.alert-dismissible {
+    padding-right: 3rem;
+}
+
+.fade {
+    transition: opacity 0.15s linear;
+}
+
+.show {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+    
+    .session-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .add-session-btn {
+        margin-left: 0;
+        margin-top: 0.5rem;
+        align-self: flex-end;
+    }
+    
+    .flash-message {
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
+    }
 }
 
 @media (max-width: 768px) {

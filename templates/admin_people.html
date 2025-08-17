@@ -39,7 +39,7 @@
                                 <td class="person-name">
                                     <a href="/admin/people/{{ person.person_id }}" class="person-link">{{ person.name }}</a>
                                 </td>
-                                <td class="person-location">{{ person.location }}</td>
+                                <td class="person-location" title="{{ person.full_location }}">{{ person.city }}</td>
                                 <td class="person-thesession">
                                     {% if person.thesession_user_id %}
                                         <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
@@ -141,6 +141,8 @@
 
 .person-location {
     font-size: 0.9rem;
+    cursor: help;
+    position: relative;
 }
 
 .person-thesession {

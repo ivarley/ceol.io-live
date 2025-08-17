@@ -5,8 +5,9 @@ CREATE TABLE person (
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(255),
     sms_number VARCHAR(20),
-    country VARCHAR(100),
     city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
     thesession_user_id INTEGER,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -1967,7 +1967,7 @@ def update_person_details(person_id):
             cur.execute('''
                 UPDATE person 
                 SET first_name = %s, last_name = %s, email = %s, sms_number = %s,
-                    city = %s, country = %s, thesession_user_id = %s, last_modified_date = %s
+                    city = %s, state = %s, country = %s, thesession_user_id = %s, last_modified_date = %s
                 WHERE person_id = %s
             ''', (
                 person_data.get('first_name'),
@@ -1975,6 +1975,7 @@ def update_person_details(person_id):
                 person_data.get('email') or None,
                 person_data.get('sms_number') or None,
                 person_data.get('city') or None,
+                person_data.get('state') or None,
                 person_data.get('country') or None,
                 person_data.get('thesession_user_id') or None,
                 datetime.utcnow(),
@@ -2017,3 +2018,269 @@ def update_person_details(person_id):
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to update details: {str(e)}'}), 500
+
+
+def get_available_sessions_for_person(person_id):
+    """Get sessions available for a person to join, prioritizing same location sessions"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get person's location info
+        cur.execute('SELECT city, state, country FROM person WHERE person_id = %s', (person_id,))
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({'success': False, 'message': 'Person not found'}), 404
+        
+        person_city, person_state, person_country = person_row
+        
+        # Get sessions the person is NOT already in, prioritizing same location
+        query = '''
+            SELECT s.session_id, s.name, s.location_name, s.city, s.state, s.country,
+                   CASE 
+                       WHEN s.city = %s AND s.state = %s AND s.country = %s THEN 1
+                       WHEN s.city = %s AND s.country = %s THEN 2  
+                       WHEN s.country = %s THEN 3
+                       ELSE 4
+                   END as location_priority
+            FROM session s
+            WHERE s.session_id NOT IN (
+                SELECT sp.session_id 
+                FROM session_person sp 
+                WHERE sp.person_id = %s
+            )
+            AND s.termination_date IS NULL
+            ORDER BY location_priority, s.name
+            LIMIT 20
+        '''
+        
+        cur.execute(query, (
+            person_city, person_state, person_country,  # Exact match
+            person_city, person_country,                # City + country match
+            person_country,                             # Country match
+            person_id                                   # Exclude existing sessions
+        ))
+        
+        sessions = []
+        for row in cur.fetchall():
+            session_id, name, location_name, city, state, country, priority = row
+            
+            # Format location display
+            location_parts = []
+            if city:
+                location_parts.append(city)
+            if state:
+                location_parts.append(state)
+            if country:
+                location_parts.append(country)
+            location_display = ', '.join(location_parts) if location_parts else 'Unknown'
+            
+            sessions.append({
+                'session_id': session_id,
+                'name': name,
+                'location_name': location_name,
+                'location_display': location_display,
+                'city': city,
+                'state': state,
+                'country': country,
+                'priority': priority
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'sessions': sessions})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to get sessions: {str(e)}'}), 500
+
+
+def search_sessions_for_person(person_id):
+    """Search sessions for a person based on search term"""
+    try:
+        data = request.get_json()
+        search_term = data.get('search_term', '').strip()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Base query to exclude sessions person is already in
+        base_where = '''
+            s.session_id NOT IN (
+                SELECT sp.session_id 
+                FROM session_person sp 
+                WHERE sp.person_id = %s
+            )
+            AND s.termination_date IS NULL
+        '''
+        
+        params = [person_id]
+        
+        if search_term:
+            # Add search criteria
+            search_where = '''
+                AND (
+                    LOWER(s.name) LIKE LOWER(%s) OR
+                    LOWER(s.location_name) LIKE LOWER(%s) OR
+                    LOWER(s.city) LIKE LOWER(%s) OR
+                    LOWER(s.state) LIKE LOWER(%s) OR
+                    LOWER(s.country) LIKE LOWER(%s)
+                )
+            '''
+            search_pattern = f'%{search_term}%'
+            params.extend([search_pattern] * 5)
+        else:
+            search_where = ''
+        
+        query = f'''
+            SELECT s.session_id, s.name, s.location_name, s.city, s.state, s.country
+            FROM session s
+            WHERE {base_where} {search_where}
+            ORDER BY s.name
+            LIMIT 10
+        '''
+        
+        cur.execute(query, params)
+        
+        sessions = []
+        for row in cur.fetchall():
+            session_id, name, location_name, city, state, country = row
+            
+            # Format location display
+            location_parts = []
+            if city:
+                location_parts.append(city)
+            if state:
+                location_parts.append(state)
+            if country:
+                location_parts.append(country)
+            location_display = ', '.join(location_parts) if location_parts else 'Unknown'
+            
+            sessions.append({
+                'session_id': session_id,
+                'name': name,
+                'location_name': location_name,
+                'location_display': location_display,
+                'city': city,
+                'state': state,
+                'country': country
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'sessions': sessions})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to search sessions: {str(e)}'}), 500
+
+
+def add_person_to_session():
+    """Add a person to a session and send notification email"""
+    try:
+        data = request.get_json()
+        person_id = data.get('person_id')
+        session_id = data.get('session_id')
+        role = data.get('role', 'attendee')  # 'regular' or 'attendee'
+        
+        if not person_id or not session_id:
+            return jsonify({'success': False, 'message': 'Person ID and Session ID are required'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if person is already in this session
+        cur.execute('SELECT 1 FROM session_person WHERE person_id = %s AND session_id = %s', 
+                   (person_id, session_id))
+        if cur.fetchone():
+            return jsonify({'success': False, 'message': 'Person is already in this session'}), 400
+        
+        # Get person and session details for email
+        cur.execute('SELECT first_name, last_name, email FROM person WHERE person_id = %s', (person_id,))
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({'success': False, 'message': 'Person not found'}), 404
+        
+        person_first_name, person_last_name, person_email = person_row
+        person_name = f"{person_first_name} {person_last_name}"
+        
+        cur.execute('SELECT name, city, state, country FROM session WHERE session_id = %s', (session_id,))
+        session_row = cur.fetchone()
+        if not session_row:
+            return jsonify({'success': False, 'message': 'Session not found'}), 404
+        
+        session_name, session_city, session_state, session_country = session_row
+        
+        # Add person to session
+        is_regular = (role == 'regular')
+        is_admin = False
+        
+        save_to_history(cur, 'session_person', 'INSERT', None, f'admin_add_person:{person_id}:{session_id}')
+        cur.execute('''
+            INSERT INTO session_person (person_id, session_id, is_regular, is_admin)
+            VALUES (%s, %s, %s, %s)
+        ''', (person_id, session_id, is_regular, is_admin))
+        
+        # Get session admins for email notification
+        cur.execute('''
+            SELECT p.first_name, p.last_name, p.email
+            FROM person p
+            JOIN session_person sp ON p.person_id = sp.person_id
+            WHERE sp.session_id = %s AND sp.is_admin = TRUE AND p.email IS NOT NULL
+        ''', (session_id,))
+        
+        session_admins = cur.fetchall()
+        
+        # If no session admins, get system admins
+        if not session_admins:
+            cur.execute('''
+                SELECT p.first_name, p.last_name, p.email
+                FROM person p
+                JOIN user_account ua ON p.person_id = ua.person_id
+                WHERE ua.is_system_admin = TRUE AND p.email IS NOT NULL
+            ''', ())
+            session_admins = cur.fetchall()
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        # Send notification emails
+        if session_admins:
+            # Format session location
+            location_parts = []
+            if session_city:
+                location_parts.append(session_city)
+            if session_state:
+                location_parts.append(session_state)
+            if session_country:
+                location_parts.append(session_country)
+            session_location = ', '.join(location_parts) if location_parts else 'Unknown'
+            
+            subject = f"New person added to session: {session_name}"
+            
+            for admin_first, admin_last, admin_email in session_admins:
+                admin_name = f"{admin_first} {admin_last}"
+                
+                body = f"""Hello {admin_name},
+                
+{person_name} has been added to the session "{session_name}" in {session_location} as a {role}.
+
+Person Details:
+- Name: {person_name}
+- Email: {person_email or 'Not provided'}
+
+You can review and modify this person's role in the session admin interface.
+
+Best regards,
+The Session Management System"""
+                
+                try:
+                    send_email_via_sendgrid(admin_email, subject, body)
+                except Exception as email_error:
+                    print(f"Failed to send email to {admin_email}: {email_error}")
+        
+        return jsonify({'success': True, 'message': f'{person_name} has been added to {session_name} as a {role}'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to add person to session: {str(e)}'}), 500
