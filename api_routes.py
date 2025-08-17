@@ -2284,3 +2284,225 @@ The Session Management System"""
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to add person to session: {str(e)}'}), 500
+
+
+def validate_thesession_user():
+    """Validate and get user info from thesession.org"""
+    try:
+        data = request.get_json()
+        user_input = data.get('user_input', '').strip()
+        
+        # Extract ID from URL or use direct ID
+        thesession_id = None
+        if user_input.startswith('https://thesession.org/members/'):
+            try:
+                thesession_id = int(user_input.split('/members/')[-1])
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Invalid TheSession.org URL format'})
+        elif user_input.isdigit():
+            thesession_id = int(user_input)
+        else:
+            return jsonify({'success': False, 'message': 'Please enter a valid name or TheSession.org URL/ID'})
+        
+        # Check if this thesession_user_id already exists in our database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('SELECT person_id, first_name, last_name FROM person WHERE thesession_user_id = %s', (thesession_id,))
+        existing_person = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if existing_person:
+            person_id, first_name, last_name = existing_person
+            return jsonify({
+                'success': False, 
+                'message': f'A person with TheSession.org ID {thesession_id} already exists: {first_name} {last_name} (Person ID: {person_id})'
+            })
+        
+        # Fetch user data from thesession.org API
+        api_url = f"https://thesession.org/members/{thesession_id}?format=json"
+        try:
+            response = requests.get(api_url, timeout=10)
+            if response.status_code != 200:
+                return jsonify({'success': False, 'message': f'TheSession.org user ID {thesession_id} not found'})
+            
+            user_data = response.json()
+            if 'name' not in user_data:
+                return jsonify({'success': False, 'message': 'Unable to retrieve user name from TheSession.org'})
+            
+            name = user_data['name']
+            
+            # Parse name into first and last
+            name_parts = name.strip().split()
+            if len(name_parts) == 1:
+                first_name = name_parts[0]
+                last_name = ''
+            else:
+                first_name = ' '.join(name_parts[:-1])
+                last_name = name_parts[-1]
+            
+            return jsonify({
+                'success': True,
+                'thesession_user_id': thesession_id,
+                'first_name': first_name,
+                'last_name': last_name,
+                'source': 'thesession'
+            })
+            
+        except requests.RequestException as e:
+            return jsonify({'success': False, 'message': f'Error connecting to TheSession.org: {str(e)}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error validating user: {str(e)}'}), 500
+
+
+def parse_person_name():
+    """Parse a person's name into first and last name"""
+    try:
+        data = request.get_json()
+        full_name = data.get('name', '').strip()
+        
+        if not full_name:
+            return jsonify({'success': False, 'message': 'Name cannot be empty'})
+        
+        # Parse name into first and last
+        name_parts = full_name.split()
+        if len(name_parts) == 1:
+            first_name = name_parts[0]
+            last_name = ''
+        else:
+            first_name = ' '.join(name_parts[:-1])
+            last_name = name_parts[-1]
+        
+        return jsonify({
+            'success': True,
+            'first_name': first_name,
+            'last_name': last_name,
+            'source': 'manual'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error parsing name: {str(e)}'}), 500
+
+
+def create_new_person():
+    """Create a new person and optionally add to a session"""
+    try:
+        data = request.get_json()
+        
+        # Required fields
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
+        
+        if not first_name:
+            return jsonify({'success': False, 'message': 'First name is required'}), 400
+        
+        # Optional fields
+        email = data.get('email', '').strip() or None
+        sms_number = data.get('sms_number', '').strip() or None
+        city = data.get('city', '').strip() or None
+        state = data.get('state', '').strip() or None
+        country = data.get('country', '').strip() or None
+        thesession_user_id = data.get('thesession_user_id') or None
+        session_id = data.get('session_id') or None
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        try:
+            # Insert new person
+            save_to_history(cur, 'person', 'INSERT', None, 'admin_create_person')
+            cur.execute('''
+                INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, thesession_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING person_id
+            ''', (first_name, last_name, email, sms_number, city, state, country, thesession_user_id))
+            
+            person_id = cur.fetchone()[0]
+            
+            # Add to session if specified
+            if session_id:
+                save_to_history(cur, 'session_person', 'INSERT', None, f'admin_create_person_add_session:{person_id}:{session_id}')
+                cur.execute('''
+                    INSERT INTO session_person (person_id, session_id, is_regular, is_admin)
+                    VALUES (%s, %s, %s, %s)
+                ''', (person_id, session_id, False, False))  # Default to attendee, not admin
+            
+            conn.commit()
+            
+            # Get session name for response message
+            session_name = None
+            if session_id:
+                cur.execute('SELECT name FROM session WHERE session_id = %s', (session_id,))
+                session_row = cur.fetchone()
+                if session_row:
+                    session_name = session_row[0]
+            
+            cur.close()
+            conn.close()
+            
+            # Create success message
+            message = f'{first_name} {last_name} has been created successfully'
+            if session_name:
+                message += f' and added to session "{session_name}"'
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'person_id': person_id
+            })
+            
+        except Exception as db_error:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': f'Database error: {str(db_error)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to create person: {str(e)}'}), 500
+
+
+def get_available_sessions():
+    """Get list of all active sessions for dropdown"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute('''
+            SELECT session_id, name, city, state, country
+            FROM session
+            WHERE termination_date IS NULL
+            ORDER BY name
+        ''')
+        
+        sessions = []
+        for row in cur.fetchall():
+            session_id, name, city, state, country = row
+            
+            # Format location display
+            location_parts = []
+            if city:
+                location_parts.append(city)
+            if state:
+                location_parts.append(state)
+            if country:
+                location_parts.append(country)
+            location_display = ', '.join(location_parts) if location_parts else ''
+            
+            display_name = f"{name}"
+            if location_display:
+                display_name += f" ({location_display})"
+            
+            sessions.append({
+                'session_id': session_id,
+                'name': name,
+                'display_name': display_name
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'sessions': sessions})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to get sessions: {str(e)}'}), 500

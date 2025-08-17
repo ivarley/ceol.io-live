@@ -16,7 +16,10 @@
             {% include 'admin_tabs.html' %}
             
             <section class="docs-section" id="people">
-                <h2 class="section-heading">People ({{ people|length }})</h2>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="section-heading mb-0">People ({{ people|length }})</h2>
+                    <button id="add-person-btn" class="btn btn-primary">Add Person</button>
+                </div>
                 
                 {% if people %}
                 <div class="table-responsive">
@@ -102,6 +105,94 @@
                 {% endif %}
             </section>
         </article>
+    </div>
+</div>
+
+<!-- Add Person Modal -->
+<div id="addPersonModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <!-- Step 1: Name/URL Input -->
+        <div id="step1" class="modal-step">
+            <div class="modal-header">
+                <h3>Add Person - Step 1</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="person-input" class="form-label">Enter the person's name, or URL or ID from thesession.org:</label>
+                    <input type="text" id="person-input" class="form-control" placeholder="e.g. 'John Smith' or 'https://thesession.org/members/12345' or '12345'">
+                    <div id="step1-error" class="text-danger mt-2" style="display: none;"></div>
+                </div>
+                <div class="d-flex justify-content-end">
+                    <button id="step1-next" class="btn btn-primary">Next</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 2: Person Details Form -->
+        <div id="step2" class="modal-step" style="display: none;">
+            <div class="modal-header">
+                <h3>Add Person - Step 2</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="add-person-form">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="add-first-name" class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="add-first-name" name="first_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-last-name" class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="add-last-name" name="last_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="add-email" name="email">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="add-sms-number" class="form-label">SMS Number</label>
+                                <input type="text" class="form-control" id="add-sms-number" name="sms_number">
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-city" class="form-label">City</label>
+                                <input type="text" class="form-control" id="add-city" name="city">
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-state" class="form-label">State</label>
+                                <input type="text" class="form-control" id="add-state" name="state">
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-country" class="form-label">Country</label>
+                                <input type="text" class="form-control" id="add-country" name="country">
+                            </div>
+                            <div class="mb-3">
+                                <label for="add-thesession-user-id" class="form-label">TheSession User ID</label>
+                                <input type="number" class="form-control" id="add-thesession-user-id" name="thesession_user_id" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add-session-select" class="form-label">Add to Session (optional)</label>
+                        <select class="form-control" id="add-session-select" name="session_id">
+                            <option value="">Do not add to any sessions</option>
+                            <!-- Sessions will be populated by JavaScript -->
+                        </select>
+                    </div>
+                    <div id="step2-error" class="text-danger mb-3" style="display: none;"></div>
+                </form>
+                <div class="d-flex justify-content-between">
+                    <button id="step2-back" class="btn btn-secondary">Back</button>
+                    <div>
+                        <button id="step2-cancel" class="btn btn-secondary me-2">Cancel</button>
+                        <button id="step2-save" class="btn btn-success">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -200,6 +291,199 @@
     margin-top: 2rem;
 }
 
+/* Add Person Modal Styles */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: var(--bg-color);
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 80%;
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-color);
+}
+
+.modal-close {
+    color: var(--text-color);
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.btn {
+    padding: 0.375rem 0.75rem;
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #218838;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+}
+
+.form-label {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-control[readonly] {
+    background-color: var(--light);
+    opacity: 1;
+}
+
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.me-2 {
+    margin-right: 0.5rem;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.justify-content-between {
+    justify-content: space-between;
+}
+
+.justify-content-end {
+    justify-content: flex-end;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+.mt-2 {
+    margin-top: 0.5rem;
+}
+
+/* Flash Message Styles */
+.flash-message {
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 100;
+}
+
+.alert-success {
+    color: #0f5132;
+    background-color: #d1e7dd;
+    border-color: #badbcc;
+}
+
+.alert-danger {
+    color: #842029;
+    background-color: #f8d7da;
+    border-color: #f5c2c7;
+}
+
+.alert-dismissible {
+    padding-right: 3rem;
+}
+
+.fade {
+    transition: opacity 0.15s linear;
+}
+
+.show {
+    opacity: 1;
+}
+
 @media (max-width: 768px) {
     .table-responsive {
         font-size: 0.85rem;
@@ -244,4 +528,306 @@
     }
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Person Modal functionality
+    const addPersonBtn = document.getElementById('add-person-btn');
+    const addPersonModal = document.getElementById('addPersonModal');
+    const modalCloses = document.querySelectorAll('.modal-close');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step1Next = document.getElementById('step1-next');
+    const step2Back = document.getElementById('step2-back');
+    const step2Cancel = document.getElementById('step2-cancel');
+    const step2Save = document.getElementById('step2-save');
+    const personInput = document.getElementById('person-input');
+    const step1Error = document.getElementById('step1-error');
+    const step2Error = document.getElementById('step2-error');
+    const sessionSelect = document.getElementById('add-session-select');
+    
+    let currentPersonData = {};
+
+    // Open modal
+    if (addPersonBtn) {
+        addPersonBtn.addEventListener('click', function() {
+            openAddPersonModal();
+        });
+    }
+
+    // Close modal
+    modalCloses.forEach(close => {
+        close.addEventListener('click', function() {
+            closeAddPersonModal();
+        });
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(e) {
+        if (e.target === addPersonModal) {
+            closeAddPersonModal();
+        }
+    });
+
+    // Step navigation
+    if (step1Next) {
+        step1Next.addEventListener('click', function() {
+            processStep1();
+        });
+    }
+
+    if (step2Back) {
+        step2Back.addEventListener('click', function() {
+            showStep1();
+        });
+    }
+
+    if (step2Cancel) {
+        step2Cancel.addEventListener('click', function() {
+            closeAddPersonModal();
+        });
+    }
+
+    if (step2Save) {
+        step2Save.addEventListener('click', function() {
+            saveNewPerson();
+        });
+    }
+
+    // Enter key handling
+    if (personInput) {
+        personInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                processStep1();
+            }
+        });
+    }
+
+    function openAddPersonModal() {
+        addPersonModal.style.display = 'block';
+        showStep1();
+        loadSessions();
+    }
+
+    function closeAddPersonModal() {
+        addPersonModal.style.display = 'none';
+        resetModal();
+    }
+
+    function resetModal() {
+        personInput.value = '';
+        step1Error.style.display = 'none';
+        step2Error.style.display = 'none';
+        document.getElementById('add-person-form').reset();
+        currentPersonData = {};
+    }
+
+    function showStep1() {
+        step1.style.display = 'block';
+        step2.style.display = 'none';
+        step1Error.style.display = 'none';
+        personInput.focus();
+    }
+
+    function showStep2() {
+        step1.style.display = 'none';
+        step2.style.display = 'block';
+        step2Error.style.display = 'none';
+    }
+
+    function showStep1Error(message) {
+        step1Error.textContent = message;
+        step1Error.style.display = 'block';
+    }
+
+    function showStep2Error(message) {
+        step2Error.textContent = message;
+        step2Error.style.display = 'block';
+    }
+
+    function processStep1() {
+        const input = personInput.value.trim();
+        if (!input) {
+            showStep1Error('Please enter a name or TheSession.org URL/ID');
+            return;
+        }
+
+        // Check if it's a URL or ID (contains digits or is a URL)
+        if (input.match(/^\d+$/) || input.startsWith('https://thesession.org/members/')) {
+            // TheSession.org user
+            validateTheSessionUser(input);
+        } else {
+            // Regular name
+            parsePersonName(input);
+        }
+    }
+
+    function validateTheSessionUser(userInput) {
+        fetch('/api/validate-thesession-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_input: userInput
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentPersonData = data;
+                populateStep2Form(data);
+                showStep2();
+            } else {
+                showStep1Error(data.message);
+            }
+        })
+        .catch(error => {
+            showStep1Error('Error validating TheSession.org user: ' + error.message);
+        });
+    }
+
+    function parsePersonName(name) {
+        fetch('/api/parse-person-name', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentPersonData = data;
+                populateStep2Form(data);
+                showStep2();
+            } else {
+                showStep1Error(data.message);
+            }
+        })
+        .catch(error => {
+            showStep1Error('Error parsing name: ' + error.message);
+        });
+    }
+
+    function populateStep2Form(data) {
+        document.getElementById('add-first-name').value = data.first_name || '';
+        document.getElementById('add-last-name').value = data.last_name || '';
+        document.getElementById('add-thesession-user-id').value = data.thesession_user_id || '';
+        
+        // Clear other fields
+        document.getElementById('add-email').value = '';
+        document.getElementById('add-sms-number').value = '';
+        document.getElementById('add-city').value = '';
+        document.getElementById('add-state').value = '';
+        document.getElementById('add-country').value = '';
+        sessionSelect.value = '';
+    }
+
+    function loadSessions() {
+        fetch('/api/sessions/list')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear existing options except the first one
+                    sessionSelect.innerHTML = '<option value="">Do not add to any sessions</option>';
+                    
+                    // Add session options
+                    data.sessions.forEach(session => {
+                        const option = document.createElement('option');
+                        option.value = session.session_id;
+                        option.textContent = session.display_name;
+                        sessionSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading sessions:', error);
+            });
+    }
+
+    function saveNewPerson() {
+        const formData = new FormData(document.getElementById('add-person-form'));
+        const data = {
+            first_name: formData.get('first_name'),
+            last_name: formData.get('last_name'),
+            email: formData.get('email'),
+            sms_number: formData.get('sms_number'),
+            city: formData.get('city'),
+            state: formData.get('state'),
+            country: formData.get('country'),
+            thesession_user_id: formData.get('thesession_user_id') || null,
+            session_id: formData.get('session_id') || null
+        };
+
+        if (!data.first_name.trim()) {
+            showStep2Error('First name is required');
+            return;
+        }
+
+        fetch('/api/create-person', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeAddPersonModal();
+                // Store success message for display after reload
+                sessionStorage.setItem('flashMessage', data.message);
+                sessionStorage.setItem('flashType', 'success');
+                // Reload the page to show updated people list
+                window.location.reload();
+            } else {
+                showStep2Error(data.message);
+            }
+        })
+        .catch(error => {
+            showStep2Error('Error creating person: ' + error.message);
+        });
+    }
+
+    // Check for flash messages from sessionStorage
+    const flashMessage = sessionStorage.getItem('flashMessage');
+    const flashType = sessionStorage.getItem('flashType');
+    if (flashMessage) {
+        showFlashMessage(flashMessage, flashType);
+        sessionStorage.removeItem('flashMessage');
+        sessionStorage.removeItem('flashType');
+    }
+
+    function showFlashMessage(message, type) {
+        // Create flash message element
+        const flashDiv = document.createElement('div');
+        flashDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show flash-message`;
+        flashDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" aria-label="Close">&times;</button>
+        `;
+        
+        // Add close button functionality
+        const closeBtn = flashDiv.querySelector('.btn-close');
+        closeBtn.addEventListener('click', function() {
+            flashDiv.remove();
+        });
+        
+        // Insert at the top of the main content
+        const mainContent = document.querySelector('.docs-content-inner');
+        mainContent.insertBefore(flashDiv, mainContent.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (flashDiv.parentNode) {
+                flashDiv.remove();
+            }
+        }, 5000);
+    }
+});
+</script>
+
 {% endblock %}
