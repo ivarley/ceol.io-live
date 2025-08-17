@@ -53,6 +53,8 @@ app.add_url_rule('/admin/people', 'admin_people', admin_people)
 app.add_url_rule('/admin/test-links', 'admin_test_links', admin_test_links)
 app.add_url_rule('/admin/people/<int:person_id>', 'person_details', person_details)
 app.add_url_rule('/admin/sessions/<path:session_path>', 'session_admin', session_admin)
+app.add_url_rule('/admin/sessions/<path:session_path>/players', 'session_admin_players', session_admin_players)
+app.add_url_rule('/admin/sessions/<path:session_path>/logs', 'session_admin_logs', session_admin_logs)
 
 # Register API routes
 app.add_url_rule('/api/sessions/data', 'sessions_data', sessions_data)

@@ -17,30 +17,18 @@
             <nav class="session-admin-tabs-nav">
                 <!-- Desktop Tab Navigation -->
                 <div class="nav nav-tabs" id="session-admin-tabs" role="tablist">
-                    <button class="nav-link {{ 'active' if active_tab == 'details' else '' }}" 
-                           id="details-tab" 
-                           data-bs-toggle="tab" 
-                           data-bs-target="#details" 
-                           type="button" 
-                           role="tab">
+                    <a class="nav-link {{ 'active' if active_tab == 'details' else '' }}" 
+                       href="/admin/sessions/{{ session.path }}">
                         Details
-                    </button>
-                    <button class="nav-link {{ 'active' if active_tab == 'players' else '' }}" 
-                           id="players-tab" 
-                           data-bs-toggle="tab" 
-                           data-bs-target="#players" 
-                           type="button" 
-                           role="tab">
+                    </a>
+                    <a class="nav-link {{ 'active' if active_tab == 'players' else '' }}" 
+                       href="/admin/sessions/{{ session.path }}/players">
                         Players
-                    </button>
-                    <button class="nav-link {{ 'active' if active_tab == 'logs' else '' }}" 
-                           id="logs-tab" 
-                           data-bs-toggle="tab" 
-                           data-bs-target="#logs" 
-                           type="button" 
-                           role="tab">
+                    </a>
+                    <a class="nav-link {{ 'active' if active_tab == 'logs' else '' }}" 
+                       href="/admin/sessions/{{ session.path }}/logs">
                         Logs
-                    </button>
+                    </a>
                 </div>
                 
                 <!-- Mobile Dropdown Navigation -->
@@ -344,65 +332,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileSelect = document.getElementById('session-admin-mobile-select');
     if (mobileSelect) {
         mobileSelect.addEventListener('change', function() {
-            // Hide all tab panes
-            document.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.classList.remove('show', 'active');
-            });
+            const sessionPath = '{{ session.path }}';
+            let url;
             
-            // Show selected tab pane
-            const selectedPane = document.getElementById(this.value);
-            if (selectedPane) {
-                selectedPane.classList.add('show', 'active');
-                
-                // Load content for tabs that need it
-                if (this.value === 'players') {
-                    loadPlayersContent();
-                } else if (this.value === 'logs') {
-                    loadLogsContent();
-                }
-                
-                // Update URL with tab parameter
-                const url = new URL(window.location);
-                url.searchParams.set('tab', this.value);
-                window.history.pushState({}, '', url);
+            if (this.value === 'details') {
+                url = `/admin/sessions/${sessionPath}`;
+            } else if (this.value === 'players') {
+                url = `/admin/sessions/${sessionPath}/players`;
+            } else if (this.value === 'logs') {
+                url = `/admin/sessions/${sessionPath}/logs`;
+            }
+            
+            if (url) {
+                window.location.href = url;
             }
         });
     }
-    
-    // Desktop tab functionality
-    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Remove active class from all tabs and panes
-            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.classList.remove('show', 'active');
-            });
-            
-            // Add active class to clicked tab
-            this.classList.add('active');
-            
-            // Show corresponding pane
-            const targetId = this.getAttribute('data-bs-target').substring(1);
-            const targetPane = document.getElementById(targetId);
-            if (targetPane) {
-                targetPane.classList.add('show', 'active');
-                
-                // Load content for tabs that need it
-                if (targetId === 'players') {
-                    loadPlayersContent();
-                } else if (targetId === 'logs') {
-                    loadLogsContent();
-                }
-                
-                // Update URL with tab parameter
-                const url = new URL(window.location);
-                url.searchParams.set('tab', targetId);
-                window.history.pushState({}, '', url);
-            }
-        });
-    });
     
     // Form submission
     document.getElementById('session-details-form').addEventListener('submit', function(e) {

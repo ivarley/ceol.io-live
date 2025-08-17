@@ -1506,21 +1506,8 @@ def person_details(person_id):
         conn.close()
 
 
-@login_required
-def session_admin(session_path):
-    """Session admin page with tabbed interface"""
-    # Check if user is system admin
-    if not session.get('is_system_admin'):
-        flash('You must be authorized to view this page.', 'error')
-        return redirect(url_for('home'))
-    
-    # Get tab parameter from query string, default to 'details'
-    active_tab = request.args.get('tab', 'details')
-    # Validate tab parameter
-    valid_tabs = ['details', 'players', 'logs']
-    if active_tab not in valid_tabs:
-        active_tab = 'details'
-    
+def _get_session_data(session_path):
+    """Helper function to get session data by path"""
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -1536,11 +1523,10 @@ def session_admin(session_path):
         
         session_row = cur.fetchone()
         if not session_row:
-            return "Session not found", 404
+            return None
             
-        session_id = session_row[0]
         session_data = {
-            'session_id': session_id,
+            'session_id': session_row[0],
             'name': session_row[1],
             'path': session_row[2],
             'location_name': session_row[3],
@@ -1557,10 +1543,61 @@ def session_admin(session_path):
             'recurrence': session_row[14]
         }
         
-        return render_template('session_admin.html', 
-                             session=session_data,
-                             session_path=session_path,
-                             active_tab=active_tab)
+        return session_data
         
     finally:
         conn.close()
+
+
+@login_required
+def session_admin(session_path):
+    """Session admin details page"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        return "Session not found", 404
+        
+    return render_template('session_admin.html', 
+                         session=session_data,
+                         session_path=session_path,
+                         active_tab='details')
+
+
+@login_required
+def session_admin_players(session_path):
+    """Session admin players page"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        return "Session not found", 404
+        
+    return render_template('session_admin.html', 
+                         session=session_data,
+                         session_path=session_path,
+                         active_tab='players')
+
+
+@login_required
+def session_admin_logs(session_path):
+    """Session admin logs page"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        return "Session not found", 404
+        
+    return render_template('session_admin.html', 
+                         session=session_data,
+                         session_path=session_path,
+                         active_tab='logs')
