@@ -143,7 +143,7 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
-    <h1 class="session-title-heading">{{ session.name }}<span class="add-link" id="edit-session-btn">Edit</span></h1>
+    <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<span class="add-link" id="edit-session-btn">Edit</span><a href="/admin/sessions/{{ session.path }}" class="add-link" style="margin-left: 20px;">Admin</a>{% endif %}</h1>
     
     <div class="session-details">
         {% if session.location_name and session.location_name != session.name %}

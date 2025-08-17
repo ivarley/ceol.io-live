@@ -455,10 +455,19 @@ def session_handler(full_path):
                 
                 popular_tunes = cur.fetchall()
                 
+                # Check if current user is an admin of this session
+                is_session_admin = False
+                if current_user.is_authenticated:
+                    # session is the database tuple, session[0] is the session_id
+                    # Use request.session to access Flask session data
+                    from flask import session as flask_session
+                    is_session_admin = (flask_session.get('is_system_admin', False) or 
+                                      session[0] in flask_session.get('admin_session_ids', []))
+                
                 cur.close()
                 conn.close()
                 
-                return render_template('session_detail.html', session=session_dict, instances_by_year=instances_by_year, sorted_years=sorted_years, popular_tunes=popular_tunes)
+                return render_template('session_detail.html', session=session_dict, instances_by_year=instances_by_year, sorted_years=sorted_years, popular_tunes=popular_tunes, is_session_admin=is_session_admin)
             else:
                 cur.close()
                 conn.close()
@@ -603,6 +612,21 @@ def login():
             # Cache admin status for menu display
             session['is_system_admin'] = user.is_system_admin
             
+            # Cache list of sessions this user is an admin of
+            conn_admin = get_db_connection()
+            try:
+                cur_admin = conn_admin.cursor()
+                cur_admin.execute('''
+                    SELECT s.session_id 
+                    FROM session_person sp
+                    JOIN session s ON sp.session_id = s.session_id
+                    WHERE sp.person_id = %s AND sp.is_admin = TRUE
+                ''', (user.person_id,))
+                admin_session_ids = [row[0] for row in cur_admin.fetchall()]
+                session['admin_session_ids'] = admin_session_ids
+            finally:
+                conn_admin.close()
+            
             # Clean up expired sessions
             cleanup_expired_sessions()
             
@@ -657,7 +681,7 @@ def logout():
         log_login_event(user_id, username, 'LOGOUT', ip_address, user_agent, session_id=db_session_id)
     
     logout_user()
-    flash('You have been logged out successfully.', 'info')
+    flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
 
