@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+
+{% block title %}{{ person.first_name }} {{ person.last_name }} - {{ session.name }}{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">{{ person.first_name }} {{ person.last_name }}</h1>
+                <section class="docs-intro">
+                    <p>Player details for <strong>{{ session.name }}</strong>. <a href="/admin/sessions/{{ session_path }}/players">← Back to players list</a></p>
+                </section>
+            </header>
+            
+            <!-- Person Information Section -->
+            <section class="docs-section" id="person-info">
+                <h2 class="section-heading">Person Information</h2>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Name:</dt>
+                                    <dd class="col-sm-8">{{ person.first_name }} {{ person.last_name }}</dd>
+                                    
+                                    <dt class="col-sm-4">Email:</dt>
+                                    <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">SMS Number:</dt>
+                                    <dd class="col-sm-8">{{ person.sms_number or 'Not provided' }}</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">City:</dt>
+                                    <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">State:</dt>
+                                    <dd class="col-sm-8">{{ person.state or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">Country:</dt>
+                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
+                                </dl>
+                            </div>
+                        </div>
+                        
+                        {% if person.thesession_user_id %}
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <dl class="row">
+                                    <dt class="col-sm-2">TheSession.org ID:</dt>
+                                    <dd class="col-sm-10">
+                                        <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank">
+                                            {{ person.thesession_user_id }}
+                                        </a>
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if person.username %}
+                        <div class="row">
+                            <div class="col-12">
+                                <dl class="row">
+                                    <dt class="col-sm-2">User Account:</dt>
+                                    <dd class="col-sm-10">
+                                        <span class="badge bg-info">{{ person.username }}</span>
+                                        {% if person.is_system_admin %}
+                                        <span class="badge bg-warning">System Admin</span>
+                                        {% endif %}
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Session Status Section -->
+            <section class="docs-section" id="session-status">
+                <h2 class="section-heading">Session Status</h2>
+                <div class="card">
+                    <div class="card-body">
+                        <form id="session-status-form">
+                            <input type="hidden" id="person-id" value="{{ person.person_id }}">
+                            <input type="hidden" id="session-path" value="{{ session_path }}">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="is-regular" {{ 'checked' if person.is_regular }}>
+                                        <label class="form-check-label" for="is-regular">
+                                            <strong>Regular Player</strong>
+                                        </label>
+                                        <div class="form-text">Mark as a regular attendee of this session</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="status-badges">
+                                        {% if person.is_admin %}
+                                        <span class="badge bg-primary">Session Admin</span>
+                                        {% endif %}
+                                        
+                                        {% if person.gets_email_reminder %}
+                                        <span class="badge bg-success">Email Reminders</span>
+                                        {% endif %}
+                                        
+                                        {% if person.gets_email_followup %}
+                                        <span class="badge bg-info">Email Followups</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="save-status" class="mt-3" style="display: none;"></div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Sessions Attended Section -->
+            <section class="docs-section" id="sessions-attended">
+                <h2 class="section-heading">Sessions Attended</h2>
+                <div class="card">
+                    <div class="card-body">
+                        {% if attendance_history %}
+                        <p class="text-muted mb-3">{{ attendance_history|length }} session{{ 's' if attendance_history|length != 1 else '' }} attended</p>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th>Comments</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for attendance in attendance_history %}
+                                    <tr>
+                                        <td>
+                                            <a href="/sessions/{{ session_path }}/{{ attendance.date }}" target="_blank">
+                                                {{ attendance.date }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            {% if attendance.start_time and attendance.end_time %}
+                                                {{ attendance.start_time }} - {{ attendance.end_time }}
+                                            {% elif attendance.start_time %}
+                                                From {{ attendance.start_time }}
+                                            {% else %}
+                                                <span class="text-muted">Not specified</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if attendance.is_cancelled %}
+                                                <span class="badge bg-danger">Cancelled</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Attended</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ attendance.comments or '' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            No sessions attended found for this person at this session.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.status-badges .badge {
+    margin-right: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.form-check-label {
+    font-weight: 500;
+}
+
+.section-heading {
+    color: var(--primary);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+    margin-bottom: 2rem;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+dl.row dt {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+dl.row dd {
+    color: var(--text-color);
+}
+
+.table th {
+    background-color: var(--light);
+    border-bottom: 2px solid var(--border-color);
+    font-weight: 600;
+}
+
+.table td {
+    border-bottom: 1px solid var(--hover-bg);
+}
+
+.alert-success {
+    background-color: var(--success-bg, #d4edda);
+    border-color: var(--success-border, #c3e6cb);
+    color: var(--success-text, #155724);
+}
+
+.alert-danger {
+    background-color: var(--danger-bg, #f8d7da);
+    border-color: var(--danger-border, #f5c6cb);
+    color: var(--danger-text, #721c24);
+}
+
+.alert-info {
+    background-color: var(--info-bg, #d1ecf1);
+    border-color: var(--info-border, #bee5eb);
+    color: var(--info-text, #0c5460);
+}
+
+/* Dark mode alert colors */
+@media (prefers-color-scheme: dark) {
+    .alert-success {
+        background-color: rgba(40, 167, 69, 0.2);
+        border-color: rgba(40, 167, 69, 0.4);
+        color: #9df5a5;
+    }
+    
+    .alert-danger {
+        background-color: rgba(220, 53, 69, 0.2);
+        border-color: rgba(220, 53, 69, 0.4);
+        color: #f5a5a5;
+    }
+    
+    .alert-info {
+        background-color: rgba(23, 162, 184, 0.2);
+        border-color: rgba(23, 162, 184, 0.4);
+        color: #a5e1f5;
+    }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    /* Remove docs-content padding completely - mobile only */
+    body .docs-content {
+        padding: 0.5rem !important;
+    }
+    
+    /* Remove docs-article padding - mobile only */
+    body .docs-article {
+        padding: 0.5rem !important;
+    }
+    
+    /* Reduce container padding to minimal - mobile only */
+    body .docs-content-inner .container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Make heading smaller - mobile only */
+    body .docs-article .docs-heading {
+        font-size: 1.75rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* Reduce section padding - mobile only */
+    body .docs-section {
+        padding: 1rem 0 !important;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    dl.row dt {
+        margin-bottom: 0.25rem;
+    }
+    
+    dl.row dd {
+        margin-bottom: 1rem;
+    }
+    
+    .status-badges {
+        margin-top: 1rem;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isRegularCheckbox = document.getElementById('is-regular');
+    const saveStatus = document.getElementById('save-status');
+    
+    if (isRegularCheckbox) {
+        isRegularCheckbox.addEventListener('change', function() {
+            const personId = document.getElementById('person-id').value;
+            const sessionPath = document.getElementById('session-path').value;
+            const isRegular = this.checked;
+            
+            // Show loading state
+            saveStatus.style.display = 'block';
+            saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+            
+            // Make API call to update regular status
+            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/regular`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    is_regular: isRegular
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    saveStatus.innerHTML = '<div class="alert alert-success">Regular status updated successfully!</div>';
+                    setTimeout(() => {
+                        saveStatus.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error(data.error || 'Failed to update regular status');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating regular status:', error);
+                saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+                // Revert checkbox state
+                this.checked = !isRegular;
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

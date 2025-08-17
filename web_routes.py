@@ -1601,3 +1601,102 @@ def session_admin_logs(session_path):
                          session=session_data,
                          session_path=session_path,
                          active_tab='logs')
+
+
+@login_required
+def session_admin_person(session_path, person_id):
+    """Session admin person details page"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get session details
+        session_data = _get_session_data(session_path)
+        if not session_data:
+            return "Session not found", 404
+        
+        session_id = session_data['session_id']
+        
+        # Get person details and their relationship to this session
+        cur.execute('''
+            SELECT 
+                p.person_id,
+                p.first_name,
+                p.last_name,
+                p.email,
+                p.sms_number,
+                p.city,
+                p.state,
+                p.country,
+                p.thesession_user_id,
+                sp.is_regular,
+                sp.is_admin,
+                sp.gets_email_reminder,
+                sp.gets_email_followup,
+                u.username,
+                u.is_system_admin
+            FROM person p
+            JOIN session_person sp ON p.person_id = sp.person_id
+            LEFT JOIN user_account u ON p.person_id = u.person_id
+            WHERE p.person_id = %s AND sp.session_id = %s
+        ''', (person_id, session_id))
+        
+        person_row = cur.fetchone()
+        if not person_row:
+            return "Person not found in this session", 404
+        
+        person_data = {
+            'person_id': person_row[0],
+            'first_name': person_row[1],
+            'last_name': person_row[2],
+            'email': person_row[3],
+            'sms_number': person_row[4],
+            'city': person_row[5],
+            'state': person_row[6],
+            'country': person_row[7],
+            'thesession_user_id': person_row[8],
+            'is_regular': person_row[9],
+            'is_admin': person_row[10],
+            'gets_email_reminder': person_row[11],
+            'gets_email_followup': person_row[12],
+            'username': person_row[13],
+            'is_system_admin': person_row[14]
+        }
+        
+        # Get attendance history for this person at this session
+        cur.execute('''
+            SELECT 
+                si.date,
+                si.start_time,
+                si.end_time,
+                si.is_cancelled,
+                si.comments
+            FROM session_instance si
+            JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
+            WHERE si.session_id = %s AND sip.person_id = %s
+            ORDER BY si.date DESC
+        ''', (session_id, person_id))
+        
+        attendance_history = []
+        for row in cur.fetchall():
+            attendance_history.append({
+                'date': row[0],
+                'start_time': row[1],
+                'end_time': row[2],
+                'is_cancelled': row[3],
+                'comments': row[4]
+            })
+        
+        return render_template('session_admin_person.html',
+                             session=session_data,
+                             session_path=session_path,
+                             person=person_data,
+                             attendance_history=attendance_history)
+        
+    finally:
+        conn.close()

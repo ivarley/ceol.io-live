@@ -65,9 +65,12 @@
                     <div class="test-section">
                         <h3>Session Admin Pages ({{ sample_session[2] }})</h3>
                         <ul class="test-links-list">
-                            <li><a href="/admin/sessions/{{ sample_session[1] }}" target="_blank">Session Admin - Details</a></li>
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}" target="_blank">Session Admin - Details (test termination/reactivation)</a></li>
                             <li><a href="/admin/sessions/{{ sample_session[1] }}/players" target="_blank">Session Admin - Players</a></li>
                             <li><a href="/admin/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Admin - Logs</a></li>
+                            {% if sample_person_id %}
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}/players/{{ sample_person_id }}" target="_blank">Session Person Detail (ID: {{ sample_person_id }})</a></li>
+                            {% endif %}
                         </ul>
                     </div>
                     {% endif %}

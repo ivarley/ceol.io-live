@@ -54,6 +54,7 @@ app.add_url_rule('/admin/test-links', 'admin_test_links', admin_test_links)
 app.add_url_rule('/admin/people/<int:person_id>', 'person_details', person_details)
 app.add_url_rule('/admin/sessions/<path:session_path>', 'session_admin', session_admin)
 app.add_url_rule('/admin/sessions/<path:session_path>/players', 'session_admin_players', session_admin_players)
+app.add_url_rule('/admin/sessions/<path:session_path>/players/<int:person_id>', 'session_admin_person', session_admin_person)
 app.add_url_rule('/admin/sessions/<path:session_path>/logs', 'session_admin_logs', session_admin_logs)
 
 # Register API routes
@@ -80,7 +81,10 @@ app.add_url_rule('/api/search-sessions', 'search_sessions_ajax', search_sessions
 app.add_url_rule('/api/fetch-session-data', 'fetch_session_data_ajax', fetch_session_data_ajax, methods=['POST'])
 app.add_url_rule('/api/add-session', 'add_session_ajax', add_session_ajax, methods=['POST'])
 app.add_url_rule('/api/admin/sessions/<path:session_path>/players', 'get_session_players_ajax', get_session_players_ajax)
+app.add_url_rule('/api/admin/sessions/<path:session_path>/players/<int:person_id>/regular', 'update_session_player_regular_status', update_session_player_regular_status, methods=['PUT'])
 app.add_url_rule('/api/admin/sessions/<path:session_path>/logs', 'get_session_logs_ajax', get_session_logs_ajax)
+app.add_url_rule('/api/admin/sessions/<path:session_path>/terminate', 'terminate_session', terminate_session, methods=['PUT'])
+app.add_url_rule('/api/admin/sessions/<path:session_path>/reactivate', 'reactivate_session', reactivate_session, methods=['PUT'])
 app.add_url_rule('/api/person/<int:person_id>/attendance', 'get_person_attendance_ajax', get_person_attendance_ajax)
 app.add_url_rule('/api/person/<int:person_id>/logins', 'get_person_logins_ajax', get_person_logins_ajax)
 app.add_url_rule('/api/check-username-availability', 'check_username_availability', check_username_availability, methods=['POST'])

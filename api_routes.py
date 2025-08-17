@@ -1,7 +1,8 @@
-from flask import request, jsonify
+from flask import request, jsonify, session
 import requests
 import re
 from datetime import datetime
+from flask_login import login_required
 from database import get_db_connection, save_to_history, find_matching_tune, normalize_apostrophes
 from auth import User
 from email_utils import send_email_via_sendgrid
@@ -2506,3 +2507,138 @@ def get_available_sessions():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to get sessions: {str(e)}'}), 500
+
+
+@login_required
+def update_session_player_regular_status(session_path, person_id):
+    """Update the regular status for a person in a specific session"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        is_regular = data.get('is_regular', False)
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session ID first
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({'success': False, 'error': 'Session not found'}), 404
+        
+        session_id = session_result[0]
+        
+        # Update the regular status
+        cur.execute('''
+            UPDATE session_person 
+            SET is_regular = %s 
+            WHERE session_id = %s AND person_id = %s
+        ''', (is_regular, session_id, person_id))
+        
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'error': 'Person not found in this session'}), 404
+        
+        # Save to history
+        save_to_history(cur, 'session_person', 'UPDATE', None, f'admin_update_regular_status:{person_id}:{session_id}:{is_regular}')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@login_required
+def terminate_session(session_path):
+    """Set the termination date for a session"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        termination_date = data.get('termination_date')
+        
+        if not termination_date:
+            return jsonify({'success': False, 'error': 'Termination date is required'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session ID first
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({'success': False, 'error': 'Session not found'}), 404
+        
+        session_id = session_result[0]
+        
+        # Update the termination date
+        cur.execute('''
+            UPDATE session 
+            SET termination_date = %s 
+            WHERE session_id = %s
+        ''', (termination_date, session_id))
+        
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'error': 'Failed to update session'}), 404
+        
+        # Save to history
+        save_to_history(cur, 'session', 'UPDATE', None, f'admin_terminate_session:{session_id}:{termination_date}')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@login_required
+def reactivate_session(session_path):
+    """Clear the termination date for a session to reactivate it"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session ID first
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({'success': False, 'error': 'Session not found'}), 404
+        
+        session_id = session_result[0]
+        
+        # Clear the termination date
+        cur.execute('''
+            UPDATE session 
+            SET termination_date = NULL 
+            WHERE session_id = %s
+        ''', (session_id,))
+        
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'error': 'Failed to update session'}), 404
+        
+        # Save to history
+        save_to_history(cur, 'session', 'UPDATE', None, f'admin_reactivate_session:{session_id}')
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
