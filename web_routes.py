@@ -572,6 +572,10 @@ def register():
 
 
 def login():
+    # Capture referrer URL for redirect after login
+    if request.method == 'GET' and request.referrer and 'login' not in request.referrer:
+        session['login_redirect_url'] = request.referrer
+    
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -630,8 +634,13 @@ def login():
             # Clean up expired sessions
             cleanup_expired_sessions()
             
+            # Check for stored redirect URL first, then next parameter, then default to home
+            redirect_url = session.pop('login_redirect_url', None)
             next_page = request.args.get('next')
-            if next_page:
+            
+            if redirect_url:
+                return redirect(redirect_url)
+            elif next_page:
                 return redirect(next_page)
             return redirect(url_for('home'))
         else:
