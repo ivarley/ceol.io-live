@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import re
 
 # Import from local modules
-from database import get_db_connection, normalize_apostrophes
+from database import get_db_connection, normalize_apostrophes, save_to_history
 from auth import User, create_session, cleanup_expired_sessions, generate_password_reset_token, generate_verification_token, log_login_event
 from email_utils import send_password_reset_email, send_verification_email
 
@@ -552,11 +552,11 @@ def register():
             verification_expires = datetime.utcnow() + timedelta(hours=24)
             
             cur.execute('''
-                INSERT INTO user_account (person_id, username, hashed_password, time_zone, 
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, time_zone, 
                                         email_verified, verification_token, verification_token_expires)
-                VALUES (%s, %s, %s, %s, FALSE, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s)
                 RETURNING user_id
-            ''', (person_id, username, hashed_password, time_zone, verification_token, verification_expires))
+            ''', (person_id, username, email, hashed_password, time_zone, verification_token, verification_expires))
             user_id = cur.fetchone()[0]
             
             conn.commit()
@@ -748,6 +748,7 @@ def forgot_password():
                 expires = datetime.utcnow() + timedelta(hours=1)
                 
                 # Save token to database
+                save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'password_reset_request')
                 cur.execute('''
                     UPDATE user_account 
                     SET password_reset_token = %s, password_reset_expires = %s
@@ -811,6 +812,7 @@ def reset_password(token):
                 username = username_row[0] if username_row else 'unknown'
                 
                 # Update password and clear reset token
+                save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'password_reset_completion')
                 hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 cur.execute('''
                     UPDATE user_account 
@@ -883,6 +885,7 @@ def change_password():
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            save_to_history(cur, 'user_account', 'UPDATE', current_user.user_id, f'password_change:{current_user.username}')
             hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             cur.execute('''
                 UPDATE user_account 
@@ -916,6 +919,7 @@ def verify_email(token):
         
         if user_data:
             # Mark email as verified and clear token
+            save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'email_verification')
             cur.execute('''
                 UPDATE user_account 
                 SET email_verified = TRUE, 
@@ -963,6 +967,7 @@ def resend_verification():
                 verification_expires = datetime.utcnow() + timedelta(hours=24)
                 
                 # Update token in database
+                save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'verification_token_regeneration')
                 cur.execute('''
                     UPDATE user_account 
                     SET verification_token = %s, verification_token_expires = %s
@@ -1412,7 +1417,7 @@ def person_details(person_id):
         
         # Get user account details if exists
         cur.execute('''
-            SELECT user_id, username, email_verified, is_system_admin, created_date
+            SELECT user_id, username, user_email, email_verified, is_system_admin, created_date
             FROM user_account
             WHERE person_id = %s
         ''', (person_id,))
@@ -1420,7 +1425,7 @@ def person_details(person_id):
         user_row = cur.fetchone()
         user = None
         if user_row:
-            user_id, username, email_verified, is_system_admin, created_date = user_row
+            user_id, username, user_email, email_verified, is_system_admin, created_date = user_row
             
             # Get last login from user_session table
             cur.execute('''
@@ -1434,6 +1439,7 @@ def person_details(person_id):
             user = {
                 'user_id': user_id,
                 'username': username,
+                'user_email': user_email,
                 'email_verified': email_verified,
                 'is_system_admin': is_system_admin,
                 'created_at': created_date,  # Keep as created_at in template for consistency

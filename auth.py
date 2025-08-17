@@ -99,16 +99,16 @@ class User(UserMixin):
         return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
 
     @staticmethod
-    def create_user(username, password, person_id, time_zone='UTC'):
+    def create_user(username, password, person_id, time_zone='UTC', user_email=None):
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             cur.execute('''
-                INSERT INTO user_account (person_id, username, hashed_password, time_zone)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, time_zone)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING user_id
-            ''', (person_id, username, hashed_password, time_zone))
+            ''', (person_id, username, user_email, hashed_password, time_zone))
             user_id = cur.fetchone()[0]
             conn.commit()
             return user_id

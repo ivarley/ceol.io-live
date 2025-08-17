@@ -190,3 +190,31 @@ CREATE INDEX idx_session_person_history_operation ON session_person_history(oper
 CREATE INDEX idx_session_instance_person_history_session_instance_person_id ON session_instance_person_history(session_instance_person_id);
 CREATE INDEX idx_session_instance_person_history_changed_at ON session_instance_person_history(changed_at);
 CREATE INDEX idx_session_instance_person_history_operation ON session_instance_person_history(operation);
+
+-- User account history table
+CREATE TABLE user_account_history (
+    history_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    changed_by VARCHAR(255),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Copy of all user_account fields at time of change
+    person_id INTEGER,
+    username VARCHAR(255),
+    user_email VARCHAR(255),
+    hashed_password VARCHAR(255),
+    time_zone VARCHAR(50),
+    is_active BOOLEAN,
+    is_system_admin BOOLEAN,
+    email_verified BOOLEAN,
+    verification_token VARCHAR(255),
+    verification_token_expires TIMESTAMP,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+    created_date TIMESTAMP,
+    last_modified_date TIMESTAMP
+);
+
+CREATE INDEX idx_user_account_history_user_id ON user_account_history(user_id);
+CREATE INDEX idx_user_account_history_changed_at ON user_account_history(changed_at);
+CREATE INDEX idx_user_account_history_operation ON user_account_history(operation);

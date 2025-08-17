@@ -67,6 +67,9 @@
                                             {% endif %}
                                         </dd>
                                         
+                                        <dt class="col-sm-4">User Email:</dt>
+                                        <dd class="col-sm-8">{{ user.user_email or 'Not provided' }}</dd>
+                                        
                                         <dt class="col-sm-4">Email Verified:</dt>
                                         <dd class="col-sm-8">
                                             {% if user.email_verified %}

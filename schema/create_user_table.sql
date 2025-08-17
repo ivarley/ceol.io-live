@@ -3,6 +3,7 @@ CREATE TABLE user_account (
     user_id SERIAL PRIMARY KEY,
     person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
     username VARCHAR(255) NOT NULL UNIQUE,
+    user_email VARCHAR(255) NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     time_zone VARCHAR(50) DEFAULT 'UTC',
     is_active BOOLEAN DEFAULT TRUE,

@@ -76,6 +76,20 @@ def save_to_history(cur, table_name, operation, record_id, changed_by='system'):
                    key_override, setting_override, created_date, last_modified_date
             FROM session_instance_tune WHERE session_instance_tune_id = %s
         ''', (operation, changed_by, record_id))
+    
+    elif table_name == 'user_account':
+        cur.execute('''
+            INSERT INTO user_account_history 
+            (user_id, operation, changed_by, person_id, username, user_email, hashed_password, 
+             time_zone, is_active, is_system_admin, email_verified, verification_token, 
+             verification_token_expires, password_reset_token, password_reset_expires, 
+             created_date, last_modified_date)
+            SELECT user_id, %s, %s, person_id, username, user_email, hashed_password, 
+                   time_zone, is_active, is_system_admin, email_verified, verification_token, 
+                   verification_token_expires, password_reset_token, password_reset_expires, 
+                   created_date, last_modified_date
+            FROM user_account WHERE user_id = %s
+        ''', (operation, changed_by, record_id))
 
 
 def find_matching_tune(cur, session_id, tune_name, allow_multiple_session_aliases=False):
