@@ -1831,3 +1831,83 @@ def get_session_logs_ajax(session_path):
         
     except Exception as e:
         return jsonify({'error': f'Failed to get session logs: {str(e)}'}), 500
+
+
+def get_person_attendance_ajax(person_id):
+    """Get attendance records for a person"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get all session instances this person was associated with
+        cur.execute('''
+            SELECT 
+                s.name as session_name,
+                si.date as instance_date,
+                sip.attended
+            FROM session_instance_person sip
+            JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+            JOIN session s ON si.session_id = s.session_id
+            WHERE sip.person_id = %s
+            ORDER BY si.date DESC
+        ''', (person_id,))
+        
+        attendance = []
+        for row in cur.fetchall():
+            session_name, instance_date, attended = row
+            attendance.append({
+                'session_name': session_name,
+                'instance_date': instance_date.strftime('%Y-%m-%d'),
+                'attended': attended
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'attendance': attendance})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Failed to get attendance data: {str(e)}'}), 500
+
+
+def get_person_logins_ajax(person_id):
+    """Get login history for a person"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # First get the user_id for this person
+        cur.execute('SELECT user_id FROM user_account WHERE person_id = %s', (person_id,))
+        user_row = cur.fetchone()
+        
+        if not user_row:
+            return jsonify({'success': True, 'logins': [], 'debug': f'No user_account found for person_id {person_id}'})
+        
+        user_id = user_row[0]
+        
+        # Get login history (focusing on successful logins)
+        cur.execute('''
+            SELECT timestamp, ip_address, user_agent, event_type
+            FROM login_history
+            WHERE user_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 100
+        ''', (user_id,))
+        
+        logins = []
+        for row in cur.fetchall():
+            timestamp, ip_address, user_agent, event_type = row
+            logins.append({
+                'login_time': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'ip_address': str(ip_address) if ip_address else 'Unknown',
+                'user_agent': user_agent or 'Unknown',
+                'event_type': event_type
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'logins': logins, 'debug': f'Found user_id {user_id}, {len(logins)} login records'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Failed to get login history: {str(e)}'}), 500

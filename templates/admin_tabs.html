@@ -13,7 +13,7 @@
             Login History
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
-           href="{{ url_for('admin') }}" 
+           href="{{ url_for('admin_sessions') }}" 
            role="tab">
             Active Sessions
         </a>
@@ -28,7 +28,7 @@
             <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
                 Login History
             </option>
-            <option value="{{ url_for('admin') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
+            <option value="{{ url_for('admin_sessions') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
                 Active Sessions
             </option>
         </select>

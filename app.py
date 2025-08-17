@@ -47,8 +47,10 @@ app.add_url_rule('/change-password', 'change_password', change_password, methods
 app.add_url_rule('/verify-email/<token>', 'verify_email', verify_email)
 app.add_url_rule('/resend-verification', 'resend_verification', resend_verification, methods=['GET', 'POST'])
 app.add_url_rule('/admin', 'admin', admin)
+app.add_url_rule('/admin/sessions', 'admin_sessions', admin_sessions)
 app.add_url_rule('/admin/login-history', 'admin_login_history', admin_login_history)
 app.add_url_rule('/admin/people', 'admin_people', admin_people)
+app.add_url_rule('/admin/people/<int:person_id>', 'person_details', person_details)
 app.add_url_rule('/admin/sessions/<path:session_path>', 'session_admin', session_admin)
 
 # Register API routes
@@ -76,6 +78,8 @@ app.add_url_rule('/api/fetch-session-data', 'fetch_session_data_ajax', fetch_ses
 app.add_url_rule('/api/add-session', 'add_session_ajax', add_session_ajax, methods=['POST'])
 app.add_url_rule('/api/admin/sessions/<path:session_path>/players', 'get_session_players_ajax', get_session_players_ajax)
 app.add_url_rule('/api/admin/sessions/<path:session_path>/logs', 'get_session_logs_ajax', get_session_logs_ajax)
+app.add_url_rule('/api/person/<int:person_id>/attendance', 'get_person_attendance_ajax', get_person_attendance_ajax)
+app.add_url_rule('/api/person/<int:person_id>/logins', 'get_person_logins_ajax', get_person_logins_ajax)
 
 if __name__ == '__main__':
     app.run(debug=True)

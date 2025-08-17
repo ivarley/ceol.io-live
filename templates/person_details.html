@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block title %}Person Details - {{ person.name }}{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Person Details: {{ person.name }}</h1>
+                <div id="back-link-container" style="display: none;">
+                    <a href="/admin/people" class="back-link">← Back To Admin</a>
+                </div>
+            </header>
+            
+            <!-- Person Information Section -->
+            <section class="docs-section" id="person-info">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">Name:</dt>
+                                    <dd class="col-sm-8">{{ person.name }}</dd>
+                                    
+                                    <dt class="col-sm-4">Email:</dt>
+                                    <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">Location:</dt>
+                                    <dd class="col-sm-8">{{ person.location or 'Not provided' }}</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">TheSession.org:</dt>
+                                    <dd class="col-sm-8">
+                                        {% if person.thesession_user_id %}
+                                            <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
+                                                {{ person.thesession_user_id }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">Not a member</span>
+                                        {% endif %}
+                                    </dd>
+                                    
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- User Account Information Section -->
+            <section class="docs-section" id="user-info">
+                <h2 class="section-heading">User Account Information</h2>
+                <div class="card">
+                    <div class="card-body">
+                        {% if user %}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Username:</dt>
+                                        <dd class="col-sm-8">
+                                            <strong>{{ user.username }}</strong>
+                                            {% if user.is_system_admin %}
+                                                <span class="admin-indicator">(admin)</span>
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Email Verified:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if user.email_verified %}
+                                                <span class="text-success">✓ Verified</span>
+                                            {% else %}
+                                                <span class="text-warning">✗ Not verified</span>
+                                            {% endif %}
+                                        </dd>
+                                    </dl>
+                                </div>
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Created:</dt>
+                                        <dd class="col-sm-8">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Unknown' }}</dd>
+                                        
+                                        <dt class="col-sm-4">Last Login:</dt>
+                                        <dd class="col-sm-8">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info" role="alert">
+                                <h4 class="alert-heading">No User Account</h4>
+                                <p>This person is not connected with a user account.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tabbed Interface Section -->
+            <section class="docs-section" id="person-data">
+                <h2 class="section-heading">Activity Data</h2>
+                
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs" id="personTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab" aria-controls="sessions" aria-selected="true">Sessions</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">Attended</button>
+                    </li>
+                    {% if user %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="logins-tab" data-bs-toggle="tab" data-bs-target="#logins" type="button" role="tab" aria-controls="logins" aria-selected="false">Logins</button>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="personTabContent">
+                    <!-- Sessions Tab -->
+                    <div class="tab-pane fade show active" id="sessions" role="tabpanel" aria-labelledby="sessions-tab">
+                        <div class="mt-3">
+                            {% if sessions %}
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Session Name</th>
+                                                <th>Location</th>
+                                                <th>Regular Schedule</th>
+                                                <th>Role</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for session in sessions %}
+                                            <tr>
+                                                <td>{{ session.session_name }}</td>
+                                                <td>{{ session.location }}</td>
+                                                <td>{{ session.regular_schedule or 'Not specified' }}</td>
+                                                <td>{{ session.role or 'Member' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-info" role="alert">
+                                    No sessions associated with this person.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Attended Tab -->
+                    <div class="tab-pane fade" id="attended" role="tabpanel" aria-labelledby="attended-tab">
+                        <div class="mt-3">
+                            <div id="attended-loading" class="text-center">
+                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                <span style="margin-left: 8px;">Loading attendance data...</span>
+                            </div>
+                            <div id="attended-content"></div>
+                        </div>
+                    </div>
+
+                    <!-- Logins Tab -->
+                    {% if user %}
+                    <div class="tab-pane fade" id="logins" role="tabpanel" aria-labelledby="logins-tab">
+                        <div class="mt-3">
+                            <div id="logins-loading" class="text-center">
+                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #f3f3f3; border-top: 2px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                <span style="margin-left: 8px;">Loading login history...</span>
+                            </div>
+                            <div id="logins-content"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+        </article>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const personId = {{ person.id }};
+    let attendedLoaded = false;
+    let loginsLoaded = false;
+
+    // Show back link if user came from admin page
+    const referer = document.referrer;
+    if (referer && (referer.includes('/admin/people') || referer.includes('/admin'))) {
+        document.getElementById('back-link-container').style.display = 'block';
+    }
+
+    // Initialize tab functionality manually since Bootstrap might not be available
+    function initTabs() {
+        const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Remove active from all tabs and panes
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabPanes.forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                });
+                
+                // Add active to clicked tab
+                this.classList.add('active');
+                
+                // Show corresponding pane
+                const targetId = this.getAttribute('data-bs-target').substring(1);
+                const targetPane = document.getElementById(targetId);
+                if (targetPane) {
+                    targetPane.classList.add('show', 'active');
+                    
+                    // Trigger custom event for data loading
+                    if (targetId === 'attended' && !attendedLoaded) {
+                        loadAttendanceData();
+                        attendedLoaded = true;
+                    } else if (targetId === 'logins' && !loginsLoaded) {
+                        loadLoginData();
+                        loginsLoaded = true;
+                    }
+                }
+            });
+        });
+    }
+
+    // Initialize tabs
+    initTabs();
+
+    function loadAttendanceData() {
+        fetch(`/api/person/${personId}/attendance`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('attended-loading').style.display = 'none';
+                
+                if (data.success && data.attendance.length > 0) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Session Name</th>
+                                        <th>Instance Date</th>
+                                        <th>Attended</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                    
+                    data.attendance.forEach(record => {
+                        html += `
+                            <tr>
+                                <td>${record.session_name}</td>
+                                <td>${record.instance_date}</td>
+                                <td>
+                                    ${record.attended ? 
+                                        '<span class="text-success">✓ Yes</span>' : 
+                                        '<span class="text-muted">✗ No</span>'
+                                    }
+                                </td>
+                            </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    document.getElementById('attended-content').innerHTML = html;
+                } else {
+                    document.getElementById('attended-content').innerHTML = 
+                        '<div class="alert alert-info" role="alert">No attendance records found.</div>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('attended-loading').style.display = 'none';
+                document.getElementById('attended-content').innerHTML = 
+                    '<div class="alert alert-danger" role="alert">Error loading attendance data.</div>';
+                console.error('Error:', error);
+            });
+    }
+
+    {% if user %}
+    function loadLoginData() {
+        fetch(`/api/person/${personId}/logins`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Login data response:', data); // Debug logging
+                document.getElementById('logins-loading').style.display = 'none';
+                
+                if (data.success && data.logins.length > 0) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Event</th>
+                                        <th>IP Address</th>
+                                        <th>User Agent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+                    
+                    data.logins.forEach(record => {
+                        const eventClass = record.event_type === 'LOGIN_SUCCESS' ? 'text-success' : 
+                                         record.event_type === 'LOGIN_FAILURE' ? 'text-danger' : 
+                                         'text-muted';
+                        html += `
+                            <tr>
+                                <td>${record.login_time}</td>
+                                <td><span class="${eventClass}">${record.event_type}</span></td>
+                                <td>${record.ip_address}</td>
+                                <td style="font-size: 0.8em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${record.user_agent}</td>
+                            </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    document.getElementById('logins-content').innerHTML = html;
+                } else {
+                    const debugInfo = data.debug ? `<br><small>Debug: ${data.debug}</small>` : '';
+                    document.getElementById('logins-content').innerHTML = 
+                        `<div class="alert alert-info" role="alert">No login history found.${debugInfo}</div>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('logins-loading').style.display = 'none';
+                document.getElementById('logins-content').innerHTML = 
+                    '<div class="alert alert-danger" role="alert">Error loading login history.</div>';
+                console.error('Error:', error);
+            });
+    }
+    {% endif %}
+});
+</script>
+
+<style>
+/* Make main headings smaller globally */
+.docs-heading {
+    font-size: 2rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.admin-indicator {
+    color: #888;
+    font-style: italic;
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
+.nav-tabs {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-color);
+    border: 1px solid transparent;
+    border-bottom-color: var(--border-color);
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: var(--hover-bg) var(--hover-bg) var(--border-color);
+    background-color: var(--hover-bg);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary-color);
+    background-color: var(--bg-color);
+    border-color: var(--border-color) var(--border-color) var(--bg-color);
+}
+
+.tab-content {
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    background-color: var(--bg-color);
+    padding: 1rem;
+}
+
+.table {
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background-color: var(--hover-bg);
+    border-top: none;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+
+.alert {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.alert-info {
+    background-color: var(--bg-color);
+    border-color: var(--primary-color, #007bff);
+    color: var(--text-color);
+}
+
+.alert-heading {
+    color: var(--text-color);
+}
+
+/* Remove any border/separator above user info section */
+#user-info {
+    border-top: none !important;
+    margin-top: 0 !important;
+    padding-top: 1rem !important;
+}
+
+.docs-section {
+    border-top: none !important;
+}
+
+.back-link {
+    display: inline-block;
+    color: var(--primary-color, #007bff);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0;
+    transition: color 0.3s ease;
+}
+
+.back-link:hover {
+    color: var(--primary-color-dark, #0056b3);
+    text-decoration: underline;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .nav-tabs .nav-link {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+    }
+}
+</style>
+{% endblock %}

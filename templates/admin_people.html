@@ -24,9 +24,8 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Email</th>
                                 <th>Location</th>
-                                <th>TheSession.org Member</th>
+                                <th>TheSession.org</th>
                                 <th>Username</th>
                                 <th>Sessions</th>
                                 <th>Instances</th>
@@ -37,13 +36,14 @@
                         <tbody>
                             {% for person in people %}
                             <tr>
-                                <td class="person-name">{{ person.name }}</td>
-                                <td class="person-email">{{ person.email }}</td>
+                                <td class="person-name">
+                                    <a href="/admin/people/{{ person.person_id }}" class="person-link">{{ person.name }}</a>
+                                </td>
                                 <td class="person-location">{{ person.location }}</td>
                                 <td class="person-thesession">
                                     {% if person.thesession_user_id %}
                                         <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
-                                            TheSession.org ({{ person.thesession_user_id }})
+                                            {{ person.thesession_user_id }}
                                         </a>
                                     {% else %}
                                         <span class="text-muted">No member</span>
@@ -127,10 +127,17 @@
     font-weight: 500;
 }
 
-.person-email {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
+.person-link {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
 }
+
+.person-link:hover {
+    text-decoration: underline;
+    color: #0056b3;
+}
+
 
 .person-location {
     font-size: 0.9rem;
@@ -196,7 +203,6 @@
         font-size: 0.85rem;
     }
     
-    .person-email,
     .person-username,
     .person-last-login {
         font-size: 0.8rem;

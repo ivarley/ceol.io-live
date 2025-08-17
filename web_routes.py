@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash, jsonify, session
+from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app
 import random
 import requests
 import bcrypt
@@ -689,10 +689,27 @@ def logout():
         # Log logout event
         log_login_event(user_id, username, 'LOGOUT', ip_address, user_agent, session_id=db_session_id)
     
+    # Clear all session data first
+    session.clear()
+    
+    # Then clear Flask-Login session
     logout_user()
-    session.clear()  # Clear all session variables
+    
+    # Set flash message after clearing the session
     flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
+    
+    # Create response with cache control headers and explicitly clear cookies
+    response = redirect(url_for('home'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    # Clear all possible session-related cookies
+    response.set_cookie('session', '', expires=0, path='/')
+    response.set_cookie('remember_token', '', expires=0, path='/')
+    response.set_cookie('user_id', '', expires=0, path='/')
+    
+    return response
 
 
 def forgot_password():
@@ -966,7 +983,19 @@ def resend_verification():
 def admin():
     # Check if user is system admin
     if not session.get('is_system_admin'):
-        return "You must be authorized to view this page.", 403
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    # Redirect to admin_people as the default tab
+    return redirect(url_for('admin_people'))
+
+
+@login_required
+def admin_sessions():
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
     
     # Get list of currently logged in users from user_session table
     conn = get_db_connection()
@@ -1022,7 +1051,8 @@ def admin():
 def admin_login_history():
     # Check if user is system admin
     if not session.get('is_system_admin'):
-        return "You must be authorized to view this page.", 403
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
     
     
     # Get pagination parameters
@@ -1141,7 +1171,8 @@ def admin_login_history():
 def admin_people():
     # Check if user is system admin
     if not session.get('is_system_admin'):
-        return "You must be authorized to view this page.", 403
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
     
     conn = get_db_connection()
     try:
@@ -1249,11 +1280,130 @@ def admin_people():
 
 
 @login_required
+def person_details(person_id):
+    """Person details page showing person info, user account, and activity data"""
+    # Check if user is system admin
+    if not session.get('is_system_admin'):
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        
+        # Get person details
+        cur.execute('''
+            SELECT person_id, first_name, last_name, email, city, country, thesession_user_id
+            FROM person
+            WHERE person_id = %s
+        ''', (person_id,))
+        
+        person_row = cur.fetchone()
+        if not person_row:
+            return "Person not found.", 404
+        
+        person_id, first_name, last_name, email, city, country, thesession_user_id = person_row
+        
+        # Format location
+        location_parts = []
+        if city:
+            location_parts.append(city)
+        if country:
+            location_parts.append(country)
+        location = ', '.join(location_parts) if location_parts else None
+        
+        person = {
+            'id': person_id,
+            'name': f"{first_name} {last_name}",
+            'email': email,
+            'location': location,
+            'thesession_user_id': thesession_user_id
+        }
+        
+        # Get user account details if exists
+        cur.execute('''
+            SELECT user_id, username, email_verified, is_system_admin, created_date
+            FROM user_account
+            WHERE person_id = %s
+        ''', (person_id,))
+        
+        user_row = cur.fetchone()
+        user = None
+        if user_row:
+            user_id, username, email_verified, is_system_admin, created_date = user_row
+            
+            # Get last login from user_session table
+            cur.execute('''
+                SELECT MAX(last_accessed) as last_login
+                FROM user_session
+                WHERE user_id = %s
+            ''', (user_id,))
+            last_login_row = cur.fetchone()
+            last_login = last_login_row[0] if last_login_row and last_login_row[0] else None
+            
+            user = {
+                'user_id': user_id,
+                'username': username,
+                'email_verified': email_verified,
+                'is_system_admin': is_system_admin,
+                'created_at': created_date,  # Keep as created_at in template for consistency
+                'last_login': last_login
+            }
+        
+        # Get sessions this person is associated with
+        cur.execute('''
+            SELECT s.name as session_name, s.city, s.state, s.country, sp.is_regular, sp.is_admin
+            FROM session_person sp
+            JOIN session s ON sp.session_id = s.session_id
+            WHERE sp.person_id = %s
+            ORDER BY s.name
+        ''', (person_id,))
+        
+        sessions = []
+        for row in cur.fetchall():
+            session_name, session_city, session_state, session_country, is_regular, is_admin = row
+            
+            # Derive role from boolean flags
+            if is_admin:
+                role = 'Admin'
+            elif is_regular:
+                role = 'Regular'
+            else:
+                role = 'Attendee'
+            
+            # Format session location
+            session_location_parts = []
+            if session_city:
+                session_location_parts.append(session_city)
+            if session_state:
+                session_location_parts.append(session_state)
+            if session_country:
+                session_location_parts.append(session_country)
+            session_location = ', '.join(session_location_parts) if session_location_parts else 'Unknown'
+            
+            sessions.append({
+                'session_name': session_name,
+                'location': session_location,
+                'regular_schedule': None,  # Would need to be added to query if available
+                'role': role
+            })
+        
+        return render_template('person_details.html', 
+                             person=person,
+                             user=user,
+                             sessions=sessions)
+        
+    finally:
+        conn.close()
+
+
+@login_required
 def session_admin(session_path):
     """Session admin page with tabbed interface"""
     # Check if user is system admin
     if not session.get('is_system_admin'):
-        return "You must be authorized to view this page.", 403
+        flash('You must be authorized to view this page.', 'error')
+        return redirect(url_for('home'))
     
     conn = get_db_connection()
     try:
