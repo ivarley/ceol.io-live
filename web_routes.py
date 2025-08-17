@@ -1388,7 +1388,7 @@ def person_details(person_id):
         
         # Get person details
         cur.execute('''
-            SELECT person_id, first_name, last_name, email, city, country, thesession_user_id
+            SELECT person_id, first_name, last_name, email, sms_number, city, country, thesession_user_id
             FROM person
             WHERE person_id = %s
         ''', (person_id,))
@@ -1397,7 +1397,7 @@ def person_details(person_id):
         if not person_row:
             return "Person not found.", 404
         
-        person_id, first_name, last_name, email, city, country, thesession_user_id = person_row
+        person_id, first_name, last_name, email, sms_number, city, country, thesession_user_id = person_row
         
         # Format location
         location_parts = []
@@ -1410,14 +1410,19 @@ def person_details(person_id):
         person = {
             'id': person_id,
             'name': f"{first_name} {last_name}",
+            'first_name': first_name,
+            'last_name': last_name,
             'email': email,
+            'sms_number': sms_number,
+            'city': city,
+            'country': country,
             'location': location,
             'thesession_user_id': thesession_user_id
         }
         
         # Get user account details if exists
         cur.execute('''
-            SELECT user_id, username, user_email, email_verified, is_system_admin, created_date
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date
             FROM user_account
             WHERE person_id = %s
         ''', (person_id,))
@@ -1425,7 +1430,7 @@ def person_details(person_id):
         user_row = cur.fetchone()
         user = None
         if user_row:
-            user_id, username, user_email, email_verified, is_system_admin, created_date = user_row
+            user_id, username, user_email, email_verified, is_system_admin, is_active, created_date = user_row
             
             # Get last login from user_session table
             cur.execute('''
@@ -1442,6 +1447,7 @@ def person_details(person_id):
                 'user_email': user_email,
                 'email_verified': email_verified,
                 'is_system_admin': is_system_admin,
+                'is_active': is_active,
                 'created_at': created_date,  # Keep as created_at in template for consistency
                 'last_login': last_login
             }

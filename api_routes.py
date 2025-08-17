@@ -1911,3 +1911,109 @@ def get_person_logins_ajax(person_id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': f'Failed to get login history: {str(e)}'}), 500
+
+
+def check_username_availability():
+    """Check if a username is available"""
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        current_user_id = data.get('current_user_id')  # To exclude current user from check
+        
+        if not username:
+            return jsonify({'available': False, 'message': 'Username cannot be empty'})
+        
+        if len(username) < 3:
+            return jsonify({'available': False, 'message': 'Username must be at least 3 characters long'})
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if username exists, excluding current user if provided
+        if current_user_id:
+            cur.execute('SELECT user_id FROM user_account WHERE username = %s AND user_id != %s', 
+                       (username, current_user_id))
+        else:
+            cur.execute('SELECT user_id FROM user_account WHERE username = %s', (username,))
+        
+        existing_user = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if existing_user:
+            return jsonify({'available': False, 'message': 'Username already taken'})
+        else:
+            return jsonify({'available': True, 'message': 'Username is available'})
+            
+    except Exception as e:
+        return jsonify({'available': False, 'message': f'Error checking username: {str(e)}'}), 500
+
+
+def update_person_details(person_id):
+    """Update person and user details"""
+    try:
+        data = request.get_json()
+        
+        if not person_id:
+            return jsonify({'success': False, 'message': 'Person ID is required'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Update person details
+        person_data = data.get('person', {})
+        if person_data:
+            save_to_history(cur, 'person', 'UPDATE', person_id, f'admin_edit')
+            cur.execute('''
+                UPDATE person 
+                SET first_name = %s, last_name = %s, email = %s, sms_number = %s,
+                    city = %s, country = %s, thesession_user_id = %s, last_modified_date = %s
+                WHERE person_id = %s
+            ''', (
+                person_data.get('first_name'),
+                person_data.get('last_name'),
+                person_data.get('email') or None,
+                person_data.get('sms_number') or None,
+                person_data.get('city') or None,
+                person_data.get('country') or None,
+                person_data.get('thesession_user_id') or None,
+                datetime.utcnow(),
+                person_id
+            ))
+        
+        # Update user details if provided
+        user_data = data.get('user', {})
+        if user_data and user_data.get('user_id'):
+            user_id = user_data.get('user_id')
+            
+            # Check if username is being changed and is available
+            username = user_data.get('username')
+            if username:
+                cur.execute('SELECT user_id FROM user_account WHERE username = %s AND user_id != %s', 
+                           (username, user_id))
+                if cur.fetchone():
+                    cur.close()
+                    conn.close()
+                    return jsonify({'success': False, 'message': 'Username already taken'}), 400
+            
+            save_to_history(cur, 'user_account', 'UPDATE', user_id, f'admin_edit')
+            cur.execute('''
+                UPDATE user_account 
+                SET username = %s, user_email = %s, is_active = %s, last_modified_date = %s
+                WHERE user_id = %s
+            ''', (
+                username,
+                user_data.get('user_email') or None,
+                user_data.get('is_active', True),
+                datetime.utcnow(),
+                user_id
+            ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Details updated successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to update details: {str(e)}'}), 500

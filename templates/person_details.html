@@ -11,13 +11,21 @@
                 <div id="back-link-container" style="display: none;">
                     <a href="/admin/people" class="back-link">← Back To Admin</a>
                 </div>
+                <div class="edit-controls">
+                    <button id="edit-btn" class="btn btn-primary">Edit</button>
+                    <div id="edit-buttons" style="display: none;">
+                        <button id="save-btn" class="btn btn-success">Save</button>
+                        <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
             </header>
             
             <!-- Person Information Section -->
             <section class="docs-section" id="person-info">
                 <div class="card">
                     <div class="card-body">
-                        <div class="row">
+                        <!-- Display Mode -->
+                        <div id="person-display" class="row">
                             <div class="col-md-6">
                                 <dl class="row">
                                     <dt class="col-sm-4">Name:</dt>
@@ -26,12 +34,18 @@
                                     <dt class="col-sm-4">Email:</dt>
                                     <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
                                     
-                                    <dt class="col-sm-4">Location:</dt>
-                                    <dd class="col-sm-8">{{ person.location or 'Not provided' }}</dd>
+                                    <dt class="col-sm-4">SMS Number:</dt>
+                                    <dd class="col-sm-8">{{ person.sms_number or 'Not provided' }}</dd>
                                 </dl>
                             </div>
                             <div class="col-md-6">
                                 <dl class="row">
+                                    <dt class="col-sm-4">Country:</dt>
+                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
+                                    
+                                    <dt class="col-sm-4">City:</dt>
+                                    <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
+                                    
                                     <dt class="col-sm-4">TheSession.org:</dt>
                                     <dd class="col-sm-8">
                                         {% if person.thesession_user_id %}
@@ -42,9 +56,48 @@
                                             <span class="text-muted">Not a member</span>
                                         {% endif %}
                                     </dd>
-                                    
                                 </dl>
                             </div>
+                        </div>
+                        
+                        <!-- Edit Mode -->
+                        <div id="person-edit" class="row" style="display: none;">
+                            <form id="person-form">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="first_name" class="form-label">First Name</label>
+                                            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ person.first_name or '' }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="last_name" class="form-label">Last Name</label>
+                                            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ person.last_name or '' }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="email" class="form-label">Email</label>
+                                            <input type="email" class="form-control" id="email" name="email" value="{{ person.email or '' }}">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="sms_number" class="form-label">SMS Number</label>
+                                            <input type="text" class="form-control" id="sms_number" name="sms_number" value="{{ person.sms_number or '' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="country" class="form-label">Country</label>
+                                            <input type="text" class="form-control" id="country" name="country" value="{{ person.country or '' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="city" class="form-label">City</label>
+                                            <input type="text" class="form-control" id="city" name="city" value="{{ person.city or '' }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="thesession_user_id" class="form-label">TheSession User ID</label>
+                                            <input type="number" class="form-control" id="thesession_user_id" name="thesession_user_id" value="{{ person.thesession_user_id or '' }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -56,7 +109,8 @@
                 <div class="card">
                     <div class="card-body">
                         {% if user %}
-                            <div class="row">
+                            <!-- Display Mode -->
+                            <div id="user-display" class="row">
                                 <div class="col-md-6">
                                     <dl class="row">
                                         <dt class="col-sm-4">Username:</dt>
@@ -82,6 +136,15 @@
                                 </div>
                                 <div class="col-md-6">
                                     <dl class="row">
+                                        <dt class="col-sm-4">Active:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if user.is_active %}
+                                                <span class="text-success">✓ Active</span>
+                                            {% else %}
+                                                <span class="text-danger">✗ Inactive</span>
+                                            {% endif %}
+                                        </dd>
+                                        
                                         <dt class="col-sm-4">Created:</dt>
                                         <dd class="col-sm-8">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Unknown' }}</dd>
                                         
@@ -89,6 +152,35 @@
                                         <dd class="col-sm-8">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</dd>
                                     </dl>
                                 </div>
+                            </div>
+                            
+                            <!-- Edit Mode -->
+                            <div id="user-edit" class="row" style="display: none;">
+                                <form id="user-form">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="username" class="form-label">Username</label>
+                                                <input type="text" class="form-control" id="username" name="username" value="{{ user.username or '' }}" required>
+                                                <div id="username-warning" class="text-warning" style="display: none;"></div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="user_email" class="form-label">Email</label>
+                                                <input type="email" class="form-control" id="user_email" name="user_email" value="{{ user.user_email or '' }}">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if user.is_active else '' }}>
+                                                    <label class="form-check-label" for="is_active">
+                                                        User Account Active
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
                             </div>
                         {% else %}
                             <div class="alert alert-info" role="alert">
@@ -99,6 +191,12 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Bottom Edit Buttons -->
+            <div id="bottom-edit-buttons" class="mt-4" style="display: none;">
+                <button id="bottom-save-btn" class="btn btn-success">Save</button>
+                <button id="bottom-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
 
             <!-- Tabbed Interface Section -->
             <section class="docs-section" id="person-data">
@@ -189,11 +287,200 @@ document.addEventListener('DOMContentLoaded', function() {
     const personId = {{ person.id }};
     let attendedLoaded = false;
     let loginsLoaded = false;
+    let editMode = false;
+    let originalUsername = '';
 
     // Show back link if user came from admin page
     const referer = document.referrer;
     if (referer && (referer.includes('/admin/people') || referer.includes('/admin'))) {
         document.getElementById('back-link-container').style.display = 'block';
+    }
+
+    // Edit functionality
+    const editBtn = document.getElementById('edit-btn');
+    const editButtons = document.getElementById('edit-buttons');
+    const saveBtn = document.getElementById('save-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const bottomEditButtons = document.getElementById('bottom-edit-buttons');
+    const bottomSaveBtn = document.getElementById('bottom-save-btn');
+    const bottomCancelBtn = document.getElementById('bottom-cancel-btn');
+    const personDisplay = document.getElementById('person-display');
+    const personEdit = document.getElementById('person-edit');
+    const userDisplay = document.getElementById('user-display');
+    const userEdit = document.getElementById('user-edit');
+    const personData = document.getElementById('person-data');
+    const usernameInput = document.getElementById('username');
+    const usernameWarning = document.getElementById('username-warning');
+
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            toggleEditMode(true);
+        });
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            toggleEditMode(false);
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            saveChanges();
+        });
+    }
+
+    if (bottomSaveBtn) {
+        bottomSaveBtn.addEventListener('click', function() {
+            saveChanges();
+        });
+    }
+
+    if (bottomCancelBtn) {
+        bottomCancelBtn.addEventListener('click', function() {
+            toggleEditMode(false);
+        });
+    }
+
+    // Username validation
+    if (usernameInput) {
+        originalUsername = usernameInput.value;
+        usernameInput.addEventListener('blur', function() {
+            if (this.value !== originalUsername && this.value.trim() !== '') {
+                checkUsernameAvailability(this.value.trim());
+            } else {
+                hideUsernameWarning();
+            }
+        });
+    }
+
+    function toggleEditMode(isEdit) {
+        editMode = isEdit;
+        
+        if (isEdit) {
+            editBtn.style.display = 'none';
+            editButtons.style.display = 'block';
+            personDisplay.style.display = 'none';
+            personEdit.style.display = 'block';
+            if (userDisplay && userEdit) {
+                userDisplay.style.display = 'none';
+                userEdit.style.display = 'block';
+            }
+            if (bottomEditButtons) {
+                bottomEditButtons.style.display = 'block';
+            }
+            personData.style.display = 'none'; // Hide tabbed interface
+        } else {
+            editBtn.style.display = 'block';
+            editButtons.style.display = 'none';
+            personDisplay.style.display = 'block';
+            personEdit.style.display = 'none';
+            if (userDisplay && userEdit) {
+                userDisplay.style.display = 'block';
+                userEdit.style.display = 'none';
+            }
+            if (bottomEditButtons) {
+                bottomEditButtons.style.display = 'none';
+            }
+            personData.style.display = 'block'; // Show tabbed interface
+            hideUsernameWarning();
+        }
+    }
+
+    function checkUsernameAvailability(username) {
+        const currentUserId = {{ user.user_id if user else 'null' }};
+        
+        fetch('/api/check-username-availability', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                current_user_id: currentUserId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.available) {
+                showUsernameWarning(data.message);
+            } else {
+                hideUsernameWarning();
+            }
+        })
+        .catch(error => {
+            console.error('Error checking username:', error);
+        });
+    }
+
+    function showUsernameWarning(message) {
+        usernameWarning.textContent = message;
+        usernameWarning.style.display = 'block';
+    }
+
+    function hideUsernameWarning() {
+        usernameWarning.style.display = 'none';
+    }
+
+    function saveChanges() {
+        // Validate username if changed
+        const currentUsername = usernameInput ? usernameInput.value.trim() : originalUsername;
+        if (currentUsername !== originalUsername && usernameWarning.style.display === 'block') {
+            alert('Please fix the username issue before saving.');
+            return;
+        }
+
+        const personForm = document.getElementById('person-form');
+        const userForm = document.getElementById('user-form');
+        
+        const formData = {
+            person_id: personId,
+            person: {},
+            user: {}
+        };
+
+        // Collect person data
+        if (personForm) {
+            const personInputs = personForm.querySelectorAll('input');
+            personInputs.forEach(input => {
+                formData.person[input.name] = input.value.trim() || null;
+            });
+        }
+
+        // Collect user data
+        if (userForm) {
+            const userInputs = userForm.querySelectorAll('input');
+            userInputs.forEach(input => {
+                if (input.type === 'checkbox') {
+                    formData.user[input.name] = input.checked;
+                } else {
+                    formData.user[input.name] = input.value.trim() || null;
+                }
+            });
+            formData.user.user_id = {{ user.user_id if user else 'null' }};
+        }
+
+        // Send update request
+        fetch(`/api/person/${personId}/update`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload the page to show updated data
+                window.location.reload();
+            } else {
+                alert('Error saving changes: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving changes:', error);
+            alert('Error saving changes. Please try again.');
+        });
     }
 
     // Initialize tab functionality manually since Bootstrap might not be available
@@ -448,6 +735,122 @@ document.addEventListener('DOMContentLoaded', function() {
 .back-link:hover {
     color: var(--primary);
     text-decoration: underline;
+}
+
+.edit-controls {
+    margin-top: 1rem;
+}
+
+.btn {
+    padding: 0.375rem 0.75rem;
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #218838;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #5a6268;
+}
+
+.form-label {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-check {
+    display: block;
+    min-height: 1.5rem;
+    padding-left: 1.5em;
+    margin-bottom: 0.125rem;
+}
+
+.form-check-input {
+    width: 1em;
+    height: 1em;
+    margin-top: 0.25em;
+    margin-left: -1.5em;
+    vertical-align: top;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25em;
+}
+
+.form-check-input:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.form-check-label {
+    color: var(--text-color);
+}
+
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.mt-4 {
+    margin-top: 1.5rem;
+}
+
+#bottom-edit-buttons {
+    margin-top: 1.5rem;
 }
 
 @keyframes spin {
