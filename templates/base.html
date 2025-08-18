@@ -148,11 +148,10 @@
                     </button>
                     <div class="hamburger-dropdown" id="hamburgerDropdown">
                         {% if current_user.is_authenticated %}
-                            <span class="hamburger-item disabled">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</span>
+                            <a href="/me" class="hamburger-item">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</a>
                             {% if current_user.is_authenticated and current_user.is_system_admin %}
                             <a href="/admin" class="hamburger-item">Admin</a>
                             {% endif %}
-                            <a href="/change-password" class="hamburger-item">Change Password</a>
                             <a href="/logout" class="hamburger-item">Logout</a>
                         {% else %}
                             <a href="/login" class="hamburger-item">Login</a>

@@ -1,16 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Person Details - {{ person.name }}{% endblock %}
+{% block title %}{% if is_user_profile %}Profile - {{ person.name }}{% else %}Person Details - {{ person.name }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
             <header class="docs-header">
-                <h1 class="docs-heading">Person Details: {{ person.name }}</h1>
+                <h1 class="docs-heading">{% if is_user_profile %}Profile: {{ person.name }}{% else %}Person Details: {{ person.name }}{% endif %}</h1>
+                {% if not is_user_profile %}
                 <div id="back-link-container" style="display: none;">
                     <a href="/admin/people" class="back-link">← Back To Admin</a>
                 </div>
+                {% endif %}
                 <div class="edit-controls">
                     <button id="edit-btn" class="btn btn-primary">Edit</button>
                     <div id="edit-buttons" style="display: none;">
@@ -161,6 +163,13 @@
                                 </div>
                             </div>
                             
+                            {% if is_user_profile %}
+                            <!-- Change Password Button for User Profile -->
+                            <div class="mt-3">
+                                <a href="/change-password" class="btn btn-outline-primary">Change My Password</a>
+                            </div>
+                            {% endif %}
+                            
                             <!-- Edit Mode -->
                             <div id="user-edit" class="row" style="display: none;">
                                 <form id="user-form">
@@ -176,6 +185,7 @@
                                                 <input type="email" class="form-control" id="user_email" name="user_email" value="{{ user.user_email or '' }}">
                                             </div>
                                         </div>
+                                        {% if not is_user_profile %}
                                         <div class="col-md-6">
                                             <div class="mb-3">
                                                 <div class="form-check">
@@ -186,6 +196,7 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        {% endif %}
                                     </div>
                                 </form>
                             </div>
@@ -212,10 +223,10 @@
                 <!-- Tab Navigation -->
                 <ul class="nav nav-tabs" id="personTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab" aria-controls="sessions" aria-selected="true">Sessions</button>
+                        <button class="nav-link active" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab" aria-controls="sessions" aria-selected="true">{% if is_user_profile %}My sessions{% else %}Sessions{% endif %}</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">Attended</button>
+                        <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">{% if is_user_profile %}I've Attended{% else %}Attended{% endif %}</button>
                     </li>
                     {% if user %}
                     <li class="nav-item" role="presentation">
@@ -230,6 +241,12 @@
                     <div class="tab-pane fade show active" id="sessions" role="tabpanel" aria-labelledby="sessions-tab">
                         <div class="mt-3">
                             {% if sessions %}
+                                <div class="mb-3">
+                                    <select id="session-filter" class="form-select">
+                                        <option value="all">All Sessions</option>
+                                        <option value="regular">Regular Sessions Only</option>
+                                    </select>
+                                </div>
                                 <div class="table-responsive">
                                     <table class="table table-striped">
                                         <thead>
@@ -252,16 +269,28 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                {% if is_user_profile %}
+                                <div class="mt-3">
+                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add another session I've been to</a>
+                                </div>
+                                {% else %}
                                 <div class="mt-3">
                                     <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
                                 </div>
+                                {% endif %}
                             {% else %}
+                                {% if is_user_profile %}
+                                <div class="alert alert-info" role="alert">
+                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">add your first session</a>
+                                </div>
+                                {% else %}
                                 <div class="alert alert-info" role="alert">
                                     No sessions associated with this person.
                                 </div>
                                 <div class="mt-3">
                                     <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
                                 </div>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </div>
@@ -299,7 +328,7 @@
 <div id="addToSessionModal" class="modal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Add {{ person.name }} to a Session</h3>
+            <h3>{% if is_user_profile %}Add me to a Session{% else %}Add {{ person.name }} to a Session{% endif %}</h3>
             <span class="modal-close">&times;</span>
         </div>
         <div class="modal-body">
@@ -310,7 +339,7 @@
                 </div>
             </div>
             <div class="role-section mb-3">
-                <label class="form-label">Add as:</label>
+                <label class="form-label">{% if is_user_profile %}Add me as:{% else %}Add as:{% endif %}</label>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="user-role" id="role-regular" value="regular" checked>
                     <label class="form-check-label" for="role-regular">Regular</label>
@@ -583,6 +612,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize tabs
     initTabs();
+
+    // Session filter functionality
+    const sessionFilter = document.getElementById('session-filter');
+    if (sessionFilter) {
+        sessionFilter.addEventListener('change', function() {
+            filterSessions();
+        });
+    }
+
+    function filterSessions() {
+        const filterValue = sessionFilter.value;
+        const sessionRows = document.querySelectorAll('#sessions tbody tr');
+        
+        sessionRows.forEach(row => {
+            const roleCell = row.querySelector('td:nth-child(4)'); // Role column
+            if (roleCell) {
+                const role = roleCell.textContent.trim();
+                if (filterValue === 'all') {
+                    row.style.display = '';
+                } else if (filterValue === 'regular' && role === 'Regular') {
+                    row.style.display = '';
+                } else if (filterValue === 'regular') {
+                    row.style.display = 'none';
+                }
+            }
+        });
+    }
 
     function loadAttendanceData() {
         fetch(`/api/person/${personId}/attendance`)
@@ -1120,6 +1176,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .form-check-label {
     color: var(--text-color);
+}
+
+.form-select {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    appearance: none;
+    max-width: 200px;
+}
+
+.form-select:focus {
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 .mb-3 {

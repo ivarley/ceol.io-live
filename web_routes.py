@@ -1379,12 +1379,19 @@ def admin_test_links():
 
 
 @login_required
-def person_details(person_id):
+def person_details(person_id=None):
     """Person details page showing person info, user account, and activity data"""
-    # Check if user is system admin
-    if not session.get('is_system_admin'):
-        flash('You must be authorized to view this page.', 'error')
-        return redirect(url_for('home'))
+    # Determine if this is a user profile view or admin view
+    is_user_profile = person_id is None
+    
+    if is_user_profile:
+        # User profile view - use current user's person_id
+        person_id = current_user.person_id
+    else:
+        # Admin view - check if user is system admin
+        if not session.get('is_system_admin'):
+            flash('You must be authorized to view this page.', 'error')
+            return redirect(url_for('home'))
     
     conn = get_db_connection()
     try:
@@ -1500,10 +1507,12 @@ def person_details(person_id):
         return render_template('person_details.html', 
                              person=person,
                              user=user,
-                             sessions=sessions)
+                             sessions=sessions,
+                             is_user_profile=is_user_profile)
         
     finally:
         conn.close()
+
 
 
 def _get_session_data(session_path):
