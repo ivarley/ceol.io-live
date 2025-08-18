@@ -2274,7 +2274,7 @@ Person Details:
 You can review and modify this person's role in the session admin interface.
 
 Best regards,
-The Session Management System"""
+The Ceol.io Session Management System"""
                 
                 try:
                     send_email_via_sendgrid(admin_email, subject, body)
