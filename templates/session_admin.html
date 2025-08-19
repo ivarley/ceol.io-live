@@ -729,8 +729,62 @@ function displayLogs(logs) {
 }
 
 function saveSessionDetails() {
-    // TODO: Implement AJAX saving of session details
-    alert('Session details save functionality coming soon...');
+    const sessionPath = '{{ session_path }}';
+    
+    // Collect form data
+    const formData = {
+        name: document.getElementById('session-name').value.trim(),
+        path: document.getElementById('session-path').value.trim(),
+        location_name: document.getElementById('location-name').value.trim(),
+        location_street: document.getElementById('location-street').value.trim(),
+        city: document.getElementById('city').value.trim(),
+        state: document.getElementById('state').value.trim(),
+        country: document.getElementById('country').value.trim(),
+        location_website: document.getElementById('location-website').value.trim(),
+        location_phone: document.getElementById('location-phone').value.trim(),
+        initiation_date: document.getElementById('initiation-date').value,
+        unlisted_address: document.getElementById('unlisted-address').checked,
+        recurrence: document.getElementById('recurrence').value.trim(),
+        comments: document.getElementById('comments').value.trim()
+    };
+    
+    // Include termination date if it exists
+    const terminationDateField = document.getElementById('termination-date');
+    if (terminationDateField) {
+        formData.termination_date = terminationDateField.value;
+    }
+    
+    // Basic validation
+    if (!formData.name) {
+        showMessage('Session name is required', 'error');
+        return;
+    }
+    
+    if (!formData.path) {
+        showMessage('URL path is required', 'error');
+        return;
+    }
+    
+    // Make API call
+    fetch(`/api/sessions/${sessionPath}/admin-update`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(data.message || 'Session details saved successfully', 'success');
+        } else {
+            showMessage(data.error || 'Failed to save session details', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving session details:', error);
+        showMessage('An error occurred while saving session details', 'error');
+    });
 }
 
 function setTerminationDate(terminationDate) {

@@ -51,6 +51,44 @@
     </script>
 
     <style>
+        /* Ephemeral Flash Message Styles */
+        .message {
+            position: fixed;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 6px;
+            z-index: 1100;
+            min-width: 300px;
+            text-align: center;
+            box-shadow: 0 4px 12px var(--dropdown-shadow);
+            transition: top 0.3s ease-in-out;
+        }
+        .message.success {
+            background-color: var(--success-bg, #d4edda);
+            border: 1px solid var(--success-border, #c3e6cb);
+            color: var(--success-text, #155724);
+        }
+        .message.error {
+            background-color: var(--error-bg, #f8d7da);
+            border: 1px solid var(--error-border, #f5c6cb);
+            color: var(--error-text, #721c24);
+        }
+        .message.info {
+            background-color: var(--info-bg, #d1ecf1);
+            border: 1px solid var(--info-border, #bee5eb);
+            color: var(--info-text, #0c5460);
+        }
+        .message.warning {
+            background-color: var(--warning-bg, #fff3cd);
+            border: 1px solid var(--warning-border, #ffeaa7);
+            color: var(--warning-text, #856404);
+        }
+        .message.show {
+            top: 20px;
+        }
+
         /* Hamburger Menu Styles */
         .hamburger-menu {
             position: relative;
@@ -237,7 +275,80 @@ document.addEventListener('DOMContentLoaded', function() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     updateDarkModeText(savedTheme);
     updateLogo(savedTheme);
+    
+    // Show any server-side flash messages as ephemeral messages
+    showServerFlashMessages();
 });
+
+// Ephemeral Flash Message System
+function showMessage(message, type = 'success') {
+    const container = getOrCreateMessageContainer();
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+    messageDiv.textContent = message;
+    
+    container.innerHTML = '';
+    container.appendChild(messageDiv);
+    
+    // Trigger animation by adding show class after a brief delay
+    setTimeout(() => {
+        messageDiv.classList.add('show');
+    }, 10);
+    
+    // Auto-hide message after 3 seconds
+    setTimeout(() => {
+        messageDiv.classList.remove('show');
+        // Remove from DOM after animation completes
+        setTimeout(() => {
+            if (container.contains(messageDiv)) {
+                container.removeChild(messageDiv);
+            }
+        }, 300);
+    }, 3000);
+}
+
+function getOrCreateMessageContainer() {
+    let container = document.getElementById('message-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'message-container';
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.zIndex = '1100';
+        container.style.pointerEvents = 'none';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function showServerFlashMessages() {
+    // Find only flash-type alerts that should be converted to ephemeral messages
+    // Only convert alerts that are dismissible (typically flash messages) 
+    // and don't contain alert-heading (which are usually permanent info boxes)
+    const alerts = document.querySelectorAll('.alert.alert-dismissible[role="alert"]');
+    alerts.forEach(alert => {
+        // Skip alerts with alert-heading as they're usually permanent info boxes
+        if (alert.querySelector('.alert-heading')) {
+            return;
+        }
+        
+        const message = alert.textContent.replace('×', '').trim();
+        let type = 'info';
+        
+        if (alert.classList.contains('alert-success')) type = 'success';
+        else if (alert.classList.contains('alert-danger')) type = 'error';
+        else if (alert.classList.contains('alert-warning')) type = 'warning';
+        else if (alert.classList.contains('alert-info')) type = 'info';
+        
+        // Hide the original alert
+        alert.style.display = 'none';
+        
+        // Show as ephemeral message
+        showMessage(message, type);
+    });
+}
 </script>
 
 {% block extra_js %}{% endblock %}

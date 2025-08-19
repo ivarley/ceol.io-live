@@ -4,32 +4,6 @@
 
 {% block extra_css %}
 <style>
-        .message {
-            position: fixed;
-            top: -60px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 15px 25px;
-            border-radius: 6px;
-            z-index: 1100;
-            min-width: 300px;
-            text-align: center;
-            box-shadow: 0 4px 12px var(--dropdown-shadow);
-            transition: top 0.3s ease-in-out;
-        }
-        .message.success {
-            background-color: var(--success-bg, #d4edda);
-            border: 1px solid var(--success-border, #c3e6cb);
-            color: var(--success-text, #155724);
-        }
-        .message.error {
-            background-color: var(--error-bg, #f8d7da);
-            border: 1px solid var(--error-border, #f5c6cb);
-            color: var(--error-text, #721c24);
-        }
-        .message.show {
-            top: 20px;
-        }
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -242,7 +216,7 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
-    <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<span class="add-link" id="edit-session-btn">Edit</span><a href="/admin/sessions/{{ session.path }}" class="add-link" style="margin-left: 20px;">Admin</a>{% endif %}</h1>
+    <h1 class="session-title-heading">{{ session.name }}{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
     
     <div class="session-details">
         {% if session.location_name and session.location_name != session.name %}
@@ -382,98 +356,6 @@
         </div>
     </div>
 
-    <!-- Edit Session Modal -->
-    <div id="edit-session-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h3>Edit Session Details</h3>
-            </div>
-            <div class="modal-body">
-                <form id="edit-session-form">
-                    <div style="display: grid; gap: 16px;">
-                        <div>
-                            <label for="edit-name">Session Name:</label>
-                            <input type="text" id="edit-name" name="name" required value="{{ session.name }}">
-                        </div>
-                        
-                        <div>
-                            <label for="edit-path">Path (URL identifier):</label>
-                            <input type="text" id="edit-path" name="path" required value="{{ session.path }}">
-                        </div>
-                        
-                        <div>
-                            <label for="edit-location-name">Location Name:</label>
-                            <input type="text" id="edit-location-name" name="location_name" value="{{ session.location_name or '' }}">
-                        </div>
-                        
-                        <div>
-                            <label for="edit-location-website">Location Website:</label>
-                            <input type="text" id="edit-location-website" name="location_website" placeholder="https://" value="{{ session.location_website or '' }}">
-                        </div>
-                        
-                        <div>
-                            <label for="edit-location-phone">Location Phone:</label>
-                            <input type="text" id="edit-location-phone" name="location_phone" value="{{ session.location_phone or '' }}">
-                        </div>
-                        
-                        <div>
-                            <label for="edit-location-street">Street Address:</label>
-                            <input type="text" id="edit-location-street" name="location_street" value="{{ session.location_street or '' }}">
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-                            <div>
-                                <label for="edit-city">City:</label>
-                                <input type="text" id="edit-city" name="city" required value="{{ session.city or '' }}">
-                            </div>
-                            <div>
-                                <label for="edit-state">State:</label>
-                                <input type="text" id="edit-state" name="state" required value="{{ session.state or '' }}">
-                            </div>
-                            <div>
-                                <label for="edit-country">Country:</label>
-                                <input type="text" id="edit-country" name="country" required value="{{ session.country or '' }}">
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label style="display: flex; align-items: center; font-weight: normal;">
-                                <input type="checkbox" id="edit-unlisted-address" name="unlisted_address" style="margin-right: 8px; width: auto;" {{ 'checked' if session.unlisted_address }}>
-                                Unlisted address
-                            </label>
-                            <div style="font-size: 12px; color: var(--disabled-text); font-style: italic; margin-top: 4px;">Check this if you only want logged in members of your session to see the address</div>
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div>
-                                <label for="edit-initiation-date">Start Date:</label>
-                                <input type="date" id="edit-initiation-date" name="initiation_date" value="{{ session.initiation_date.strftime('%Y-%m-%d') if session.initiation_date else '' }}">
-                            </div>
-                            <div>
-                                <label for="edit-termination-date">End Date:</label>
-                                <input type="date" id="edit-termination-date" name="termination_date" value="{{ session.termination_date.strftime('%Y-%m-%d') if session.termination_date else '' }}">
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label for="edit-recurrence">Recurrence:</label>
-                            <input type="text" id="edit-recurrence" name="recurrence" placeholder="e.g. Thursdays at 7, Monthly on Sundays at 4pm" value="{{ session.recurrence or '' }}">
-                            <div style="font-size: 12px; color: var(--disabled-text); font-style: italic; margin-top: 4px;">e.g. Thursdays at 7, Monthly on Sundays at 4pm</div>
-                        </div>
-                        
-                        <div>
-                            <label for="edit-comments">Comments:</label>
-                            <textarea id="edit-comments" name="comments" rows="3" style="resize: vertical;">{{ session.comments or '' }}</textarea>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-secondary" id="edit-session-cancel-btn">Cancel</button>
-                <button type="button" class="btn-primary" id="edit-session-save-btn">Save Changes</button>
-            </div>
-        </div>
-    </div>
 
 <!-- end landing page -->
 </div>
@@ -498,31 +380,6 @@
         {% endif %}
     ];
     
-    function showMessage(message, type = 'success') {
-        const container = document.getElementById('message-container');
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
-        
-        container.innerHTML = '';
-        container.appendChild(messageDiv);
-        
-        // Trigger animation by adding show class after a brief delay
-        setTimeout(() => {
-            messageDiv.classList.add('show');
-        }, 10);
-        
-        // Auto-hide message after 3 seconds
-        setTimeout(() => {
-            messageDiv.classList.remove('show');
-            // Remove from DOM after animation completes
-            setTimeout(() => {
-                if (container.contains(messageDiv)) {
-                    container.removeChild(messageDiv);
-                }
-            }, 300);
-        }, 3000);
-    }
     
     function calculateNextSessionDate() {
         if (recentDates.length === 0) {
@@ -675,79 +532,12 @@
         });
     }
     
-    // Edit Session Modal Functions
-    function showEditSessionModal() {
-        const modal = document.getElementById('edit-session-modal');
-        modal.style.display = 'flex';
-        document.getElementById('edit-name').focus();
-    }
-    
-    function hideEditSessionModal() {
-        const modal = document.getElementById('edit-session-modal');
-        modal.style.display = 'none';
-    }
-    
-    function saveSessionChanges() {
-        const form = document.getElementById('edit-session-form');
-        const formData = new FormData(form);
-        
-        // Convert FormData to regular object
-        const data = {};
-        for (let [key, value] of formData.entries()) {
-            if (key === 'unlisted_address') {
-                data[key] = document.getElementById('edit-unlisted-address').checked;
-            } else {
-                data[key] = value.trim();
-            }
-        }
-        
-        // Basic validation
-        if (!data.name) {
-            showMessage('Session name is required', 'error');
-            return;
-        }
-        if (!data.path) {
-            showMessage('Path is required', 'error');
-            return;
-        }
-        if (!data.city || !data.state || !data.country) {
-            showMessage('City, state, and country are required', 'error');
-            return;
-        }
-        
-        // Call API to update the session
-        fetch(`/api/sessions/${sessionPath}/update`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showMessage(result.message);
-                hideEditSessionModal();
-                // Reload the page to reflect changes
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            } else {
-                showMessage(result.message, 'error');
-            }
-        })
-        .catch(error => {
-            showMessage('Failed to update session', 'error');
-            console.error('Error:', error);
-        });
-    }
 
     
     // Close modal on escape key
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             hideAddSessionModal();
-            hideEditSessionModal();
         }
     });
     
@@ -755,12 +545,6 @@
     document.getElementById('add-session-instance-modal').addEventListener('click', (event) => {
         if (event.target === event.currentTarget) {
             hideAddSessionModal();
-        }
-    });
-    
-    document.getElementById('edit-session-modal').addEventListener('click', (event) => {
-        if (event.target === event.currentTarget) {
-            hideEditSessionModal();
         }
     });
     
@@ -815,14 +599,14 @@
         document.getElementById('add-session-cancel-btn').addEventListener('click', hideAddSessionModal);
         document.getElementById('add-session-confirm-btn').addEventListener('click', addSessionInstance);
         
-        document.getElementById('edit-session-btn').addEventListener('click', showEditSessionModal);
-        document.getElementById('edit-session-cancel-btn').addEventListener('click', hideEditSessionModal);
-        document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionChanges);
         
-        // Handle enter key in date input
+        // Handle enter key in date input (only for add session instance modal)
         document.getElementById('session-date-input').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                addSessionInstance();
+                const addModal = document.getElementById('add-session-instance-modal');
+                if (addModal.style.display === 'flex') {
+                    addSessionInstance();
+                }
             }
         });
         

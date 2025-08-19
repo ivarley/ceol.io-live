@@ -8,6 +8,87 @@ from auth import User
 from email_utils import send_email_via_sendgrid
 
 
+@login_required
+def update_session_ajax(session_path):
+    """Update session details from admin page"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'})
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get current session details for history tracking
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Save to history before making changes
+        user_id = session.get('user_id')
+        save_to_history(cur, 'session', 'UPDATE', session_id, user_id)
+        
+        # Prepare the update query
+        update_fields = []
+        update_values = []
+        
+        # Map form fields to database columns
+        field_mapping = {
+            'name': 'name',
+            'path': 'path',
+            'location_name': 'location_name',
+            'location_street': 'location_street',
+            'city': 'city',
+            'state': 'state',
+            'country': 'country',
+            'location_website': 'location_website',
+            'location_phone': 'location_phone',
+            'initiation_date': 'initiation_date',
+            'termination_date': 'termination_date',
+            'unlisted_address': 'unlisted_address',
+            'recurrence': 'recurrence',
+            'comments': 'comments'
+        }
+        
+        # Build update query dynamically based on provided fields
+        for form_field, db_field in field_mapping.items():
+            if form_field in data:
+                value = data[form_field]
+                # Handle empty strings and convert them to NULL for appropriate fields
+                if value == '' and form_field in ['location_street', 'location_website', 'location_phone', 'initiation_date', 'termination_date', 'recurrence', 'comments']:
+                    value = None
+                elif form_field == 'unlisted_address':
+                    value = bool(value)
+                
+                update_fields.append(f"{db_field} = %s")
+                update_values.append(value)
+        
+        if not update_fields:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'error': 'No valid fields to update'})
+        
+        # Execute the update
+        update_query = f"UPDATE session SET {', '.join(update_fields)} WHERE path = %s"
+        update_values.append(session_path)
+        
+        cur.execute(update_query, update_values)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Session details updated successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Error updating session: {str(e)}'})
+
+
 def sessions_data():
     try:
         conn = get_db_connection()
@@ -332,88 +413,6 @@ def add_session_instance_ajax(session_path):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Failed to create session instance: {str(e)}'})
 
-
-def update_session_ajax(session_path):
-    name = request.json.get('name', '').strip()
-    path = request.json.get('path', '').strip()
-    location_name = request.json.get('location_name', '').strip() if request.json.get('location_name') else None
-    location_website = request.json.get('location_website', '').strip() if request.json.get('location_website') else None
-    location_phone = request.json.get('location_phone', '').strip() if request.json.get('location_phone') else None
-    location_street = request.json.get('location_street', '').strip() if request.json.get('location_street') else None
-    city = request.json.get('city', '').strip()
-    state = request.json.get('state', '').strip()
-    country = request.json.get('country', '').strip()
-    comments = request.json.get('comments', '').strip() if request.json.get('comments') else None
-    unlisted_address = request.json.get('unlisted_address', False)
-    initiation_date = request.json.get('initiation_date', '').strip() if request.json.get('initiation_date') else None
-    termination_date = request.json.get('termination_date', '').strip() if request.json.get('termination_date') else None
-    recurrence = request.json.get('recurrence', '').strip() if request.json.get('recurrence') else None
-    
-    # Validation
-    if not name:
-        return jsonify({'success': False, 'message': 'Session name is required'})
-    if not path:
-        return jsonify({'success': False, 'message': 'Path is required'})
-    if not city or not state or not country:
-        return jsonify({'success': False, 'message': 'City, state, and country are required'})
-    
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Get the session_id for the current path
-        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
-        session_result = cur.fetchone()
-        if not session_result:
-            cur.close()
-            conn.close()
-            return jsonify({'success': False, 'message': 'Session not found'})
-        
-        session_id = session_result[0]
-        
-        # Check if the new path is already taken by another session
-        if path != session_path:
-            cur.execute('SELECT session_id FROM session WHERE path = %s AND session_id != %s', (path, session_id))
-            existing_path = cur.fetchone()
-            if existing_path:
-                cur.close()
-                conn.close()
-                return jsonify({'success': False, 'message': f'Path "{path}" is already taken by another session'})
-        
-        # Save current record to history before updating
-        save_to_history(cur, 'session', 'update', session_id)
-        
-        # Update the session
-        cur.execute('''
-            UPDATE session SET 
-                name = %s, 
-                path = %s, 
-                location_name = %s, 
-                location_website = %s, 
-                location_phone = %s, 
-                location_street = %s,
-                city = %s, 
-                state = %s, 
-                country = %s, 
-                comments = %s, 
-                unlisted_address = %s, 
-                initiation_date = %s, 
-                termination_date = %s, 
-                recurrence = %s,
-                last_modified_date = CURRENT_TIMESTAMP
-            WHERE session_id = %s
-        ''', (name, path, location_name, location_website, location_phone, location_street,
-              city, state, country, comments, unlisted_address, initiation_date, 
-              termination_date, recurrence, session_id))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        return jsonify({'success': True, 'message': 'Session updated successfully!'})
-    
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Failed to update session: {str(e)}'})
 
 
 def update_session_instance_ajax(session_path, date):

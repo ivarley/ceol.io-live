@@ -377,13 +377,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('back-link-container').style.display = 'block';
     }
 
-    // Check for flash messages from sessionStorage
-    const flashMessage = sessionStorage.getItem('flashMessage');
-    const flashType = sessionStorage.getItem('flashType');
-    if (flashMessage) {
-        showFlashMessage(flashMessage, flashType);
-        sessionStorage.removeItem('flashMessage');
-        sessionStorage.removeItem('flashType');
+    // Check for saved flash messages from sessionStorage
+    const savedMessage = sessionStorage.getItem('personSavedMessage');
+    if (savedMessage) {
+        showMessage(savedMessage, 'success');
+        sessionStorage.removeItem('personSavedMessage');
     }
 
     // Edit functionality
@@ -561,15 +559,17 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Store success message for display after reload
+                sessionStorage.setItem('personSavedMessage', data.message);
                 // Reload the page to show updated data
                 window.location.reload();
             } else {
-                alert('Error saving changes: ' + data.message);
+                showMessage('Error saving changes: ' + data.message, 'error');
             }
         })
         .catch(error => {
             console.error('Error saving changes:', error);
-            alert('Error saving changes. Please try again.');
+            showMessage('Error saving changes. Please try again.', 'error');
         });
     }
 
@@ -903,18 +903,17 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Store success message for display after reload
-                    sessionStorage.setItem('flashMessage', data.message);
-                    sessionStorage.setItem('flashType', 'success');
                     closeSessionModal();
+                    // Store success message for display after reload
+                    sessionStorage.setItem('personSavedMessage', data.message);
                     // Reload the page to show updated sessions list
                     window.location.reload();
                 } else {
-                    showFlashMessage('Error: ' + data.message, 'error');
+                    showMessage('Error: ' + data.message, 'error');
                 }
             })
             .catch(error => {
-                showFlashMessage('Error adding person to session: ' + error.message, 'error');
+                showMessage('Error adding person to session: ' + error.message, 'error');
             });
     }
 
@@ -933,32 +932,7 @@ document.addEventListener('DOMContentLoaded', function() {
         noSessionsMessage.style.display = 'none';
     }
 
-    function showFlashMessage(message, type) {
-        // Create flash message element
-        const flashDiv = document.createElement('div');
-        flashDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show flash-message`;
-        flashDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" aria-label="Close">&times;</button>
-        `;
-        
-        // Add close button functionality
-        const closeBtn = flashDiv.querySelector('.btn-close');
-        closeBtn.addEventListener('click', function() {
-            flashDiv.remove();
-        });
-        
-        // Insert at the top of the main content
-        const mainContent = document.querySelector('.docs-content-inner');
-        mainContent.insertBefore(flashDiv, mainContent.firstChild);
-        
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            if (flashDiv.parentNode) {
-                flashDiv.remove();
-            }
-        }, 5000);
-    }
+    // Flash messages are now handled by the global showMessage() function from base.html
 });
 </script>
 
@@ -1344,53 +1318,7 @@ document.addEventListener('DOMContentLoaded', function() {
     100% { transform: rotate(360deg); }
 }
 
-.flash-message {
-    margin-bottom: 1rem;
-    position: relative;
-    z-index: 100;
-}
-
-.btn-close {
-    background: none;
-    border: none;
-    font-size: 1.2rem;
-    font-weight: bold;
-    line-height: 1;
-    color: #000;
-    opacity: 0.5;
-    cursor: pointer;
-    padding: 0;
-    margin: 0;
-    float: right;
-}
-
-.btn-close:hover {
-    opacity: 0.75;
-}
-
-.alert-success {
-    color: #0f5132;
-    background-color: #d1e7dd;
-    border-color: #badbcc;
-}
-
-.alert-danger {
-    color: #842029;
-    background-color: #f8d7da;
-    border-color: #f5c2c7;
-}
-
-.alert-dismissible {
-    padding-right: 3rem;
-}
-
-.fade {
-    transition: opacity 0.15s linear;
-}
-
-.show {
-    opacity: 1;
-}
+/* Flash message styles now handled globally in base.html */
 
 @media (max-width: 768px) {
     .modal-content {
@@ -1407,11 +1335,6 @@ document.addEventListener('DOMContentLoaded', function() {
         margin-left: 0;
         margin-top: 0.5rem;
         align-self: flex-end;
-    }
-    
-    .flash-message {
-        margin-left: 0.5rem;
-        margin-right: 0.5rem;
     }
 }
 
