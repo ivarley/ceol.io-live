@@ -21,88 +21,99 @@
                     <button id="add-person-btn" class="btn btn-primary">Add Person</button>
                 </div>
                 
-                {% if people %}
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Location</th>
-                                <th>TheSession.org</th>
-                                <th>Username</th>
-                                <th>Sessions</th>
-                                <th>Instances</th>
-                                <th>Latest Session</th>
-                                <th>Last Login</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for person in people %}
-                            <tr>
-                                <td class="person-name">
-                                    <a href="/admin/people/{{ person.person_id }}" class="person-link">{{ person.name }}</a>
-                                </td>
-                                <td class="person-location" title="{{ person.full_location }}">{{ person.city }}</td>
-                                <td class="person-thesession">
-                                    {% if person.thesession_user_id %}
-                                        <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
-                                            {{ person.thesession_user_id }}
-                                        </a>
-                                    {% else %}
-                                        <span class="text-muted">No member</span>
-                                    {% endif %}
-                                </td>
-                                <td class="person-username">
-                                    {% if person.username != 'No account' %}
-                                        <strong>{{ person.username }}</strong>
-                                        {% if person.is_system_admin %}
-                                            <span class="admin-indicator">(admin)</span>
+                <!-- Search Controls -->
+                <div class="mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" id="people-search" placeholder="Search by name, email, username, or location...">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="people-content">
+                    {% if people %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Location</th>
+                                    <th>TheSession.org</th>
+                                    <th>Username</th>
+                                    <th>Sessions</th>
+                                    <th>Instances</th>
+                                    <th>Latest Session</th>
+                                    <th>Last Login</th>
+                                </tr>
+                            </thead>
+                            <tbody id="people-tbody">
+                                {% for person in people %}
+                                <tr data-person-name="{{ person.name|lower }}" data-person-email="{{ person.email|lower or '' }}" data-person-username="{{ person.username|lower }}" data-person-location="{{ person.city|lower or '' }} {{ person.state|lower or '' }} {{ person.country|lower or '' }}">
+                                    <td class="person-name">
+                                        <a href="/admin/people/{{ person.person_id }}" class="person-link">{{ person.name }}</a>
+                                    </td>
+                                    <td class="person-location" title="{{ person.full_location }}">{{ person.city }}</td>
+                                    <td class="person-thesession">
+                                        {% if person.thesession_user_id %}
+                                            <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
+                                                {{ person.thesession_user_id }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">No member</span>
                                         {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">{{ person.username }}</span>
-                                    {% endif %}
-                                </td>
-                                <td class="person-session-count">
-                                    {% if person.session_count > 0 %}
-                                        <span class="badge bg-primary">{{ person.session_count }}</span>
-                                    {% else %}
-                                        <span class="text-muted">0</span>
-                                    {% endif %}
-                                </td>
-                                <td class="person-instance-count">
-                                    {% if person.session_instance_count > 0 %}
-                                        <span class="badge bg-success">{{ person.session_instance_count }}</span>
-                                    {% else %}
-                                        <span class="text-muted">0</span>
-                                    {% endif %}
-                                </td>
-                                <td class="person-latest-session">
-                                    {% if person.latest_session_info != 'None' %}
-                                        <span class="latest-session-info">{{ person.latest_session_info }}</span>
-                                    {% else %}
-                                        <span class="text-muted">None</span>
-                                    {% endif %}
-                                </td>
-                                <td class="person-last-login">
-                                    {% if person.last_login == 'Never' %}
-                                        <span class="text-warning">{{ person.last_login }}</span>
-                                    {% elif person.last_login == 'N/A' %}
-                                        <span class="text-muted">{{ person.last_login }}</span>
-                                    {% else %}
-                                        {{ person.last_login }}
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </td>
+                                    <td class="person-username">
+                                        {% if person.username != 'No account' %}
+                                            <strong>{{ person.username }}</strong>
+                                            {% if person.is_system_admin %}
+                                                <span class="admin-indicator">(admin)</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">{{ person.username }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-session-count">
+                                        {% if person.session_count > 0 %}
+                                            <span class="badge bg-primary">{{ person.session_count }}</span>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-instance-count">
+                                        {% if person.session_instance_count > 0 %}
+                                            <span class="badge bg-success">{{ person.session_instance_count }}</span>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-latest-session">
+                                        {% if person.latest_session_info != 'None' %}
+                                            <span class="latest-session-info">{{ person.latest_session_info }}</span>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-last-login">
+                                        {% if person.last_login == 'Never' %}
+                                            <span class="text-warning">{{ person.last_login }}</span>
+                                        {% elif person.last_login == 'N/A' %}
+                                            <span class="text-muted">{{ person.last_login }}</span>
+                                        {% else %}
+                                            {{ person.last_login }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" role="alert">
+                        <h4 class="alert-heading">No People Found</h4>
+                        <p>There are currently no people records in the system.</p>
+                    </div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="alert alert-info" role="alert">
-                    <h4 class="alert-heading">No People Found</h4>
-                    <p>There are currently no people records in the system.</p>
-                </div>
-                {% endif %}
             </section>
         </article>
     </div>
@@ -502,6 +513,12 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Search functionality
+    const searchInput = document.getElementById('people-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', filterPeople);
+    }
+    
     // Add Person Modal functionality
     const addPersonBtn = document.getElementById('add-person-btn');
     const addPersonModal = document.getElementById('addPersonModal');
@@ -764,6 +781,50 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Flash messages are now handled by the global ephemeral system in base.html
+    
+    function filterPeople() {
+        const searchTerm = document.getElementById('people-search').value.toLowerCase();
+        const tbody = document.getElementById('people-tbody');
+        const rows = tbody.getElementsByTagName('tr');
+        let visibleCount = 0;
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const name = row.getAttribute('data-person-name') || '';
+            const email = row.getAttribute('data-person-email') || '';
+            const username = row.getAttribute('data-person-username') || '';
+            const location = row.getAttribute('data-person-location') || '';
+            
+            // Check if search term matches any of the fields
+            const matches = name.includes(searchTerm) || 
+                          email.includes(searchTerm) || 
+                          username.includes(searchTerm) || 
+                          location.includes(searchTerm);
+            
+            if (matches) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        }
+        
+        // Show "no results" message if no people match
+        const peopleContent = document.getElementById('people-content');
+        const existingNoResults = document.getElementById('no-search-results');
+        
+        if (visibleCount === 0 && searchTerm) {
+            if (!existingNoResults) {
+                const noResultsDiv = document.createElement('div');
+                noResultsDiv.id = 'no-search-results';
+                noResultsDiv.className = 'alert alert-info';
+                noResultsDiv.innerHTML = '<p class="mb-0">No people match your search criteria.</p>';
+                peopleContent.appendChild(noResultsDiv);
+            }
+        } else if (existingNoResults) {
+            existingNoResults.remove();
+        }
+    }
 });
 </script>
 
