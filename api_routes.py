@@ -2204,12 +2204,12 @@ def add_person_to_session():
         person_first_name, person_last_name, person_email = person_row
         person_name = f"{person_first_name} {person_last_name}"
         
-        cur.execute('SELECT name, city, state, country FROM session WHERE session_id = %s', (session_id,))
+        cur.execute('SELECT name, city, state, country, path FROM session WHERE session_id = %s', (session_id,))
         session_row = cur.fetchone()
         if not session_row:
             return jsonify({'success': False, 'message': 'Session not found'}), 404
         
-        session_name, session_city, session_state, session_country = session_row
+        session_name, session_city, session_state, session_country, session_path = session_row
         
         # Add person to session
         is_regular = (role == 'regular')
@@ -2270,7 +2270,7 @@ Person Details:
 - Name: {person_name}
 - Email: {person_email or 'Not provided'}
 
-You can review and modify this person's role in the session admin interface.
+You can review and modify this person's role in the session admin interface: https://ceol.io/admin/sessions/{session_path}/players
 
 Best regards,
 The Ceol.io Session Management System"""
