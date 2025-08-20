@@ -158,7 +158,8 @@ def session_tunes(session_path):
         if not session_info:
             cur.close()
             conn.close()
-            return f"Session not found: {session_path}", 404
+            from app import render_error_page
+            return render_error_page(f"Session not found: {session_path}", 404)
             
         session_id, session_name = session_info
         
@@ -210,7 +211,8 @@ def session_tune_info(session_path, tune_id):
         if not session_info:
             cur.close()
             conn.close()
-            return f"Session not found: {session_path}", 404
+            from app import render_error_page
+            return render_error_page(f"Session not found: {session_path}", 404)
             
         session_id, session_name = session_info
         
@@ -225,7 +227,8 @@ def session_tune_info(session_path, tune_id):
         if not tune_info:
             cur.close()
             conn.close()
-            return f"Tune not found: {tune_id}", 404
+            from app import render_error_page
+            return render_error_page(f"Tune not found: {tune_id}", 404)
             
         tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
         
@@ -240,7 +243,8 @@ def session_tune_info(session_path, tune_id):
         if not session_tune_info:
             cur.close()
             conn.close()
-            return f"Tune not found in this session: {tune_id}", 404
+            from app import render_error_page
+            return render_error_page(f"Tune not found in this session: {tune_id}", 404)
         
         setting_id, overridden_key, alias = session_tune_info
         
@@ -380,7 +384,8 @@ def session_handler(full_path):
             else:
                 cur.close()
                 conn.close()
-                return f"Session instance not found: {session_path} on {date}", 404
+                from app import render_error_page
+                return render_error_page(f"Session instance not found: {session_path} on {date}", 404)
         except Exception as e:
             return f"Database connection failed: {str(e)}"
     
@@ -481,7 +486,8 @@ def session_handler(full_path):
             else:
                 cur.close()
                 conn.close()
-                return f"Session not found: {session_path}", 404
+                from app import render_error_page
+                return render_error_page(f"Session not found: {session_path}", 404)
         except Exception as e:
             return f"Database connection failed: {str(e)}"
 
@@ -1406,7 +1412,8 @@ def person_details(person_id=None):
         
         person_row = cur.fetchone()
         if not person_row:
-            return "Person not found.", 404
+            from app import render_error_page
+            return render_error_page("Person not found.", 404)
         
         person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id = person_row
         
@@ -1568,7 +1575,8 @@ def session_admin(session_path):
     
     session_data = _get_session_data(session_path)
     if not session_data:
-        return "Session not found", 404
+        from app import render_error_page
+        return render_error_page("Session not found", 404)
         
     return render_template('session_admin.html', 
                          session=session_data,
@@ -1586,7 +1594,8 @@ def session_admin_players(session_path):
     
     session_data = _get_session_data(session_path)
     if not session_data:
-        return "Session not found", 404
+        from app import render_error_page
+        return render_error_page("Session not found", 404)
         
     return render_template('session_admin.html', 
                          session=session_data,
@@ -1604,7 +1613,8 @@ def session_admin_logs(session_path):
     
     session_data = _get_session_data(session_path)
     if not session_data:
-        return "Session not found", 404
+        from app import render_error_page
+        return render_error_page("Session not found", 404)
         
     return render_template('session_admin.html', 
                          session=session_data,
@@ -1627,7 +1637,8 @@ def session_admin_person(session_path, person_id):
         # Get session details
         session_data = _get_session_data(session_path)
         if not session_data:
-            return "Session not found", 404
+            from app import render_error_page
+            return render_error_page("Session not found", 404)
         
         session_id = session_data['session_id']
         
@@ -1657,7 +1668,8 @@ def session_admin_person(session_path, person_id):
         
         person_row = cur.fetchone()
         if not person_row:
-            return "Person not found in this session", 404
+            from app import render_error_page
+            return render_error_page("Person not found in this session", 404)
         
         person_data = {
             'person_id': person_row[0],

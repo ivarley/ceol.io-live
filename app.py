@@ -1,6 +1,7 @@
-from flask import Flask
+from flask import Flask, render_template
 from flask_login import LoginManager
 import os
+import random
 from dotenv import load_dotenv
 
 # Import our custom modules
@@ -97,6 +98,79 @@ app.add_url_rule('/api/validate-thesession-user', 'validate_thesession_user', va
 app.add_url_rule('/api/parse-person-name', 'parse_person_name', parse_person_name, methods=['POST'])
 app.add_url_rule('/api/create-person', 'create_new_person', create_new_person, methods=['POST'])
 app.add_url_rule('/api/sessions/list', 'get_available_sessions', get_available_sessions)
+
+# Error handlers
+FUNNY_ERROR_TEXTS = [
+    "Stroh Piano Accordion",
+    "Traditional Irish Djembe"
+]
+
+FUNNY_ERROR_IMAGES = [
+    # Placeholder - you can add image filenames here later
+    "stroh.avif",
+    "djembe.avif"
+]
+
+def get_random_funny_content():
+    """Get random funny text and image for error pages"""
+    if FUNNY_ERROR_TEXTS:
+        # Use single random index to pair text and image together
+        index = random.randint(0, len(FUNNY_ERROR_TEXTS) - 1)
+        funny_text = FUNNY_ERROR_TEXTS[index]
+        funny_image = FUNNY_ERROR_IMAGES[index] if index < len(FUNNY_ERROR_IMAGES) else None
+        return funny_text, funny_image
+    return None, None
+
+def render_error_page(message, status_code=400):
+    """Helper function to render error page with consistent formatting"""
+    funny_text, funny_image = get_random_funny_content()
+    return render_template('error.html',
+                         error_message=message,
+                         funny_text=funny_text,
+                         funny_image=funny_image), status_code
+
+@app.errorhandler(404)
+def not_found_error(error):
+    funny_text, funny_image = get_random_funny_content()
+    return render_template('error.html', 
+                         error_message="Page not found. The session you're looking for might have ended, or the URL might be incorrect.",
+                         funny_text=funny_text,
+                         funny_image=funny_image), 404
+
+@app.errorhandler(403) 
+def forbidden_error(error):
+    funny_text, funny_image = get_random_funny_content()
+    return render_template('error.html',
+                         error_message="You don't have permission to access this page. You might need to log in or contact an admin.",
+                         funny_text=funny_text,
+                         funny_image=funny_image), 403
+
+@app.errorhandler(401)
+def unauthorized_error(error):
+    funny_text, funny_image = get_random_funny_content()
+    return render_template('error.html',
+                         error_message="You must be logged in to access this page. Please log in and try again.",
+                         funny_text=funny_text,
+                         funny_image=funny_image), 401
+
+@app.errorhandler(500)
+def internal_error(error):
+    funny_text, funny_image = get_random_funny_content()
+    return render_template('error.html',
+                         error_message="A server error occurred. Our team has been notified and will look into this issue.",
+                         funny_text=funny_text,
+                         funny_image=funny_image), 500
+
+@app.errorhandler(Exception)
+def handle_exception(error):
+    """Catch all other unhandled exceptions"""
+    funny_text, funny_image = get_random_funny_content()
+    # Log the error for debugging (in production you'd want proper logging)
+    print(f"Unhandled exception: {error}")
+    return render_template('error.html',
+                         error_message=f"An unexpected error occurred: {str(error)}",
+                         funny_text=funny_text,
+                         funny_image=funny_image), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

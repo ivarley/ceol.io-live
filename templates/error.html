@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Something went wrong{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px; margin: 50px auto; padding: 20px; text-align: center;">
+    <h1 style="font-size: 2.5em; color: var(--error-text, #721c24); margin-bottom: 30px;">
+        Something went wrong. :(
+    </h1>
+    
+    {% if error_message %}
+    <div style="background-color: var(--error-bg, #f8d7da); border: 1px solid var(--error-border, #f5c6cb); color: var(--error-text, #721c24); padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        {{ error_message }}
+    </div>
+    {% endif %}
+    
+    <!-- Funny text and image section -->
+    <div id="funny-content" style="margin-top: 40px;">
+        {% if funny_text %}
+        <div style="background-color: var(--info-bg, #d1ecf1); border: 1px solid var(--info-border, #bee5eb); color: var(--info-text, #0c5460); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="font-size: 1.1em; margin: 0;">Perhaps we could interest you in something from <a href="https://www.joefago.com/thesessionshoppe-instruments">The Session Shoppe</a>, like a {{ funny_text }}?</p>
+        </div>
+        {% endif %}
+        
+        {% if funny_image %}
+        <div style="margin-top: 20px;">
+            <img src="{{ url_for('static', filename='images/error/' + funny_image) }}" 
+                 alt="Error illustration" 
+                 style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        </div>
+        {% endif %}
+    </div>
+    
+    <div style="margin-top: 40px;">
+        <a href="{{ url_for('home') }}" 
+           style="display: inline-block; background-color: var(--primary-color, #007bff); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+            Go back home
+        </a>
+    </div>
+</div>
+{% endblock %}
