@@ -1735,18 +1735,23 @@ def get_session_players_ajax(session_path):
                 sp.gets_email_followup,
                 u.username,
                 u.is_system_admin,
-                COUNT(sip.session_instance_person_id) as attendance_count,
-                MAX(si.date) as last_attended
+                COALESCE(person_session_count.attendance_count, 0) as attendance_count,
+                person_session_count.last_attended
             FROM session_person sp
-            JOIN person p ON sp.person_id = p.person_id
-            LEFT JOIN user_account u ON p.person_id = u.person_id
-            LEFT JOIN session_instance_person sip ON sp.person_id = sip.person_id
-            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id 
-                AND si.session_id = %s AND sip.attended = true
+            INNER JOIN person p ON sp.person_id = p.person_id
+            LEFT OUTER JOIN user_account u ON p.person_id = u.person_id
+            LEFT OUTER JOIN (
+                SELECT 
+                    sip.person_id, 
+                    si.session_id, 
+                    COUNT(*) as attendance_count,
+                    MAX(si.date) as last_attended
+                FROM session_instance si
+                INNER JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
+                WHERE si.session_id = %s AND sip.attended = true
+                GROUP BY sip.person_id, si.session_id
+            ) person_session_count ON p.person_id = person_session_count.person_id
             WHERE sp.session_id = %s
-            GROUP BY sp.session_person_id, sp.person_id, p.first_name, p.last_name, 
-                     p.email, sp.is_regular, sp.is_admin, sp.gets_email_reminder, 
-                     sp.gets_email_followup, u.username, u.is_system_admin
             ORDER BY sp.is_regular DESC, p.last_name, p.first_name
         ''', (session_id, session_id))
         
