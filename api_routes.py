@@ -1688,14 +1688,53 @@ def edit_tune_ajax(session_path, date):
                 
                 message = f'Converted to unlinked tune: "{new_name}"'
         else:
-            # This is a name-only tune - just update the name
-            cur.execute('''
-                UPDATE session_instance_tune 
-                SET name = %s, key_override = %s
-                WHERE session_instance_tune_id = %s
-            ''', (new_name, key_override, session_instance_tune_id))
+            # This is a name-only tune - update the name and try to link it
+            # First, try to find a matching tune
+            tune_id_match, final_name, error_message = find_matching_tune(cur, session_id, new_name)
             
-            message = f'Updated tune name to "{new_name}"'
+            if tune_id_match and not error_message:
+                # Found a match - link the tune
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET tune_id = %s, name = NULL, key_override = %s
+                    WHERE session_instance_tune_id = %s
+                ''', (tune_id_match, key_override, session_instance_tune_id))
+                
+                message = f'Linked tune to "{final_name}"'
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                return jsonify({
+                    'success': True, 
+                    'message': message,
+                    'linked': True,
+                    'tune_id': tune_id_match,
+                    'final_name': final_name
+                })
+            else:
+                # No match or multiple matches - just update the name
+                cur.execute('''
+                    UPDATE session_instance_tune 
+                    SET name = %s, key_override = %s
+                    WHERE session_instance_tune_id = %s
+                ''', (new_name, key_override, session_instance_tune_id))
+                
+                if error_message:
+                    message = f'Updated to "{new_name}" - {error_message}'
+                else:
+                    message = f'Updated tune name to "{new_name}"'
+                
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                return jsonify({
+                    'success': True, 
+                    'message': message,
+                    'linked': False
+                })
         
         conn.commit()
         cur.close()
