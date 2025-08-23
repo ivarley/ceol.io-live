@@ -103,9 +103,6 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# Claude Code configuration
-CLAUDE.md
-
 # Environment variables
 .env
 
