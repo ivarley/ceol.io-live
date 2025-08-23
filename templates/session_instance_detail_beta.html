@@ -1107,7 +1107,7 @@
                         // Handle text input
                         for (let char of e.data) {
                             if (char === ',' || char === ';') {
-                                finishTyping();
+                                finishTyping(false, 'comma/semicolon');
                             } else {
                                 handleTextInput(char);
                             }
@@ -1123,7 +1123,7 @@
                         const shouldKeepKeyboard = isTyping && typingBuffer.trim();
                         updateDebugIndicator(`Enter: typing=${isTyping}, buf='${typingBuffer}', keep=${shouldKeepKeyboard}`);
                         
-                        finishTyping(shouldKeepKeyboard);
+                        finishTyping(shouldKeepKeyboard, 'enter');
                     }
                 });
                 
@@ -1144,7 +1144,7 @@
                                 container.contentEditable = 'false';
                                 if (isTyping && typingBuffer.trim()) {
                                     updateDebugIndicator('Blur handler calling finishTyping');
-                                    finishTyping();
+                                    finishTyping(false, 'blur');
                                 }
                             } else {
                                 updateDebugIndicator('Blur handler blocked - keeping KB open');
@@ -2640,8 +2640,8 @@
         return false;
     }
     
-    function finishTyping(keepKeyboardOpen = false) {
-        updateDebugIndicator(`finishTyping: keepKB=${keepKeyboardOpen}, isTyping=${isTyping}, buffer='${typingBuffer.trim()}'`);
+    function finishTyping(keepKeyboardOpen = false, source = 'unknown') {
+        updateDebugIndicator(`finishTyping(${source}): keepKB=${keepKeyboardOpen}`);
         
         // If we're trying to keep keyboard open, set the flag
         if (keepKeyboardOpen) {
