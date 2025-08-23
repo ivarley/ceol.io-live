@@ -133,13 +133,120 @@
         
         .tune-pill.selected {
             box-shadow: 0 0 0 2px var(--primary);
-            transform: scale(1.05);
+            background-color: rgba(0, 122, 255, 0.1);
         }
         
         .tune-pill.dragging {
-            opacity: 0.7;
-            transform: rotate(3deg);
+            opacity: 0.5;
+            box-shadow: 0 0 0 2px #007AFF;
+            position: relative;
             z-index: 1000;
+        }
+        
+        /* Drop indicators - color only, no size changes */
+        .tune-pill.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.1) !important;
+            position: relative;
+        }
+        
+        /* Show drop position indicator on right side of pill */
+        .tune-pill.mobile-drop-target.drop-after::after {
+            content: '';
+            position: absolute;
+            right: -2px;
+            top: 2px;
+            bottom: 2px;
+            width: 3px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 10;
+        }
+        
+        /* Show drop position indicator on left side of pill */
+        .tune-pill.mobile-drop-target.drop-before::before {
+            content: '';
+            position: absolute;
+            left: -2px;
+            top: 2px;
+            bottom: 2px;
+            width: 3px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 10;
+        }
+        
+        .horizontal-drop-zone.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+        }
+        
+        .tune-set.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.05) !important;
+        }
+        
+        /* Tune-set with blank space drop gets brighter highlighting */
+        .tune-set.mobile-drop-target.drop-at-end {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for blank space drops in tune-sets - vertical bar at end of row */
+        .tune-set.mobile-drop-target.drop-at-end::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 30px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        /* Tune-set with gap drop gets brighter highlighting */
+        .tune-set.mobile-drop-target.drop-in-gap {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for gap drops - vertical bar between pills */
+        .tune-set.mobile-drop-target.drop-in-gap::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 30px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            left: var(--gap-indicator-left, 12px);
+            top: var(--gap-indicator-top, 8px);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        #tune-pills-container.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for blank space drops - vertical bar at insertion point */
+        #tune-pills-container.mobile-drop-target.drop-at-end::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 60px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        /* Ensure dark mode doesn't override */
+        [data-theme="dark"] #tune-pills-container.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
         }
         
         .tune-pill.just-landed {
@@ -224,7 +331,7 @@
             margin: 0px 0;
             position: relative;
             cursor: text;
-            transition: background-color 0.2s ease;
+            /* Removed transition to prevent flickering */
         }
         
         .horizontal-drop-zone:hover {
@@ -781,7 +888,6 @@
         cursorPos.dataset.pillIndex = pillIndex;
         cursorPos.dataset.positionType = positionType;
         
-        console.log('Creating cursor position:', setIndex, pillIndex, positionType); // Debug
         
         // Add click handler for cursor positioning
         cursorPos.addEventListener('click', (e) => {
@@ -828,7 +934,6 @@
     
     // Set cursor position and show visual cursor
     function setCursorPosition(setIndex, pillIndex, positionType) {
-        console.log('Setting cursor position:', setIndex, pillIndex, positionType);
         
         cursorPosition = { setIndex, pillIndex, position: positionType };
         
@@ -846,7 +951,7 @@
         const allCursorPositions = document.querySelectorAll('.cursor-position');
         console.log('All cursor positions:', allCursorPositions.length);
         allCursorPositions.forEach((pos, i) => {
-            console.log(`Position ${i}:`, pos.dataset.setIndex, pos.dataset.pillIndex, pos.dataset.positionType);
+            // Position debug removed
         });
         
         if (cursorElements.length > 0) {
@@ -1035,26 +1140,491 @@
             e.stopPropagation();
         });
         
-        // Long press for mobile
+        // Mobile touch handling
         let longPressTimer;
+        let touchStartTime;
+        let hasTouchMoved = false;
+        let touchStartPos = null;
+        let isDragMode = false;
+        let dragGhost = null;
+        
         pillElement.addEventListener('touchstart', (e) => {
-            longPressTimer = setTimeout(() => {
-                showContextMenu(e, pillData);
-            }, 800);
+            touchStartTime = Date.now();
+            hasTouchMoved = false;
+            isDragMode = false;
+            touchStartPos = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY
+            };
+            
+            // Check if touch is on the chevron area (left part of pill)
+            const rect = pillElement.getBoundingClientRect();
+            const touchX = e.touches[0].clientX - rect.left;
+            const textElement = pillElement.querySelector('.text');
+            const textStart = textElement ? textElement.offsetLeft : 20; // Fallback to 20px if no text found
+            const isChevronArea = touchX < textStart;
+            
+            // Store whether this touch started on chevron
+            pillElement.dataset.touchOnChevron = isChevronArea;
+            
+            if (!isChevronArea) {
+                // Only set up long press for drag if not on chevron
+                longPressTimer = setTimeout(() => {
+                    // Enter drag mode
+                    isDragMode = true;
+                    pillElement.classList.add('dragging');
+                    
+                    // If pill isn't selected, select it
+                    if (!selectedPills.has(pillData.id)) {
+                        selectSingle(pillData.id);
+                    }
+                    
+                    // Visual feedback for all selected pills
+                    selectedPills.forEach(pillId => {
+                        const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                        if (pill && pill !== pillElement) {
+                            pill.classList.add('dragging');
+                        }
+                    });
+                    
+                    // Add haptic feedback if available
+                    if (navigator.vibrate) {
+                        navigator.vibrate(50);
+                    }
+                    
+                    console.log('Entered mobile drag mode');
+                }, 1000);
+            }
+            
+            e.stopPropagation();
         });
         
-        pillElement.addEventListener('touchend', () => {
+        // Track last drop zone and throttle updates
+        let lastDropZone = null;
+        let lastDropZoneUpdate = 0;
+        const DROP_ZONE_UPDATE_THROTTLE = 50; // ms - reduced for more responsive feedback
+        
+        pillElement.addEventListener('touchmove', (e) => {
+            hasTouchMoved = true;
             clearTimeout(longPressTimer);
+            
+            if (isDragMode) {
+                // Prevent scrolling during drag
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                
+                // Create or update drag ghost
+                if (!dragGhost) {
+                    dragGhost = document.createElement('div');
+                    dragGhost.className = 'mobile-drag-ghost';
+                    dragGhost.style.cssText = `
+                        position: fixed;
+                        pointer-events: none;
+                        z-index: 10000;
+                        background: #007AFF;
+                        color: white;
+                        padding: 4px 8px;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        transform: rotate(2deg);
+                        opacity: 0.8;
+                    `;
+                    dragGhost.textContent = selectedPills.size > 1 ? `${selectedPills.size} pills` : pillData.tuneName;
+                    document.body.appendChild(dragGhost);
+                }
+                
+                // Update ghost position smoothly
+                dragGhost.style.left = (touch.clientX - 30) + 'px';
+                dragGhost.style.top = (touch.clientY - 15) + 'px';
+                
+                // Check for drop zone under finger every 50ms to show color feedback
+                const now = Date.now();
+                if (now - lastDropZoneUpdate > DROP_ZONE_UPDATE_THROTTLE) {
+                    lastDropZoneUpdate = now;
+                    
+                    // Get element below finger
+                    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                    
+                    // Find potential drop zone
+                    let currentDropZone = null;
+                    let dropSide = null; // 'left' or 'right' for pills
+                    
+                    if (elementBelow) {
+                        // Check for horizontal drop zone first
+                        currentDropZone = elementBelow.closest('.horizontal-drop-zone');
+                        
+                        // If not, check for pill (but not if it's being dragged)
+                        if (!currentDropZone) {
+                            const pill = elementBelow.closest('.tune-pill');
+                            if (pill && !pill.classList.contains('dragging')) {
+                                currentDropZone = pill;
+                                
+                                // Determine if we're over the right half (drop after) or left half (drop before)
+                                const pillRect = pill.getBoundingClientRect();
+                                const pillCenterX = pillRect.left + pillRect.width / 2;
+                                dropSide = touch.clientX > pillCenterX ? 'right' : 'left';
+                            }
+                        }
+                        
+                        // If not over a pill or horizontal zone, check for gaps between pills
+                        if (!currentDropZone) {
+                            const tuneSet = elementBelow.closest('.tune-set');
+                            if (tuneSet) {
+                                const pills = Array.from(tuneSet.querySelectorAll('.tune-pill'));
+                                
+                                // Check if we're in a gap between two pills on the same row
+                                for (let i = 0; i < pills.length - 1; i++) {
+                                    const currentPill = pills[i];
+                                    const nextPill = pills[i + 1];
+                                    
+                                    const currentRect = currentPill.getBoundingClientRect();
+                                    const nextRect = nextPill.getBoundingClientRect();
+                                    
+                                    // Check if both pills are on roughly the same row (within 20px vertically)
+                                    const verticalDiff = Math.abs(currentRect.top - nextRect.top);
+                                    if (verticalDiff < 20) {
+                                        // Check if touch point is horizontally between these two pills
+                                        const gapStart = currentRect.right;
+                                        const gapEnd = nextRect.left;
+                                        const gapCenterY = (currentRect.top + currentRect.bottom) / 2;
+                                        
+                                        // Check if we're in the horizontal gap and vertically aligned
+                                        if (touch.clientX >= gapStart && 
+                                            touch.clientX <= gapEnd &&
+                                            Math.abs(touch.clientY - gapCenterY) < 25) {
+                                            
+                                            // We're in the gap between these pills
+                                            currentDropZone = tuneSet;
+                                            currentDropZone.dataset.gapAfterPillIndex = i.toString();
+                                            dropSide = 'gap';
+                                            console.log(`Detected gap between pill ${i} and ${i + 1}`);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Finally, check for tune-set or any blank space
+                        if (!currentDropZone) {
+                            const tuneSet = elementBelow.closest('.tune-set');
+                            if (tuneSet) {
+                                // Check if we're in blank space to the right of pills in this set
+                                const pills = tuneSet.querySelectorAll('.tune-pill');
+                                const setRect = tuneSet.getBoundingClientRect();
+                                
+                                if (pills.length > 0) {
+                                    // Find the rightmost pill on the same row as our touch point
+                                    let rightmostPillOnRow = null;
+                                    let smallestDistance = Infinity;
+                                    
+                                    for (const pill of pills) {
+                                        const pillRect = pill.getBoundingClientRect();
+                                        const verticalDistance = Math.abs(touch.clientY - (pillRect.top + pillRect.height / 2));
+                                        
+                                        // If this pill is roughly on the same row (within reasonable vertical distance)
+                                        if (verticalDistance < 30) {
+                                            if (pillRect.right < touch.clientX && verticalDistance < smallestDistance) {
+                                                rightmostPillOnRow = pill;
+                                                smallestDistance = verticalDistance;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // If we found a pill on the same row and we're to the right of it, this is blank space
+                                    if (rightmostPillOnRow && touch.clientX > rightmostPillOnRow.getBoundingClientRect().right + 10) {
+                                        currentDropZone = tuneSet;
+                                        currentDropZone.dataset.virtualDropType = 'end-of-row';
+                                        dropSide = 'end'; // Special indicator for blank space positioning
+                                        console.log('Detected blank space drop zone in set');
+                                    } else {
+                                        // Regular tune-set drop
+                                        currentDropZone = tuneSet;
+                                    }
+                                } else {
+                                    // Empty set
+                                    currentDropZone = tuneSet;
+                                }
+                            } else {
+                                // Check if we're in the main container area (bottom empty space)
+                                const container = document.getElementById('tune-pills-container');
+                                if (container) {
+                                    const containerRect = container.getBoundingClientRect();
+                                    
+                                    // Check if touch point is within container bounds
+                                    if (touch.clientX >= containerRect.left && 
+                                        touch.clientX <= containerRect.right &&
+                                        touch.clientY >= containerRect.top && 
+                                        touch.clientY <= containerRect.bottom) {
+                                        
+                                        // We're in the bottom empty area - create new set
+                                        currentDropZone = container;
+                                        currentDropZone.dataset.virtualDropType = 'end-of-list';
+                                        dropSide = 'end';
+                                        console.log('Detected blank space drop zone at end');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Track if target or side changed
+                    const dropKey = currentDropZone ? `${currentDropZone.id || currentDropZone.className}-${dropSide}` : null;
+                    const lastDropKey = lastDropZone ? `${lastDropZone.id || lastDropZone.className}-${lastDropZone.dataset.dropSide}` : null;
+                    
+                    // Only update if target or side changed
+                    if (dropKey !== lastDropKey) {
+                        // Remove classes from previous target
+                        if (lastDropZone) {
+                            lastDropZone.classList.remove('mobile-drop-target', 'drop-before', 'drop-after', 'drop-at-end', 'drop-in-gap');
+                            delete lastDropZone.dataset.dropSide;
+                            delete lastDropZone.dataset.gapAfterPillIndex;
+                            lastDropZone.style.removeProperty('--gap-indicator-left');
+                            lastDropZone.style.removeProperty('--gap-indicator-top');
+                        }
+                        
+                        // Add classes to new target
+                        if (currentDropZone) {
+                            currentDropZone.classList.add('mobile-drop-target');
+                            
+                            // Debug for container
+                            if (currentDropZone.id === 'tune-pills-container') {
+                                console.log('Applied mobile-drop-target to container');
+                                console.log('Container classes:', currentDropZone.className);
+                                console.log('Container computed style background:', getComputedStyle(currentDropZone).backgroundColor);
+                                console.log('Container computed style outline:', getComputedStyle(currentDropZone).outline);
+                            }
+                            
+                            // Add side indicator for pills
+                            if (currentDropZone.classList.contains('tune-pill') && dropSide && dropSide !== 'end') {
+                                currentDropZone.classList.add(dropSide === 'right' ? 'drop-after' : 'drop-before');
+                                currentDropZone.dataset.dropSide = dropSide;
+                            }
+                            
+                            // Add position indicator for blank space drops
+                            if ((currentDropZone.id === 'tune-pills-container' || currentDropZone.classList.contains('tune-set')) && dropSide === 'end') {
+                                currentDropZone.classList.add('drop-at-end');
+                                currentDropZone.dataset.dropSide = dropSide;
+                            }
+                            
+                            // Add position indicator for gap drops
+                            if (currentDropZone.classList.contains('tune-set') && dropSide === 'gap') {
+                                currentDropZone.classList.add('drop-in-gap');
+                                currentDropZone.dataset.dropSide = dropSide;
+                                
+                                // Position the indicator between the pills
+                                const gapAfterIndex = parseInt(currentDropZone.dataset.gapAfterPillIndex);
+                                const pills = currentDropZone.querySelectorAll('.tune-pill');
+                                
+                                if (pills[gapAfterIndex] && pills[gapAfterIndex + 1]) {
+                                    const currentPillRect = pills[gapAfterIndex].getBoundingClientRect();
+                                    const nextPillRect = pills[gapAfterIndex + 1].getBoundingClientRect();
+                                    const setRect = currentDropZone.getBoundingClientRect();
+                                    
+                                    // Calculate gap center position relative to the set
+                                    const gapCenterX = (currentPillRect.right + nextPillRect.left) / 2;
+                                    const gapCenterY = (currentPillRect.top + currentPillRect.bottom) / 2;
+                                    
+                                    const relativeLeft = gapCenterX - setRect.left;
+                                    const relativeTop = gapCenterY - setRect.top;
+                                    
+                                    // Set the position via CSS custom properties
+                                    currentDropZone.style.setProperty('--gap-indicator-left', `${relativeLeft - 2}px`);
+                                    currentDropZone.style.setProperty('--gap-indicator-top', `${relativeTop - 15}px`);
+                                }
+                            }
+                        }
+                        
+                        lastDropZone = currentDropZone;
+                    }
+                }
+            }
         });
         
-        pillElement.addEventListener('touchmove', () => {
+        pillElement.addEventListener('touchend', (e) => {
             clearTimeout(longPressTimer);
+            
+            if (isDragMode) {
+                e.preventDefault();
+                
+                const touch = e.changedTouches[0];
+                const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                
+                // Clean up drag ghost
+                if (dragGhost) {
+                    dragGhost.remove();
+                    dragGhost = null;
+                }
+                
+                // Remove classes from the last drop zone
+                if (lastDropZone) {
+                    lastDropZone.classList.remove('mobile-drop-target', 'drop-before', 'drop-after', 'drop-at-end', 'drop-in-gap');
+                    delete lastDropZone.dataset.dropSide;
+                    delete lastDropZone.dataset.gapAfterPillIndex;
+                    lastDropZone.style.removeProperty('--gap-indicator-left');
+                    lastDropZone.style.removeProperty('--gap-indicator-top');
+                }
+                
+                // Find drop target and perform drop
+                // Use the lastDropZone if available (it has our gap data), otherwise detect from elementBelow
+                let dropZone = lastDropZone;
+                if (!dropZone && elementBelow) {
+                    dropZone = elementBelow.closest('.horizontal-drop-zone, .tune-pill, .tune-set');
+                }
+                
+                if (dropZone && !dropZone.classList.contains('dragging')) {
+                    let dropPosition = null;
+                    
+                    // Determine drop position based on drop zone type
+                    if (dropZone.classList.contains('horizontal-drop-zone')) {
+                        // Dropping between sets - create a new set at this position
+                        const setIndex = parseInt(dropZone.dataset.insertAtSetIndex);
+                        dropPosition = { setIndex, pillIndex: 0, position: 'newset' };
+                    } else if (dropZone.classList.contains('tune-pill')) {
+                        // Dropping on a pill - detect which side based on touch position
+                        const targetPillId = dropZone.dataset.pillId;
+                        
+                        // Determine side based on touch position
+                        const pillRect = dropZone.getBoundingClientRect();
+                        const pillCenterX = pillRect.left + pillRect.width / 2;
+                        const dropAfter = touch.clientX > pillCenterX;
+                        
+                        // Find the pill's position
+                        for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                            const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === targetPillId);
+                            if (pillIndex !== -1) {
+                                // Drop based on which side we're on
+                                if (dropAfter) {
+                                    // Right side - drop after this pill
+                                    dropPosition = { setIndex, pillIndex, position: 'after' };
+                                } else {
+                                    // Left side - drop before this pill
+                                    dropPosition = { setIndex, pillIndex, position: 'before' };
+                                }
+                                break;
+                            }
+                        }
+                    } else if (dropZone.classList.contains('tune-set')) {
+                        const setIndex = parseInt(dropZone.dataset.setIndex);
+                        
+                        // Check if this is a gap drop
+                        if (dropZone.dataset.gapAfterPillIndex !== undefined) {
+                            // Dropping in a gap between pills
+                            const gapAfterIndex = parseInt(dropZone.dataset.gapAfterPillIndex);
+                            dropPosition = { setIndex, pillIndex: gapAfterIndex, position: 'after' };
+                            console.log('Gap drop after pill index:', gapAfterIndex);
+                        } else if (dropZone.dataset.virtualDropType === 'end-of-row') {
+                            // Dropping in blank space at end of row
+                            const setLength = tunePillsData[setIndex]?.length || 0;
+                            dropPosition = { setIndex, pillIndex: setLength - 1, position: 'after' };
+                        } else {
+                            // Regular set drop - add to end
+                            const setLength = tunePillsData[setIndex]?.length || 0;
+                            dropPosition = { setIndex, pillIndex: setLength - 1, position: 'after' };
+                        }
+                    } else if (dropZone.id === 'tune-pills-container' || dropZone.dataset.virtualDropType === 'end-of-list') {
+                        // Dropping on blank space - create new set at the end
+                        dropPosition = { setIndex: tunePillsData.length, pillIndex: 0, position: 'newset' };
+                    }
+                    
+                    if (dropPosition) {
+                        // Call the existing drop handler with correct parameters
+                        const draggedIds = Array.from(selectedPills);
+                        performDrop(dropPosition, draggedIds);
+                        console.log('Mobile drop completed at position:', dropPosition);
+                    }
+                }
+            } else {
+                // Not in drag mode - handle as selection or context menu
+                const touchDuration = Date.now() - touchStartTime;
+                const wasChevronTouch = pillElement.dataset.touchOnChevron === 'true';
+                
+                console.log('Touch ended - duration:', touchDuration, 'chevron:', wasChevronTouch, 'moved:', hasTouchMoved);
+                
+                // Only handle quick taps (less than 500ms to be more responsive)
+                // Long touches should do nothing
+                if (!hasTouchMoved && touchDuration < 500) {
+                    if (wasChevronTouch) {
+                        // Touch was on chevron - toggle context menu
+                        const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
+                        if (existingMenu) {
+                            // Menu is open, close it
+                            hideContextMenu(pillData.id);
+                        } else {
+                            // Menu is closed, open it
+                            // Create a fake event with the touch coordinates
+                            const touch = e.changedTouches[0];
+                            const fakeEvent = {
+                                clientX: touch.clientX,
+                                clientY: touch.clientY,
+                                target: pillElement,
+                                preventDefault: () => {},
+                                stopPropagation: () => {}
+                            };
+                            showContextMenu(fakeEvent, pillData);
+                        }
+                    } else {
+                        // Touch was on main pill area - handle selection
+                        // If user is typing, finish typing first
+                        if (isTyping) {
+                            finishTyping();
+                        }
+                        
+                        // Toggle selection (works like shift-select by default)
+                        if (selectedPills.has(pillData.id)) {
+                            // Deselect
+                            selectedPills.delete(pillData.id);
+                        } else {
+                            // Select (add to existing selection)
+                            selectedPills.add(pillData.id);
+                        }
+                        updateSelectionDisplay();
+                    }
+                } else if (touchDuration >= 1000) {
+                    // Long touch without drag - do nothing
+                    console.log('Long touch detected, no action taken');
+                }
+                
+                e.preventDefault();
+            }
+            
+            // Clean up the data attribute
+            delete pillElement.dataset.touchOnChevron;
+            
+            // Reset drag styling
+            selectedPills.forEach(pillId => {
+                const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                if (pill) {
+                    pill.classList.remove('dragging');
+                }
+            });
+            
+            // Reset drag state
+            isDragMode = false;
+            lastDropZone = null;
+            e.stopPropagation();
         });
         
-        // Right click for context menu
+        // Right click for context menu (desktop only)
+        // Mobile browsers trigger this on long press, so we need to prevent it
         pillElement.addEventListener('contextmenu', (e) => {
-            showContextMenu(e, pillData);
+            // Always prevent default browser context menu
             e.preventDefault();
+            
+            // Check if this is from a touch event (mobile)
+            // Multiple ways to detect since browser support varies
+            const isTouch = (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) ||
+                           e.pointerType === 'touch' ||
+                           'ontouchstart' in window && navigator.maxTouchPoints > 0;
+            
+            if (isTouch) {
+                // Don't show context menu on mobile - it's handled by touch events
+                return;
+            }
+            
+            // Show context menu only for desktop right-click
+            showContextMenu(e, pillData);
         });
         
         // Drag and drop functionality
@@ -1386,8 +1956,17 @@
             } else {
                 // Insert into existing set
                 const targetSet = tunePillsData[adjustedTargetIndex];
-                let insertIndex = Math.min(position.pillIndex, targetSet.length);
+                let insertIndex;
                 
+                if (position.position === 'after') {
+                    insertIndex = Math.min(position.pillIndex + 1, targetSet.length);
+                } else if (position.position === 'before') {
+                    insertIndex = position.pillIndex; // Insert exactly at the pill index to go before it
+                } else {
+                    insertIndex = Math.min(position.pillIndex, targetSet.length);
+                }
+                
+                console.log(`Inserting into set ${adjustedTargetIndex} at index ${insertIndex} (pill ${position.pillIndex}, position: ${position.position})`);
                 // Insert all dragged pills at the position
                 draggedPills.forEach((pill, index) => {
                     targetSet.splice(insertIndex + index, 0, pill);
@@ -2660,7 +3239,6 @@
                     const lastPillEnd = lastPillRect.right - rect.left;
                     if (clickX > lastPillEnd) {
                         bestPosition = { pillIndex: setLength - 1, position: 'after' };
-                        console.log('Click beyond last pill, positioning at end');
                     }
                 }
                 
@@ -2697,6 +3275,118 @@
             updateSelectionDisplay();
             
             setCursorPosition(tunePillsData.length, 0, 'newset');
+        });
+        
+        // Mobile touch handling for container (cursor placement and scrolling)
+        let containerTouchStart = null;
+        let containerTouchMoved = false;
+        
+        tuneContainer.addEventListener('touchstart', (e) => {
+            // Don't handle touches on tune pills (they have their own handlers)
+            if (e.target.closest('.tune-pill')) {
+                return;
+            }
+            
+            // Don't handle touches on context menus or cursor positions
+            if (e.target.closest('.tune-context-menu') || e.target.classList.contains('cursor-position')) {
+                return;
+            }
+            
+            containerTouchStart = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY,
+                time: Date.now(),
+                target: e.target
+            };
+            containerTouchMoved = false;
+        });
+        
+        tuneContainer.addEventListener('touchmove', (e) => {
+            if (containerTouchStart) {
+                containerTouchMoved = true;
+                // Let browser handle scrolling
+            }
+        });
+        
+        tuneContainer.addEventListener('touchend', (e) => {
+            if (!containerTouchStart) return;
+            
+            const touchDuration = Date.now() - containerTouchStart.time;
+            
+            // If it was a quick tap without movement, treat as cursor placement
+            if (!containerTouchMoved && touchDuration < 500) {
+                const touch = e.changedTouches[0];
+                
+                // Create a synthetic click event to reuse existing click logic
+                const clickEvent = new MouseEvent('click', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    bubbles: true,
+                    cancelable: true
+                });
+                
+                // Set the target and trigger the existing click handler logic
+                Object.defineProperty(clickEvent, 'target', { value: containerTouchStart.target });
+                
+                // Manually execute the cursor positioning logic
+                if (containerTouchStart.target.classList.contains('tune-set')) {
+                    const setIndex = parseInt(containerTouchStart.target.dataset.setIndex);
+                    const rect = containerTouchStart.target.getBoundingClientRect();
+                    const clickX = touch.clientX - rect.left;
+                    const setWidth = rect.width;
+                    const setLength = tunePillsData[setIndex]?.length || 0;
+                    
+                    // Find best cursor position (reusing click logic)
+                    let bestPosition = null;
+                    
+                    if (setLength > 0) {
+                        // Find position relative to pills
+                        const relativePosition = clickX / setWidth;
+                        const estimatedPillIndex = Math.floor(relativePosition * setLength);
+                        const clampedIndex = Math.max(0, Math.min(setLength - 1, estimatedPillIndex));
+                        
+                        if (relativePosition < (clampedIndex + 0.5) / setLength) {
+                            bestPosition = { pillIndex: clampedIndex, position: 'before' };
+                        } else {
+                            bestPosition = { pillIndex: clampedIndex, position: 'after' };
+                        }
+                        
+                        if (relativePosition > 0.9) {
+                            bestPosition = { pillIndex: setLength - 1, position: 'after' };
+                        }
+                    }
+                    
+                    if (!bestPosition) {
+                        bestPosition = { pillIndex: 0, position: 'before' };
+                    }
+                    
+                    // If user is typing, finish typing first
+                    if (isTyping) {
+                        finishTyping();
+                    }
+                    
+                    // Clear selection when touching to move cursor
+                    selectedPills.clear();
+                    updateSelectionDisplay();
+                    
+                    setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
+                } else {
+                    // Touch in empty space - set cursor at end
+                    if (isTyping) {
+                        finishTyping();
+                    }
+                    
+                    selectedPills.clear();
+                    updateSelectionDisplay();
+                    
+                    setCursorPosition(tunePillsData.length, 0, 'newset');
+                }
+                
+                e.preventDefault();
+            }
+            // If touch moved, allow normal scroll behavior (no preventDefault)
+            
+            containerTouchStart = null;
         });
         
         // Keyboard shortcuts and text input
