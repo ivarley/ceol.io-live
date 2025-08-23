@@ -1005,17 +1005,17 @@
             // Focus - with special handling for maintaining keyboard
             if (maintainKeyboard) {
                 // When maintaining keyboard, always focus to keep it visible
-                container.focus();
+                container.focus({ preventScroll: true });
                 
                 // Add a delayed re-focus attempt for stubborn mobile browsers
                 setTimeout(() => {
                     if (container.contentEditable === 'true') {
-                        container.focus();
+                        container.focus({ preventScroll: true });
                     }
                 }, 100);
             } else {
                 // Normal focus for new keyboard activation
-                container.focus();
+                container.focus({ preventScroll: true });
             }
             
             // Place the selection at the cursor position
@@ -1087,7 +1087,7 @@
             }
         } else {
             // Desktop behavior - just focus normally
-            container.focus();
+            container.focus({ preventScroll: true });
         }
     }
     
@@ -2533,7 +2533,7 @@
                 
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
-                    container.focus();
+                    container.focus({ preventScroll: true });
                 }, 300);
             }
         }
