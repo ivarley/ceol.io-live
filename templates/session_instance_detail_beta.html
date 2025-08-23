@@ -777,6 +777,11 @@
         cleanupDragGhosts();
         
         const container = document.getElementById('tune-pills-container');
+        
+        // Remember if the container was contentEditable before clearing (for mobile keyboard persistence)
+        const wasContentEditable = container.contentEditable === 'true';
+        const wasFocused = document.activeElement === container;
+        
         container.innerHTML = '';
         
         if (tunePillsData.length === 0) {
@@ -858,7 +863,8 @@
             setCursorPosition(tunePillsData.length, 0, 'newset');
         } else {
             // Restore cursor position after re-render
-            setCursorPosition(cursorPosition.setIndex, cursorPosition.pillIndex, cursorPosition.position);
+            // Pass maintainKeyboard flag if we were contentEditable before
+            setCursorPosition(cursorPosition.setIndex, cursorPosition.pillIndex, cursorPosition.position, wasContentEditable);
         }
         
         console.log('Finished rendering tune pills'); // Debug log
@@ -1007,10 +1013,8 @@
             container.contentEditable = 'true';
             container.inputMode = 'text';
             
-            // Focus the container to trigger keyboard (if not already focused)
-            if (!wasAlreadyEditable || maintainKeyboard) {
-                container.focus();
-            }
+            // Always focus when setting cursor position on mobile
+            container.focus();
             
             // Place the selection at the cursor position
             const selection = window.getSelection();
@@ -1047,7 +1051,12 @@
                         handleBackspace();
                     } else if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
                         // Handle enter key - keep keyboard open for continued typing
-                        finishTyping(true);
+                        e.preventDefault();
+                        
+                        // Store that we want to keep keyboard open
+                        const shouldKeepKeyboard = isTyping && typingBuffer.trim();
+                        
+                        finishTyping(shouldKeepKeyboard);
                     }
                 });
                 
@@ -2574,6 +2583,18 @@
             if (container) {
                 container.contentEditable = 'false';
                 container.blur();
+            }
+        } else if (isMobileDevice() && keepKeyboardOpen) {
+            // When keeping keyboard open, ensure the container stays focused and editable
+            const container = document.getElementById('tune-pills-container');
+            if (container) {
+                // Re-focus after a delay to ensure the render and cursor positioning is complete
+                setTimeout(() => {
+                    container.contentEditable = 'true';
+                    container.inputMode = 'text';
+                    container.focus();
+                    console.log('Re-focused container to keep keyboard open');
+                }, 100);
             }
         }
     }
