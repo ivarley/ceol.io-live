@@ -694,6 +694,15 @@
             setDiv.className = 'tune-set';
             setDiv.dataset.setIndex = setIndex;
             
+            // Handle empty sets (especially temporary ones)
+            if (tuneSet.length === 0) {
+                // Add cursor position for empty set
+                addCursorPosition(setDiv, setIndex, 0, 'before');
+                
+                // Add some minimal height so the empty set is visible
+                setDiv.style.minHeight = '25px';
+            }
+            
             tuneSet.forEach((pill, pillIndex) => {
                 // Add cursor position before first pill only
                 if (pillIndex === 0) {
@@ -780,9 +789,19 @@
             e.stopPropagation();
             console.log('Clicked cursor position:', setIndex, pillIndex, positionType); // Debug
             
+            // If user is typing, finish typing first
+            if (isTyping) {
+                finishTyping();
+            }
+            
             // Clear selection when clicking to move cursor
             selectedPills.clear();
             updateSelectionDisplay();
+            
+            // Remove temporary empty set if clicking away from it
+            if (removeTemporaryEmptySet()) {
+                renderTunePills();
+            }
             
             setCursorPosition(setIndex, pillIndex, positionType);
         });
@@ -995,6 +1014,12 @@
                 }
             } else {
                 // Click on text area - handle selection
+                
+                // If user is typing, finish typing first
+                if (isTyping) {
+                    finishTyping();
+                }
+                
                 if (e.shiftKey) {
                     // Range selection
                     extendSelection(pillData.id);
@@ -1793,6 +1818,36 @@
         }
     }
     
+    function handleEnterKey() {
+        if (!cursorPosition) return;
+        
+        const { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Only create new line if at the end of a set (after the last pill)
+        if (position === 'after' && tunePillsData[setIndex] && pillIndex === tunePillsData[setIndex].length - 1) {
+            // Create temporary empty set after current set
+            const newSetIndex = setIndex + 1;
+            tunePillsData.splice(newSetIndex, 0, []);
+            temporaryEmptySet = newSetIndex;
+            
+            renderTunePills();
+            setCursorPosition(newSetIndex, 0, 'before');
+            
+            console.log(`Created temporary empty set at index ${newSetIndex}`);
+        }
+    }
+    
+    function removeTemporaryEmptySet() {
+        if (temporaryEmptySet !== null && temporaryEmptySet < tunePillsData.length && tunePillsData[temporaryEmptySet].length === 0) {
+            console.log(`Removing temporary empty set at index ${temporaryEmptySet}`);
+            tunePillsData.splice(temporaryEmptySet, 1);
+            temporaryEmptySet = null;
+            return true;
+        }
+        temporaryEmptySet = null;
+        return false;
+    }
+    
     function finishTyping() {
         if (isTyping && typingBuffer.trim()) {
             const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
@@ -1818,6 +1873,9 @@
     
     // Track if we need to re-render after typing finishes
     let pendingRender = false;
+    
+    // Track temporary empty line
+    let temporaryEmptySet = null;
     
     // Apply landing animation to pills that have been moved
     function applyLandingAnimation(pillIds) {
@@ -2024,6 +2082,11 @@
     function insertTunesAtCursor(tuneNames) {
         if (!cursorPosition || tuneNames.length === 0) return;
         
+        // If we're adding tunes to a temporary empty set, make it permanent
+        if (temporaryEmptySet !== null && cursorPosition.setIndex === temporaryEmptySet) {
+            temporaryEmptySet = null;
+        }
+        
         saveToUndo();
         
         // Create new pills
@@ -2177,13 +2240,12 @@
             if (pillIndex > 0) {
                 newCursorPosition = { setIndex, pillIndex: pillIndex - 1, position: 'after' };
             } else {
-                // Deleting first pill of the set - go to end of previous line if it exists
-                if (setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
-                    const prevSetIndex = setIndex - 1;
-                    const prevSetLength = tunePillsData[prevSetIndex].length;
-                    newCursorPosition = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1, position: 'after' };
+                // Deleting first pill of the set - check if it's the only pill
+                if (tunePillsData[setIndex].length === 1) {
+                    // This is the only pill in the set - set should become a temporary empty line
+                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
                 } else {
-                    // No previous set, position before the next pill in current set
+                    // There are other pills in the set, position before the next pill
                     newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
                 }
             }
@@ -2197,13 +2259,14 @@
             if (tunePillsData[setIndex].length > 0) {
                 // Delete the first pill of current set
                 tuneToDelete = { setIndex, pillIndex: 0 };
-                // After deleting, cursor should go to end of previous set if it exists
-                if (setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
-                    const prevSetIndex = setIndex - 1;
-                    const prevSetLength = tunePillsData[prevSetIndex].length;
-                    newCursorPosition = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1, position: 'after' };
+                
+                // Check if there will be other pills left in this set after deletion
+                if (tunePillsData[setIndex].length > 1) {
+                    // Other pills remain - cursor stays at beginning of set
+                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
                 } else {
-                    // No previous set, stay at beginning of current set
+                    // This is the only pill in the set - set should become a temporary empty line
+                    // The cursor should stay in the same set (which will become empty)
                     newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
                 }
             }
@@ -2218,12 +2281,25 @@
         if (tuneToDelete) {
             saveToUndo();
             const targetSet = tunePillsData[tuneToDelete.setIndex];
+            const wasLastPillInSet = targetSet.length === 1; // Check before deletion
             targetSet.splice(tuneToDelete.pillIndex, 1);
             
-            // Remove empty sets (save the info first for cursor positioning)
-            const setWasRemoved = targetSet.length === 0;
+            // Check if this deletion creates a temporary empty set
+            // This happens when deleting the only pill in a set and cursor stays in that set
+            const shouldCreateTemporaryEmpty = (targetSet.length === 0 && 
+                                              wasLastPillInSet &&
+                                              newCursorPosition && 
+                                              newCursorPosition.setIndex === tuneToDelete.setIndex &&
+                                              newCursorPosition.position === 'before');
+            
+            // Handle empty sets
+            const setWasRemoved = targetSet.length === 0 && !shouldCreateTemporaryEmpty;
             if (setWasRemoved) {
                 tunePillsData.splice(tuneToDelete.setIndex, 1);
+            } else if (shouldCreateTemporaryEmpty) {
+                // Mark this as a temporary empty set
+                temporaryEmptySet = tuneToDelete.setIndex;
+                console.log(`Created temporary empty set at index ${tuneToDelete.setIndex} after deletion`);
             }
             
             // Render first, then set cursor position
@@ -2250,8 +2326,12 @@
                     // Cursor position is after deleted set, adjust index
                     setCursorPosition(newCursorPosition.setIndex - 1, newCursorPosition.pillIndex, newCursorPosition.position);
                 }
+            } else if (shouldCreateTemporaryEmpty) {
+                // Set exists but is now empty (temporary empty set)
+                // Position cursor at the beginning of the empty set
+                setCursorPosition(newCursorPosition.setIndex, 0, 'before');
             } else {
-                // Set still exists, use the calculated new cursor position
+                // Set still exists and has pills, use the calculated new cursor position
                 if (newCursorPosition.pillIndex >= targetSet.length) {
                     // Position is beyond the end of the set, position after last pill
                     setCursorPosition(newCursorPosition.setIndex, targetSet.length - 1, 'after');
@@ -2269,6 +2349,16 @@
     // Cursor movement functions
     function moveCursorLeft(shiftKey = false) {
         if (!cursorPosition) return;
+        
+        // If user is typing, finish typing first
+        if (isTyping) {
+            finishTyping();
+        }
+        
+        // Remove temporary empty set if moving away from it
+        if (removeTemporaryEmptySet()) {
+            renderTunePills();
+        }
         
         let { setIndex, pillIndex, position } = cursorPosition;
         
@@ -2320,6 +2410,16 @@
     
     function moveCursorRight(shiftKey = false) {
         if (!cursorPosition) return;
+        
+        // If user is typing, finish typing first
+        if (isTyping) {
+            finishTyping();
+        }
+        
+        // Remove temporary empty set if moving away from it
+        if (removeTemporaryEmptySet()) {
+            renderTunePills();
+        }
         
         let { setIndex, pillIndex, position } = cursorPosition;
         
@@ -2571,6 +2671,11 @@
                 
                 console.log('Best cursor position:', bestPosition);
                 
+                // If user is typing, finish typing first
+                if (isTyping) {
+                    finishTyping();
+                }
+                
                 // Clear selection when clicking to move cursor
                 selectedPills.clear();
                 updateSelectionDisplay();
@@ -2581,6 +2686,11 @@
             
             // For clicks in other empty space, set cursor at end
             console.log('Setting cursor at end due to empty space click'); // Debug log
+            
+            // If user is typing, finish typing first
+            if (isTyping) {
+                finishTyping();
+            }
             
             // Clear selection when clicking to move cursor
             selectedPills.clear();
@@ -2608,6 +2718,13 @@
                         handleBackspace();
                         return;
                     case 'Enter':
+                        e.preventDefault();
+                        if (isTyping) {
+                            finishTyping();
+                        } else {
+                            handleEnterKey();
+                        }
+                        return;
                     case 'Tab':
                     case ';':
                     case ',':
