@@ -939,7 +939,7 @@
     }
 
     // Set cursor position and show visual cursor
-    function setCursorPosition(setIndex, pillIndex, positionType) {
+    function setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
         
         cursorPosition = { setIndex, pillIndex, position: positionType };
         
@@ -983,12 +983,17 @@
         
         // On mobile devices, make container contenteditable to trigger keyboard
         if (isMobileDevice()) {
+            // Check if contentEditable is already true (keyboard already open)
+            const wasAlreadyEditable = container.contentEditable === 'true';
+            
             // Make the container contenteditable temporarily
             container.contentEditable = 'true';
             container.inputMode = 'text';
             
-            // Focus the container to trigger keyboard
-            container.focus();
+            // Focus the container to trigger keyboard (if not already focused)
+            if (!wasAlreadyEditable || maintainKeyboard) {
+                container.focus();
+            }
             
             // Place the selection at the cursor position
             const selection = window.getSelection();
@@ -1024,8 +1029,8 @@
                         // Handle backspace
                         handleBackspace();
                     } else if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
-                        // Handle enter key
-                        finishTyping();
+                        // Handle enter key - keep keyboard open for continued typing
+                        finishTyping(true);
                     }
                 });
                 
@@ -2506,18 +2511,18 @@
         return false;
     }
     
-    function finishTyping() {
+    function finishTyping(keepKeyboardOpen = false) {
         if (isTyping && typingBuffer.trim()) {
             const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
-            insertTunesAtCursor(tuneNames);
+            insertTunesAtCursor(tuneNames, keepKeyboardOpen);
         }
         
         typingBuffer = '';
         isTyping = false;
         updateCursorWithText();
         
-        // On mobile, remove contenteditable to hide keyboard after finishing
-        if (isMobileDevice()) {
+        // On mobile, only hide keyboard if not continuing to type
+        if (isMobileDevice() && !keepKeyboardOpen) {
             const container = document.getElementById('tune-pills-container');
             if (container) {
                 container.contentEditable = 'false';
@@ -2755,7 +2760,7 @@
         }
     }
     
-    function insertTunesAtCursor(tuneNames) {
+    function insertTunesAtCursor(tuneNames, keepKeyboardOpen = false) {
         if (!cursorPosition || tuneNames.length === 0) return;
         
         // If we're adding tunes to a temporary empty set, make it permanent
@@ -2790,12 +2795,12 @@
                 // Create new set at end
                 tunePillsData.push(newPills);
                 // Position cursor after the last inserted pill in this new set
-                setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after');
+                setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after', keepKeyboardOpen);
             } else {
                 // Create new set at specific index (insert between existing sets)
                 tunePillsData.splice(setIndex, 0, newPills);
                 // Position cursor after the last inserted pill in this new set
-                setCursorPosition(setIndex, newPills.length - 1, 'after');
+                setCursorPosition(setIndex, newPills.length - 1, 'after', keepKeyboardOpen);
             }
         } else {
             // Insert into existing set
@@ -2818,7 +2823,7 @@
             
             // Move cursor to after the inserted pills
             const newCursorPillIndex = insertIndex + newPills.length - 1;
-            setCursorPosition(setIndex, newCursorPillIndex, 'after');
+            setCursorPosition(setIndex, newCursorPillIndex, 'after', keepKeyboardOpen);
         }
         
         renderTunePills();
