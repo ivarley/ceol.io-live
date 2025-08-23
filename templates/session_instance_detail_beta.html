@@ -2499,44 +2499,19 @@
             typingBuffer = typingBuffer.slice(0, -1);
             updateCursorWithText();
         } else if (cursorPosition && !isTyping) {
-            // Delete tune or move cursor
-            deleteTuneAtCursor();
-        }
-    }
-    
-    function handleDelete() {
-        if (!cursorPosition || isTyping) return;
-        
-        const { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Special case: At the beginning of an empty line (temporary empty set)
-        if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length === 0) {
-            // Do nothing if this is the first line
-            if (setIndex === 0) {
-                return;
-            }
+            const { setIndex, pillIndex, position } = cursorPosition;
             
-            // Delete the set break and merge any following content with previous set
-            saveToUndo();
-            
-            // Check if there's a next set with content to merge
-            if (setIndex < tunePillsData.length - 1 && tunePillsData[setIndex + 1].length > 0) {
-                // Merge next set's content into previous set
-                const prevSet = tunePillsData[setIndex - 1];
-                const nextSet = tunePillsData[setIndex + 1];
-                const prevSetOriginalLength = prevSet.length;
+            // Special case: At the beginning of an empty line (after deleting leftmost tune)
+            if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length === 0) {
+                // Don't do anything if this is the first line
+                if (setIndex === 0) {
+                    return;
+                }
                 
-                // Append all pills from next set to previous set
-                prevSet.push(...nextSet);
+                // Delete the set break and merge with previous line
+                saveToUndo();
                 
-                // Remove both the empty set and the next set
-                tunePillsData.splice(setIndex, 2);
-                
-                // Position cursor where the merge happened
-                renderTunePills();
-                setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
-            } else {
-                // Just remove the empty set
+                // Just remove the empty set and position cursor at end of previous set
                 tunePillsData.splice(setIndex, 1);
                 
                 // Position cursor at end of previous set
@@ -2546,33 +2521,80 @@
                 } else {
                     setCursorPosition(0, 0, 'before');
                 }
+                return;
             }
-            return;
+            
+            // Check for another special case: At the beginning of a line with content
+            if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length > 0 && setIndex > 0) {
+                // At the beginning of a line with content - merge current set with previous set
+                saveToUndo();
+                const prevSet = tunePillsData[setIndex - 1];
+                const currentSet = tunePillsData[setIndex];
+                const prevSetOriginalLength = prevSet.length;
+                
+                // Append all pills from current set to previous set
+                prevSet.push(...currentSet);
+                
+                // Remove the current set
+                tunePillsData.splice(setIndex, 1);
+                
+                // Position cursor where the merge happened
+                renderTunePills();
+                setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
+                return;
+            }
+            
+            // Normal backspace behavior: delete tune to the left
+            deleteTuneAtCursor();
         }
+    }
+    
+    function handleDelete() {
+        if (!cursorPosition || isTyping) return;
         
-        // Special case: At the beginning of a line with content
-        if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length > 0) {
-            // Do nothing if this is the first line
+        const { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Special case: On an empty temporary line - just remove the empty line
+        if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length === 0) {
+            // First line, do nothing
             if (setIndex === 0) {
                 return;
             }
             
-            // Delete the set break and merge current set with previous set
+            // Just remove the empty set without merging anything
             saveToUndo();
-            const prevSet = tunePillsData[setIndex - 1];
-            const currentSet = tunePillsData[setIndex];
-            const prevSetOriginalLength = prevSet.length;
-            
-            // Append all pills from current set to previous set
-            prevSet.push(...currentSet);
-            
-            // Remove the current set
             tunePillsData.splice(setIndex, 1);
             
-            // Position cursor where the merge happened
+            // Position cursor at end of previous set
             renderTunePills();
-            setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
+            if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
+                setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
+            } else {
+                setCursorPosition(0, 0, 'before');
+            }
             return;
+        }
+        
+        // Special case: At the end of a line - merge next line's content into current line
+        if (position === 'after' && pillIndex === tunePillsData[setIndex].length - 1) {
+            // Check if there's a next set to merge
+            if (setIndex + 1 < tunePillsData.length) {
+                saveToUndo();
+                const currentSet = tunePillsData[setIndex];
+                const nextSet = tunePillsData[setIndex + 1];
+                const currentSetOriginalLength = currentSet.length;
+                
+                // Append all pills from next set to current set
+                currentSet.push(...nextSet);
+                
+                // Remove the next set
+                tunePillsData.splice(setIndex + 1, 1);
+                
+                // Keep cursor at end of original current set content
+                renderTunePills();
+                setCursorPosition(setIndex, currentSetOriginalLength - 1, 'after');
+                return;
+            }
         }
         
         // Normal delete behavior: delete tune to the right
@@ -2584,7 +2606,7 @@
             if (pillIndex < tunePillsData[setIndex].length) {
                 tuneToDelete = { setIndex, pillIndex };
                 // Cursor stays in the same position (before the next pill)
-                newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
+                newCursorPosition = { setIndex, pillIndex, position: 'before' };
             }
         } else if (position === 'after') {
             // Delete the next pill if it exists
@@ -2603,10 +2625,22 @@
         if (tuneToDelete) {
             saveToUndo();
             const targetSet = tunePillsData[tuneToDelete.setIndex];
+            const wasLastPillInSet = targetSet.length === 1; // Check before deletion
             targetSet.splice(tuneToDelete.pillIndex, 1);
             
-            // Remove empty sets
-            if (targetSet.length === 0) {
+            // Check if this deletion creates a temporary empty set
+            // This happens when deleting the only pill in a set and cursor stays in that set
+            const shouldCreateTemporaryEmpty = (targetSet.length === 0 && 
+                                              wasLastPillInSet &&
+                                              newCursorPosition && 
+                                              newCursorPosition.setIndex === tuneToDelete.setIndex);
+            
+            // Handle empty sets
+            if (targetSet.length === 0 && shouldCreateTemporaryEmpty) {
+                // Mark this as a temporary empty set
+                temporaryEmptySet = tuneToDelete.setIndex;
+            } else if (targetSet.length === 0) {
+                // Remove the empty set entirely and adjust cursor positions
                 tunePillsData.splice(tuneToDelete.setIndex, 1);
                 // Adjust cursor position if needed
                 if (newCursorPosition && newCursorPosition.setIndex > tuneToDelete.setIndex) {
@@ -3112,21 +3146,9 @@
             // After deletion, cursor stays before the same pill (which now has a lower index)
             newCursorPosition = { setIndex, pillIndex: pillIndex - 1, position: 'before' };
         } else if (position === 'before' && pillIndex === 0) {
-            // Cursor is at the beginning of a set
-            if (tunePillsData[setIndex].length > 0) {
-                // Delete the first pill of current set
-                tuneToDelete = { setIndex, pillIndex: 0 };
-                
-                // Check if there will be other pills left in this set after deletion
-                if (tunePillsData[setIndex].length > 1) {
-                    // Other pills remain - cursor stays at beginning of set
-                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
-                } else {
-                    // This is the only pill in the set - set should become a temporary empty line
-                    // The cursor should stay in the same set (which will become empty)
-                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
-                }
-            }
+            // Cursor is at the beginning of a set - for backspace, we don't delete anything here
+            // This case should be handled by the caller (e.g., merge with previous line if empty)
+            return;
         } else if (position === 'newset' && setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
             // Cursor is at a new set position - delete the last pill of the previous set
             const prevSetIndex = setIndex - 1;
