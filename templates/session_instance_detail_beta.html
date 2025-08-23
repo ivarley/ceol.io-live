@@ -718,8 +718,39 @@
         document.querySelectorAll('.mobile-drag-ghost').forEach(ghost => ghost.remove());
     }
     
+    // Create a debug indicator for mobile testing
+    function createDebugIndicator() {
+        if (isMobileDevice()) {
+            const debugDiv = document.createElement('div');
+            debugDiv.id = 'mobile-debug';
+            debugDiv.style.cssText = `
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 8px;
+                font-size: 12px;
+                border-radius: 4px;
+                z-index: 10000;
+                max-width: 200px;
+                font-family: monospace;
+            `;
+            debugDiv.textContent = 'Debug: Ready';
+            document.body.appendChild(debugDiv);
+        }
+    }
+    
+    function updateDebugIndicator(message) {
+        const debug = document.getElementById('mobile-debug');
+        if (debug) {
+            debug.textContent = `Debug: ${message}`;
+        }
+    }
+
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
+        createDebugIndicator();
         if (!isCancelled) {
             // Convert server-side tune sets data to pills format
             const initialTuneSets = {{ tune_sets|tojson }};
@@ -782,7 +813,16 @@
         const wasContentEditable = container.contentEditable === 'true';
         const wasFocused = document.activeElement === container;
         
+        console.log('renderTunePills: was contentEditable:', wasContentEditable, 'was focused:', wasFocused);
+        
         container.innerHTML = '';
+        
+        // If we were contentEditable, restore it immediately after clearing
+        if (wasContentEditable) {
+            container.contentEditable = 'true';
+            container.inputMode = 'text';
+            console.log('renderTunePills: restored contentEditable immediately');
+        }
         
         if (tunePillsData.length === 0) {
             console.log('No tune pills data, showing empty message'); // Debug log
@@ -1013,8 +1053,17 @@
             container.contentEditable = 'true';
             container.inputMode = 'text';
             
-            // Always focus when setting cursor position on mobile
-            container.focus();
+            // Focus - with special handling for maintaining keyboard
+            if (maintainKeyboard) {
+                updateDebugIndicator(`setCursor: maintain KB, wasEdit: ${wasAlreadyEditable}`);
+                // Don't interfere if we're maintaining keyboard state
+                if (!wasAlreadyEditable) {
+                    container.focus();
+                }
+            } else {
+                // Normal focus for new keyboard activation
+                container.focus();
+            }
             
             // Place the selection at the cursor position
             const selection = window.getSelection();
@@ -1055,6 +1104,7 @@
                         
                         // Store that we want to keep keyboard open
                         const shouldKeepKeyboard = isTyping && typingBuffer.trim();
+                        updateDebugIndicator(`Enter pressed, keepKB: ${shouldKeepKeyboard}`);
                         
                         finishTyping(shouldKeepKeyboard);
                     }
@@ -2588,13 +2638,16 @@
             // When keeping keyboard open, ensure the container stays focused and editable
             const container = document.getElementById('tune-pills-container');
             if (container) {
-                // Re-focus after a delay to ensure the render and cursor positioning is complete
+                updateDebugIndicator('Keeping KB open');
+                // Keep contentEditable true and don't blur
+                container.contentEditable = 'true';
+                container.inputMode = 'text';
+                
+                // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
-                    container.contentEditable = 'true';
-                    container.inputMode = 'text';
                     container.focus();
-                    console.log('Re-focused container to keep keyboard open');
-                }, 100);
+                    updateDebugIndicator(`Refocused: ${container.contentEditable}`);
+                }, 200);
             }
         }
     }
