@@ -719,48 +719,9 @@
         document.querySelectorAll('.mobile-drag-ghost').forEach(ghost => ghost.remove());
     }
     
-    // Create a debug indicator for mobile testing
-    function createDebugIndicator() {
-        if (isMobileDevice()) {
-            const debugDiv = document.createElement('div');
-            debugDiv.id = 'mobile-debug';
-            debugDiv.style.cssText = `
-                position: fixed;
-                bottom: 10px;
-                right: 10px;
-                background: rgba(0,0,0,0.8);
-                color: white;
-                padding: 8px;
-                font-size: 12px;
-                border-radius: 4px;
-                z-index: 10000;
-                max-width: 200px;
-                font-family: monospace;
-            `;
-            debugDiv.textContent = 'Debug: Ready';
-            document.body.appendChild(debugDiv);
-        }
-    }
-    
-    let debugMessages = [];
-    
-    function updateDebugIndicator(message) {
-        const debug = document.getElementById('mobile-debug');
-        if (debug) {
-            debugMessages.push(message);
-            // Keep only the last 3 messages
-            if (debugMessages.length > 3) {
-                debugMessages.shift();
-            }
-            debug.innerHTML = debugMessages.map((msg, i) => 
-                `<div style="opacity: ${0.5 + (i * 0.25)}">${i + 1}: ${msg}</div>`
-            ).join('');
-        }
-    }
 
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
-        createDebugIndicator();
         if (!isCancelled) {
             // Convert server-side tune sets data to pills format
             const initialTuneSets = {{ tune_sets|tojson }};
@@ -776,10 +737,8 @@
     function convertTuneSetsToPills(tuneSets) {
         tunePillsData = [];
         
-        console.log('Converting tune sets:', tuneSets); // Debug log
         
         if (!tuneSets || tuneSets.length === 0) {
-            console.log('No tune sets to convert');
             return;
         }
         
@@ -802,7 +761,6 @@
             }
         });
         
-        console.log('Converted to pills data:', tunePillsData); // Debug log
     }
     
     // Generate unique IDs for pills
@@ -812,7 +770,6 @@
     
     // Render tune pills in the container
     function renderTunePills() {
-        console.log('Rendering tune pills, data:', tunePillsData); // Debug log
         
         // Clean up any lingering drag ghosts before re-rendering
         cleanupDragGhosts();
@@ -823,19 +780,15 @@
         const wasContentEditable = container.contentEditable === 'true';
         const wasFocused = document.activeElement === container;
         
-        console.log('renderTunePills: was contentEditable:', wasContentEditable, 'was focused:', wasFocused);
-        
         container.innerHTML = '';
         
         // If we were contentEditable, restore it immediately after clearing
         if (wasContentEditable) {
             container.contentEditable = 'true';
             container.inputMode = 'text';
-            console.log('renderTunePills: restored contentEditable immediately');
         }
         
         if (tunePillsData.length === 0) {
-            console.log('No tune pills data, showing empty message'); // Debug log
             container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
             
             // Add a cursor position for empty container
@@ -917,7 +870,6 @@
             setCursorPosition(cursorPosition.setIndex, cursorPosition.pillIndex, cursorPosition.position, wasContentEditable);
         }
         
-        console.log('Finished rendering tune pills'); // Debug log
     }
     
     // Create a pill element
@@ -966,7 +918,6 @@
         cursorPos.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Clicked cursor position:', setIndex, pillIndex, positionType); // Debug
             
             // If user is typing, finish typing first
             if (isTyping) {
@@ -1023,28 +974,16 @@
         const selector = `.cursor-position[data-set-index="${setIndex}"][data-pill-index="${pillIndex}"][data-position-type="${positionType}"]`;
         const cursorElements = document.querySelectorAll(selector);
         
-        console.log('Looking for cursor position with selector:', selector);
-        console.log('Found cursor positions:', cursorElements.length);
-        
-        // Debug: show all cursor positions that exist
-        const allCursorPositions = document.querySelectorAll('.cursor-position');
-        console.log('All cursor positions:', allCursorPositions.length);
-        allCursorPositions.forEach((pos, i) => {
-            // Position debug removed
-        });
-        
         if (cursorElements.length > 0) {
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
             cursorElements[0].appendChild(cursor);
-            console.log('Cursor added to position element at:', cursorElements[0]);
             
             // Only scroll cursor into view for user-initiated actions (not after drag/drop)
             // Skip scrolling to prevent unwanted view changes after move operations
         } else {
             // Fallback - add cursor at the end
-            console.log('No position found, adding cursor at end');
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
@@ -1065,7 +1004,6 @@
             
             // Focus - with special handling for maintaining keyboard
             if (maintainKeyboard) {
-                updateDebugIndicator(`setCursor: maintain KB, focusing`);
                 // When maintaining keyboard, always focus to keep it visible
                 container.focus();
                 
@@ -1073,13 +1011,11 @@
                 setTimeout(() => {
                     if (container.contentEditable === 'true') {
                         container.focus();
-                        updateDebugIndicator(`setCursor: delayed focus, activeEl: ${document.activeElement === container}`);
                     }
                 }, 100);
             } else {
                 // Normal focus for new keyboard activation
                 container.focus();
-                updateDebugIndicator('setCursor: normal focus');
             }
             
             // Place the selection at the cursor position
@@ -1107,7 +1043,7 @@
                         // Handle text input
                         for (let char of e.data) {
                             if (char === ',' || char === ';') {
-                                finishTyping(false, 'comma/semicolon');
+                                finishTyping();
                             } else {
                                 handleTextInput(char);
                             }
@@ -1121,9 +1057,8 @@
                         
                         // Store that we want to keep keyboard open
                         const shouldKeepKeyboard = isTyping && typingBuffer.trim();
-                        updateDebugIndicator(`Enter: typing=${isTyping}, buf='${typingBuffer}', keep=${shouldKeepKeyboard}`);
                         
-                        finishTyping(shouldKeepKeyboard, 'enter');
+                        finishTyping(shouldKeepKeyboard);
                     }
                 });
                 
@@ -1143,11 +1078,8 @@
                             if (!isKeepingKeyboardOpen) {
                                 container.contentEditable = 'false';
                                 if (isTyping && typingBuffer.trim()) {
-                                    updateDebugIndicator('Blur handler calling finishTyping');
-                                    finishTyping(false, 'blur');
+                                    finishTyping();
                                 }
-                            } else {
-                                updateDebugIndicator('Blur handler blocked - keeping KB open');
                             }
                         }
                     }, 100);
@@ -1176,7 +1108,6 @@
         dropZone.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Clicked horizontal drop zone, positioning cursor for new set at index:', insertAtSetIndex);
             setCursorPosition(insertAtSetIndex, 0, 'newset');
         });
         
@@ -1196,7 +1127,6 @@
             e.stopPropagation(); // IMPORTANT: Stop the event from bubbling to the container
             dropZone.classList.remove('drag-over');
             
-            console.log('Dropped on horizontal zone, creating new set at index:', insertAtSetIndex);
             
             if (dragState) {
                 // Internal drag and drop - use drag data to preserve set structure
@@ -1213,7 +1143,6 @@
                     }
                 } catch (err) {
                     // Fallback to old method if drag data parsing fails
-                    console.log('Could not parse drag data, using fallback method');
                     const draggedIds = Array.from(selectedPills);
                     const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
                     performDrop(position, draggedIds);
@@ -1227,7 +1156,6 @@
                         pasteAtPosition(dragData, position);
                     }
                 } catch (err) {
-                    console.log('Invalid drag data');
                 }
             }
         });
@@ -1247,7 +1175,6 @@
             
             if (y >= zoneRect.top && y <= zoneRect.bottom) {
                 const insertAtSetIndex = parseInt(zoneElement.dataset.insertAtSetIndex);
-                console.log('Found horizontal drop zone at set index:', insertAtSetIndex);
                 return { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
             }
         }
@@ -1374,7 +1301,6 @@
                         navigator.vibrate(50);
                     }
                     
-                    console.log('Entered mobile drag mode');
                 }, 1000);
             }
             
@@ -1483,7 +1409,6 @@
                                             currentDropZone = tuneSet;
                                             currentDropZone.dataset.gapAfterPillIndex = i.toString();
                                             dropSide = 'gap';
-                                            console.log(`Detected gap between pill ${i} and ${i + 1}`);
                                             break;
                                         }
                                     }
@@ -1522,7 +1447,6 @@
                                         currentDropZone = tuneSet;
                                         currentDropZone.dataset.virtualDropType = 'end-of-row';
                                         dropSide = 'end'; // Special indicator for blank space positioning
-                                        console.log('Detected blank space drop zone in set');
                                     } else {
                                         // Regular tune-set drop
                                         currentDropZone = tuneSet;
@@ -1547,7 +1471,6 @@
                                         currentDropZone = container;
                                         currentDropZone.dataset.virtualDropType = 'end-of-list';
                                         dropSide = 'end';
-                                        console.log('Detected blank space drop zone at end');
                                     }
                                 }
                             }
@@ -1575,10 +1498,6 @@
                             
                             // Debug for container
                             if (currentDropZone.id === 'tune-pills-container') {
-                                console.log('Applied mobile-drop-target to container');
-                                console.log('Container classes:', currentDropZone.className);
-                                console.log('Container computed style background:', getComputedStyle(currentDropZone).backgroundColor);
-                                console.log('Container computed style outline:', getComputedStyle(currentDropZone).outline);
                             }
                             
                             // Add side indicator for pills
@@ -1695,7 +1614,6 @@
                             // Dropping in a gap between pills
                             const gapAfterIndex = parseInt(dropZone.dataset.gapAfterPillIndex);
                             dropPosition = { setIndex, pillIndex: gapAfterIndex, position: 'after' };
-                            console.log('Gap drop after pill index:', gapAfterIndex);
                         } else if (dropZone.dataset.virtualDropType === 'end-of-row') {
                             // Dropping in blank space at end of row
                             const setLength = tunePillsData[setIndex]?.length || 0;
@@ -1714,7 +1632,6 @@
                         // Call the existing drop handler with correct parameters
                         const draggedIds = Array.from(selectedPills);
                         performDrop(dropPosition, draggedIds);
-                        console.log('Mobile drop completed at position:', dropPosition);
                     }
                 }
             } else {
@@ -1722,7 +1639,6 @@
                 const touchDuration = Date.now() - touchStartTime;
                 const wasChevronTouch = pillElement.dataset.touchOnChevron === 'true';
                 
-                console.log('Touch ended - duration:', touchDuration, 'chevron:', wasChevronTouch, 'moved:', hasTouchMoved);
                 
                 // Only handle quick taps (less than 500ms to be more responsive)
                 // Long touches should do nothing
@@ -1765,7 +1681,6 @@
                     }
                 } else if (touchDuration >= 1000) {
                     // Long touch without drag - do nothing
-                    console.log('Long touch detected, no action taken');
                 }
                 
                 e.preventDefault();
@@ -1876,7 +1791,6 @@
             });
             
             // Debug: Log the selectedBySet structure
-            console.log('Selected by set:', Array.from(selectedBySet.entries()).map(([setIndex, pills]) => ({
                 setIndex,
                 length: pills.length,
                 pills: pills.map(p => p.tuneName).join(', ')
@@ -1886,7 +1800,6 @@
             const dragData = Array.from(selectedBySet.values()).filter(set => set && set.length > 0);
             
             // Debug: Log final drag data
-            console.log('Final drag data:', dragData.map((set, i) => ({
                 setIndex: i,
                 length: set.length,
                 pills: set.map(p => p.tuneName).join(', ')
@@ -2014,7 +1927,6 @@
         if (!dragData || dragData.length === 0) return;
         
         // Debug: Log the incoming drag data
-        console.log('Drag data received:', dragData.map((set, i) => ({
             setIndex: i,
             length: set.length,
             pills: set.map(p => p.tuneName).join(', ')
@@ -2024,11 +1936,9 @@
         dragData = dragData.filter(set => set && set.length > 0);
         
         if (dragData.length === 0) {
-            console.log('No valid sets in drag data after filtering');
             return;
         }
         
-        console.log('Data structure BEFORE removal:', tunePillsData.map((set, i) => ({
             setIndex: i,
             length: set.length,
             pills: set.map(p => p.tuneName).join(', ')
@@ -2040,16 +1950,13 @@
         const draggedPillIds = Array.from(selectedPills);
         const setsToRemove = new Set();
         
-        console.log('Dragged pill IDs:', draggedPillIds);
         
         draggedPillIds.forEach(pillId => {
             for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
                 const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
                 if (pillIndex !== -1) {
-                    console.log(`Removing pill ${pillId} from set ${setIndex}, position ${pillIndex}`);
                     tunePillsData[setIndex].splice(pillIndex, 1);
                     if (tunePillsData[setIndex].length === 0) {
-                        console.log(`Set ${setIndex} is now empty, marking for removal`);
                         setsToRemove.add(setIndex);
                     }
                     break;
@@ -2057,18 +1964,15 @@
             }
         });
         
-        console.log('Data structure AFTER removal:', tunePillsData.map((set, i) => ({
             setIndex: i,
             length: set.length,
             pills: set.map(p => p.tuneName).join(', ')
         })));
         
-        console.log('Sets to remove:', Array.from(setsToRemove));
         
         // Clean up empty sets BEFORE calculating target position
         tunePillsData = tunePillsData.filter(set => set.length > 0);
         
-        console.log('Data structure AFTER filtering empty sets:', tunePillsData.map((set, i) => ({
             setIndex: i,
             length: set.length,
             pills: set.map(p => p.tuneName).join(', ')
@@ -2082,7 +1986,6 @@
             }
         }
         
-        console.log(`Target set index: ${targetSetIndex}, adjusted to: ${adjustedTargetIndex}`);
         
         // Create new sets with new IDs
         const newSets = dragData.map(set => 
@@ -2101,7 +2004,6 @@
         }
         
         // Debug: Log the data structure after insertion
-        console.log('Data structure after drop:', tunePillsData.map((set, i) => ({
             setIndex: i,
             length: set.length,
             pills: set.map(p => p.tuneName).join(', ')
@@ -2159,7 +2061,6 @@
             } else {
                 // Create new set at specific index (insert between existing sets)
                 tunePillsData.splice(adjustedTargetIndex, 0, draggedPills);
-                console.log(`Inserted new set at index ${adjustedTargetIndex} (original: ${position.setIndex})`);
             }
         } else {
             // Use the adjusted target index for existing sets too
@@ -2179,7 +2080,6 @@
                     insertIndex = Math.min(position.pillIndex, targetSet.length);
                 }
                 
-                console.log(`Inserting into set ${adjustedTargetIndex} at index ${insertIndex} (pill ${position.pillIndex}, position: ${position.position})`);
                 // Insert all dragged pills at the position
                 draggedPills.forEach((pill, index) => {
                     targetSet.splice(insertIndex + index, 0, pill);
@@ -2433,7 +2333,6 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
             const jsonData = JSON.stringify(clipboard);
             navigator.clipboard.writeText(jsonData).catch(err => {
-                console.log('Could not copy to system clipboard');
             });
         }
         
@@ -2625,13 +2524,11 @@
             renderTunePills();
             setCursorPosition(newSetIndex, 0, 'before');
             
-            console.log(`Created temporary empty set at index ${newSetIndex}`);
         }
     }
     
     function removeTemporaryEmptySet() {
         if (temporaryEmptySet !== null && temporaryEmptySet < tunePillsData.length && tunePillsData[temporaryEmptySet].length === 0) {
-            console.log(`Removing temporary empty set at index ${temporaryEmptySet}`);
             tunePillsData.splice(temporaryEmptySet, 1);
             temporaryEmptySet = null;
             return true;
@@ -2640,9 +2537,7 @@
         return false;
     }
     
-    function finishTyping(keepKeyboardOpen = false, source = 'unknown') {
-        updateDebugIndicator(`finishTyping(${source}): keepKB=${keepKeyboardOpen}`);
-        
+    function finishTyping(keepKeyboardOpen = false) {
         // If we're trying to keep keyboard open, set the flag
         if (keepKeyboardOpen) {
             isKeepingKeyboardOpen = true;
@@ -2663,7 +2558,6 @@
         
         // On mobile, only hide keyboard if not continuing to type
         if (isMobileDevice() && !keepKeyboardOpen) {
-            updateDebugIndicator('finishTyping: hiding KB');
             const container = document.getElementById('tune-pills-container');
             if (container) {
                 container.contentEditable = 'false';
@@ -2673,7 +2567,6 @@
             // When keeping keyboard open, ensure the container stays focused and editable
             const container = document.getElementById('tune-pills-container');
             if (container) {
-                updateDebugIndicator('Keeping KB open');
                 // Keep contentEditable true and don't blur
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
@@ -2681,7 +2574,6 @@
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
                     container.focus();
-                    updateDebugIndicator(`Final refocus: active=${document.activeElement === container}`);
                 }, 300);
             }
         }
@@ -2860,14 +2752,12 @@
                         tuneSet: tuneSet,
                         insertionPoint: cursorPosition.nextSibling
                     };
-                    console.log('Captured typing context in tune-set');
                 } else {
                     // Fallback context
                     typingContext = {
                         tuneSet: cursorPosition?.parentNode,
                         insertionPoint: cursorPosition?.nextSibling
                     };
-                    console.log('Captured typing context (fallback)');
                 }
             }
             
@@ -2899,16 +2789,12 @@
             if (typingContext && typingContext.tuneSet) {
                 typingContext.tuneSet.insertBefore(textSpan, typingContext.insertionPoint);
                 typingContext.tuneSet.insertBefore(newCursor, textSpan.nextSibling);
-                console.log('Inserted typing text and cursor using stable context');
             } else {
                 // Emergency fallback
                 console.error('No typing context available!');
             }
             
             // Debug the actual layout
-            console.log('Updated typing text:', typingBuffer);
-            console.log('Text span computed width:', textSpan.offsetWidth);
-            console.log('Text span parent:', textSpan.parentNode?.className);
         } else {
             // Remove any typing text display and reset context
             document.querySelectorAll('.typing-text').forEach(el => el.remove());
@@ -2944,7 +2830,6 @@
         
         const { setIndex, pillIndex, position } = cursorPosition;
         
-        console.log('Inserting tunes at cursor:', { setIndex, pillIndex, position, tuneNames }); // Debug
         
         if (position === 'newset') {
             if (setIndex >= tunePillsData.length) {
@@ -2969,12 +2854,10 @@
                 insertIndex = Math.min(targetSet.length, pillIndex + 1);
             }
             
-            console.log('Calculated insertIndex:', insertIndex, 'for set length:', targetSet.length); // Debug
             
             // Insert all new pills at the position
             newPills.forEach((pill, index) => {
                 targetSet.splice(insertIndex + index, 0, pill);
-                console.log('Inserted pill at index:', insertIndex + index); // Debug
             });
             
             // Move cursor to after the inserted pills
@@ -3012,11 +2895,9 @@
                 pill.tuneName = result.final_name; // Use the canonical name from database
                 pill.state = 'linked';
                 
-                console.log(`Auto-matched "${pill.tuneName}" to tune ID ${result.tune_id}`);
             } else if (result.success && !result.matched) {
                 // No match found - pill becomes unlinked (gray)
                 pill.state = 'unlinked';
-                console.log(`No match found for "${pill.tuneName}"`);
             } else {
                 // Error occurred - pill becomes unlinked
                 pill.state = 'unlinked';
@@ -3136,7 +3017,6 @@
             } else if (shouldCreateTemporaryEmpty) {
                 // Mark this as a temporary empty set
                 temporaryEmptySet = tuneToDelete.setIndex;
-                console.log(`Created temporary empty set at index ${tuneToDelete.setIndex} after deletion`);
             }
             
             // Render first, then set cursor position
@@ -3208,7 +3088,6 @@
             selectedPills.clear();
         }
         
-        console.log('Moving left from:', { setIndex, pillIndex, position }); // Debug
         
         let newSetIndex = setIndex;
         let newPillIndex = pillIndex;
@@ -3269,7 +3148,6 @@
             selectedPills.clear();
         }
         
-        console.log('Moving right from:', { setIndex, pillIndex, position }); // Debug
         
         let newSetIndex = setIndex;
         let newPillIndex = pillIndex;
@@ -3327,7 +3205,6 @@
             selectedPills.clear();
         }
         
-        console.log('Moving up from:', { setIndex, pillIndex, position }); // Debug
         
         let newSetIndex = setIndex;
         let newPillIndex = pillIndex;
@@ -3391,7 +3268,6 @@
             selectedPills.clear();
         }
         
-        console.log('Moving down from:', { setIndex, pillIndex, position }); // Debug
         
         let newSetIndex = setIndex;
         let newPillIndex = pillIndex;
@@ -3435,23 +3311,19 @@
         // Container click to focus
         const tuneContainer = document.getElementById('tune-pills-container');
         tuneContainer.addEventListener('click', (e) => {
-            console.log('Container clicked', e.target, e.target.className); // Debug log
             
             // Don't handle clicks on tune pills or their children (they have their own handlers)
             if (e.target.closest('.tune-pill')) {
-                console.log('Click on tune pill, ignoring'); // Debug log
                 return;
             }
             
             // Don't handle clicks on context menus
             if (e.target.closest('.tune-context-menu')) {
-                console.log('Click on context menu, ignoring'); // Debug log
                 return;
             }
             
             // Check if click is on a cursor position element (they handle themselves)
             if (e.target.classList.contains('cursor-position')) {
-                console.log('Click on cursor position, handled by position element'); // Debug log
                 return;
             }
             
@@ -3463,7 +3335,6 @@
                 const setWidth = rect.width;
                 const setLength = tunePillsData[setIndex]?.length || 0;
                 
-                console.log('Click on tune-set', setIndex, 'at position', clickX, '/', setWidth, 'set length:', setLength);
                 
                 // Find the actual position of tune pills within the set
                 const pillElements = e.target.querySelectorAll('.tune-pill');
@@ -3505,7 +3376,6 @@
                     bestPosition = { pillIndex: 0, position: 'before' };
                 }
                 
-                console.log('Best cursor position:', bestPosition);
                 
                 // If user is typing, finish typing first
                 if (isTyping) {
@@ -3521,7 +3391,6 @@
             }
             
             // For clicks in other empty space, set cursor at end
-            console.log('Setting cursor at end due to empty space click'); // Debug log
             
             // If user is typing, finish typing first
             if (isTyping) {
@@ -3654,7 +3523,6 @@
             // Don't handle keyboard events if container is contentEditable (mobile typing mode)
             const container = document.getElementById('tune-pills-container');
             if (container && container.contentEditable === 'true') {
-                updateDebugIndicator('keydown blocked - contentEditable active');
                 return;
             }
             
@@ -3675,7 +3543,7 @@
                     case 'Enter':
                         e.preventDefault();
                         if (isTyping) {
-                            finishTyping(false, 'keyboard-enter');
+                            finishTyping();
                         } else {
                             handleEnterKey();
                         }
@@ -3784,7 +3652,6 @@
                         pasteAtPosition(dragData, position);
                     }
                 } catch (err) {
-                    console.log('Invalid drag data');
                 }
             }
         });
