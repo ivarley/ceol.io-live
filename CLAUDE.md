@@ -33,12 +33,17 @@ This system provides a mobile and desktop web experience for traditional Irish m
 
 ## Key Features
 
-### Session Tracking
+### Session Data Tracking
 
 - Track regular music sessions with location, timing, and recurrence patterns
 - Record individual session instances (specific dates/times)
-- Add and organize tunes played during sessions
+- Add and organize logs of tunes played during sessions
+
+### Session Logging
+
+- View and edit modes
 - Set management (grouping tunes played consecutively)
+- Beta version (session_instance_detail_beta) using a word-processor like UI with drag and drop, copy paste, undo
 
 ### Tune Database
 
