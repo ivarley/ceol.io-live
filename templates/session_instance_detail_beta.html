@@ -3869,19 +3869,34 @@
         });
     }
     
-    // Message display function
+    // Message display function - uses the existing base template flash message system
     function showMessage(message, type = 'success') {
-        const container = document.getElementById('message-container');
+        // Remove any existing messages first
+        const existingMessages = document.querySelectorAll('.message');
+        existingMessages.forEach(msg => msg.remove());
+        
+        // Create message element using the base template's existing styles
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
-        messageDiv.innerHTML = `<p>${message}</p>`;
+        messageDiv.textContent = message;
         
-        container.innerHTML = '';
-        container.appendChild(messageDiv);
+        // Add to body (the base template styles handle positioning)
+        document.body.appendChild(messageDiv);
         
+        // Trigger the slide-in animation using the base template's .show class
         setTimeout(() => {
-            messageDiv.remove();
-        }, 5000);
+            messageDiv.classList.add('show');
+        }, 50);
+        
+        // Auto-hide after 4 seconds
+        setTimeout(() => {
+            messageDiv.classList.remove('show');
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 300);
+        }, 4000);
     }
 </script>
 {% endblock %}
