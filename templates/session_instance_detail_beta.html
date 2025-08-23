@@ -392,12 +392,13 @@
         .text-cursor {
             display: inline-block;
             width: 2px;
-            height: 20px;
+            height: 21px;
             background-color: var(--primary, #007bff);
             animation: blink 1s infinite;
             vertical-align: middle;
             margin: 0 1px;
             position: relative;
+            top: -5px;
             z-index: 10;
             border-radius: 1px;
             box-shadow: 0 0 2px rgba(0, 123, 255, 0.5);
@@ -411,7 +412,7 @@
         .cursor-position {
             display: inline-block;
             width: 0;
-            height: 20px;
+            height: 21px;
             position: relative;
             vertical-align: middle;
             background-color: transparent;
@@ -425,9 +426,9 @@
             content: '';
             position: absolute;
             left: 3px;
-            top: 0;
+            top: -5px;
             width: 2px;
-            height: 20px;
+            height: 21px;
             background-color: rgba(0, 123, 255, 0.4);
             border-radius: 1px;
         }
