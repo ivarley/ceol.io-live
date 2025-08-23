@@ -932,6 +932,12 @@
         containerElement.appendChild(finalPos);
     }
     
+    // Check if device is mobile
+    function isMobileDevice() {
+        return ('ontouchstart' in window || navigator.maxTouchPoints > 0) && 
+               (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    }
+
     // Set cursor position and show visual cursor
     function setCursorPosition(setIndex, pillIndex, positionType) {
         
@@ -973,7 +979,68 @@
         }
         
         // Focus the container for keyboard input
-        document.getElementById('tune-pills-container').focus();
+        const container = document.getElementById('tune-pills-container');
+        container.focus();
+        
+        // On mobile devices, trigger virtual keyboard when cursor is positioned
+        if (isMobileDevice()) {
+            // Create a hidden input field to trigger the keyboard
+            let hiddenInput = document.getElementById('mobile-keyboard-trigger');
+            if (!hiddenInput) {
+                hiddenInput = document.createElement('input');
+                hiddenInput.id = 'mobile-keyboard-trigger';
+                hiddenInput.type = 'text';
+                hiddenInput.style.cssText = `
+                    position: fixed;
+                    left: -9999px;
+                    top: 50%;
+                    width: 1px;
+                    height: 1px;
+                    opacity: 0;
+                    pointer-events: none;
+                `;
+                document.body.appendChild(hiddenInput);
+                
+                // Forward input from hidden field to our text handling
+                hiddenInput.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    if (value) {
+                        // Process each character
+                        for (let char of value) {
+                            if (char === ',' || char === ';') {
+                                finishTyping();
+                            } else {
+                                handleTextInput(char);
+                            }
+                        }
+                        // Clear the hidden input
+                        hiddenInput.value = '';
+                    }
+                });
+                
+                // Handle special keys
+                hiddenInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === 'Tab') {
+                        e.preventDefault();
+                        finishTyping();
+                        // Don't refocus - let finishTyping handle keyboard state
+                    } else if (e.key === 'Backspace' && hiddenInput.value === '') {
+                        e.preventDefault();
+                        handleBackspace();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelTyping();
+                        hiddenInput.blur();
+                    }
+                });
+            }
+            
+            // Focus the hidden input to show keyboard
+            setTimeout(() => {
+                hiddenInput.focus();
+                hiddenInput.click();
+            }, 100);
+        }
     }
     
     // Create drop indicator
@@ -2436,12 +2503,28 @@
         typingBuffer = '';
         isTyping = false;
         updateCursorWithText();
+        
+        // On mobile, blur the hidden input to hide keyboard after finishing
+        if (isMobileDevice()) {
+            const hiddenInput = document.getElementById('mobile-keyboard-trigger');
+            if (hiddenInput) {
+                hiddenInput.blur();
+            }
+        }
     }
     
     function cancelTyping() {
         typingBuffer = '';
         isTyping = false;
         updateCursorWithText();
+        
+        // On mobile, blur the hidden input to hide keyboard
+        if (isMobileDevice()) {
+            const hiddenInput = document.getElementById('mobile-keyboard-trigger');
+            if (hiddenInput) {
+                hiddenInput.blur();
+            }
+        }
     }
     
     // Track the original cursor context during typing
