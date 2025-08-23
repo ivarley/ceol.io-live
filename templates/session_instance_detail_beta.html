@@ -741,10 +741,19 @@
         }
     }
     
+    let debugMessages = [];
+    
     function updateDebugIndicator(message) {
         const debug = document.getElementById('mobile-debug');
         if (debug) {
-            debug.textContent = `Debug: ${message}`;
+            debugMessages.push(message);
+            // Keep only the last 3 messages
+            if (debugMessages.length > 3) {
+                debugMessages.shift();
+            }
+            debug.innerHTML = debugMessages.map((msg, i) => 
+                `<div style="opacity: ${0.5 + (i * 0.25)}">${i + 1}: ${msg}</div>`
+            ).join('');
         }
     }
 
