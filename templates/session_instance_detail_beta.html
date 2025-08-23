@@ -1058,6 +1058,14 @@
                 updateDebugIndicator(`setCursor: maintain KB, focusing`);
                 // When maintaining keyboard, always focus to keep it visible
                 container.focus();
+                
+                // Add a delayed re-focus attempt for stubborn mobile browsers
+                setTimeout(() => {
+                    if (container.contentEditable === 'true') {
+                        container.focus();
+                        updateDebugIndicator(`setCursor: delayed focus, activeEl: ${document.activeElement === container}`);
+                    }
+                }, 100);
             } else {
                 // Normal focus for new keyboard activation
                 container.focus();
@@ -2645,8 +2653,8 @@
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
                     container.focus();
-                    updateDebugIndicator(`Refocused: ${container.contentEditable}`);
-                }, 200);
+                    updateDebugIndicator(`Final refocus: active=${document.activeElement === container}`);
+                }, 300);
             }
         }
     }
