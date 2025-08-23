@@ -1055,14 +1055,13 @@
             
             // Focus - with special handling for maintaining keyboard
             if (maintainKeyboard) {
-                updateDebugIndicator(`setCursor: maintain KB, wasEdit: ${wasAlreadyEditable}`);
-                // Don't interfere if we're maintaining keyboard state
-                if (!wasAlreadyEditable) {
-                    container.focus();
-                }
+                updateDebugIndicator(`setCursor: maintain KB, focusing`);
+                // When maintaining keyboard, always focus to keep it visible
+                container.focus();
             } else {
                 // Normal focus for new keyboard activation
                 container.focus();
+                updateDebugIndicator('setCursor: normal focus');
             }
             
             // Place the selection at the cursor position
