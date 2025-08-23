@@ -45,6 +45,17 @@
             color: var(--text-color);
             font-style: italic;
         }
+        
+        /* Ensure header stays truly fixed */
+        .header.fixed-top {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 1030 !important;
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+        }
         .edit-link {
             color: var(--primary);
             text-decoration: none;
@@ -1005,17 +1016,17 @@
             // Focus - with special handling for maintaining keyboard
             if (maintainKeyboard) {
                 // When maintaining keyboard, always focus to keep it visible
-                container.focus({ preventScroll: true });
+                container.focus();
                 
                 // Add a delayed re-focus attempt for stubborn mobile browsers
                 setTimeout(() => {
                     if (container.contentEditable === 'true') {
-                        container.focus({ preventScroll: true });
+                        container.focus();
                     }
                 }, 100);
             } else {
                 // Normal focus for new keyboard activation
-                container.focus({ preventScroll: true });
+                container.focus();
             }
             
             // Place the selection at the cursor position
@@ -1087,7 +1098,7 @@
             }
         } else {
             // Desktop behavior - just focus normally
-            container.focus({ preventScroll: true });
+            container.focus();
         }
     }
     
@@ -2533,7 +2544,7 @@
                 
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
-                    container.focus({ preventScroll: true });
+                    container.focus();
                 }, 300);
             }
         }
