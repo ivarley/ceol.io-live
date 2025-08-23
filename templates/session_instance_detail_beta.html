@@ -2998,8 +2998,11 @@
         }));
         
         // Attempt to auto-match each tune via API
-        newPills.forEach(pill => {
-            autoMatchTune(pill);
+        const matchPromises = newPills.map(pill => autoMatchTune(pill));
+        
+        // Wait for all matching to complete, then show appropriate message
+        Promise.all(matchPromises).then(() => {
+            showMatchingResults(newPills);
         });
         
         const { setIndex, pillIndex, position } = cursorPosition;
@@ -3040,7 +3043,31 @@
         }
         
         renderTunePills();
-        showMessage(`Added ${newPills.length} tune(s)`, 'success');
+    }
+    
+    // Show results after all tune matching completes
+    function showMatchingResults(pills) {
+        const linkedCount = pills.filter(pill => pill.state === 'linked').length;
+        const unlinkedCount = pills.filter(pill => pill.state === 'unlinked').length;
+        const totalCount = pills.length;
+        
+        let message, type;
+        
+        if (linkedCount === totalCount) {
+            // All tunes matched
+            message = totalCount === 1 ? 'Tune matched' : `All ${totalCount} tunes matched`;
+            type = 'success';
+        } else if (linkedCount === 0) {
+            // No tunes matched
+            message = totalCount === 1 ? 'Tune not matched' : `${totalCount} tunes not matched`;
+            type = 'error';
+        } else {
+            // Some matched, some didn't
+            message = `${linkedCount} of ${totalCount} tunes matched`;
+            type = 'success';
+        }
+        
+        showMessage(message, type);
     }
     
     // Auto-match a tune against the database without saving
