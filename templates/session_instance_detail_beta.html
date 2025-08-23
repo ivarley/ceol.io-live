@@ -980,110 +980,78 @@
         
         // Focus the container for keyboard input
         const container = document.getElementById('tune-pills-container');
-        container.focus();
         
-        // On mobile devices, trigger virtual keyboard when cursor is positioned
+        // On mobile devices, make container contenteditable to trigger keyboard
         if (isMobileDevice()) {
-            // Remove any existing mobile input
-            const existingInput = document.getElementById('mobile-keyboard-trigger');
-            if (existingInput) {
-                existingInput.remove();
+            // Make the container contenteditable temporarily
+            container.contentEditable = 'true';
+            container.inputMode = 'text';
+            
+            // Focus the container to trigger keyboard
+            container.focus();
+            
+            // Place the selection at the cursor position
+            const selection = window.getSelection();
+            const range = document.createRange();
+            
+            // Try to position the caret near the cursor element
+            const cursorElement = document.getElementById('active-cursor');
+            if (cursorElement && cursorElement.parentNode) {
+                range.setStartBefore(cursorElement);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
             }
             
-            // Create a new input field at the cursor position
-            const mobileInput = document.createElement('input');
-            mobileInput.id = 'mobile-keyboard-trigger';
-            mobileInput.type = 'text';
-            mobileInput.inputMode = 'text';  // Explicitly set input mode
-            mobileInput.autocomplete = 'off';
-            mobileInput.autocorrect = 'off';
-            mobileInput.autocapitalize = 'off';
-            mobileInput.spellcheck = false;
-            mobileInput.placeholder = 'Type tune name...';
-            
-            // Style it to be barely visible but functional
-            mobileInput.style.cssText = `
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 200px;
-                height: 30px;
-                font-size: 16px;
-                padding: 5px;
-                border: 1px solid #ccc;
-                background: white;
-                z-index: 10000;
-                opacity: 0.1;
-            `;
-            
-            // Add to body for maximum compatibility
-            document.body.appendChild(mobileInput);
-            
-            // Forward input from mobile field to our text handling
-            let lastValue = '';
-            mobileInput.addEventListener('input', (e) => {
-                const value = e.target.value;
+            // Handle input on the contenteditable container
+            if (!container.hasAttribute('data-mobile-input-setup')) {
+                container.setAttribute('data-mobile-input-setup', 'true');
                 
-                // Detect what was added
-                if (value.length > lastValue.length) {
-                    const newChars = value.substring(lastValue.length);
-                    for (let char of newChars) {
-                        if (char === ',' || char === ';') {
-                            finishTyping();
-                            mobileInput.value = '';
-                            lastValue = '';
-                        } else {
-                            handleTextInput(char);
-                        }
-                    }
-                }
-                lastValue = value;
-            });
-            
-            // Handle backspace
-            mobileInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
+                // Prevent default contenteditable behavior
+                container.addEventListener('beforeinput', (e) => {
                     e.preventDefault();
-                    finishTyping();
-                    mobileInput.value = '';
-                    lastValue = '';
-                } else if (e.key === 'Backspace') {
-                    if (mobileInput.value === '') {
-                        e.preventDefault();
-                        handleBackspace();
-                    } else {
-                        // Let it delete from the input field
-                        setTimeout(() => {
-                            lastValue = mobileInput.value;
-                            // Also update our typing buffer
-                            if (typingBuffer.length > 0) {
-                                typingBuffer = typingBuffer.slice(0, -1);
-                                updateCursorWithText();
+                    
+                    if (e.inputType === 'insertText' && e.data) {
+                        // Handle text input
+                        for (let char of e.data) {
+                            if (char === ',' || char === ';') {
+                                finishTyping();
+                            } else {
+                                handleTextInput(char);
                             }
-                        }, 0);
-                    }
-                }
-            });
-            
-            // Handle blur
-            mobileInput.addEventListener('blur', (e) => {
-                setTimeout(() => {
-                    if (isTyping && typingBuffer.trim()) {
+                        }
+                    } else if (e.inputType === 'deleteContentBackward') {
+                        // Handle backspace
+                        handleBackspace();
+                    } else if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+                        // Handle enter key
                         finishTyping();
                     }
-                    // Remove the input after blur
-                    if (mobileInput.parentNode) {
-                        mobileInput.remove();
-                    }
-                }, 200);
-            });
-            
-            // Focus with a small delay to ensure DOM is ready
-            setTimeout(() => {
-                mobileInput.focus();
-                mobileInput.select();
-            }, 50);
+                });
+                
+                // Prevent any actual content changes to the container
+                container.addEventListener('input', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                
+                // Clean up on blur
+                container.addEventListener('blur', (e) => {
+                    // Only remove contenteditable if we're really blurring
+                    setTimeout(() => {
+                        const activeEl = document.activeElement;
+                        if (activeEl !== container && !container.contains(activeEl)) {
+                            container.contentEditable = 'false';
+                            if (isTyping && typingBuffer.trim()) {
+                                finishTyping();
+                            }
+                        }
+                    }, 100);
+                });
+            }
+        } else {
+            // Desktop behavior - just focus normally
+            container.focus();
         }
     }
     
@@ -2548,12 +2516,12 @@
         isTyping = false;
         updateCursorWithText();
         
-        // On mobile, blur the input to hide keyboard after finishing
+        // On mobile, remove contenteditable to hide keyboard after finishing
         if (isMobileDevice()) {
-            const mobileInput = document.getElementById('mobile-keyboard-trigger');
-            if (mobileInput) {
-                mobileInput.blur();
-                mobileInput.value = '';
+            const container = document.getElementById('tune-pills-container');
+            if (container) {
+                container.contentEditable = 'false';
+                container.blur();
             }
         }
     }
@@ -2563,12 +2531,12 @@
         isTyping = false;
         updateCursorWithText();
         
-        // On mobile, blur the input to hide keyboard
+        // On mobile, remove contenteditable to hide keyboard
         if (isMobileDevice()) {
-            const mobileInput = document.getElementById('mobile-keyboard-trigger');
-            if (mobileInput) {
-                mobileInput.blur();
-                mobileInput.value = '';
+            const container = document.getElementById('tune-pills-container');
+            if (container) {
+                container.contentEditable = 'false';
+                container.blur();
             }
         }
     }
