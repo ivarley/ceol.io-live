@@ -704,6 +704,20 @@
     let isTyping = false;
     let typingBuffer = '';
     
+    // Global mobile drag ghost management
+    let globalDragGhost = null;
+    
+    // Function to clean up any existing drag ghosts
+    function cleanupDragGhosts() {
+        // Remove the global ghost if it exists
+        if (globalDragGhost) {
+            globalDragGhost.remove();
+            globalDragGhost = null;
+        }
+        // Also remove any orphaned ghosts by class name
+        document.querySelectorAll('.mobile-drag-ghost').forEach(ghost => ghost.remove());
+    }
+    
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
         if (!isCancelled) {
@@ -758,6 +772,9 @@
     // Render tune pills in the container
     function renderTunePills() {
         console.log('Rendering tune pills, data:', tunePillsData); // Debug log
+        
+        // Clean up any lingering drag ghosts before re-rendering
+        cleanupDragGhosts();
         
         const container = document.getElementById('tune-pills-container');
         container.innerHTML = '';
@@ -1230,7 +1247,6 @@
         let hasTouchMoved = false;
         let touchStartPos = null;
         let isDragMode = false;
-        let dragGhost = null;
         
         pillElement.addEventListener('touchstart', (e) => {
             touchStartTime = Date.now();
@@ -1298,11 +1314,14 @@
                 
                 const touch = e.touches[0];
                 
-                // Create or update drag ghost
-                if (!dragGhost) {
-                    dragGhost = document.createElement('div');
-                    dragGhost.className = 'mobile-drag-ghost';
-                    dragGhost.style.cssText = `
+                // Clean up any existing ghosts first
+                cleanupDragGhosts();
+                
+                // Create new drag ghost
+                if (!globalDragGhost) {
+                    globalDragGhost = document.createElement('div');
+                    globalDragGhost.className = 'mobile-drag-ghost';
+                    globalDragGhost.style.cssText = `
                         position: fixed;
                         pointer-events: none;
                         z-index: 10000;
@@ -1314,13 +1333,13 @@
                         transform: rotate(2deg);
                         opacity: 0.8;
                     `;
-                    dragGhost.textContent = selectedPills.size > 1 ? `${selectedPills.size} pills` : pillData.tuneName;
-                    document.body.appendChild(dragGhost);
+                    globalDragGhost.textContent = selectedPills.size > 1 ? `${selectedPills.size} pills` : pillData.tuneName;
+                    document.body.appendChild(globalDragGhost);
                 }
                 
                 // Update ghost position smoothly
-                dragGhost.style.left = (touch.clientX - 30) + 'px';
-                dragGhost.style.top = (touch.clientY - 15) + 'px';
+                globalDragGhost.style.left = (touch.clientX - 30) + 'px';
+                globalDragGhost.style.top = (touch.clientY - 15) + 'px';
                 
                 // Check for drop zone under finger every 50ms to show color feedback
                 const now = Date.now();
@@ -1535,11 +1554,8 @@
                 const touch = e.changedTouches[0];
                 const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
                 
-                // Clean up drag ghost
-                if (dragGhost) {
-                    dragGhost.remove();
-                    dragGhost = null;
-                }
+                // Clean up all drag ghosts
+                cleanupDragGhosts();
                 
                 // Remove classes from the last drop zone
                 if (lastDropZone) {
@@ -1688,6 +1704,37 @@
             isDragMode = false;
             lastDropZone = null;
             e.stopPropagation();
+        });
+        
+        // Handle touch cancel (e.g., incoming call, system gesture)
+        pillElement.addEventListener('touchcancel', (e) => {
+            clearTimeout(longPressTimer);
+            
+            // Clean up any drag ghosts
+            cleanupDragGhosts();
+            
+            // Reset drag state
+            if (isDragMode) {
+                // Remove dragging class from all pills
+                selectedPills.forEach(pillId => {
+                    const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                    if (pill) {
+                        pill.classList.remove('dragging');
+                    }
+                });
+                
+                // Remove classes from the last drop zone
+                if (lastDropZone) {
+                    lastDropZone.classList.remove('mobile-drop-target', 'drop-before', 'drop-after', 'drop-at-end', 'drop-in-gap');
+                    delete lastDropZone.dataset.dropSide;
+                    delete lastDropZone.dataset.gapAfterPillIndex;
+                    lastDropZone.style.removeProperty('--gap-indicator-left');
+                    lastDropZone.style.removeProperty('--gap-indicator-top');
+                    lastDropZone = null;
+                }
+                
+                isDragMode = false;
+            }
         });
         
         // Right click for context menu (desktop only)
