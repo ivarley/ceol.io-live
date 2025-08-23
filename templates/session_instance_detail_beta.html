@@ -2625,6 +2625,8 @@
     }
     
     function finishTyping(keepKeyboardOpen = false) {
+        updateDebugIndicator(`finishTyping: keepKB=${keepKeyboardOpen}, isTyping=${isTyping}, buffer='${typingBuffer.trim()}'`);
+        
         if (isTyping && typingBuffer.trim()) {
             const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
             insertTunesAtCursor(tuneNames, keepKeyboardOpen);
@@ -2636,6 +2638,7 @@
         
         // On mobile, only hide keyboard if not continuing to type
         if (isMobileDevice() && !keepKeyboardOpen) {
+            updateDebugIndicator('finishTyping: hiding KB');
             const container = document.getElementById('tune-pills-container');
             if (container) {
                 container.contentEditable = 'false';
