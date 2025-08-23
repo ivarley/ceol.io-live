@@ -703,6 +703,7 @@
     let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
     let isTyping = false;
     let typingBuffer = '';
+    let isKeepingKeyboardOpen = false;
     
     // Global mobile drag ghost management
     let globalDragGhost = null;
@@ -1120,7 +1121,7 @@
                         
                         // Store that we want to keep keyboard open
                         const shouldKeepKeyboard = isTyping && typingBuffer.trim();
-                        updateDebugIndicator(`Enter pressed, keepKB: ${shouldKeepKeyboard}`);
+                        updateDebugIndicator(`Enter: typing=${isTyping}, buf='${typingBuffer}', keep=${shouldKeepKeyboard}`);
                         
                         finishTyping(shouldKeepKeyboard);
                     }
@@ -1138,9 +1139,15 @@
                     setTimeout(() => {
                         const activeEl = document.activeElement;
                         if (activeEl !== container && !container.contains(activeEl)) {
-                            container.contentEditable = 'false';
-                            if (isTyping && typingBuffer.trim()) {
-                                finishTyping();
+                            // Don't interfere if we're intentionally keeping keyboard open
+                            if (!isKeepingKeyboardOpen) {
+                                container.contentEditable = 'false';
+                                if (isTyping && typingBuffer.trim()) {
+                                    updateDebugIndicator('Blur handler calling finishTyping');
+                                    finishTyping();
+                                }
+                            } else {
+                                updateDebugIndicator('Blur handler blocked - keeping KB open');
                             }
                         }
                     }, 100);
@@ -2635,6 +2642,15 @@
     
     function finishTyping(keepKeyboardOpen = false) {
         updateDebugIndicator(`finishTyping: keepKB=${keepKeyboardOpen}, isTyping=${isTyping}, buffer='${typingBuffer.trim()}'`);
+        
+        // If we're trying to keep keyboard open, set the flag
+        if (keepKeyboardOpen) {
+            isKeepingKeyboardOpen = true;
+            // Clear the flag after a delay to allow processing to complete
+            setTimeout(() => {
+                isKeepingKeyboardOpen = false;
+            }, 1000);
+        }
         
         if (isTyping && typingBuffer.trim()) {
             const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
