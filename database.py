@@ -7,7 +7,7 @@ def normalize_apostrophes(text):
     if not text:
         return text
     # Replace various smart apostrophes and quotes with standard apostrophe
-    return text.replace(''', "'").replace(''', "'").replace('"', '"').replace('"', '"')
+    return text.replace('‘', "'").replace('’', "'").replace('“', '"').replace('”', '"')
 
 
 def get_db_connection():

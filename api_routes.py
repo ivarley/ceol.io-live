@@ -1001,7 +1001,7 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
 
 def link_tune_ajax(session_path, date):
     tune_input = request.json.get('tune_id', '').strip()
-    tune_name = request.json.get('tune_name', '').strip()
+    tune_name = normalize_apostrophes(request.json.get('tune_name', '').strip())
     order_number = request.json.get('order_number')
     
     if not tune_input or not tune_name or order_number is None:
@@ -2653,7 +2653,7 @@ def match_tune_ajax(session_path, date):
     Match a single tune name against the database without saving anything.
     Used by the beta tune pill editor for auto-matching typed text.
     """
-    tune_name = request.json.get('tune_name', '').strip()
+    tune_name = normalize_apostrophes(request.json.get('tune_name', '').strip())
     if not tune_name:
         return jsonify({'success': False, 'message': 'Please provide a tune name'})
     
