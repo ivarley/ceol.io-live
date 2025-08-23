@@ -1790,20 +1790,8 @@
                 });
             });
             
-            // Debug: Log the selectedBySet structure
-                setIndex,
-                length: pills.length,
-                pills: pills.map(p => p.tuneName).join(', ')
-            })));
-            
             // Convert to array of sets, preserving set breaks
             const dragData = Array.from(selectedBySet.values()).filter(set => set && set.length > 0);
-            
-            // Debug: Log final drag data
-                setIndex: i,
-                length: set.length,
-                pills: set.map(p => p.tuneName).join(', ')
-            })));
             
             e.dataTransfer.setData('text/json', JSON.stringify(dragData));
             e.dataTransfer.effectAllowed = 'move';
@@ -1926,23 +1914,12 @@
     function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
         if (!dragData || dragData.length === 0) return;
         
-        // Debug: Log the incoming drag data
-            setIndex: i,
-            length: set.length,
-            pills: set.map(p => p.tuneName).join(', ')
-        })));
-        
         // Filter out any empty sets from drag data
         dragData = dragData.filter(set => set && set.length > 0);
         
         if (dragData.length === 0) {
             return;
         }
-        
-            setIndex: i,
-            length: set.length,
-            pills: set.map(p => p.tuneName).join(', ')
-        })));
         
         saveToUndo();
         
@@ -1964,19 +1941,8 @@
             }
         });
         
-            setIndex: i,
-            length: set.length,
-            pills: set.map(p => p.tuneName).join(', ')
-        })));
-        
-        
         // Clean up empty sets BEFORE calculating target position
         tunePillsData = tunePillsData.filter(set => set.length > 0);
-        
-            setIndex: i,
-            length: set.length,
-            pills: set.map(p => p.tuneName).join(', ')
-        })));
         
         // Calculate adjusted target index AFTER cleanup
         let adjustedTargetIndex = targetSetIndex;
@@ -2002,12 +1968,6 @@
         } else {
             tunePillsData.splice(adjustedTargetIndex, 0, ...newSets);
         }
-        
-        // Debug: Log the data structure after insertion
-            setIndex: i,
-            length: set.length,
-            pills: set.map(p => p.tuneName).join(', ')
-        })));
         
         renderTunePills();
         
