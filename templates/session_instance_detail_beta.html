@@ -46,23 +46,9 @@
             font-style: italic;
         }
         
-        /* Fix for contentEditable affecting fixed positioning */
-        html {
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        body {
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-            height: 100%;
-        }
-        
         /* Force header to stay fixed even when contentEditable is active */
         .header.fixed-top {
             position: fixed !important;
-            position: -webkit-sticky !important;
-            position: sticky !important;
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
@@ -72,12 +58,6 @@
             will-change: transform;
             -webkit-backface-visibility: hidden;
             backface-visibility: hidden;
-        }
-        
-        /* Prevent contentEditable from affecting viewport */
-        .tune-pills-container[contenteditable="true"] {
-            -webkit-user-modify: read-write-plaintext-only;
-            user-modify: read-write-plaintext-only;
         }
         
         .edit-link {

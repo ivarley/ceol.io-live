@@ -59,7 +59,7 @@
             transform: translateX(-50%);
             padding: 15px 25px;
             border-radius: 6px;
-            z-index: 1100;
+            z-index: 10000;
             min-width: 300px;
             text-align: center;
             box-shadow: 0 4px 12px var(--dropdown-shadow);
@@ -315,7 +315,7 @@ function getOrCreateMessageContainer() {
         container.style.top = '0';
         container.style.left = '0';
         container.style.width = '100%';
-        container.style.zIndex = '1100';
+        container.style.zIndex = '10000';
         container.style.pointerEvents = 'none';
         document.body.appendChild(container);
     }
