@@ -1,0 +1,2910 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session_instance.session_name }} - {{ session_instance.date }} - Irish Music Session Details (Beta){% endblock %}
+
+{% block extra_css %}
+<style>
+        .hidden {
+            display: none;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .loading-ellipsis {
+            display: inline-block;
+            color: var(--disabled-text);
+        }
+        .loading-ellipsis:after {
+            content: '...';
+            animation: ellipsis 1.5s infinite;
+            width: 1em;
+            text-align: left;
+            display: inline-block;
+        }
+        @keyframes ellipsis {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+            100% { content: ''; }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .cancelled-date {
+            color: var(--danger, #dc3545);
+            text-decoration: line-through;
+        }
+        .cancelled-message {
+            padding: 20px;
+            background-color: var(--light);
+            border-left: 4px solid var(--danger, #dc3545);
+            margin: 20px 0;
+            color: var(--text-color);
+            font-style: italic;
+        }
+        .edit-link {
+            color: var(--primary);
+            text-decoration: none;
+            margin-left: 15px;
+            font-size: 0.7em;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .edit-link:hover {
+            text-decoration: underline;
+        }
+        .editable-header:hover .edit-link {
+            opacity: 1;
+        }
+        
+        /* Beta Editor Styles */
+        .tune-pills-container {
+            min-height: 200px;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            background: var(--bg-color, white);
+            line-height: 1.8;
+            font-size: 16px;
+            cursor: text;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+        
+        .tune-pills-container:hover {
+            border-color: var(--primary);
+        }
+        
+        .tune-pills-container:focus-within {
+            border-color: var(--primary);
+            outline: none;
+        }
+        
+        .tune-set {
+            margin-bottom: 2px;
+            min-height: 18px;
+        }
+        
+        .tune-set:last-child {
+            margin-bottom: 0;
+        }
+        
+        .tune-pill {
+            display: inline-block;
+            margin: 2px;
+            padding: 0px 9px;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            user-select: none;
+            vertical-align: middle;
+            line-height: 21px;
+        }
+        
+        .tune-pill.unlinked {
+            background-color: var(--secondary, #6c757d);
+            color: white;
+            border: 1px solid var(--secondary, #6c757d);
+        }
+        
+        .tune-pill.loading {
+            background-color: #e9ecef;
+            color: #6c757d;
+            border: 1px solid #e9ecef;
+        }
+        
+        .tune-pill.linked {
+            background-color: var(--primary, #007bff);
+            color: white;
+            border: 1px solid var(--primary, #007bff);
+        }
+        
+        .tune-pill.error {
+            background-color: var(--warning, #ffc107);
+            color: var(--dark, #212529);
+            border: 1px solid var(--warning, #ffc107);
+        }
+        
+        .tune-pill.selected {
+            box-shadow: 0 0 0 2px var(--primary);
+            transform: scale(1.05);
+        }
+        
+        .tune-pill.dragging {
+            opacity: 0.7;
+            transform: rotate(3deg);
+            z-index: 1000;
+        }
+        
+        .tune-pill.just-landed {
+            background-color: #ffc107 !important;
+            border-color: #ffc107 !important;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+            animation: landingGlow 3s ease-out forwards;
+        }
+        
+        /* Loading spinner for pills waiting for API response */
+        .tune-pill .loading-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(108, 117, 125, 0.3);
+            border-top: 2px solid #6c757d;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes landingGlow {
+            0% {
+                background-color: #ffc107 !important;
+                border-color: #ffc107 !important;
+                box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+            }
+            100% {
+                background-color: var(--primary, #007bff) !important;
+                border-color: var(--primary, #007bff) !important;
+                box-shadow: none;
+            }
+        }
+        
+        .tune-pill .chevron {
+            position: absolute;
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            border-left: 5px solid currentColor;
+            opacity: 0.7;
+            transition: transform 0.2s ease;
+        }
+        
+        .tune-pill .chevron.open {
+            transform: translateY(-50%) rotate(90deg);
+        }
+        
+        .tune-pill .text {
+            margin-left: 10px;
+        }
+        
+        .drop-indicator {
+            display: inline-block;
+            width: 3px;
+            height: 20px;
+            background-color: var(--primary);
+            border-radius: 2px;
+            margin: 0 2px;
+            vertical-align: middle;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .drop-indicator.active {
+            opacity: 1;
+        }
+        
+        .horizontal-drop-zone {
+            height: 12px;
+            width: 100%;
+            margin: 0px 0;
+            position: relative;
+            cursor: text;
+            transition: background-color 0.2s ease;
+        }
+        
+        .horizontal-drop-zone:hover {
+            background-color: rgba(0, 123, 255, 0.08);
+        }
+        
+        .horizontal-drop-zone.drag-over {
+            background-color: rgba(0, 123, 255, 0.15);
+        }
+        
+        .horizontal-drop-zone.drag-over::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 2px;
+            background-color: var(--primary);
+            border-radius: 1px;
+            transform: translateY(-50%);
+        }
+        
+        .text-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 20px;
+            background-color: var(--primary, #007bff);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin: 0 1px;
+            position: relative;
+            z-index: 10;
+            border-radius: 1px;
+            box-shadow: 0 0 2px rgba(0, 123, 255, 0.5);
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .cursor-position {
+            display: inline-block;
+            width: 0;
+            height: 20px;
+            position: relative;
+            vertical-align: middle;
+            background-color: transparent;
+            cursor: text;
+            padding: 0 3px; /* Create hover area without affecting layout */
+            margin: 0;
+            overflow: visible; /* Allow content to extend beyond boundaries */
+        }
+        
+        .cursor-position:hover::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: 0;
+            width: 2px;
+            height: 20px;
+            background-color: rgba(0, 123, 255, 0.4);
+            border-radius: 1px;
+        }
+        
+        .text-input {
+            display: inline-block;
+            min-width: 200px;
+            border: 2px solid var(--primary);
+            outline: none;
+            background: var(--bg-color, white);
+            font-family: inherit;
+            font-size: inherit;
+            color: var(--text-color);
+            vertical-align: middle;
+            margin: 2px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
+        .tune-context-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 1500;
+            font-size: 14px;
+            color: var(--text-color);
+            white-space: nowrap;
+            display: none;
+            min-width: 120px;
+            pointer-events: auto;
+            touch-action: manipulation;
+        }
+        
+        .tune-context-menu a {
+            display: block;
+            padding: 8px 12px;
+            text-decoration: none;
+            color: var(--text-color);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .tune-context-menu a:hover {
+            background-color: var(--hover-bg);
+            color: var(--primary);
+        }
+        
+        .tune-context-menu .menu-section {
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 4px;
+            padding-bottom: 4px;
+        }
+        
+        .tune-context-menu .menu-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        /* Dark mode adjustments */
+        [data-theme="dark"] .tune-pills-container {
+            background: var(--bg-color);
+            border-color: var(--border-color);
+        }
+        
+        [data-theme="dark"] .tune-context-menu {
+            background: var(--dropdown-bg);
+            border-color: var(--border-color);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .tune-context-menu a {
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .tune-context-menu a:hover {
+            background-color: var(--hover-bg);
+            color: var(--primary);
+        }
+        
+        /* Modals for linking and editing tunes */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: var(--bg-color, white);
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            color: var(--text-color);
+        }
+        
+        .modal-header {
+            margin-bottom: 16px;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: var(--text-color);
+        }
+        
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        
+        .modal-body label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+        
+        .modal-body input, .modal-body textarea, .modal-body select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        .modal-footer {
+            text-align: right;
+        }
+        
+        .modal-footer button {
+            margin-left: 8px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .modal-footer .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .modal-footer .btn-secondary {
+            background-color: var(--secondary);
+            color: white;
+        }
+        
+        .modal-footer button:hover {
+            opacity: 0.9;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-page" style="display: block;">
+
+    <h1 class="editable-header">{{ session_instance.session_name }}<span class="edit-link" id="edit-name-btn">Edit</span></h1>
+    <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
+    
+    {% if session_instance.location_override %}
+    <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
+        <strong>Note</strong> - actual location of this session: {{ session_instance.location_override }}
+    </p>
+    {% endif %}
+    
+    <div id="message-container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="message success">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+    
+    <!-- Beta Mode Indicator -->
+    <div style="background-color: var(--warning-bg, #fff3cd); border: 1px solid var(--warning, #ffc107); border-radius: 4px; padding: 12px; margin: 20px 0; color: var(--text-color);">
+        <strong>🧪 Beta Editor Mode</strong> - This is the experimental tune pill editor. <a href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}">Switch to normal view</a>
+    </div>
+    
+    <!-- Link Tune Modal -->
+    <div id="link-tune-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Link Tune</h3>
+            </div>
+            <div class="modal-body">
+                <p>Enter a URL or tune ID from thesession.org to link for this name:</p>
+                <label for="tune-link-input">Tune ID or URL:</label>
+                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="link-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="link-confirm-btn">Link</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Tune Modal -->
+    <div id="edit-tune-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Tune</h3>
+            </div>
+            <div class="modal-body">
+                <label for="edit-tune-name-input">Tune Name:</label>
+                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="edit-tune-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="edit-tune-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Session Instance Modal -->
+    <div id="edit-session-instance-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Session Instance</h3>
+            </div>
+            <div class="modal-body">
+                <label for="edit-session-date-input">Session Date:</label>
+                <input type="date" id="edit-session-date-input" required>
+                
+                <label for="edit-session-location-input" style="margin-top: 16px;">Location:</label>
+                <input type="text" id="edit-session-location-input" placeholder="The usual: {{ session_instance.session_name }}">
+                
+                <label for="edit-session-comments-input" style="margin-top: 16px;">Comments:</label>
+                <textarea id="edit-session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
+                
+                <div style="margin-top: 16px;">
+                    <label style="display: flex; align-items: center; font-weight: normal;">
+                        <input type="checkbox" id="edit-session-cancelled-input" style="margin-right: 8px; width: auto;">
+                        Cancelled?
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="edit-session-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="edit-session-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    {% if session_instance.comments %}
+    <div class="session-instance-comments">
+        <h3>Notes from this session:</h3>
+        <p>{{ session_instance.comments }}</p>
+    </div>
+    {% endif %}
+    
+    {% if session_instance.is_cancelled %}
+    <div class="cancelled-message">
+        <strong>This session instance was cancelled.</strong>
+    </div>
+    {% else %}
+    <div id="tunes-container">
+        <h3>Tunes Played:</h3>
+        <div id="tune-pills-container" class="tune-pills-container" tabindex="0" role="textbox" aria-label="Tune editor">
+            <!-- Tune pills will be rendered here -->
+        </div>
+    </div>
+    {% endif %}
+    
+    <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const sessionPath = '{{ session_instance.session_path }}';
+    const sessionDate = '{{ session_instance.date }}';
+    const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
+    
+    // Session instance data for editing
+    const sessionInstanceData = {
+        date: '{{ session_instance.date }}',
+        location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
+        default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
+        comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
+        is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
+    };
+    
+    // Beta Editor State
+    let tunePillsData = [];
+    let undoStack = [];
+    let redoStack = [];
+    let selectedPills = new Set();
+    let dragState = null;
+    let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
+    let isTyping = false;
+    let typingBuffer = '';
+    
+    // Initialize the editor on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!isCancelled) {
+            // Convert server-side tune sets data to pills format
+            const initialTuneSets = {{ tune_sets|tojson }};
+            convertTuneSetsToPills(initialTuneSets);
+            renderTunePills();
+            setupEventListeners();
+        }
+        
+        setupSessionEditListeners();
+    });
+    
+    // Convert tune sets to pills data format
+    function convertTuneSetsToPills(tuneSets) {
+        tunePillsData = [];
+        
+        console.log('Converting tune sets:', tuneSets); // Debug log
+        
+        if (!tuneSets || tuneSets.length === 0) {
+            console.log('No tune sets to convert');
+            return;
+        }
+        
+        tuneSets.forEach(tuneSet => {
+            const setData = [];
+            tuneSet.forEach(tune => {
+                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType] = tune;
+                setData.push({
+                    id: generateId(),
+                    orderNumber: orderNumber,
+                    tuneId: tuneId,
+                    tuneName: tuneName,
+                    setting: setting,
+                    tuneType: tuneType,
+                    state: tuneId ? 'linked' : 'unlinked'
+                });
+            });
+            if (setData.length > 0) {
+                tunePillsData.push(setData);
+            }
+        });
+        
+        console.log('Converted to pills data:', tunePillsData); // Debug log
+    }
+    
+    // Generate unique IDs for pills
+    function generateId() {
+        return 'pill_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    // Render tune pills in the container
+    function renderTunePills() {
+        console.log('Rendering tune pills, data:', tunePillsData); // Debug log
+        
+        const container = document.getElementById('tune-pills-container');
+        container.innerHTML = '';
+        
+        if (tunePillsData.length === 0) {
+            console.log('No tune pills data, showing empty message'); // Debug log
+            container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
+            
+            // Add a cursor position for empty container
+            const emptyPos = document.createElement('span');
+            emptyPos.className = 'cursor-position';
+            emptyPos.dataset.setIndex = '0';
+            emptyPos.dataset.pillIndex = '0';
+            emptyPos.dataset.positionType = 'newset';
+            emptyPos.style.position = 'absolute';
+            emptyPos.style.top = '50%';
+            emptyPos.style.left = '50%';
+            emptyPos.style.transform = 'translate(-50%, -50%)';
+            
+            emptyPos.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setCursorPosition(0, 0, 'newset');
+            });
+            
+            container.appendChild(emptyPos);
+            
+            // Set initial cursor position
+            setCursorPosition(0, 0, 'newset');
+            return;
+        }
+        
+        tunePillsData.forEach((tuneSet, setIndex) => {
+            // Add horizontal drop zone before each set (except the first one)
+            if (setIndex > 0) {
+                const dropZone = createHorizontalDropZone(setIndex);
+                container.appendChild(dropZone);
+            }
+            
+            const setDiv = document.createElement('div');
+            setDiv.className = 'tune-set';
+            setDiv.dataset.setIndex = setIndex;
+            
+            tuneSet.forEach((pill, pillIndex) => {
+                // Add cursor position before first pill only
+                if (pillIndex === 0) {
+                    addCursorPosition(setDiv, setIndex, pillIndex, 'before');
+                }
+                
+                const pillElement = createPillElement(pill, setIndex, pillIndex);
+                setDiv.appendChild(pillElement);
+                
+                // Add cursor position after each pill (this becomes the "before" position for next pill)
+                addCursorPosition(setDiv, setIndex, pillIndex, 'after');
+                
+                // Add spacing between pills
+                if (pillIndex < tuneSet.length - 1) {
+                    const spacer = document.createElement('span');
+                    spacer.textContent = ' ';
+                    setDiv.appendChild(spacer);
+                }
+            });
+            
+            container.appendChild(setDiv);
+        });
+        
+        // Add final cursor position at the end
+        addFinalCursor(container);
+        
+        // Set default cursor position at the end if none exists
+        if (!cursorPosition) {
+            setCursorPosition(tunePillsData.length, 0, 'newset');
+        } else {
+            // Restore cursor position after re-render
+            setCursorPosition(cursorPosition.setIndex, cursorPosition.pillIndex, cursorPosition.position);
+        }
+        
+        console.log('Finished rendering tune pills'); // Debug log
+    }
+    
+    // Create a pill element
+    function createPillElement(pill, setIndex, pillIndex) {
+        const pillDiv = document.createElement('div');
+        pillDiv.className = `tune-pill ${pill.state}`;
+        pillDiv.dataset.pillId = pill.id;
+        pillDiv.dataset.setIndex = setIndex;
+        pillDiv.dataset.pillIndex = pillIndex;
+        pillDiv.draggable = true;
+        
+        // Add chevron
+        const chevron = document.createElement('div');
+        chevron.className = 'chevron';
+        pillDiv.appendChild(chevron);
+        
+        // Add text
+        const text = document.createElement('span');
+        text.className = 'text';
+        text.textContent = pill.tuneName;
+        pillDiv.appendChild(text);
+        
+        // Add loading spinner if pill is in loading state
+        if (pill.state === 'loading') {
+            const spinner = document.createElement('span');
+            spinner.className = 'loading-spinner';
+            pillDiv.appendChild(spinner);
+        }
+        
+        // Add event listeners
+        setupPillEventListeners(pillDiv, pill);
+        
+        return pillDiv;
+    }
+    
+    // Add cursor position markers
+    function addCursorPosition(parent, setIndex, pillIndex, positionType) {
+        const cursorPos = document.createElement('span');
+        cursorPos.className = 'cursor-position';
+        cursorPos.dataset.setIndex = setIndex;
+        cursorPos.dataset.pillIndex = pillIndex;
+        cursorPos.dataset.positionType = positionType;
+        
+        console.log('Creating cursor position:', setIndex, pillIndex, positionType); // Debug
+        
+        // Add click handler for cursor positioning
+        cursorPos.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Clicked cursor position:', setIndex, pillIndex, positionType); // Debug
+            
+            // Clear selection when clicking to move cursor
+            selectedPills.clear();
+            updateSelectionDisplay();
+            
+            setCursorPosition(setIndex, pillIndex, positionType);
+        });
+        
+        parent.appendChild(cursorPos);
+    }
+    
+    // Add final cursor at end
+    function addFinalCursor(containerElement) {
+        const finalPos = document.createElement('span');
+        finalPos.className = 'cursor-position';
+        finalPos.dataset.setIndex = tunePillsData.length;
+        finalPos.dataset.pillIndex = 0;
+        finalPos.dataset.positionType = 'newset';
+        
+        finalPos.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setCursorPosition(tunePillsData.length, 0, 'newset');
+        });
+        
+        containerElement.appendChild(finalPos);
+    }
+    
+    // Set cursor position and show visual cursor
+    function setCursorPosition(setIndex, pillIndex, positionType) {
+        console.log('Setting cursor position:', setIndex, pillIndex, positionType);
+        
+        cursorPosition = { setIndex, pillIndex, position: positionType };
+        
+        // Remove existing cursors
+        document.querySelectorAll('.text-cursor').forEach(cursor => cursor.remove());
+        
+        // Add cursor at the specified position
+        const selector = `.cursor-position[data-set-index="${setIndex}"][data-pill-index="${pillIndex}"][data-position-type="${positionType}"]`;
+        const cursorElements = document.querySelectorAll(selector);
+        
+        console.log('Looking for cursor position with selector:', selector);
+        console.log('Found cursor positions:', cursorElements.length);
+        
+        // Debug: show all cursor positions that exist
+        const allCursorPositions = document.querySelectorAll('.cursor-position');
+        console.log('All cursor positions:', allCursorPositions.length);
+        allCursorPositions.forEach((pos, i) => {
+            console.log(`Position ${i}:`, pos.dataset.setIndex, pos.dataset.pillIndex, pos.dataset.positionType);
+        });
+        
+        if (cursorElements.length > 0) {
+            const cursor = document.createElement('div');
+            cursor.className = 'text-cursor';
+            cursor.id = 'active-cursor';
+            cursorElements[0].appendChild(cursor);
+            console.log('Cursor added to position element at:', cursorElements[0]);
+            
+            // Only scroll cursor into view for user-initiated actions (not after drag/drop)
+            // Skip scrolling to prevent unwanted view changes after move operations
+        } else {
+            // Fallback - add cursor at the end
+            console.log('No position found, adding cursor at end');
+            const cursor = document.createElement('div');
+            cursor.className = 'text-cursor';
+            cursor.id = 'active-cursor';
+            document.getElementById('tune-pills-container').appendChild(cursor);
+        }
+        
+        // Focus the container for keyboard input
+        document.getElementById('tune-pills-container').focus();
+    }
+    
+    // Create drop indicator
+    function createDropIndicator() {
+        const indicator = document.createElement('div');
+        indicator.className = 'drop-indicator';
+        return indicator;
+    }
+    
+    // Create horizontal drop zone between sets
+    function createHorizontalDropZone(insertAtSetIndex) {
+        const dropZone = document.createElement('div');
+        dropZone.className = 'horizontal-drop-zone';
+        dropZone.dataset.insertAtSetIndex = insertAtSetIndex;
+        
+        // Click handler - position cursor for typing new set
+        dropZone.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Clicked horizontal drop zone, positioning cursor for new set at index:', insertAtSetIndex);
+            setCursorPosition(insertAtSetIndex, 0, 'newset');
+        });
+        
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // IMPORTANT: Stop the event from bubbling to the container
+            dropZone.classList.remove('drag-over');
+            
+            console.log('Dropped on horizontal zone, creating new set at index:', insertAtSetIndex);
+            
+            if (dragState) {
+                // Internal drag and drop - use drag data to preserve set structure
+                try {
+                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    if (dragData && Array.isArray(dragData)) {
+                        // Use the existing performDrop logic but with the structured data
+                        dropStructuredSetsAtNewPosition(dragData, insertAtSetIndex);
+                    } else {
+                        // Fallback to old method if drag data is invalid
+                        const draggedIds = Array.from(selectedPills);
+                        const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                        performDrop(position, draggedIds);
+                    }
+                } catch (err) {
+                    // Fallback to old method if drag data parsing fails
+                    console.log('Could not parse drag data, using fallback method');
+                    const draggedIds = Array.from(selectedPills);
+                    const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                    performDrop(position, draggedIds);
+                }
+            } else {
+                // External drag or paste
+                try {
+                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    if (dragData && Array.isArray(dragData)) {
+                        const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                        pasteAtPosition(dragData, position);
+                    }
+                } catch (err) {
+                    console.log('Invalid drag data');
+                }
+            }
+        });
+        
+        return dropZone;
+    }
+    
+    // Find drop position based on mouse coordinates
+    function findDropPosition(x, y) {
+        const containerElement = document.getElementById('tune-pills-container');
+        
+        // First check for horizontal drop zones
+        const horizontalZones = containerElement.querySelectorAll('.horizontal-drop-zone');
+        for (let i = 0; i < horizontalZones.length; i++) {
+            const zoneElement = horizontalZones[i];
+            const zoneRect = zoneElement.getBoundingClientRect();
+            
+            if (y >= zoneRect.top && y <= zoneRect.bottom) {
+                const insertAtSetIndex = parseInt(zoneElement.dataset.insertAtSetIndex);
+                console.log('Found horizontal drop zone at set index:', insertAtSetIndex);
+                return { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+            }
+        }
+        
+        // Then check tune sets
+        const sets = containerElement.querySelectorAll('.tune-set');
+        
+        for (let setIndex = 0; setIndex < sets.length; setIndex++) {
+            const setElement = sets[setIndex];
+            const setRect = setElement.getBoundingClientRect();
+            
+            if (y >= setRect.top && y <= setRect.bottom) {
+                const pills = setElement.querySelectorAll('.tune-pill');
+                
+                for (let pillIndex = 0; pillIndex < pills.length; pillIndex++) {
+                    const pillRect = pills[pillIndex].getBoundingClientRect();
+                    
+                    if (x < pillRect.left + pillRect.width / 2) {
+                        return { setIndex, pillIndex, position: 'before' };
+                    }
+                }
+                
+                // After last pill in this set
+                return { setIndex, pillIndex: pills.length, position: 'after' };
+            }
+        }
+        
+        // After last set
+        return { setIndex: sets.length, pillIndex: 0, position: 'newset' };
+    }
+    
+    // Setup event listeners for pills
+    function setupPillEventListeners(pillElement, pillData) {
+        // Click to select or show context menu
+        pillElement.addEventListener('click', (e) => {
+            // Calculate if click is on the left side (chevron area)
+            const rect = pillElement.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const textElement = pillElement.querySelector('.text');
+            const textStart = textElement ? textElement.offsetLeft : 20; // Fallback to 20px if no text found
+            
+            // If click is to the left of the text, treat it as chevron click
+            if (clickX < textStart) {
+                // Check if menu is already open for this pill
+                const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
+                if (existingMenu) {
+                    // Menu is open, close it
+                    hideContextMenu(pillData.id);
+                } else {
+                    // Menu is closed, open it
+                    showContextMenu(e, pillData);
+                }
+            } else {
+                // Click on text area - handle selection
+                if (e.shiftKey) {
+                    // Range selection
+                    extendSelection(pillData.id);
+                } else if (e.ctrlKey || e.metaKey) {
+                    // Toggle selection
+                    toggleSelection(pillData.id);
+                } else {
+                    // Single selection
+                    selectSingle(pillData.id);
+                }
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        
+        // Long press for mobile
+        let longPressTimer;
+        pillElement.addEventListener('touchstart', (e) => {
+            longPressTimer = setTimeout(() => {
+                showContextMenu(e, pillData);
+            }, 800);
+        });
+        
+        pillElement.addEventListener('touchend', () => {
+            clearTimeout(longPressTimer);
+        });
+        
+        pillElement.addEventListener('touchmove', () => {
+            clearTimeout(longPressTimer);
+        });
+        
+        // Right click for context menu
+        pillElement.addEventListener('contextmenu', (e) => {
+            showContextMenu(e, pillData);
+            e.preventDefault();
+        });
+        
+        // Drag and drop functionality
+        pillElement.addEventListener('dragstart', (e) => {
+            dragState = {
+                draggedPillId: pillData.id,
+                startX: e.clientX,
+                startY: e.clientY
+            };
+            
+            // If dragged pill is not selected, select only it
+            if (!selectedPills.has(pillData.id)) {
+                selectSingle(pillData.id);
+            }
+            
+            // Visual feedback - apply dragging class to all selected pills
+            selectedPills.forEach(pillId => {
+                const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                if (pill) {
+                    pill.classList.add('dragging');
+                }
+            });
+            
+            // Set drag data (for clipboard compatibility) - preserve set structure
+            const selectedBySet = new Map();
+            
+            tunePillsData.forEach((tuneSet, setIndex) => {
+                tuneSet.forEach((pill, pillIndex) => {
+                    if (selectedPills.has(pill.id)) {
+                        if (!selectedBySet.has(setIndex)) {
+                            selectedBySet.set(setIndex, []);
+                        }
+                        selectedBySet.get(setIndex).push(JSON.parse(JSON.stringify(pill)));
+                    }
+                });
+            });
+            
+            // Debug: Log the selectedBySet structure
+            console.log('Selected by set:', Array.from(selectedBySet.entries()).map(([setIndex, pills]) => ({
+                setIndex,
+                length: pills.length,
+                pills: pills.map(p => p.tuneName).join(', ')
+            })));
+            
+            // Convert to array of sets, preserving set breaks
+            const dragData = Array.from(selectedBySet.values()).filter(set => set && set.length > 0);
+            
+            // Debug: Log final drag data
+            console.log('Final drag data:', dragData.map((set, i) => ({
+                setIndex: i,
+                length: set.length,
+                pills: set.map(p => p.tuneName).join(', ')
+            })));
+            
+            e.dataTransfer.setData('text/json', JSON.stringify(dragData));
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        pillElement.addEventListener('dragend', (e) => {
+            // Remove dragging class from all pills that might have it
+            document.querySelectorAll('.tune-pill.dragging').forEach(pill => {
+                pill.classList.remove('dragging');
+            });
+            clearDropIndicators();
+            dragState = null;
+        });
+    }
+    
+    // Selection functions
+    function selectSingle(pillId) {
+        selectedPills.clear();
+        selectedPills.add(pillId);
+        updateSelectionDisplay();
+    }
+    
+    function toggleSelection(pillId) {
+        if (selectedPills.has(pillId)) {
+            selectedPills.delete(pillId);
+        } else {
+            selectedPills.add(pillId);
+        }
+        updateSelectionDisplay();
+    }
+    
+    function extendSelection(pillId) {
+        // For shift-click selection, we need to select from the last selected pill to this one
+        if (selectedPills.size === 0) {
+            // If no pills are selected, just select this one
+            selectedPills.add(pillId);
+        } else {
+            // Find the range between the last selected pill and the current one
+            const allPills = document.querySelectorAll('.tune-pill');
+            const pillIds = Array.from(allPills).map(pill => pill.dataset.pillId);
+            
+            // Find the indices of the last selected pill and the current pill
+            const lastSelectedId = Array.from(selectedPills)[selectedPills.size - 1];
+            const lastIndex = pillIds.indexOf(lastSelectedId);
+            const currentIndex = pillIds.indexOf(pillId);
+            
+            if (lastIndex !== -1 && currentIndex !== -1) {
+                // Select all pills between the last selected and current (inclusive)
+                const startIndex = Math.min(lastIndex, currentIndex);
+                const endIndex = Math.max(lastIndex, currentIndex);
+                
+                for (let i = startIndex; i <= endIndex; i++) {
+                    selectedPills.add(pillIds[i]);
+                }
+            } else {
+                // Fallback: just add the current pill
+                selectedPills.add(pillId);
+            }
+        }
+        updateSelectionDisplay();
+    }
+    
+    function updateSelectionDisplay() {
+        document.querySelectorAll('.tune-pill').forEach(pill => {
+            if (selectedPills.has(pill.dataset.pillId)) {
+                pill.classList.add('selected');
+            } else {
+                pill.classList.remove('selected');
+            }
+        });
+    }
+    
+    // Drag and drop support functions
+    function findPillById(pillId) {
+        for (const set of tunePillsData) {
+            for (const pill of set) {
+                if (pill.id === pillId) {
+                    return pill;
+                }
+            }
+        }
+        return null;
+    }
+    
+    function clearDropIndicators() {
+        document.querySelectorAll('.drop-indicator').forEach(indicator => {
+            indicator.remove();
+        });
+    }
+    
+    function showDropIndicator(position) {
+        clearDropIndicators();
+        
+        const containerElement = document.getElementById('tune-pills-container');
+        const sets = containerElement.querySelectorAll('.tune-set');
+        
+        if (position.position === 'newset') {
+            // Show indicator at end of container
+            const indicator = createDropIndicator();
+            indicator.classList.add('active');
+            containerElement.appendChild(indicator);
+        } else {
+            const targetSet = sets[position.setIndex];
+            const pills = targetSet.querySelectorAll('.tune-pill');
+            
+            if (position.position === 'before' && pills[position.pillIndex]) {
+                const indicator = createDropIndicator();
+                indicator.classList.add('active');
+                targetSet.insertBefore(indicator, pills[position.pillIndex]);
+            } else {
+                // After last pill or specific position
+                const indicator = createDropIndicator();
+                indicator.classList.add('active');
+                targetSet.appendChild(indicator);
+            }
+        }
+    }
+    
+    // Specialized function for dropping structured sets at a new position (horizontal zones)
+    function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
+        if (!dragData || dragData.length === 0) return;
+        
+        // Debug: Log the incoming drag data
+        console.log('Drag data received:', dragData.map((set, i) => ({
+            setIndex: i,
+            length: set.length,
+            pills: set.map(p => p.tuneName).join(', ')
+        })));
+        
+        // Filter out any empty sets from drag data
+        dragData = dragData.filter(set => set && set.length > 0);
+        
+        if (dragData.length === 0) {
+            console.log('No valid sets in drag data after filtering');
+            return;
+        }
+        
+        console.log('Data structure BEFORE removal:', tunePillsData.map((set, i) => ({
+            setIndex: i,
+            length: set.length,
+            pills: set.map(p => p.tuneName).join(', ')
+        })));
+        
+        saveToUndo();
+        
+        // Remove dragged pills from their current positions (same logic as performDrop)
+        const draggedPillIds = Array.from(selectedPills);
+        const setsToRemove = new Set();
+        
+        console.log('Dragged pill IDs:', draggedPillIds);
+        
+        draggedPillIds.forEach(pillId => {
+            for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+                if (pillIndex !== -1) {
+                    console.log(`Removing pill ${pillId} from set ${setIndex}, position ${pillIndex}`);
+                    tunePillsData[setIndex].splice(pillIndex, 1);
+                    if (tunePillsData[setIndex].length === 0) {
+                        console.log(`Set ${setIndex} is now empty, marking for removal`);
+                        setsToRemove.add(setIndex);
+                    }
+                    break;
+                }
+            }
+        });
+        
+        console.log('Data structure AFTER removal:', tunePillsData.map((set, i) => ({
+            setIndex: i,
+            length: set.length,
+            pills: set.map(p => p.tuneName).join(', ')
+        })));
+        
+        console.log('Sets to remove:', Array.from(setsToRemove));
+        
+        // Clean up empty sets BEFORE calculating target position
+        tunePillsData = tunePillsData.filter(set => set.length > 0);
+        
+        console.log('Data structure AFTER filtering empty sets:', tunePillsData.map((set, i) => ({
+            setIndex: i,
+            length: set.length,
+            pills: set.map(p => p.tuneName).join(', ')
+        })));
+        
+        // Calculate adjusted target index AFTER cleanup
+        let adjustedTargetIndex = targetSetIndex;
+        for (let i = 0; i < targetSetIndex; i++) {
+            if (setsToRemove.has(i)) {
+                adjustedTargetIndex--;
+            }
+        }
+        
+        console.log(`Target set index: ${targetSetIndex}, adjusted to: ${adjustedTargetIndex}`);
+        
+        // Create new sets with new IDs
+        const newSets = dragData.map(set => 
+            set.map(pill => ({
+                ...pill,
+                id: generateId(),
+                orderNumber: null
+            }))
+        );
+        
+        // Insert the new sets at the adjusted position
+        if (adjustedTargetIndex >= tunePillsData.length) {
+            tunePillsData.push(...newSets);
+        } else {
+            tunePillsData.splice(adjustedTargetIndex, 0, ...newSets);
+        }
+        
+        // Debug: Log the data structure after insertion
+        console.log('Data structure after drop:', tunePillsData.map((set, i) => ({
+            setIndex: i,
+            length: set.length,
+            pills: set.map(p => p.tuneName).join(', ')
+        })));
+        
+        renderTunePills();
+        
+        // Apply landing animation
+        const movedPillIds = newSets.flat().map(pill => pill.id);
+        setTimeout(() => {
+            applyLandingAnimation(movedPillIds);
+        }, 50);
+    }
+    
+    function performDrop(position, draggedPillIds) {
+        if (!draggedPillIds || draggedPillIds.length === 0) return;
+        
+        saveToUndo();
+        
+        // Track which sets will become empty after removal
+        const originalSetCount = tunePillsData.length;
+        const setsToRemove = new Set();
+        
+        // Remove dragged pills from their current positions
+        const draggedPills = [];
+        draggedPillIds.forEach(pillId => {
+            for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+                if (pillIndex !== -1) {
+                    draggedPills.push(tunePillsData[setIndex].splice(pillIndex, 1)[0]);
+                    if (tunePillsData[setIndex].length === 0) {
+                        setsToRemove.add(setIndex);
+                    }
+                    break;
+                }
+            }
+        });
+        
+        // Calculate how many sets before target position will be removed
+        let adjustedTargetIndex = position.setIndex;
+        for (let i = 0; i < position.setIndex; i++) {
+            if (setsToRemove.has(i)) {
+                adjustedTargetIndex--;
+            }
+        }
+        
+        // Clean up empty sets
+        tunePillsData = tunePillsData.filter(set => set.length > 0);
+        
+        // Insert at new position
+        if (position.position === 'newset') {
+            if (adjustedTargetIndex >= tunePillsData.length) {
+                // Create new set at end
+                tunePillsData.push(draggedPills);
+            } else {
+                // Create new set at specific index (insert between existing sets)
+                tunePillsData.splice(adjustedTargetIndex, 0, draggedPills);
+                console.log(`Inserted new set at index ${adjustedTargetIndex} (original: ${position.setIndex})`);
+            }
+        } else {
+            // Use the adjusted target index for existing sets too
+            if (adjustedTargetIndex >= tunePillsData.length) {
+                // Create new set at end
+                tunePillsData.push(draggedPills);
+            } else {
+                // Insert into existing set
+                const targetSet = tunePillsData[adjustedTargetIndex];
+                let insertIndex = Math.min(position.pillIndex, targetSet.length);
+                
+                // Insert all dragged pills at the position
+                draggedPills.forEach((pill, index) => {
+                    targetSet.splice(insertIndex + index, 0, pill);
+                });
+            }
+        }
+        
+        renderTunePills();
+        
+        // Apply landing animation to moved pills
+        const movedPillIds = draggedPills.map(pill => pill.id);
+        setTimeout(() => {
+            applyLandingAnimation(movedPillIds);
+        }, 50); // Small delay to ensure pills are rendered
+    }
+    
+    // Context menu functions
+    function hideContextMenu(pillId) {
+        // Remove all context menus and reset chevron states
+        document.querySelectorAll('.tune-context-menu').forEach(menu => menu.remove());
+        document.querySelectorAll('.chevron.open').forEach(chevron => chevron.classList.remove('open'));
+    }
+    
+    function showContextMenu(event, pillData) {
+        // Remove existing context menus and reset all chevrons
+        hideContextMenu();
+        
+        const menu = document.createElement('div');
+        menu.className = 'tune-context-menu';
+        menu.style.display = 'block';
+        menu.dataset.pillId = pillData.id; // Track which pill this menu belongs to
+        
+        // Find the pill element to match its dimensions and color
+        const pillElement = event.target.closest('.tune-pill');
+        const rect = pillElement.getBoundingClientRect();
+        
+        // Set chevron to open state
+        const chevron = pillElement.querySelector('.chevron');
+        chevron.classList.add('open');
+        
+        // Position menu
+        menu.style.position = 'fixed';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 5) + 'px';
+        
+        // Match pill width and colors
+        menu.style.width = rect.width + 'px';
+        menu.style.minWidth = 'unset';
+        
+        // Match pill background color based on state
+        const computedStyle = window.getComputedStyle(pillElement);
+        menu.style.backgroundColor = computedStyle.backgroundColor;
+        menu.style.color = computedStyle.color;
+        menu.style.borderColor = computedStyle.borderColor;
+        
+        // Create menu items based on pill state
+        if (pillData.state === 'linked') {
+            // Linked tune options
+            addMenuItem(menu, 'Dots', () => {
+                const url = `https://thesession.org/tunes/${pillData.tuneId}${pillData.setting ? '#setting' + pillData.setting : ''}`;
+                window.open(url, '_blank');
+                hideContextMenu();
+            });
+            
+            addMenuItem(menu, 'Relink', () => {
+                showLinkModal(pillData);
+                hideContextMenu();
+            });
+        } else {
+            // Unlinked tune options
+            addMenuItem(menu, 'Link', () => {
+                showLinkModal(pillData);
+                hideContextMenu();
+            });
+        }
+        
+        // Common options
+        addMenuItem(menu, 'Edit Text', () => {
+            showEditModal(pillData);
+            hideContextMenu();
+        });
+        
+        if (selectedPills.size <= 1) {
+            addMenuItem(menu, 'Delete', () => {
+                deletePill(pillData.id);
+                hideContextMenu();
+            });
+        } else {
+            addMenuItem(menu, `Delete Selected (${selectedPills.size})`, () => {
+                deleteSelectedPills();
+                hideContextMenu();
+            });
+        }
+        
+        document.body.appendChild(menu);
+        
+        // Hide menu when clicking elsewhere
+        setTimeout(() => {
+            const hideMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    hideContextMenu();
+                    document.removeEventListener('click', hideMenu);
+                }
+            };
+            document.addEventListener('click', hideMenu);
+        }, 0);
+    }
+    
+    function addMenuItem(menu, text, callback) {
+        const item = document.createElement('a');
+        item.textContent = text;
+        item.addEventListener('click', callback);
+        menu.appendChild(item);
+    }
+    
+    // Modal functions
+    function showLinkModal(pillData) {
+        document.getElementById('link-tune-modal').style.display = 'flex';
+        const input = document.getElementById('tune-link-input');
+        if (pillData.tuneId) {
+            input.value = `https://thesession.org/tunes/${pillData.tuneId}`;
+        } else {
+            input.value = '';
+        }
+        input.focus();
+        
+        // Store current pill for linking
+        window.currentLinkingPill = pillData;
+    }
+    
+    function showEditModal(pillData) {
+        document.getElementById('edit-tune-modal').style.display = 'flex';
+        const input = document.getElementById('edit-tune-name-input');
+        input.value = pillData.tuneName;
+        input.focus();
+        input.select();
+        
+        // Add Enter key handler for this modal instance
+        const enterHandler = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmEdit();
+                input.removeEventListener('keydown', enterHandler);
+            }
+        };
+        input.addEventListener('keydown', enterHandler);
+        
+        // Store current pill for editing
+        window.currentEditingPill = pillData;
+    }
+    
+    // Delete functions
+    function deletePill(pillId) {
+        // Find and remove the pill
+        for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+            const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+            if (pillIndex !== -1) {
+                saveToUndo();
+                tunePillsData[setIndex].splice(pillIndex, 1);
+                
+                // Remove empty sets
+                if (tunePillsData[setIndex].length === 0) {
+                    tunePillsData.splice(setIndex, 1);
+                }
+                
+                renderTunePills();
+                break;
+            }
+        }
+    }
+    
+    function deleteSelectedPills() {
+        if (selectedPills.size === 0) return;
+        
+        saveToUndo();
+        
+        // Remove selected pills
+        selectedPills.forEach(pillId => {
+            for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+                if (pillIndex !== -1) {
+                    tunePillsData[setIndex].splice(pillIndex, 1);
+                    break;
+                }
+            }
+        });
+        
+        // Remove empty sets
+        tunePillsData = tunePillsData.filter(set => set.length > 0);
+        
+        selectedPills.clear();
+        renderTunePills();
+    }
+    
+    // Undo/Redo functions
+    function saveToUndo() {
+        undoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
+        redoStack.length = 0; // Clear redo stack when new action is performed
+        
+        // Limit undo stack size
+        if (undoStack.length > 50) {
+            undoStack.shift();
+        }
+    }
+    
+    function undo() {
+        if (undoStack.length === 0) return;
+        
+        redoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
+        tunePillsData = undoStack.pop();
+        renderTunePills();
+    }
+    
+    function redo() {
+        if (redoStack.length === 0) return;
+        
+        undoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
+        tunePillsData = redoStack.pop();
+        renderTunePills();
+    }
+    
+    // Clipboard functions
+    let clipboard = [];
+    
+    function copySelectedPills() {
+        if (selectedPills.size === 0) return;
+        
+        // Group selected pills by their sets, preserving order and set structure
+        const selectedBySet = new Map();
+        
+        tunePillsData.forEach((tuneSet, setIndex) => {
+            tuneSet.forEach((pill, pillIndex) => {
+                if (selectedPills.has(pill.id)) {
+                    if (!selectedBySet.has(setIndex)) {
+                        selectedBySet.set(setIndex, []);
+                    }
+                    selectedBySet.get(setIndex).push({
+                        pill: JSON.parse(JSON.stringify(pill)),
+                        originalPillIndex: pillIndex
+                    });
+                }
+            });
+        });
+        
+        // Convert to array of sets, preserving set breaks
+        clipboard = Array.from(selectedBySet.values()).map(setData => 
+            setData.map(item => item.pill)
+        );
+        
+        // Also copy to system clipboard if supported
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            const jsonData = JSON.stringify(clipboard);
+            navigator.clipboard.writeText(jsonData).catch(err => {
+                console.log('Could not copy to system clipboard');
+            });
+        }
+        
+        const totalPills = clipboard.reduce((sum, set) => sum + set.length, 0);
+        const setCount = clipboard.length;
+        showMessage(`Copied ${totalPills} tune(s) in ${setCount} set(s)`, 'success');
+    }
+    
+    function cutSelectedPills() {
+        if (selectedPills.size === 0) return;
+        
+        copySelectedPills();
+        deleteSelectedPills();
+    }
+    
+    function pasteFromClipboard() {
+        if (clipboard.length === 0) return;
+        
+        // Paste at current cursor position if available, otherwise at the end
+        let position;
+        if (cursorPosition) {
+            position = {
+                setIndex: cursorPosition.setIndex,
+                pillIndex: cursorPosition.pillIndex,
+                position: cursorPosition.position
+            };
+        } else {
+            // Fallback: paste at the end
+            position = { setIndex: tunePillsData.length, pillIndex: 0, position: 'newset' };
+        }
+        pasteAtPosition(clipboard, position);
+    }
+    
+    function pasteAtPosition(pillsData, position) {
+        if (!pillsData || pillsData.length === 0) return;
+        
+        saveToUndo();
+        
+        // Check if pillsData is a flat array (old format) or array of sets (new format)
+        const isNewFormat = Array.isArray(pillsData[0]);
+        
+        if (isNewFormat) {
+            // New format: array of sets with preserved set breaks
+            const newSets = pillsData.map(set => 
+                set.map(pill => ({
+                    ...pill,
+                    id: generateId(),
+                    orderNumber: null
+                }))
+            );
+            
+            let insertPosition = position.setIndex;
+            
+            if (position.position === 'newset') {
+                // Insert sets starting at the specified position
+                if (insertPosition >= tunePillsData.length) {
+                    // Add at end
+                    tunePillsData.push(...newSets);
+                } else {
+                    // Insert between existing sets
+                    tunePillsData.splice(insertPosition, 0, ...newSets);
+                }
+            } else {
+                // Insert into/split existing set
+                const targetSetIndex = position.setIndex;
+                
+                if (targetSetIndex >= tunePillsData.length) {
+                    // Add sets at end
+                    tunePillsData.push(...newSets);
+                } else {
+                    const targetSet = tunePillsData[targetSetIndex];
+                    let insertIndex = position.pillIndex;
+                    
+                    // Handle position type
+                    if (position.position === 'before') {
+                        insertIndex = Math.max(0, position.pillIndex);
+                    } else if (position.position === 'after') {
+                        insertIndex = Math.min(targetSet.length, position.pillIndex + 1);
+                    }
+                    
+                    if (newSets.length === 1) {
+                        // Single set - insert pills into existing set
+                        newSets[0].forEach((pill, index) => {
+                            targetSet.splice(insertIndex + index, 0, pill);
+                        });
+                    } else {
+                        // Multiple sets - split the target set
+                        const beforePills = targetSet.slice(0, insertIndex);
+                        const afterPills = targetSet.slice(insertIndex);
+                        
+                        // Replace target set with: before pills + new sets + after pills
+                        const allSets = [];
+                        if (beforePills.length > 0) allSets.push(beforePills);
+                        allSets.push(...newSets);
+                        if (afterPills.length > 0) allSets.push(afterPills);
+                        
+                        tunePillsData.splice(targetSetIndex, 1, ...allSets);
+                    }
+                }
+            }
+            
+            const totalPills = newSets.reduce((sum, set) => sum + set.length, 0);
+            showMessage(`Pasted ${totalPills} tune(s) in ${newSets.length} set(s)`, 'success');
+            
+            // Apply landing animation to pasted pills
+            const pastedPillIds = newSets.flat().map(pill => pill.id);
+            setTimeout(() => {
+                applyLandingAnimation(pastedPillIds);
+            }, 50);
+        } else {
+            // Old format: flat array of pills - use original logic
+            const newPills = pillsData.map(pill => ({
+                ...pill,
+                id: generateId(),
+                orderNumber: null
+            }));
+            
+            if (position.position === 'newset') {
+                const targetSetIndex = position.setIndex;
+                if (targetSetIndex >= tunePillsData.length) {
+                    tunePillsData.push(newPills);
+                } else {
+                    tunePillsData.splice(targetSetIndex, 0, newPills);
+                }
+            } else {
+                let targetSetIndex = position.setIndex;
+                if (targetSetIndex >= tunePillsData.length) {
+                    tunePillsData.push(newPills);
+                } else {
+                    const targetSet = tunePillsData[targetSetIndex];
+                    let insertIndex = position.pillIndex;
+                    
+                    if (position.position === 'before') {
+                        insertIndex = Math.max(0, position.pillIndex);
+                    } else if (position.position === 'after') {
+                        insertIndex = Math.min(targetSet.length, position.pillIndex + 1);
+                    }
+                    
+                    newPills.forEach((pill, index) => {
+                        targetSet.splice(insertIndex + index, 0, pill);
+                    });
+                }
+            }
+            
+            showMessage(`Pasted ${newPills.length} tune(s)`, 'success');
+            
+            // Apply landing animation to pasted pills
+            const pastedPillIds = newPills.map(pill => pill.id);
+            setTimeout(() => {
+                applyLandingAnimation(pastedPillIds);
+            }, 50);
+        }
+        
+        renderTunePills();
+    }
+    
+    // Text input handling functions
+    function handleTextInput(char) {
+        if (!isTyping) {
+            isTyping = true;
+            typingBuffer = '';
+        }
+        typingBuffer += char;
+        updateCursorWithText();
+    }
+    
+    function handleBackspace() {
+        if (isTyping && typingBuffer.length > 0) {
+            typingBuffer = typingBuffer.slice(0, -1);
+            updateCursorWithText();
+        } else if (cursorPosition && !isTyping) {
+            // Delete tune or move cursor
+            deleteTuneAtCursor();
+        }
+    }
+    
+    function finishTyping() {
+        if (isTyping && typingBuffer.trim()) {
+            const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
+            insertTunesAtCursor(tuneNames);
+        }
+        
+        typingBuffer = '';
+        isTyping = false;
+        updateCursorWithText();
+    }
+    
+    function cancelTyping() {
+        typingBuffer = '';
+        isTyping = false;
+        updateCursorWithText();
+    }
+    
+    // Track the original cursor context during typing
+    let typingContext = null;
+    
+    // Track selection anchor for shift+arrow selection
+    let selectionAnchor = null;
+    
+    // Track if we need to re-render after typing finishes
+    let pendingRender = false;
+    
+    // Apply landing animation to pills that have been moved
+    function applyLandingAnimation(pillIds) {
+        pillIds.forEach(pillId => {
+            const pillElement = document.querySelector(`[data-pill-id="${pillId}"]`);
+            if (pillElement) {
+                pillElement.classList.add('just-landed');
+                setTimeout(() => {
+                    pillElement.classList.remove('just-landed');
+                }, 3000);
+            }
+        });
+    }
+    
+    function selectPillsBetweenPositions(startPos, endPos) {
+        // Clear current selection
+        selectedPills.clear();
+        
+        // Get all pills in order
+        const allPills = [];
+        tunePillsData.forEach((set, setIndex) => {
+            set.forEach((pill, pillIndex) => {
+                allPills.push({
+                    pill: pill,
+                    setIndex: setIndex,
+                    pillIndex: pillIndex
+                });
+            });
+        });
+        
+        // Find start and end indices in the flat list
+        let startIndex = -1;
+        let endIndex = -1;
+        
+        for (let i = 0; i < allPills.length; i++) {
+            const item = allPills[i];
+            
+            // Check if this pill matches start position
+            if (startPos && item.setIndex === startPos.setIndex && item.pillIndex === startPos.pillIndex) {
+                startIndex = i;
+            }
+            
+            // Check if this pill matches end position
+            if (endPos && item.setIndex === endPos.setIndex && item.pillIndex === endPos.pillIndex) {
+                endIndex = i;
+            }
+        }
+        
+        // Select pills in range
+        if (startIndex !== -1 && endIndex !== -1) {
+            const minIndex = Math.min(startIndex, endIndex);
+            const maxIndex = Math.max(startIndex, endIndex);
+            
+            for (let i = minIndex; i <= maxIndex; i++) {
+                selectedPills.add(allPills[i].pill.id);
+            }
+        }
+        
+        updateSelectionDisplay();
+    }
+    
+    function selectPillsBetweenCursorPositions(startCursorPos, endCursorPos) {
+        // Clear current selection
+        selectedPills.clear();
+        
+        // Convert cursor positions to pill ranges
+        const startPills = getPillsFromCursorPosition(startCursorPos);
+        const endPills = getPillsFromCursorPosition(endCursorPos);
+        
+        // Get all pills in order
+        const allPills = [];
+        tunePillsData.forEach((set, setIndex) => {
+            set.forEach((pill, pillIndex) => {
+                allPills.push({
+                    pill: pill,
+                    setIndex: setIndex,
+                    pillIndex: pillIndex
+                });
+            });
+        });
+        
+        // Find the range of pills to select
+        const startIndex = findPillIndex(allPills, startPills[0]);
+        const endIndex = findPillIndex(allPills, endPills[endPills.length - 1]);
+        
+        if (startIndex !== -1 && endIndex !== -1) {
+            const minIndex = Math.min(startIndex, endIndex);
+            const maxIndex = Math.max(startIndex, endIndex);
+            
+            for (let i = minIndex; i <= maxIndex; i++) {
+                selectedPills.add(allPills[i].pill.id);
+            }
+        }
+        
+        updateSelectionDisplay();
+    }
+    
+    function getPillsFromCursorPosition(cursorPos) {
+        // Convert a cursor position to the pills it represents
+        const { setIndex, pillIndex, position } = cursorPos;
+        
+        if (position === 'newset' || setIndex >= tunePillsData.length || tunePillsData[setIndex].length === 0) {
+            return [];
+        }
+        
+        if (position === 'before') {
+            // Before a pill means we include that pill
+            if (pillIndex < tunePillsData[setIndex].length) {
+                return [{ setIndex, pillIndex }];
+            }
+        } else if (position === 'after') {
+            // After a pill means we include that pill
+            if (pillIndex >= 0 && pillIndex < tunePillsData[setIndex].length) {
+                return [{ setIndex, pillIndex }];
+            }
+        }
+        
+        return [];
+    }
+    
+    function findPillIndex(allPills, pillPos) {
+        if (!pillPos) return -1;
+        
+        for (let i = 0; i < allPills.length; i++) {
+            if (allPills[i].setIndex === pillPos.setIndex && allPills[i].pillIndex === pillPos.pillIndex) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    function updateCursorWithText() {
+        // Find the active cursor element
+        const activeCursor = document.getElementById('active-cursor');
+        if (!activeCursor) return;
+        
+        if (isTyping && typingBuffer) {
+            // On first keystroke, capture the typing context
+            if (!typingContext) {
+                const cursorPosition = activeCursor.parentNode;
+                const tuneSet = cursorPosition?.parentNode;
+                
+                if (tuneSet && tuneSet.classList.contains('tune-set')) {
+                    typingContext = {
+                        tuneSet: tuneSet,
+                        insertionPoint: cursorPosition.nextSibling
+                    };
+                    console.log('Captured typing context in tune-set');
+                } else {
+                    // Fallback context
+                    typingContext = {
+                        tuneSet: cursorPosition?.parentNode,
+                        insertionPoint: cursorPosition?.nextSibling
+                    };
+                    console.log('Captured typing context (fallback)');
+                }
+            }
+            
+            // Remove any existing typing display and cursor
+            document.querySelectorAll('.typing-text').forEach(el => el.remove());
+            activeCursor.remove();
+            
+            // Create typing text
+            const textSpan = document.createElement('span');
+            textSpan.className = 'typing-text';
+            
+            // Simple styling that behaves like natural text
+            textSpan.style.color = 'var(--primary)';
+            textSpan.style.backgroundColor = 'rgba(0, 123, 255, 0.1)';
+            textSpan.style.padding = '1px 3px';
+            textSpan.style.borderRadius = '3px';
+            textSpan.style.fontWeight = 'normal';
+            textSpan.style.fontStyle = 'normal';
+            textSpan.style.display = 'inline';
+            textSpan.style.whiteSpace = 'nowrap';
+            textSpan.textContent = typingBuffer;
+            
+            // Create new cursor
+            const newCursor = document.createElement('div');
+            newCursor.className = 'text-cursor';
+            newCursor.id = 'active-cursor';
+            
+            // Insert both text and cursor using stable context
+            if (typingContext && typingContext.tuneSet) {
+                typingContext.tuneSet.insertBefore(textSpan, typingContext.insertionPoint);
+                typingContext.tuneSet.insertBefore(newCursor, textSpan.nextSibling);
+                console.log('Inserted typing text and cursor using stable context');
+            } else {
+                // Emergency fallback
+                console.error('No typing context available!');
+            }
+            
+            // Debug the actual layout
+            console.log('Updated typing text:', typingBuffer);
+            console.log('Text span computed width:', textSpan.offsetWidth);
+            console.log('Text span parent:', textSpan.parentNode?.className);
+        } else {
+            // Remove any typing text display and reset context
+            document.querySelectorAll('.typing-text').forEach(el => el.remove());
+            typingContext = null;
+        }
+    }
+    
+    function insertTunesAtCursor(tuneNames) {
+        if (!cursorPosition || tuneNames.length === 0) return;
+        
+        saveToUndo();
+        
+        // Create new pills
+        const newPills = tuneNames.map(name => ({
+            id: generateId(),
+            orderNumber: null,
+            tuneId: null,
+            tuneName: name,
+            setting: null,
+            tuneType: null,
+            state: 'loading'  // Show loading spinner until API responds
+        }));
+        
+        // Attempt to auto-match each tune via API
+        newPills.forEach(pill => {
+            autoMatchTune(pill);
+        });
+        
+        const { setIndex, pillIndex, position } = cursorPosition;
+        
+        console.log('Inserting tunes at cursor:', { setIndex, pillIndex, position, tuneNames }); // Debug
+        
+        if (position === 'newset') {
+            if (setIndex >= tunePillsData.length) {
+                // Create new set at end
+                tunePillsData.push(newPills);
+                // Position cursor after the last inserted pill in this new set
+                setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after');
+            } else {
+                // Create new set at specific index (insert between existing sets)
+                tunePillsData.splice(setIndex, 0, newPills);
+                // Position cursor after the last inserted pill in this new set
+                setCursorPosition(setIndex, newPills.length - 1, 'after');
+            }
+        } else {
+            // Insert into existing set
+            const targetSet = tunePillsData[setIndex];
+            let insertIndex = pillIndex;
+            
+            if (position === 'before') {
+                insertIndex = Math.max(0, pillIndex);
+            } else if (position === 'after') {
+                insertIndex = Math.min(targetSet.length, pillIndex + 1);
+            }
+            
+            console.log('Calculated insertIndex:', insertIndex, 'for set length:', targetSet.length); // Debug
+            
+            // Insert all new pills at the position
+            newPills.forEach((pill, index) => {
+                targetSet.splice(insertIndex + index, 0, pill);
+                console.log('Inserted pill at index:', insertIndex + index); // Debug
+            });
+            
+            // Move cursor to after the inserted pills
+            const newCursorPillIndex = insertIndex + newPills.length - 1;
+            setCursorPosition(setIndex, newCursorPillIndex, 'after');
+        }
+        
+        renderTunePills();
+        showMessage(`Added ${newPills.length} tune(s)`, 'success');
+    }
+    
+    // Auto-match a tune against the database without saving
+    async function autoMatchTune(pill) {
+        try {
+            const response = await fetch(`/api/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/match_tune`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tune_name: pill.tuneName
+                })
+            });
+            
+            if (!response.ok) {
+                console.warn(`Failed to match tune "${pill.tuneName}": ${response.status}`);
+                return;
+            }
+            
+            const result = await response.json();
+            
+            if (result.success && result.matched) {
+                // Update the pill with matched tune data
+                pill.tuneId = result.tune_id;
+                pill.tuneName = result.final_name; // Use the canonical name from database
+                pill.state = 'linked';
+                
+                console.log(`Auto-matched "${pill.tuneName}" to tune ID ${result.tune_id}`);
+            } else if (result.success && !result.matched) {
+                // No match found - pill becomes unlinked (gray)
+                pill.state = 'unlinked';
+                console.log(`No match found for "${pill.tuneName}"`);
+            } else {
+                // Error occurred - pill becomes unlinked
+                pill.state = 'unlinked';
+                console.warn(`Error matching tune "${pill.tuneName}": ${result.message}`);
+            }
+            
+            // Update just this pill instead of re-rendering everything
+            updatePillAppearance(pill);
+        } catch (error) {
+            console.error(`Network error matching tune "${pill.tuneName}":`, error);
+            // Network error - pill becomes unlinked
+            pill.state = 'unlinked';
+            updatePillAppearance(pill);
+        }
+    }
+    
+    // Update the appearance of a single pill without re-rendering everything
+    function updatePillAppearance(pill) {
+        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
+        if (!pillElement) return;
+        
+        // Update the CSS class to reflect the new state
+        pillElement.className = `tune-pill ${pill.state}`;
+        
+        // Update the text content in case it changed (e.g., canonical name from API)
+        const textElement = pillElement.querySelector('.text');
+        if (textElement) {
+            textElement.textContent = pill.tuneName;
+        }
+        
+        // Remove any existing spinner
+        const existingSpinner = pillElement.querySelector('.loading-spinner');
+        if (existingSpinner) {
+            existingSpinner.remove();
+        }
+        
+        // Add spinner if still loading
+        if (pill.state === 'loading') {
+            const spinner = document.createElement('span');
+            spinner.className = 'loading-spinner';
+            pillElement.appendChild(spinner);
+        }
+    }
+    
+    function deleteTuneAtCursor() {
+        if (!cursorPosition) return;
+        
+        const { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Always delete the pill immediately to the left of the cursor (backspace behavior)
+        let tuneToDelete = null;
+        let newCursorPosition = null;
+        
+        if (position === 'after') {
+            // Cursor is after a pill - delete that pill
+            tuneToDelete = { setIndex, pillIndex };
+            // After deletion, if there's a pill to the left, position after it
+            if (pillIndex > 0) {
+                newCursorPosition = { setIndex, pillIndex: pillIndex - 1, position: 'after' };
+            } else {
+                // Deleting first pill of the set - go to end of previous line if it exists
+                if (setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
+                    const prevSetIndex = setIndex - 1;
+                    const prevSetLength = tunePillsData[prevSetIndex].length;
+                    newCursorPosition = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1, position: 'after' };
+                } else {
+                    // No previous set, position before the next pill in current set
+                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
+                }
+            }
+        } else if (position === 'before' && pillIndex > 0) {
+            // Cursor is before a pill - delete the previous pill
+            tuneToDelete = { setIndex, pillIndex: pillIndex - 1 };
+            // After deletion, cursor stays before the same pill (which now has a lower index)
+            newCursorPosition = { setIndex, pillIndex: pillIndex - 1, position: 'before' };
+        } else if (position === 'before' && pillIndex === 0) {
+            // Cursor is at the beginning of a set
+            if (tunePillsData[setIndex].length > 0) {
+                // Delete the first pill of current set
+                tuneToDelete = { setIndex, pillIndex: 0 };
+                // After deleting, cursor should go to end of previous set if it exists
+                if (setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
+                    const prevSetIndex = setIndex - 1;
+                    const prevSetLength = tunePillsData[prevSetIndex].length;
+                    newCursorPosition = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1, position: 'after' };
+                } else {
+                    // No previous set, stay at beginning of current set
+                    newCursorPosition = { setIndex, pillIndex: 0, position: 'before' };
+                }
+            }
+        } else if (position === 'newset' && setIndex > 0 && tunePillsData[setIndex - 1].length > 0) {
+            // Cursor is at a new set position - delete the last pill of the previous set
+            const prevSetIndex = setIndex - 1;
+            const prevSetLength = tunePillsData[prevSetIndex].length;
+            tuneToDelete = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1 };
+            newCursorPosition = { setIndex: prevSetIndex, pillIndex: prevSetLength - 1, position: 'after' };
+        }
+        
+        if (tuneToDelete) {
+            saveToUndo();
+            const targetSet = tunePillsData[tuneToDelete.setIndex];
+            targetSet.splice(tuneToDelete.pillIndex, 1);
+            
+            // Remove empty sets (save the info first for cursor positioning)
+            const setWasRemoved = targetSet.length === 0;
+            if (setWasRemoved) {
+                tunePillsData.splice(tuneToDelete.setIndex, 1);
+            }
+            
+            // Render first, then set cursor position
+            renderTunePills();
+            
+            // Apply the cursor position after rendering when cursor position elements exist
+            if (setWasRemoved) {
+                // Set was removed - use the stored cursor position but adjust for removed set
+                if (newCursorPosition.setIndex < tuneToDelete.setIndex) {
+                    // Cursor position is in a set before the deleted one, no adjustment needed
+                    setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
+                } else if (newCursorPosition.setIndex === tuneToDelete.setIndex) {
+                    // Cursor was in the deleted set, position at the beginning of next set or end
+                    if (tuneToDelete.setIndex < tunePillsData.length) {
+                        setCursorPosition(tuneToDelete.setIndex, 0, 'before');
+                    } else if (tuneToDelete.setIndex > 0) {
+                        // No next set, go to end of previous set
+                        setCursorPosition(tuneToDelete.setIndex - 1, tunePillsData[tuneToDelete.setIndex - 1].length - 1, 'after');
+                    } else {
+                        // No sets left
+                        setCursorPosition(0, 0, 'newset');
+                    }
+                } else {
+                    // Cursor position is after deleted set, adjust index
+                    setCursorPosition(newCursorPosition.setIndex - 1, newCursorPosition.pillIndex, newCursorPosition.position);
+                }
+            } else {
+                // Set still exists, use the calculated new cursor position
+                if (newCursorPosition.pillIndex >= targetSet.length) {
+                    // Position is beyond the end of the set, position after last pill
+                    setCursorPosition(newCursorPosition.setIndex, targetSet.length - 1, 'after');
+                } else if (newCursorPosition.pillIndex < 0) {
+                    // Position is before the beginning, position before first pill
+                    setCursorPosition(newCursorPosition.setIndex, 0, 'before');
+                } else {
+                    // Position is valid
+                    setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
+                }
+            }
+        }
+    }
+    
+    // Cursor movement functions
+    function moveCursorLeft(shiftKey = false) {
+        if (!cursorPosition) return;
+        
+        let { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Set selection anchor if shift is pressed and we don't have one
+        if (shiftKey && !selectionAnchor) {
+            selectionAnchor = { setIndex, pillIndex };
+        } else if (!shiftKey) {
+            // Clear selection anchor if shift is not pressed
+            selectionAnchor = null;
+            selectedPills.clear();
+        }
+        
+        console.log('Moving left from:', { setIndex, pillIndex, position }); // Debug
+        
+        let newSetIndex = setIndex;
+        let newPillIndex = pillIndex;
+        let newPosition = position;
+        
+        if (position === 'after' && pillIndex > 0) {
+            // Move to 'after' the previous pill (which is the same as 'before' current pill)
+            newPillIndex = pillIndex - 1;
+            newPosition = 'after';
+        } else if (position === 'after' && pillIndex === 0) {
+            // At beginning of set, try to move to 'before' position if it exists
+            newPillIndex = 0;
+            newPosition = 'before';
+        } else if (position === 'before' && pillIndex === 0 && setIndex > 0) {
+            // Move to end of previous set
+            const prevSetLength = tunePillsData[setIndex - 1].length;
+            newSetIndex = setIndex - 1;
+            newPillIndex = prevSetLength - 1;
+            newPosition = 'after';
+        } else {
+            // Can't move further left
+            return;
+        }
+        
+        setCursorPosition(newSetIndex, newPillIndex, newPosition);
+        
+        // Handle selection if shift is pressed
+        if (shiftKey && selectionAnchor) {
+            // Select pills between anchor and new position based on cursor movement
+            selectPillsBetweenCursorPositions(
+                { setIndex: selectionAnchor.setIndex, pillIndex: selectionAnchor.pillIndex, position: 'after' },
+                { setIndex: newSetIndex, pillIndex: newPillIndex, position: newPosition }
+            );
+        }
+    }
+    
+    function moveCursorRight(shiftKey = false) {
+        if (!cursorPosition) return;
+        
+        let { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Set selection anchor if shift is pressed and we don't have one
+        if (shiftKey && !selectionAnchor) {
+            selectionAnchor = { setIndex, pillIndex };
+        } else if (!shiftKey) {
+            // Clear selection anchor if shift is not pressed
+            selectionAnchor = null;
+            selectedPills.clear();
+        }
+        
+        console.log('Moving right from:', { setIndex, pillIndex, position }); // Debug
+        
+        let newSetIndex = setIndex;
+        let newPillIndex = pillIndex;
+        let newPosition = position;
+        
+        if (setIndex < tunePillsData.length) {
+            const currentSetLength = tunePillsData[setIndex].length;
+            
+            if (position === 'before' && pillIndex === 0) {
+                // Move to 'after' the same pill (first pill in set)
+                newPosition = 'after';
+            } else if (position === 'after' && pillIndex < currentSetLength - 1) {
+                // Move to 'after' the next pill in same set
+                newPillIndex = pillIndex + 1;
+                newPosition = 'after';
+            } else if (position === 'after' && pillIndex === currentSetLength - 1 && setIndex < tunePillsData.length - 1) {
+                // Move to beginning of next set
+                newSetIndex = setIndex + 1;
+                newPillIndex = 0;
+                newPosition = 'before';
+            } else if (position === 'after' && pillIndex === currentSetLength - 1 && setIndex === tunePillsData.length - 1) {
+                // Move to the very end (newset position)
+                newSetIndex = tunePillsData.length;
+                newPillIndex = 0;
+                newPosition = 'newset';
+            } else {
+                // Can't move further right
+                return;
+            }
+        } else {
+            // Can't move further right
+            return;
+        }
+        
+        setCursorPosition(newSetIndex, newPillIndex, newPosition);
+        
+        // Handle selection if shift is pressed (but not for newset position)
+        if (shiftKey && selectionAnchor && newPosition !== 'newset') {
+            selectPillsBetweenPositions(selectionAnchor, { setIndex: newSetIndex, pillIndex: newPillIndex });
+        }
+    }
+    
+    function moveCursorUp(shiftKey = false) {
+        // Move to previous set (line)
+        if (!cursorPosition) return;
+        
+        let { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Set selection anchor if shift is pressed and we don't have one
+        if (shiftKey && !selectionAnchor) {
+            selectionAnchor = { setIndex, pillIndex };
+        } else if (!shiftKey) {
+            // Clear selection anchor if shift is not pressed
+            selectionAnchor = null;
+            selectedPills.clear();
+        }
+        
+        console.log('Moving up from:', { setIndex, pillIndex, position }); // Debug
+        
+        let newSetIndex = setIndex;
+        let newPillIndex = pillIndex;
+        let newPosition = position;
+        
+        // Handle special case: cursor is at "newset" position (very end)
+        if (position === 'newset' && setIndex >= tunePillsData.length) {
+            // Move to last set
+            if (tunePillsData.length > 0) {
+                const lastSetLength = tunePillsData[tunePillsData.length - 1].length;
+                newSetIndex = tunePillsData.length - 1;
+                newPillIndex = lastSetLength - 1;
+                newPosition = 'after';
+            } else {
+                return;
+            }
+        } else if (setIndex > 0) {
+            // Move to previous set, try to maintain similar position
+            const prevSetLength = tunePillsData[setIndex - 1].length;
+            
+            if (prevSetLength === 0) {
+                // Empty set, position at beginning
+                newSetIndex = setIndex - 1;
+                newPillIndex = 0;
+                newPosition = 'before';
+            } else {
+                // Try to match position, but clamp to set bounds
+                newSetIndex = setIndex - 1;
+                newPillIndex = Math.min(pillIndex, prevSetLength - 1);
+                newPosition = position;
+            }
+        } else {
+            // Already at first set, do nothing
+            return;
+        }
+        
+        setCursorPosition(newSetIndex, newPillIndex, newPosition);
+        
+        // Handle selection if shift is pressed
+        if (shiftKey && selectionAnchor) {
+            // Select pills between anchor and new position based on cursor movement
+            selectPillsBetweenCursorPositions(
+                { setIndex: selectionAnchor.setIndex, pillIndex: selectionAnchor.pillIndex, position: 'after' },
+                { setIndex: newSetIndex, pillIndex: newPillIndex, position: newPosition }
+            );
+        }
+    }
+    
+    function moveCursorDown(shiftKey = false) {
+        // Move to next set (line)
+        if (!cursorPosition) return;
+        
+        let { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Set selection anchor if shift is pressed and we don't have one
+        if (shiftKey && !selectionAnchor) {
+            selectionAnchor = { setIndex, pillIndex };
+        } else if (!shiftKey) {
+            // Clear selection anchor if shift is not pressed
+            selectionAnchor = null;
+            selectedPills.clear();
+        }
+        
+        console.log('Moving down from:', { setIndex, pillIndex, position }); // Debug
+        
+        let newSetIndex = setIndex;
+        let newPillIndex = pillIndex;
+        let newPosition = position;
+        
+        if (setIndex < tunePillsData.length - 1) {
+            // Move to next set, try to maintain similar position
+            const nextSetLength = tunePillsData[setIndex + 1].length;
+            
+            if (nextSetLength === 0) {
+                // Empty set, position at beginning
+                newSetIndex = setIndex + 1;
+                newPillIndex = 0;
+                newPosition = 'before';
+            } else {
+                // Try to match position, but clamp to set bounds
+                newSetIndex = setIndex + 1;
+                newPillIndex = Math.min(pillIndex, nextSetLength - 1);
+                newPosition = position;
+            }
+        } else if (setIndex === tunePillsData.length - 1) {
+            // At last set, move to the "newset" position at the very end
+            newSetIndex = tunePillsData.length;
+            newPillIndex = 0;
+            newPosition = 'newset';
+        } else {
+            // Already at very end (newset), do nothing
+            return;
+        }
+        
+        setCursorPosition(newSetIndex, newPillIndex, newPosition);
+        
+        // Handle selection if shift is pressed (but not for newset position)
+        if (shiftKey && selectionAnchor && newPosition !== 'newset') {
+            selectPillsBetweenPositions(selectionAnchor, { setIndex: newSetIndex, pillIndex: newPillIndex });
+        }
+    }
+    
+    // Event listeners setup
+    function setupEventListeners() {
+        // Container click to focus
+        const tuneContainer = document.getElementById('tune-pills-container');
+        tuneContainer.addEventListener('click', (e) => {
+            console.log('Container clicked', e.target, e.target.className); // Debug log
+            
+            // Don't handle clicks on tune pills or their children (they have their own handlers)
+            if (e.target.closest('.tune-pill')) {
+                console.log('Click on tune pill, ignoring'); // Debug log
+                return;
+            }
+            
+            // Don't handle clicks on context menus
+            if (e.target.closest('.tune-context-menu')) {
+                console.log('Click on context menu, ignoring'); // Debug log
+                return;
+            }
+            
+            // Check if click is on a cursor position element (they handle themselves)
+            if (e.target.classList.contains('cursor-position')) {
+                console.log('Click on cursor position, handled by position element'); // Debug log
+                return;
+            }
+            
+            // Check if clicking on a tune-set - find the best cursor position
+            if (e.target.classList.contains('tune-set')) {
+                const setIndex = parseInt(e.target.dataset.setIndex);
+                const rect = e.target.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const setWidth = rect.width;
+                const setLength = tunePillsData[setIndex]?.length || 0;
+                
+                console.log('Click on tune-set', setIndex, 'at position', clickX, '/', setWidth, 'set length:', setLength);
+                
+                // Find the actual position of tune pills within the set
+                const pillElements = e.target.querySelectorAll('.tune-pill');
+                let bestPosition = null;
+                let closestDistance = Infinity;
+                
+                // Check distance to each pill to find the closest cursor position
+                pillElements.forEach((pill, pillIndex) => {
+                    const pillRect = pill.getBoundingClientRect();
+                    const pillCenterX = pillRect.left + pillRect.width / 2 - rect.left;
+                    const pillEndX = pillRect.right - rect.left;
+                    
+                    // Distance to "before" position (left edge of pill)
+                    const distanceToBefore = Math.abs(clickX - (pillRect.left - rect.left));
+                    if (distanceToBefore < closestDistance) {
+                        closestDistance = distanceToBefore;
+                        bestPosition = { pillIndex, position: 'before' };
+                    }
+                    
+                    // Distance to "after" position (right edge of pill)
+                    const distanceToAfter = Math.abs(clickX - pillEndX);
+                    if (distanceToAfter < closestDistance) {
+                        closestDistance = distanceToAfter;
+                        bestPosition = { pillIndex, position: 'after' };
+                    }
+                });
+                
+                // If click is beyond the last pill, always position at end
+                if (pillElements.length > 0) {
+                    const lastPillRect = pillElements[pillElements.length - 1].getBoundingClientRect();
+                    const lastPillEnd = lastPillRect.right - rect.left;
+                    if (clickX > lastPillEnd) {
+                        bestPosition = { pillIndex: setLength - 1, position: 'after' };
+                        console.log('Click beyond last pill, positioning at end');
+                    }
+                }
+                
+                // Fallback: if no pills or click is before first pill
+                if (!bestPosition) {
+                    bestPosition = { pillIndex: 0, position: 'before' };
+                }
+                
+                console.log('Best cursor position:', bestPosition);
+                
+                // Clear selection when clicking to move cursor
+                selectedPills.clear();
+                updateSelectionDisplay();
+                
+                setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
+                return;
+            }
+            
+            // For clicks in other empty space, set cursor at end
+            console.log('Setting cursor at end due to empty space click'); // Debug log
+            
+            // Clear selection when clicking to move cursor
+            selectedPills.clear();
+            updateSelectionDisplay();
+            
+            setCursorPosition(tunePillsData.length, 0, 'newset');
+        });
+        
+        // Keyboard shortcuts and text input
+        document.addEventListener('keydown', (e) => {
+            if (e.target.closest('.modal-overlay')) return; // Don't handle if modal is open
+            
+            // Handle typing at cursor position
+            if (!e.ctrlKey && !e.metaKey && cursorPosition && e.key.length === 1) {
+                e.preventDefault();
+                handleTextInput(e.key);
+                return;
+            }
+            
+            // Handle special keys for typing
+            if (cursorPosition && !e.ctrlKey && !e.metaKey) {
+                switch(e.key) {
+                    case 'Backspace':
+                        e.preventDefault();
+                        handleBackspace();
+                        return;
+                    case 'Enter':
+                    case 'Tab':
+                    case ';':
+                    case ',':
+                        e.preventDefault();
+                        finishTyping();
+                        return;
+                    case 'Escape':
+                        e.preventDefault();
+                        cancelTyping();
+                        return;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        moveCursorLeft(e.shiftKey);
+                        return;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        moveCursorRight(e.shiftKey);
+                        return;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        moveCursorUp(e.shiftKey);
+                        return;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        moveCursorDown(e.shiftKey);
+                        return;
+                }
+            }
+            
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            redo();
+                        } else {
+                            undo();
+                        }
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        redo();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        selectAll();
+                        break;
+                    case 'c':
+                        e.preventDefault();
+                        copySelectedPills();
+                        break;
+                    case 'x':
+                        e.preventDefault();
+                        cutSelectedPills();
+                        break;
+                    case 'v':
+                        e.preventDefault();
+                        pasteFromClipboard();
+                        break;
+                }
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedPills.size > 0) {
+                    e.preventDefault();
+                    deleteSelectedPills();
+                }
+            }
+        });
+        
+        // Container drag and drop event listeners
+        // (reusing container variable from above)
+        
+        tuneContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const position = findDropPosition(e.clientX, e.clientY);
+            showDropIndicator(position);
+        });
+        
+        tuneContainer.addEventListener('dragleave', (e) => {
+            // Only clear if we're really leaving the container
+            if (!tuneContainer.contains(e.relatedTarget)) {
+                clearDropIndicators();
+            }
+        });
+        
+        tuneContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            clearDropIndicators();
+            
+            const position = findDropPosition(e.clientX, e.clientY);
+            
+            if (dragState) {
+                // Internal drag and drop
+                const draggedIds = Array.from(selectedPills);
+                performDrop(position, draggedIds);
+            } else {
+                // External drag or paste
+                try {
+                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    if (dragData && Array.isArray(dragData)) {
+                        pasteAtPosition(dragData, position);
+                    }
+                } catch (err) {
+                    console.log('Invalid drag data');
+                }
+            }
+        });
+        
+        // Modal event listeners
+        document.getElementById('link-cancel-btn').addEventListener('click', hideLinkModal);
+        document.getElementById('link-confirm-btn').addEventListener('click', confirmLink);
+        document.getElementById('edit-tune-cancel-btn').addEventListener('click', hideEditModal);
+        document.getElementById('edit-tune-save-btn').addEventListener('click', confirmEdit);
+        
+        // Close modals on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideLinkModal();
+                hideEditModal();
+                hideSessionEditModal();
+            }
+        });
+    }
+    
+    function selectAll() {
+        selectedPills.clear();
+        tunePillsData.forEach(set => {
+            set.forEach(pill => selectedPills.add(pill.id));
+        });
+        updateSelectionDisplay();
+    }
+    
+    // Modal control functions
+    function hideLinkModal() {
+        document.getElementById('link-tune-modal').style.display = 'none';
+        window.currentLinkingPill = null;
+    }
+    
+    function hideEditModal() {
+        document.getElementById('edit-tune-modal').style.display = 'none';
+        window.currentEditingPill = null;
+    }
+    
+    function confirmLink() {
+        const input = document.getElementById('tune-link-input').value.trim();
+        if (!input || !window.currentLinkingPill) return;
+        
+        // Extract tune ID from URL or use as is
+        let tuneId = input;
+        const urlMatch = input.match(/thesession\.org\/tunes\/(\d+)/);
+        if (urlMatch) {
+            tuneId = urlMatch[1];
+        }
+        
+        if (!/^\d+$/.test(tuneId)) {
+            showMessage('Please enter a valid tune ID or thesession.org URL', 'error');
+            return;
+        }
+        
+        saveToUndo();
+        
+        // Update the pill
+        window.currentLinkingPill.tuneId = parseInt(tuneId);
+        window.currentLinkingPill.state = 'linked';
+        
+        renderTunePills();
+        hideLinkModal();
+        
+        showMessage('Tune linked successfully!', 'success');
+    }
+    
+    function confirmEdit() {
+        const newName = document.getElementById('edit-tune-name-input').value.trim();
+        if (!newName || !window.currentEditingPill) return;
+        
+        saveToUndo();
+        
+        const pill = window.currentEditingPill;
+        
+        // Update the tune name
+        pill.tuneName = newName;
+        
+        // If the tune was linked, unlink it first and re-run matching
+        if (pill.state === 'linked') {
+            // Unlink the tune
+            pill.tuneId = null;
+            pill.setting = null;
+            pill.tuneType = null;
+            pill.state = 'loading';  // Show loading state while re-matching
+            
+            // Update the pill appearance immediately to show loading state
+            updatePillAppearance(pill);
+            
+            // Re-run auto-matching with the new name
+            autoMatchTune(pill);
+        } else {
+            // If it was unlinked, still try to match the new name
+            pill.state = 'loading';
+            updatePillAppearance(pill);
+            autoMatchTune(pill);
+        }
+        
+        hideEditModal();
+        showMessage('Tune name updated!', 'success');
+    }
+    
+    // Session edit functionality (reused from original)
+    function setupSessionEditListeners() {
+        document.getElementById('edit-name-btn').addEventListener('click', showEditSessionModal);
+        document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
+        document.getElementById('edit-session-cancel-btn').addEventListener('click', hideSessionEditModal);
+        document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
+    }
+    
+    function showEditSessionModal() {
+        const modal = document.getElementById('edit-session-instance-modal');
+        const dateInput = document.getElementById('edit-session-date-input');
+        const locationInput = document.getElementById('edit-session-location-input');
+        const commentsInput = document.getElementById('edit-session-comments-input');
+        const cancelledInput = document.getElementById('edit-session-cancelled-input');
+        
+        dateInput.value = sessionInstanceData.date;
+        locationInput.value = sessionInstanceData.location_override || '';
+        commentsInput.value = sessionInstanceData.comments || '';
+        cancelledInput.checked = sessionInstanceData.is_cancelled;
+        
+        modal.style.display = 'flex';
+        dateInput.focus();
+    }
+    
+    function hideSessionEditModal() {
+        document.getElementById('edit-session-instance-modal').style.display = 'none';
+    }
+    
+    function saveSessionInstance() {
+        const dateInput = document.getElementById('edit-session-date-input');
+        const locationInput = document.getElementById('edit-session-location-input');
+        const commentsInput = document.getElementById('edit-session-comments-input');
+        const cancelledInput = document.getElementById('edit-session-cancelled-input');
+        
+        const date = dateInput.value.trim();
+        const location = locationInput.value.trim();
+        const comments = commentsInput.value.trim();
+        const cancelled = cancelledInput.checked;
+        
+        if (!date) {
+            showMessage('Please enter a session date', 'error');
+            return;
+        }
+        
+        const requestData = { 
+            date: date,
+            cancelled: cancelled
+        };
+        
+        if (location) requestData.location = location;
+        if (comments) requestData.comments = comments;
+        
+        fetch(`/api/sessions/${sessionPath}/${sessionDate}/update`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message);
+                hideSessionEditModal();
+                if (date !== sessionDate) {
+                    window.location.href = `/sessions/${sessionPath}/${date}/beta`;
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                showMessage(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showMessage('Failed to update session instance', 'error');
+            console.error('Error:', error);
+        });
+    }
+    
+    // Message display function
+    function showMessage(message, type = 'success') {
+        const container = document.getElementById('message-container');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = `<p>${message}</p>`;
+        
+        container.innerHTML = '';
+        container.appendChild(messageDiv);
+        
+        setTimeout(() => {
+            messageDiv.remove();
+        }, 5000);
+    }
+</script>
+{% endblock %}

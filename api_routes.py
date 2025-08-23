@@ -2646,3 +2646,58 @@ def reactivate_session(session_path):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@login_required
+def match_tune_ajax(session_path, date):
+    """
+    Match a single tune name against the database without saving anything.
+    Used by the beta tune pill editor for auto-matching typed text.
+    """
+    tune_name = request.json.get('tune_name', '').strip()
+    if not tune_name:
+        return jsonify({'success': False, 'message': 'Please provide a tune name'})
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Use the existing tune matching function
+        tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
+        
+        cur.close()
+        conn.close()
+        
+        if error_message:
+            return jsonify({
+                'success': False, 
+                'message': error_message,
+                'tune_id': None,
+                'matched': False
+            })
+        elif tune_id:
+            return jsonify({
+                'success': True,
+                'tune_id': tune_id,
+                'final_name': final_name,
+                'matched': True
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'tune_id': None,
+                'final_name': tune_name,
+                'matched': False
+            })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

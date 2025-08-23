@@ -309,6 +309,12 @@ def session_handler(full_path):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip('/')
     
+    # Check for beta suffix first
+    is_beta = False
+    if full_path.endswith('/beta'):
+        is_beta = True
+        full_path = full_path[:-5]  # Remove '/beta' from path
+    
     # Check if the last part of the path looks like a date (yyyy-mm-dd)
     path_parts = full_path.split('/')
     last_part = path_parts[-1]
@@ -378,9 +384,14 @@ def session_handler(full_path):
                 if current_set:
                     sets.append(current_set)
                 
-                return render_template('session_instance_detail.html', 
-                                     session_instance=session_instance_dict, 
-                                     tune_sets=sets)
+                if is_beta:
+                    return render_template('session_instance_detail_beta.html', 
+                                         session_instance=session_instance_dict, 
+                                         tune_sets=sets)
+                else:
+                    return render_template('session_instance_detail.html', 
+                                         session_instance=session_instance_dict, 
+                                         tune_sets=sets)
             else:
                 cur.close()
                 conn.close()

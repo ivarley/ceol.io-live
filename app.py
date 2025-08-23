@@ -78,6 +78,7 @@ app.add_url_rule('/api/sessions/<path:session_path>/<date>/move_set', 'move_set_
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/move_tune', 'move_tune_ajax', move_tune_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/add_tunes_to_set', 'add_tunes_to_set_ajax', add_tunes_to_set_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/edit_tune', 'edit_tune_ajax', edit_tune_ajax, methods=['POST'])
+app.add_url_rule('/api/sessions/<path:session_path>/<date>/match_tune', 'match_tune_ajax', match_tune_ajax, methods=['POST'])
 app.add_url_rule('/api/check-existing-session', 'check_existing_session_ajax', check_existing_session_ajax, methods=['POST'])
 app.add_url_rule('/api/search-sessions', 'search_sessions_ajax', search_sessions_ajax, methods=['POST'])
 app.add_url_rule('/api/fetch-session-data', 'fetch_session_data_ajax', fetch_session_data_ajax, methods=['POST'])
@@ -173,4 +174,4 @@ def handle_exception(error):
                          funny_image=funny_image), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5001, host='127.0.0.1', use_reloader=True, use_debugger=True)
