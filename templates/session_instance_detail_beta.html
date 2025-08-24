@@ -2305,10 +2305,23 @@
             setData.map(item => item.pill)
         );
         
-        // Also copy to system clipboard if supported
+        // Copy to external clipboard - both JSON format and plain text tune names
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            const jsonData = JSON.stringify(clipboard);
-            navigator.clipboard.writeText(jsonData).catch(err => {
+            // Create plain text version with sets on separate lines, tunes in sets separated by commas
+            const tuneNames = clipboard.map(set => 
+                set.map(pill => pill.tuneName).join(', ')
+            ).join('\n');
+            
+            // Try to write plain text tune names to external clipboard
+            navigator.clipboard.writeText(tuneNames).then(() => {
+                console.log('Successfully copied to external clipboard:', tuneNames);
+            }).catch(err => {
+                console.warn('Failed to write tune names to clipboard, trying JSON fallback:', err);
+                // Fallback to JSON format if plain text fails
+                const jsonData = JSON.stringify(clipboard);
+                navigator.clipboard.writeText(jsonData).catch(err => {
+                    console.error('Failed to write JSON to clipboard:', err);
+                });
             });
         }
         
@@ -2324,8 +2337,60 @@
         deleteSelectedPills();
     }
     
-    function pasteFromClipboard() {
-        if (clipboard.length === 0) return;
+    async function pasteFromClipboard() {
+        // First try to read from external clipboard
+        let externalClipboardData = null;
+        let isPlainTextPaste = false;
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            try {
+                const clipboardText = await navigator.clipboard.readText();
+                if (clipboardText.trim()) {
+                    // Try to parse as JSON first (for internal clipboard data)
+                    try {
+                        const parsedData = JSON.parse(clipboardText);
+                        if (Array.isArray(parsedData)) {
+                            // This is internal JSON data - use it as-is, no need to match
+                            externalClipboardData = parsedData;
+                            isPlainTextPaste = false;
+                        }
+                    } catch (e) {
+                        // Not JSON, treat as plain text tune names
+                        // Each line is a set, tunes within a set are comma-separated
+                        const lines = clipboardText.split('\n')
+                            .map(line => line.trim())
+                            .filter(line => line.length > 0);
+                        
+                        if (lines.length > 0) {
+                            // Convert each line to a set of tune objects
+                            externalClipboardData = lines.map(line => {
+                                const tuneNames = line.split(',')
+                                    .map(name => name.trim())
+                                    .filter(name => name.length > 0);
+                                
+                                return tuneNames.map(tunename => ({
+                                    id: generateId(),
+                                    orderNumber: null,
+                                    tuneId: null,
+                                    tuneName: tunename,
+                                    setting: null,
+                                    tuneType: null,
+                                    state: 'unlinked'
+                                }));
+                            });
+                            isPlainTextPaste = true;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('External clipboard read failed:', err);
+                // External clipboard read failed, fall back to internal clipboard
+            }
+        }
+        
+        // Use external clipboard data if available, otherwise fall back to internal clipboard
+        const clipboardData = externalClipboardData || clipboard;
+        
+        if (!clipboardData || clipboardData.length === 0) return;
         
         // Paste at current cursor position if available, otherwise at the end
         let position;
@@ -2339,7 +2404,62 @@
             // Fallback: paste at the end
             position = { setIndex: tunePillsData.length, pillIndex: 0, position: 'newset' };
         }
-        pasteAtPosition(clipboard, position);
+        pasteAtPosition(clipboardData, position);
+        
+        // If we pasted external plain text (not JSON), run matching
+        if (isPlainTextPaste) {
+            // Wait for the DOM to be fully updated before starting matching
+            requestAnimationFrame(() => {
+                setTimeout(async () => {
+                    const originalTuneNames = clipboardData.flat().map(p => p.tuneName);
+                    console.log('Starting tune matching for pasted pills:', originalTuneNames);
+                    
+                    // Find the actual pills that were inserted into tunePillsData
+                    // Since pasteAtPosition creates new IDs, we need to find them by tune name
+                    const actualPastedPills = [];
+                    tunePillsData.forEach(tuneSet => {
+                        tuneSet.forEach(pill => {
+                            if (originalTuneNames.includes(pill.tuneName) && pill.state === 'unlinked') {
+                                actualPastedPills.push(pill);
+                            }
+                        });
+                    });
+                    
+                    console.log('Found actual pasted pills in tunePillsData:', actualPastedPills.map(p => `${p.tuneName} (${p.id})`));
+                    
+                    // Verify pills exist in DOM
+                    const missingPills = actualPastedPills.filter(pill => 
+                        !document.querySelector(`[data-pill-id="${pill.id}"]`)
+                    );
+                    if (missingPills.length > 0) {
+                        console.warn('Some pills not found in DOM:', missingPills.map(p => p.id));
+                    }
+                    
+                    // Create array of matching promises
+                    const matchingPromises = actualPastedPills
+                        .filter(pill => pill.state === 'unlinked')
+                        .map(pill => {
+                            console.log(`Attempting to match tune: "${pill.tuneName}"`);
+                            return autoMatchTune(pill).then(() => {
+                                console.log(`Match result for "${pill.tuneName}": ${pill.state}`);
+                                updatePillAppearance(pill);
+                            }).catch(err => {
+                                console.error(`Error matching "${pill.tuneName}":`, err);
+                            });
+                        });
+                    
+                    // Wait for all matching operations to complete
+                    await Promise.all(matchingPromises);
+                    
+                    // Force a complete re-render to ensure visual updates are applied
+                    renderTunePills();
+                    
+                    // Now show matching results with accurate pill states
+                    console.log('All matching complete, showing results for pills:', actualPastedPills.map(p => `${p.tuneName}: ${p.state}`));
+                    showMatchingResults(actualPastedPills);
+                }, 200); // Small additional delay after requestAnimationFrame
+            });
+        }
     }
     
     function pasteAtPosition(pillsData, position) {
@@ -3053,6 +3173,7 @@
     // Auto-match a tune against the database without saving
     async function autoMatchTune(pill) {
         try {
+            console.log(`Making API request to match tune: "${pill.tuneName}"`);
             const response = await fetch(`/api/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/match_tune`, {
                 method: 'POST',
                 headers: {
@@ -3063,26 +3184,33 @@
                 })
             });
             
+            console.log(`API response status for "${pill.tuneName}": ${response.status}`);
+            
             if (!response.ok) {
                 console.warn(`Failed to match tune "${pill.tuneName}": ${response.status}`);
+                const errorText = await response.text();
+                console.warn('Error response:', errorText);
                 return;
             }
             
             const result = await response.json();
+            console.log(`API result for "${pill.tuneName}":`, result);
             
             if (result.success && result.matched) {
                 // Update the pill with matched tune data
                 pill.tuneId = result.tune_id;
                 pill.tuneName = result.final_name; // Use the canonical name from database
                 pill.state = 'linked';
+                console.log(`Successfully matched "${pill.tuneName}" -> "${result.final_name}" (ID: ${result.tune_id})`);
                 
             } else if (result.success && !result.matched) {
                 // No match found - pill becomes unlinked (gray)
                 pill.state = 'unlinked';
+                console.log(`No match found for "${pill.tuneName}"`);
             } else {
                 // Error occurred - pill becomes unlinked
                 pill.state = 'unlinked';
-                console.warn(`Error matching tune "${pill.tuneName}": ${result.message}`);
+                console.warn(`Error matching tune "${pill.tuneName}": ${result.message || 'Unknown error'}`);
             }
             
             // Update just this pill instead of re-rendering everything
@@ -3097,16 +3225,24 @@
     
     // Update the appearance of a single pill without re-rendering everything
     function updatePillAppearance(pill) {
+        console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
         const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
-        if (!pillElement) return;
+        if (!pillElement) {
+            console.error(`Could not find pill element with ID: ${pill.id}`);
+            return;
+        }
         
+        console.log(`Found pill element, updating class from "${pillElement.className}" to "tune-pill ${pill.state}"`);
         // Update the CSS class to reflect the new state
         pillElement.className = `tune-pill ${pill.state}`;
         
         // Update the text content in case it changed (e.g., canonical name from API)
         const textElement = pillElement.querySelector('.text');
         if (textElement) {
+            console.log(`Updating text content from "${textElement.textContent}" to "${pill.tuneName}"`);
             textElement.textContent = pill.tuneName;
+        } else {
+            console.error('Could not find .text element within pill');
         }
         
         // Remove any existing spinner
