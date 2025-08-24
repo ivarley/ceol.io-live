@@ -2689,10 +2689,12 @@ def reactivate_session(session_path):
 @login_required
 def match_tune_ajax(session_path, date):
     """
-    Match a single tune name against the database without saving anything.
+    Match a tune name against the database without saving anything.
     Used by the beta tune pill editor for auto-matching typed text.
+    Returns either a single exact match or up to 5 possible matches with wildcard search.
     """
     tune_name = normalize_apostrophes(request.json.get('tune_name', '').strip())
+    previous_tune_type = request.json.get('previous_tune_type', None)  # For preferencing matching tune types in sets
     if not tune_name:
         return jsonify({'success': False, 'message': 'Please provide a tune name'})
     
@@ -2710,33 +2712,122 @@ def match_tune_ajax(session_path, date):
         
         session_id = session_result[0]
         
-        # Use the existing tune matching function
+        # First, try to find an exact match using the existing function
         tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
+        
+        # If we found exactly one match, return it
+        if tune_id and not error_message:
+            # Get the tune type for the matched tune
+            cur.execute('SELECT tune_type FROM tune WHERE tune_id = %s', (tune_id,))
+            tune_type_result = cur.fetchone()
+            tune_type = tune_type_result[0] if tune_type_result else None
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'matched': True,
+                'exact_match': True,
+                'results': [{
+                    'tune_id': tune_id,
+                    'tune_name': final_name,
+                    'tune_type': tune_type
+                }]
+            })
+        
+        # If no exact match or multiple matches, do wildcard search
+        # Build the wildcard query with proper ordering
+        wildcard_pattern = f'%{tune_name.lower()}%'
+        
+        # Debug logging
+        print(f"Wildcard search for '{tune_name}' with previous_tune_type='{previous_tune_type}'")
+        
+        # Query with all the ordering criteria
+        query = '''
+            SELECT 
+                t.tune_id, 
+                COALESCE(st.alias, t.name) as display_name, 
+                t.tune_type,
+                CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END as preferred_tune_type,
+                playcounts.plays
+            FROM tune t
+            LEFT OUTER JOIN session_tune st
+                ON t.tune_id = st.tune_id AND st.session_id = %s
+            LEFT OUTER JOIN (
+                SELECT sit.tune_id, COUNT(*) as plays 
+                FROM session_instance si 
+                INNER JOIN session_instance_tune sit 
+                    ON si.session_instance_id = sit.session_instance_id 
+                WHERE si.session_id = %s 
+                GROUP BY sit.tune_id
+            ) playcounts
+                ON t.tune_id = playcounts.tune_id
+            WHERE LOWER(COALESCE(st.alias, t.name)) LIKE %s
+            ORDER BY 
+                preferred_tune_type ASC, 
+                playcounts.plays DESC NULLS LAST, 
+                t.tunebook_count_cached DESC NULLS LAST, 
+                LOWER(COALESCE(st.alias, t.name)) ASC
+            LIMIT 5
+        '''
+        
+        cur.execute(query, (previous_tune_type, session_id, session_id, wildcard_pattern))
+        matches = cur.fetchall()
+        
+        # Debug logging of results
+        print(f"Found {len(matches)} matches:")
+        for match in matches:
+            print(f"  - {match[1]} ({match[2]}) - preferred={match[3]}, plays={match[4]}")
         
         cur.close()
         conn.close()
         
-        if error_message:
-            return jsonify({
-                'success': False, 
-                'message': error_message,
-                'tune_id': None,
-                'matched': False
-            })
-        elif tune_id:
+        if not matches:
+            # No matches found at all
             return jsonify({
                 'success': True,
-                'tune_id': tune_id,
-                'final_name': final_name,
-                'matched': True
+                'matched': False,
+                'exact_match': False,
+                'results': []
             })
-        else:
-            return jsonify({
-                'success': True,
-                'tune_id': None,
-                'final_name': tune_name,
-                'matched': False
+        
+        # Format the results
+        results = []
+        for match in matches:
+            results.append({
+                'tune_id': match[0],
+                'tune_name': match[1],
+                'tune_type': match[2]
             })
+        
+        return jsonify({
+            'success': True,
+            'matched': len(results) == 1,  # Only considered "matched" if exactly one result
+            'exact_match': False,
+            'results': results
+        })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@login_required
+def test_match_tune_ajax(session_path, date):
+    """
+    Test endpoint for the enhanced match_tune functionality.
+    Accepts GET requests with query parameters for easier testing.
+    """
+    tune_name = normalize_apostrophes(request.args.get('tune_name', '').strip())
+    previous_tune_type = request.args.get('previous_tune_type', None)
+    
+    if not tune_name:
+        return jsonify({'success': False, 'message': 'Please provide a tune_name query parameter'})
+    
+    # Create a fake POST request data
+    request.json = {
+        'tune_name': tune_name,
+        'previous_tune_type': previous_tune_type
+    }
+    
+    # Call the actual match_tune_ajax function
+    return match_tune_ajax(session_path, date)

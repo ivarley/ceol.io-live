@@ -128,6 +128,12 @@
             border: 1px solid var(--secondary, #6c757d);
         }
         
+        .tune-pill.unmatched {
+            background-color: var(--danger, #dc3545);
+            color: white;
+            border: 1px solid var(--danger, #dc3545);
+        }
+        
         .tune-pill.loading {
             background-color: #e9ecef;
             color: #6c757d;
@@ -720,6 +726,8 @@
     let isTyping = false;
     let typingBuffer = '';
     let isKeepingKeyboardOpen = false;
+    let typingTimeout = null;  // For 3-second pause matching
+    let typingPill = null;      // Temporary pill being typed
     
     // Global mobile drag ghost management
     let globalDragGhost = null;
@@ -2079,6 +2087,133 @@
         document.querySelectorAll('.chevron.open').forEach(chevron => chevron.classList.remove('open'));
     }
     
+    function hideMatchResultsMenu(pillId) {
+        // Remove match results menu for specific pill
+        const menu = document.querySelector(`.match-results-menu[data-pill-id="${pillId}"]`);
+        if (menu) {
+            menu.remove();
+        }
+    }
+    
+    function showMatchResultsMenu(pill) {
+        // Remove any existing match results menu for this pill
+        hideMatchResultsMenu(pill.id);
+        
+        if (!pill.matchResults || pill.matchResults.length === 0) {
+            return;
+        }
+        
+        // Find the pill element
+        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
+        if (!pillElement) {
+            console.error(`Could not find pill element for ID: ${pill.id}`);
+            return;
+        }
+        
+        const menu = document.createElement('div');
+        menu.className = 'tune-context-menu match-results-menu';
+        menu.style.display = 'block';
+        menu.dataset.pillId = pill.id;
+        
+        const rect = pillElement.getBoundingClientRect();
+        
+        // Position menu below the pill
+        menu.style.position = 'fixed';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 5) + 'px';
+        menu.style.width = 'auto';
+        menu.style.minWidth = Math.max(200, rect.width) + 'px';
+        menu.style.maxWidth = Math.min(600, window.innerWidth - rect.left - 20) + 'px';
+        
+        // Use a neutral background for the menu
+        menu.style.backgroundColor = 'white';
+        menu.style.color = '#212529';
+        menu.style.border = '1px solid #dee2e6';
+        menu.style.borderRadius = '4px';
+        menu.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        
+        // Add match results as menu items
+        pill.matchResults.forEach(result => {
+            const item = document.createElement('a');
+            item.style.display = 'block';
+            item.style.padding = '8px 12px';
+            item.style.cursor = 'pointer';
+            item.style.borderBottom = '1px solid #f0f0f0';
+            item.style.color = '#212529';
+            item.style.textDecoration = 'none';
+            
+            // Show tune name and type
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = result.tune_name;
+            nameSpan.style.fontWeight = '500';
+            item.appendChild(nameSpan);
+            
+            if (result.tune_type) {
+                const typeSpan = document.createElement('span');
+                typeSpan.textContent = ` (${result.tune_type})`;
+                typeSpan.style.color = '#6c757d';
+                typeSpan.style.fontSize = '0.9em';
+                item.appendChild(typeSpan);
+            }
+            
+            // Hover effect
+            item.addEventListener('mouseenter', () => {
+                item.style.backgroundColor = '#f8f9fa';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.backgroundColor = 'transparent';
+            });
+            
+            // Click to select this match
+            item.addEventListener('click', () => {
+                // Apply the selected match
+                pill.tuneId = result.tune_id;
+                pill.tuneName = result.tune_name;
+                pill.tuneType = result.tune_type;
+                pill.state = 'linked';
+                pill.matchResults = null;
+                
+                // Update the pill appearance
+                updatePillAppearance(pill);
+                
+                // Hide the menu
+                hideMatchResultsMenu(pill.id);
+                
+                // If we're still typing, maintain typing state
+                if (isTyping) {
+                    // Move cursor after this pill
+                    const pillPosition = findPillPosition(pill.id);
+                    if (pillPosition) {
+                        setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
+                    }
+                }
+            });
+            
+            menu.appendChild(item);
+        });
+        
+        // Remove last border
+        if (menu.lastChild) {
+            menu.lastChild.style.borderBottom = 'none';
+        }
+        
+        document.body.appendChild(menu);
+        
+        // Don't auto-hide this menu when clicking elsewhere while typing
+        // But do hide it when the pill state changes or user navigates away
+    }
+    
+    function findPillPosition(pillId) {
+        for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+            const set = tunePillsData[setIndex];
+            const pillIndex = set.findIndex(p => p.id === pillId);
+            if (pillIndex !== -1) {
+                return { setIndex, pillIndex };
+            }
+        }
+        return null;
+    }
+    
     function showContextMenu(event, pillData) {
         // Remove existing context menus and reset all chevrons
         hideContextMenu();
@@ -2101,9 +2236,16 @@
         menu.style.left = rect.left + 'px';
         menu.style.top = (rect.bottom + 5) + 'px';
         
-        // Match pill width and colors
-        menu.style.width = rect.width + 'px';
-        menu.style.minWidth = 'unset';
+        // For unmatched pills with results, make menu wider to accommodate tune names
+        if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
+            menu.style.width = 'auto';
+            menu.style.minWidth = Math.max(250, rect.width) + 'px';
+            menu.style.maxWidth = Math.min(500, window.innerWidth - rect.left - 20) + 'px';
+        } else {
+            // Match pill width for other states
+            menu.style.width = rect.width + 'px';
+            menu.style.minWidth = 'unset';
+        }
         
         // Match pill background color based on state
         const computedStyle = window.getComputedStyle(pillElement);
@@ -2121,6 +2263,57 @@
             });
             
             addMenuItem(menu, 'Relink', () => {
+                showLinkModal(pillData);
+                hideContextMenu();
+            });
+        } else if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
+            // Show match results first if available
+            pillData.matchResults.forEach(result => {
+                const item = document.createElement('a');
+                item.style.display = 'block';
+                item.style.padding = '8px 12px';
+                item.style.cursor = 'pointer';
+                item.style.borderBottom = '1px solid rgba(255,255,255,0.2)';
+                
+                // Show tune name and type
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = result.tune_name;
+                nameSpan.style.fontWeight = '500';
+                item.appendChild(nameSpan);
+                
+                if (result.tune_type) {
+                    const typeSpan = document.createElement('span');
+                    typeSpan.textContent = ` (${result.tune_type})`;
+                    typeSpan.style.opacity = '0.8';
+                    typeSpan.style.fontSize = '0.9em';
+                    item.appendChild(typeSpan);
+                }
+                
+                // Click to select this match
+                item.addEventListener('click', () => {
+                    // Apply the selected match
+                    pillData.tuneId = result.tune_id;
+                    pillData.tuneName = result.tune_name;
+                    pillData.tuneType = result.tune_type;
+                    pillData.state = 'linked';
+                    pillData.matchResults = null;
+                    
+                    // Update the pill appearance
+                    updatePillAppearance(pillData);
+                    hideContextMenu();
+                });
+                
+                menu.appendChild(item);
+            });
+            
+            // Add separator
+            const separator = document.createElement('div');
+            separator.style.borderTop = '1px solid rgba(255,255,255,0.3)';
+            separator.style.margin = '4px 0';
+            menu.appendChild(separator);
+            
+            // Add manual link option
+            addMenuItem(menu, 'Manual Link...', () => {
                 showLinkModal(pillData);
                 hideContextMenu();
             });
@@ -2590,6 +2783,13 @@
         if (!isTyping) {
             isTyping = true;
             typingBuffer = '';
+            typingPill = null;
+        }
+        
+        // Clear any existing typing timeout
+        if (typingTimeout) {
+            clearTimeout(typingTimeout);
+            typingTimeout = null;
         }
         
         // Handle comma and semicolon as immediate tune separators
@@ -2611,6 +2811,216 @@
         
         typingBuffer += char;
         updateCursorWithText();
+        
+        // Set a timeout to trigger matching after 3 seconds of no typing
+        typingTimeout = setTimeout(() => {
+            if (isTyping && typingBuffer.trim()) {
+                // Trigger matching but stay in typing mode
+                performTypingMatch();
+            }
+        }, 3000);
+    }
+    
+    // Perform matching while still in typing mode
+    function performTypingMatch() {
+        if (!isTyping || !typingBuffer.trim()) return;
+        
+        // Create a temporary pill for matching
+        if (!typingPill) {
+            typingPill = {
+                id: 'typing-' + Date.now(),
+                orderNumber: null,
+                tuneId: null,
+                tuneName: typingBuffer.trim(),
+                setting: null,
+                tuneType: null,
+                state: 'typing'
+            };
+        } else {
+            typingPill.tuneName = typingBuffer.trim();
+        }
+        
+        // Find the previous tune type if we're in a set
+        let previousTuneType = null;
+        if (cursorPosition) {
+            const { setIndex, pillIndex, position } = cursorPosition;
+            console.log(`Finding previous tune type - cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
+            console.log(`tunePillsData structure:`, tunePillsData.map((set, i) => `Set ${i}: ${set.length} pills`));
+            
+            if (setIndex < tunePillsData.length) {
+                const set = tunePillsData[setIndex];
+                console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
+                
+                // Different logic based on cursor position
+                if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
+                    // Cursor is after a pill - look backwards from current pill
+                    console.log(`Looking backwards from pill ${pillIndex} in 'after' position`);
+                    for (let i = pillIndex; i >= 0; i--) {
+                        console.log(`Checking pill ${i}: ${set[i].tuneName} (${set[i].tuneType})`);
+                        if (set[i].tuneType) {
+                            previousTuneType = set[i].tuneType;
+                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
+                            break;
+                        }
+                    }
+                } else if (position === 'before' && pillIndex > 0 && pillIndex <= set.length) {
+                    // Cursor is before a pill but not the first - look at previous pill
+                    console.log(`Looking backwards from pill ${pillIndex - 1} in 'before' position`);
+                    for (let i = pillIndex - 1; i >= 0; i--) {
+                        console.log(`Checking pill ${i}: ${set[i].tuneName} (${set[i].tuneType})`);
+                        if (set[i].tuneType) {
+                            previousTuneType = set[i].tuneType;
+                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
+                            break;
+                        }
+                    }
+                } else if (position === 'newset' && setIndex > 0) {
+                    // Starting a new set - check the last tune of the previous set
+                    const prevSet = tunePillsData[setIndex - 1];
+                    console.log(`Looking in previous set (${setIndex - 1}) with ${prevSet ? prevSet.length : 0} pills`);
+                    if (prevSet && prevSet.length > 0) {
+                        for (let i = prevSet.length - 1; i >= 0; i--) {
+                            console.log(`Checking prev set pill ${i}: ${prevSet[i].tuneName} (${prevSet[i].tuneType})`);
+                            if (prevSet[i].tuneType) {
+                                previousTuneType = prevSet[i].tuneType;
+                                console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    console.log(`No matching cursor position logic for setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
+                }
+            } else {
+                console.log(`setIndex ${setIndex} >= tunePillsData.length ${tunePillsData.length}`);
+            }
+        } else {
+            console.log(`No cursorPosition available`);
+        }
+        
+        // Store previous tune type on the pill for the API call
+        typingPill.previousTuneType = previousTuneType;
+        
+        // Call autoMatchTune with stillTyping flag
+        autoMatchTune(typingPill, true).then(() => {
+            // If we got results, show them as a dropdown menu
+            if (typingPill.matchResults && typingPill.matchResults.length > 0) {
+                // Show the match results menu positioned at the typing cursor
+                showTypingMatchResults(typingPill);
+            }
+        });
+    }
+    
+    // Show match results for the tune being typed
+    function showTypingMatchResults(pill) {
+        // Hide any existing typing match results
+        const existingMenu = document.querySelector('.typing-match-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+        
+        if (!pill.matchResults || pill.matchResults.length === 0) {
+            return;
+        }
+        
+        // Find the typing text element
+        const typingText = document.querySelector('.typing-text');
+        if (!typingText) {
+            return;
+        }
+        
+        const menu = document.createElement('div');
+        menu.className = 'tune-context-menu typing-match-menu';
+        menu.style.display = 'block';
+        
+        const rect = typingText.getBoundingClientRect();
+        
+        // Position menu below the typing text
+        menu.style.position = 'fixed';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 5) + 'px';
+        menu.style.width = 'auto';
+        menu.style.minWidth = Math.max(200, rect.width) + 'px';
+        menu.style.maxWidth = Math.min(600, window.innerWidth - rect.left - 20) + 'px';
+        
+        // Use a neutral background for the menu
+        menu.style.backgroundColor = 'white';
+        menu.style.color = '#212529';
+        menu.style.border = '1px solid #dee2e6';
+        menu.style.borderRadius = '4px';
+        menu.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        menu.style.zIndex = '1000';
+        
+        // Add match results as menu items
+        pill.matchResults.forEach((result, index) => {
+            const item = document.createElement('a');
+            item.style.display = 'block';
+            item.style.padding = '8px 12px';
+            item.style.cursor = 'pointer';
+            item.style.borderBottom = index < pill.matchResults.length - 1 ? '1px solid #f0f0f0' : 'none';
+            item.style.color = '#212529';
+            item.style.textDecoration = 'none';
+            
+            // Show tune name and type
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = result.tune_name;
+            nameSpan.style.fontWeight = '500';
+            item.appendChild(nameSpan);
+            
+            if (result.tune_type) {
+                const typeSpan = document.createElement('span');
+                typeSpan.textContent = ` (${result.tune_type})`;
+                typeSpan.style.color = '#6c757d';
+                typeSpan.style.fontSize = '0.9em';
+                item.appendChild(typeSpan);
+            }
+            
+            // Hover effect
+            item.addEventListener('mouseenter', () => {
+                item.style.backgroundColor = '#f8f9fa';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.backgroundColor = 'transparent';
+            });
+            
+            // Click to select this match
+            item.addEventListener('click', () => {
+                // Apply the selected match to the typing buffer
+                typingBuffer = result.tune_name;
+                updateCursorWithText();
+                
+                // Store the match info for when we finish typing
+                typingPill.tuneId = result.tune_id;
+                typingPill.tuneName = result.tune_name;
+                typingPill.tuneType = result.tune_type;
+                typingPill.state = 'matched';
+                
+                // Hide the menu
+                menu.remove();
+                
+                // Finish typing and insert the matched tune
+                finishTyping(true);
+            });
+            
+            menu.appendChild(item);
+        });
+        
+        document.body.appendChild(menu);
+        
+        // Remove menu when typing continues or stops
+        const removeMenu = () => {
+            const menu = document.querySelector('.typing-match-menu');
+            if (menu) {
+                menu.remove();
+            }
+        };
+        
+        // Set up event to remove menu on any keypress
+        const keyHandler = () => {
+            removeMenu();
+            document.removeEventListener('keydown', keyHandler);
+        };
+        document.addEventListener('keydown', keyHandler);
     }
     
     function handleBackspace() {
@@ -2842,6 +3252,18 @@
     }
     
     function finishTyping(keepKeyboardOpen = false) {
+        // Clear any typing timeout
+        if (typingTimeout) {
+            clearTimeout(typingTimeout);
+            typingTimeout = null;
+        }
+        
+        // Hide any typing match menu
+        const typingMenu = document.querySelector('.typing-match-menu');
+        if (typingMenu) {
+            typingMenu.remove();
+        }
+        
         // If we're trying to keep keyboard open, set the flag
         if (keepKeyboardOpen) {
             isKeepingKeyboardOpen = true;
@@ -2858,6 +3280,7 @@
         
         typingBuffer = '';
         isTyping = false;
+        typingPill = null;
         updateCursorWithText();
         
         // On mobile, only hide keyboard if not continuing to type
@@ -2884,8 +3307,21 @@
     }
     
     function cancelTyping() {
+        // Clear any typing timeout
+        if (typingTimeout) {
+            clearTimeout(typingTimeout);
+            typingTimeout = null;
+        }
+        
+        // Hide any typing match menu
+        const typingMenu = document.querySelector('.typing-match-menu');
+        if (typingMenu) {
+            typingMenu.remove();
+        }
+        
         typingBuffer = '';
         isTyping = false;
+        typingPill = null;
         updateCursorWithText();
         
         // On mobile, remove contenteditable to hide keyboard
@@ -3116,7 +3552,50 @@
         
         saveToUndo();
         
-        // Create new pills
+        const { setIndex, pillIndex, position } = cursorPosition;
+        
+        // Calculate the previous tune type based on cursor position before inserting pills
+        let previousTuneType = null;
+        console.log(`insertTunesAtCursor - Finding previous tune type for cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
+        
+        if (setIndex < tunePillsData.length) {
+            const set = tunePillsData[setIndex];
+            console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
+            
+            if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
+                // Cursor is after a pill - look backwards from current pill
+                for (let i = pillIndex; i >= 0; i--) {
+                    if (set[i].tuneType) {
+                        previousTuneType = set[i].tuneType;
+                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
+                        break;
+                    }
+                }
+            } else if (position === 'before' && pillIndex > 0) {
+                // Cursor is before a pill but not the first - look at previous pill
+                for (let i = pillIndex - 1; i >= 0; i--) {
+                    if (set[i].tuneType) {
+                        previousTuneType = set[i].tuneType;
+                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
+                        break;
+                    }
+                }
+            }
+        } else if (position === 'newset' && setIndex > 0) {
+            // Starting a new set - check the last tune of the previous set
+            const prevSet = tunePillsData[setIndex - 1];
+            if (prevSet && prevSet.length > 0) {
+                for (let i = prevSet.length - 1; i >= 0; i--) {
+                    if (prevSet[i].tuneType) {
+                        previousTuneType = prevSet[i].tuneType;
+                        console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Create new pills with the calculated previous tune type
         const newPills = tuneNames.map(name => ({
             id: generateId(),
             orderNumber: null,
@@ -3124,8 +3603,11 @@
             tuneName: name,
             setting: null,
             tuneType: null,
-            state: 'loading'  // Show loading spinner until API responds
+            state: 'loading',  // Show loading spinner until API responds
+            previousTuneType: previousTuneType  // Store for API call
         }));
+        
+        console.log(`Created ${newPills.length} pills with previousTuneType: ${previousTuneType}`);
         
         // Attempt to auto-match each tune via API
         const matchPromises = newPills.map(pill => autoMatchTune(pill));
@@ -3134,8 +3616,6 @@
         Promise.all(matchPromises).then(() => {
             showMatchingResults(newPills);
         });
-        
-        const { setIndex, pillIndex, position } = cursorPosition;
         
         
         if (position === 'newset') {
@@ -3201,16 +3681,43 @@
     }
     
     // Auto-match a tune against the database without saving
-    async function autoMatchTune(pill) {
+    async function autoMatchTune(pill, stillTyping = false) {
         try {
-            console.log(`Making API request to match tune: "${pill.tuneName}"`);
+            // Find the previous tune type if this pill is in a set
+            let previousTuneType = null;
+            
+            // Check if the pill already has a previousTuneType set (for typing pills)
+            if (pill.previousTuneType !== undefined) {
+                previousTuneType = pill.previousTuneType;
+                console.log(`Using pre-calculated previous tune type: ${previousTuneType}`);
+            } else {
+                // Find which set this pill belongs to
+                for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                    const set = tunePillsData[setIndex];
+                    const pillIndex = set.findIndex(p => p.id === pill.id);
+                    
+                    if (pillIndex > 0) {
+                        // This pill is not the first in the set, check previous pills for tune type
+                        for (let i = pillIndex - 1; i >= 0; i--) {
+                            if (set[i].tuneType) {
+                                previousTuneType = set[i].tuneType;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            console.log(`Making API request to match tune: "${pill.tuneName}" (previous type: ${previousTuneType || 'none'})`);
             const response = await fetch(`/api/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/match_tune`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    tune_name: pill.tuneName
+                    tune_name: pill.tuneName,
+                    previous_tune_type: previousTuneType
                 })
             });
             
@@ -3226,21 +3733,61 @@
             const result = await response.json();
             console.log(`API result for "${pill.tuneName}":`, result);
             
-            if (result.success && result.matched) {
-                // Update the pill with matched tune data
-                pill.tuneId = result.tune_id;
-                pill.tuneName = result.final_name; // Use the canonical name from database
-                pill.state = 'linked';
-                console.log(`Successfully matched "${pill.tuneName}" -> "${result.final_name}" (ID: ${result.tune_id})`);
+            if (result.success && result.results) {
+                // Store the results on the pill for later use
+                pill.matchResults = result.results;
                 
-            } else if (result.success && !result.matched) {
-                // No match found - pill becomes unlinked (gray)
-                pill.state = 'unlinked';
-                console.log(`No match found for "${pill.tuneName}"`);
+                if (result.results.length === 1 && result.exact_match) {
+                    // Single exact match - automatically apply it
+                    const match = result.results[0];
+                    pill.tuneId = match.tune_id;
+                    pill.tuneName = match.tune_name;
+                    pill.tuneType = match.tune_type;
+                    pill.state = 'linked';
+                    pill.matchResults = null; // Clear stored results
+                    console.log(`Successfully matched "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
+                    
+                } else if (result.results.length > 1) {
+                    // Multiple matches - mark as unmatched and store results
+                    pill.state = 'unmatched';
+                    console.log(`Multiple matches found for "${pill.tuneName}": ${result.results.length} results`);
+                    
+                    // Show context menu with results if still typing/editing
+                    if (stillTyping) {
+                        showMatchResultsMenu(pill);
+                    } else {
+                        // User has exited text entry - hide any existing menu
+                        hideMatchResultsMenu(pill.id);
+                    }
+                    
+                } else if (result.results.length === 1 && !result.exact_match) {
+                    // Single wildcard match
+                    if (stillTyping) {
+                        // While typing, just show the option but don't auto-apply
+                        pill.state = 'unmatched';
+                        showMatchResultsMenu(pill);
+                    } else {
+                        // When finished typing, auto-apply single wildcard match
+                        const match = result.results[0];
+                        pill.tuneId = match.tune_id;
+                        pill.tuneName = match.tune_name;
+                        pill.tuneType = match.tune_type;
+                        pill.state = 'linked';
+                        pill.matchResults = null;
+                        console.log(`Auto-applied single wildcard match: "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
+                    }
+                    
+                } else {
+                    // No matches at all
+                    pill.state = 'unlinked';
+                    pill.matchResults = null;
+                    console.log(`No match found for "${pill.tuneName}"`);
+                }
             } else {
-                // Error occurred - pill becomes unlinked
+                // Error or unexpected response format
                 pill.state = 'unlinked';
-                console.warn(`Error matching tune "${pill.tuneName}": ${result.message || 'Unknown error'}`);
+                pill.matchResults = null;
+                console.warn(`Unexpected response format for "${pill.tuneName}"`);
             }
             
             // Update just this pill instead of re-rendering everything
@@ -3249,6 +3796,7 @@
             console.error(`Network error matching tune "${pill.tuneName}":`, error);
             // Network error - pill becomes unlinked
             pill.state = 'unlinked';
+            pill.matchResults = null;
             updatePillAppearance(pill);
         }
     }
