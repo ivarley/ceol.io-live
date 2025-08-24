@@ -578,6 +578,118 @@ def delete_session_instance_ajax(session_path, date):
         return jsonify({'success': False, 'message': f'Failed to delete session instance: {str(e)}'})
 
 
+def mark_session_log_complete_ajax(session_path, date):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Check if the session instance exists
+        cur.execute('''
+            SELECT session_instance_id, log_complete_date 
+            FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        
+        instance_result = cur.fetchone()
+        if not instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id, current_log_complete_date = instance_result
+        
+        # Check if already marked complete
+        if current_log_complete_date is not None:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session log is already marked as complete'})
+        
+        # Mark the session log as complete
+        cur.execute('''
+            UPDATE session_instance 
+            SET log_complete_date = CURRENT_TIMESTAMP 
+            WHERE session_instance_id = %s
+        ''', (session_instance_id,))
+        
+        # Record in history table
+        save_to_history(cur, 'session_instance', 'UPDATE', session_instance_id)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'This session log has been marked as complete.'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to mark session log complete: {str(e)}'})
+
+
+def mark_session_log_incomplete_ajax(session_path, date):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id for this session_path
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Check if the session instance exists
+        cur.execute('''
+            SELECT session_instance_id, log_complete_date 
+            FROM session_instance 
+            WHERE session_id = %s AND date = %s
+        ''', (session_id, date))
+        
+        instance_result = cur.fetchone()
+        if not instance_result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_instance_id, current_log_complete_date = instance_result
+        
+        # Check if not marked complete
+        if current_log_complete_date is None:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session log is not marked as complete'})
+        
+        # Mark the session log as incomplete
+        cur.execute('''
+            UPDATE session_instance 
+            SET log_complete_date = NULL 
+            WHERE session_instance_id = %s
+        ''', (session_instance_id,))
+        
+        # Record in history table
+        save_to_history(cur, 'session_instance', 'UPDATE', session_instance_id)
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'This session log has been marked as not complete.'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to mark session log as not complete: {str(e)}'})
+
+
 def check_existing_session_ajax():
     session_id = request.json.get('session_id')
     if not session_id:

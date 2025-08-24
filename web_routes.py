@@ -330,7 +330,7 @@ def session_handler(full_path):
             cur = conn.cursor()
             cur.execute('''
                 SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled, 
-                       si.location_override, s.location_name
+                       si.location_override, s.location_name, si.log_complete_date, s.session_id
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE s.path = %s AND si.date = %s
@@ -346,6 +346,7 @@ def session_handler(full_path):
                     'is_cancelled': session_instance[4],
                     'location_override': session_instance[5],
                     'default_location': session_instance[6],
+                    'log_complete_date': session_instance[7],
                     'session_path': session_path
                 }
                 
@@ -384,14 +385,25 @@ def session_handler(full_path):
                 if current_set:
                     sets.append(current_set)
                 
+                # Check if current user is an admin of this session
+                is_session_admin = False
+                if current_user.is_authenticated:
+                    # session_instance[8] is the session_id from our updated query
+                    # Use request.session to access Flask session data
+                    from flask import session as flask_session
+                    is_session_admin = (flask_session.get('is_system_admin', False) or 
+                                      session_instance[8] in flask_session.get('admin_session_ids', []))
+                
                 if is_beta:
                     return render_template('session_instance_detail_beta.html', 
                                          session_instance=session_instance_dict, 
-                                         tune_sets=sets)
+                                         tune_sets=sets,
+                                         is_session_admin=is_session_admin)
                 else:
                     return render_template('session_instance_detail.html', 
                                          session_instance=session_instance_dict, 
-                                         tune_sets=sets)
+                                         tune_sets=sets,
+                                         is_session_admin=is_session_admin)
             else:
                 cur.close()
                 conn.close()

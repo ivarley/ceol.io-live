@@ -70,6 +70,8 @@ app.add_url_rule('/api/sessions/<path:session_path>/add_instance', 'add_session_
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/update', 'update_session_instance_ajax', update_session_instance_ajax, methods=['PUT'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/tune_count', 'get_session_tune_count_ajax', get_session_tune_count_ajax)
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/delete', 'delete_session_instance_ajax', delete_session_instance_ajax, methods=['DELETE'])
+app.add_url_rule('/api/sessions/<path:session_path>/<date>/mark_complete', 'mark_session_log_complete_ajax', mark_session_log_complete_ajax, methods=['POST'])
+app.add_url_rule('/api/sessions/<path:session_path>/<date>/mark_incomplete', 'mark_session_log_incomplete_ajax', mark_session_log_incomplete_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/add_tune', 'add_tune_ajax', add_tune_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/delete_tune_by_order/<int:order_number>', 'delete_tune_by_order_ajax', delete_tune_by_order_ajax, methods=['DELETE'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/link_tune', 'link_tune_ajax', link_tune_ajax, methods=['POST'])

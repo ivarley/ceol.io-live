@@ -827,6 +827,25 @@
     </div>
     {% endif %}
     
+    {% if session_instance.log_complete_date and is_session_admin %}
+    <div style="margin-top: 20px;">
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
+        </p>
+        <a href="#" id="mark-incomplete-link" style="color: var(--warning, #ffc107); text-decoration: none; font-size: 14px;">Mark this session as not complete</a>
+    </div>
+    {% elif not session_instance.log_complete_date and is_session_admin %}
+    <div style="margin-top: 20px;">
+        <a href="#" id="mark-complete-link" style="color: var(--primary); text-decoration: none; font-size: 14px;">Mark this session log complete</a>
+    </div>
+    {% elif session_instance.log_complete_date and not is_session_admin %}
+    <div style="margin-top: 20px;">
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
+        </p>
+    </div>
+    {% endif %}
+    
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
 </div>
 {% endblock %}
@@ -836,6 +855,8 @@
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
     const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
+    const isSessionAdmin = {{ 'true' if is_session_admin else 'false' }};
+    const isLogComplete = {{ 'true' if session_instance.log_complete_date else 'false' }};
     
     // Session instance data for editing
     const sessionInstanceData = {
@@ -5245,6 +5266,82 @@
                 }
             }, 300);
         }, 4000);
+    }
+    
+    // Mark complete link event listener (if link exists)
+    const markCompleteLink = document.getElementById('mark-complete-link');
+    if (markCompleteLink) {
+        markCompleteLink.addEventListener('click', function(event) {
+            event.preventDefault();
+            markSessionLogComplete();
+        });
+    }
+    
+    // Mark incomplete link event listener (if link exists)
+    const markIncompleteLink = document.getElementById('mark-incomplete-link');
+    if (markIncompleteLink) {
+        markIncompleteLink.addEventListener('click', function(event) {
+            event.preventDefault();
+            markSessionLogIncomplete();
+        });
+    }
+    
+    function markSessionLogComplete() {
+        if (!confirm('Mark this session log as complete? This will switch to view mode and hide the edit button from non-admins.')) {
+            return;
+        }
+        
+        fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message);
+                // Redirect to normal view after a short delay
+                setTimeout(() => {
+                    window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
+                }, 1500);
+            } else {
+                showMessage(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showMessage('Failed to mark session log complete', 'error');
+            console.error('Error:', error);
+        });
+    }
+    
+    function markSessionLogIncomplete() {
+        if (!confirm('Mark this session log as not complete? This will allow all users to edit it again.')) {
+            return;
+        }
+        
+        fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_incomplete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message);
+                // Reload the page to show updated status
+                setTimeout(() => {
+                    window.location.href = `/sessions/${sessionPath}/${sessionDate}/beta`;
+                }, 1500);
+            } else {
+                showMessage(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showMessage('Failed to mark session log as not complete', 'error');
+            console.error('Error:', error);
+        });
     }
 </script>
 {% endblock %}

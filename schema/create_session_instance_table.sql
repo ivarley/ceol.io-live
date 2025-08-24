@@ -8,6 +8,7 @@ CREATE TABLE session_instance (
     location_override VARCHAR(255),
     is_cancelled BOOLEAN DEFAULT FALSE,
     comments TEXT,
+    log_complete_date TIMESTAMP DEFAULT NULL,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -17,6 +18,9 @@ CREATE INDEX idx_session_instance_session_id ON session_instance(session_id);
 
 -- Create index on date for temporal queries
 CREATE INDEX idx_session_instance_date ON session_instance(date);
+
+-- Create index for querying completed/incomplete session instances
+CREATE INDEX idx_session_instance_log_complete_date ON session_instance(log_complete_date);
 
 -- Create unique constraint to prevent overlapping instances for the same session
 CREATE UNIQUE INDEX idx_session_instance_no_overlap ON session_instance(session_id, date, start_time);

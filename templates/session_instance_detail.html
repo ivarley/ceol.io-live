@@ -394,7 +394,23 @@
     </div>
     
     <div style="margin-top: 30px;">
+        {% if session_instance.log_complete_date and not is_session_admin %}
+        <!-- For completed logs, non-admins see completion message only -->
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
+        </p>
+        {% elif session_instance.log_complete_date and is_session_admin %}
+        <!-- For completed logs, admins see completion message with edit link -->
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}. 
+            (<a href="#" id="edit-anyway-link" style="color: var(--primary); text-decoration: none;">Edit anyway?</a>)
+        </p>
+        <a href="#" id="mark-incomplete-link" class="hidden" style="color: var(--warning, #ffc107); text-decoration: none; font-size: 14px; display: inline-block; padding: 10px 0;">Mark this session as not complete</a>
+        {% else %}
+        <!-- For incomplete logs, show normal edit button -->
         <button id="toggle-edit-btn" style="background-color: var(--success, #28a745); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
+        <a href="#" id="mark-complete-link" class="hidden" style="color: var(--primary); text-decoration: none; margin-left: 20px; font-size: 14px; display: inline-block; padding: 10px 0;">Mark this session log complete</a>
+        {% endif %}
     </div>
     {% endif %}
     
@@ -406,6 +422,8 @@
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';
         const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
+        const isSessionAdmin = {{ 'true' if is_session_admin else 'false' }};
+        const isLogComplete = {{ 'true' if session_instance.log_complete_date else 'false' }};
         
         // Session instance data for editing
         const sessionInstanceData = {
@@ -416,9 +434,19 @@
             is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
         };
         
-        // Check if we should start in edit mode (for newly created instances)
+        // Check if we should start in edit mode
         const urlParams = new URLSearchParams(window.location.search);
-        let editMode = !isCancelled && urlParams.get('edit') === 'true';
+        let editMode;
+        
+        // Default to edit mode if log is incomplete and user is session admin or system admin
+        if (!isCancelled && !isLogComplete && isSessionAdmin) {
+            editMode = true;
+        } else if (!isCancelled && urlParams.get('edit') === 'true') {
+            // Allow explicit edit mode via URL parameter
+            editMode = true;
+        } else {
+            editMode = false;
+        }
         
         // Check if a specific tune should be highlighted
         const highlightTuneId = urlParams.get('highlight_tune');
@@ -440,12 +468,15 @@
             }
         });
         
-        // Toggle edit mode (only if not cancelled)
+        // Toggle edit mode (only if not cancelled and toggle button exists)
         if (!isCancelled) {
-            document.getElementById('toggle-edit-btn').addEventListener('click', function() {
-                editMode = !editMode;
-                updateUI(true); // Pass true to reload tunes when toggling edit mode
-            });
+            const toggleBtn = document.getElementById('toggle-edit-btn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    editMode = !editMode;
+                    updateUI(true); // Pass true to reload tunes when toggling edit mode
+                });
+            }
         }
         
         // Edit session instance event listeners (always available)
@@ -454,6 +485,34 @@
         document.getElementById('edit-session-cancel-btn').addEventListener('click', hideEditSessionModal);
         document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
         document.getElementById('delete-session-btn').addEventListener('click', confirmDeleteSession);
+        
+        // Mark complete link event listener (if link exists)
+        const markCompleteLink = document.getElementById('mark-complete-link');
+        if (markCompleteLink) {
+            markCompleteLink.addEventListener('click', function(event) {
+                event.preventDefault();
+                markSessionLogComplete();
+            });
+        }
+        
+        // Edit anyway link event listener (for completed logs)
+        const editAnywayLink = document.getElementById('edit-anyway-link');
+        if (editAnywayLink) {
+            editAnywayLink.addEventListener('click', function(event) {
+                event.preventDefault();
+                editMode = true;
+                updateUI(true);
+            });
+        }
+        
+        // Mark incomplete link event listener (if link exists)
+        const markIncompleteLink = document.getElementById('mark-incomplete-link');
+        if (markIncompleteLink) {
+            markIncompleteLink.addEventListener('click', function(event) {
+                event.preventDefault();
+                markSessionLogIncomplete();
+            });
+        }
         
         // Close edit modal on escape key
         document.addEventListener('keydown', (event) => {
@@ -504,15 +563,61 @@
         function updateUI(reloadTunes = false) {
             const toggleBtn = document.getElementById('toggle-edit-btn');
             const addForm = document.getElementById('add-tune-form');
+            const markCompleteLink = document.getElementById('mark-complete-link');
+            const markIncompleteLink = document.getElementById('mark-incomplete-link');
+            const editAnywayLink = document.getElementById('edit-anyway-link');
+            const completionMessage = editAnywayLink ? editAnywayLink.parentElement : null;
             
             if (editMode) {
-                toggleBtn.textContent = 'View';
-                toggleBtn.style.backgroundColor = 'var(--primary)';
-                addForm.classList.remove('hidden');
+                // Hide completion message and show form/links
+                if (completionMessage) {
+                    completionMessage.style.display = 'none';
+                }
+                if (addForm) addForm.classList.remove('hidden');
+                
+                // Show appropriate marking link
+                if (isLogComplete && markIncompleteLink) {
+                    markIncompleteLink.classList.remove('hidden');
+                } else if (!isLogComplete && markCompleteLink) {
+                    markCompleteLink.classList.remove('hidden');
+                }
+                
+                // Create and show View button if needed
+                if (!toggleBtn && isLogComplete && isSessionAdmin) {
+                    // Create a View button for completed logs
+                    const viewBtn = document.createElement('button');
+                    viewBtn.id = 'toggle-edit-btn';
+                    viewBtn.textContent = 'View';
+                    viewBtn.style.cssText = 'background-color: var(--primary); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;';
+                    viewBtn.addEventListener('click', function() {
+                        editMode = false;
+                        updateUI(true);
+                    });
+                    
+                    const container = completionMessage ? completionMessage.parentElement : document.querySelector('div[style*="margin-top: 30px"]');
+                    if (container) {
+                        container.insertBefore(viewBtn, container.firstChild);
+                    }
+                } else if (toggleBtn) {
+                    toggleBtn.textContent = 'View';
+                    toggleBtn.style.backgroundColor = 'var(--primary)';
+                }
             } else {
-                toggleBtn.textContent = 'Edit';
-                toggleBtn.style.backgroundColor = 'var(--success, #28a745)';
-                addForm.classList.add('hidden');
+                // View mode
+                if (completionMessage) {
+                    completionMessage.style.display = '';
+                }
+                if (addForm) addForm.classList.add('hidden');
+                if (markCompleteLink) markCompleteLink.classList.add('hidden');
+                if (markIncompleteLink) markIncompleteLink.classList.add('hidden');
+                
+                // Remove any dynamically created View button
+                if (toggleBtn && isLogComplete && isSessionAdmin) {
+                    toggleBtn.remove();
+                } else if (toggleBtn) {
+                    toggleBtn.textContent = isLogComplete ? 'Edit this session log' : 'Edit';
+                    toggleBtn.style.backgroundColor = 'var(--success, #28a745)';
+                }
             }
             
             if (reloadTunes) {
@@ -1784,6 +1889,64 @@
             })
             .catch(error => {
                 showMessage('Failed to delete session instance', 'error');
+                console.error('Error:', error);
+            });
+        }
+        
+        function markSessionLogComplete() {
+            if (!confirm('Mark this session log as complete? This will switch to view mode and hide the edit button from non-admins.')) {
+                return;
+            }
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_complete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    // Redirect to view mode after a short delay
+                    setTimeout(() => {
+                        window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
+                    }, 1500);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to mark session log complete', 'error');
+                console.error('Error:', error);
+            });
+        }
+        
+        function markSessionLogIncomplete() {
+            if (!confirm('Mark this session log as not complete? This will allow all users to edit it again.')) {
+                return;
+            }
+            
+            fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_incomplete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message);
+                    // Reload the page to show updated status
+                    setTimeout(() => {
+                        window.location.href = `/sessions/${sessionPath}/${sessionDate}?edit=true`;
+                    }, 1500);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Failed to mark session log as not complete', 'error');
                 console.error('Error:', error);
             });
         }

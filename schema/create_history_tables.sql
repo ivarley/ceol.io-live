@@ -49,6 +49,7 @@ CREATE TABLE session_instance_history (
     location_override VARCHAR(255),
     is_cancelled BOOLEAN,
     comments TEXT,
+    log_complete_date TIMESTAMP,
     created_date TIMESTAMP,
     last_modified_date TIMESTAMP
 );
