@@ -580,6 +580,17 @@
         .modal-footer button:hover {
             opacity: 0.9;
         }
+        
+        /* Save button disabled state */
+        #save-session-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: var(--disabled-bg, #ccc) !important;
+        }
+        
+        #save-session-btn:not(:disabled):hover {
+            opacity: 0.9;
+        }
     </style>
 {% endblock %}
 
@@ -695,6 +706,23 @@
             <!-- Tune pills will be rendered here -->
         </div>
     </div>
+    
+    <!-- Save Controls -->
+    <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+        <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
+            Save Session
+        </button>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="auto-save-checkbox" style="cursor: pointer;">
+            <label for="auto-save-checkbox" style="margin: 0; cursor: pointer;">Auto-save after</label>
+            <select id="auto-save-interval" style="padding: 5px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-color); color: var(--text-color);">
+                <option value="10">10 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60" selected>60 seconds</option>
+            </select>
+        </div>
+        <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
+    </div>
     {% endif %}
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
@@ -723,6 +751,11 @@
     let selectedPills = new Set();
     let dragState = null;
     let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
+    
+    // Save state tracking
+    let isDirty = false;
+    let lastSavedData = null;
+    let autoSaveTimer = null;
     let isTyping = false;
     let typingBuffer = '';
     let isKeepingKeyboardOpen = false;
@@ -744,6 +777,112 @@
     }
     
 
+    // Save functionality
+    function checkDirtyState() {
+        // Compare current data with last saved data
+        const currentDataStr = JSON.stringify(tunePillsData);
+        const savedDataStr = JSON.stringify(lastSavedData);
+        const isCurrentlyDirty = currentDataStr !== savedDataStr;
+        
+        if (isCurrentlyDirty !== isDirty) {
+            isDirty = isCurrentlyDirty;
+            const saveBtn = document.getElementById('save-session-btn');
+            if (saveBtn) {
+                saveBtn.disabled = !isDirty;
+            }
+        }
+    }
+    
+    function markDirty() {
+        // Call checkDirtyState instead of directly setting dirty
+        checkDirtyState();
+    }
+    
+    function markClean() {
+        isDirty = false;
+        document.getElementById('save-session-btn').disabled = true;
+        lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
+    }
+    
+    function saveSession() {
+        // Disable save button and show status
+        const saveBtn = document.getElementById('save-session-btn');
+        const saveStatus = document.getElementById('save-status');
+        
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        saveStatus.style.display = 'inline';
+        saveStatus.textContent = 'Saving...';
+        saveStatus.style.color = 'var(--text-color)';
+        
+        // Convert tunePillsData to the format expected by the API
+        const tuneSets = tunePillsData.map(set => 
+            set.map(pill => ({
+                tune_id: pill.tuneId || null,
+                name: pill.tuneName || null,
+                tune_name: pill.tuneName || null
+            }))
+        );
+        
+        // Send save request
+        fetch(`/api/sessions/${sessionPath}/${sessionDate}/save_tunes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ tune_sets: tuneSets })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                markClean();
+                saveStatus.textContent = data.message || 'Saved successfully!';
+                saveStatus.style.color = 'var(--success, #28a745)';
+                saveBtn.textContent = 'Save Session';
+                saveBtn.disabled = true;  // Ensure button is disabled after successful save
+                
+                // Hide status message after 3 seconds
+                setTimeout(() => {
+                    saveStatus.style.display = 'none';
+                }, 3000);
+            } else {
+                throw new Error(data.message || 'Save failed');
+            }
+        })
+        .catch(error => {
+            console.error('Save error:', error);
+            saveStatus.textContent = 'Save failed: ' + error.message;
+            saveStatus.style.color = 'var(--danger, #dc3545)';
+            saveBtn.textContent = 'Save Session';
+            // Re-enable button on error if still dirty
+            if (isDirty) {
+                saveBtn.disabled = false;
+            }
+        });
+    }
+    
+    function setupAutoSave() {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+        const intervalSelect = document.getElementById('auto-save-interval');
+        
+        // Clear existing timer
+        if (autoSaveTimer) {
+            clearInterval(autoSaveTimer);
+            autoSaveTimer = null;
+        }
+        
+        // Set up new timer if checkbox is checked
+        if (autoSaveCheckbox.checked) {
+            const interval = parseInt(intervalSelect.value) * 1000; // Convert to milliseconds
+            
+            autoSaveTimer = setInterval(() => {
+                if (isDirty) {
+                    saveSession();
+                }
+            }, interval);
+        }
+    }
+    
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
         if (!isCancelled) {
@@ -752,9 +891,19 @@
             convertTuneSetsToPills(initialTuneSets);
             renderTunePills();
             setupEventListeners();
+            
+            // Initialize save state - mark as clean since we just loaded
+            lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
+            isDirty = false;
+            // Ensure save button is disabled on initial load
+            const saveBtn = document.getElementById('save-session-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+            }
         }
         
         setupSessionEditListeners();
+        setupSaveListeners();
     });
     
     // Convert tune sets to pills data format
@@ -2176,6 +2325,9 @@
                 // Update the pill appearance
                 updatePillAppearance(pill);
                 
+                // Mark as dirty since we changed the pill
+                markDirty();
+                
                 // Hide the menu
                 hideMatchResultsMenu(pill.id);
                 
@@ -2452,6 +2604,9 @@
         if (undoStack.length > 50) {
             undoStack.shift();
         }
+        
+        // Mark as dirty when any change is made
+        markDirty();
     }
     
     function undo() {
@@ -3747,10 +3902,16 @@
                     pill.matchResults = null; // Clear stored results
                     console.log(`Successfully matched "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
                     
+                    // Mark as dirty since we changed the pill
+                    markDirty();
+                    
                 } else if (result.results.length > 1) {
                     // Multiple matches - mark as unmatched and store results
                     pill.state = 'unmatched';
                     console.log(`Multiple matches found for "${pill.tuneName}": ${result.results.length} results`);
+                    
+                    // Mark as dirty since we changed the pill state
+                    markDirty();
                     
                     // Show context menu with results if still typing/editing
                     if (stillTyping) {
@@ -3765,6 +3926,7 @@
                     if (stillTyping) {
                         // While typing, just show the option but don't auto-apply
                         pill.state = 'unmatched';
+                        markDirty();
                         showMatchResultsMenu(pill);
                     } else {
                         // When finished typing, auto-apply single wildcard match
@@ -3775,6 +3937,9 @@
                         pill.state = 'linked';
                         pill.matchResults = null;
                         console.log(`Auto-applied single wildcard match: "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
+                        
+                        // Mark as dirty since we changed the pill
+                        markDirty();
                     }
                     
                 } else {
@@ -3782,12 +3947,18 @@
                     pill.state = 'unlinked';
                     pill.matchResults = null;
                     console.log(`No match found for "${pill.tuneName}"`);
+                    
+                    // Mark as dirty since we changed the pill state
+                    markDirty();
                 }
             } else {
                 // Error or unexpected response format
                 pill.state = 'unlinked';
                 pill.matchResults = null;
                 console.warn(`Unexpected response format for "${pill.tuneName}"`);
+                
+                // Mark as dirty since we changed the pill state
+                markDirty();
             }
             
             // Update just this pill instead of re-rendering everything
@@ -3797,6 +3968,10 @@
             // Network error - pill becomes unlinked
             pill.state = 'unlinked';
             pill.matchResults = null;
+            
+            // Mark as dirty since we changed the pill state
+            markDirty();
+            
             updatePillAppearance(pill);
         }
     }
@@ -4617,6 +4792,9 @@
         // Update the tune name
         pill.tuneName = newName;
         
+        // Mark as dirty since we changed the pill
+        markDirty();
+        
         // If the tune was linked, unlink it first and re-run matching
         if (pill.state === 'linked') {
             // Unlink the tune
@@ -4647,6 +4825,21 @@
         document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
         document.getElementById('edit-session-cancel-btn').addEventListener('click', hideSessionEditModal);
         document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
+    }
+    
+    function setupSaveListeners() {
+        // Save button click
+        document.getElementById('save-session-btn').addEventListener('click', saveSession);
+        
+        // Auto-save checkbox change
+        document.getElementById('auto-save-checkbox').addEventListener('change', setupAutoSave);
+        
+        // Auto-save interval change
+        document.getElementById('auto-save-interval').addEventListener('change', () => {
+            if (document.getElementById('auto-save-checkbox').checked) {
+                setupAutoSave();
+            }
+        });
     }
     
     function showEditSessionModal() {

@@ -80,6 +80,7 @@ app.add_url_rule('/api/sessions/<path:session_path>/<date>/add_tunes_to_set', 'a
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/edit_tune', 'edit_tune_ajax', edit_tune_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/match_tune', 'match_tune_ajax', match_tune_ajax, methods=['POST'])
 app.add_url_rule('/api/sessions/<path:session_path>/<date>/test_match_tune', 'test_match_tune_ajax', test_match_tune_ajax, methods=['GET'])
+app.add_url_rule('/api/sessions/<path:session_path>/<date>/save_tunes', 'save_session_instance_tunes_ajax', save_session_instance_tunes_ajax, methods=['POST'])
 app.add_url_rule('/api/check-existing-session', 'check_existing_session_ajax', check_existing_session_ajax, methods=['POST'])
 app.add_url_rule('/api/search-sessions', 'search_sessions_ajax', search_sessions_ajax, methods=['POST'])
 app.add_url_rule('/api/fetch-session-data', 'fetch_session_data_ajax', fetch_session_data_ajax, methods=['POST'])

@@ -2831,3 +2831,147 @@ def test_match_tune_ajax(session_path, date):
     
     # Call the actual match_tune_ajax function
     return match_tune_ajax(session_path, date)
+
+@login_required
+def save_session_instance_tunes_ajax(session_path, date):
+    """
+    Save the complete tune list for a session instance from the beta page.
+    Minimizes database modifications by only updating/inserting/deleting where necessary.
+    """
+    try:
+        data = request.get_json()
+        tune_sets = data.get('tune_sets', [])
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id and session_instance_id
+        cur.execute('''
+            SELECT s.session_id, si.session_instance_id
+            FROM session s
+            JOIN session_instance si ON s.session_id = si.session_id
+            WHERE s.path = %s AND si.date = %s
+        ''', (session_path, date))
+        
+        result = cur.fetchone()
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Session instance not found'})
+        
+        session_id, session_instance_id = result
+        
+        # Get all existing tunes for this session instance
+        cur.execute('''
+            SELECT session_instance_tune_id, order_number, tune_id, name, continues_set
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_number
+        ''', (session_instance_id,))
+        
+        existing_tunes = cur.fetchall()
+        existing_dict = {row[1]: row for row in existing_tunes}  # Dict by order_number
+        
+        # Build new tune list from the sets
+        new_tunes = []
+        sequence_num = 1
+        
+        for set_idx, tune_set in enumerate(tune_sets):
+            for tune_idx, tune_data in enumerate(tune_set):
+                # Determine continues_set: false for first tune in set, true otherwise
+                continues_set = tune_idx > 0
+                
+                # Extract tune data
+                tune_id = tune_data.get('tune_id')
+                tune_name = tune_data.get('name') or tune_data.get('tune_name')
+                
+                # Ensure we have either tune_id or name (required by database constraint)
+                if not tune_id and not tune_name:
+                    # Skip empty pills or provide a default name
+                    tune_name = "Unknown tune"
+                
+                # If this is a matched tune (has tune_id), we typically don't store the name
+                # But keep it if there's no tune_id
+                if tune_id:
+                    tune_name = None
+                
+                new_tunes.append({
+                    'order_number': sequence_num,
+                    'tune_id': tune_id,
+                    'name': tune_name,
+                    'continues_set': continues_set
+                })
+                sequence_num += 1
+        
+        # Begin transaction
+        cur.execute('BEGIN')
+        
+        try:
+            modifications = 0
+            
+            # Process updates/inserts
+            for new_tune in new_tunes:
+                order_num = new_tune['order_number']
+                
+                if order_num in existing_dict:
+                    # Check if update is needed
+                    existing = existing_dict[order_num]
+                    if (existing[2] != new_tune['tune_id'] or 
+                        existing[3] != new_tune['name'] or 
+                        existing[4] != new_tune['continues_set']):
+                        
+                        # Update existing record
+                        save_to_history(cur, 'session_instance_tune', 'UPDATE', existing[0])
+                        
+                        cur.execute('''
+                            UPDATE session_instance_tune
+                            SET tune_id = %s, name = %s, continues_set = %s, last_modified_date = NOW()
+                            WHERE session_instance_tune_id = %s
+                        ''', (new_tune['tune_id'], new_tune['name'], new_tune['continues_set'], existing[0]))
+                        modifications += 1
+                else:
+                    # Insert new record
+                    cur.execute('''
+                        INSERT INTO session_instance_tune 
+                        (session_instance_id, order_number, tune_id, name, continues_set, created_date, last_modified_date)
+                        VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                        RETURNING session_instance_tune_id
+                    ''', (session_instance_id, order_num, new_tune['tune_id'], new_tune['name'], new_tune['continues_set']))
+                    
+                    new_id = cur.fetchone()[0]
+                    save_to_history(cur, 'session_instance_tune', 'INSERT', new_id)
+                    modifications += 1
+            
+            # Delete records that are beyond the new length
+            max_new_order = len(new_tunes)
+            for existing in existing_tunes:
+                if existing[1] > max_new_order:
+                    save_to_history(cur, 'session_instance_tune', 'DELETE', existing[0])
+                    cur.execute('''
+                        DELETE FROM session_instance_tune
+                        WHERE session_instance_tune_id = %s
+                    ''', (existing[0],))
+                    modifications += 1
+            
+            # Commit transaction
+            cur.execute('COMMIT')
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Session saved successfully ({modifications} modifications)',
+                'modifications': modifications
+            })
+            
+        except Exception as e:
+            cur.execute('ROLLBACK')
+            raise e
+            
+    except Exception as e:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({'success': False, 'message': f'Failed to save session: {str(e)}'})
