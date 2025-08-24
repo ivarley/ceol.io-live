@@ -88,6 +88,49 @@ flask --app app run --debug
 
 The application uses Gunicorn for production deployment on Render, which automatically detects the Flask app.
 
+## Deployment & Infrastructure
+
+- **Hosting**: Render.com with automatic Flask app detection
+- **Database**: PostgreSQL hosted on Render (separate service)
+- **Production Server**: Gunicorn (auto-configured by Render)
+- **Domain**: ceol.io with SSL/TLS termination
+
+## External Integrations
+
+### thesession.org API
+
+- **Purpose**: Tune metadata lookup and validation
+- **Usage**: Found in 15+ files across templates and API routes
+- **Integration Points**: Tune search, metadata sync, popularity tracking
+- **Data Format**: JSON responses with tune details, recordings, discussions
+
+### SendGrid Email Service
+
+- **Purpose**: Password reset emails, account verification
+- **Configuration**: Via SENDGRID_API_KEY environment variable
+- **Default Sender**: ceol@ceol.io
+- **Templates**: Custom HTML email templates for user communications
+
+## Development Workflow
+
+### Local Development
+
+```bash
+# Start development server with debug mode
+flask --app app run --debug
+
+# Default local server: http://127.0.0.1:5001
+```
+
+### Database Operations
+
+- **Backup**: `scripts/backup_database.py` - Creates timestamped SQL dumps
+- **Restore**: `scripts/restore_database.py` - Restores from backup files
+- **Maintenance**: `scripts/refresh_tunebook_counts.py` - Updates popularity metrics
+- **Schema**: All DDL files in `schema/` directory with comprehensive documentation
+
+**Note**: Currently no testing framework is implemented.
+
 ## Key Implementation Details
 
 ### Application Structure
@@ -124,3 +167,81 @@ The application uses Gunicorn for production deployment on Render, which automat
 - Database utilities: database.py
 - Templates: templates/ directory with auth/ subdirectory
 - Schema documentation and DDL: schema/*
+
+## UI/UX Implementation Patterns
+
+### Dark Mode System
+
+- **Implementation**: CSS custom properties with `[data-theme="dark"]` attribute switching
+- **Storage**: Theme preference stored in localStorage
+- **FOUC Prevention**: Inline script in base.html prevents flash of unstyled content
+- **Logo Switching**: Automatic logo variant switching (logo1.png ↔ logo1-dark-transparent.png)
+
+### Responsive Design
+
+- **Framework**: Bootstrap 4.5.2 with extensive customization
+- **Approach**: Mobile-first responsive design
+- **Breakpoints**: Standard Bootstrap breakpoints with custom CSS variables
+- **Layout**: Fluid container system with sidebar navigation
+
+### AJAX-Heavy Frontend
+
+- **Pattern**: Most user interactions use AJAX calls to `/api/` endpoints
+- **Error Handling**: Consistent JSON error responses with user-friendly messages
+- **Loading States**: Visual feedback during async operations
+- **Real-time Updates**: Dynamic content updates without page refreshes
+
+### Session Logging UI
+
+- **Standard Version**: Traditional form-based tune entry and editing
+- **Beta Version**: Word-processor-like interface with drag & drop, copy/paste, undo functionality
+- **Set Management**: Visual grouping of consecutive tunes played together
+
+## Data Model Key Concepts
+
+### Session Architecture
+
+- **session**: Regular recurring music sessions (location, timing, players)
+- **session_instance**: Specific date/time occurrences of a session
+- **session_instance_tune**: Individual tunes played during a session instance
+- **Relationship**: One session has many instances; one instance has many tunes
+
+### Tune Management System
+
+- **Tune Linking**: Connect session tunes to thesession.org database entries
+- **Local Aliases**: Session-specific alternate names for tunes
+- **Popularity Tracking**: Tunebook counts from thesession.org API
+- **Type Categorization**: Jig, reel, hornpipe, etc. with validation
+
+### User & Authentication Model
+
+- **User Roles**: Regular users vs admin capabilities
+- **Session Management**: Server-side sessions with configurable expiration
+- **Email Verification**: Two-step registration with email confirmation
+- **History Tracking**: Comprehensive audit trail for all data changes
+
+### Set Management
+
+- **Sets**: Groups of tunes played consecutively without breaks
+- **Ordering**: Precise tune ordering within sets and across session
+- **Movement**: Drag-and-drop reordering with API persistence
+
+## Performance Considerations
+
+### Database Optimization
+
+- **Connection Handling**: Database connection management via get_db_connection()
+- **History Tables**: Separate audit tables to avoid bloating main tables
+- **Indexing**: Optimized indices for session/tune lookups and popularity queries
+
+### External API Management
+
+- **thesession.org Integration**: Rate limiting and caching considerations for API calls
+- **Lazy Loading**: Tune metadata fetched on-demand rather than bulk operations
+- **Error Resilience**: Graceful degradation when external APIs unavailable
+
+### Frontend Performance
+
+- **AJAX Patterns**: Minimize full page reloads through targeted API calls
+- **Asset Management**: Optimized CSS/JS delivery with proper caching headers
+- **Mobile Optimization**: Touch-friendly interfaces with minimal bandwidth usage
