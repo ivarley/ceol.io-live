@@ -2591,6 +2591,24 @@
             isTyping = true;
             typingBuffer = '';
         }
+        
+        // Handle comma and semicolon as immediate tune separators
+        if (char === ',' || char === ';') {
+            // If we have content in the buffer, finish the current tune first
+            if (typingBuffer.trim()) {
+                const tuneName = typingBuffer.trim();
+                typingBuffer = '';
+                
+                // Insert the current tune and start matching
+                insertTunesAtCursor([tuneName], true); // Keep keyboard open for continued typing
+                
+                // Continue in typing mode for the next tune
+                updateCursorWithText();
+            }
+            // Don't add the comma/semicolon to the buffer
+            return;
+        }
+        
         typingBuffer += char;
         updateCursorWithText();
     }
