@@ -2614,6 +2614,12 @@
     }
     
     function handleBackspace() {
+        // If multiple pills are selected, delete them all
+        if (selectedPills.size > 0) {
+            deleteSelectedPills();
+            return;
+        }
+        
         if (isTyping && typingBuffer.length > 0) {
             typingBuffer = typingBuffer.slice(0, -1);
             updateCursorWithText();
@@ -2669,6 +2675,12 @@
     }
     
     function handleDelete() {
+        // If multiple pills are selected, delete them all
+        if (selectedPills.size > 0) {
+            deleteSelectedPills();
+            return;
+        }
+        
         if (!cursorPosition || isTyping) return;
         
         const { setIndex, pillIndex, position } = cursorPosition;
