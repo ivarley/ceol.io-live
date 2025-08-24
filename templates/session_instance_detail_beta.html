@@ -591,6 +591,21 @@
         #save-session-btn:not(:disabled):hover {
             opacity: 0.9;
         }
+        
+        /* Auto-save countdown styling */
+        #auto-save-countdown {
+            color: #c3e6cb; /* Light green, subtle in light mode */
+        }
+        
+        [data-theme="dark"] #auto-save-countdown {
+            color: #3d4f42; /* Dark grey-green, subtle in dark mode */
+        }
+        
+        /* Cancel link inherits color from parent countdown text */
+        #cancel-auto-save {
+            color: inherit;
+            font-style: inherit;
+        }
     </style>
 {% endblock %}
 
@@ -721,9 +736,9 @@
                 <option value="60" selected>60 seconds</option>
             </select>
             <span style="margin: 0;">of inactivity</span>
-            <span id="auto-save-countdown" style="color: var(--success, #28a745); font-style: italic; display: none;">
-                Saving in <span id="countdown-seconds">60</span> seconds... 
-                <a href="#" id="cancel-auto-save" style="color: var(--primary); text-decoration: underline; cursor: pointer;">Cancel</a>
+            <span id="auto-save-countdown" style="font-style: italic; display: none; margin-left: 8px;">
+                Saving in <span id="countdown-seconds" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... 
+                <a href="#" id="cancel-auto-save" style="text-decoration: underline; cursor: pointer;">Cancel</a>
             </span>
         </div>
         <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
