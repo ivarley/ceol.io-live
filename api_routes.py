@@ -2204,12 +2204,13 @@ def update_person_details(person_id):
             save_to_history(cur, 'user_account', 'UPDATE', user_id, f'admin_edit')
             cur.execute('''
                 UPDATE user_account 
-                SET username = %s, user_email = %s, is_active = %s, last_modified_date = %s
+                SET username = %s, user_email = %s, is_active = %s, timezone = %s, last_modified_date = %s
                 WHERE user_id = %s
             ''', (
                 username,
                 user_data.get('user_email') or None,
                 user_data.get('is_active', True),
+                user_data.get('timezone') or 'UTC',
                 now_utc(),
                 user_id
             ))

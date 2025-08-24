@@ -8,7 +8,7 @@ import re
 
 # Import from local modules
 from database import get_db_connection, normalize_apostrophes, save_to_history
-from timezone_utils import now_utc
+from timezone_utils import now_utc, get_timezone_display_name, get_timezone_display_with_offset
 from auth import User, create_session, cleanup_expired_sessions, generate_password_reset_token, generate_verification_token, log_login_event
 from email_utils import send_password_reset_email, send_verification_email
 
@@ -1470,7 +1470,7 @@ def person_details(person_id=None):
         
         # Get user account details if exists
         cur.execute('''
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone
             FROM user_account
             WHERE person_id = %s
         ''', (person_id,))
@@ -1478,7 +1478,7 @@ def person_details(person_id=None):
         user_row = cur.fetchone()
         user = None
         if user_row:
-            user_id, username, user_email, email_verified, is_system_admin, is_active, created_date = user_row
+            user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone = user_row
             
             # Get last login from user_session table
             cur.execute('''
@@ -1497,7 +1497,9 @@ def person_details(person_id=None):
                 'is_system_admin': is_system_admin,
                 'is_active': is_active,
                 'created_at': created_date,  # Keep as created_at in template for consistency
-                'last_login': last_login
+                'last_login': last_login,
+                'timezone': timezone,
+                'timezone_display': get_timezone_display_name(timezone or 'UTC')
             }
         
         # Get sessions this person is associated with
@@ -1538,11 +1540,64 @@ def person_details(person_id=None):
                 'role': role
             })
         
+        # Get timezone options with UTC offsets for dropdown
+        timezone_options = [
+            ('UTC', get_timezone_display_with_offset('UTC')),
+            # Americas
+            ('America/New_York', get_timezone_display_with_offset('America/New_York')),
+            ('America/Chicago', get_timezone_display_with_offset('America/Chicago')),
+            ('America/Denver', get_timezone_display_with_offset('America/Denver')),
+            ('America/Los_Angeles', get_timezone_display_with_offset('America/Los_Angeles')),
+            ('America/Anchorage', get_timezone_display_with_offset('America/Anchorage')),
+            ('Pacific/Honolulu', get_timezone_display_with_offset('Pacific/Honolulu')),
+            ('America/Toronto', get_timezone_display_with_offset('America/Toronto')),
+            ('America/Vancouver', get_timezone_display_with_offset('America/Vancouver')),
+            ('America/Mexico_City', get_timezone_display_with_offset('America/Mexico_City')),
+            ('America/Buenos_Aires', get_timezone_display_with_offset('America/Buenos_Aires')),
+            ('America/Sao_Paulo', get_timezone_display_with_offset('America/Sao_Paulo')),
+            # Europe
+            ('Europe/London', get_timezone_display_with_offset('Europe/London')),
+            ('Europe/Dublin', get_timezone_display_with_offset('Europe/Dublin')),
+            ('Europe/Paris', get_timezone_display_with_offset('Europe/Paris')),
+            ('Europe/Berlin', get_timezone_display_with_offset('Europe/Berlin')),
+            ('Europe/Rome', get_timezone_display_with_offset('Europe/Rome')),
+            ('Europe/Madrid', get_timezone_display_with_offset('Europe/Madrid')),
+            ('Europe/Amsterdam', get_timezone_display_with_offset('Europe/Amsterdam')),
+            ('Europe/Brussels', get_timezone_display_with_offset('Europe/Brussels')),
+            ('Europe/Zurich', get_timezone_display_with_offset('Europe/Zurich')),
+            ('Europe/Stockholm', get_timezone_display_with_offset('Europe/Stockholm')),
+            ('Europe/Oslo', get_timezone_display_with_offset('Europe/Oslo')),
+            ('Europe/Copenhagen', get_timezone_display_with_offset('Europe/Copenhagen')),
+            ('Europe/Helsinki', get_timezone_display_with_offset('Europe/Helsinki')),
+            ('Europe/Athens', get_timezone_display_with_offset('Europe/Athens')),
+            ('Europe/Moscow', get_timezone_display_with_offset('Europe/Moscow')),
+            # Africa & Middle East
+            ('Africa/Cairo', get_timezone_display_with_offset('Africa/Cairo')),
+            ('Africa/Johannesburg', get_timezone_display_with_offset('Africa/Johannesburg')),
+            ('Africa/Lagos', get_timezone_display_with_offset('Africa/Lagos')),
+            ('Asia/Dubai', get_timezone_display_with_offset('Asia/Dubai')),
+            ('Asia/Jerusalem', get_timezone_display_with_offset('Asia/Jerusalem')),
+            # Asia
+            ('Asia/Kolkata', get_timezone_display_with_offset('Asia/Kolkata')),
+            ('Asia/Bangkok', get_timezone_display_with_offset('Asia/Bangkok')),
+            ('Asia/Singapore', get_timezone_display_with_offset('Asia/Singapore')),
+            ('Asia/Hong_Kong', get_timezone_display_with_offset('Asia/Hong_Kong')),
+            ('Asia/Shanghai', get_timezone_display_with_offset('Asia/Shanghai')),
+            ('Asia/Tokyo', get_timezone_display_with_offset('Asia/Tokyo')),
+            ('Asia/Seoul', get_timezone_display_with_offset('Asia/Seoul')),
+            # Australia & Pacific
+            ('Australia/Perth', get_timezone_display_with_offset('Australia/Perth')),
+            ('Australia/Sydney', get_timezone_display_with_offset('Australia/Sydney')),
+            ('Australia/Melbourne', get_timezone_display_with_offset('Australia/Melbourne')),
+            ('Pacific/Auckland', get_timezone_display_with_offset('Pacific/Auckland')),
+        ]
+        
         return render_template('person_details.html', 
                              person=person,
                              user=user,
                              sessions=sessions,
-                             is_user_profile=is_user_profile)
+                             is_user_profile=is_user_profile,
+                             timezone_options=timezone_options)
         
     finally:
         conn.close()

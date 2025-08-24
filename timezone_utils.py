@@ -194,16 +194,68 @@ def get_timezone_display_name(timezone_name: str) -> str:
         'America/Chicago': 'US Central', 
         'America/Denver': 'US Mountain',
         'America/Los_Angeles': 'US Pacific',
+        'America/Anchorage': 'US Alaska',
+        'Pacific/Honolulu': 'US Hawaii',
+        'America/Toronto': 'Canada Eastern',
+        'America/Vancouver': 'Canada Pacific',
+        'America/Mexico_City': 'Mexico City',
+        'America/Buenos_Aires': 'Argentina',
+        'America/Sao_Paulo': 'Brazil (São Paulo)',
         'Europe/London': 'UK/London',
         'Europe/Dublin': 'Ireland/Dublin',
         'Europe/Paris': 'France/Paris',
         'Europe/Berlin': 'Germany/Berlin',
+        'Europe/Rome': 'Italy/Rome',
+        'Europe/Madrid': 'Spain/Madrid',
+        'Europe/Amsterdam': 'Netherlands',
+        'Europe/Brussels': 'Belgium',
+        'Europe/Zurich': 'Switzerland',
+        'Europe/Stockholm': 'Sweden',
+        'Europe/Oslo': 'Norway',
+        'Europe/Copenhagen': 'Denmark',
+        'Europe/Helsinki': 'Finland',
+        'Europe/Athens': 'Greece',
+        'Europe/Moscow': 'Russia/Moscow',
+        'Africa/Cairo': 'Egypt/Cairo',
+        'Africa/Johannesburg': 'South Africa',
+        'Africa/Lagos': 'Nigeria/Lagos',
+        'Asia/Dubai': 'UAE/Dubai',
+        'Asia/Jerusalem': 'Israel',
+        'Asia/Kolkata': 'India',
+        'Asia/Bangkok': 'Thailand',
+        'Asia/Singapore': 'Singapore',
+        'Asia/Hong_Kong': 'Hong Kong',
+        'Asia/Shanghai': 'China/Shanghai',
+        'Asia/Tokyo': 'Japan/Tokyo',
+        'Asia/Seoul': 'South Korea',
         'Australia/Sydney': 'Australia/Sydney',
-        'Asia/Kolkata': 'India Standard Time',
-        'Asia/Tokyo': 'Japan Standard Time',
+        'Australia/Melbourne': 'Australia/Melbourne',
+        'Australia/Perth': 'Australia/Perth',
+        'Pacific/Auckland': 'New Zealand',
     }
     
     return display_names.get(timezone_name, timezone_name)
+
+
+def get_timezone_display_with_offset(timezone_name: str) -> str:
+    """
+    Get timezone display name with current UTC offset.
+    
+    Args:
+        timezone_name: IANA timezone identifier
+        
+    Returns:
+        Display name with UTC offset (e.g., "US Eastern (UTC-05:00)")
+    """
+    display_name = get_timezone_display_name(timezone_name)
+    
+    # Get current offset
+    offset_minutes = get_utc_offset_minutes(timezone_name)
+    hours, mins = divmod(abs(offset_minutes), 60)
+    sign = '+' if offset_minutes >= 0 else '-'
+    offset_str = f"UTC{sign}{hours:02d}:{mins:02d}"
+    
+    return f"{display_name} ({offset_str})"
 
 
 def now_utc() -> datetime:
