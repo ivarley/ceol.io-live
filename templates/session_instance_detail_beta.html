@@ -720,6 +720,11 @@
                 <option value="30">30 seconds</option>
                 <option value="60" selected>60 seconds</option>
             </select>
+            <span style="margin: 0;">of inactivity</span>
+            <span id="auto-save-countdown" style="color: var(--success, #28a745); font-style: italic; display: none;">
+                Saving in <span id="countdown-seconds">60</span> seconds... 
+                <a href="#" id="cancel-auto-save" style="color: var(--primary); text-decoration: underline; cursor: pointer;">Cancel</a>
+            </span>
         </div>
         <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
     </div>
@@ -755,7 +760,128 @@
     // Save state tracking
     let isDirty = false;
     let lastSavedData = null;
-    let autoSaveTimer = null;
+    let lastCheckedData = null;  // Track last checked data to detect any changes
+    
+    // Function to force check for changes (call this after any direct data modification)
+    function forceCheckChanges() {
+        const currentDataStr = JSON.stringify(tunePillsData);
+        const lastCheckedDataStr = JSON.stringify(lastCheckedData);
+        
+        if (currentDataStr !== lastCheckedDataStr) {
+            // Update lastCheckedData
+            lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
+            
+            // Check dirty state
+            const savedDataStr = JSON.stringify(lastSavedData);
+            const wasDirty = isDirty;
+            isDirty = currentDataStr !== savedDataStr;
+            
+            // Update save button
+            const saveBtn = document.getElementById('save-session-btn');
+            if (saveBtn) {
+                saveBtn.disabled = !isDirty;
+            }
+            
+            // Handle auto-save timer
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            if (autoSaveCheckbox && autoSaveCheckbox.checked) {
+                const intervalSelect = document.getElementById('auto-save-interval');
+                const intervalSeconds = parseInt(intervalSelect.value);
+                
+                if (isDirty) {
+                    // Data changed and we're dirty - start/restart timer
+                    autoSaveTimer.start(intervalSeconds);
+                } else {
+                    // Data changed but we're not dirty - stop timer
+                    autoSaveTimer.stop();
+                    autoSaveTimer.hideCountdown();
+                }
+            }
+        }
+    }
+    
+    // Auto-save countdown timer singleton
+    class AutoSaveTimer {
+        constructor() {
+            this.timer = null;
+            this.seconds = 0;
+            this.intervalSeconds = 60;
+            this.isRunning = false;
+        }
+        
+        start(intervalSeconds) {
+            this.stop(); // Always stop any existing timer first
+            this.intervalSeconds = intervalSeconds;
+            this.seconds = intervalSeconds;
+            this.isRunning = true;
+            
+            // Update UI immediately
+            this.updateDisplay();
+            this.showCountdown();
+            
+            // Start the countdown
+            this.timer = setInterval(() => {
+                this.seconds--;
+                this.updateDisplay();
+                
+                if (this.seconds <= 0) {
+                    this.stop();
+                    this.hideCountdown();
+                    
+                    // Trigger auto-save
+                    if (isDirty) {
+                        saveSession().then(() => {
+                            // After saving, restart if still enabled and dirty again
+                            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+                            if (autoSaveCheckbox && autoSaveCheckbox.checked && isDirty) {
+                                this.start(this.intervalSeconds);
+                            }
+                        }).catch(() => {
+                            // On save error, don't restart timer
+                        });
+                    }
+                }
+            }, 1000);
+        }
+        
+        reset(intervalSeconds) {
+            if (this.isRunning) {
+                this.start(intervalSeconds || this.intervalSeconds);
+            }
+        }
+        
+        stop() {
+            if (this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
+            this.isRunning = false;
+        }
+        
+        updateDisplay() {
+            const countdownSecondsElement = document.getElementById('countdown-seconds');
+            if (countdownSecondsElement) {
+                countdownSecondsElement.textContent = this.seconds;
+            }
+        }
+        
+        showCountdown() {
+            const countdownElement = document.getElementById('auto-save-countdown');
+            if (countdownElement) {
+                countdownElement.style.display = 'inline';
+            }
+        }
+        
+        hideCountdown() {
+            const countdownElement = document.getElementById('auto-save-countdown');
+            if (countdownElement) {
+                countdownElement.style.display = 'none';
+            }
+        }
+    }
+    
+    // Create singleton instance
+    const autoSaveTimer = new AutoSaveTimer();
     let isTyping = false;
     let typingBuffer = '';
     let isKeepingKeyboardOpen = false;
@@ -779,16 +905,48 @@
 
     // Save functionality
     function checkDirtyState() {
-        // Compare current data with last saved data
+        // Compare current data with last saved data for dirty state
         const currentDataStr = JSON.stringify(tunePillsData);
         const savedDataStr = JSON.stringify(lastSavedData);
         const isCurrentlyDirty = currentDataStr !== savedDataStr;
         
+        // Check if data has changed since last check (for activity detection)
+        const lastCheckedDataStr = JSON.stringify(lastCheckedData);
+        const dataHasChanged = currentDataStr !== lastCheckedDataStr;
+        
+        // Update last checked data
+        lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
+        
+        // Reset timer on ANY data change (regardless of dirty state)
+        if (dataHasChanged) {
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            if (autoSaveCheckbox && autoSaveCheckbox.checked && autoSaveTimer.isRunning) {
+                const intervalSelect = document.getElementById('auto-save-interval');
+                autoSaveTimer.reset(parseInt(intervalSelect.value));
+            }
+        }
+        
+        // Handle dirty state changes
         if (isCurrentlyDirty !== isDirty) {
+            const wasDirty = isDirty;
             isDirty = isCurrentlyDirty;
             const saveBtn = document.getElementById('save-session-btn');
             if (saveBtn) {
                 saveBtn.disabled = !isDirty;
+            }
+            
+            // If we just became dirty and auto-save is enabled, start countdown
+            if (!wasDirty && isDirty) {
+                const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+                if (autoSaveCheckbox && autoSaveCheckbox.checked) {
+                    const intervalSelect = document.getElementById('auto-save-interval');
+                    autoSaveTimer.start(parseInt(intervalSelect.value));
+                }
+            }
+            // If we just became clean, stop countdown
+            else if (wasDirty && !isDirty) {
+                autoSaveTimer.stop();
+                autoSaveTimer.hideCountdown();
             }
         }
     }
@@ -824,8 +982,8 @@
             }))
         );
         
-        // Send save request
-        fetch(`/api/sessions/${sessionPath}/${sessionDate}/save_tunes`, {
+        // Send save request and return the promise
+        return fetch(`/api/sessions/${sessionPath}/${sessionDate}/save_tunes`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -858,6 +1016,8 @@
             if (isDirty) {
                 saveBtn.disabled = false;
             }
+            // Re-throw the error so promise chain can handle it
+            throw error;
         });
     }
     
@@ -865,22 +1025,26 @@
         const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
         const intervalSelect = document.getElementById('auto-save-interval');
         
-        // Clear existing timer
-        if (autoSaveTimer) {
-            clearInterval(autoSaveTimer);
-            autoSaveTimer = null;
-        }
+        // Stop any existing timer
+        autoSaveTimer.stop();
+        autoSaveTimer.hideCountdown();
         
-        // Set up new timer if checkbox is checked
-        if (autoSaveCheckbox.checked) {
-            const interval = parseInt(intervalSelect.value) * 1000; // Convert to milliseconds
-            
-            autoSaveTimer = setInterval(() => {
-                if (isDirty) {
-                    saveSession();
-                }
-            }, interval);
+        // Start timer if checkbox is checked and we're dirty
+        if (autoSaveCheckbox.checked && isDirty) {
+            const intervalSeconds = parseInt(intervalSelect.value);
+            autoSaveTimer.start(intervalSeconds);
         }
+    }
+    
+    function cancelAutoSave() {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+        
+        // Uncheck the checkbox
+        autoSaveCheckbox.checked = false;
+        
+        // Stop timer and hide countdown
+        autoSaveTimer.stop();
+        autoSaveTimer.hideCountdown();
     }
     
     // Initialize the editor on page load
@@ -894,6 +1058,7 @@
             
             // Initialize save state - mark as clean since we just loaded
             lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
+            lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
             isDirty = false;
             // Ensure save button is disabled on initial load
             const saveBtn = document.getElementById('save-session-btn');
@@ -943,6 +1108,9 @@
     
     // Render tune pills in the container
     function renderTunePills() {
+        
+        // Check for data changes before rendering (safety net)
+        forceCheckChanges();
         
         // Clean up any lingering drag ghosts before re-rendering
         cleanupDragGhosts();
@@ -2566,6 +2734,9 @@
                     tunePillsData.splice(setIndex, 1);
                 }
                 
+                // Force check for changes after data modification
+                forceCheckChanges();
+                
                 renderTunePills();
                 break;
             }
@@ -2590,6 +2761,9 @@
         
         // Remove empty sets
         tunePillsData = tunePillsData.filter(set => set.length > 0);
+        
+        // Force check for changes after data modification
+        forceCheckChanges();
         
         selectedPills.clear();
         renderTunePills();
@@ -4839,6 +5013,12 @@
             if (document.getElementById('auto-save-checkbox').checked) {
                 setupAutoSave();
             }
+        });
+        
+        // Cancel auto-save link
+        document.getElementById('cancel-auto-save').addEventListener('click', (e) => {
+            e.preventDefault();
+            cancelAutoSave();
         });
     }
     
