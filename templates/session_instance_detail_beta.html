@@ -2493,8 +2493,8 @@
                 // Update the pill appearance
                 updatePillAppearance(pill);
                 
-                // Mark as dirty since we changed the pill
-                markDirty();
+                // Force check for changes (includes timer reset and dirty state)
+                forceCheckChanges();
                 
                 // Hide the menu
                 hideMatchResultsMenu(pill.id);
@@ -2620,6 +2620,9 @@
                     
                     // Update the pill appearance
                     updatePillAppearance(pillData);
+                    
+                    // Force check for changes (includes timer reset and dirty state)
+                    forceCheckChanges();
                     hideContextMenu();
                 });
                 
@@ -2780,7 +2783,7 @@
         }
         
         // Mark as dirty when any change is made
-        markDirty();
+        forceCheckChanges();
     }
     
     function undo() {
@@ -4077,7 +4080,7 @@
                     console.log(`Successfully matched "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
                     
                     // Mark as dirty since we changed the pill
-                    markDirty();
+                    forceCheckChanges();
                     
                 } else if (result.results.length > 1) {
                     // Multiple matches - mark as unmatched and store results
@@ -4085,7 +4088,7 @@
                     console.log(`Multiple matches found for "${pill.tuneName}": ${result.results.length} results`);
                     
                     // Mark as dirty since we changed the pill state
-                    markDirty();
+                    forceCheckChanges();
                     
                     // Show context menu with results if still typing/editing
                     if (stillTyping) {
@@ -4100,7 +4103,7 @@
                     if (stillTyping) {
                         // While typing, just show the option but don't auto-apply
                         pill.state = 'unmatched';
-                        markDirty();
+                        forceCheckChanges();
                         showMatchResultsMenu(pill);
                     } else {
                         // When finished typing, auto-apply single wildcard match
@@ -4113,7 +4116,7 @@
                         console.log(`Auto-applied single wildcard match: "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
                         
                         // Mark as dirty since we changed the pill
-                        markDirty();
+                        forceCheckChanges();
                     }
                     
                 } else {
@@ -4123,7 +4126,7 @@
                     console.log(`No match found for "${pill.tuneName}"`);
                     
                     // Mark as dirty since we changed the pill state
-                    markDirty();
+                    forceCheckChanges();
                 }
             } else {
                 // Error or unexpected response format
@@ -4967,7 +4970,7 @@
         pill.tuneName = newName;
         
         // Mark as dirty since we changed the pill
-        markDirty();
+        forceCheckChanges();
         
         // If the tune was linked, unlink it first and re-run matching
         if (pill.state === 'linked') {
