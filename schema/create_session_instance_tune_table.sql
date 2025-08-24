@@ -6,12 +6,12 @@ CREATE TABLE session_instance_tune (
     name VARCHAR(255),
     order_number INTEGER NOT NULL,
     continues_set BOOLEAN DEFAULT FALSE,
-    played_timestamp TIMESTAMP,
-    inserted_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    played_timestamp TIMESTAMPTZ,
+    inserted_timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     key_override VARCHAR(10),
     setting_override INTEGER,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     CONSTRAINT session_instance_tune_name_or_id CHECK (tune_id IS NOT NULL OR name IS NOT NULL)
 );
 
@@ -19,7 +19,7 @@ CREATE TABLE session_instance_tune (
 CREATE OR REPLACE FUNCTION update_session_instance_tune_last_modified_date()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.last_modified_date = CURRENT_TIMESTAMP;
+    NEW.last_modified_date = NOW() AT TIME ZONE 'UTC';
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -73,7 +73,7 @@
                         <tbody>
                             {% for entry in login_history %}
                             <tr class="event-{{ entry.event_type.lower() }}">
-                                <td class="timestamp">{{ entry.timestamp }}</td>
+                                <td class="timestamp">{{ entry.timestamp | format_datetime_tz }}</td>
                                 <td class="username">
                                     <strong>{{ entry.username }}</strong>
                                     {% if entry.user_id %}

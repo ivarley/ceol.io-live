@@ -8,9 +8,9 @@ CREATE TABLE session_instance (
     location_override VARCHAR(255),
     is_cancelled BOOLEAN DEFAULT FALSE,
     comments TEXT,
-    log_complete_date TIMESTAMP DEFAULT NULL,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    log_complete_date TIMESTAMPTZ DEFAULT NULL,
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
 -- Create index on session_id for efficient queries
@@ -29,7 +29,7 @@ CREATE UNIQUE INDEX idx_session_instance_no_overlap ON session_instance(session_
 CREATE OR REPLACE FUNCTION update_session_instance_last_modified_date()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.last_modified_date = CURRENT_TIMESTAMP;
+    NEW.last_modified_date = NOW() AT TIME ZONE 'UTC';
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -39,3 +39,8 @@ CREATE TRIGGER trigger_session_instance_last_modified_date
     BEFORE UPDATE ON session_instance
     FOR EACH ROW
     EXECUTE FUNCTION update_session_instance_last_modified_date();
+
+-- Comments for documentation
+COMMENT ON COLUMN session_instance.log_complete_date IS 'UTC timestamp when session log was marked complete';
+COMMENT ON COLUMN session_instance.created_date IS 'UTC timestamp when session instance was created';
+COMMENT ON COLUMN session_instance.last_modified_date IS 'UTC timestamp when session instance was last modified';

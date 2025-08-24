@@ -8,7 +8,7 @@ CREATE TABLE login_history (
     user_agent TEXT,
     session_id VARCHAR(255), -- Reference to user_session.session_id for successful logins
     failure_reason VARCHAR(255), -- For failed login attempts (e.g., 'INVALID_PASSWORD', 'USER_NOT_FOUND', 'ACCOUNT_LOCKED')
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     additional_data JSONB -- For storing extra context like geolocation, device info, etc.
 );
 

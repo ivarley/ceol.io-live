@@ -9,6 +9,8 @@ from auth import User
 from database import get_db_connection
 from api_routes import *
 from web_routes import *
+from timezone_utils import format_datetime_with_timezone, utc_to_local
+from flask_login import current_user
 
 load_dotenv()
 
@@ -28,6 +30,72 @@ login_manager.login_message = 'Please log in to access this page.'
 @login_manager.user_loader
 def load_user(user_id):
     return User.get_by_id(int(user_id))
+
+
+# Template filters for timezone handling
+@app.template_filter('format_datetime_tz')
+def format_datetime_tz(dt, session_timezone=None, format_str='%Y-%m-%d %H:%M'):
+    """
+    Format datetime with appropriate timezone conversion for templates.
+    
+    Args:
+        dt: UTC datetime from database
+        session_timezone: Session's timezone (optional)
+        format_str: strftime format string
+    
+    Returns:
+        Formatted datetime string with timezone abbreviation
+    """
+    if not dt:
+        return ''
+    
+    # Determine which timezone to use for display
+    try:
+        # If user is logged in, use their timezone
+        if hasattr(current_user, 'timezone') and current_user.timezone:
+            user_timezone = current_user.timezone
+            return format_datetime_with_timezone(dt, user_timezone, format_str)
+    except:
+        pass
+    
+    # If session timezone provided, use that
+    if session_timezone:
+        return format_datetime_with_timezone(dt, session_timezone, format_str)
+    
+    # Default: show as UTC
+    return format_datetime_with_timezone(dt, 'UTC', format_str)
+
+
+@app.template_filter('to_user_timezone') 
+def to_user_timezone(dt, session_timezone=None):
+    """Convert UTC datetime to user's timezone (or session timezone if no user)"""
+    if not dt:
+        return None
+    
+    try:
+        # If user is logged in, use their timezone
+        if hasattr(current_user, 'timezone') and current_user.timezone:
+            return utc_to_local(dt, current_user.timezone)
+    except:
+        pass
+    
+    # If session timezone provided, use that
+    if session_timezone:
+        return utc_to_local(dt, session_timezone)
+    
+    # Default: return as UTC
+    return dt
+
+
+@app.template_global('get_user_timezone')
+def get_user_timezone():
+    """Get current user's timezone for use in templates"""
+    try:
+        if hasattr(current_user, 'timezone') and current_user.timezone:
+            return current_user.timezone
+    except:
+        pass
+    return 'UTC'
 
 # Register web page routes
 app.add_url_rule('/', 'home', home)

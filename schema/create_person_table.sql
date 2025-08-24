@@ -9,8 +9,8 @@ CREATE TABLE person (
     state VARCHAR(100),
     country VARCHAR(100),
     thesession_user_id INTEGER,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
 -- Create unique index on email (when not null)

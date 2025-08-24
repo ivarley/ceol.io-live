@@ -8,8 +8,8 @@ CREATE TABLE session_person (
     is_admin BOOLEAN DEFAULT FALSE,
     gets_email_reminder BOOLEAN DEFAULT FALSE,
     gets_email_followup BOOLEAN DEFAULT FALSE,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
 -- Create unique constraint to prevent duplicate session-person associations

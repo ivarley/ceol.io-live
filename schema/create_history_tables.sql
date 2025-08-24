@@ -13,7 +13,7 @@ CREATE TABLE session_history (
     session_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session fields at time of change
     thesession_id INTEGER,
     name VARCHAR(255),
@@ -30,8 +30,8 @@ CREATE TABLE session_history (
     initiation_date DATE,
     termination_date DATE,
     recurrence TEXT,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Session instance history table
@@ -40,7 +40,7 @@ CREATE TABLE session_instance_history (
     session_instance_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_instance fields at time of change
     session_id INTEGER,
     date DATE,
@@ -49,9 +49,9 @@ CREATE TABLE session_instance_history (
     location_override VARCHAR(255),
     is_cancelled BOOLEAN,
     comments TEXT,
-    log_complete_date TIMESTAMP,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    log_complete_date TIMESTAMPTZ,
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Tune history table
@@ -60,14 +60,14 @@ CREATE TABLE tune_history (
     tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all tune fields at time of change
     name VARCHAR(255),
     tune_type VARCHAR(50),
     tunebook_count_cached INTEGER,
     tunebook_count_cached_date DATE,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Session tune history table
@@ -77,13 +77,13 @@ CREATE TABLE session_tune_history (
     tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_tune fields at time of change
     setting_id INTEGER,
     key VARCHAR(10),
     alias VARCHAR(255),
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Session instance tune history table
@@ -92,19 +92,19 @@ CREATE TABLE session_instance_tune_history (
     session_instance_tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_instance_tune fields at time of change
     session_instance_id INTEGER,
     tune_id INTEGER,
     name VARCHAR(255),
     order_number INTEGER,
     continues_set BOOLEAN,
-    played_timestamp TIMESTAMP,
-    inserted_timestamp TIMESTAMP,
+    played_timestamp TIMESTAMPTZ,
+    inserted_timestamp TIMESTAMPTZ,
     key_override VARCHAR(10),
     setting_override INTEGER,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Create indexes for efficient querying
@@ -135,13 +135,13 @@ CREATE TABLE session_tune_alias_history (
     session_tune_alias_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_tune_alias fields at time of change
     session_id INTEGER,
     tune_id INTEGER,
     alias VARCHAR(255),
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 CREATE INDEX idx_session_tune_alias_history_session_tune_alias_id ON session_tune_alias_history(session_tune_alias_id);
@@ -154,7 +154,7 @@ CREATE TABLE session_person_history (
     session_person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_person fields at time of change
     session_id INTEGER,
     person_id INTEGER,
@@ -162,8 +162,8 @@ CREATE TABLE session_person_history (
     is_admin BOOLEAN,
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Session instance person history table
@@ -172,15 +172,15 @@ CREATE TABLE session_instance_person_history (
     session_instance_person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all session_instance_person fields at time of change
     session_instance_id INTEGER,
     person_id INTEGER,
     attended BOOLEAN,
     plans_to_attend VARCHAR(10),
     comment TEXT,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- Create indexes for the new history tables
@@ -198,7 +198,7 @@ CREATE TABLE person_history (
     person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all person fields at time of change
     first_name VARCHAR(100),
     last_name VARCHAR(100),
@@ -208,8 +208,8 @@ CREATE TABLE person_history (
     state VARCHAR(100),
     country VARCHAR(100),
     thesession_user_id INTEGER,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 -- User account history table
@@ -218,22 +218,22 @@ CREATE TABLE user_account_history (
     user_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
     changed_by VARCHAR(255),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     -- Copy of all user_account fields at time of change
     person_id INTEGER,
     username VARCHAR(255),
     user_email VARCHAR(255),
     hashed_password VARCHAR(255),
-    time_zone VARCHAR(50),
+    timezone VARCHAR(50),
     is_active BOOLEAN,
     is_system_admin BOOLEAN,
     email_verified BOOLEAN,
     verification_token VARCHAR(255),
-    verification_token_expires TIMESTAMP,
+    verification_token_expires TIMESTAMPTZ,
     password_reset_token VARCHAR(255),
-    password_reset_expires TIMESTAMP,
-    created_date TIMESTAMP,
-    last_modified_date TIMESTAMP
+    password_reset_expires TIMESTAMPTZ,
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ
 );
 
 CREATE INDEX idx_person_history_person_id ON person_history(person_id);

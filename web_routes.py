@@ -8,6 +8,7 @@ import re
 
 # Import from local modules
 from database import get_db_connection, normalize_apostrophes, save_to_history
+from timezone_utils import now_utc
 from auth import User, create_session, cleanup_expired_sessions, generate_password_reset_token, generate_verification_token, log_login_event
 from email_utils import send_password_reset_email, send_verification_email
 
@@ -531,7 +532,10 @@ def register():
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
         email = request.form.get('email', '').strip()
-        time_zone = request.form.get('time_zone', 'UTC')
+        timezone = request.form.get('time_zone', 'UTC')
+        # Migrate legacy timezone values to IANA identifiers
+        from timezone_utils import migrate_legacy_timezone
+        timezone = migrate_legacy_timezone(timezone)
         
         # Validation
         if not username or not password or not first_name or not last_name or not email:
@@ -578,14 +582,14 @@ def register():
             # Create user record (unverified)
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             verification_token = generate_verification_token()
-            verification_expires = datetime.utcnow() + timedelta(hours=24)
+            verification_expires = now_utc() + timedelta(hours=24)
             
             cur.execute('''
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, time_zone, 
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, 
                                         email_verified, verification_token, verification_token_expires)
                 VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s)
                 RETURNING user_id
-            ''', (person_id, username, email, hashed_password, time_zone, verification_token, verification_expires))
+            ''', (person_id, username, email, hashed_password, timezone, verification_token, verification_expires))
             user_id = cur.fetchone()[0]
             
             conn.commit()
@@ -774,7 +778,7 @@ def forgot_password():
             if user_data:
                 # Generate reset token
                 token = generate_password_reset_token()
-                expires = datetime.utcnow() + timedelta(hours=1)
+                expires = now_utc() + timedelta(hours=1)
                 
                 # Save token to database
                 save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'password_reset_request')
@@ -831,7 +835,7 @@ def reset_password(token):
                 WHERE password_reset_token = %s 
                 AND password_reset_expires > %s
                 AND is_active = TRUE
-            ''', (token, datetime.utcnow()))
+            ''', (token, now_utc()))
             user_data = cur.fetchone()
             
             if user_data:
@@ -875,7 +879,7 @@ def reset_password(token):
             WHERE password_reset_token = %s 
             AND password_reset_expires > %s
             AND is_active = TRUE
-        ''', (token, datetime.utcnow()))
+        ''', (token, now_utc()))
         if not cur.fetchone():
             flash('Invalid or expired reset token.', 'error')
             return redirect(url_for('forgot_password'))
@@ -920,7 +924,7 @@ def change_password():
                 UPDATE user_account 
                 SET hashed_password = %s, last_modified_date = %s
                 WHERE user_id = %s
-            ''', (hashed_password, datetime.utcnow(), current_user.user_id))
+            ''', (hashed_password, now_utc(), current_user.user_id))
             conn.commit()
             
             flash('Password changed successfully.', 'success')
@@ -943,7 +947,7 @@ def verify_email(token):
             WHERE verification_token = %s 
             AND verification_token_expires > %s
             AND email_verified = FALSE
-        ''', (token, datetime.utcnow()))
+        ''', (token, now_utc()))
         user_data = cur.fetchone()
         
         if user_data:
@@ -956,7 +960,7 @@ def verify_email(token):
                     verification_token_expires = NULL,
                     last_modified_date = %s
                 WHERE user_id = %s
-            ''', (datetime.utcnow(), user_data[0]))
+            ''', (now_utc(), user_data[0]))
             conn.commit()
             
             flash('Email verified successfully! You can now log in.', 'success')
@@ -993,7 +997,7 @@ def resend_verification():
             if user_data:
                 # Generate new verification token
                 verification_token = generate_verification_token()
-                verification_expires = datetime.utcnow() + timedelta(hours=24)
+                verification_expires = now_utc() + timedelta(hours=24)
                 
                 # Update token in database
                 save_to_history(cur, 'user_account', 'UPDATE', user_data[0], f'verification_token_regeneration')
@@ -1058,14 +1062,14 @@ def admin_sessions():
             JOIN person p ON ua.person_id = p.person_id
             WHERE us.expires_at > %s
             ORDER BY us.last_accessed DESC
-        ''', (datetime.utcnow(),))
+        ''', (now_utc(),))
         
         active_sessions = []
         for row in cur.fetchall():
             user_id, first_name, last_name, created_date, last_accessed, ip_address = row
             
             # Calculate how long they've been logged in
-            login_duration = datetime.utcnow() - created_date
+            login_duration = now_utc() - created_date
             days = login_duration.days
             hours, remainder = divmod(login_duration.seconds, 3600)
             minutes, _ = divmod(remainder, 60)
@@ -1116,7 +1120,7 @@ def admin_login_history():
         
         # Build WHERE conditions
         where_conditions = ['lh.timestamp > %s']
-        params = [datetime.utcnow() - timedelta(hours=hours_filter)]
+        params = [now_utc() - timedelta(hours=hours_filter)]
         
         if event_type:
             where_conditions.append('lh.event_type = %s')

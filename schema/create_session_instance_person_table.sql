@@ -7,8 +7,8 @@ CREATE TABLE session_instance_person (
     attended BOOLEAN DEFAULT NULL,  -- NULL means unknown, TRUE means attended, FALSE means did not attend
     plans_to_attend VARCHAR(10) CHECK (plans_to_attend IN ('yes', 'probably', 'maybe', 'no')) DEFAULT NULL,
     comment TEXT,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
 -- Create unique constraint to prevent duplicate session_instance-person associations

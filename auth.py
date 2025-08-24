@@ -2,9 +2,10 @@ import os
 import secrets
 import bcrypt
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask_login import UserMixin
 from database import get_db_connection
+from timezone_utils import migrate_legacy_timezone, now_utc
 
 # Session configuration
 SESSION_LIFETIME_WEEKS = 6
@@ -12,7 +13,7 @@ SESSION_LIFETIME_WEEKS = 6
 
 class User(UserMixin):
     def __init__(self, user_id, person_id, username, is_active=True, is_system_admin=False, 
-                 first_name='', last_name='', email='', time_zone='UTC', email_verified=False):
+                 first_name='', last_name='', email='', timezone='UTC', email_verified=False):
         self.id = str(user_id)
         self.user_id = user_id
         self.person_id = person_id
@@ -22,7 +23,7 @@ class User(UserMixin):
         self.first_name = first_name
         self.last_name = last_name
         self.email = email
-        self.time_zone = time_zone
+        self.timezone = timezone
         self.email_verified = email_verified
 
     @property
@@ -40,7 +41,7 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute('''
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
-                       ua.time_zone, ua.email_verified, p.first_name, p.last_name, p.email
+                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.user_id = %s AND ua.is_active = TRUE
@@ -53,7 +54,7 @@ class User(UserMixin):
                     username=user_data[2],
                     is_active=user_data[3],
                     is_system_admin=user_data[4],
-                    time_zone=user_data[5],
+                    timezone=user_data[5],
                     email_verified=user_data[6],
                     first_name=user_data[7],
                     last_name=user_data[8],
@@ -70,7 +71,7 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute('''
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active, 
-                       ua.is_system_admin, ua.time_zone, ua.email_verified, p.first_name, p.last_name, p.email
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.username = %s
@@ -83,7 +84,7 @@ class User(UserMixin):
                     username=user_data[2],
                     is_active=user_data[4],
                     is_system_admin=user_data[5],
-                    time_zone=user_data[6],
+                    timezone=user_data[6],
                     email_verified=user_data[7],
                     first_name=user_data[8],
                     last_name=user_data[9],
@@ -99,16 +100,16 @@ class User(UserMixin):
         return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
 
     @staticmethod
-    def create_user(username, password, person_id, time_zone='UTC', user_email=None):
+    def create_user(username, password, person_id, timezone='UTC', user_email=None):
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         conn = get_db_connection()
         try:
             cur = conn.cursor()
             cur.execute('''
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, time_zone)
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING user_id
-            ''', (person_id, username, user_email, hashed_password, time_zone))
+            ''', (person_id, username, user_email, hashed_password, timezone))
             user_id = cur.fetchone()[0]
             conn.commit()
             return user_id
@@ -118,7 +119,7 @@ class User(UserMixin):
 
 def create_session(user_id, ip_address=None, user_agent=None):
     session_id = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(weeks=SESSION_LIFETIME_WEEKS)
+    expires_at = now_utc() + timedelta(weeks=SESSION_LIFETIME_WEEKS)
     
     conn = get_db_connection()
     try:
@@ -137,7 +138,7 @@ def cleanup_expired_sessions():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('DELETE FROM user_session WHERE expires_at < %s', (datetime.utcnow(),))
+        cur.execute('DELETE FROM user_session WHERE expires_at < %s', (now_utc(),))
         conn.commit()
     finally:
         conn.close()
@@ -151,7 +152,7 @@ def update_session_activity(session_id):
             UPDATE user_session 
             SET last_accessed = %s 
             WHERE session_id = %s AND expires_at > %s
-        ''', (datetime.utcnow(), session_id, datetime.utcnow()))
+        ''', (now_utc(), session_id, now_utc()))
         conn.commit()
     finally:
         conn.close()

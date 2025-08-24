@@ -6,6 +6,54 @@ from flask_login import login_required
 from database import get_db_connection, save_to_history, find_matching_tune, normalize_apostrophes
 from auth import User
 from email_utils import send_email_via_sendgrid
+from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
+from flask_login import current_user
+
+
+def get_timezone_for_display(session_path=None, user_timezone=None):
+    """
+    Get appropriate timezone for display based on context:
+    - If user is logged in, use user's timezone
+    - If session_path provided and no user, use session's timezone
+    - Otherwise use UTC
+    """
+    if user_timezone:
+        return user_timezone
+    
+    # If user is logged in, use their timezone
+    try:
+        if hasattr(current_user, 'timezone') and current_user.timezone:
+            return current_user.timezone
+    except:
+        pass
+    
+    # If session_path provided, get session timezone
+    if session_path:
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute('SELECT timezone FROM session WHERE path = %s', (session_path,))
+            result = cur.fetchone()
+            conn.close()
+            if result and result[0]:
+                return result[0]
+        except:
+            pass
+    
+    return 'UTC'
+
+
+def format_datetime_for_api(dt, timezone_name, include_timezone=True):
+    """Format datetime for API response with timezone conversion"""
+    if not dt:
+        return None
+    
+    if include_timezone:
+        return format_datetime_with_timezone(dt, timezone_name)
+    else:
+        # Just convert to local timezone without showing timezone abbreviation
+        local_dt = utc_to_local(dt, timezone_name)
+        return local_dt.strftime('%Y-%m-%d %H:%M')
 
 
 @login_required
@@ -2134,7 +2182,7 @@ def update_person_details(person_id):
                 person_data.get('state') or None,
                 person_data.get('country') or None,
                 person_data.get('thesession_user_id') or None,
-                datetime.utcnow(),
+                now_utc(),
                 person_id
             ))
         
@@ -2162,7 +2210,7 @@ def update_person_details(person_id):
                 username,
                 user_data.get('user_email') or None,
                 user_data.get('is_active', True),
-                datetime.utcnow(),
+                now_utc(),
                 user_id
             ))
         
