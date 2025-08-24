@@ -606,6 +606,83 @@
             color: inherit;
             font-style: inherit;
         }
+        
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .save-controls-container {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 10px !important;
+            }
+            
+            #save-session-btn .desktop-text {
+                display: none;
+            }
+            #save-session-btn .mobile-text {
+                display: inline;
+            }
+            
+            
+            .inactivity-text {
+                display: none;
+            }
+            
+            .countdown-desktop {
+                display: none;
+            }
+            .countdown-mobile {
+                display: inline;
+            }
+            
+            .cancel-desktop {
+                display: none;
+            }
+            .cancel-mobile {
+                display: inline;
+            }
+            
+            #auto-save-countdown {
+                margin-left: 0 !important;
+                margin-top: 5px;
+                width: 100%;
+            }
+            
+            /* Only force block display when countdown should be visible */
+            #auto-save-countdown[style*="display: inline"] {
+                display: block !important;
+            }
+        }
+        
+        /* Desktop default - hide mobile elements */
+        @media (min-width: 769px) {
+            #save-session-btn .mobile-text {
+                display: none;
+            }
+            #save-session-btn .desktop-text {
+                display: inline;
+            }
+            
+            .auto-save-interval-mobile {
+                display: none;
+            }
+            .auto-save-interval-desktop {
+                display: block;
+            }
+            
+            .countdown-mobile {
+                display: none;
+            }
+            .countdown-desktop {
+                display: inline;
+            }
+            
+            .cancel-mobile {
+                display: none;
+            }
+            .cancel-desktop {
+                display: inline;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -723,9 +800,10 @@
     </div>
     
     <!-- Save Controls -->
-    <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+    <div class="save-controls-container" style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
         <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
-            Save Session
+            <span class="desktop-text">Save Session</span>
+            <span class="mobile-text">Save</span>
         </button>
         <div style="display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="auto-save-checkbox" style="cursor: pointer;">
@@ -735,12 +813,16 @@
                 <option value="30">30 seconds</option>
                 <option value="60" selected>60 seconds</option>
             </select>
-            <span style="margin: 0;">of inactivity</span>
-            <span id="auto-save-countdown" style="font-style: italic; display: none; margin-left: 8px;">
-                Saving in <span id="countdown-seconds" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... 
-                <a href="#" id="cancel-auto-save" style="text-decoration: underline; cursor: pointer;">Cancel</a>
-            </span>
+            <span style="margin: 0;" class="inactivity-text">of inactivity</span>
         </div>
+        <span id="auto-save-countdown" style="font-style: italic; display: none; margin-left: 8px;">
+            <span class="countdown-desktop">Saving in <span id="countdown-seconds" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... </span>
+            <span class="countdown-mobile">Saving in <span id="countdown-seconds-mobile" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... </span>
+            <a href="#" id="cancel-auto-save" style="text-decoration: underline; cursor: pointer;">
+                <span class="cancel-desktop">Cancel</span>
+                <span class="cancel-mobile">cancel</span>
+            </a>
+        </span>
         <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
     </div>
     {% endif %}
@@ -875,8 +957,12 @@
         
         updateDisplay() {
             const countdownSecondsElement = document.getElementById('countdown-seconds');
+            const countdownSecondsMobileElement = document.getElementById('countdown-seconds-mobile');
             if (countdownSecondsElement) {
                 countdownSecondsElement.textContent = this.seconds;
+            }
+            if (countdownSecondsMobileElement) {
+                countdownSecondsMobileElement.textContent = this.seconds;
             }
         }
         
@@ -897,6 +983,24 @@
     
     // Create singleton instance
     const autoSaveTimer = new AutoSaveTimer();
+    
+    // Handle responsive option text
+    function updateOptionText() {
+        const select = document.getElementById('auto-save-interval');
+        const isMobile = window.innerWidth <= 768;
+        
+        if (select) {
+            const options = select.querySelectorAll('option');
+            options.forEach(option => {
+                const value = option.value;
+                if (isMobile) {
+                    option.textContent = `${value} sec`;
+                } else {
+                    option.textContent = `${value} seconds`;
+                }
+            });
+        }
+    }
     let isTyping = false;
     let typingBuffer = '';
     let isKeepingKeyboardOpen = false;
@@ -1084,6 +1188,10 @@
         
         setupSessionEditListeners();
         setupSaveListeners();
+        
+        // Set up responsive option text
+        updateOptionText();
+        window.addEventListener('resize', updateOptionText);
     });
     
     // Convert tune sets to pills data format
