@@ -94,6 +94,7 @@ def update_session_ajax(session_path):
             'city': 'city',
             'state': 'state',
             'country': 'country',
+            'timezone': 'timezone',
             'location_website': 'location_website',
             'location_phone': 'location_phone',
             'initiation_date': 'initiation_date',

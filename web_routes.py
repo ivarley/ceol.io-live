@@ -1614,7 +1614,7 @@ def _get_session_data(session_path):
         cur.execute('''
             SELECT session_id, name, path, location_name, location_website, location_phone,
                    location_street, city, state, country, comments, unlisted_address,
-                   initiation_date, termination_date, recurrence
+                   initiation_date, termination_date, recurrence, timezone
             FROM session 
             WHERE path = %s
         ''', (session_path,))
@@ -1638,7 +1638,9 @@ def _get_session_data(session_path):
             'unlisted_address': session_row[11],
             'initiation_date': session_row[12],
             'termination_date': session_row[13],
-            'recurrence': session_row[14]
+            'recurrence': session_row[14],
+            'timezone': session_row[15],
+            'timezone_display': get_timezone_display_name(session_row[15] or 'UTC')
         }
         
         return session_data
@@ -1659,11 +1661,64 @@ def session_admin(session_path):
     if not session_data:
         from app import render_error_page
         return render_error_page("Session not found", 404)
+    
+    # Get timezone options with UTC offsets for dropdown
+    timezone_options = [
+        ('UTC', get_timezone_display_with_offset('UTC')),
+        # Americas
+        ('America/New_York', get_timezone_display_with_offset('America/New_York')),
+        ('America/Chicago', get_timezone_display_with_offset('America/Chicago')),
+        ('America/Denver', get_timezone_display_with_offset('America/Denver')),
+        ('America/Los_Angeles', get_timezone_display_with_offset('America/Los_Angeles')),
+        ('America/Anchorage', get_timezone_display_with_offset('America/Anchorage')),
+        ('Pacific/Honolulu', get_timezone_display_with_offset('Pacific/Honolulu')),
+        ('America/Toronto', get_timezone_display_with_offset('America/Toronto')),
+        ('America/Vancouver', get_timezone_display_with_offset('America/Vancouver')),
+        ('America/Mexico_City', get_timezone_display_with_offset('America/Mexico_City')),
+        ('America/Buenos_Aires', get_timezone_display_with_offset('America/Buenos_Aires')),
+        ('America/Sao_Paulo', get_timezone_display_with_offset('America/Sao_Paulo')),
+        # Europe
+        ('Europe/London', get_timezone_display_with_offset('Europe/London')),
+        ('Europe/Dublin', get_timezone_display_with_offset('Europe/Dublin')),
+        ('Europe/Paris', get_timezone_display_with_offset('Europe/Paris')),
+        ('Europe/Berlin', get_timezone_display_with_offset('Europe/Berlin')),
+        ('Europe/Rome', get_timezone_display_with_offset('Europe/Rome')),
+        ('Europe/Madrid', get_timezone_display_with_offset('Europe/Madrid')),
+        ('Europe/Amsterdam', get_timezone_display_with_offset('Europe/Amsterdam')),
+        ('Europe/Brussels', get_timezone_display_with_offset('Europe/Brussels')),
+        ('Europe/Zurich', get_timezone_display_with_offset('Europe/Zurich')),
+        ('Europe/Stockholm', get_timezone_display_with_offset('Europe/Stockholm')),
+        ('Europe/Oslo', get_timezone_display_with_offset('Europe/Oslo')),
+        ('Europe/Copenhagen', get_timezone_display_with_offset('Europe/Copenhagen')),
+        ('Europe/Helsinki', get_timezone_display_with_offset('Europe/Helsinki')),
+        ('Europe/Athens', get_timezone_display_with_offset('Europe/Athens')),
+        ('Europe/Moscow', get_timezone_display_with_offset('Europe/Moscow')),
+        # Africa & Middle East
+        ('Africa/Cairo', get_timezone_display_with_offset('Africa/Cairo')),
+        ('Africa/Johannesburg', get_timezone_display_with_offset('Africa/Johannesburg')),
+        ('Africa/Lagos', get_timezone_display_with_offset('Africa/Lagos')),
+        ('Asia/Dubai', get_timezone_display_with_offset('Asia/Dubai')),
+        ('Asia/Jerusalem', get_timezone_display_with_offset('Asia/Jerusalem')),
+        # Asia
+        ('Asia/Kolkata', get_timezone_display_with_offset('Asia/Kolkata')),
+        ('Asia/Bangkok', get_timezone_display_with_offset('Asia/Bangkok')),
+        ('Asia/Singapore', get_timezone_display_with_offset('Asia/Singapore')),
+        ('Asia/Hong_Kong', get_timezone_display_with_offset('Asia/Hong_Kong')),
+        ('Asia/Shanghai', get_timezone_display_with_offset('Asia/Shanghai')),
+        ('Asia/Tokyo', get_timezone_display_with_offset('Asia/Tokyo')),
+        ('Asia/Seoul', get_timezone_display_with_offset('Asia/Seoul')),
+        # Australia & Pacific
+        ('Australia/Perth', get_timezone_display_with_offset('Australia/Perth')),
+        ('Australia/Sydney', get_timezone_display_with_offset('Australia/Sydney')),
+        ('Australia/Melbourne', get_timezone_display_with_offset('Australia/Melbourne')),
+        ('Pacific/Auckland', get_timezone_display_with_offset('Pacific/Auckland')),
+    ]
         
     return render_template('session_admin.html', 
                          session=session_data,
                          session_path=session_path,
-                         active_tab='details')
+                         active_tab='details',
+                         timezone_options=timezone_options)
 
 
 @login_required

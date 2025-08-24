@@ -91,8 +91,12 @@
                                     </div>
                                     
                                     <div class="mb-3">
-                                        <label for="location-website" class="form-label">Location Website</label>
-                                        <input type="url" class="form-control" id="location-website" value="{{ session.location_website or '' }}">
+                                        <label for="timezone" class="form-label">Timezone</label>
+                                        <select class="form-select" id="timezone" name="timezone">
+                                            {% for tz_value, tz_display in timezone_options %}
+                                            <option value="{{ tz_value }}" {% if session.timezone == tz_value %}selected{% endif %}>{{ tz_display }}</option>
+                                            {% endfor %}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -102,6 +106,11 @@
                                     <div class="mb-3">
                                         <label for="location-phone" class="form-label">Location Phone</label>
                                         <input type="tel" class="form-control" id="location-phone" value="{{ session.location_phone or '' }}">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="location-website" class="form-label">Location Website</label>
+                                        <input type="url" class="form-control" id="location-website" value="{{ session.location_website or '' }}">
                                     </div>
                                     
                                     <div class="mb-3">
@@ -273,6 +282,45 @@
 
 .form-control:focus {
     border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Form select styling */
+.form-select {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23999' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    appearance: none;
+}
+
+/* Dark mode styling for select dropdowns */
+[data-theme="dark"] .form-select {
+    background-color: var(--dropdown-bg);
+    color: var(--text-color);
+    border-color: var(--dropdown-border);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23999' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+}
+
+[data-theme="dark"] .form-select option {
+    background-color: var(--dropdown-bg);
+    color: var(--text-color);
+}
+
+.form-select:focus {
+    border-color: var(--primary);
+    outline: 0;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
@@ -740,6 +788,7 @@ function saveSessionDetails() {
         city: document.getElementById('city').value.trim(),
         state: document.getElementById('state').value.trim(),
         country: document.getElementById('country').value.trim(),
+        timezone: document.getElementById('timezone').value,
         location_website: document.getElementById('location-website').value.trim(),
         location_phone: document.getElementById('location-phone').value.trim(),
         initiation_date: document.getElementById('initiation-date').value,
