@@ -255,7 +255,7 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
-    <h1 class="editable-header">{{ session_instance.session_name }}<span class="edit-link" id="edit-name-btn">Edit</span></h1>
+    <h1>{{ session_instance.session_name }}</h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
     
     {% if session_instance.location_override %}
@@ -480,7 +480,6 @@
         }
         
         // Edit session instance event listeners (always available)
-        document.getElementById('edit-name-btn').addEventListener('click', showEditSessionModal);
         document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
         document.getElementById('edit-session-cancel-btn').addEventListener('click', hideEditSessionModal);
         document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
@@ -687,6 +686,9 @@
                 });
         }
         
+        // Global variable to cache tune data for move operations
+        let cachedTuneData = null;
+        
         function renderTunes(tuneSets) {
             const container = document.getElementById('tune-sets');
             
@@ -874,9 +876,6 @@
                 container.classList.remove('loading');
             });
         }
-        
-        // Global variable to cache tune data for move operations
-        let cachedTuneData = null;
         
         function getCurrentTuneData(orderNumber) {
             if (!cachedTuneData) {

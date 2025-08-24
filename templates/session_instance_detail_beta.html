@@ -689,7 +689,7 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
-    <h1 class="editable-header">{{ session_instance.session_name }}<span class="edit-link" id="edit-name-btn">Edit</span></h1>
+    <h1>{{ session_instance.session_name }}</h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
     
     {% if session_instance.location_override %}
@@ -5142,7 +5142,6 @@
     
     // Session edit functionality (reused from original)
     function setupSessionEditListeners() {
-        document.getElementById('edit-name-btn').addEventListener('click', showEditSessionModal);
         document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
         document.getElementById('edit-session-cancel-btn').addEventListener('click', hideSessionEditModal);
         document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
