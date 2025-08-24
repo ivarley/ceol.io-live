@@ -2374,7 +2374,7 @@
                                     tuneName: tunename,
                                     setting: null,
                                     tuneType: null,
-                                    state: 'unlinked'
+                                    state: 'loading'  // Show loading spinner during matching
                                 }));
                             });
                             isPlainTextPaste = true;
@@ -2419,7 +2419,7 @@
                     const actualPastedPills = [];
                     tunePillsData.forEach(tuneSet => {
                         tuneSet.forEach(pill => {
-                            if (originalTuneNames.includes(pill.tuneName) && pill.state === 'unlinked') {
+                            if (originalTuneNames.includes(pill.tuneName) && pill.state === 'loading') {
                                 actualPastedPills.push(pill);
                             }
                         });
@@ -2437,7 +2437,7 @@
                     
                     // Create array of matching promises
                     const matchingPromises = actualPastedPills
-                        .filter(pill => pill.state === 'unlinked')
+                        .filter(pill => pill.state === 'loading')
                         .map(pill => {
                             console.log(`Attempting to match tune: "${pill.tuneName}"`);
                             return autoMatchTune(pill).then(() => {
