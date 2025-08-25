@@ -305,26 +305,51 @@ class PillSelection {
     }
     
     static getPillRangeBetweenCursors(startCursor, endCursor, allPills) {
-        // CRITICAL INSIGHT: The user expectations are:
-        // 1. When cursor is "after pill A" and moves left, they expect to select pill A
-        // 2. When cursor moves right to "before pill B", they expect to select pill B  
-        // 3. The selection should represent the pills "traversed" by cursor movement
+        // SIMPLIFIED APPROACH: Select pills based on what's between the cursor positions
         
-        const startPos = this.getCursorLogicalPosition(startCursor, allPills);
-        const endPos = this.getCursorLogicalPosition(endCursor, allPills);
+        const startBoundary = this.getCursorPillBoundary(startCursor, allPills);
+        const endBoundary = this.getCursorPillBoundary(endCursor, allPills);
         
-        if (startPos === null || endPos === null) return [];
-        
-        // Select pills between the logical positions (inclusive)
-        const minPos = Math.min(startPos, endPos);
-        const maxPos = Math.max(startPos, endPos);
+        if (startBoundary === -1 || endBoundary === -1) return [];
         
         const selectedPills = [];
-        for (let i = minPos; i <= maxPos && i < allPills.length; i++) {
+        const minBoundary = Math.min(startBoundary, endBoundary);
+        const maxBoundary = Math.max(startBoundary, endBoundary);
+        
+        // Select pills between the boundaries (exclusive of boundaries)
+        for (let i = minBoundary; i < maxBoundary && i < allPills.length; i++) {
             selectedPills.push(allPills[i]);
         }
         
         return selectedPills;
+    }
+    
+    static getCursorPillBoundary(cursor, allPills) {
+        const { setIndex, pillIndex, position } = cursor;
+        
+        if (position === 'newset') {
+            // Newset position is after all pills - return boundary after last pill
+            return allPills.length;
+        }
+        
+        const pillArrayIndex = allPills.findIndex(p => 
+            p.setIndex === setIndex && p.pillIndex === pillIndex
+        );
+        
+        if (pillArrayIndex === -1) return -1;
+        
+        // BOUNDARY LOGIC: Cursor positions represent boundaries, not pills themselves
+        if (position === 'before') {
+            // "before pill N" = boundary just before pill N
+            // First pill that would be selected when extending FROM here is pill N
+            return pillArrayIndex;
+        } else if (position === 'after') {
+            // "after pill N" = boundary just after pill N  
+            // First pill that would be selected when extending FROM here is pill N+1
+            return pillArrayIndex + 1;
+        }
+        
+        return pillArrayIndex;
     }
     
     static getCursorLogicalPosition(cursor, allPills) {
@@ -341,10 +366,16 @@ class PillSelection {
         
         if (pillArrayIndex === -1) return null;
         
-        // HERE'S THE KEY INSIGHT:
-        // - "before" pill N means logical position N (the pill itself)
-        // - "after" pill N means logical position N (still the pill itself, for selection)
-        // The position difference affects cursor movement, but for selection both refer to the pill
+        // CORRECTED LOGIC FOR PROPER DESELECTION:
+        // - "before" pill N means logical position N (just before the pill)
+        // - "after" pill N means logical position N+1 (just after the pill)
+        // This way moving from "after" to "before" the same pill changes the selection range
+        
+        if (position === 'before') {
+            return pillArrayIndex;
+        } else if (position === 'after') {
+            return pillArrayIndex + 1;
+        }
         
         return pillArrayIndex;
     }

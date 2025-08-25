@@ -205,16 +205,10 @@ class CursorManager {
             newPillIndex = pillIndex + 1;
             newPosition = 'after';
         } else if (position === 'after' && setIndex < tunePillsData.length - 1) {
-            // Move to end of next set
+            // Move to after the first pill of next set (so it gets selected immediately)
             newSetIndex = setIndex + 1;
-            const nextSetLength = tunePillsData[newSetIndex].length;
-            if (nextSetLength > 0) {
-                newPillIndex = nextSetLength - 1;
-                newPosition = 'after';
-            } else {
-                newPillIndex = 0;
-                newPosition = 'before';
-            }
+            newPillIndex = 0;
+            newPosition = 'after';
         } else if (position === 'after' && setIndex === tunePillsData.length - 1) {
             // Move to final position (new set)
             newSetIndex = tunePillsData.length;
