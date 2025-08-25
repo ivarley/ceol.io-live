@@ -10,7 +10,7 @@ class CursorManager {
     static onCursorChange = null; // Callback for cursor position changes
     static onSelectionChange = null; // Callback for selection changes
     static getStateManager = null; // Function to get StateManager reference
-    static selectedPills = null; // Reference to selectedPills Set
+    // Selection is now managed by PillSelection module
     static temporaryEmptySet = null;
     static typingContext = null; // Typing context for updateCursorWithText
     
@@ -18,7 +18,7 @@ class CursorManager {
         this.onCursorChange = options.onCursorChange;
         this.onSelectionChange = options.onSelectionChange;
         this.getStateManager = options.getStateManager || (() => window.StateManager);
-        this.selectedPills = options.selectedPills || new Set();
+        // Selection is now managed by PillSelection module
         this.temporaryEmptySet = options.temporaryEmptySet || null;
         this.cursorPosition = null;
         this.selectionAnchor = null;
@@ -388,11 +388,14 @@ class CursorManager {
     
     static clearSelection() {
         console.log('CursorManager.clearSelection: Called');
-        if (this.selectedPills) {
-            this.selectedPills.clear();
-            if (this.onSelectionChange) {
-                this.onSelectionChange();
-            }
+        // Clear selection using PillSelection module
+        if (window.PillSelection) {
+            window.PillSelection.selectNone();
+        }
+        
+        // Call selection change callback if it exists  
+        if (this.onSelectionChange) {
+            this.onSelectionChange();
         }
         
         // Clear selection anchor so cursor becomes visible again
