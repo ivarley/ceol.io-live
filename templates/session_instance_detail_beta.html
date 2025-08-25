@@ -852,6 +852,7 @@
 
 {% block extra_js %}
 <script src="/static/js/components/autoSave.js"></script>
+<script src="/static/js/components/stateManager.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -868,13 +869,13 @@
         is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
     };
     
-    // Beta Editor State
-    let tunePillsData = [];
-    let undoStack = [];
-    let redoStack = [];
+    // Beta Editor State - core data now managed by StateManager  
     let selectedPills = new Set();
     let dragState = null;
     let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
+    
+    // Core data array - will be replaced by StateManager calls
+    let tunePillsData = [];
     
     // Save state tracking - now managed by AutoSaveManager
     
@@ -909,21 +910,28 @@
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
         if (!isCancelled) {
+            // Initialize StateManager with change callback
+            StateManager.initialize(() => {
+                tunePillsData = StateManager.getTunePillsData();
+                AutoSaveManager.forceCheckChanges();
+            });
+            
             // Convert server-side tune sets data to pills format
             const initialTuneSets = {{ tune_sets|tojson }};
-            convertTuneSetsToPills(initialTuneSets);
+            convertTuneSetsToPills(initialTuneSets, true); // Skip callback during initialization
             renderTunePills();
             setupEventListeners();
             
             // Initialize AutoSaveManager after tunePillsData is created
-            AutoSaveManager.initialize(sessionPath, sessionDate, () => tunePillsData, {
+            AutoSaveManager.initialize(sessionPath, sessionDate, () => StateManager.getTunePillsData(), {
                 isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
                 userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }}
             });
             
             // Initialize save state - mark as clean since we just loaded
-            AutoSaveManager.lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
-            AutoSaveManager.lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
+            const currentData = StateManager.getTunePillsData();
+            AutoSaveManager.lastSavedData = JSON.parse(JSON.stringify(currentData));
+            AutoSaveManager.lastCheckedData = JSON.parse(JSON.stringify(currentData));
             AutoSaveManager.isDirty = false;
             
             // Ensure save button is disabled on initial load
@@ -944,39 +952,15 @@
         window.addEventListener('resize', AutoSaveManager.updateOptionText);
     });
     
-    // Convert tune sets to pills data format
-    function convertTuneSetsToPills(tuneSets) {
-        tunePillsData = [];
-        
-        
-        if (!tuneSets || tuneSets.length === 0) {
-            return;
-        }
-        
-        tuneSets.forEach(tuneSet => {
-            const setData = [];
-            tuneSet.forEach(tune => {
-                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType] = tune;
-                setData.push({
-                    id: generateId(),
-                    orderNumber: orderNumber,
-                    tuneId: tuneId,
-                    tuneName: tuneName,
-                    setting: setting,
-                    tuneType: tuneType,
-                    state: tuneId ? 'linked' : 'unlinked'
-                });
-            });
-            if (setData.length > 0) {
-                tunePillsData.push(setData);
-            }
-        });
-        
+    // Convert tune sets to pills data format - delegated to StateManager
+    function convertTuneSetsToPills(tuneSets, skipCallback = false) {
+        StateManager.convertTuneSetsToPills(tuneSets, skipCallback);
+        tunePillsData = StateManager.getTunePillsData();
     }
     
-    // Generate unique IDs for pills
+    // Generate unique IDs for pills - delegated to StateManager
     function generateId() {
-        return 'pill_' + Math.random().toString(36).substr(2, 9);
+        return StateManager.generateId();
     }
     
     // Render tune pills in the container
@@ -2645,34 +2629,25 @@
         renderTunePills();
     }
     
-    // Undo/Redo functions
+    // Undo/Redo functions - now delegated to StateManager
     function saveToUndo() {
-        undoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
-        redoStack.length = 0; // Clear redo stack when new action is performed
-        
-        // Limit undo stack size
-        if (undoStack.length > 50) {
-            undoStack.shift();
-        }
-        
+        StateManager.saveToUndo();
         // Mark as dirty when any change is made
         AutoSaveManager.forceCheckChanges();
     }
     
     function undo() {
-        if (undoStack.length === 0) return;
-        
-        redoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
-        tunePillsData = undoStack.pop();
-        renderTunePills();
+        if (StateManager.undo()) {
+            tunePillsData = StateManager.getTunePillsData();
+            renderTunePills();
+        }
     }
     
     function redo() {
-        if (redoStack.length === 0) return;
-        
-        undoStack.push(JSON.parse(JSON.stringify(tunePillsData)));
-        tunePillsData = redoStack.pop();
-        renderTunePills();
+        if (StateManager.redo()) {
+            tunePillsData = StateManager.getTunePillsData();
+            renderTunePills();
+        }
     }
     
     // Clipboard functions
