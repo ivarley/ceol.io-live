@@ -855,6 +855,7 @@
 <script src="/static/js/components/stateManager.js"></script>
 <script src="/static/js/components/cursorManager.js"></script>
 <script src="/static/js/components/pillRenderer.js"></script>
+<script src="/static/js/components/pillSelection.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -872,6 +873,7 @@
     };
     
     // Beta Editor State - core data now managed by StateManager  
+    // selectedPills now managed by PillSelection - keep reference for backward compatibility
     let selectedPills = new Set();
     let dragState = null;
     // cursorPosition now managed by CursorManager - keep reference for backward compatibility
@@ -952,6 +954,23 @@
                 createHorizontalDropZone: (setIndex) => createHorizontalDropZone(setIndex),
                 setupPillEventListeners: (pillElement, pillData) => setupPillEventListeners(pillElement, pillData),
                 setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard)
+            });
+            
+            // Initialize PillSelection
+            PillSelection.initialize({
+                getStateManager: () => StateManager,
+                getAutoSaveManager: () => AutoSaveManager,
+                selectedPills: selectedPills,
+                onSelectionChange: () => {
+                    updateSelectionDisplay();
+                }
+            });
+            
+            // Register callbacks that PillSelection needs
+            PillSelection.registerCallbacks({
+                renderTunePills: () => renderTunePills(),
+                saveToUndo: () => saveToUndo(),
+                showMessage: (message, type) => showMessage(message, type)
             });
             
             // Convert server-side tune sets data to pills format
@@ -1879,60 +1898,21 @@
     }
     
     // Selection functions
+    // Selection functions - delegated to PillSelection module
     function selectSingle(pillId) {
-        selectedPills.clear();
-        selectedPills.add(pillId);
-        updateSelectionDisplay();
+        return PillSelection.selectSingle(pillId);
     }
     
     function toggleSelection(pillId) {
-        if (selectedPills.has(pillId)) {
-            selectedPills.delete(pillId);
-        } else {
-            selectedPills.add(pillId);
-        }
-        updateSelectionDisplay();
+        return PillSelection.toggleSelection(pillId);
     }
     
     function extendSelection(pillId) {
-        // For shift-click selection, we need to select from the last selected pill to this one
-        if (selectedPills.size === 0) {
-            // If no pills are selected, just select this one
-            selectedPills.add(pillId);
-        } else {
-            // Find the range between the last selected pill and the current one
-            const allPills = document.querySelectorAll('.tune-pill');
-            const pillIds = Array.from(allPills).map(pill => pill.dataset.pillId);
-            
-            // Find the indices of the last selected pill and the current pill
-            const lastSelectedId = Array.from(selectedPills)[selectedPills.size - 1];
-            const lastIndex = pillIds.indexOf(lastSelectedId);
-            const currentIndex = pillIds.indexOf(pillId);
-            
-            if (lastIndex !== -1 && currentIndex !== -1) {
-                // Select all pills between the last selected and current (inclusive)
-                const startIndex = Math.min(lastIndex, currentIndex);
-                const endIndex = Math.max(lastIndex, currentIndex);
-                
-                for (let i = startIndex; i <= endIndex; i++) {
-                    selectedPills.add(pillIds[i]);
-                }
-            } else {
-                // Fallback: just add the current pill
-                selectedPills.add(pillId);
-            }
-        }
-        updateSelectionDisplay();
+        return PillSelection.extendSelection(pillId);
     }
     
     function updateSelectionDisplay() {
-        document.querySelectorAll('.tune-pill').forEach(pill => {
-            if (selectedPills.has(pill.dataset.pillId)) {
-                pill.classList.add('selected');
-            } else {
-                pill.classList.remove('selected');
-            }
-        });
+        return PillSelection.updateSelectionDisplay();
     }
     
     // Drag and drop support functions
@@ -2476,30 +2456,9 @@
         }
     }
     
+    // Delete selected pills - delegated to PillSelection module
     function deleteSelectedPills() {
-        if (selectedPills.size === 0) return;
-        
-        saveToUndo();
-        
-        // Remove selected pills
-        selectedPills.forEach(pillId => {
-            for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
-                const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
-                if (pillIndex !== -1) {
-                    tunePillsData[setIndex].splice(pillIndex, 1);
-                    break;
-                }
-            }
-        });
-        
-        // Remove empty sets
-        tunePillsData = tunePillsData.filter(set => set.length > 0);
-        
-        // Force check for changes after data modification
-        AutoSaveManager.forceCheckChanges();
-        
-        selectedPills.clear();
-        renderTunePills();
+        return PillSelection.deleteSelectedPills();
     }
     
     // Undo/Redo functions - now delegated to StateManager
@@ -2526,61 +2485,21 @@
     // Clipboard functions
     let clipboard = [];
     
+    // Clipboard functions - delegated to PillSelection module  
     function copySelectedPills() {
-        if (selectedPills.size === 0) return;
-        
-        // Group selected pills by their sets, preserving order and set structure
-        const selectedBySet = new Map();
-        
-        tunePillsData.forEach((tuneSet, setIndex) => {
-            tuneSet.forEach((pill, pillIndex) => {
-                if (selectedPills.has(pill.id)) {
-                    if (!selectedBySet.has(setIndex)) {
-                        selectedBySet.set(setIndex, []);
-                    }
-                    selectedBySet.get(setIndex).push({
-                        pill: JSON.parse(JSON.stringify(pill)),
-                        originalPillIndex: pillIndex
-                    });
-                }
-            });
-        });
-        
-        // Convert to array of sets, preserving set breaks
-        clipboard = Array.from(selectedBySet.values()).map(setData => 
-            setData.map(item => item.pill)
-        );
-        
-        // Copy to external clipboard - both JSON format and plain text tune names
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            // Create plain text version with sets on separate lines, tunes in sets separated by commas
-            const tuneNames = clipboard.map(set => 
-                set.map(pill => pill.tuneName).join(', ')
-            ).join('\n');
-            
-            // Try to write plain text tune names to external clipboard
-            navigator.clipboard.writeText(tuneNames).then(() => {
-                console.log('Successfully copied to external clipboard:', tuneNames);
-            }).catch(err => {
-                console.warn('Failed to write tune names to clipboard, trying JSON fallback:', err);
-                // Fallback to JSON format if plain text fails
-                const jsonData = JSON.stringify(clipboard);
-                navigator.clipboard.writeText(jsonData).catch(err => {
-                    console.error('Failed to write JSON to clipboard:', err);
-                });
-            });
+        const copiedData = PillSelection.copySelectedPills();
+        if (copiedData) {
+            clipboard = copiedData;
         }
-        
-        const totalPills = clipboard.reduce((sum, set) => sum + set.length, 0);
-        const setCount = clipboard.length;
-        showMessage(`Copied ${totalPills} tune(s) in ${setCount} set(s)`, 'success');
+        return copiedData;
     }
     
     function cutSelectedPills() {
-        if (selectedPills.size === 0) return;
-        
-        copySelectedPills();
-        deleteSelectedPills();
+        const cutData = PillSelection.cutSelectedPills();
+        if (cutData) {
+            clipboard = cutData;
+        }
+        return cutData;
     }
     
     async function pasteFromClipboard() {
@@ -4655,12 +4574,9 @@
         });
     }
     
+    // Select all function - delegated to PillSelection module
     function selectAll() {
-        selectedPills.clear();
-        tunePillsData.forEach(set => {
-            set.forEach(pill => selectedPills.add(pill.id));
-        });
-        updateSelectionDisplay();
+        return PillSelection.selectAll();
     }
     
     // Modal control functions
