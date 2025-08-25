@@ -3137,3 +3137,43 @@ def save_session_instance_tunes_ajax(session_path, date):
         if 'conn' in locals():
             conn.close()
         return jsonify({'success': False, 'message': f'Failed to save session: {str(e)}'})
+
+
+def update_auto_save_preference():
+    """Update the auto-save preference for logged-in users"""
+    try:
+        # Check if user is logged in
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'error': 'User not authenticated'}), 401
+        
+        # Get the preference value from request
+        data = request.get_json()
+        auto_save = data.get('auto_save', False)
+        
+        # Update user preference in database
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute('''
+            UPDATE user_account 
+            SET auto_save_tunes = %s,
+                last_modified_date = NOW() AT TIME ZONE 'UTC'
+            WHERE user_id = %s
+        ''', (auto_save, current_user.user_id))
+        
+        save_to_history(cur, 'user_account', 'UPDATE', current_user.user_id)
+        
+        cur.close()
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Auto-save preference updated',
+            'auto_save': auto_save
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({'success': False, 'error': str(e)}), 500

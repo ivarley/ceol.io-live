@@ -13,7 +13,7 @@ SESSION_LIFETIME_WEEKS = 6
 
 class User(UserMixin):
     def __init__(self, user_id, person_id, username, is_active=True, is_system_admin=False, 
-                 first_name='', last_name='', email='', timezone='UTC', email_verified=False):
+                 first_name='', last_name='', email='', timezone='UTC', email_verified=False, auto_save_tunes=False):
         self.id = str(user_id)
         self.user_id = user_id
         self.person_id = person_id
@@ -25,6 +25,7 @@ class User(UserMixin):
         self.email = email
         self.timezone = timezone
         self.email_verified = email_verified
+        self.auto_save_tunes = auto_save_tunes
 
     @property
     def is_active(self):
@@ -41,7 +42,7 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute('''
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
-                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email
+                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.user_id = %s AND ua.is_active = TRUE
@@ -58,7 +59,8 @@ class User(UserMixin):
                     email_verified=user_data[6],
                     first_name=user_data[7],
                     last_name=user_data[8],
-                    email=user_data[9]
+                    email=user_data[9],
+                    auto_save_tunes=user_data[10] if len(user_data) > 10 else False
                 )
             return None
         finally:
@@ -71,7 +73,7 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute('''
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active, 
-                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.username = %s
@@ -88,7 +90,8 @@ class User(UserMixin):
                     email_verified=user_data[7],
                     first_name=user_data[8],
                     last_name=user_data[9],
-                    email=user_data[10]
+                    email=user_data[10],
+                    auto_save_tunes=user_data[11] if len(user_data) > 11 else False
                 )
                 user.hashed_password = user_data[3]
                 return user

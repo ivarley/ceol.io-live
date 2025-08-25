@@ -1161,6 +1161,66 @@
         });
     }
     
+    function initializeAutoSavePreference() {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+        const isUserLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+        
+        if (isUserLoggedIn) {
+            // For logged-in users, use their stored preference
+            autoSaveCheckbox.checked = {{ 'true' if current_user.auto_save_tunes else 'false' }};
+        } else {
+            // For anonymous users, check for cookie
+            const cookieValue = getCookie('auto_save_tunes');
+            autoSaveCheckbox.checked = cookieValue === 'true';
+        }
+    }
+    
+    function saveAutoSavePreference(isEnabled) {
+        const isUserLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+        
+        if (isUserLoggedIn) {
+            // Save to user account via API
+            fetch('/api/user/auto-save-preference', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    auto_save: isEnabled
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Failed to save auto-save preference:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving auto-save preference:', error);
+            });
+        } else {
+            // Save to cookie for anonymous users
+            setCookie('auto_save_tunes', isEnabled.toString(), 365);
+        }
+    }
+    
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+    
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+    }
+    
     function setupAutoSave() {
         const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
         const intervalSelect = document.getElementById('auto-save-interval');
@@ -1168,6 +1228,9 @@
         // Stop any existing timer
         autoSaveTimer.stop();
         autoSaveTimer.hideCountdown();
+        
+        // Save preference when checkbox state changes
+        saveAutoSavePreference(autoSaveCheckbox.checked);
         
         // Start timer if checkbox is checked and we're dirty
         if (autoSaveCheckbox.checked && isDirty) {
@@ -1209,6 +1272,9 @@
         
         setupSessionEditListeners();
         setupSaveListeners();
+        
+        // Initialize auto-save preference
+        initializeAutoSavePreference();
         
         // Set up responsive option text
         updateOptionText();

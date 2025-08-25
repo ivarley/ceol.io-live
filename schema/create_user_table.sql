@@ -9,6 +9,7 @@ CREATE TABLE user_account (
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
     email_verified BOOLEAN DEFAULT FALSE,
+    auto_save_tunes BOOLEAN DEFAULT FALSE,
     verification_token VARCHAR(255),
     verification_token_expires TIMESTAMPTZ,
     password_reset_token VARCHAR(255),
@@ -25,6 +26,7 @@ CREATE INDEX idx_user_reset_token ON user_account (password_reset_token) WHERE p
 
 -- Comments for documentation
 COMMENT ON COLUMN user_account.timezone IS 'IANA timezone identifier (e.g., America/New_York) for displaying dates to user';
+COMMENT ON COLUMN user_account.auto_save_tunes IS 'User preference for auto-saving tunes in session instance editor';
 COMMENT ON COLUMN user_account.created_date IS 'UTC timestamp when user account was created';
 COMMENT ON COLUMN user_account.last_modified_date IS 'UTC timestamp when user account was last modified';
 COMMENT ON COLUMN user_account.verification_token_expires IS 'UTC timestamp when email verification token expires';

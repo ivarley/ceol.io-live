@@ -171,6 +171,7 @@ app.add_url_rule('/api/validate-thesession-user', 'validate_thesession_user', va
 app.add_url_rule('/api/parse-person-name', 'parse_person_name', parse_person_name, methods=['POST'])
 app.add_url_rule('/api/create-person', 'create_new_person', create_new_person, methods=['POST'])
 app.add_url_rule('/api/sessions/list', 'get_available_sessions', get_available_sessions)
+app.add_url_rule('/api/user/auto-save-preference', 'update_auto_save_preference', update_auto_save_preference, methods=['POST'])
 
 # Error handlers
 FUNNY_ERROR_TEXTS = [
