@@ -122,7 +122,9 @@ class CursorManager {
         
         // Set selection anchor if shift is pressed and we don't have one
         if (shiftKey && !this.selectionAnchor) {
+            // Set anchor to current position BEFORE moving cursor
             this.selectionAnchor = { setIndex, pillIndex, position };
+            console.log('CursorManager.moveCursorLeft: Setting selection anchor to:', this.selectionAnchor);
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             this.selectionAnchor = null;
@@ -134,18 +136,18 @@ class CursorManager {
         let newPosition = position;
         
         if (position === 'after') {
-            // Move to 'before' the same pill
+            // Move to 'before' the same pill (this selects the current pill)
             newPosition = 'before';
         } else if (position === 'before' && pillIndex > 0) {
-            // Move to 'after' the previous pill
+            // Move to 'before' the previous pill (this selects the previous pill)
             newPillIndex = pillIndex - 1;
-            newPosition = 'after';
+            newPosition = 'before';
         } else if (position === 'before' && pillIndex === 0 && setIndex > 0) {
-            // Move to end of previous set
+            // Move to beginning of previous set
             const prevSetLength = tunePillsData[setIndex - 1].length;
             newSetIndex = setIndex - 1;
             newPillIndex = prevSetLength - 1;
-            newPosition = 'after';
+            newPosition = 'before';
         } else {
             // Can't move further left
             return;
@@ -155,7 +157,11 @@ class CursorManager {
         
         // Update selection if shift key is pressed
         if (shiftKey && this.selectionAnchor) {
+            console.log('CursorManager.moveCursorLeft: Updating selection after cursor move');
+            console.log('  Selection anchor:', this.selectionAnchor);
+            console.log('  Current cursor:', this.cursorPosition);
             this.updateSelection();
+            console.log('  Selection update complete');
         }
     }
     
@@ -178,7 +184,9 @@ class CursorManager {
         
         // Set selection anchor if shift is pressed and we don't have one
         if (shiftKey && !this.selectionAnchor) {
+            // Set anchor to current position BEFORE moving cursor
             this.selectionAnchor = { setIndex, pillIndex, position };
+            console.log('CursorManager.moveCursorRight: Setting selection anchor to:', this.selectionAnchor);
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             this.selectionAnchor = null;
@@ -190,17 +198,23 @@ class CursorManager {
         let newPosition = position;
         
         if (position === 'before') {
-            // Move to 'after' the same pill
+            // Move to 'after' the same pill (this selects the current pill)
             newPosition = 'after';
         } else if (position === 'after' && pillIndex < tunePillsData[setIndex].length - 1) {
-            // Move to 'before' the next pill (which is the same as 'after' current pill)
+            // Move to 'after' the next pill (this selects the next pill)
             newPillIndex = pillIndex + 1;
-            newPosition = 'before';
+            newPosition = 'after';
         } else if (position === 'after' && setIndex < tunePillsData.length - 1) {
-            // Move to beginning of next set
+            // Move to end of next set
             newSetIndex = setIndex + 1;
-            newPillIndex = 0;
-            newPosition = 'before';
+            const nextSetLength = tunePillsData[newSetIndex].length;
+            if (nextSetLength > 0) {
+                newPillIndex = nextSetLength - 1;
+                newPosition = 'after';
+            } else {
+                newPillIndex = 0;
+                newPosition = 'before';
+            }
         } else if (position === 'after' && setIndex === tunePillsData.length - 1) {
             // Move to final position (new set)
             newSetIndex = tunePillsData.length;
@@ -215,7 +229,11 @@ class CursorManager {
         
         // Update selection if shift key is pressed
         if (shiftKey && this.selectionAnchor) {
+            console.log('CursorManager.moveCursorRight: Updating selection after cursor move');
+            console.log('  Selection anchor:', this.selectionAnchor);
+            console.log('  Current cursor:', this.cursorPosition);
             this.updateSelection();
+            console.log('  Selection update complete');
         }
     }
     
@@ -329,10 +347,26 @@ class CursorManager {
     }
     
     static clearSelection() {
+        console.log('CursorManager.clearSelection: Called');
         if (this.selectedPills) {
             this.selectedPills.clear();
             if (this.onSelectionChange) {
                 this.onSelectionChange();
+            }
+        }
+        
+        // Clear selection anchor so cursor becomes visible again
+        this.selectionAnchor = null;
+        
+        // Re-render cursor to make it visible again after clearing selection
+        if (this.cursorPosition) {
+            console.log('CursorManager.clearSelection: Re-rendering cursor at', this.cursorPosition);
+            if (window.setCursorPositionOriginal) {
+                window.setCursorPositionOriginal(
+                    this.cursorPosition.setIndex, 
+                    this.cursorPosition.pillIndex, 
+                    this.cursorPosition.position
+                );
             }
         }
     }

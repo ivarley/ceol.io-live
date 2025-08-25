@@ -1050,18 +1050,40 @@
         
         cursorPosition = { setIndex, pillIndex, position: positionType };
         
-        // Remove existing cursors
+        // Always remove existing cursors before creating new one
+        // The cursor should always be visible, whether in selection mode or not
+        const hasSelection = CursorManager.selectionAnchor !== null;
+        console.log('setCursorPositionOriginal: hasSelection =', hasSelection, 'position =', {setIndex, pillIndex, positionType});
+        
+        // Remove all existing cursors so we can place the new one
         document.querySelectorAll('.text-cursor').forEach(cursor => cursor.remove());
         
         // Add cursor at the specified position
         const selector = `.cursor-position[data-set-index="${setIndex}"][data-pill-index="${pillIndex}"][data-position-type="${positionType}"]`;
         const cursorElements = document.querySelectorAll(selector);
         
+        console.log('setCursorPositionOriginal: Adding cursor, selector =', selector, 'found elements:', cursorElements.length);
+        
         if (cursorElements.length > 0) {
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
             cursorElements[0].appendChild(cursor);
+            console.log('setCursorPositionOriginal: Added cursor to cursor-position element');
+            console.log('  Cursor element:', cursor);
+            console.log('  Cursor parent:', cursorElements[0]);
+            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
+            
+            // Check if cursor is still there after a short delay
+            setTimeout(() => {
+                const stillThere = document.getElementById('active-cursor');
+                console.log('setCursorPositionOriginal: Cursor still in DOM after 100ms:', stillThere);
+                if (stillThere) {
+                    console.log('  Cursor parent after delay:', stillThere.parentNode);
+                    console.log('  Cursor computed style display:', getComputedStyle(stillThere).display);
+                    console.log('  Cursor computed style visibility:', getComputedStyle(stillThere).visibility);
+                }
+            }, 100);
             
             // Only scroll cursor into view for user-initiated actions (not after drag/drop)
             // Skip scrolling to prevent unwanted view changes after move operations
@@ -1071,6 +1093,9 @@
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
             document.getElementById('tune-pills-container').appendChild(cursor);
+            console.log('setCursorPositionOriginal: Added cursor to container (fallback)');
+            console.log('  Cursor element:', cursor);
+            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
         }
         
         // Focus the container for keyboard input

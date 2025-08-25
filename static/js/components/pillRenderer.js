@@ -130,15 +130,13 @@ class PillRenderer {
         }
         
         tuneSet.forEach((pill, pillIndex) => {
-            // Add cursor position before first pill only
-            if (pillIndex === 0) {
-                this.addCursorPosition(setDiv, setIndex, pillIndex, 'before');
-            }
+            // Add cursor position before every pill (not just the first one)
+            this.addCursorPosition(setDiv, setIndex, pillIndex, 'before');
             
             const pillElement = this.createPillElement(pill, setIndex, pillIndex);
             setDiv.appendChild(pillElement);
             
-            // Add cursor position after each pill (this becomes the "before" position for next pill)
+            // Add cursor position after every pill
             this.addCursorPosition(setDiv, setIndex, pillIndex, 'after');
             
             // Add spacing between pills
