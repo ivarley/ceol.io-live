@@ -1213,14 +1213,12 @@
                     // Toggle selection
                     toggleSelection(pillData.id);
                 } else {
-                    // Normal click - clear selection and position cursor after this pill
-                    // Find pill position
-                    const pillPosition = findPillPosition(pillData.id);
-                    if (pillPosition) {
-                        // Clear any existing selection and selection anchor
-                        CursorManager.clearSelection();
-                        // Position cursor after this pill
-                        setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
+                    // Normal click - select this pill (clearing any existing selection)
+                    selectSingle(pillData.id);
+                    
+                    // If we had a selection anchor from shift+arrow, clear it
+                    if (CursorManager.selectionAnchor !== null) {
+                        CursorManager.selectionAnchor = null;
                     }
                 }
             }
