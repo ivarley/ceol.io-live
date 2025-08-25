@@ -854,6 +854,7 @@
 <script src="/static/js/components/autoSave.js"></script>
 <script src="/static/js/components/stateManager.js"></script>
 <script src="/static/js/components/cursorManager.js"></script>
+<script src="/static/js/components/pillRenderer.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -938,6 +939,21 @@
                 renderTunePills: () => renderTunePills()
             });
             
+            // Initialize PillRenderer
+            PillRenderer.initialize({
+                getStateManager: () => StateManager,
+                getCursorManager: () => CursorManager,
+                getAutoSaveManager: () => AutoSaveManager
+            });
+            
+            // Register callbacks that PillRenderer needs
+            PillRenderer.registerCallbacks({
+                cleanupDragGhosts: () => cleanupDragGhosts(),
+                createHorizontalDropZone: (setIndex) => createHorizontalDropZone(setIndex),
+                setupPillEventListeners: (pillElement, pillData) => setupPillEventListeners(pillElement, pillData),
+                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard)
+            });
+            
             // Convert server-side tune sets data to pills format
             const initialTuneSets = {{ tune_sets|tojson }};
             convertTuneSetsToPills(initialTuneSets, true); // Skip callback during initialization
@@ -986,143 +1002,14 @@
     }
     
     // Render tune pills in the container
+    // Pill rendering functionality - delegated to PillRenderer module
     function renderTunePills() {
-        
-        // Check for data changes before rendering (safety net)
-        AutoSaveManager.forceCheckChanges();
-        
-        // Clean up any lingering drag ghosts before re-rendering
-        cleanupDragGhosts();
-        
-        const container = document.getElementById('tune-pills-container');
-        
-        // Remember if the container was contentEditable before clearing (for mobile keyboard persistence)
-        const wasContentEditable = container.contentEditable === 'true';
-        const wasFocused = document.activeElement === container;
-        
-        container.innerHTML = '';
-        
-        // If we were contentEditable, restore it immediately after clearing
-        if (wasContentEditable) {
-            container.contentEditable = 'true';
-            container.inputMode = 'text';
-        }
-        
-        if (tunePillsData.length === 0) {
-            container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
-            
-            // Add a cursor position for empty container
-            const emptyPos = document.createElement('span');
-            emptyPos.className = 'cursor-position';
-            emptyPos.dataset.setIndex = '0';
-            emptyPos.dataset.pillIndex = '0';
-            emptyPos.dataset.positionType = 'newset';
-            emptyPos.style.position = 'absolute';
-            emptyPos.style.top = '50%';
-            emptyPos.style.left = '50%';
-            emptyPos.style.transform = 'translate(-50%, -50%)';
-            
-            emptyPos.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCursorPosition(0, 0, 'newset');
-            });
-            
-            container.appendChild(emptyPos);
-            
-            // Set initial cursor position
-            setCursorPosition(0, 0, 'newset');
-            return;
-        }
-        
-        tunePillsData.forEach((tuneSet, setIndex) => {
-            // Add horizontal drop zone before each set (except the first one)
-            if (setIndex > 0) {
-                const dropZone = createHorizontalDropZone(setIndex);
-                container.appendChild(dropZone);
-            }
-            
-            const setDiv = document.createElement('div');
-            setDiv.className = 'tune-set';
-            setDiv.dataset.setIndex = setIndex;
-            
-            // Handle empty sets (especially temporary ones)
-            if (tuneSet.length === 0) {
-                // Add cursor position for empty set
-                addCursorPosition(setDiv, setIndex, 0, 'before');
-                
-                // Add some minimal height so the empty set is visible
-                setDiv.style.minHeight = '25px';
-            }
-            
-            tuneSet.forEach((pill, pillIndex) => {
-                // Add cursor position before first pill only
-                if (pillIndex === 0) {
-                    addCursorPosition(setDiv, setIndex, pillIndex, 'before');
-                }
-                
-                const pillElement = createPillElement(pill, setIndex, pillIndex);
-                setDiv.appendChild(pillElement);
-                
-                // Add cursor position after each pill (this becomes the "before" position for next pill)
-                addCursorPosition(setDiv, setIndex, pillIndex, 'after');
-                
-                // Add spacing between pills
-                if (pillIndex < tuneSet.length - 1) {
-                    const spacer = document.createElement('span');
-                    spacer.textContent = ' ';
-                    setDiv.appendChild(spacer);
-                }
-            });
-            
-            container.appendChild(setDiv);
-        });
-        
-        // Add final cursor position at the end
-        addFinalCursor(container);
-        
-        // Set default cursor position at the end if none exists
-        if (!cursorPosition) {
-            setCursorPosition(tunePillsData.length, 0, 'newset');
-        } else {
-            // Restore cursor position after re-render
-            // Pass maintainKeyboard flag if we were contentEditable before
-            setCursorPosition(cursorPosition.setIndex, cursorPosition.pillIndex, cursorPosition.position, wasContentEditable);
-        }
-        
+        return PillRenderer.renderTunePills();
     }
     
-    // Create a pill element
+    // Create a pill element - delegated to PillRenderer module
     function createPillElement(pill, setIndex, pillIndex) {
-        const pillDiv = document.createElement('div');
-        pillDiv.className = `tune-pill ${pill.state}`;
-        pillDiv.dataset.pillId = pill.id;
-        pillDiv.dataset.setIndex = setIndex;
-        pillDiv.dataset.pillIndex = pillIndex;
-        pillDiv.draggable = true;
-        
-        // Add chevron
-        const chevron = document.createElement('div');
-        chevron.className = 'chevron';
-        pillDiv.appendChild(chevron);
-        
-        // Add text
-        const text = document.createElement('span');
-        text.className = 'text';
-        text.textContent = pill.tuneName;
-        pillDiv.appendChild(text);
-        
-        // Add loading spinner if pill is in loading state
-        if (pill.state === 'loading') {
-            const spinner = document.createElement('span');
-            spinner.className = 'loading-spinner';
-            pillDiv.appendChild(spinner);
-        }
-        
-        // Add event listeners
-        setupPillEventListeners(pillDiv, pill);
-        
-        return pillDiv;
+        return PillRenderer.createPillElement(pill, setIndex, pillIndex);
     }
     
     // Add cursor position markers
