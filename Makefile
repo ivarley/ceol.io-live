@@ -38,7 +38,7 @@ setup-test-db:
 
 # Testing targets
 test:
-	pytest -v
+	pytest
 
 test-unit:
 	pytest tests/unit/ -v -m unit

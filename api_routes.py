@@ -1,10 +1,8 @@
 from flask import request, jsonify, session
 import requests
 import re
-from datetime import datetime
 from flask_login import login_required
 from database import get_db_connection, save_to_history, find_matching_tune, normalize_apostrophes
-from auth import User
 from email_utils import send_email_via_sendgrid
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
@@ -79,7 +77,7 @@ def update_session_ajax(session_path):
         
         # Save to history before making changes
         user_id = session.get('user_id')
-        save_to_history(cur, 'session', 'UPDATE', session_id, user_id)
+        save_to_history(cur, 'session', 'UPDATE', session_id, str(user_id) if user_id else 'system')
         
         # Prepare the update query
         update_fields = []
@@ -269,6 +267,8 @@ def get_session_tune_aliases(session_path, tune_id):
 
 def add_session_tune_alias(session_path, tune_id):
     """Add a new alias for a tune in a session"""
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     alias = request.json.get('alias', '').strip()
     if not alias:
         return jsonify({'success': False, 'message': 'Please enter an alias'})
@@ -324,6 +324,8 @@ def add_session_tune_alias(session_path, tune_id):
         ''', (session_id, tune_id, normalized_alias))
         
         result = cur.fetchone()
+        if not result:
+            return jsonify({'success': False, 'message': 'Failed to create alias'})
         new_id, created_date = result
         
         conn.commit()
@@ -396,6 +398,8 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
 
 
 def add_session_instance_ajax(session_path):
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     date = request.json.get('date', '').strip()
     location = request.json.get('location', '').strip() if request.json.get('location') else None
     comments = request.json.get('comments', '').strip() if request.json.get('comments') else None
@@ -465,6 +469,8 @@ def add_session_instance_ajax(session_path):
 
 
 def update_session_instance_ajax(session_path, date):
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     new_date = request.json.get('date', '').strip()
     location = request.json.get('location', '').strip() if request.json.get('location') else None
     comments = request.json.get('comments', '').strip() if request.json.get('comments') else None
@@ -553,7 +559,8 @@ def get_session_tune_count_ajax(session_path, date):
             WHERE s.path = %s AND si.date = %s
         ''', (session_path, date))
         
-        tune_count = cur.fetchone()[0]
+        result = cur.fetchone()
+        tune_count = result[0] if result else 0
         
         cur.close()
         conn.close()
@@ -740,6 +747,8 @@ def mark_session_log_incomplete_ajax(session_path, date):
 
 
 def check_existing_session_ajax():
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     session_id = request.json.get('session_id')
     if not session_id:
         return jsonify({'success': False, 'message': 'Session ID is required'})
@@ -765,6 +774,8 @@ def check_existing_session_ajax():
 
 
 def search_sessions_ajax():
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     search_query = request.json.get('query')
     if not search_query:
         return jsonify({'success': False, 'message': 'Search query is required'})
@@ -821,6 +832,8 @@ def search_sessions_ajax():
 
 
 def fetch_session_data_ajax():
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     session_id = request.json.get('session_id')
     if not session_id:
         return jsonify({'success': False, 'message': 'Session ID is required'})
@@ -867,6 +880,8 @@ def fetch_session_data_ajax():
 
 def add_session_ajax():
     data = request.json
+    if not data:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     
     # Validate required fields
     required_fields = ['name', 'path', 'city', 'state', 'country']
@@ -939,6 +954,8 @@ def add_session_ajax():
 
 
 def add_tune_ajax(session_path, date):
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     tune_names_input = request.json.get('tune_name', '').strip()
     if not tune_names_input:
         return jsonify({'success': False, 'message': 'Please enter tune name(s)'})
@@ -1161,6 +1178,8 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
 
 
 def link_tune_ajax(session_path, date):
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     tune_input = request.json.get('tune_id', '').strip()
     tune_name = normalize_apostrophes(request.json.get('tune_name', '').strip())
     order_number = request.json.get('order_number')
@@ -1783,6 +1802,8 @@ def add_tunes_to_set_ajax(session_path, date):
 
 
 def edit_tune_ajax(session_path, date):
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     order_number = request.json.get('order_number')
     new_name = normalize_apostrophes(request.json.get('new_name', '').strip())
     original_name = request.json.get('original_name', '').strip()
@@ -2624,7 +2645,10 @@ def create_new_person():
                 RETURNING person_id
             ''', (first_name, last_name, email, sms_number, city, state, country, thesession_user_id))
             
-            person_id = cur.fetchone()[0]
+            result = cur.fetchone()
+            if not result:
+                return jsonify({'success': False, 'message': 'Failed to create person'})
+            person_id = result[0]
             
             # Add to session if specified
             if session_id:
@@ -2855,6 +2879,8 @@ def match_tune_ajax(session_path, date):
     Used by the beta tune pill editor for auto-matching typed text.
     Returns either a single exact match or up to 5 possible matches with wildcard search.
     """
+    if not request.json:
+        return jsonify({'success': False, 'message': 'No JSON data provided'})
     tune_name = normalize_apostrophes(request.json.get('tune_name', '').strip())
     previous_tune_type = request.json.get('previous_tune_type', None)  # For preferencing matching tune types in sets
     if not tune_name:
@@ -2985,14 +3011,29 @@ def test_match_tune_ajax(session_path, date):
     if not tune_name:
         return jsonify({'success': False, 'message': 'Please provide a tune_name query parameter'})
     
-    # Create a fake POST request data
-    request.json = {
-        'tune_name': tune_name,
-        'previous_tune_type': previous_tune_type
-    }
-    
-    # Call the actual match_tune_ajax function
-    return match_tune_ajax(session_path, date)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get the session_id from the session_path and date  
+        cur.execute('SELECT session_id FROM session WHERE path = %s', (session_path,))
+        session_result = cur.fetchone()
+        
+        if not session_result:
+            return jsonify({'success': False, 'message': 'Session not found'})
+        
+        session_id = session_result[0]
+        
+        # Use find_matching_tune from database module
+        result = find_matching_tune(cur, tune_name, previous_tune_type, session_id)
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @login_required
 def save_session_instance_tunes_ajax(session_path, date):
@@ -3073,6 +3114,8 @@ def save_session_instance_tunes_ajax(session_path, date):
             
             # Process updates/inserts
             for new_tune in new_tunes:
+                if not new_tune:
+                    continue
                 order_num = new_tune['order_number']
                 
                 if order_num in existing_dict:
@@ -3100,7 +3143,10 @@ def save_session_instance_tunes_ajax(session_path, date):
                         RETURNING session_instance_tune_id
                     ''', (session_instance_id, order_num, new_tune['tune_id'], new_tune['name'], new_tune['continues_set']))
                     
-                    new_id = cur.fetchone()[0]
+                    result = cur.fetchone()
+                    if not result:
+                        continue
+                    new_id = result[0]
                     save_to_history(cur, 'session_instance_tune', 'INSERT', new_id)
                     modifications += 1
             

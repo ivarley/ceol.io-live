@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 # Import our custom modules
 from auth import User
-from database import get_db_connection
 from api_routes import *
 from web_routes import *
 from timezone_utils import format_datetime_with_timezone, utc_to_local
@@ -24,7 +23,7 @@ app.url_map.strict_slashes = False
 # Configure Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login'  # type: ignore
 login_manager.login_message = 'Please log in to access this page.'
 
 @login_manager.user_loader
@@ -204,7 +203,7 @@ def render_error_page(message, status_code=400):
                          funny_image=funny_image), status_code
 
 @app.errorhandler(404)
-def not_found_error(error):
+def not_found_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
     return render_template('error.html', 
                          error_message="Page not found. The session you're looking for might have ended, or the URL might be incorrect.",
@@ -212,7 +211,7 @@ def not_found_error(error):
                          funny_image=funny_image), 404
 
 @app.errorhandler(403) 
-def forbidden_error(error):
+def forbidden_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
     return render_template('error.html',
                          error_message="You don't have permission to access this page. You might need to log in or contact an admin.",
@@ -220,7 +219,7 @@ def forbidden_error(error):
                          funny_image=funny_image), 403
 
 @app.errorhandler(401)
-def unauthorized_error(error):
+def unauthorized_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
     return render_template('error.html',
                          error_message="You must be logged in to access this page. Please log in and try again.",
@@ -228,7 +227,7 @@ def unauthorized_error(error):
                          funny_image=funny_image), 401
 
 @app.errorhandler(500)
-def internal_error(error):
+def internal_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
     return render_template('error.html',
                          error_message="A server error occurred. Our team has been notified and will look into this issue.",

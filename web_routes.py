@@ -38,7 +38,8 @@ def home():
                 FROM session_instance
                 WHERE session_id = %s
             ''', (session_id,))
-            total_instances = cur.fetchone()[0]
+            result = cur.fetchone()
+            total_instances = result[0] if result else 0
             
             # Get the 3 most recent instances
             cur.execute('''
@@ -256,7 +257,8 @@ def session_tune_info(session_path, tune_id):
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
             WHERE si.session_id = %s AND sit.tune_id = %s
         ''', (session_id, tune_id))
-        play_count = cur.fetchone()[0]
+        result = cur.fetchone()
+        play_count = result[0] if result else 0
         
         # Get session instances where this tune was played
         cur.execute('''
@@ -577,7 +579,11 @@ def register():
                 VALUES (%s, %s, %s)
                 RETURNING person_id
             ''', (first_name, last_name, email))
-            person_id = cur.fetchone()[0]
+            result = cur.fetchone()
+            if not result:
+                flash('Failed to create person record', 'error')
+                return redirect(url_for('register'))
+            person_id = result[0]
             
             # Create user record (unverified)
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -590,7 +596,11 @@ def register():
                 VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s)
                 RETURNING user_id
             ''', (person_id, username, email, hashed_password, timezone, verification_token, verification_expires))
-            user_id = cur.fetchone()[0]
+            result = cur.fetchone()
+            if not result:
+                flash('Failed to create user account', 'error')
+                return redirect(url_for('register'))
+            user_id = result[0]
             
             conn.commit()
             
@@ -910,7 +920,7 @@ def change_password():
         
         # Get current user with hashed password
         user = User.get_by_username(current_user.username)
-        if not user.check_password(current_password):
+        if not user or not user.check_password(current_password):
             flash('Current password is incorrect.', 'error')
             return render_template('auth/change_password.html')
         
@@ -1138,7 +1148,8 @@ def admin_login_history():
             WHERE {where_clause}
         '''
         cur.execute(count_query, params)
-        total_count = cur.fetchone()[0]
+        result = cur.fetchone()
+        total_count = result[0] if result else 0
         
         # Get login history with user details
         query = f'''

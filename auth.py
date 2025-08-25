@@ -1,11 +1,10 @@
-import os
 import secrets
 import bcrypt
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from flask_login import UserMixin
 from database import get_db_connection
-from timezone_utils import migrate_legacy_timezone, now_utc
+from timezone_utils import now_utc
 
 # Session configuration
 SESSION_LIFETIME_WEEKS = 6
@@ -26,6 +25,7 @@ class User(UserMixin):
         self.timezone = timezone
         self.email_verified = email_verified
         self.auto_save_tunes = auto_save_tunes
+        self.hashed_password = None  # Will be set when loading from database
 
     @property
     def is_active(self):
@@ -79,7 +79,7 @@ class User(UserMixin):
                 WHERE ua.username = %s
             ''', (username,))
             user_data = cur.fetchone()
-            if user_data:
+            if user_data and len(user_data) >= 12:
                 user = User(
                     user_id=user_data[0],
                     person_id=user_data[1],
@@ -100,6 +100,8 @@ class User(UserMixin):
             conn.close()
 
     def check_password(self, password):
+        if not self.hashed_password:
+            return False
         return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
 
     @staticmethod
@@ -113,7 +115,10 @@ class User(UserMixin):
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING user_id
             ''', (person_id, username, user_email, hashed_password, timezone))
-            user_id = cur.fetchone()[0]
+            result = cur.fetchone()
+            if not result:
+                return None
+            user_id = result[0]
             conn.commit()
             return user_id
         finally:
