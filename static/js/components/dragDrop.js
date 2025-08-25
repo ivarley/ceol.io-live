@@ -68,10 +68,10 @@ class DragDrop {
             e.preventDefault();
             e.stopPropagation();
             
-            // Clear any current selection
+            // Clear selection and selection anchor when clicking to move cursor
             this.clearSelection();
             
-            setCursorPosition(insertAtSetIndex, 0, 'newset');
+            this.setCursorPosition(insertAtSetIndex, 0, 'newset');
         });
         
         // Drag and drop handlers
