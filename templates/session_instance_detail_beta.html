@@ -936,10 +936,16 @@
             
             // Register callbacks that CursorManager needs
             CursorManager.registerCallbacks({
-                finishTyping: () => finishTyping(),
+                finishTyping: (keepKeyboard) => finishTyping(keepKeyboard),
                 removeTemporaryEmptySet: () => removeTemporaryEmptySet(),
-                renderTunePills: () => renderTunePills()
+                renderTunePills: () => renderTunePills(),
+                handleTextInput: (char) => handleTextInput(char),
+                handleBackspace: () => handleBackspace()
             });
+            
+            // Set typing-related variables that CursorManager needs access to
+            CursorManager.typingBuffer = () => typingBuffer;
+            CursorManager.isKeepingKeyboardOpen = () => isKeepingKeyboardOpen;
             
             // Initialize PillRenderer
             PillRenderer.initialize({
@@ -1045,163 +1051,8 @@
         return CursorManager.isMobileDevice();
     }
 
-    // Set cursor position and show visual cursor - original implementation
-    function setCursorPositionOriginal(setIndex, pillIndex, positionType, maintainKeyboard = false) {
-        
-        cursorPosition = { setIndex, pillIndex, position: positionType };
-        
-        // Always remove existing cursors before creating new one
-        // The cursor should always be visible, whether in selection mode or not
-        const hasSelection = CursorManager.selectionAnchor !== null;
-        console.log('setCursorPositionOriginal: hasSelection =', hasSelection, 'position =', {setIndex, pillIndex, positionType});
-        
-        // Remove all existing cursors so we can place the new one
-        document.querySelectorAll('.text-cursor').forEach(cursor => cursor.remove());
-        
-        // Add cursor at the specified position
-        const selector = `.cursor-position[data-set-index="${setIndex}"][data-pill-index="${pillIndex}"][data-position-type="${positionType}"]`;
-        const cursorElements = document.querySelectorAll(selector);
-        
-        console.log('setCursorPositionOriginal: Adding cursor, selector =', selector, 'found elements:', cursorElements.length);
-        
-        if (cursorElements.length > 0) {
-            const cursor = document.createElement('div');
-            cursor.className = 'text-cursor';
-            cursor.id = 'active-cursor';
-            cursorElements[0].appendChild(cursor);
-            console.log('setCursorPositionOriginal: Added cursor to cursor-position element');
-            console.log('  Cursor element:', cursor);
-            console.log('  Cursor parent:', cursorElements[0]);
-            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
-            
-            // Check if cursor is still there after a short delay
-            setTimeout(() => {
-                const stillThere = document.getElementById('active-cursor');
-                console.log('setCursorPositionOriginal: Cursor still in DOM after 100ms:', stillThere);
-                if (stillThere) {
-                    console.log('  Cursor parent after delay:', stillThere.parentNode);
-                    console.log('  Cursor computed style display:', getComputedStyle(stillThere).display);
-                    console.log('  Cursor computed style visibility:', getComputedStyle(stillThere).visibility);
-                }
-            }, 100);
-            
-            // Only scroll cursor into view for user-initiated actions (not after drag/drop)
-            // Skip scrolling to prevent unwanted view changes after move operations
-        } else {
-            // Fallback - add cursor at the end
-            const cursor = document.createElement('div');
-            cursor.className = 'text-cursor';
-            cursor.id = 'active-cursor';
-            document.getElementById('tune-pills-container').appendChild(cursor);
-            console.log('setCursorPositionOriginal: Added cursor to container (fallback)');
-            console.log('  Cursor element:', cursor);
-            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
-        }
-        
-        // Focus the container for keyboard input
-        const container = document.getElementById('tune-pills-container');
-        
-        // On mobile devices, make container contenteditable to trigger keyboard
-        if (isMobileDevice()) {
-            // Check if contentEditable is already true (keyboard already open)
-            const wasAlreadyEditable = container.contentEditable === 'true';
-            
-            // Make the container contenteditable temporarily
-            container.contentEditable = 'true';
-            container.inputMode = 'text';
-            
-            // Focus - with special handling for maintaining keyboard
-            if (maintainKeyboard) {
-                // When maintaining keyboard, always focus to keep it visible
-                container.focus();
-                
-                // Add a delayed re-focus attempt for stubborn mobile browsers
-                setTimeout(() => {
-                    if (container.contentEditable === 'true') {
-                        container.focus();
-                    }
-                }, 100);
-            } else {
-                // Normal focus for new keyboard activation
-                container.focus();
-            }
-            
-            // Place the selection at the cursor position
-            const selection = window.getSelection();
-            const range = document.createRange();
-            
-            // Try to position the caret near the cursor element
-            const cursorElement = document.getElementById('active-cursor');
-            if (cursorElement && cursorElement.parentNode) {
-                range.setStartBefore(cursorElement);
-                range.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            }
-            
-            // Handle input on the contenteditable container
-            if (!container.hasAttribute('data-mobile-input-setup')) {
-                container.setAttribute('data-mobile-input-setup', 'true');
-                
-                // Prevent default contenteditable behavior
-                container.addEventListener('beforeinput', (e) => {
-                    e.preventDefault();
-                    
-                    if (e.inputType === 'insertText' && e.data) {
-                        // Handle text input
-                        for (let char of e.data) {
-                            if (char === ',' || char === ';') {
-                                finishTyping();
-                            } else {
-                                handleTextInput(char);
-                            }
-                        }
-                    } else if (e.inputType === 'deleteContentBackward') {
-                        // Handle backspace
-                        handleBackspace();
-                    } else if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
-                        // Handle enter key - keep keyboard open for continued typing
-                        e.preventDefault();
-                        
-                        // Store that we want to keep keyboard open
-                        const shouldKeepKeyboard = isTyping && typingBuffer.trim();
-                        
-                        finishTyping(shouldKeepKeyboard);
-                    }
-                });
-                
-                // Prevent any actual content changes to the container
-                container.addEventListener('input', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                });
-                
-                // Clean up on blur
-                container.addEventListener('blur', (e) => {
-                    // Only remove contenteditable if we're really blurring
-                    setTimeout(() => {
-                        const activeEl = document.activeElement;
-                        if (activeEl !== container && !container.contains(activeEl)) {
-                            // Don't interfere if we're intentionally keeping keyboard open
-                            if (!isKeepingKeyboardOpen) {
-                                container.contentEditable = 'false';
-                                if (isTyping && typingBuffer.trim()) {
-                                    finishTyping();
-                                }
-                            }
-                        }
-                    }, 100);
-                });
-            }
-        } else {
-            // Desktop behavior - just focus normally
-            container.focus();
-        }
-    }
     
-    // Expose original function globally and create CursorManager wrapper
-    window.setCursorPositionOriginal = setCursorPositionOriginal;
-    
+    // Create CursorManager wrapper 
     function setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
         return CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard);
     }
@@ -2590,6 +2441,7 @@
         
         // Paste at current cursor position if available, otherwise at the end
         let position;
+        const cursorPosition = CursorManager.getCursorPosition();
         if (cursorPosition) {
             position = {
                 setIndex: cursorPosition.setIndex,
@@ -2848,6 +2700,7 @@
         
         // Find the previous tune type if we're in a set
         let previousTuneType = null;
+        const cursorPosition = CursorManager.getCursorPosition();
         if (cursorPosition) {
             const { setIndex, pillIndex, position } = cursorPosition;
             console.log(`Finding previous tune type - cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
@@ -3039,7 +2892,8 @@
         if (isTyping && typingBuffer.length > 0) {
             typingBuffer = typingBuffer.slice(0, -1);
             CursorManager.updateCursorWithText();
-        } else if (cursorPosition && !isTyping) {
+        } else if (CursorManager.getCursorPosition() && !isTyping) {
+            const cursorPosition = CursorManager.getCursorPosition();
             const { setIndex, pillIndex, position } = cursorPosition;
             
             // Special case: At the beginning of an empty line (after deleting leftmost tune)
@@ -3103,6 +2957,7 @@
             return;
         }
         
+        const cursorPosition = CursorManager.getCursorPosition();
         if (!cursorPosition || isTyping) return;
         
         const { setIndex, pillIndex, position } = cursorPosition;
@@ -3242,6 +3097,7 @@
     }
     
     function handleEnterKey() {
+        const cursorPosition = CursorManager.getCursorPosition();
         if (!cursorPosition) return;
         
         const { setIndex, pillIndex, position } = cursorPosition;
@@ -3467,28 +3323,6 @@
         updateSelectionDisplay();
     }
     
-    function getPillsFromCursorPosition(cursorPos) {
-        // Convert a cursor position to the pills it represents
-        const { setIndex, pillIndex, position } = cursorPos;
-        
-        if (position === 'newset' || setIndex >= tunePillsData.length || tunePillsData[setIndex].length === 0) {
-            return [];
-        }
-        
-        if (position === 'before') {
-            // Before a pill means we include that pill
-            if (pillIndex < tunePillsData[setIndex].length) {
-                return [{ setIndex, pillIndex }];
-            }
-        } else if (position === 'after') {
-            // After a pill means we include that pill
-            if (pillIndex >= 0 && pillIndex < tunePillsData[setIndex].length) {
-                return [{ setIndex, pillIndex }];
-            }
-        }
-        
-        return [];
-    }
     
     function findPillIndex(allPills, pillPos) {
         if (!pillPos) return -1;
@@ -3501,80 +3335,13 @@
         return -1;
     }
     
-    function updateCursorWithTextOriginal() {
-        // Find the active cursor element
-        const activeCursor = document.getElementById('active-cursor');
-        if (!activeCursor) return;
-        
-        if (isTyping && typingBuffer) {
-            // On first keystroke, capture the typing context
-            if (!typingContext) {
-                const cursorPosition = activeCursor.parentNode;
-                const tuneSet = cursorPosition?.parentNode;
-                
-                if (tuneSet && tuneSet.classList.contains('tune-set')) {
-                    typingContext = {
-                        tuneSet: tuneSet,
-                        insertionPoint: cursorPosition.nextSibling
-                    };
-                } else {
-                    // Fallback context
-                    typingContext = {
-                        tuneSet: cursorPosition?.parentNode,
-                        insertionPoint: cursorPosition?.nextSibling
-                    };
-                }
-            }
-            
-            // Remove any existing typing display and cursor
-            document.querySelectorAll('.typing-text').forEach(el => el.remove());
-            activeCursor.remove();
-            
-            // Create typing text
-            const textSpan = document.createElement('span');
-            textSpan.className = 'typing-text';
-            
-            // Simple styling that behaves like natural text
-            textSpan.style.color = 'var(--primary)';
-            textSpan.style.backgroundColor = 'rgba(0, 123, 255, 0.1)';
-            textSpan.style.padding = '1px 3px';
-            textSpan.style.borderRadius = '3px';
-            textSpan.style.fontWeight = 'normal';
-            textSpan.style.fontStyle = 'normal';
-            textSpan.style.display = 'inline';
-            textSpan.style.whiteSpace = 'nowrap';
-            textSpan.textContent = typingBuffer;
-            
-            // Create new cursor
-            const newCursor = document.createElement('div');
-            newCursor.className = 'text-cursor';
-            newCursor.id = 'active-cursor';
-            
-            // Insert both text and cursor using stable context
-            if (typingContext && typingContext.tuneSet) {
-                typingContext.tuneSet.insertBefore(textSpan, typingContext.insertionPoint);
-                typingContext.tuneSet.insertBefore(newCursor, textSpan.nextSibling);
-            } else {
-                // Emergency fallback
-                console.error('No typing context available!');
-            }
-            
-            // Debug the actual layout
-        } else {
-            // Remove any typing text display and reset context
-            document.querySelectorAll('.typing-text').forEach(el => el.remove());
-            typingContext = null;
-        }
-    }
-    
-    // Expose original function globally and create CursorManager wrapper
-    window.updateCursorWithTextOriginal = updateCursorWithTextOriginal;
     
     function updateCursorWithText() {
         return CursorManager.updateCursorWithText();
     }
     
     function insertTunesAtCursor(tuneNames, keepKeyboardOpen = false) {
+        const cursorPosition = CursorManager.getCursorPosition();
         if (!cursorPosition || tuneNames.length === 0) return;
         
         // If we're adding tunes to a temporary empty set, make it permanent
@@ -3893,6 +3660,7 @@
     }
     
     function deleteTuneAtCursor() {
+        const cursorPosition = CursorManager.getCursorPosition();
         if (!cursorPosition) return;
         
         const { setIndex, pillIndex, position } = cursorPosition;
@@ -4484,14 +4252,14 @@
             }
             
             // Handle typing at cursor position
-            if (!e.ctrlKey && !e.metaKey && cursorPosition && e.key.length === 1) {
+            if (!e.ctrlKey && !e.metaKey && CursorManager.getCursorPosition() && e.key.length === 1) {
                 e.preventDefault();
                 handleTextInput(e.key);
                 return;
             }
             
             // Handle special keys for typing
-            if (cursorPosition && !e.ctrlKey && !e.metaKey) {
+            if (CursorManager.getCursorPosition() && !e.ctrlKey && !e.metaKey) {
                 switch(e.key) {
                     case 'Backspace':
                         e.preventDefault();
