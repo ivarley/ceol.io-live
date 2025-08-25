@@ -959,7 +959,8 @@
                 cleanupDragGhosts: () => cleanupDragGhosts(),
                 createHorizontalDropZone: (setIndex) => createHorizontalDropZone(setIndex),
                 setupPillEventListeners: (pillElement, pillData) => setupPillEventListeners(pillElement, pillData),
-                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard)
+                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
+                clearSelection: () => CursorManager.clearSelection()
             });
             
             // Initialize PillSelection
@@ -1074,6 +1075,10 @@
         dropZone.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Clear selection and selection anchor when clicking to move cursor
+            CursorManager.clearSelection();
+            
             setCursorPosition(insertAtSetIndex, 0, 'newset');
         });
         
@@ -1208,8 +1213,15 @@
                     // Toggle selection
                     toggleSelection(pillData.id);
                 } else {
-                    // Single selection
-                    selectSingle(pillData.id);
+                    // Normal click - clear selection and position cursor after this pill
+                    // Find pill position
+                    const pillPosition = findPillPosition(pillData.id);
+                    if (pillPosition) {
+                        // Clear any existing selection and selection anchor
+                        CursorManager.clearSelection();
+                        // Position cursor after this pill
+                        setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
+                    }
                 }
             }
             e.preventDefault();
@@ -4107,9 +4119,8 @@
                     finishTyping();
                 }
                 
-                // Clear selection when clicking to move cursor
-                selectedPills.clear();
-                updateSelectionDisplay();
+                // Clear selection and selection anchor when clicking to move cursor
+                CursorManager.clearSelection();
                 
                 setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
                 return;
@@ -4122,9 +4133,8 @@
                 finishTyping();
             }
             
-            // Clear selection when clicking to move cursor
-            selectedPills.clear();
-            updateSelectionDisplay();
+            // Clear selection and selection anchor when clicking to move cursor
+            CursorManager.clearSelection();
             
             setCursorPosition(tunePillsData.length, 0, 'newset');
         });

@@ -83,6 +83,10 @@ class CursorManager {
         finalPos.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Clear selection when clicking to move cursor
+            this.clearSelection();
+            
             this.setCursorPosition(tunePillsData.length, 0, 'newset');
         });
         

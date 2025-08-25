@@ -14,6 +14,7 @@ class PillRenderer {
     static createHorizontalDropZone = null;
     static setupPillEventListeners = null;
     static setCursorPosition = null;
+    static clearSelection = null;
     
     static initialize(options = {}) {
         this.getStateManager = options.getStateManager || (() => window.StateManager);
@@ -101,6 +102,12 @@ class PillRenderer {
         emptyPos.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Clear selection and selection anchor when clicking to move cursor
+            if (this.clearSelection) {
+                this.clearSelection();
+            }
+            
             if (this.setCursorPosition) {
                 this.setCursorPosition(0, 0, 'newset');
             }
@@ -200,6 +207,12 @@ class PillRenderer {
         cursorPos.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Clear selection and selection anchor when clicking to move cursor
+            if (this.clearSelection) {
+                this.clearSelection();
+            }
+            
             if (this.setCursorPosition) {
                 this.setCursorPosition(setIndex, pillIndex, positionType);
             }
@@ -228,6 +241,12 @@ class PillRenderer {
         finalPos.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            
+            // Clear selection and selection anchor when clicking to move cursor
+            if (this.clearSelection) {
+                this.clearSelection();
+            }
+            
             if (this.setCursorPosition) {
                 this.setCursorPosition(tunePillsData.length, 0, 'newset');
             }
@@ -251,6 +270,7 @@ class PillRenderer {
         this.createHorizontalDropZone = callbacks.createHorizontalDropZone;
         this.setupPillEventListeners = callbacks.setupPillEventListeners;
         this.setCursorPosition = callbacks.setCursorPosition;
+        this.clearSelection = callbacks.clearSelection;
     }
 }
 
