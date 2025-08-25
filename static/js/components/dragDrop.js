@@ -17,6 +17,7 @@ class DragDrop {
     static pasteAtPosition = null;
     static saveToUndo = null;
     static showContextMenu = null;
+    static hideContextMenu = null;
     static applyLandingAnimation = null;
     static setCursorPosition = null;
     static clearSelection = null;
@@ -183,10 +184,19 @@ class DragDrop {
             const isChevronArea = clickX <= 30; // Chevron area is approximately 30px
             
             if (isChevronArea) {
-                // Clicked on chevron - show context menu
+                // Clicked on chevron - toggle context menu
                 e.preventDefault();
                 e.stopPropagation();
-                this.showContextMenu(e, pillData);
+                
+                // Check if menu is already open for this pill
+                const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
+                if (existingMenu) {
+                    // Menu is open, close it
+                    this.hideContextMenu(pillData.id);
+                } else {
+                    // Menu is closed, open it
+                    this.showContextMenu(e, pillData);
+                }
             } else {
                 // Clicked on tune name area - handle selection
                 e.preventDefault();
@@ -563,10 +573,19 @@ class DragDrop {
                 
                 if (!hasMoved) {
                     if (isChevronArea) {
-                        // Clicked on chevron - show context menu
+                        // Clicked on chevron - toggle context menu
                         e.preventDefault();
                         e.stopPropagation();
-                        this.showContextMenu(e, pillData);
+                        
+                        // Check if menu is already open for this pill
+                        const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
+                        if (existingMenu) {
+                            // Menu is open, close it
+                            this.hideContextMenu(pillData.id);
+                        } else {
+                            // Menu is closed, open it
+                            this.showContextMenu(e, pillData);
+                        }
                     } else if (touchDuration < 500) {
                         // Short tap on tune name area - handle selection
                         e.preventDefault();

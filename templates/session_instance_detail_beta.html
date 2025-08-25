@@ -982,6 +982,7 @@
                 pasteAtPosition: (dragData, position) => pasteAtPosition(dragData, position),
                 saveToUndo: () => saveToUndo(),
                 showContextMenu: (e, pillData) => showContextMenu(e, pillData),
+                hideContextMenu: (pillId) => hideContextMenu(pillId),
                 applyLandingAnimation: (movedPillIds) => applyLandingAnimation(movedPillIds),
                 setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
                 clearSelection: () => CursorManager.clearSelection()
