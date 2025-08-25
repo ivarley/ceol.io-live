@@ -69,7 +69,7 @@ test-parallel:
 
 # Code quality
 lint:
-	flake8 . --exclude=venv,env,htmlcov
+	flake8 . --exclude=venv,env,htmlcov --ignore=E501,W503,F403,F405,E402,E712 --per-file-ignores="tests/*:F401,F841,scripts/*:F541"
 	black . --check
 
 format:

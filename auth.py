@@ -11,8 +11,20 @@ SESSION_LIFETIME_WEEKS = 6
 
 
 class User(UserMixin):
-    def __init__(self, user_id, person_id, username, is_active=True, is_system_admin=False, 
-                 first_name='', last_name='', email='', timezone='UTC', email_verified=False, auto_save_tunes=False):
+    def __init__(
+        self,
+        user_id,
+        person_id,
+        username,
+        is_active=True,
+        is_system_admin=False,
+        first_name="",
+        last_name="",
+        email="",
+        timezone="UTC",
+        email_verified=False,
+        auto_save_tunes=False,
+    ):
         self.id = str(user_id)
         self.user_id = user_id
         self.person_id = person_id
@@ -40,13 +52,16 @@ class User(UserMixin):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute('''
+            cur.execute(
+                """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
                        ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.user_id = %s AND ua.is_active = TRUE
-            ''', (user_id,))
+            """,
+                (user_id,),
+            )
             user_data = cur.fetchone()
             if user_data:
                 return User(
@@ -60,7 +75,7 @@ class User(UserMixin):
                     first_name=user_data[7],
                     last_name=user_data[8],
                     email=user_data[9],
-                    auto_save_tunes=user_data[10] if len(user_data) > 10 else False
+                    auto_save_tunes=user_data[10] if len(user_data) > 10 else False,
                 )
             return None
         finally:
@@ -71,13 +86,16 @@ class User(UserMixin):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute('''
-                SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active, 
+            cur.execute(
+                """
+                SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
                        ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.username = %s
-            ''', (username,))
+            """,
+                (username,),
+            )
             user_data = cur.fetchone()
             if user_data and len(user_data) >= 12:
                 user = User(
@@ -91,7 +109,7 @@ class User(UserMixin):
                     first_name=user_data[8],
                     last_name=user_data[9],
                     email=user_data[10],
-                    auto_save_tunes=user_data[11] if len(user_data) > 11 else False
+                    auto_save_tunes=user_data[11] if len(user_data) > 11 else False,
                 )
                 user.hashed_password = user_data[3]
                 return user
@@ -102,19 +120,26 @@ class User(UserMixin):
     def check_password(self, password):
         if not self.hashed_password:
             return False
-        return bcrypt.checkpw(password.encode('utf-8'), self.hashed_password.encode('utf-8'))
+        return bcrypt.checkpw(
+            password.encode("utf-8"), self.hashed_password.encode("utf-8")
+        )
 
     @staticmethod
-    def create_user(username, password, person_id, timezone='UTC', user_email=None):
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    def create_user(username, password, person_id, timezone="UTC", user_email=None):
+        hashed_password = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute('''
+            cur.execute(
+                """
                 INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING user_id
-            ''', (person_id, username, user_email, hashed_password, timezone))
+            """,
+                (person_id, username, user_email, hashed_password, timezone),
+            )
             result = cur.fetchone()
             if not result:
                 return None
@@ -128,14 +153,17 @@ class User(UserMixin):
 def create_session(user_id, ip_address=None, user_agent=None):
     session_id = secrets.token_urlsafe(32)
     expires_at = now_utc() + timedelta(weeks=SESSION_LIFETIME_WEEKS)
-    
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('''
+        cur.execute(
+            """
             INSERT INTO user_session (session_id, user_id, expires_at, ip_address, user_agent)
             VALUES (%s, %s, %s, %s, %s)
-        ''', (session_id, user_id, expires_at, ip_address, user_agent))
+        """,
+            (session_id, user_id, expires_at, ip_address, user_agent),
+        )
         conn.commit()
         return session_id
     finally:
@@ -146,7 +174,7 @@ def cleanup_expired_sessions():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('DELETE FROM user_session WHERE expires_at < %s', (now_utc(),))
+        cur.execute("DELETE FROM user_session WHERE expires_at < %s", (now_utc(),))
         conn.commit()
     finally:
         conn.close()
@@ -156,11 +184,14 @@ def update_session_activity(session_id):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('''
-            UPDATE user_session 
-            SET last_accessed = %s 
+        cur.execute(
+            """
+            UPDATE user_session
+            SET last_accessed = %s
             WHERE session_id = %s AND expires_at > %s
-        ''', (now_utc(), session_id, now_utc()))
+        """,
+            (now_utc(), session_id, now_utc()),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -174,11 +205,19 @@ def generate_verification_token():
     return secrets.token_urlsafe(32)
 
 
-def log_login_event(user_id, username, event_type, ip_address=None, user_agent=None, 
-                   session_id=None, failure_reason=None, additional_data=None):
+def log_login_event(
+    user_id,
+    username,
+    event_type,
+    ip_address=None,
+    user_agent=None,
+    session_id=None,
+    failure_reason=None,
+    additional_data=None,
+):
     """
     Log login/logout events to the login_history table.
-    
+
     Args:
         user_id: User ID (can be None for failed logins)
         username: Username attempted
@@ -192,19 +231,28 @@ def log_login_event(user_id, username, event_type, ip_address=None, user_agent=N
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        
+
         # Convert additional_data to JSON if provided
         additional_data_json = json.dumps(additional_data) if additional_data else None
-        
-        cur.execute('''
+
+        cur.execute(
+            """
             INSERT INTO login_history (
                 user_id, username, event_type, ip_address, user_agent,
                 session_id, failure_reason, additional_data
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (
-            user_id, username, event_type, ip_address, user_agent,
-            session_id, failure_reason, additional_data_json
-        ))
+        """,
+            (
+                user_id,
+                username,
+                event_type,
+                ip_address,
+                user_agent,
+                session_id,
+                failure_reason,
+                additional_data_json,
+            ),
+        )
         conn.commit()
     except Exception as e:
         print(f"Failed to log login event: {str(e)}")
