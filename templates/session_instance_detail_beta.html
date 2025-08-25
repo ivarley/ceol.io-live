@@ -1227,13 +1227,13 @@
                         dropStructuredSetsAtNewPosition(dragData, insertAtSetIndex);
                     } else {
                         // Fallback to old method if drag data is invalid
-                        const draggedIds = Array.from(selectedPills);
+                        const draggedIds = Array.from(PillSelection.getSelectedPills());
                         const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
                         performDrop(position, draggedIds);
                     }
                 } catch (err) {
                     // Fallback to old method if drag data parsing fails
-                    const draggedIds = Array.from(selectedPills);
+                    const draggedIds = Array.from(PillSelection.getSelectedPills());
                     const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
                     performDrop(position, draggedIds);
                 }
@@ -1720,7 +1720,7 @@
                     
                     if (dropPosition) {
                         // Call the existing drop handler with correct parameters
-                        const draggedIds = Array.from(selectedPills);
+                        const draggedIds = Array.from(PillSelection.getSelectedPills());
                         performDrop(dropPosition, draggedIds);
                     }
                 }
@@ -1975,7 +1975,7 @@
         saveToUndo();
         
         // Remove dragged pills from their current positions (same logic as performDrop)
-        const draggedPillIds = Array.from(selectedPills);
+        const draggedPillIds = Array.from(PillSelection.getSelectedPills());
         const setsToRemove = new Set();
         
         
@@ -2019,6 +2019,9 @@
         } else {
             tunePillsData.splice(adjustedTargetIndex, 0, ...newSets);
         }
+        
+        // Update StateManager with the modified data
+        StateManager.setTunePillsData(tunePillsData);
         
         renderTunePills();
         
@@ -2097,6 +2100,9 @@
                 });
             }
         }
+        
+        // Update StateManager with the modified data
+        StateManager.setTunePillsData(tunePillsData);
         
         renderTunePills();
         
@@ -2447,8 +2453,8 @@
                     tunePillsData.splice(setIndex, 1);
                 }
                 
-                // Force check for changes after data modification
-                AutoSaveManager.forceCheckChanges();
+                // Update StateManager with the modified data
+                StateManager.setTunePillsData(tunePillsData);
                 
                 renderTunePills();
                 break;
@@ -2747,6 +2753,9 @@
             }, 50);
         }
         
+        // Update StateManager with the modified data
+        StateManager.setTunePillsData(tunePillsData);
+        
         renderTunePills();
     }
     
@@ -3021,6 +3030,9 @@
                 // Just remove the empty set and position cursor at end of previous set
                 tunePillsData.splice(setIndex, 1);
                 
+                // Update StateManager with the modified data
+                StateManager.setTunePillsData(tunePillsData);
+                
                 // Position cursor at end of previous set
                 renderTunePills();
                 if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
@@ -3044,6 +3056,9 @@
                 
                 // Remove the current set
                 tunePillsData.splice(setIndex, 1);
+                
+                // Update StateManager with the modified data
+                StateManager.setTunePillsData(tunePillsData);
                 
                 // Position cursor where the merge happened
                 renderTunePills();
@@ -3078,6 +3093,9 @@
             saveToUndo();
             tunePillsData.splice(setIndex, 1);
             
+            // Update StateManager with the modified data
+            StateManager.setTunePillsData(tunePillsData);
+            
             // Position cursor at end of previous set
             renderTunePills();
             if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
@@ -3102,6 +3120,9 @@
                 
                 // Remove the next set
                 tunePillsData.splice(setIndex + 1, 1);
+                
+                // Update StateManager with the modified data
+                StateManager.setTunePillsData(tunePillsData);
                 
                 // Keep cursor at end of original current set content
                 renderTunePills();
@@ -3207,6 +3228,9 @@
             tunePillsData.splice(newSetIndex, 0, []);
             temporaryEmptySet = newSetIndex;
             
+            // Update StateManager with the modified data
+            StateManager.setTunePillsData(tunePillsData);
+            
             renderTunePills();
             setCursorPosition(newSetIndex, 0, 'before');
             
@@ -3217,6 +3241,10 @@
         if (temporaryEmptySet !== null && temporaryEmptySet < tunePillsData.length && tunePillsData[temporaryEmptySet].length === 0) {
             tunePillsData.splice(temporaryEmptySet, 1);
             temporaryEmptySet = null;
+            
+            // Update StateManager with the modified data
+            StateManager.setTunePillsData(tunePillsData);
+            
             return true;
         }
         temporaryEmptySet = null;
@@ -3631,6 +3659,9 @@
             setCursorPosition(setIndex, newCursorPillIndex, 'after', keepKeyboardOpen);
         }
         
+        // Update StateManager with the modified data
+        StateManager.setTunePillsData(tunePillsData);
+        
         renderTunePills();
     }
     
@@ -3900,6 +3931,9 @@
                 // Mark this as a temporary empty set
                 temporaryEmptySet = tuneToDelete.setIndex;
             }
+            
+            // Update StateManager with the modified data
+            StateManager.setTunePillsData(tunePillsData);
             
             // Render first, then set cursor position
             renderTunePills();
@@ -4544,7 +4578,7 @@
             
             if (dragState) {
                 // Internal drag and drop
-                const draggedIds = Array.from(selectedPills);
+                const draggedIds = Array.from(PillSelection.getSelectedPills());
                 performDrop(position, draggedIds);
             } else {
                 // External drag or paste
