@@ -46,6 +46,8 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+TEST_OUTPUT.txt
+test-results.xml
 
 # Translations
 *.mo
@@ -105,6 +107,10 @@ venv.bak/
 
 # Environment variables
 .env
+.env.test
 
 # Database backups - contain sensitive production data
 data/backup/
+
+# Claude
+.claude-code-config.json
