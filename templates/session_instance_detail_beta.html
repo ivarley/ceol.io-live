@@ -853,6 +853,7 @@
 {% block extra_js %}
 <script src="/static/js/components/autoSave.js"></script>
 <script src="/static/js/components/stateManager.js"></script>
+<script src="/static/js/components/cursorManager.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -872,7 +873,8 @@
     // Beta Editor State - core data now managed by StateManager  
     let selectedPills = new Set();
     let dragState = null;
-    let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
+    // cursorPosition now managed by CursorManager - keep reference for backward compatibility
+    let cursorPosition = null;
     
     // Core data array - will be replaced by StateManager calls
     let tunePillsData = [];
@@ -914,6 +916,26 @@
             StateManager.initialize(() => {
                 tunePillsData = StateManager.getTunePillsData();
                 AutoSaveManager.forceCheckChanges();
+            });
+            
+            // Initialize CursorManager 
+            CursorManager.initialize({
+                getStateManager: () => StateManager,
+                selectedPills: selectedPills,
+                onCursorChange: (newPosition) => {
+                    // Update global reference for backward compatibility
+                    cursorPosition = newPosition;
+                },
+                onSelectionChange: () => {
+                    updateSelectionDisplay();
+                }
+            });
+            
+            // Register callbacks that CursorManager needs
+            CursorManager.registerCallbacks({
+                finishTyping: () => finishTyping(),
+                removeTemporaryEmptySet: () => removeTemporaryEmptySet(),
+                renderTunePills: () => renderTunePills()
             });
             
             // Convert server-side tune sets data to pills format
@@ -1104,64 +1126,21 @@
     }
     
     // Add cursor position markers
+    // Cursor management functions - delegated to CursorManager
     function addCursorPosition(parent, setIndex, pillIndex, positionType) {
-        const cursorPos = document.createElement('span');
-        cursorPos.className = 'cursor-position';
-        cursorPos.dataset.setIndex = setIndex;
-        cursorPos.dataset.pillIndex = pillIndex;
-        cursorPos.dataset.positionType = positionType;
-        
-        
-        // Add click handler for cursor positioning
-        cursorPos.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // If user is typing, finish typing first
-            if (isTyping) {
-                finishTyping();
-            }
-            
-            // Clear selection when clicking to move cursor
-            selectedPills.clear();
-            updateSelectionDisplay();
-            
-            // Remove temporary empty set if clicking away from it
-            if (removeTemporaryEmptySet()) {
-                renderTunePills();
-            }
-            
-            setCursorPosition(setIndex, pillIndex, positionType);
-        });
-        
-        parent.appendChild(cursorPos);
+        return CursorManager.addCursorPosition(parent, setIndex, pillIndex, positionType);
     }
     
-    // Add final cursor at end
     function addFinalCursor(containerElement) {
-        const finalPos = document.createElement('span');
-        finalPos.className = 'cursor-position';
-        finalPos.dataset.setIndex = tunePillsData.length;
-        finalPos.dataset.pillIndex = 0;
-        finalPos.dataset.positionType = 'newset';
-        
-        finalPos.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setCursorPosition(tunePillsData.length, 0, 'newset');
-        });
-        
-        containerElement.appendChild(finalPos);
+        return CursorManager.addFinalCursor(containerElement);
     }
     
-    // Check if device is mobile
     function isMobileDevice() {
-        return ('ontouchstart' in window || navigator.maxTouchPoints > 0) && 
-               (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+        return CursorManager.isMobileDevice();
     }
 
-    // Set cursor position and show visual cursor
-    function setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
+    // Set cursor position and show visual cursor - original implementation
+    function setCursorPositionOriginal(setIndex, pillIndex, positionType, maintainKeyboard = false) {
         
         cursorPosition = { setIndex, pillIndex, position: positionType };
         
@@ -1287,6 +1266,13 @@
             // Desktop behavior - just focus normally
             container.focus();
         }
+    }
+    
+    // Expose original function globally and create CursorManager wrapper
+    window.setCursorPositionOriginal = setCursorPositionOriginal;
+    
+    function setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
+        return CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard);
     }
     
     // Create drop indicator
@@ -2983,14 +2969,14 @@
                 insertTunesAtCursor([tuneName], true); // Keep keyboard open for continued typing
                 
                 // Continue in typing mode for the next tune
-                updateCursorWithText();
+                CursorManager.updateCursorWithText();
             }
             // Don't add the comma/semicolon to the buffer
             return;
         }
         
         typingBuffer += char;
-        updateCursorWithText();
+        CursorManager.updateCursorWithText();
         
         // Set a timeout to trigger matching after 3 seconds of no typing
         typingTimeout = setTimeout(() => {
@@ -3167,7 +3153,7 @@
             item.addEventListener('click', () => {
                 // Apply the selected match to the typing buffer
                 typingBuffer = result.tune_name;
-                updateCursorWithText();
+                CursorManager.updateCursorWithText();
                 
                 // Store the match info for when we finish typing
                 typingPill.tuneId = result.tune_id;
@@ -3212,7 +3198,7 @@
         
         if (isTyping && typingBuffer.length > 0) {
             typingBuffer = typingBuffer.slice(0, -1);
-            updateCursorWithText();
+            CursorManager.updateCursorWithText();
         } else if (cursorPosition && !isTyping) {
             const { setIndex, pillIndex, position } = cursorPosition;
             
@@ -3461,7 +3447,7 @@
         typingBuffer = '';
         isTyping = false;
         typingPill = null;
-        updateCursorWithText();
+        CursorManager.updateCursorWithText();
         
         // On mobile, only hide keyboard if not continuing to type
         if (isMobileDevice() && !keepKeyboardOpen) {
@@ -3502,7 +3488,7 @@
         typingBuffer = '';
         isTyping = false;
         typingPill = null;
-        updateCursorWithText();
+        CursorManager.updateCursorWithText();
         
         // On mobile, remove contenteditable to hide keyboard
         if (isMobileDevice()) {
@@ -3656,7 +3642,7 @@
         return -1;
     }
     
-    function updateCursorWithText() {
+    function updateCursorWithTextOriginal() {
         // Find the active cursor element
         const activeCursor = document.getElementById('active-cursor');
         if (!activeCursor) return;
@@ -3720,6 +3706,13 @@
             document.querySelectorAll('.typing-text').forEach(el => el.remove());
             typingContext = null;
         }
+    }
+    
+    // Expose original function globally and create CursorManager wrapper
+    window.updateCursorWithTextOriginal = updateCursorWithTextOriginal;
+    
+    function updateCursorWithText() {
+        return CursorManager.updateCursorWithText();
     }
     
     function insertTunesAtCursor(tuneNames, keepKeyboardOpen = false) {
@@ -4148,6 +4141,10 @@
     
     // Cursor movement functions
     function moveCursorLeft(shiftKey = false) {
+        return CursorManager.moveCursorLeft(shiftKey);
+    }
+    
+    function moveCursorLeftOld(shiftKey = false) {
         if (!cursorPosition) return;
         
         // If user is typing, finish typing first
@@ -4208,6 +4205,10 @@
     }
     
     function moveCursorRight(shiftKey = false) {
+        return CursorManager.moveCursorRight(shiftKey);
+    }
+    
+    function moveCursorRightOld(shiftKey = false) {
         if (!cursorPosition) return;
         
         // If user is typing, finish typing first
@@ -4274,6 +4275,10 @@
     }
     
     function moveCursorUp(shiftKey = false) {
+        return CursorManager.moveCursorUp(shiftKey);
+    }
+    
+    function moveCursorUpOld(shiftKey = false) {
         // Move to previous set (line)
         if (!cursorPosition) return;
         
@@ -4337,6 +4342,10 @@
     }
     
     function moveCursorDown(shiftKey = false) {
+        return CursorManager.moveCursorDown(shiftKey);
+    }
+    
+    function moveCursorDownOld(shiftKey = false) {
         // Move to next set (line)
         if (!cursorPosition) return;
         
@@ -4647,19 +4656,19 @@
                         return;
                     case 'ArrowLeft':
                         e.preventDefault();
-                        moveCursorLeft(e.shiftKey);
+                        CursorManager.moveCursorLeft(e.shiftKey);
                         return;
                     case 'ArrowRight':
                         e.preventDefault();
-                        moveCursorRight(e.shiftKey);
+                        CursorManager.moveCursorRight(e.shiftKey);
                         return;
                     case 'ArrowUp':
                         e.preventDefault();
-                        moveCursorUp(e.shiftKey);
+                        CursorManager.moveCursorUp(e.shiftKey);
                         return;
                     case 'ArrowDown':
                         e.preventDefault();
-                        moveCursorDown(e.shiftKey);
+                        CursorManager.moveCursorDown(e.shiftKey);
                         return;
                 }
             }
