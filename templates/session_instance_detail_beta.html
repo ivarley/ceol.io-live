@@ -934,6 +934,7 @@
             });
             
             // Set typing-related variables that CursorManager needs access to
+            CursorManager.isTyping = () => isTyping;
             CursorManager.typingBuffer = () => typingBuffer;
             CursorManager.isKeepingKeyboardOpen = () => isKeepingKeyboardOpen;
             

@@ -6,7 +6,7 @@
 class CursorManager {
     static cursorPosition = null; // { setIndex, pillIndex, position }
     static selectionAnchor = null; // For shift+arrow selection
-    static isTyping = false;
+    static isTyping = () => false; // Callback function set from external code
     static onCursorChange = null; // Callback for cursor position changes
     static onSelectionChange = null; // Callback for selection changes
     static getStateManager = null; // Function to get StateManager reference
@@ -51,7 +51,7 @@ class CursorManager {
             e.stopPropagation();
             
             // If user is typing, finish typing first
-            if (this.isTyping) {
+            if (this.isTyping && this.isTyping()) {
                 this.finishTyping();
             }
             
@@ -103,7 +103,7 @@ class CursorManager {
         if (!this.cursorPosition) return;
         
         // If user is typing, finish typing first
-        if (this.isTyping) {
+        if (this.isTyping && this.isTyping()) {
             this.finishTyping && this.finishTyping();
         }
         
@@ -165,7 +165,7 @@ class CursorManager {
         if (!this.cursorPosition) return;
         
         // If user is typing, finish typing first
-        if (this.isTyping) {
+        if (this.isTyping && this.isTyping()) {
             this.finishTyping && this.finishTyping();
         }
         
@@ -320,7 +320,7 @@ class CursorManager {
         const activeCursor = document.getElementById('active-cursor');
         if (!activeCursor) return;
         
-        if (this.isTyping && this.typingBuffer && this.typingBuffer()) {
+        if (this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer()) {
             // On first keystroke, capture the typing context
             if (!this.typingContext) {
                 const cursorPosition = activeCursor.parentNode;
@@ -432,11 +432,12 @@ class CursorManager {
     }
     
     static setTypingMode(isTyping) {
-        this.isTyping = isTyping;
+        // This method is deprecated - isTyping should be set as callback from external code
+        this.isTyping = () => isTyping;
     }
     
     static getTypingMode() {
-        return this.isTyping;
+        return this.isTyping && this.isTyping();
     }
     
     static hasValidCursor() {
@@ -446,7 +447,7 @@ class CursorManager {
     static resetCursor() {
         this.cursorPosition = null;
         this.selectionAnchor = null;
-        this.isTyping = false;
+        this.isTyping = () => false;
         
         // Remove all active cursor highlights
         document.querySelectorAll('.cursor-position.active').forEach(cursor => {
@@ -583,7 +584,7 @@ class CursorManager {
                         e.preventDefault();
                         
                         // Store that we want to keep keyboard open
-                        const shouldKeepKeyboard = this.isTyping && this.typingBuffer && this.typingBuffer.trim();
+                        const shouldKeepKeyboard = this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer.trim();
                         
                         this.finishTyping && this.finishTyping(shouldKeepKeyboard);
                     }
@@ -604,7 +605,7 @@ class CursorManager {
                             // Don't interfere if we're intentionally keeping keyboard open
                             if (!this.isKeepingKeyboardOpen) {
                                 container.contentEditable = 'false';
-                                if (this.isTyping && this.typingBuffer && this.typingBuffer.trim()) {
+                                if (this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer.trim()) {
                                     this.finishTyping && this.finishTyping();
                                 }
                             }
