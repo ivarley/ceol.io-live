@@ -19,6 +19,7 @@ Output:
 import os
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 from datetime import datetime
 import gzip
 import sys
@@ -96,8 +97,10 @@ def backup_table_data(cursor, table_name, file_handle):
     schema = get_table_schema(cursor, table_name)
     columns = [col[0] for col in schema]
     
-    # Get row count
-    cursor.execute(f"SELECT COUNT(*) FROM {table_name};")
+    # Get row count - use psycopg2.sql for safe table name handling
+    cursor.execute(
+        sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(table_name))
+    )
     row_count = cursor.fetchone()[0]
     
     if row_count == 0:
@@ -111,9 +114,15 @@ def backup_table_data(cursor, table_name, file_handle):
     file_handle.write(f"-- Rows: {row_count}\n")
     file_handle.write(f"-- Generated: {datetime.now().isoformat()}\n\n")
     
-    # Get all data
-    column_list = ', '.join(columns)
-    cursor.execute(f"SELECT {column_list} FROM {table_name} ORDER BY 1;")
+    # Get all data - use psycopg2.sql for safe column/table name handling
+    column_identifiers = [sql.Identifier(col) for col in columns]
+    column_list = ', '.join(columns)  # Keep for INSERT statement string
+    cursor.execute(
+        sql.SQL("SELECT {} FROM {} ORDER BY 1").format(
+            sql.SQL(', ').join(column_identifiers),
+            sql.Identifier(table_name)
+        )
+    )
     
     # Write INSERT statements in batches
     batch_size = 100
