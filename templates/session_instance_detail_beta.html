@@ -872,9 +872,8 @@
         is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
     };
     
-    // Beta Editor State - core data now managed by StateManager  
-    // selectedPills now managed by PillSelection - keep reference for backward compatibility
-    let selectedPills = new Set();
+    // Beta Editor State - core data now managed by StateManager
+    // selectedPills now fully managed by PillSelection module
     let dragState = null;
     // cursorPosition now managed by CursorManager - keep reference for backward compatibility
     let cursorPosition = null;
@@ -924,13 +923,12 @@
             // Initialize CursorManager 
             CursorManager.initialize({
                 getStateManager: () => StateManager,
-                selectedPills: selectedPills,
                 onCursorChange: (newPosition) => {
                     // Update global reference for backward compatibility
                     cursorPosition = newPosition;
                 },
                 onSelectionChange: () => {
-                    updateSelectionDisplay();
+                    PillSelection.updateSelectionDisplay();
                 }
             });
             
@@ -967,9 +965,8 @@
             PillSelection.initialize({
                 getStateManager: () => StateManager,
                 getAutoSaveManager: () => AutoSaveManager,
-                selectedPills: selectedPills,
                 onSelectionChange: () => {
-                    updateSelectionDisplay();
+                    PillSelection.updateSelectionDisplay();
                 }
             });
             
@@ -1208,13 +1205,13 @@
                 
                 if (e.shiftKey) {
                     // Range selection
-                    extendSelection(pillData.id);
+                    PillSelection.extendSelection(pillData.id);
                 } else if (e.ctrlKey || e.metaKey) {
                     // Toggle selection
-                    toggleSelection(pillData.id);
+                    PillSelection.toggleSelection(pillData.id);
                 } else {
                     // Normal click - select this pill (clearing any existing selection)
-                    selectSingle(pillData.id);
+                    PillSelection.selectSingle(pillData.id);
                     
                     // If we had a selection anchor from shift+arrow, clear it
                     if (CursorManager.selectionAnchor !== null) {
@@ -1260,12 +1257,12 @@
                     pillElement.classList.add('dragging');
                     
                     // If pill isn't selected, select it
-                    if (!selectedPills.has(pillData.id)) {
-                        selectSingle(pillData.id);
+                    if (!PillSelection.isSelected(pillData.id)) {
+                        PillSelection.selectSingle(pillData.id);
                     }
                     
                     // Visual feedback for all selected pills
-                    selectedPills.forEach(pillId => {
+                    PillSelection.getSelectedPills().forEach(pillId => {
                         const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
                         if (pill && pill !== pillElement) {
                             pill.classList.add('dragging');
@@ -1317,7 +1314,7 @@
                         transform: rotate(2deg);
                         opacity: 0.8;
                     `;
-                    globalDragGhost.textContent = selectedPills.size > 1 ? `${selectedPills.size} pills` : pillData.tuneName;
+                    globalDragGhost.textContent = PillSelection.getSelectionCount() > 1 ? `${PillSelection.getSelectionCount()} pills` : pillData.tuneName;
                     document.body.appendChild(globalDragGhost);
                 }
                 
@@ -1646,14 +1643,7 @@
                         }
                         
                         // Toggle selection (works like shift-select by default)
-                        if (selectedPills.has(pillData.id)) {
-                            // Deselect
-                            selectedPills.delete(pillData.id);
-                        } else {
-                            // Select (add to existing selection)
-                            selectedPills.add(pillData.id);
-                        }
-                        updateSelectionDisplay();
+                        PillSelection.toggleSelection(pillData.id);
                     }
                 } else if (touchDuration >= 1000) {
                     // Long touch without drag - do nothing
@@ -1666,7 +1656,7 @@
             delete pillElement.dataset.touchOnChevron;
             
             // Reset drag styling
-            selectedPills.forEach(pillId => {
+            PillSelection.getSelectedPills().forEach(pillId => {
                 const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
                 if (pill) {
                     pill.classList.remove('dragging');
@@ -1689,7 +1679,7 @@
             // Reset drag state
             if (isDragMode) {
                 // Remove dragging class from all pills
-                selectedPills.forEach(pillId => {
+                PillSelection.getSelectedPills().forEach(pillId => {
                     const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
                     if (pill) {
                         pill.classList.remove('dragging');
@@ -1740,12 +1730,12 @@
             };
             
             // If dragged pill is not selected, select only it
-            if (!selectedPills.has(pillData.id)) {
-                selectSingle(pillData.id);
+            if (!PillSelection.isSelected(pillData.id)) {
+                PillSelection.selectSingle(pillData.id);
             }
             
             // Visual feedback - apply dragging class to all selected pills
-            selectedPills.forEach(pillId => {
+            PillSelection.getSelectedPills().forEach(pillId => {
                 const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
                 if (pill) {
                     pill.classList.add('dragging');
@@ -1757,7 +1747,7 @@
             
             tunePillsData.forEach((tuneSet, setIndex) => {
                 tuneSet.forEach((pill, pillIndex) => {
-                    if (selectedPills.has(pill.id)) {
+                    if (PillSelection.isSelected(pill.id)) {
                         if (!selectedBySet.has(setIndex)) {
                             selectedBySet.set(setIndex, []);
                         }
@@ -1784,22 +1774,7 @@
     }
     
     // Selection functions
-    // Selection functions - delegated to PillSelection module
-    function selectSingle(pillId) {
-        return PillSelection.selectSingle(pillId);
-    }
-    
-    function toggleSelection(pillId) {
-        return PillSelection.toggleSelection(pillId);
-    }
-    
-    function extendSelection(pillId) {
-        return PillSelection.extendSelection(pillId);
-    }
-    
-    function updateSelectionDisplay() {
-        return PillSelection.updateSelectionDisplay();
-    }
+    // Selection functions now directly call PillSelection methods
     
     // Drag and drop support functions
     function findPillById(pillId) {
@@ -2256,14 +2231,14 @@
             hideContextMenu();
         });
         
-        if (selectedPills.size <= 1) {
+        if (PillSelection.getSelectionCount() <= 1) {
             addMenuItem(menu, 'Delete', () => {
                 deletePill(pillData.id);
                 hideContextMenu();
             });
         } else {
-            addMenuItem(menu, `Delete Selected (${selectedPills.size})`, () => {
-                deleteSelectedPills();
+            addMenuItem(menu, `Delete Selected (${PillSelection.getSelectionCount()})`, () => {
+                PillSelection.deleteSelectedPills();
                 hideContextMenu();
             });
         }
@@ -2348,10 +2323,7 @@
         }
     }
     
-    // Delete selected pills - delegated to PillSelection module
-    function deleteSelectedPills() {
-        return PillSelection.deleteSelectedPills();
-    }
+    // Delete selected pills now directly calls PillSelection.deleteSelectedPills()
     
     // Undo/Redo functions - now delegated to StateManager
     function saveToUndo() {
@@ -2894,8 +2866,8 @@
     
     function handleBackspace() {
         // If multiple pills are selected, delete them all
-        if (selectedPills.size > 0) {
-            deleteSelectedPills();
+        if (PillSelection.hasSelection()) {
+            PillSelection.deleteSelectedPills();
             return;
         }
         
@@ -2962,8 +2934,8 @@
     
     function handleDelete() {
         // If multiple pills are selected, delete them all
-        if (selectedPills.size > 0) {
-            deleteSelectedPills();
+        if (PillSelection.hasSelection()) {
+            PillSelection.deleteSelectedPills();
             return;
         }
         
@@ -3251,86 +3223,15 @@
     }
     
     function selectPillsBetweenPositions(startPos, endPos) {
-        // Clear current selection
-        selectedPills.clear();
-        
-        // Get all pills in order
-        const allPills = [];
-        tunePillsData.forEach((set, setIndex) => {
-            set.forEach((pill, pillIndex) => {
-                allPills.push({
-                    pill: pill,
-                    setIndex: setIndex,
-                    pillIndex: pillIndex
-                });
-            });
-        });
-        
-        // Find start and end indices in the flat list
-        let startIndex = -1;
-        let endIndex = -1;
-        
-        for (let i = 0; i < allPills.length; i++) {
-            const item = allPills[i];
-            
-            // Check if this pill matches start position
-            if (startPos && item.setIndex === startPos.setIndex && item.pillIndex === startPos.pillIndex) {
-                startIndex = i;
-            }
-            
-            // Check if this pill matches end position
-            if (endPos && item.setIndex === endPos.setIndex && item.pillIndex === endPos.pillIndex) {
-                endIndex = i;
-            }
-        }
-        
-        // Select pills in range
-        if (startIndex !== -1 && endIndex !== -1) {
-            const minIndex = Math.min(startIndex, endIndex);
-            const maxIndex = Math.max(startIndex, endIndex);
-            
-            for (let i = minIndex; i <= maxIndex; i++) {
-                selectedPills.add(allPills[i].pill.id);
-            }
-        }
-        
-        updateSelectionDisplay();
+        // Convert positions to cursor format and use PillSelection method
+        const startCursor = { setIndex: startPos.setIndex, pillIndex: startPos.pillIndex, position: 'after' };
+        const endCursor = { setIndex: endPos.setIndex, pillIndex: endPos.pillIndex, position: 'after' };
+        PillSelection.selectFromCursorRange(startCursor, endCursor);
     }
     
     function selectPillsBetweenCursorPositions(startCursorPos, endCursorPos) {
-        // Clear current selection
-        selectedPills.clear();
-        
-        // Convert cursor positions to pill ranges
-        const startPills = getPillsFromCursorPosition(startCursorPos);
-        const endPills = getPillsFromCursorPosition(endCursorPos);
-        
-        // Get all pills in order
-        const allPills = [];
-        tunePillsData.forEach((set, setIndex) => {
-            set.forEach((pill, pillIndex) => {
-                allPills.push({
-                    pill: pill,
-                    setIndex: setIndex,
-                    pillIndex: pillIndex
-                });
-            });
-        });
-        
-        // Find the range of pills to select
-        const startIndex = findPillIndex(allPills, startPills[0]);
-        const endIndex = findPillIndex(allPills, endPills[endPills.length - 1]);
-        
-        if (startIndex !== -1 && endIndex !== -1) {
-            const minIndex = Math.min(startIndex, endIndex);
-            const maxIndex = Math.max(startIndex, endIndex);
-            
-            for (let i = minIndex; i <= maxIndex; i++) {
-                selectedPills.add(allPills[i].pill.id);
-            }
-        }
-        
-        updateSelectionDisplay();
+        // Use PillSelection method directly
+        PillSelection.selectFromCursorRange(startCursorPos, endCursorPos);
     }
     
     
@@ -3808,7 +3709,7 @@
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             selectionAnchor = null;
-            selectedPills.clear();
+            PillSelection.selectNone();
         }
         
         
@@ -3872,7 +3773,7 @@
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             selectionAnchor = null;
-            selectedPills.clear();
+            PillSelection.selectNone();
         }
         
         
@@ -3933,7 +3834,7 @@
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             selectionAnchor = null;
-            selectedPills.clear();
+            PillSelection.selectNone();
         }
         
         
@@ -4000,7 +3901,7 @@
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             selectionAnchor = null;
-            selectedPills.clear();
+            PillSelection.selectNone();
         }
         
         
@@ -4226,8 +4127,7 @@
                     }
                     
                     // Clear selection when touching to move cursor
-                    selectedPills.clear();
-                    updateSelectionDisplay();
+                    PillSelection.selectNone();
                     
                     setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
                 } else {
@@ -4236,8 +4136,7 @@
                         finishTyping();
                     }
                     
-                    selectedPills.clear();
-                    updateSelectionDisplay();
+                    PillSelection.selectNone();
                     
                     setCursorPosition(tunePillsData.length, 0, 'newset');
                 }
@@ -4330,7 +4229,7 @@
                         break;
                     case 'a':
                         e.preventDefault();
-                        selectAll();
+                        PillSelection.selectAll();
                         break;
                     case 'c':
                         e.preventDefault();
@@ -4346,9 +4245,9 @@
                         break;
                 }
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedPills.size > 0) {
+                if (PillSelection.hasSelection()) {
                     e.preventDefault();
-                    deleteSelectedPills();
+                    PillSelection.deleteSelectedPills();
                 }
             }
         });
@@ -4409,10 +4308,7 @@
         });
     }
     
-    // Select all function - delegated to PillSelection module
-    function selectAll() {
-        return PillSelection.selectAll();
-    }
+    // Select all now directly calls PillSelection.selectAll()
     
     // Modal control functions
     function hideLinkModal() {
