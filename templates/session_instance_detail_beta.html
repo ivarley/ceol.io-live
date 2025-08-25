@@ -856,6 +856,7 @@
 <script src="/static/js/components/cursorManager.js"></script>
 <script src="/static/js/components/pillRenderer.js"></script>
 <script src="/static/js/components/pillSelection.js"></script>
+<script src="/static/js/components/pillInteraction.js"></script>
 <script src="/static/js/components/dragDrop.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
@@ -968,11 +969,24 @@
                 showMessage: (message, type) => showMessage(message, type)
             });
             
+            // Initialize PillInteraction
+            PillInteraction.initialize({
+                getPillSelection: () => PillSelection,
+                getStateManager: () => StateManager,
+                getCursorManager: () => CursorManager,
+                getDragDrop: () => DragDrop,
+                showContextMenu: (e, pillData) => showContextMenu(e, pillData),
+                hideContextMenu: (pillId) => hideContextMenu(pillId),
+                isTyping: () => isTyping,
+                finishTyping: () => finishTyping()
+            });
+            
             // Initialize DragDrop
             DragDrop.initialize({
                 getPillSelection: () => PillSelection,
                 getStateManager: () => StateManager,
-                getCursorManager: () => CursorManager
+                getCursorManager: () => CursorManager,
+                getPillInteraction: () => PillInteraction
             });
             
             // Register callbacks that DragDrop needs
