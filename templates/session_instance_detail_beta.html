@@ -851,6 +851,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/components/autoSave.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -875,153 +876,11 @@
     let dragState = null;
     let cursorPosition = null; // { setIndex: 0, pillIndex: 0, position: 'before'|'after'|'newset' }
     
-    // Save state tracking
-    let isDirty = false;
-    let lastSavedData = null;
-    let lastCheckedData = null;  // Track last checked data to detect any changes
+    // Save state tracking - now managed by AutoSaveManager
     
-    // Function to force check for changes (call this after any direct data modification)
-    function forceCheckChanges() {
-        const currentDataStr = JSON.stringify(tunePillsData);
-        const lastCheckedDataStr = JSON.stringify(lastCheckedData);
-        
-        if (currentDataStr !== lastCheckedDataStr) {
-            // Update lastCheckedData
-            lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
-            
-            // Check dirty state
-            const savedDataStr = JSON.stringify(lastSavedData);
-            const wasDirty = isDirty;
-            isDirty = currentDataStr !== savedDataStr;
-            
-            // Update save button
-            const saveBtn = document.getElementById('save-session-btn');
-            if (saveBtn) {
-                saveBtn.disabled = !isDirty;
-            }
-            
-            // Handle auto-save timer
-            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-            if (autoSaveCheckbox && autoSaveCheckbox.checked) {
-                const intervalSelect = document.getElementById('auto-save-interval');
-                const intervalSeconds = parseInt(intervalSelect.value);
-                
-                if (isDirty) {
-                    // Data changed and we're dirty - start/restart timer
-                    autoSaveTimer.start(intervalSeconds);
-                } else {
-                    // Data changed but we're not dirty - stop timer
-                    autoSaveTimer.stop();
-                    autoSaveTimer.hideCountdown();
-                }
-            }
-        }
-    }
+    // State change tracking now handled directly by AutoSaveManager
     
-    // Auto-save countdown timer singleton
-    class AutoSaveTimer {
-        constructor() {
-            this.timer = null;
-            this.seconds = 0;
-            this.intervalSeconds = 60;
-            this.isRunning = false;
-        }
-        
-        start(intervalSeconds) {
-            this.stop(); // Always stop any existing timer first
-            this.intervalSeconds = intervalSeconds;
-            this.seconds = intervalSeconds;
-            this.isRunning = true;
-            
-            // Update UI immediately
-            this.updateDisplay();
-            this.showCountdown();
-            
-            // Start the countdown
-            this.timer = setInterval(() => {
-                this.seconds--;
-                this.updateDisplay();
-                
-                if (this.seconds <= 0) {
-                    this.stop();
-                    this.hideCountdown();
-                    
-                    // Trigger auto-save
-                    if (isDirty) {
-                        saveSession().then(() => {
-                            // After saving, restart if still enabled and dirty again
-                            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-                            if (autoSaveCheckbox && autoSaveCheckbox.checked && isDirty) {
-                                this.start(this.intervalSeconds);
-                            }
-                        }).catch(() => {
-                            // On save error, don't restart timer
-                        });
-                    }
-                }
-            }, 1000);
-        }
-        
-        reset(intervalSeconds) {
-            if (this.isRunning) {
-                this.start(intervalSeconds || this.intervalSeconds);
-            }
-        }
-        
-        stop() {
-            if (this.timer) {
-                clearInterval(this.timer);
-                this.timer = null;
-            }
-            this.isRunning = false;
-        }
-        
-        updateDisplay() {
-            const countdownSecondsElement = document.getElementById('countdown-seconds');
-            const countdownSecondsMobileElement = document.getElementById('countdown-seconds-mobile');
-            if (countdownSecondsElement) {
-                countdownSecondsElement.textContent = this.seconds;
-            }
-            if (countdownSecondsMobileElement) {
-                countdownSecondsMobileElement.textContent = this.seconds;
-            }
-        }
-        
-        showCountdown() {
-            const countdownElement = document.getElementById('auto-save-countdown');
-            if (countdownElement) {
-                countdownElement.style.display = 'inline';
-            }
-        }
-        
-        hideCountdown() {
-            const countdownElement = document.getElementById('auto-save-countdown');
-            if (countdownElement) {
-                countdownElement.style.display = 'none';
-            }
-        }
-    }
-    
-    // Create singleton instance
-    const autoSaveTimer = new AutoSaveTimer();
-    
-    // Handle responsive option text
-    function updateOptionText() {
-        const select = document.getElementById('auto-save-interval');
-        const isMobile = window.innerWidth <= 768;
-        
-        if (select) {
-            const options = select.querySelectorAll('option');
-            options.forEach(option => {
-                const value = option.value;
-                if (isMobile) {
-                    option.textContent = `${value} sec`;
-                } else {
-                    option.textContent = `${value} seconds`;
-                }
-            });
-        }
-    }
+    // Handle responsive option text - now handled directly by AutoSaveManager
     let isTyping = false;
     let typingBuffer = '';
     let isKeepingKeyboardOpen = false;
@@ -1043,212 +902,9 @@
     }
     
 
-    // Save functionality
-    function checkDirtyState() {
-        // Compare current data with last saved data for dirty state
-        const currentDataStr = JSON.stringify(tunePillsData);
-        const savedDataStr = JSON.stringify(lastSavedData);
-        const isCurrentlyDirty = currentDataStr !== savedDataStr;
-        
-        // Check if data has changed since last check (for activity detection)
-        const lastCheckedDataStr = JSON.stringify(lastCheckedData);
-        const dataHasChanged = currentDataStr !== lastCheckedDataStr;
-        
-        // Update last checked data
-        lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
-        
-        // Reset timer on ANY data change (regardless of dirty state)
-        if (dataHasChanged) {
-            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-            if (autoSaveCheckbox && autoSaveCheckbox.checked && autoSaveTimer.isRunning) {
-                const intervalSelect = document.getElementById('auto-save-interval');
-                autoSaveTimer.reset(parseInt(intervalSelect.value));
-            }
-        }
-        
-        // Handle dirty state changes
-        if (isCurrentlyDirty !== isDirty) {
-            const wasDirty = isDirty;
-            isDirty = isCurrentlyDirty;
-            const saveBtn = document.getElementById('save-session-btn');
-            if (saveBtn) {
-                saveBtn.disabled = !isDirty;
-            }
-            
-            // If we just became dirty and auto-save is enabled, start countdown
-            if (!wasDirty && isDirty) {
-                const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-                if (autoSaveCheckbox && autoSaveCheckbox.checked) {
-                    const intervalSelect = document.getElementById('auto-save-interval');
-                    autoSaveTimer.start(parseInt(intervalSelect.value));
-                }
-            }
-            // If we just became clean, stop countdown
-            else if (wasDirty && !isDirty) {
-                autoSaveTimer.stop();
-                autoSaveTimer.hideCountdown();
-            }
-        }
-    }
+    // Save functionality - now handled directly by AutoSaveManager
     
-    function markDirty() {
-        // Call checkDirtyState instead of directly setting dirty
-        checkDirtyState();
-    }
-    
-    function markClean() {
-        isDirty = false;
-        document.getElementById('save-session-btn').disabled = true;
-        lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
-    }
-    
-    function saveSession() {
-        // Disable save button and show status
-        const saveBtn = document.getElementById('save-session-btn');
-        const saveStatus = document.getElementById('save-status');
-        
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
-        saveStatus.style.display = 'inline';
-        saveStatus.textContent = 'Saving...';
-        saveStatus.style.color = 'var(--text-color)';
-        
-        // Convert tunePillsData to the format expected by the API
-        const tuneSets = tunePillsData.map(set => 
-            set.map(pill => ({
-                tune_id: pill.tuneId || null,
-                name: pill.tuneName || null,
-                tune_name: pill.tuneName || null
-            }))
-        );
-        
-        // Send save request and return the promise
-        return fetch(`/api/sessions/${sessionPath}/${sessionDate}/save_tunes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ tune_sets: tuneSets })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                markClean();
-                saveStatus.textContent = data.message || 'Saved successfully!';
-                saveStatus.style.color = 'var(--success, #28a745)';
-                saveBtn.textContent = 'Save Session';
-                saveBtn.disabled = true;  // Ensure button is disabled after successful save
-                
-                // Hide status message after 3 seconds
-                setTimeout(() => {
-                    saveStatus.style.display = 'none';
-                }, 3000);
-            } else {
-                throw new Error(data.message || 'Save failed');
-            }
-        })
-        .catch(error => {
-            console.error('Save error:', error);
-            saveStatus.textContent = 'Save failed: ' + error.message;
-            saveStatus.style.color = 'var(--danger, #dc3545)';
-            saveBtn.textContent = 'Save Session';
-            // Re-enable button on error if still dirty
-            if (isDirty) {
-                saveBtn.disabled = false;
-            }
-            // Re-throw the error so promise chain can handle it
-            throw error;
-        });
-    }
-    
-    function initializeAutoSavePreference() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-        const isUserLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        
-        if (isUserLoggedIn) {
-            // For logged-in users, use their stored preference
-            autoSaveCheckbox.checked = {{ 'true' if current_user.auto_save_tunes else 'false' }};
-        } else {
-            // For anonymous users, check for cookie
-            const cookieValue = getCookie('auto_save_tunes');
-            autoSaveCheckbox.checked = cookieValue === 'true';
-        }
-    }
-    
-    function saveAutoSavePreference(isEnabled) {
-        const isUserLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        
-        if (isUserLoggedIn) {
-            // Save to user account via API
-            fetch('/api/user/auto-save-preference', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    auto_save: isEnabled
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    console.error('Failed to save auto-save preference:', data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error saving auto-save preference:', error);
-            });
-        } else {
-            // Save to cookie for anonymous users
-            setCookie('auto_save_tunes', isEnabled.toString(), 365);
-        }
-    }
-    
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-        return null;
-    }
-    
-    function setCookie(name, value, days) {
-        let expires = "";
-        if (days) {
-            const date = new Date();
-            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-            expires = "; expires=" + date.toUTCString();
-        }
-        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
-    }
-    
-    function setupAutoSave() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-        const intervalSelect = document.getElementById('auto-save-interval');
-        
-        // Stop any existing timer
-        autoSaveTimer.stop();
-        autoSaveTimer.hideCountdown();
-        
-        // Save preference when checkbox state changes
-        saveAutoSavePreference(autoSaveCheckbox.checked);
-        
-        // Start timer if checkbox is checked and we're dirty
-        if (autoSaveCheckbox.checked && isDirty) {
-            const intervalSeconds = parseInt(intervalSelect.value);
-            autoSaveTimer.start(intervalSeconds);
-        }
-    }
-    
-    function cancelAutoSave() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-        
-        // Uncheck the checkbox
-        autoSaveCheckbox.checked = false;
-        
-        // Stop timer and hide countdown
-        autoSaveTimer.stop();
-        autoSaveTimer.hideCountdown();
-    }
+    // AutoSave functions now handled directly by AutoSaveManager module
     
     // Initialize the editor on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -1259,10 +915,17 @@
             renderTunePills();
             setupEventListeners();
             
+            // Initialize AutoSaveManager after tunePillsData is created
+            AutoSaveManager.initialize(sessionPath, sessionDate, () => tunePillsData, {
+                isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
+                userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }}
+            });
+            
             // Initialize save state - mark as clean since we just loaded
-            lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
-            lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
-            isDirty = false;
+            AutoSaveManager.lastSavedData = JSON.parse(JSON.stringify(tunePillsData));
+            AutoSaveManager.lastCheckedData = JSON.parse(JSON.stringify(tunePillsData));
+            AutoSaveManager.isDirty = false;
+            
             // Ensure save button is disabled on initial load
             const saveBtn = document.getElementById('save-session-btn');
             if (saveBtn) {
@@ -1274,11 +937,11 @@
         setupSaveListeners();
         
         // Initialize auto-save preference
-        initializeAutoSavePreference();
+        AutoSaveManager.initializeAutoSavePreference();
         
         // Set up responsive option text
-        updateOptionText();
-        window.addEventListener('resize', updateOptionText);
+        AutoSaveManager.updateOptionText();
+        window.addEventListener('resize', AutoSaveManager.updateOptionText);
     });
     
     // Convert tune sets to pills data format
@@ -1320,7 +983,7 @@
     function renderTunePills() {
         
         // Check for data changes before rendering (safety net)
-        forceCheckChanges();
+        AutoSaveManager.forceCheckChanges();
         
         // Clean up any lingering drag ghosts before re-rendering
         cleanupDragGhosts();
@@ -2704,7 +2367,7 @@
                 updatePillAppearance(pill);
                 
                 // Force check for changes (includes timer reset and dirty state)
-                forceCheckChanges();
+                AutoSaveManager.forceCheckChanges();
                 
                 // Hide the menu
                 hideMatchResultsMenu(pill.id);
@@ -2832,7 +2495,7 @@
                     updatePillAppearance(pillData);
                     
                     // Force check for changes (includes timer reset and dirty state)
-                    forceCheckChanges();
+                    AutoSaveManager.forceCheckChanges();
                     hideContextMenu();
                 });
                 
@@ -2948,7 +2611,7 @@
                 }
                 
                 // Force check for changes after data modification
-                forceCheckChanges();
+                AutoSaveManager.forceCheckChanges();
                 
                 renderTunePills();
                 break;
@@ -2976,7 +2639,7 @@
         tunePillsData = tunePillsData.filter(set => set.length > 0);
         
         // Force check for changes after data modification
-        forceCheckChanges();
+        AutoSaveManager.forceCheckChanges();
         
         selectedPills.clear();
         renderTunePills();
@@ -2993,7 +2656,7 @@
         }
         
         // Mark as dirty when any change is made
-        forceCheckChanges();
+        AutoSaveManager.forceCheckChanges();
     }
     
     function undo() {
@@ -4290,7 +3953,7 @@
                     console.log(`Successfully matched "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
                     
                     // Mark as dirty since we changed the pill
-                    forceCheckChanges();
+                    AutoSaveManager.forceCheckChanges();
                     
                 } else if (result.results.length > 1) {
                     // Multiple matches - mark as unmatched and store results
@@ -4298,7 +3961,7 @@
                     console.log(`Multiple matches found for "${pill.tuneName}": ${result.results.length} results`);
                     
                     // Mark as dirty since we changed the pill state
-                    forceCheckChanges();
+                    AutoSaveManager.forceCheckChanges();
                     
                     // Show context menu with results if still typing/editing
                     if (stillTyping) {
@@ -4313,7 +3976,7 @@
                     if (stillTyping) {
                         // While typing, just show the option but don't auto-apply
                         pill.state = 'unmatched';
-                        forceCheckChanges();
+                        AutoSaveManager.forceCheckChanges();
                         showMatchResultsMenu(pill);
                     } else {
                         // When finished typing, auto-apply single wildcard match
@@ -4326,7 +3989,7 @@
                         console.log(`Auto-applied single wildcard match: "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
                         
                         // Mark as dirty since we changed the pill
-                        forceCheckChanges();
+                        AutoSaveManager.forceCheckChanges();
                     }
                     
                 } else {
@@ -4336,7 +3999,7 @@
                     console.log(`No match found for "${pill.tuneName}"`);
                     
                     // Mark as dirty since we changed the pill state
-                    forceCheckChanges();
+                    AutoSaveManager.forceCheckChanges();
                 }
             } else {
                 // Error or unexpected response format
@@ -4345,7 +4008,7 @@
                 console.warn(`Unexpected response format for "${pill.tuneName}"`);
                 
                 // Mark as dirty since we changed the pill state
-                markDirty();
+                AutoSaveManager.markDirty();
             }
             
             // Update just this pill instead of re-rendering everything
@@ -4357,7 +4020,7 @@
             pill.matchResults = null;
             
             // Mark as dirty since we changed the pill state
-            markDirty();
+            AutoSaveManager.markDirty();
             
             updatePillAppearance(pill);
         }
@@ -5180,7 +4843,7 @@
         pill.tuneName = newName;
         
         // Mark as dirty since we changed the pill
-        forceCheckChanges();
+        AutoSaveManager.forceCheckChanges();
         
         // If the tune was linked, unlink it first and re-run matching
         if (pill.state === 'linked') {
@@ -5215,22 +4878,22 @@
     
     function setupSaveListeners() {
         // Save button click
-        document.getElementById('save-session-btn').addEventListener('click', saveSession);
+        document.getElementById('save-session-btn').addEventListener('click', () => AutoSaveManager.saveSession());
         
         // Auto-save checkbox change
-        document.getElementById('auto-save-checkbox').addEventListener('change', setupAutoSave);
+        document.getElementById('auto-save-checkbox').addEventListener('change', () => AutoSaveManager.setupAutoSave());
         
         // Auto-save interval change
         document.getElementById('auto-save-interval').addEventListener('change', () => {
             if (document.getElementById('auto-save-checkbox').checked) {
-                setupAutoSave();
+                AutoSaveManager.setupAutoSave();
             }
         });
         
         // Cancel auto-save link
         document.getElementById('cancel-auto-save').addEventListener('click', (e) => {
             e.preventDefault();
-            cancelAutoSave();
+            AutoSaveManager.cancelAutoSave();
         });
     }
     
