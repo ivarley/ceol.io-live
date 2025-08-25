@@ -37,7 +37,7 @@ def get_db_connection():
             database=os.environ.get('PGDATABASE'),
             user=os.environ.get('PGUSER'),
             password=os.environ.get('PGPASSWORD'),
-            port=os.environ.get('PGPORT', 5432)
+            port=int(os.environ.get('PGPORT', 5432))
         )
         return conn
     except Exception as e:
