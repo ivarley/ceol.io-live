@@ -858,6 +858,7 @@
 <script src="/static/js/components/pillSelection.js"></script>
 <script src="/static/js/components/pillInteraction.js"></script>
 <script src="/static/js/components/dragDrop.js"></script>
+<script src="/static/js/components/keyboardHandler.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
     const sessionDate = '{{ session_instance.date }}';
@@ -1001,6 +1002,34 @@
                 applyLandingAnimation: (movedPillIds) => applyLandingAnimation(movedPillIds),
                 setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
                 clearSelection: () => CursorManager.clearSelection()
+            });
+            
+            // Initialize KeyboardHandler
+            KeyboardHandler.initialize({
+                getCursorManager: () => CursorManager,
+                getPillSelection: () => PillSelection,
+                isTyping: () => isTyping
+            });
+            
+            // Register callbacks that KeyboardHandler needs
+            KeyboardHandler.registerCallbacks({
+                handleTextInput: (char) => handleTextInput(char),
+                handleBackspace: () => handleBackspace(),
+                handleDelete: () => handleDelete(),
+                handleEnterKey: () => handleEnterKey(),
+                finishTyping: () => finishTyping(),
+                cancelTyping: () => cancelTyping(),
+                undo: () => undo(),
+                redo: () => redo(),
+                copySelectedPills: () => copySelectedPills(),
+                cutSelectedPills: () => cutSelectedPills(),
+                pasteFromClipboard: () => pasteFromClipboard(),
+                hideLinkModal: () => hideLinkModal(),
+                hideEditModal: () => hideEditModal(),
+                hideSessionEditModal: () => hideSessionEditModal(),
+                confirmLink: () => confirmLink(),
+                confirmEdit: () => confirmEdit(),
+                removeTypingMatchResults: () => removeTypingMatchResults()
             });
             
             // Convert server-side tune sets data to pills format
@@ -1551,6 +1580,14 @@
         menu.appendChild(item);
     }
     
+    // Typing match results cleanup function - called by KeyboardHandler
+    function removeTypingMatchResults() {
+        const existingMenu = document.querySelector('.typing-match-menu');
+        if (existingMenu) {
+            existingMenu.remove();
+        }
+    }
+    
     // Modal functions
     function showLinkModal(pillData) {
         document.getElementById('link-tune-modal').style.display = 'flex';
@@ -1573,15 +1610,7 @@
         input.focus();
         input.select();
         
-        // Add Enter key handler for this modal instance
-        const enterHandler = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                confirmEdit();
-                input.removeEventListener('keydown', enterHandler);
-            }
-        };
-        input.addEventListener('keydown', enterHandler);
+        // Enter key handling now managed by KeyboardHandler
         
         // Store current pill for editing
         window.currentEditingPill = pillData;
@@ -2143,12 +2172,7 @@
             }
         };
         
-        // Set up event to remove menu on any keypress
-        const keyHandler = () => {
-            removeMenu();
-            document.removeEventListener('keydown', keyHandler);
-        };
-        document.addEventListener('keydown', keyHandler);
+        // Menu removal on keypress now handled by KeyboardHandler
     }
     
     function handleBackspace() {
@@ -3435,109 +3459,8 @@
             containerTouchStart = null;
         });
         
-        // Keyboard shortcuts and text input
-        document.addEventListener('keydown', (e) => {
-            if (e.target.closest('.modal-overlay')) return; // Don't handle if modal is open
-            
-            // Don't handle keyboard events if container is contentEditable (mobile typing mode)
-            const container = document.getElementById('tune-pills-container');
-            if (container && container.contentEditable === 'true') {
-                return;
-            }
-            
-            // Handle typing at cursor position
-            if (!e.ctrlKey && !e.metaKey && CursorManager.getCursorPosition() && e.key.length === 1) {
-                e.preventDefault();
-                handleTextInput(e.key);
-                return;
-            }
-            
-            // Handle special keys for typing
-            if (CursorManager.getCursorPosition() && !e.ctrlKey && !e.metaKey) {
-                switch(e.key) {
-                    case 'Backspace':
-                        e.preventDefault();
-                        handleBackspace();
-                        return;
-                    case 'Delete':
-                        e.preventDefault();
-                        handleDelete();
-                        return;
-                    case 'Enter':
-                        e.preventDefault();
-                        if (isTyping) {
-                            finishTyping();
-                        } else {
-                            handleEnterKey();
-                        }
-                        return;
-                    case 'Tab':
-                    case ';':
-                    case ',':
-                        e.preventDefault();
-                        finishTyping();
-                        return;
-                    case 'Escape':
-                        e.preventDefault();
-                        cancelTyping();
-                        return;
-                    case 'ArrowLeft':
-                        e.preventDefault();
-                        CursorManager.moveCursorLeft(e.shiftKey);
-                        return;
-                    case 'ArrowRight':
-                        e.preventDefault();
-                        CursorManager.moveCursorRight(e.shiftKey);
-                        return;
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        CursorManager.moveCursorUp(e.shiftKey);
-                        return;
-                    case 'ArrowDown':
-                        e.preventDefault();
-                        CursorManager.moveCursorDown(e.shiftKey);
-                        return;
-                }
-            }
-            
-            if (e.ctrlKey || e.metaKey) {
-                switch(e.key) {
-                    case 'z':
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            redo();
-                        } else {
-                            undo();
-                        }
-                        break;
-                    case 'y':
-                        e.preventDefault();
-                        redo();
-                        break;
-                    case 'a':
-                        e.preventDefault();
-                        PillSelection.selectAll();
-                        break;
-                    case 'c':
-                        e.preventDefault();
-                        copySelectedPills();
-                        break;
-                    case 'x':
-                        e.preventDefault();
-                        cutSelectedPills();
-                        break;
-                    case 'v':
-                        e.preventDefault();
-                        pasteFromClipboard();
-                        break;
-                }
-            } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (PillSelection.hasSelection()) {
-                    e.preventDefault();
-                    PillSelection.deleteSelectedPills();
-                }
-            }
-        });
+        // Keyboard shortcuts and text input - handled by KeyboardHandler module
+        KeyboardHandler.setupKeyboardListeners();
         
         // Container drag and drop event listeners
         DragDrop.setupContainerDragListeners();
@@ -3547,15 +3470,6 @@
         document.getElementById('link-confirm-btn').addEventListener('click', confirmLink);
         document.getElementById('edit-tune-cancel-btn').addEventListener('click', hideEditModal);
         document.getElementById('edit-tune-save-btn').addEventListener('click', confirmEdit);
-        
-        // Close modals on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                hideLinkModal();
-                hideEditModal();
-                hideSessionEditModal();
-            }
-        });
     }
     
     // Select all now directly calls PillSelection.selectAll()
