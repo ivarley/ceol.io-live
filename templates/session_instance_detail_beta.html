@@ -932,7 +932,7 @@
             CursorManager.registerCallbacks({
                 finishTyping: (keepKeyboard) => textInput.finishTyping(keepKeyboard),
                 removeTemporaryEmptySet: () => removeTemporaryEmptySet(),
-                renderTunePills: () => renderTunePills(),
+                renderTunePills: () => PillRenderer.renderTunePills(),
                 handleTextInput: (char) => textInput.handleTextInput(char),
                 handleBackspace: () => textInput.handleBackspace()
             });
@@ -954,7 +954,7 @@
                 cleanupDragGhosts: () => DragDrop.cleanupDragGhosts(),
                 createHorizontalDropZone: (setIndex) => DragDrop.createHorizontalDropZone(setIndex),
                 setupPillEventListeners: (pillElement, pillData) => DragDrop.setupPillEventListeners(pillElement, pillData),
-                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
+                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
                 clearSelection: () => CursorManager.clearSelection()
             });
             
@@ -969,7 +969,7 @@
             
             // Register callbacks that PillSelection needs
             PillSelection.registerCallbacks({
-                renderTunePills: () => renderTunePills(),
+                renderTunePills: () => PillRenderer.renderTunePills(),
                 saveToUndo: () => undoRedoManager.saveToUndo(),
                 showMessage: (message, type) => showMessage(message, type)
             });
@@ -1003,7 +1003,7 @@
                 showContextMenu: (e, pillData) => showContextMenu(e, pillData),
                 hideContextMenu: (pillId) => hideContextMenu(pillId),
                 applyLandingAnimation: (movedPillIds) => applyLandingAnimation(movedPillIds),
-                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
+                setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
                 clearSelection: () => CursorManager.clearSelection()
             });
             
@@ -1017,7 +1017,7 @@
             undoRedoManager.registerCallbacks({
                 onUndoRedo: () => {
                     tunePillsData = StateManager.getTunePillsData();
-                    renderTunePills();
+                    PillRenderer.renderTunePills();
                 }
             });
             
@@ -1031,8 +1031,8 @@
             // Register callbacks that ClipboardManager needs
             clipboardManager.registerCallbacks({
                 saveToUndo: () => undoRedoManager.saveToUndo(),
-                generateId: () => generateId(),
-                renderTunePills: () => renderTunePills(),
+                generateId: () => StateManager.generateId(),
+                renderTunePills: () => PillRenderer.renderTunePills(),
                 showMessage: (message, type) => showMessage(message, type),
                 applyLandingAnimation: (pillIds) => applyLandingAnimation(pillIds),
                 autoMatchTune: (pill) => autoMatchTune(pill),
@@ -1072,7 +1072,7 @@
             // Convert server-side tune sets data to pills format
             const initialTuneSets = {{ tune_sets|tojson }};
             convertTuneSetsToPills(initialTuneSets, true); // Skip callback during initialization
-            renderTunePills();
+            PillRenderer.renderTunePills();
             setupEventListeners();
             
             // Initialize AutoSaveManager after tunePillsData is created
@@ -1111,54 +1111,8 @@
         tunePillsData = StateManager.getTunePillsData();
     }
     
-    // Generate unique IDs for pills - delegated to StateManager
-    function generateId() {
-        return StateManager.generateId();
-    }
-    
-    // Render tune pills in the container
-    // Pill rendering functionality - delegated to PillRenderer module
-    function renderTunePills() {
-        return PillRenderer.renderTunePills();
-    }
-    
-    // Create a pill element - delegated to PillRenderer module
-    function createPillElement(pill, setIndex, pillIndex) {
-        return PillRenderer.createPillElement(pill, setIndex, pillIndex);
-    }
-    
-    // Add cursor position markers
-    // Cursor management functions - delegated to CursorManager
-    function addCursorPosition(parent, setIndex, pillIndex, positionType) {
-        return CursorManager.addCursorPosition(parent, setIndex, pillIndex, positionType);
-    }
-    
-    function addFinalCursor(containerElement) {
-        return CursorManager.addFinalCursor(containerElement);
-    }
-    
-    function isMobileDevice() {
-        return CursorManager.isMobileDevice();
-    }
-
-    
-    // Create CursorManager wrapper 
-    function setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
-        return CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard);
-    }
-    
-    // Drop indicator creation now handled by DragDrop module
-    
-    // Horizontal drop zone creation now handled by DragDrop module
-    
-    // Drop position calculation now handled by DragDrop module
-    
-    // Pill event listeners now handled by DragDrop module
-    function setupPillEventListeners(pillElement, pillData) {
-        // All pill event handling (click, touch, drag) now delegated to DragDrop module
-        // This wrapper is kept for backward compatibility but functionality moved to DragDrop.setupPillEventListeners()
-        return DragDrop.setupPillEventListeners(pillElement, pillData);
-    }
+    // Module functions are now called directly
+ 
     
     // Specialized function for dropping structured sets at a new position (horizontal zones)
     function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
@@ -1171,7 +1125,7 @@
             return;
         }
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         // Remove dragged pills from their current positions (same logic as performDrop)
         const draggedPillIds = Array.from(PillSelection.getSelectedPills());
@@ -1207,7 +1161,7 @@
         const newSets = dragData.map(set => 
             set.map(pill => ({
                 ...pill,
-                id: generateId(),
+                id: StateManager.generateId(),
                 orderNumber: null
             }))
         );
@@ -1222,7 +1176,7 @@
         // Update StateManager with the modified data
         StateManager.setTunePillsData(tunePillsData);
         
-        renderTunePills();
+        PillRenderer.renderTunePills();
         
         // Apply landing animation
         const movedPillIds = newSets.flat().map(pill => pill.id);
@@ -1234,7 +1188,7 @@
     function performDrop(position, draggedPillIds) {
         if (!draggedPillIds || draggedPillIds.length === 0) return;
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         // Track which sets will become empty after removal
         const originalSetCount = tunePillsData.length;
@@ -1299,7 +1253,7 @@
         // Update StateManager with the modified data
         StateManager.setTunePillsData(tunePillsData);
         
-        renderTunePills();
+        PillRenderer.renderTunePills();
         
         // Apply landing animation to moved pills
         const movedPillIds = draggedPills.map(pill => pill.id);
@@ -1307,9 +1261,6 @@
             applyLandingAnimation(movedPillIds);
         }, 50); // Small delay to ensure pills are rendered
     }
-    
-    // Selection functions
-    // Selection functions now directly call PillSelection methods
     
     // Drag and drop support functions
     function findPillById(pillId) {
@@ -1322,10 +1273,6 @@
         }
         return null;
     }
-    
-    // Drop indicators now handled by DragDrop module
-    
-    // Structured set dropping now handled by DragDrop module
     
     // Context menu functions
     function hideContextMenu(pillId) {
@@ -1434,7 +1381,7 @@
                     // Move cursor after this pill
                     const pillPosition = findPillPosition(pill.id);
                     if (pillPosition) {
-                        setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
+                        CursorManager.setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
                     }
                 }
             });
@@ -1617,8 +1564,6 @@
         menu.appendChild(item);
     }
     
-    // Typing match results cleanup function - called by KeyboardHandler
-    
     // Modal functions - using generic ModalManager methods
     function showLinkModal(pillData) {
         const inputValue = pillData.tuneId ? `https://thesession.org/tunes/${pillData.tuneId}` : '';
@@ -1639,7 +1584,7 @@
         for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
             const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
             if (pillIndex !== -1) {
-                saveToUndo();
+                undoRedoManager.saveToUndo();
                 tunePillsData[setIndex].splice(pillIndex, 1);
                 
                 // Remove empty sets
@@ -1650,50 +1595,13 @@
                 // Update StateManager with the modified data
                 StateManager.setTunePillsData(tunePillsData);
                 
-                renderTunePills();
+                PillRenderer.renderTunePills();
                 break;
             }
         }
     }
     
-    // Delete selected pills now directly calls PillSelection.deleteSelectedPills()
-    
-    // Undo/Redo functions - now delegated to StateManager
-    // Undo/Redo functions now delegated to UndoRedoManager
-    function saveToUndo() {
-        return undoRedoManager.saveToUndo();
-    }
-    
-    function undo() {
-        return undoRedoManager.undo();
-    }
-    
-    function redo() {
-        return undoRedoManager.redo();
-    }
-    
-    // Clipboard functions now delegated to ClipboardManager
-    function copySelectedPills() {
-        return clipboardManager.copySelectedPills();
-    }
-    
-    function cutSelectedPills() {
-        return clipboardManager.cutSelectedPills();
-    }
-    
-    async function pasteFromClipboard() {
-        return clipboardManager.pasteFromClipboard();
-    }
-    
-    function pasteAtPosition(pillsData, position) {
-        return clipboardManager.pasteAtPosition(pillsData, position);
-    }
-    
-    // Text input handling now in TextInput module
-    
-    // handleDelete() now in TextInput module
-    
-    // handleEnterKey() now in TextInput module
+    // All clipboard and undo/redo functions now use modules directly
     
     function removeTemporaryEmptySet() {
         if (temporaryEmptySet !== null && temporaryEmptySet < tunePillsData.length && tunePillsData[temporaryEmptySet].length === 0) {
@@ -1708,9 +1616,6 @@
         temporaryEmptySet = null;
         return false;
     }
-    
-    // finishTyping() and cancelTyping() now in TextInput module
-    // Typing state variables now handled by TextInput module
     
     // Track selection anchor for shift+arrow selection  
     let selectionAnchor = null;
@@ -1754,11 +1659,6 @@
         }
         return -1;
     }
-    
-    
-    // updateCursorWithText() now in TextInput module
-    
-    // insertTunesAtCursor() now in TextInput module
     
     // Show results after all tune matching completes
     function showMatchingResults(pills) {
@@ -2006,7 +1906,7 @@
         }
         
         if (tuneToDelete) {
-            saveToUndo();
+            undoRedoManager.saveToUndo();
             const targetSet = tunePillsData[tuneToDelete.setIndex];
             const wasLastPillInSet = targetSet.length === 1; // Check before deletion
             targetSet.splice(tuneToDelete.pillIndex, 1);
@@ -2032,307 +1932,51 @@
             StateManager.setTunePillsData(tunePillsData);
             
             // Render first, then set cursor position
-            renderTunePills();
+            PillRenderer.renderTunePills();
             
             // Apply the cursor position after rendering when cursor position elements exist
             if (setWasRemoved) {
                 // Set was removed - use the stored cursor position but adjust for removed set
                 if (newCursorPosition.setIndex < tuneToDelete.setIndex) {
                     // Cursor position is in a set before the deleted one, no adjustment needed
-                    setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
+                    CursorManager.setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
                 } else if (newCursorPosition.setIndex === tuneToDelete.setIndex) {
                     // Cursor was in the deleted set, position at the beginning of next set or end
                     if (tuneToDelete.setIndex < tunePillsData.length) {
-                        setCursorPosition(tuneToDelete.setIndex, 0, 'before');
+                        CursorManager.setCursorPosition(tuneToDelete.setIndex, 0, 'before');
                     } else if (tuneToDelete.setIndex > 0) {
                         // No next set, go to end of previous set
-                        setCursorPosition(tuneToDelete.setIndex - 1, tunePillsData[tuneToDelete.setIndex - 1].length - 1, 'after');
+                        CursorManager.setCursorPosition(tuneToDelete.setIndex - 1, tunePillsData[tuneToDelete.setIndex - 1].length - 1, 'after');
                     } else {
                         // No sets left
-                        setCursorPosition(0, 0, 'newset');
+                        CursorManager.setCursorPosition(0, 0, 'newset');
                     }
                 } else {
                     // Cursor position is after deleted set, adjust index
-                    setCursorPosition(newCursorPosition.setIndex - 1, newCursorPosition.pillIndex, newCursorPosition.position);
+                    CursorManager.setCursorPosition(newCursorPosition.setIndex - 1, newCursorPosition.pillIndex, newCursorPosition.position);
                 }
             } else if (shouldCreateTemporaryEmpty) {
                 // Set exists but is now empty (temporary empty set)
                 // Position cursor at the beginning of the empty set
-                setCursorPosition(newCursorPosition.setIndex, 0, 'before');
+                CursorManager.setCursorPosition(newCursorPosition.setIndex, 0, 'before');
             } else {
                 // Set still exists and has pills, use the calculated new cursor position
                 if (newCursorPosition.pillIndex >= targetSet.length) {
                     // Position is beyond the end of the set, position after last pill
-                    setCursorPosition(newCursorPosition.setIndex, targetSet.length - 1, 'after');
+                    CursorManager.setCursorPosition(newCursorPosition.setIndex, targetSet.length - 1, 'after');
                 } else if (newCursorPosition.pillIndex < 0) {
                     // Position is before the beginning, position before first pill
-                    setCursorPosition(newCursorPosition.setIndex, 0, 'before');
+                    CursorManager.setCursorPosition(newCursorPosition.setIndex, 0, 'before');
                 } else {
                     // Position is valid
-                    setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
+                    CursorManager.setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
                 }
             }
         }
     }
     
     // Cursor movement functions
-    function moveCursorLeft(shiftKey = false) {
-        return CursorManager.moveCursorLeft(shiftKey);
-    }
-    
-    function moveCursorLeftOld(shiftKey = false) {
-        if (!cursorPosition) return;
-        
-        // If user is typing, finish typing first
-        if (textInput && textInput.typing) {
-            textInput.finishTyping();
-        }
-        
-        // Remove temporary empty set if moving away from it
-        if (removeTemporaryEmptySet()) {
-            renderTunePills();
-        }
-        
-        let { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Set selection anchor if shift is pressed and we don't have one
-        if (shiftKey && !selectionAnchor) {
-            selectionAnchor = { setIndex, pillIndex };
-        } else if (!shiftKey) {
-            // Clear selection anchor if shift is not pressed
-            selectionAnchor = null;
-            PillSelection.selectNone();
-        }
-        
-        
-        let newSetIndex = setIndex;
-        let newPillIndex = pillIndex;
-        let newPosition = position;
-        
-        if (position === 'after' && pillIndex > 0) {
-            // Move to 'after' the previous pill (which is the same as 'before' current pill)
-            newPillIndex = pillIndex - 1;
-            newPosition = 'after';
-        } else if (position === 'after' && pillIndex === 0) {
-            // At beginning of set, try to move to 'before' position if it exists
-            newPillIndex = 0;
-            newPosition = 'before';
-        } else if (position === 'before' && pillIndex === 0 && setIndex > 0) {
-            // Move to end of previous set
-            const prevSetLength = tunePillsData[setIndex - 1].length;
-            newSetIndex = setIndex - 1;
-            newPillIndex = prevSetLength - 1;
-            newPosition = 'after';
-        } else {
-            // Can't move further left
-            return;
-        }
-        
-        setCursorPosition(newSetIndex, newPillIndex, newPosition);
-        
-        // Handle selection if shift is pressed
-        if (shiftKey && selectionAnchor) {
-            // Select pills between anchor and new position based on cursor movement
-            selectPillsBetweenCursorPositions(
-                { setIndex: selectionAnchor.setIndex, pillIndex: selectionAnchor.pillIndex, position: 'after' },
-                { setIndex: newSetIndex, pillIndex: newPillIndex, position: newPosition }
-            );
-        }
-    }
-    
-    function moveCursorRight(shiftKey = false) {
-        return CursorManager.moveCursorRight(shiftKey);
-    }
-    
-    function moveCursorRightOld(shiftKey = false) {
-        if (!cursorPosition) return;
-        
-        // If user is typing, finish typing first
-        if (textInput && textInput.typing) {
-            textInput.finishTyping();
-        }
-        
-        // Remove temporary empty set if moving away from it
-        if (removeTemporaryEmptySet()) {
-            renderTunePills();
-        }
-        
-        let { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Set selection anchor if shift is pressed and we don't have one
-        if (shiftKey && !selectionAnchor) {
-            selectionAnchor = { setIndex, pillIndex };
-        } else if (!shiftKey) {
-            // Clear selection anchor if shift is not pressed
-            selectionAnchor = null;
-            PillSelection.selectNone();
-        }
-        
-        
-        let newSetIndex = setIndex;
-        let newPillIndex = pillIndex;
-        let newPosition = position;
-        
-        if (setIndex < tunePillsData.length) {
-            const currentSetLength = tunePillsData[setIndex].length;
-            
-            if (position === 'before' && pillIndex === 0) {
-                // Move to 'after' the same pill (first pill in set)
-                newPosition = 'after';
-            } else if (position === 'after' && pillIndex < currentSetLength - 1) {
-                // Move to 'after' the next pill in same set
-                newPillIndex = pillIndex + 1;
-                newPosition = 'after';
-            } else if (position === 'after' && pillIndex === currentSetLength - 1 && setIndex < tunePillsData.length - 1) {
-                // Move to beginning of next set
-                newSetIndex = setIndex + 1;
-                newPillIndex = 0;
-                newPosition = 'before';
-            } else if (position === 'after' && pillIndex === currentSetLength - 1 && setIndex === tunePillsData.length - 1) {
-                // Move to the very end (newset position)
-                newSetIndex = tunePillsData.length;
-                newPillIndex = 0;
-                newPosition = 'newset';
-            } else {
-                // Can't move further right
-                return;
-            }
-        } else {
-            // Can't move further right
-            return;
-        }
-        
-        setCursorPosition(newSetIndex, newPillIndex, newPosition);
-        
-        // Handle selection if shift is pressed (but not for newset position)
-        if (shiftKey && selectionAnchor && newPosition !== 'newset') {
-            selectPillsBetweenPositions(selectionAnchor, { setIndex: newSetIndex, pillIndex: newPillIndex });
-        }
-    }
-    
-    function moveCursorUp(shiftKey = false) {
-        return CursorManager.moveCursorUp(shiftKey);
-    }
-    
-    function moveCursorUpOld(shiftKey = false) {
-        // Move to previous set (line)
-        if (!cursorPosition) return;
-        
-        let { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Set selection anchor if shift is pressed and we don't have one
-        if (shiftKey && !selectionAnchor) {
-            selectionAnchor = { setIndex, pillIndex };
-        } else if (!shiftKey) {
-            // Clear selection anchor if shift is not pressed
-            selectionAnchor = null;
-            PillSelection.selectNone();
-        }
-        
-        
-        let newSetIndex = setIndex;
-        let newPillIndex = pillIndex;
-        let newPosition = position;
-        
-        // Handle special case: cursor is at "newset" position (very end)
-        if (position === 'newset' && setIndex >= tunePillsData.length) {
-            // Move to last set
-            if (tunePillsData.length > 0) {
-                const lastSetLength = tunePillsData[tunePillsData.length - 1].length;
-                newSetIndex = tunePillsData.length - 1;
-                newPillIndex = lastSetLength - 1;
-                newPosition = 'after';
-            } else {
-                return;
-            }
-        } else if (setIndex > 0) {
-            // Move to previous set, try to maintain similar position
-            const prevSetLength = tunePillsData[setIndex - 1].length;
-            
-            if (prevSetLength === 0) {
-                // Empty set, position at beginning
-                newSetIndex = setIndex - 1;
-                newPillIndex = 0;
-                newPosition = 'before';
-            } else {
-                // Try to match position, but clamp to set bounds
-                newSetIndex = setIndex - 1;
-                newPillIndex = Math.min(pillIndex, prevSetLength - 1);
-                newPosition = position;
-            }
-        } else {
-            // Already at first set, do nothing
-            return;
-        }
-        
-        setCursorPosition(newSetIndex, newPillIndex, newPosition);
-        
-        // Handle selection if shift is pressed
-        if (shiftKey && selectionAnchor) {
-            // Select pills between anchor and new position based on cursor movement
-            selectPillsBetweenCursorPositions(
-                { setIndex: selectionAnchor.setIndex, pillIndex: selectionAnchor.pillIndex, position: 'after' },
-                { setIndex: newSetIndex, pillIndex: newPillIndex, position: newPosition }
-            );
-        }
-    }
-    
-    function moveCursorDown(shiftKey = false) {
-        return CursorManager.moveCursorDown(shiftKey);
-    }
-    
-    function moveCursorDownOld(shiftKey = false) {
-        // Move to next set (line)
-        if (!cursorPosition) return;
-        
-        let { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Set selection anchor if shift is pressed and we don't have one
-        if (shiftKey && !selectionAnchor) {
-            selectionAnchor = { setIndex, pillIndex };
-        } else if (!shiftKey) {
-            // Clear selection anchor if shift is not pressed
-            selectionAnchor = null;
-            PillSelection.selectNone();
-        }
-        
-        
-        let newSetIndex = setIndex;
-        let newPillIndex = pillIndex;
-        let newPosition = position;
-        
-        if (setIndex < tunePillsData.length - 1) {
-            // Move to next set, try to maintain similar position
-            const nextSetLength = tunePillsData[setIndex + 1].length;
-            
-            if (nextSetLength === 0) {
-                // Empty set, position at beginning
-                newSetIndex = setIndex + 1;
-                newPillIndex = 0;
-                newPosition = 'before';
-            } else {
-                // Try to match position, but clamp to set bounds
-                newSetIndex = setIndex + 1;
-                newPillIndex = Math.min(pillIndex, nextSetLength - 1);
-                newPosition = position;
-            }
-        } else if (setIndex === tunePillsData.length - 1) {
-            // At last set, move to the "newset" position at the very end
-            newSetIndex = tunePillsData.length;
-            newPillIndex = 0;
-            newPosition = 'newset';
-        } else {
-            // Already at very end (newset), do nothing
-            return;
-        }
-        
-        setCursorPosition(newSetIndex, newPillIndex, newPosition);
-        
-        // Handle selection if shift is pressed (but not for newset position)
-        if (shiftKey && selectionAnchor && newPosition !== 'newset') {
-            selectPillsBetweenPositions(selectionAnchor, { setIndex: newSetIndex, pillIndex: newPillIndex });
-        }
-    }
+    // Cursor movement functions now handled directly by CursorManager
     
     // Event listeners setup
     function setupEventListeners() {
@@ -2413,7 +2057,7 @@
                 // Clear selection and selection anchor when clicking to move cursor
                 CursorManager.clearSelection();
                 
-                setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
+                CursorManager.setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
                 return;
             }
             
@@ -2427,7 +2071,7 @@
             // Clear selection and selection anchor when clicking to move cursor
             CursorManager.clearSelection();
             
-            setCursorPosition(tunePillsData.length, 0, 'newset');
+            CursorManager.setCursorPosition(tunePillsData.length, 0, 'newset');
         });
         
         // Mobile touch handling for container (cursor placement and scrolling)
@@ -2521,7 +2165,7 @@
                     // Clear selection when touching to move cursor
                     CursorManager.clearSelection();
                     
-                    setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
+                    CursorManager.setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
                 } else {
                     // Touch in empty space - set cursor at end
                     if (textInput && textInput.typing) {
@@ -2530,7 +2174,7 @@
                     
                     PillSelection.selectNone();
                     
-                    setCursorPosition(tunePillsData.length, 0, 'newset');
+                    CursorManager.setCursorPosition(tunePillsData.length, 0, 'newset');
                 }
                 
                 e.preventDefault();
@@ -2552,8 +2196,6 @@
         document.getElementById('edit-tune-cancel-btn').addEventListener('click', hideEditModal);
         document.getElementById('edit-tune-save-btn').addEventListener('click', confirmEdit);
     }
-    
-    // Select all now directly calls PillSelection.selectAll()
     
     // Modal control functions
     function hideLinkModal() {
@@ -2582,13 +2224,13 @@
             return;
         }
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         // Update the pill
         window.currentLinkingPill.tuneId = parseInt(tuneId);
         window.currentLinkingPill.state = 'linked';
         
-        renderTunePills();
+        PillRenderer.renderTunePills();
         hideLinkModal();
         
         showMessage('Tune linked successfully!', 'success');
@@ -2598,7 +2240,7 @@
         const newName = document.getElementById('edit-tune-name-input').value.trim();
         if (!newName || !window.currentEditingPill) return;
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         const pill = window.currentEditingPill;
         
