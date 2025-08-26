@@ -305,7 +305,7 @@
 /* Add Person Modal Styles */
 .modal {
     position: fixed;
-    z-index: 1000;
+    z-index: 10000;
     left: 0;
     top: 0;
     width: 100%;
@@ -511,6 +511,7 @@
 }
 </style>
 
+<script src="/static/js/components/modalManager.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Search functionality
@@ -592,13 +593,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function openAddPersonModal() {
-        addPersonModal.style.display = 'block';
+        // Prepare modal content (page-specific business logic)
         showStep1();
         loadSessions();
+        
+        // Show modal using ModalManager
+        ModalManager.showModal('addPersonModal');
     }
 
     function closeAddPersonModal() {
-        addPersonModal.style.display = 'none';
+        ModalManager.hideModal('addPersonModal');
         resetModal();
     }
 

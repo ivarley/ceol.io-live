@@ -11,7 +11,7 @@
             width: 100%;
             height: 100%;
             background-color: var(--dropdown-shadow);
-            z-index: 2000;
+            z-index: 10000;
             display: none;
             align-items: center;
             justify-content: center;
@@ -365,6 +365,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/components/modalManager.js"></script>
 <script>
     const sessionPath = '{{ session.path }}';
     const sessionRecurrence = {{ session.recurrence|tojson if session.recurrence else 'null' }};
@@ -452,7 +453,7 @@
     }
     
     function showAddSessionModal() {
-        const modal = document.getElementById('add-session-instance-modal');
+        // Prepare form fields (page-specific business logic)
         const dateInput = document.getElementById('session-date-input');
         const locationInput = document.getElementById('session-location-input');
         const commentsInput = document.getElementById('session-comments-input');
@@ -466,13 +467,16 @@
         commentsInput.value = '';
         cancelledInput.checked = false;
         
-        modal.style.display = 'flex';
+        // Show modal using ModalManager
+        ModalManager.showModal('add-session-instance-modal', {
+            autoFocus: false // We'll focus manually
+        });
+        
         dateInput.focus();
     }
     
     function hideAddSessionModal() {
-        const modal = document.getElementById('add-session-instance-modal');
-        modal.style.display = 'none';
+        ModalManager.hideModal('add-session-instance-modal');
     }
     
     function addSessionInstance() {

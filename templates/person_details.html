@@ -374,6 +374,7 @@
     </div>
 </div>
 
+<script src="/static/js/components/modalManager.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const personId = {{ person.id }};
@@ -791,13 +792,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function openSessionModal() {
-        addToSessionModal.style.display = 'block';
+        // Prepare modal content (page-specific business logic)
         sessionSearch.value = '';
         loadInitialSessions();
+        
+        // Show modal using ModalManager
+        ModalManager.showModal('addToSessionModal');
     }
 
     function closeSessionModal() {
-        addToSessionModal.style.display = 'none';
+        ModalManager.hideModal('addToSessionModal');
     }
 
     function loadInitialSessions() {
@@ -1217,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Modal Styles */
 .modal {
     position: fixed;
-    z-index: 1000;
+    z-index: 10000;
     left: 0;
     top: 0;
     width: 100%;

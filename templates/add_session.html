@@ -161,7 +161,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 1000;
+        z-index: 10000;
     }
 
     .modal-content {
@@ -295,6 +295,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/components/modalManager.js"></script>
 <script>
 document.getElementById('sessionUrlForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -463,7 +464,7 @@ function fetchSessionData(sessionId) {
 }
 
 function populateModal(sessionData) {
-    // Populate the modal fields with the fetched data
+    // Populate the modal fields with the fetched data (page-specific business logic)
     document.getElementById('thesessionId').value = sessionData.id || '';
     document.getElementById('sessionName').value = sessionData.name || '';
     document.getElementById('sessionPath').value = generatePath(sessionData.city || '', sessionData.name || '');
@@ -476,26 +477,28 @@ function populateModal(sessionData) {
     document.getElementById('inceptionDate').value = sessionData.inception_date || '';
     document.getElementById('recurrence').value = sessionData.recurrence || '';
     
-    // Show the modal
-    document.getElementById('sessionModal').style.display = 'flex';
+    // Show the modal using ModalManager
+    ModalManager.showModal('sessionModal');
 }
 
 function closeSessionModal() {
-    document.getElementById('sessionModal').style.display = 'none';
+    ModalManager.hideModal('sessionModal');
 }
 
 function showExistingSessionModal(sessionPath, sessionName) {
+    // Update modal content (page-specific business logic)
     document.getElementById('existingSessionMessage').textContent = 
         `"${sessionName}" is already in ceol.io; click "Go" to view it.`;
     
     // Store the session path for the Go button
     document.getElementById('goToExistingBtn').setAttribute('data-session-path', sessionPath);
     
-    document.getElementById('existingSessionModal').style.display = 'flex';
+    // Show modal using ModalManager
+    ModalManager.showModal('existingSessionModal');
 }
 
 function closeExistingSessionModal() {
-    document.getElementById('existingSessionModal').style.display = 'none';
+    ModalManager.hideModal('existingSessionModal');
 }
 
 function generatePath(city, sessionName) {
