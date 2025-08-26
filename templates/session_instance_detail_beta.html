@@ -330,20 +330,9 @@
             margin-left: 10px;
         }
         
+        /* Legacy drop-indicator - kept for backwards compatibility but hidden */
         .drop-indicator {
-            display: inline-block;
-            width: 3px;
-            height: 20px;
-            background-color: var(--primary);
-            border-radius: 2px;
-            margin: 0 2px;
-            vertical-align: middle;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
-        
-        .drop-indicator.active {
-            opacity: 1;
+            display: none;
         }
         
         .horizontal-drop-zone {
@@ -417,6 +406,19 @@
             height: 21px;
             background-color: rgba(0, 123, 255, 0.4);
             border-radius: 1px;
+        }
+        
+        /* Show drop indicator when dragging */
+        .cursor-position.drop-active::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: -2px;
+            width: 3px;
+            height: 21px;
+            background-color: var(--primary, #007AFF);
+            border-radius: 1px;
+            opacity: 1;
         }
         
         .text-input {

@@ -483,6 +483,11 @@ class DragDrop {
     
     // Clear all drop indicators
     static clearDropIndicators() {
+        // Remove drop-active class from cursor positions
+        document.querySelectorAll('.cursor-position.drop-active').forEach(cursorPos => {
+            cursorPos.classList.remove('drop-active');
+        });
+        // Still remove old-style drop indicators if they exist
         document.querySelectorAll('.drop-indicator').forEach(indicator => {
             indicator.classList.remove('active');
         });
@@ -509,26 +514,37 @@ class DragDrop {
                 }
             });
         } else if (position.setIndex < sets.length) {
-            // Show pill-level drop indicator
+            // Use existing cursor positions instead of creating new drop indicators
             const targetSet = sets[position.setIndex];
-            const pills = targetSet.querySelectorAll('.tune-pill');
+            const cursorPositions = targetSet.querySelectorAll('.cursor-position');
             
-            // Find or create drop indicator
-            let indicator = targetSet.querySelector(`.drop-indicator[data-position="${position.pillIndex}"]`);
-            if (!indicator) {
-                indicator = this.createDropIndicator();
-                indicator.dataset.position = position.pillIndex;
+            // Find the matching cursor position
+            cursorPositions.forEach(cursorPos => {
+                const cursorSetIndex = parseInt(cursorPos.dataset.setIndex);
+                const cursorPillIndex = parseInt(cursorPos.dataset.pillIndex);
+                const cursorPositionType = cursorPos.dataset.positionType;
                 
-                if (position.pillIndex === 0) {
-                    targetSet.insertBefore(indicator, targetSet.firstChild);
-                } else if (position.pillIndex >= pills.length) {
-                    targetSet.appendChild(indicator);
-                } else {
-                    targetSet.insertBefore(indicator, pills[position.pillIndex]);
+                // Match based on position
+                let matches = false;
+                
+                if (position.position === 'before') {
+                    // Dropping before pill at pillIndex
+                    if (position.pillIndex === 0) {
+                        // Special case: before first pill
+                        matches = (cursorPositionType === 'before' && cursorPillIndex === 0);
+                    } else {
+                        // Between pills: this is the 'after' position of the previous pill
+                        matches = (cursorPositionType === 'after' && cursorPillIndex === position.pillIndex - 1);
+                    }
+                } else if (position.position === 'after') {
+                    // Dropping after the last pill in set
+                    matches = (cursorPositionType === 'after' && cursorPillIndex === position.pillIndex - 1);
                 }
-            }
-            
-            indicator.classList.add('active');
+                
+                if (matches) {
+                    cursorPos.classList.add('drop-active');
+                }
+            });
         }
     }
     
