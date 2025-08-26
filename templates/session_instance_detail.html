@@ -157,7 +157,7 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
+            z-index: 10000;
             display: none;
             align-items: center;
             justify-content: center;
@@ -418,6 +418,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/components/modalManager.js"></script>
 <script>
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';
@@ -1469,31 +1470,25 @@
             currentEditingTuneId = tuneId;
             currentEditingSetting = setting;
             
-            const modal = document.getElementById('edit-tune-modal');
-            const nameInput = document.getElementById('edit-tune-name-input');
-            const urlInput = document.getElementById('edit-tune-url-display');
-            
-            nameInput.value = tuneName;
-            
-            // Set URL field
+            // Prepare URL value for display
+            let urlValue = '';
             if (tuneId) {
-                let url = `https://thesession.org/tunes/${tuneId}`;
+                urlValue = `https://thesession.org/tunes/${tuneId}`;
                 if (setting) {
-                    url += `?setting=${setting}`;
+                    urlValue += `?setting=${setting}`;
                 }
-                urlInput.value = url;
-            } else {
-                urlInput.value = '';
             }
             
-            modal.style.display = 'flex';
-            nameInput.focus();
-            nameInput.select();
+            // Set URL field before showing modal
+            const urlInput = document.getElementById('edit-tune-url-display');
+            urlInput.value = urlValue;
+            
+            // Show modal using generic ModalManager
+            ModalManager.showModalWithInput('edit-tune-modal', '#edit-tune-name-input', tuneName, true);
         }
         
         function hideEditTuneModal() {
-            const modal = document.getElementById('edit-tune-modal');
-            modal.style.display = 'none';
+            ModalManager.hideModal('edit-tune-modal');
             currentEditingTune = null;
             currentEditingOrder = null;
             currentEditingTuneId = null;
@@ -1545,17 +1540,11 @@
         function showAddTuneToSetModal(orderNumber) {
             currentAddToSetOrder = orderNumber;
             
-            const modal = document.getElementById('add-tune-to-set-modal');
-            const input = document.getElementById('add-tune-to-set-input');
-            
-            input.value = '';
-            modal.style.display = 'flex';
-            input.focus();
+            ModalManager.showModalWithInput('add-tune-to-set-modal', '#add-tune-to-set-input', '', false);
         }
         
         function hideAddTuneToSetModal() {
-            const modal = document.getElementById('add-tune-to-set-modal');
-            modal.style.display = 'none';
+            ModalManager.hideModal('add-tune-to-set-modal');
             currentAddToSetOrder = null;
         }
         
@@ -1615,35 +1604,29 @@
             currentLinkingOrder = orderNumber;
             
             const modal = document.getElementById('link-tune-modal');
-            const input = document.getElementById('tune-link-input');
             
-            // Pre-populate with current URL if relinking
+            // Determine input value and modal title
+            let inputValue = '';
+            let modalTitle = 'Link Tune';
+            
             if (currentTuneId) {
-                let currentUrl = `https://thesession.org/tunes/${currentTuneId}`;
+                inputValue = `https://thesession.org/tunes/${currentTuneId}`;
                 if (currentSetting) {
-                    currentUrl += `#setting${currentSetting}`;
+                    inputValue += `#setting${currentSetting}`;
                 }
-                input.value = currentUrl;
-                
-                // Update modal title to indicate relinking
-                const modalTitle = modal.querySelector('h3');
-                modalTitle.textContent = 'Relink Tune';
-            } else {
-                input.value = '';
-                
-                // Reset modal title to original
-                const modalTitle = modal.querySelector('h3');
-                modalTitle.textContent = 'Link Tune';
+                modalTitle = 'Relink Tune';
             }
             
-            modal.style.display = 'flex';
-            input.focus();
-            input.select(); // Select all text for easy replacement
+            // Update modal title
+            const modalTitleElement = modal.querySelector('h3');
+            modalTitleElement.textContent = modalTitle;
+            
+            // Show modal using generic ModalManager
+            ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, true);
         }
         
         function hideLinkTuneModal() {
-            const modal = document.getElementById('link-tune-modal');
-            modal.style.display = 'none';
+            ModalManager.hideModal('link-tune-modal');
             currentLinkingTune = null;
             currentLinkingOrder = null;
         }
@@ -1760,25 +1743,27 @@
         
         // Edit Session Instance Modal Functions
         function showEditSessionModal() {
-            const modal = document.getElementById('edit-session-instance-modal');
+            // Populate fields with current values first
             const dateInput = document.getElementById('edit-session-date-input');
             const locationInput = document.getElementById('edit-session-location-input');
             const commentsInput = document.getElementById('edit-session-comments-input');
             const cancelledInput = document.getElementById('edit-session-cancelled-input');
             
-            // Populate fields with current values
             dateInput.value = sessionInstanceData.date;
             locationInput.value = sessionInstanceData.location_override || '';
             commentsInput.value = sessionInstanceData.comments || '';
             cancelledInput.checked = sessionInstanceData.is_cancelled;
             
-            modal.style.display = 'flex';
+            // Show modal using ModalManager
+            ModalManager.showModal('edit-session-instance-modal', {
+                autoFocus: false // We'll focus manually
+            });
+            
             dateInput.focus();
         }
         
         function hideEditSessionModal() {
-            const modal = document.getElementById('edit-session-instance-modal');
-            modal.style.display = 'none';
+            ModalManager.hideModal('edit-session-instance-modal');
         }
         
         function saveSessionInstance() {

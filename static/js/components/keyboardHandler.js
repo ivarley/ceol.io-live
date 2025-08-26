@@ -27,11 +27,13 @@ class KeyboardHandler {
     static confirmLink = null;
     static confirmEdit = null;
     static removeTypingMatchResults = null;
+    static getModalManager = null;
     
     static initialize(options = {}) {
         this.getCursorManager = options.getCursorManager || (() => window.CursorManager);
         this.getPillSelection = options.getPillSelection || (() => window.PillSelection);
         this.isTyping = options.isTyping || (() => false);
+        this.getModalManager = options.getModalManager || (() => window.ModalManager);
     }
     
     static registerCallbacks(callbacks) {
@@ -216,10 +218,16 @@ class KeyboardHandler {
     }
     
     static handleModalEscape(e) {
-        // Close all modals when Escape is pressed
-        this.hideLinkModal && this.hideLinkModal();
-        this.hideEditModal && this.hideEditModal();
-        this.hideSessionEditModal && this.hideSessionEditModal();
+        // Use ModalManager if available, otherwise fall back to individual functions
+        const modalManager = this.getModalManager && this.getModalManager();
+        if (modalManager && modalManager.hideAllModals) {
+            modalManager.hideAllModals();
+        } else {
+            // Fallback to individual modal hide functions
+            this.hideLinkModal && this.hideLinkModal();
+            this.hideEditModal && this.hideEditModal();
+            this.hideSessionEditModal && this.hideSessionEditModal();
+        }
     }
 }
 

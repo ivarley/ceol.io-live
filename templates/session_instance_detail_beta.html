@@ -507,7 +507,7 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
+            z-index: 10000;
             display: none;
             align-items: center;
             justify-content: center;
@@ -858,6 +858,7 @@
 <script src="/static/js/components/pillSelection.js"></script>
 <script src="/static/js/components/pillInteraction.js"></script>
 <script src="/static/js/components/dragDrop.js"></script>
+<script src="/static/js/components/modalManager.js"></script>
 <script src="/static/js/components/keyboardHandler.js"></script>
 <script>
     const sessionPath = '{{ session_instance.session_path }}';
@@ -1008,7 +1009,8 @@
             KeyboardHandler.initialize({
                 getCursorManager: () => CursorManager,
                 getPillSelection: () => PillSelection,
-                isTyping: () => isTyping
+                isTyping: () => isTyping,
+                getModalManager: () => ModalManager
             });
             
             // Register callbacks that KeyboardHandler needs
@@ -1588,31 +1590,17 @@
         }
     }
     
-    // Modal functions
+    // Modal functions - using generic ModalManager methods
     function showLinkModal(pillData) {
-        document.getElementById('link-tune-modal').style.display = 'flex';
-        const input = document.getElementById('tune-link-input');
-        if (pillData.tuneId) {
-            input.value = `https://thesession.org/tunes/${pillData.tuneId}`;
-        } else {
-            input.value = '';
-        }
-        input.focus();
-        
-        // Store current pill for linking
+        const inputValue = pillData.tuneId ? `https://thesession.org/tunes/${pillData.tuneId}` : '';
+        ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, false);
+        // Store current pill for linking (backward compatibility)
         window.currentLinkingPill = pillData;
     }
     
     function showEditModal(pillData) {
-        document.getElementById('edit-tune-modal').style.display = 'flex';
-        const input = document.getElementById('edit-tune-name-input');
-        input.value = pillData.tuneName;
-        input.focus();
-        input.select();
-        
-        // Enter key handling now managed by KeyboardHandler
-        
-        // Store current pill for editing
+        ModalManager.showModalWithInput('edit-tune-modal', '#edit-tune-name-input', pillData.tuneName, true);
+        // Store current pill for editing (backward compatibility)
         window.currentEditingPill = pillData;
     }
     
@@ -3476,12 +3464,12 @@
     
     // Modal control functions
     function hideLinkModal() {
-        document.getElementById('link-tune-modal').style.display = 'none';
+        ModalManager.hideModal('link-tune-modal');
         window.currentLinkingPill = null;
     }
     
     function hideEditModal() {
-        document.getElementById('edit-tune-modal').style.display = 'none';
+        ModalManager.hideModal('edit-tune-modal');
         window.currentEditingPill = null;
     }
     
@@ -3580,7 +3568,7 @@
     }
     
     function showEditSessionModal() {
-        const modal = document.getElementById('edit-session-instance-modal');
+        // Populate form data first (page-specific business logic)
         const dateInput = document.getElementById('edit-session-date-input');
         const locationInput = document.getElementById('edit-session-location-input');
         const commentsInput = document.getElementById('edit-session-comments-input');
@@ -3591,12 +3579,16 @@
         commentsInput.value = sessionInstanceData.comments || '';
         cancelledInput.checked = sessionInstanceData.is_cancelled;
         
-        modal.style.display = 'flex';
+        // Show modal with generic ModalManager
+        ModalManager.showModal('edit-session-instance-modal', {
+            autoFocus: false // We'll focus manually
+        });
+        
         dateInput.focus();
     }
     
     function hideSessionEditModal() {
-        document.getElementById('edit-session-instance-modal').style.display = 'none';
+        ModalManager.hideModal('edit-session-instance-modal');
     }
     
     function saveSessionInstance() {
@@ -3650,32 +3642,7 @@
     
     // Message display function - uses the existing base template flash message system
     function showMessage(message, type = 'success') {
-        // Remove any existing messages first
-        const existingMessages = document.querySelectorAll('.message');
-        existingMessages.forEach(msg => msg.remove());
-        
-        // Create message element using the base template's existing styles
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
-        
-        // Add to body (the base template styles handle positioning)
-        document.body.appendChild(messageDiv);
-        
-        // Trigger the slide-in animation using the base template's .show class
-        setTimeout(() => {
-            messageDiv.classList.add('show');
-        }, 50);
-        
-        // Auto-hide after 4 seconds
-        setTimeout(() => {
-            messageDiv.classList.remove('show');
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
-                }
-            }, 300);
-        }, 4000);
+        return ModalManager.showMessage(message, type);
     }
     
     // Mark complete link event listener (if link exists)
