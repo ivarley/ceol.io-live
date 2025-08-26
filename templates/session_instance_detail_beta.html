@@ -858,6 +858,7 @@
 <script src="/static/js/components/pillSelection.js"></script>
 <script src="/static/js/components/pillInteraction.js"></script>
 <script src="/static/js/components/dragDrop.js"></script>
+<script src="/static/js/components/textInput.js"></script>
 <script src="/static/js/components/modalManager.js"></script>
 <script src="/static/js/components/keyboardHandler.js"></script>
 <script>
@@ -889,12 +890,8 @@
     
     // State change tracking now handled directly by AutoSaveManager
     
-    // Handle responsive option text - now handled directly by AutoSaveManager
-    let isTyping = false;
-    let typingBuffer = '';
-    let isKeepingKeyboardOpen = false;
-    let typingTimeout = null;  // For 3-second pause matching
-    let typingPill = null;      // Temporary pill being typed
+    // Text input handling now managed by TextInput module
+    let textInput = null;
     
     // Global mobile drag ghost management now handled by DragDrop module
     
@@ -926,19 +923,22 @@
                 }
             });
             
+            // Initialize TextInput module
+            textInput = new TextInput();
+            
             // Register callbacks that CursorManager needs
             CursorManager.registerCallbacks({
-                finishTyping: (keepKeyboard) => finishTyping(keepKeyboard),
+                finishTyping: (keepKeyboard) => textInput.finishTyping(keepKeyboard),
                 removeTemporaryEmptySet: () => removeTemporaryEmptySet(),
                 renderTunePills: () => renderTunePills(),
-                handleTextInput: (char) => handleTextInput(char),
-                handleBackspace: () => handleBackspace()
+                handleTextInput: (char) => textInput.handleTextInput(char),
+                handleBackspace: () => textInput.handleBackspace()
             });
             
             // Set typing-related variables that CursorManager needs access to
-            CursorManager.isTyping = () => isTyping;
-            CursorManager.typingBuffer = () => typingBuffer;
-            CursorManager.isKeepingKeyboardOpen = () => isKeepingKeyboardOpen;
+            CursorManager.isTyping = () => textInput.typing;
+            CursorManager.typingBuffer = () => textInput.buffer;
+            CursorManager.isKeepingKeyboardOpen = () => textInput.keepingKeyboardOpen;
             
             // Initialize PillRenderer
             PillRenderer.initialize({
@@ -980,8 +980,8 @@
                 getDragDrop: () => DragDrop,
                 showContextMenu: (e, pillData) => showContextMenu(e, pillData),
                 hideContextMenu: (pillId) => hideContextMenu(pillId),
-                isTyping: () => isTyping,
-                finishTyping: () => finishTyping()
+                isTyping: () => textInput.typing,
+                finishTyping: () => textInput.finishTyping()
             });
             
             // Initialize DragDrop
@@ -1009,18 +1009,18 @@
             KeyboardHandler.initialize({
                 getCursorManager: () => CursorManager,
                 getPillSelection: () => PillSelection,
-                isTyping: () => isTyping,
+                isTyping: () => textInput.typing,
                 getModalManager: () => ModalManager
             });
             
             // Register callbacks that KeyboardHandler needs
             KeyboardHandler.registerCallbacks({
-                handleTextInput: (char) => handleTextInput(char),
-                handleBackspace: () => handleBackspace(),
-                handleDelete: () => handleDelete(),
-                handleEnterKey: () => handleEnterKey(),
-                finishTyping: () => finishTyping(),
-                cancelTyping: () => cancelTyping(),
+                handleTextInput: (char) => textInput.handleTextInput(char),
+                handleBackspace: () => textInput.handleBackspace(),
+                handleDelete: () => textInput.handleDelete(),
+                handleEnterKey: () => textInput.handleEnterKey(),
+                finishTyping: () => textInput.finishTyping(),
+                cancelTyping: () => textInput.cancelTyping(),
                 undo: () => undo(),
                 redo: () => redo(),
                 copySelectedPills: () => copySelectedPills(),
@@ -1395,7 +1395,7 @@
                 hideMatchResultsMenu(pill.id);
                 
                 // If we're still typing, maintain typing state
-                if (isTyping) {
+                if (textInput && textInput.typing) {
                     // Move cursor after this pill
                     const pillPosition = findPillPosition(pill.id);
                     if (pillPosition) {
@@ -1583,12 +1583,6 @@
     }
     
     // Typing match results cleanup function - called by KeyboardHandler
-    function removeTypingMatchResults() {
-        const existingMenu = document.querySelector('.typing-match-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-    }
     
     // Modal functions - using generic ModalManager methods
     function showLinkModal(pillData) {
@@ -1922,482 +1916,11 @@
         renderTunePills();
     }
     
-    // Text input handling functions
-    function handleTextInput(char) {
-        if (!isTyping) {
-            isTyping = true;
-            typingBuffer = '';
-            typingPill = null;
-        }
-        
-        // Clear any existing typing timeout
-        if (typingTimeout) {
-            clearTimeout(typingTimeout);
-            typingTimeout = null;
-        }
-        
-        // Handle comma and semicolon as immediate tune separators
-        if (char === ',' || char === ';') {
-            // If we have content in the buffer, finish the current tune first
-            if (typingBuffer.trim()) {
-                const tuneName = typingBuffer.trim();
-                typingBuffer = '';
-                
-                // Insert the current tune and start matching
-                insertTunesAtCursor([tuneName], true); // Keep keyboard open for continued typing
-                
-                // Continue in typing mode for the next tune
-                CursorManager.updateCursorWithText();
-            }
-            // Don't add the comma/semicolon to the buffer
-            return;
-        }
-        
-        typingBuffer += char;
-        CursorManager.updateCursorWithText();
-        
-        // Set a timeout to trigger matching after 3 seconds of no typing
-        typingTimeout = setTimeout(() => {
-            if (isTyping && typingBuffer.trim()) {
-                // Trigger matching but stay in typing mode
-                performTypingMatch();
-            }
-        }, 3000);
-    }
+    // Text input handling now in TextInput module
     
-    // Perform matching while still in typing mode
-    function performTypingMatch() {
-        if (!isTyping || !typingBuffer.trim()) return;
-        
-        // Create a temporary pill for matching
-        if (!typingPill) {
-            typingPill = {
-                id: 'typing-' + Date.now(),
-                orderNumber: null,
-                tuneId: null,
-                tuneName: typingBuffer.trim(),
-                setting: null,
-                tuneType: null,
-                state: 'typing'
-            };
-        } else {
-            typingPill.tuneName = typingBuffer.trim();
-        }
-        
-        // Find the previous tune type if we're in a set
-        let previousTuneType = null;
-        const cursorPosition = CursorManager.getCursorPosition();
-        if (cursorPosition) {
-            const { setIndex, pillIndex, position } = cursorPosition;
-            console.log(`Finding previous tune type - cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
-            console.log(`tunePillsData structure:`, tunePillsData.map((set, i) => `Set ${i}: ${set.length} pills`));
-            
-            if (setIndex < tunePillsData.length) {
-                const set = tunePillsData[setIndex];
-                console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
-                
-                // Different logic based on cursor position
-                if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
-                    // Cursor is after a pill - look backwards from current pill
-                    console.log(`Looking backwards from pill ${pillIndex} in 'after' position`);
-                    for (let i = pillIndex; i >= 0; i--) {
-                        console.log(`Checking pill ${i}: ${set[i].tuneName} (${set[i].tuneType})`);
-                        if (set[i].tuneType) {
-                            previousTuneType = set[i].tuneType;
-                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
-                            break;
-                        }
-                    }
-                } else if (position === 'before' && pillIndex > 0 && pillIndex <= set.length) {
-                    // Cursor is before a pill but not the first - look at previous pill
-                    console.log(`Looking backwards from pill ${pillIndex - 1} in 'before' position`);
-                    for (let i = pillIndex - 1; i >= 0; i--) {
-                        console.log(`Checking pill ${i}: ${set[i].tuneName} (${set[i].tuneType})`);
-                        if (set[i].tuneType) {
-                            previousTuneType = set[i].tuneType;
-                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
-                            break;
-                        }
-                    }
-                } else if (position === 'newset' && setIndex > 0) {
-                    // Starting a new set - check the last tune of the previous set
-                    const prevSet = tunePillsData[setIndex - 1];
-                    console.log(`Looking in previous set (${setIndex - 1}) with ${prevSet ? prevSet.length : 0} pills`);
-                    if (prevSet && prevSet.length > 0) {
-                        for (let i = prevSet.length - 1; i >= 0; i--) {
-                            console.log(`Checking prev set pill ${i}: ${prevSet[i].tuneName} (${prevSet[i].tuneType})`);
-                            if (prevSet[i].tuneType) {
-                                previousTuneType = prevSet[i].tuneType;
-                                console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    console.log(`No matching cursor position logic for setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
-                }
-            } else {
-                console.log(`setIndex ${setIndex} >= tunePillsData.length ${tunePillsData.length}`);
-            }
-        } else {
-            console.log(`No cursorPosition available`);
-        }
-        
-        // Store previous tune type on the pill for the API call
-        typingPill.previousTuneType = previousTuneType;
-        
-        // Call autoMatchTune with stillTyping flag
-        autoMatchTune(typingPill, true).then(() => {
-            // If we got results, show them as a dropdown menu
-            if (typingPill.matchResults && typingPill.matchResults.length > 0) {
-                // Show the match results menu positioned at the typing cursor
-                showTypingMatchResults(typingPill);
-            }
-        });
-    }
+    // handleDelete() now in TextInput module
     
-    // Show match results for the tune being typed
-    function showTypingMatchResults(pill) {
-        // Hide any existing typing match results
-        const existingMenu = document.querySelector('.typing-match-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
-        
-        if (!pill.matchResults || pill.matchResults.length === 0) {
-            return;
-        }
-        
-        // Find the typing text element
-        const typingText = document.querySelector('.typing-text');
-        if (!typingText) {
-            return;
-        }
-        
-        const menu = document.createElement('div');
-        menu.className = 'tune-context-menu typing-match-menu';
-        menu.style.display = 'block';
-        
-        const rect = typingText.getBoundingClientRect();
-        
-        // Position menu below the typing text
-        menu.style.position = 'fixed';
-        menu.style.left = rect.left + 'px';
-        menu.style.top = (rect.bottom + 5) + 'px';
-        menu.style.width = 'auto';
-        menu.style.minWidth = Math.max(200, rect.width) + 'px';
-        menu.style.maxWidth = Math.min(600, window.innerWidth - rect.left - 20) + 'px';
-        
-        // Use a neutral background for the menu
-        menu.style.backgroundColor = 'white';
-        menu.style.color = '#212529';
-        menu.style.border = '1px solid #dee2e6';
-        menu.style.borderRadius = '4px';
-        menu.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-        menu.style.zIndex = '1000';
-        
-        // Add match results as menu items
-        pill.matchResults.forEach((result, index) => {
-            const item = document.createElement('a');
-            item.style.display = 'block';
-            item.style.padding = '8px 12px';
-            item.style.cursor = 'pointer';
-            item.style.borderBottom = index < pill.matchResults.length - 1 ? '1px solid #f0f0f0' : 'none';
-            item.style.color = '#212529';
-            item.style.textDecoration = 'none';
-            
-            // Show tune name and type
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = result.tune_name;
-            nameSpan.style.fontWeight = '500';
-            item.appendChild(nameSpan);
-            
-            if (result.tune_type) {
-                const typeSpan = document.createElement('span');
-                typeSpan.textContent = ` (${result.tune_type})`;
-                typeSpan.style.color = '#6c757d';
-                typeSpan.style.fontSize = '0.9em';
-                item.appendChild(typeSpan);
-            }
-            
-            // Hover effect
-            item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = '#f8f9fa';
-            });
-            item.addEventListener('mouseleave', () => {
-                item.style.backgroundColor = 'transparent';
-            });
-            
-            // Click to select this match
-            item.addEventListener('click', () => {
-                // Apply the selected match to the typing buffer
-                typingBuffer = result.tune_name;
-                CursorManager.updateCursorWithText();
-                
-                // Store the match info for when we finish typing
-                typingPill.tuneId = result.tune_id;
-                typingPill.tuneName = result.tune_name;
-                typingPill.tuneType = result.tune_type;
-                typingPill.state = 'matched';
-                
-                // Hide the menu
-                menu.remove();
-                
-                // Finish typing and insert the matched tune
-                finishTyping(true);
-            });
-            
-            menu.appendChild(item);
-        });
-        
-        document.body.appendChild(menu);
-        
-        // Remove menu when typing continues or stops
-        const removeMenu = () => {
-            const menu = document.querySelector('.typing-match-menu');
-            if (menu) {
-                menu.remove();
-            }
-        };
-        
-        // Menu removal on keypress now handled by KeyboardHandler
-    }
-    
-    function handleBackspace() {
-        // If multiple pills are selected, delete them all
-        if (PillSelection.hasSelection()) {
-            PillSelection.deleteSelectedPills();
-            return;
-        }
-        
-        if (isTyping && typingBuffer.length > 0) {
-            typingBuffer = typingBuffer.slice(0, -1);
-            CursorManager.updateCursorWithText();
-        } else if (CursorManager.getCursorPosition() && !isTyping) {
-            const cursorPosition = CursorManager.getCursorPosition();
-            const { setIndex, pillIndex, position } = cursorPosition;
-            
-            // Special case: At the beginning of an empty line (after deleting leftmost tune)
-            if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length === 0) {
-                // Don't do anything if this is the first line
-                if (setIndex === 0) {
-                    return;
-                }
-                
-                // Delete the set break and merge with previous line
-                saveToUndo();
-                
-                // Just remove the empty set and position cursor at end of previous set
-                tunePillsData.splice(setIndex, 1);
-                
-                // Update StateManager with the modified data
-                StateManager.setTunePillsData(tunePillsData);
-                
-                // Position cursor at end of previous set
-                renderTunePills();
-                if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
-                    setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
-                } else {
-                    setCursorPosition(0, 0, 'before');
-                }
-                return;
-            }
-            
-            // Check for another special case: At the beginning of a line with content
-            if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length > 0 && setIndex > 0) {
-                // At the beginning of a line with content - merge current set with previous set
-                saveToUndo();
-                const prevSet = tunePillsData[setIndex - 1];
-                const currentSet = tunePillsData[setIndex];
-                const prevSetOriginalLength = prevSet.length;
-                
-                // Append all pills from current set to previous set
-                prevSet.push(...currentSet);
-                
-                // Remove the current set
-                tunePillsData.splice(setIndex, 1);
-                
-                // Update StateManager with the modified data
-                StateManager.setTunePillsData(tunePillsData);
-                
-                // Position cursor where the merge happened
-                renderTunePills();
-                setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
-                return;
-            }
-            
-            // Normal backspace behavior: delete tune to the left
-            deleteTuneAtCursor();
-        }
-    }
-    
-    function handleDelete() {
-        // If multiple pills are selected, delete them all
-        if (PillSelection.hasSelection()) {
-            PillSelection.deleteSelectedPills();
-            return;
-        }
-        
-        const cursorPosition = CursorManager.getCursorPosition();
-        if (!cursorPosition || isTyping) return;
-        
-        const { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Special case: On an empty temporary line - just remove the empty line
-        if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length === 0) {
-            // First line, do nothing
-            if (setIndex === 0) {
-                return;
-            }
-            
-            // Just remove the empty set without merging anything
-            saveToUndo();
-            tunePillsData.splice(setIndex, 1);
-            
-            // Update StateManager with the modified data
-            StateManager.setTunePillsData(tunePillsData);
-            
-            // Position cursor at end of previous set
-            renderTunePills();
-            if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
-                setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
-            } else {
-                setCursorPosition(0, 0, 'before');
-            }
-            return;
-        }
-        
-        // Special case: At the end of a line - merge next line's content into current line
-        if (position === 'after' && pillIndex === tunePillsData[setIndex].length - 1) {
-            // Check if there's a next set to merge
-            if (setIndex + 1 < tunePillsData.length) {
-                saveToUndo();
-                const currentSet = tunePillsData[setIndex];
-                const nextSet = tunePillsData[setIndex + 1];
-                const currentSetOriginalLength = currentSet.length;
-                
-                // Append all pills from next set to current set
-                currentSet.push(...nextSet);
-                
-                // Remove the next set
-                tunePillsData.splice(setIndex + 1, 1);
-                
-                // Update StateManager with the modified data
-                StateManager.setTunePillsData(tunePillsData);
-                
-                // Keep cursor at end of original current set content
-                renderTunePills();
-                setCursorPosition(setIndex, currentSetOriginalLength - 1, 'after');
-                return;
-            }
-        }
-        
-        // Normal delete behavior: delete tune to the right
-        let tuneToDelete = null;
-        let newCursorPosition = null;
-        
-        if (position === 'before') {
-            // Delete the pill at the current position
-            if (pillIndex < tunePillsData[setIndex].length) {
-                tuneToDelete = { setIndex, pillIndex };
-                // Cursor stays in the same position (before the next pill)
-                newCursorPosition = { setIndex, pillIndex, position: 'before' };
-            }
-        } else if (position === 'after') {
-            // Delete the next pill if it exists
-            if (pillIndex + 1 < tunePillsData[setIndex].length) {
-                tuneToDelete = { setIndex, pillIndex: pillIndex + 1 };
-                // Cursor stays after the current pill
-                newCursorPosition = { setIndex, pillIndex, position: 'after' };
-            } else if (setIndex + 1 < tunePillsData.length && tunePillsData[setIndex + 1].length > 0) {
-                // At end of set, delete first pill of next set
-                tuneToDelete = { setIndex: setIndex + 1, pillIndex: 0 };
-                // Cursor stays at end of current set
-                newCursorPosition = { setIndex, pillIndex, position: 'after' };
-            }
-        }
-        
-        if (tuneToDelete) {
-            saveToUndo();
-            const targetSet = tunePillsData[tuneToDelete.setIndex];
-            const wasLastPillInSet = targetSet.length === 1; // Check before deletion
-            targetSet.splice(tuneToDelete.pillIndex, 1);
-            
-            // Check if this deletion creates a temporary empty set
-            // This happens when deleting the only pill in a set and cursor stays in that set
-            const shouldCreateTemporaryEmpty = (targetSet.length === 0 && 
-                                              wasLastPillInSet &&
-                                              newCursorPosition && 
-                                              newCursorPosition.setIndex === tuneToDelete.setIndex);
-            
-            // Handle empty sets
-            if (targetSet.length === 0 && shouldCreateTemporaryEmpty) {
-                // Mark this as a temporary empty set
-                temporaryEmptySet = tuneToDelete.setIndex;
-            } else if (targetSet.length === 0) {
-                // Remove the empty set entirely and adjust cursor positions
-                tunePillsData.splice(tuneToDelete.setIndex, 1);
-                // Adjust cursor position if needed
-                if (newCursorPosition && newCursorPosition.setIndex > tuneToDelete.setIndex) {
-                    newCursorPosition.setIndex--;
-                } else if (newCursorPosition && newCursorPosition.setIndex === tuneToDelete.setIndex) {
-                    // The set we were in was removed
-                    if (tuneToDelete.setIndex > 0) {
-                        // Go to end of previous set
-                        newCursorPosition = { 
-                            setIndex: tuneToDelete.setIndex - 1, 
-                            pillIndex: tunePillsData[tuneToDelete.setIndex - 1].length - 1, 
-                            position: 'after' 
-                        };
-                    } else if (tunePillsData.length > 0) {
-                        // Go to beginning of next set (which is now at index 0)
-                        newCursorPosition = { setIndex: 0, pillIndex: 0, position: 'before' };
-                    } else {
-                        // No sets left
-                        newCursorPosition = { setIndex: 0, pillIndex: 0, position: 'newset' };
-                    }
-                }
-            }
-            
-            renderTunePills();
-            
-            // Apply the new cursor position
-            if (newCursorPosition) {
-                // Ensure the position is valid
-                if (newCursorPosition.setIndex < tunePillsData.length) {
-                    const setLength = tunePillsData[newCursorPosition.setIndex].length;
-                    if (newCursorPosition.position === 'after' && newCursorPosition.pillIndex >= setLength) {
-                        newCursorPosition.pillIndex = setLength - 1;
-                    } else if (newCursorPosition.position === 'before' && newCursorPosition.pillIndex > setLength) {
-                        newCursorPosition.pillIndex = setLength;
-                    }
-                }
-                setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
-            }
-        }
-    }
-    
-    function handleEnterKey() {
-        const cursorPosition = CursorManager.getCursorPosition();
-        if (!cursorPosition) return;
-        
-        const { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Only create new line if at the end of a set (after the last pill)
-        if (position === 'after' && tunePillsData[setIndex] && pillIndex === tunePillsData[setIndex].length - 1) {
-            // Create temporary empty set after current set
-            const newSetIndex = setIndex + 1;
-            tunePillsData.splice(newSetIndex, 0, []);
-            temporaryEmptySet = newSetIndex;
-            
-            // Update StateManager with the modified data
-            StateManager.setTunePillsData(tunePillsData);
-            
-            renderTunePills();
-            setCursorPosition(newSetIndex, 0, 'before');
-            
-        }
-    }
+    // handleEnterKey() now in TextInput module
     
     function removeTemporaryEmptySet() {
         if (temporaryEmptySet !== null && temporaryEmptySet < tunePillsData.length && tunePillsData[temporaryEmptySet].length === 0) {
@@ -2413,97 +1936,11 @@
         return false;
     }
     
-    function finishTyping(keepKeyboardOpen = false) {
-        // Clear any typing timeout
-        if (typingTimeout) {
-            clearTimeout(typingTimeout);
-            typingTimeout = null;
-        }
-        
-        // Hide any typing match menu
-        const typingMenu = document.querySelector('.typing-match-menu');
-        if (typingMenu) {
-            typingMenu.remove();
-        }
-        
-        // If we're trying to keep keyboard open, set the flag
-        if (keepKeyboardOpen) {
-            isKeepingKeyboardOpen = true;
-            // Clear the flag after a delay to allow processing to complete
-            setTimeout(() => {
-                isKeepingKeyboardOpen = false;
-            }, 1000);
-        }
-        
-        if (isTyping && typingBuffer.trim()) {
-            const tuneNames = typingBuffer.split(/[,;]/).map(name => name.trim()).filter(name => name);
-            insertTunesAtCursor(tuneNames, keepKeyboardOpen);
-        }
-        
-        typingBuffer = '';
-        isTyping = false;
-        typingPill = null;
-        CursorManager.updateCursorWithText();
-        
-        // On mobile, only hide keyboard if not continuing to type
-        if (isMobileDevice() && !keepKeyboardOpen) {
-            const container = document.getElementById('tune-pills-container');
-            if (container) {
-                container.contentEditable = 'false';
-                container.blur();
-            }
-        } else if (isMobileDevice() && keepKeyboardOpen) {
-            // When keeping keyboard open, ensure the container stays focused and editable
-            const container = document.getElementById('tune-pills-container');
-            if (container) {
-                // Keep contentEditable true and don't blur
-                container.contentEditable = 'true';
-                container.inputMode = 'text';
-                
-                // Re-focus after a longer delay to ensure everything is complete
-                setTimeout(() => {
-                    container.focus();
-                }, 300);
-            }
-        }
-    }
+    // finishTyping() and cancelTyping() now in TextInput module
+    // Typing state variables now handled by TextInput module
     
-    function cancelTyping() {
-        // Clear any typing timeout
-        if (typingTimeout) {
-            clearTimeout(typingTimeout);
-            typingTimeout = null;
-        }
-        
-        // Hide any typing match menu
-        const typingMenu = document.querySelector('.typing-match-menu');
-        if (typingMenu) {
-            typingMenu.remove();
-        }
-        
-        typingBuffer = '';
-        isTyping = false;
-        typingPill = null;
-        CursorManager.updateCursorWithText();
-        
-        // On mobile, remove contenteditable to hide keyboard
-        if (isMobileDevice()) {
-            const container = document.getElementById('tune-pills-container');
-            if (container) {
-                container.contentEditable = 'false';
-                container.blur();
-            }
-        }
-    }
-    
-    // Track the original cursor context during typing
-    let typingContext = null;
-    
-    // Track selection anchor for shift+arrow selection
+    // Track selection anchor for shift+arrow selection  
     let selectionAnchor = null;
-    
-    // Track if we need to re-render after typing finishes
-    let pendingRender = false;
     
     // Track temporary empty line
     let temporaryEmptySet = null;
@@ -2546,126 +1983,9 @@
     }
     
     
-    function updateCursorWithText() {
-        return CursorManager.updateCursorWithText();
-    }
+    // updateCursorWithText() now in TextInput module
     
-    function insertTunesAtCursor(tuneNames, keepKeyboardOpen = false) {
-        const cursorPosition = CursorManager.getCursorPosition();
-        if (!cursorPosition || tuneNames.length === 0) return;
-        
-        // If we're adding tunes to a temporary empty set, make it permanent
-        if (temporaryEmptySet !== null && cursorPosition.setIndex === temporaryEmptySet) {
-            temporaryEmptySet = null;
-        }
-        
-        saveToUndo();
-        
-        const { setIndex, pillIndex, position } = cursorPosition;
-        
-        // Calculate the previous tune type based on cursor position before inserting pills
-        let previousTuneType = null;
-        console.log(`insertTunesAtCursor - Finding previous tune type for cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
-        
-        if (setIndex < tunePillsData.length) {
-            const set = tunePillsData[setIndex];
-            console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
-            
-            if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
-                // Cursor is after a pill - look backwards from current pill
-                for (let i = pillIndex; i >= 0; i--) {
-                    if (set[i].tuneType) {
-                        previousTuneType = set[i].tuneType;
-                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
-                        break;
-                    }
-                }
-            } else if (position === 'before' && pillIndex > 0) {
-                // Cursor is before a pill but not the first - look at previous pill
-                for (let i = pillIndex - 1; i >= 0; i--) {
-                    if (set[i].tuneType) {
-                        previousTuneType = set[i].tuneType;
-                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
-                        break;
-                    }
-                }
-            }
-        } else if (position === 'newset' && setIndex > 0) {
-            // Starting a new set - check the last tune of the previous set
-            const prevSet = tunePillsData[setIndex - 1];
-            if (prevSet && prevSet.length > 0) {
-                for (let i = prevSet.length - 1; i >= 0; i--) {
-                    if (prevSet[i].tuneType) {
-                        previousTuneType = prevSet[i].tuneType;
-                        console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // Create new pills with the calculated previous tune type
-        const newPills = tuneNames.map(name => ({
-            id: generateId(),
-            orderNumber: null,
-            tuneId: null,
-            tuneName: name,
-            setting: null,
-            tuneType: null,
-            state: 'loading',  // Show loading spinner until API responds
-            previousTuneType: previousTuneType  // Store for API call
-        }));
-        
-        console.log(`Created ${newPills.length} pills with previousTuneType: ${previousTuneType}`);
-        
-        // Attempt to auto-match each tune via API
-        const matchPromises = newPills.map(pill => autoMatchTune(pill));
-        
-        // Wait for all matching to complete, then show appropriate message
-        Promise.all(matchPromises).then(() => {
-            showMatchingResults(newPills);
-        });
-        
-        
-        if (position === 'newset') {
-            if (setIndex >= tunePillsData.length) {
-                // Create new set at end
-                tunePillsData.push(newPills);
-                // Position cursor after the last inserted pill in this new set
-                setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after', keepKeyboardOpen);
-            } else {
-                // Create new set at specific index (insert between existing sets)
-                tunePillsData.splice(setIndex, 0, newPills);
-                // Position cursor after the last inserted pill in this new set
-                setCursorPosition(setIndex, newPills.length - 1, 'after', keepKeyboardOpen);
-            }
-        } else {
-            // Insert into existing set
-            const targetSet = tunePillsData[setIndex];
-            let insertIndex = pillIndex;
-            
-            if (position === 'before') {
-                insertIndex = Math.max(0, pillIndex);
-            } else if (position === 'after') {
-                insertIndex = Math.min(targetSet.length, pillIndex + 1);
-            }
-            
-            
-            // Insert all new pills at the position
-            newPills.forEach((pill, index) => {
-                targetSet.splice(insertIndex + index, 0, pill);
-            });
-            
-            // Move cursor to after the inserted pills
-            const newCursorPillIndex = insertIndex + newPills.length - 1;
-            setCursorPosition(setIndex, newCursorPillIndex, 'after', keepKeyboardOpen);
-        }
-        
-        // Update StateManager with the modified data
-        StateManager.setTunePillsData(tunePillsData);
-        
-        renderTunePills();
-    }
+    // insertTunesAtCursor() now in TextInput module
     
     // Show results after all tune matching completes
     function showMatchingResults(pills) {
@@ -2991,8 +2311,8 @@
         if (!cursorPosition) return;
         
         // If user is typing, finish typing first
-        if (isTyping) {
-            finishTyping();
+        if (textInput && textInput.typing) {
+            textInput.finishTyping();
         }
         
         // Remove temporary empty set if moving away from it
@@ -3055,8 +2375,8 @@
         if (!cursorPosition) return;
         
         // If user is typing, finish typing first
-        if (isTyping) {
-            finishTyping();
+        if (textInput && textInput.typing) {
+            textInput.finishTyping();
         }
         
         // Remove temporary empty set if moving away from it
@@ -3313,7 +2633,7 @@
                 
                 
                 // If user is typing, finish typing first
-                if (isTyping) {
+                if (textInput && textInput.typing) {
                     finishTyping();
                 }
                 
@@ -3327,7 +2647,7 @@
             // For clicks in other empty space, set cursor at end
             
             // If user is typing, finish typing first
-            if (isTyping) {
+            if (textInput && textInput.typing) {
                 finishTyping();
             }
             
@@ -3421,7 +2741,7 @@
                     }
                     
                     // If user is typing, finish typing first
-                    if (isTyping) {
+                    if (textInput && textInput.typing) {
                         finishTyping();
                     }
                     
@@ -3431,7 +2751,7 @@
                     setCursorPosition(setIndex, bestPosition.pillIndex, bestPosition.position);
                 } else {
                     // Touch in empty space - set cursor at end
-                    if (isTyping) {
+                    if (textInput && textInput.typing) {
                         finishTyping();
                     }
                     
