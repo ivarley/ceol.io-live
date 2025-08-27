@@ -472,6 +472,14 @@ function findPillIndex(allPills, pillPos) {
 
 // Show results after all tune matching completes
 function showMatchingResults(pills) {
+    // Check if any pills failed due to authentication
+    const authFailedCount = pills.filter(pill => pill.authenticationFailed).length;
+    if (authFailedCount > 0) {
+        // Don't show the generic message if authentication failed
+        // The auth-specific message was already shown
+        return;
+    }
+    
     const linkedCount = pills.filter(pill => pill.state === 'linked').length;
     const unlinkedCount = pills.filter(pill => pill.state === 'unlinked').length;
     const totalCount = pills.length;
@@ -524,7 +532,6 @@ async function autoMatchTune(pill, stillTyping = false) {
             }
         }
         
-        console.log(`Making API request to match tune: "${pill.tuneName}" (previous type: ${previousTuneType || 'none'})`);
         const response = await fetch(`/api/sessions/${sessionPath}/${sessionDate}/match_tune`, {
             method: 'POST',
             headers: {
@@ -536,17 +543,31 @@ async function autoMatchTune(pill, stillTyping = false) {
             })
         });
         
-        console.log(`API response status for "${pill.tuneName}": ${response.status}`);
-        
-        if (!response.ok) {
-            console.warn(`Failed to match tune "${pill.tuneName}": ${response.status}`);
-            const errorText = await response.text();
-            console.warn('Error response:', errorText);
+        // Check for authentication error specifically
+        if (response.status === 401) {
+            console.warn('Authentication required for tune matching');
+            // Show message to user
+            showMessage('You must log in to match tunes', 'warning');
+            // Set pill to unlinked state so it's not spinning
+            pill.state = 'unlinked';
+            pill.authenticationFailed = true;  // Mark that this failed due to auth
+            pill.matchResults = null;
+            PillRenderer.updatePillAppearance(pill);
             return;
         }
         
+        if (!response.ok) {
+            console.warn(`Failed to match tune "${pill.tuneName}": ${response.status}`);
+            // Try to get error details if response is JSON
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                const errorData = await response.json();
+                console.warn('Error response:', errorData);
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const result = await response.json();
-        console.log(`API result for "${pill.tuneName}":`, result);
         
         if (result.success && result.results) {
             // Store the results on the pill for later use

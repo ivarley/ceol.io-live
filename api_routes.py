@@ -11,6 +11,20 @@ from database import (
 from email_utils import send_email_via_sendgrid
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
+from functools import wraps
+
+
+def api_login_required(f):
+    """
+    Decorator for API endpoints that require authentication.
+    Returns JSON error response instead of redirecting to login page.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def get_timezone_for_display(session_path=None, user_timezone=None):
@@ -3686,7 +3700,7 @@ def reactivate_session(session_path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def match_tune_ajax(session_path, date):
     """
     Match a tune name against the database without saving anything.
@@ -3826,7 +3840,7 @@ def match_tune_ajax(session_path, date):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def test_match_tune_ajax(session_path, date):
     """
     Test endpoint for the enhanced match_tune functionality.
@@ -3865,7 +3879,7 @@ def test_match_tune_ajax(session_path, date):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def save_session_instance_tunes_ajax(session_path, date):
     """
     Save the complete tune list for a session instance from the beta page.
