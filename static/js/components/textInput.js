@@ -290,7 +290,7 @@ class TextInput {
                 }
                 
                 // Delete the set break and merge with previous line
-                saveToUndo();
+                undoRedoManager.saveToUndo();
                 
                 // Just remove the empty set and position cursor at end of previous set
                 tunePillsData.splice(setIndex, 1);
@@ -299,11 +299,11 @@ class TextInput {
                 StateManager.setTunePillsData(tunePillsData);
                 
                 // Position cursor at end of previous set
-                renderTunePills();
+                PillRenderer.renderTunePills();
                 if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
-                    setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
+                    CursorManager.setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
                 } else {
-                    setCursorPosition(0, 0, 'before');
+                    CursorManager.setCursorPosition(0, 0, 'before');
                 }
                 return;
             }
@@ -311,7 +311,7 @@ class TextInput {
             // Check for another special case: At the beginning of a line with content
             if (position === 'before' && pillIndex === 0 && tunePillsData[setIndex].length > 0 && setIndex > 0) {
                 // At the beginning of a line with content - merge current set with previous set
-                saveToUndo();
+                undoRedoManager.saveToUndo();
                 const prevSet = tunePillsData[setIndex - 1];
                 const currentSet = tunePillsData[setIndex];
                 const prevSetOriginalLength = prevSet.length;
@@ -326,8 +326,8 @@ class TextInput {
                 StateManager.setTunePillsData(tunePillsData);
                 
                 // Position cursor where the merge happened
-                renderTunePills();
-                setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
+                PillRenderer.renderTunePills();
+                CursorManager.setCursorPosition(setIndex - 1, prevSetOriginalLength, 'after');
                 return;
             }
             
@@ -359,18 +359,18 @@ class TextInput {
             }
             
             // Just remove the empty set without merging anything
-            saveToUndo();
+            undoRedoManager.saveToUndo();
             tunePillsData.splice(setIndex, 1);
             
             // Update StateManager with the modified data
             StateManager.setTunePillsData(tunePillsData);
             
             // Position cursor at end of previous set
-            renderTunePills();
+            PillRenderer.renderTunePills();
             if (setIndex - 1 >= 0 && tunePillsData[setIndex - 1].length > 0) {
-                setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
+                CursorManager.setCursorPosition(setIndex - 1, tunePillsData[setIndex - 1].length - 1, 'after');
             } else {
-                setCursorPosition(0, 0, 'before');
+                CursorManager.setCursorPosition(0, 0, 'before');
             }
             return;
         }
@@ -379,7 +379,7 @@ class TextInput {
         if (position === 'after' && pillIndex === tunePillsData[setIndex].length - 1) {
             // Check if there's a next set to merge
             if (setIndex + 1 < tunePillsData.length) {
-                saveToUndo();
+                undoRedoManager.saveToUndo();
                 const currentSet = tunePillsData[setIndex];
                 const nextSet = tunePillsData[setIndex + 1];
                 const currentSetOriginalLength = currentSet.length;
@@ -394,8 +394,8 @@ class TextInput {
                 StateManager.setTunePillsData(tunePillsData);
                 
                 // Keep cursor at end of original current set content
-                renderTunePills();
-                setCursorPosition(setIndex, currentSetOriginalLength - 1, 'after');
+                PillRenderer.renderTunePills();
+                CursorManager.setCursorPosition(setIndex, currentSetOriginalLength - 1, 'after');
                 return;
             }
         }
@@ -426,7 +426,7 @@ class TextInput {
         }
         
         if (tuneToDelete) {
-            saveToUndo();
+            undoRedoManager.saveToUndo();
             const targetSet = tunePillsData[tuneToDelete.setIndex];
             const wasLastPillInSet = targetSet.length === 1; // Check before deletion
             
@@ -471,7 +471,7 @@ class TextInput {
             // Update StateManager with the modified data
             StateManager.setTunePillsData(tunePillsData);
             
-            renderTunePills();
+            PillRenderer.renderTunePills();
             
             // Set the cursor position
             if (newCursorPosition && newCursorPosition.setIndex < tunePillsData.length) {
@@ -480,10 +480,10 @@ class TextInput {
                     newCursorPosition.pillIndex = Math.max(0, setLength - 1);
                     newCursorPosition.position = setLength > 0 ? 'after' : 'before';
                 }
-                setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
+                CursorManager.setCursorPosition(newCursorPosition.setIndex, newCursorPosition.pillIndex, newCursorPosition.position);
             } else {
                 // Fallback to a safe position
-                setCursorPosition(0, 0, 'before');
+                CursorManager.setCursorPosition(0, 0, 'before');
             }
         }
     }
@@ -495,7 +495,7 @@ class TextInput {
         const cursorPosition = CursorManager.getCursorPosition();
         if (!cursorPosition || this.isTyping) return;
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         const { setIndex, pillIndex, position } = cursorPosition;
         
@@ -506,10 +506,10 @@ class TextInput {
         // Update StateManager with the modified data
         StateManager.setTunePillsData(tunePillsData);
         
-        renderTunePills();
+        PillRenderer.renderTunePills();
         
         // Position cursor at the beginning of the new set
-        setCursorPosition(newSetIndex, 0, 'before');
+        CursorManager.setCursorPosition(newSetIndex, 0, 'before');
         
         temporaryEmptySet = newSetIndex;
     }
@@ -550,13 +550,13 @@ class TextInput {
         CursorManager.updateCursorWithText();
         
         // On mobile, only hide keyboard if not continuing to type
-        if (isMobileDevice() && !keepKeyboardOpen) {
+        if (CursorManager.isMobileDevice() && !keepKeyboardOpen) {
             const container = document.getElementById('tune-pills-container');
             if (container) {
                 container.contentEditable = 'false';
                 container.blur();
             }
-        } else if (isMobileDevice() && keepKeyboardOpen) {
+        } else if (CursorManager.isMobileDevice() && keepKeyboardOpen) {
             // When keeping keyboard open, ensure the container stays focused and editable
             const container = document.getElementById('tune-pills-container');
             if (container) {
@@ -594,7 +594,7 @@ class TextInput {
         CursorManager.updateCursorWithText();
         
         // On mobile, remove contenteditable to hide keyboard
-        if (isMobileDevice()) {
+        if (CursorManager.isMobileDevice()) {
             const container = document.getElementById('tune-pills-container');
             if (container) {
                 container.contentEditable = 'false';
@@ -615,7 +615,7 @@ class TextInput {
             temporaryEmptySet = null;
         }
         
-        saveToUndo();
+        undoRedoManager.saveToUndo();
         
         const { setIndex, pillIndex, position } = cursorPosition;
         
@@ -662,7 +662,7 @@ class TextInput {
         
         // Create new pills with the calculated previous tune type
         const newPills = tuneNames.map(name => ({
-            id: generateId(),
+            id: StateManager.generateId(),
             orderNumber: null,
             tuneId: null,
             tuneName: name,
@@ -687,12 +687,12 @@ class TextInput {
                 // Create new set at end
                 tunePillsData.push(newPills);
                 // Position cursor after the last inserted pill in this new set
-                setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after', keepKeyboardOpen);
+                CursorManager.setCursorPosition(tunePillsData.length - 1, newPills.length - 1, 'after', keepKeyboardOpen);
             } else {
                 // Create new set at specific index (insert between existing sets)
                 tunePillsData.splice(setIndex, 0, newPills);
                 // Position cursor after the last inserted pill in this new set
-                setCursorPosition(setIndex, newPills.length - 1, 'after', keepKeyboardOpen);
+                CursorManager.setCursorPosition(setIndex, newPills.length - 1, 'after', keepKeyboardOpen);
             }
         } else {
             // Insert into existing set
@@ -712,13 +712,13 @@ class TextInput {
             
             // Move cursor to after the inserted pills
             const newCursorPillIndex = insertIndex + newPills.length - 1;
-            setCursorPosition(setIndex, newCursorPillIndex, 'after', keepKeyboardOpen);
+            CursorManager.setCursorPosition(setIndex, newCursorPillIndex, 'after', keepKeyboardOpen);
         }
         
         // Update StateManager with the modified data
         StateManager.setTunePillsData(tunePillsData);
         
-        renderTunePills();
+        PillRenderer.renderTunePills();
     }
 
     /**
