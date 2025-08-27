@@ -421,6 +421,34 @@
             opacity: 1;
         }
         
+        /* Special styling for wrap cursors at line breaks */
+        .cursor-position.wrap-cursor {
+            /* No special background needed now that it's working */
+        }
+        
+        /* Wrap cursor at start of new line should ensure left margin matches first line */
+        .cursor-position.wrap-cursor[data-wrap-type="line-start"] {
+            margin-left: 0;
+            padding-left: 6px; /* Match the spacing that would be provided by cursor + spacing */
+            width: 0;
+        }
+        
+        /* Enhanced visibility for cursor positions in wrapped sets */
+        .cursor-position {
+            transition: background-color 0.2s ease;
+        }
+        
+        /* Make cursor positions more visible when hovering in wrapped content */
+        .tune-set .cursor-position:hover {
+            background-color: rgba(0, 123, 255, 0.15) !important;
+        }
+        
+        /* Ensure cursor positions in wrapped content are clickable */
+        .tune-set .cursor-position {
+            min-height: 21px;
+            display: inline-block;
+        }
+        
         .text-input {
             display: inline-block;
             min-width: 200px;

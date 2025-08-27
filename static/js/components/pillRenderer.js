@@ -156,7 +156,96 @@ class PillRenderer {
             }
         });
         
+        // After initial render, check for line wrapping and improve cursor positioning
+        setTimeout(() => {
+            this.enhanceWrappedCursorVisibility(setDiv, setIndex);
+        }, 10);
+        
         return setDiv;
+    }
+    
+    static enhanceWrappedCursorVisibility(setDiv, setIndex) {
+        // Find all tune pills in this set
+        const pills = Array.from(setDiv.querySelectorAll('.tune-pill'));
+        
+        if (pills.length <= 1) {
+            return; // No wrapping possible with 0 or 1 pills
+        }
+        
+        // Remove any existing wrap cursors first
+        setDiv.querySelectorAll('.cursor-position.wrap-cursor').forEach(cursor => cursor.remove());
+        
+        // Group pills by their top position (same line)
+        const lines = [];
+        let currentLine = [];
+        let currentTop = null;
+        
+        pills.forEach((pill, index) => {
+            const rect = pill.getBoundingClientRect();
+            const top = Math.round(rect.top);
+            
+            if (currentTop === null) {
+                currentTop = top;
+                currentLine.push(pill);
+            } else if (Math.abs(top - currentTop) < 5) { // Same line (within 5px tolerance)
+                currentLine.push(pill);
+            } else {
+                // New line detected
+                if (currentLine.length > 0) {
+                    lines.push(currentLine);
+                }
+                currentLine = [pill];
+                currentTop = top;
+            }
+        });
+        
+        if (currentLine.length > 0) {
+            lines.push(currentLine);
+        }
+        
+        // If we have multiple lines, enhance cursor visibility for drop zones
+        if (lines.length > 1) {
+            // Mark all cursor positions in wrapped content for better visibility
+            setDiv.querySelectorAll('.cursor-position').forEach(cursor => {
+                // Enhanced visibility for wrapped content cursors
+                cursor.style.backgroundColor = 'rgba(0, 123, 255, 0.05)';
+                cursor.style.minWidth = '6px'; // Make them slightly wider for easier targeting
+            });
+        }
+    }
+    
+    static createWrapCursorPosition(setIndex, pillIndex, wrapType) {
+        const cursorPos = document.createElement('span');
+        cursorPos.className = 'cursor-position wrap-cursor';
+        cursorPos.dataset.setIndex = setIndex;
+        cursorPos.dataset.pillIndex = pillIndex;
+        
+        // Set the correct position type based on wrap type
+        if (wrapType === 'line-start') {
+            cursorPos.dataset.positionType = 'before';
+        } else if (wrapType === 'after-pill') {
+            cursorPos.dataset.positionType = 'after';
+        } else {
+            cursorPos.dataset.positionType = 'after'; // default
+        }
+        
+        cursorPos.dataset.wrapType = wrapType;
+        
+        cursorPos.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Clear selection when clicking to move cursor
+            if (this.clearSelection) {
+                this.clearSelection();
+            }
+            
+            if (this.setCursorPosition) {
+                this.setCursorPosition(setIndex, pillIndex, cursorPos.dataset.positionType);
+            }
+        });
+        
+        return cursorPos;
     }
     
     static createPillElement(pill, setIndex, pillIndex) {

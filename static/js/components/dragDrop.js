@@ -151,7 +151,39 @@ class DragDrop {
             }
         }
         
-        // Then check tune sets
+        // Enhanced logic: Check all cursor positions directly for better wrapping support
+        const allCursorPositions = containerElement.querySelectorAll('.cursor-position');
+        let closestCursor = null;
+        let closestDistance = Infinity;
+        
+        allCursorPositions.forEach(cursor => {
+            const cursorRect = cursor.getBoundingClientRect();
+            const cursorCenterX = cursorRect.left + cursorRect.width / 2;
+            const cursorCenterY = cursorRect.top + cursorRect.height / 2;
+            
+            // Calculate distance from mouse to cursor center
+            const distance = Math.sqrt(Math.pow(x - cursorCenterX, 2) + Math.pow(y - cursorCenterY, 2));
+            
+            // Only consider cursors that are reasonably close (within 40px)
+            if (distance < 40 && distance < closestDistance) {
+                closestDistance = distance;
+                closestCursor = cursor;
+            }
+        });
+        
+        if (closestCursor) {
+            const setIndex = parseInt(closestCursor.dataset.setIndex);
+            const pillIndex = parseInt(closestCursor.dataset.pillIndex);
+            const positionType = closestCursor.dataset.positionType;
+            
+            return { 
+                setIndex, 
+                pillIndex: positionType === 'after' ? pillIndex + 1 : pillIndex, 
+                position: positionType === 'after' ? 'before' : positionType 
+            };
+        }
+        
+        // Fallback to original pill-based logic
         const sets = containerElement.querySelectorAll('.tune-set');
         
         for (let setIndex = 0; setIndex < sets.length; setIndex++) {
