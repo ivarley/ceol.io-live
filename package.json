@@ -1,0 +1,17 @@
+{
+  "name": "ceol-io",
+  "version": "1.0.0",
+  "description": "Traditional Irish music session tracking web application",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "dev": "webpack --mode=development --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0",
+    "ts-loader": "^9.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

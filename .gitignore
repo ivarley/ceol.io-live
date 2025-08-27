@@ -114,3 +114,10 @@ data/backup/
 
 # Claude
 .claude-code-config.json
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# TypeScript/Webpack build outputs
+static/js/dist/
