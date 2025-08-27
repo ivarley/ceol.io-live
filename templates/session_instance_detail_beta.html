@@ -125,15 +125,15 @@
         }
         
         .tune-pill.unlinked {
-            background-color: var(--secondary, #6c757d);
-            color: white;
-            border: 1px solid var(--secondary, #6c757d);
+            background-color: #cbcbcb;
+            color: black;
+            border: 1px solid #7a7a7a;
         }
         
         .tune-pill.unmatched {
-            background-color: var(--danger, #dc3545);
-            color: white;
-            border: 1px solid var(--danger, #dc3545);
+            background-color: #e88a91;
+            color: black;
+            border: 1px solid #a04e53;
         }
         
         .tune-pill.loading {
@@ -143,9 +143,9 @@
         }
         
         .tune-pill.linked {
-            background-color: var(--primary, #007bff);
-            color: white;
-            border: 1px solid var(--primary, #007bff);
+            background-color: #cbe6ff;
+            color: black;
+            border: 1px solid #6994bb;
         }
         
         .tune-pill.error {
@@ -155,8 +155,7 @@
         }
         
         .tune-pill.selected {
-            box-shadow: 0 0 0 2px var(--primary);
-            background-color: rgba(0, 122, 255, 0.1);
+            box-shadow: 0 0 0 3px #ffd500;
         }
         
         .tune-pill.dragging {
@@ -516,6 +515,28 @@
         }
         
         /* Dark mode adjustments */
+        [data-theme="dark"] .tune-pill.unlinked {
+            background-color: #4a4e52;
+            color: white;
+            border: 1px solid #4a4e52;
+        }
+        
+        [data-theme="dark"] .tune-pill.unmatched {
+            background-color: #8b2c31;
+            color: white;
+            border: 1px solid #8b2c31;
+        }
+        
+        [data-theme="dark"] .tune-pill.linked {
+            background-color: #1e5896;
+            color: white;
+            border: 1px solid #1e5896;
+        }
+
+        [data-theme="dark"] .tune-pill.selected {
+            box-shadow: 0 0 0 2px #ff9500;
+        }
+
         [data-theme="dark"] .tune-pills-container {
             background: var(--bg-color);
             border-color: var(--border-color);
