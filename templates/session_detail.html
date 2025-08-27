@@ -297,7 +297,7 @@
                     <div class="year-header-left">
                         <span class="year-toggle" data-year="{{ year }}">⌄</span>
                         <h3 class="year-title">{{ year }}</h3>
-                        <a href="#" class="year-view-link" data-year="{{ year }}">view</a>
+                        <a href="#" class="year-view-link" data-year="{{ year }}">view {{ instances_by_year[year]|length }} log{{ 's' if instances_by_year[year]|length != 1 else '' }}</a>
                     </div>
                 </div>
                 <div class="year-content" data-year="{{ year }}">

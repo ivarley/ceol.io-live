@@ -377,6 +377,14 @@ class CursorManager {
         } else {
             // Remove any typing text display and reset context
             document.querySelectorAll('.typing-text').forEach(el => el.remove());
+            
+            // Before resetting context, restore cursor to current position if typing just ended
+            if (this.typingContext && this.cursorPosition) {
+                // Re-render the cursor at the current position to ensure it's in the right place
+                const { setIndex, pillIndex, position } = this.cursorPosition;
+                this.setCursorPositionOriginal(setIndex, pillIndex, position);
+            }
+            
             this.typingContext = null;
         }
     }
