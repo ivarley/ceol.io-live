@@ -4074,6 +4074,11 @@ def update_auto_save_preference():
         # Get the preference value from request
         data = request.get_json()
         auto_save = data.get("auto_save", False)
+        auto_save_interval = data.get("auto_save_interval", 60)
+        
+        # Validate interval value
+        if auto_save_interval not in [10, 30, 60]:
+            auto_save_interval = 60
 
         # Update user preference in database
         conn = get_db_connection()
@@ -4083,10 +4088,11 @@ def update_auto_save_preference():
             """
             UPDATE user_account
             SET auto_save_tunes = %s,
+                auto_save_interval = %s,
                 last_modified_date = NOW() AT TIME ZONE 'UTC'
             WHERE user_id = %s
         """,
-            (auto_save, current_user.user_id),
+            (auto_save, auto_save_interval, current_user.user_id),
         )
 
         save_to_history(cur, "user_account", "UPDATE", current_user.user_id)
@@ -4100,6 +4106,7 @@ def update_auto_save_preference():
                 "success": True,
                 "message": "Auto-save preference updated",
                 "auto_save": auto_save,
+                "auto_save_interval": auto_save_interval,
             }
         )
 

@@ -75,6 +75,7 @@ class TestUser:
             sample_user_data["last_name"],
             sample_user_data["email"],
             sample_user_data["auto_save_tunes"],
+            sample_user_data.get("auto_save_interval", 60),
         )
         mock_cursor.fetchone.return_value = user_tuple
 
@@ -128,6 +129,7 @@ class TestUser:
             sample_user_data_with_password["last_name"],
             sample_user_data_with_password["email"],
             sample_user_data_with_password["auto_save_tunes"],
+            sample_user_data_with_password.get("auto_save_interval", 60),
         )
         mock_cursor.fetchone.return_value = user_tuple
 

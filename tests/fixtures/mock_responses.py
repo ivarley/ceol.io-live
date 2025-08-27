@@ -187,6 +187,7 @@ class MockDatabaseResponses:
             "User",  # last_name
             "test@example.com",  # email
             False,  # auto_save_tunes
+            60,  # auto_save_interval
         )
 
     @staticmethod

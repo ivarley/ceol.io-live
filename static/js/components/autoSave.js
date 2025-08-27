@@ -96,6 +96,7 @@ class AutoSaveManager {
     static getTunePillsData = null; // Function to get current data
     static isUserLoggedIn = false;
     static userAutoSave = false;
+    static userAutoSaveInterval = 60;
     
     static initialize(sessionPath, sessionDate, getTunePillsDataFunc, userConfig = {}) {
         this.sessionPath = sessionPath;
@@ -103,6 +104,7 @@ class AutoSaveManager {
         this.getTunePillsData = getTunePillsDataFunc || (() => window.tunePillsData);
         this.isUserLoggedIn = userConfig.isUserLoggedIn || false;
         this.userAutoSave = userConfig.userAutoSave || false;
+        this.userAutoSaveInterval = userConfig.userAutoSaveInterval || 60;
     }
     
     static forceCheckChanges() {
@@ -295,19 +297,32 @@ class AutoSaveManager {
     
     static initializeAutoSavePreference() {
         const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+        const intervalSelect = document.getElementById('auto-save-interval');
+        
         if (!autoSaveCheckbox) return;
         
         if (this.isUserLoggedIn) {
-            // For logged-in users, use their stored preference
+            // For logged-in users, use their stored preferences
             autoSaveCheckbox.checked = this.userAutoSave;
+            if (intervalSelect) {
+                intervalSelect.value = this.userAutoSaveInterval.toString();
+            }
         } else {
-            // For anonymous users, check for cookie
+            // For anonymous users, check for cookies
             const cookieValue = this.getCookie('auto_save_tunes');
             autoSaveCheckbox.checked = cookieValue === 'true';
+            
+            const intervalCookie = this.getCookie('auto_save_interval');
+            if (intervalSelect && intervalCookie && [10, 30, 60].includes(parseInt(intervalCookie))) {
+                intervalSelect.value = intervalCookie;
+            }
         }
     }
     
-    static saveAutoSavePreference(isEnabled) {
+    static saveAutoSavePreference(isEnabled, interval = null) {
+        const intervalSelect = document.getElementById('auto-save-interval');
+        const saveInterval = interval || (intervalSelect ? parseInt(intervalSelect.value) : 60);
+        
         if (this.isUserLoggedIn) {
             // Save to user account via API
             fetch('/api/user/auto-save-preference', {
@@ -316,7 +331,8 @@ class AutoSaveManager {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    auto_save: isEnabled
+                    auto_save: isEnabled,
+                    auto_save_interval: saveInterval
                 })
             })
             .then(response => response.json())
@@ -329,8 +345,9 @@ class AutoSaveManager {
                 console.error('Error saving auto-save preference:', error);
             });
         } else {
-            // Save to cookie for anonymous users
+            // Save to cookies for anonymous users
             this.setCookie('auto_save_tunes', isEnabled.toString(), 365);
+            this.setCookie('auto_save_interval', saveInterval.toString(), 365);
         }
     }
     
@@ -362,11 +379,11 @@ class AutoSaveManager {
         this.autoSaveTimer.hideCountdown();
         
         // Save preference when checkbox state changes
-        this.saveAutoSavePreference(autoSaveCheckbox.checked);
+        const intervalSeconds = intervalSelect ? parseInt(intervalSelect.value) : 60;
+        this.saveAutoSavePreference(autoSaveCheckbox.checked, intervalSeconds);
         
         // Start timer if checkbox is checked and we're dirty
         if (autoSaveCheckbox.checked && this.isDirty) {
-            const intervalSeconds = parseInt(intervalSelect.value);
             this.autoSaveTimer.start(intervalSeconds);
         }
     }

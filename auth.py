@@ -24,6 +24,7 @@ class User(UserMixin):
         timezone="UTC",
         email_verified=False,
         auto_save_tunes=False,
+        auto_save_interval=60,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -37,6 +38,7 @@ class User(UserMixin):
         self.timezone = timezone
         self.email_verified = email_verified
         self.auto_save_tunes = auto_save_tunes
+        self.auto_save_interval = auto_save_interval
         self.hashed_password = None  # Will be set when loading from database
 
     @property
@@ -55,7 +57,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
-                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
+                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.user_id = %s AND ua.is_active = TRUE
@@ -75,7 +77,8 @@ class User(UserMixin):
                     first_name=user_data[7],
                     last_name=user_data[8],
                     email=user_data[9],
-                    auto_save_tunes=user_data[10] if len(user_data) > 10 else False,
+                    auto_save_tunes=user_data[10],
+                    auto_save_interval=user_data[11],
                 )
             return None
         finally:
@@ -89,7 +92,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
-                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.username = %s
@@ -97,7 +100,7 @@ class User(UserMixin):
                 (username,),
             )
             user_data = cur.fetchone()
-            if user_data and len(user_data) >= 12:
+            if user_data:
                 user = User(
                     user_id=user_data[0],
                     person_id=user_data[1],
@@ -109,7 +112,8 @@ class User(UserMixin):
                     first_name=user_data[8],
                     last_name=user_data[9],
                     email=user_data[10],
-                    auto_save_tunes=user_data[11] if len(user_data) > 11 else False,
+                    auto_save_tunes=user_data[11],
+                    auto_save_interval=user_data[12],
                 )
                 user.hashed_password = user_data[3]
                 return user

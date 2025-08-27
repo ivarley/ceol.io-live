@@ -179,6 +179,7 @@ class UserAccountFactory(factory.Factory):
     auto_save_tunes = factory.fuzzy.FuzzyChoice(
         [True, False], probability_true=0.3
     )  # 30% use auto-save
+    auto_save_interval = factory.fuzzy.FuzzyChoice([10, 30, 60])  # Valid intervals
 
 
 class SessionFactory(factory.Factory):

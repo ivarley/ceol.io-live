@@ -927,7 +927,8 @@ window.sessionConfig = {
     },
     initialTuneSets: {{ tune_sets|tojson }},
     isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
-    userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }}
+    userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }},
+    userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }}
 };
 </script>
 <script src="/static/js/components/autoSave.js"></script>

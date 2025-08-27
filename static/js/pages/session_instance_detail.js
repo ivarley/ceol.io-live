@@ -211,7 +211,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize AutoSaveManager after tunePillsData is created
         AutoSaveManager.initialize(sessionPath, sessionDate, () => StateManager.getTunePillsData(), {
             isUserLoggedIn: window.sessionConfig.isUserLoggedIn,
-            userAutoSave: window.sessionConfig.userAutoSave
+            userAutoSave: window.sessionConfig.userAutoSave,
+            userAutoSaveInterval: window.sessionConfig.userAutoSaveInterval
         });
         
         // Initialize save state - mark as clean since we just loaded
@@ -1086,8 +1087,15 @@ function setupSaveListeners() {
     
     // Auto-save interval change
     document.getElementById('auto-save-interval').addEventListener('change', () => {
-        if (document.getElementById('auto-save-checkbox').checked) {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+        const intervalSelect = document.getElementById('auto-save-interval');
+        
+        if (autoSaveCheckbox.checked) {
+            // If auto-save is enabled, restart with new interval
             AutoSaveManager.setupAutoSave();
+        } else {
+            // If auto-save is disabled, just save the interval preference
+            AutoSaveManager.saveAutoSavePreference(false, parseInt(intervalSelect.value));
         }
     });
     
