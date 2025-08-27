@@ -1080,7 +1080,14 @@ function setupSessionEditListeners() {
 
 function setupSaveListeners() {
     // Save button click
-    document.getElementById('save-session-btn').addEventListener('click', () => AutoSaveManager.saveSession());
+    document.getElementById('save-session-btn').addEventListener('click', () => {
+        // Cancel auto-save timer immediately when manually saving
+        AutoSaveManager.autoSaveTimer.stop();
+        AutoSaveManager.autoSaveTimer.hideCountdown();
+        
+        // Perform the save
+        AutoSaveManager.saveSession();
+    });
     
     // Auto-save checkbox change
     document.getElementById('auto-save-checkbox').addEventListener('change', () => AutoSaveManager.setupAutoSave());
