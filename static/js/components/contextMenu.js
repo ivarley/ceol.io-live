@@ -165,15 +165,25 @@ class ContextMenu {
         
         document.body.appendChild(menu);
         
-        // Hide menu when clicking elsewhere
+        // Hide menu when clicking elsewhere or scrolling
         setTimeout(() => {
             const hideMenu = (e) => {
                 if (!menu.contains(e.target)) {
                     ContextMenu.hideContextMenu();
                     document.removeEventListener('click', hideMenu);
+                    document.removeEventListener('scroll', hideOnScroll, true);
                 }
             };
+            
+            const hideOnScroll = () => {
+                ContextMenu.hideContextMenu();
+                document.removeEventListener('click', hideMenu);
+                document.removeEventListener('scroll', hideOnScroll, true);
+            };
+            
             document.addEventListener('click', hideMenu);
+            // Use capture phase to catch scroll on any element
+            document.addEventListener('scroll', hideOnScroll, true);
         }, 0);
     }
     
@@ -283,15 +293,25 @@ class ContextMenu {
         
         document.body.appendChild(menu);
         
-        // Hide menu when clicking elsewhere
+        // Hide menu when clicking elsewhere or scrolling
         setTimeout(() => {
             const hideMenu = (e) => {
                 if (!menu.contains(e.target)) {
                     ContextMenu.hideMatchResultsMenu(pill.id);
                     document.removeEventListener('click', hideMenu);
+                    document.removeEventListener('scroll', hideOnScroll, true);
                 }
             };
+            
+            const hideOnScroll = () => {
+                ContextMenu.hideMatchResultsMenu(pill.id);
+                document.removeEventListener('click', hideMenu);
+                document.removeEventListener('scroll', hideOnScroll, true);
+            };
+            
             document.addEventListener('click', hideMenu);
+            // Use capture phase to catch scroll on any element
+            document.addEventListener('scroll', hideOnScroll, true);
         }, 0);
     }
     
