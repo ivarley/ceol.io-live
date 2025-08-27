@@ -274,6 +274,55 @@ class PillRenderer {
         this.setCursorPosition = callbacks.setCursorPosition;
         this.clearSelection = callbacks.clearSelection;
     }
+    
+    // Update the appearance of a single pill without re-rendering everything
+    static updatePillAppearance(pill) {
+        console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
+        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
+        if (!pillElement) {
+            console.error(`Could not find pill element with ID: ${pill.id}`);
+            return;
+        }
+        
+        console.log(`Found pill element, updating class from "${pillElement.className}" to "tune-pill ${pill.state}"`);
+        // Update the CSS class to reflect the new state
+        pillElement.className = `tune-pill ${pill.state}`;
+        
+        // Update the text content in case it changed (e.g., canonical name from API)
+        const textElement = pillElement.querySelector('.text');
+        if (textElement) {
+            console.log(`Updating text content from "${textElement.textContent}" to "${pill.tuneName}"`);
+            textElement.textContent = pill.tuneName;
+        } else {
+            console.error('Could not find .text element within pill');
+        }
+        
+        // Remove any existing spinner
+        const existingSpinner = pillElement.querySelector('.loading-spinner');
+        if (existingSpinner) {
+            existingSpinner.remove();
+        }
+        
+        // Add spinner if still loading
+        if (pill.state === 'loading') {
+            const spinner = document.createElement('span');
+            spinner.className = 'loading-spinner';
+            pillElement.appendChild(spinner);
+        }
+    }
+    
+    // Apply landing animation to pills that have been moved
+    static applyLandingAnimation(pillIds) {
+        pillIds.forEach(pillId => {
+            const pillElement = document.querySelector(`[data-pill-id="${pillId}"]`);
+            if (pillElement) {
+                pillElement.classList.add('just-landed');
+                setTimeout(() => {
+                    pillElement.classList.remove('just-landed');
+                }, 3000);
+            }
+        });
+    }
 }
 
 // Export for use in other modules or global scope

@@ -1004,7 +1004,7 @@
                 saveToUndo: () => undoRedoManager.saveToUndo(),
                 showContextMenu: (e, pillData) => showContextMenu(e, pillData),
                 hideContextMenu: (pillId) => hideContextMenu(pillId),
-                applyLandingAnimation: (movedPillIds) => applyLandingAnimation(movedPillIds),
+                applyLandingAnimation: (movedPillIds) => PillRenderer.applyLandingAnimation(movedPillIds),
                 setCursorPosition: (setIndex, pillIndex, positionType, maintainKeyboard) => CursorManager.setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard),
                 clearSelection: () => CursorManager.clearSelection()
             });
@@ -1036,9 +1036,9 @@
                 generateId: () => StateManager.generateId(),
                 renderTunePills: () => PillRenderer.renderTunePills(),
                 showMessage: (message, type) => showMessage(message, type),
-                applyLandingAnimation: (pillIds) => applyLandingAnimation(pillIds),
+                applyLandingAnimation: (pillIds) => PillRenderer.applyLandingAnimation(pillIds),
                 autoMatchTune: (pill) => autoMatchTune(pill),
-                updatePillAppearance: (pill) => updatePillAppearance(pill),
+                updatePillAppearance: (pill) => PillRenderer.updatePillAppearance(pill),
                 showMatchingResults: (pills) => showMatchingResults(pills)
             });
             
@@ -1183,7 +1183,7 @@
         // Apply landing animation
         const movedPillIds = newSets.flat().map(pill => pill.id);
         setTimeout(() => {
-            applyLandingAnimation(movedPillIds);
+            PillRenderer.applyLandingAnimation(movedPillIds);
         }, 50);
     }
     
@@ -1260,7 +1260,7 @@
         // Apply landing animation to moved pills
         const movedPillIds = draggedPills.map(pill => pill.id);
         setTimeout(() => {
-            applyLandingAnimation(movedPillIds);
+            PillRenderer.applyLandingAnimation(movedPillIds);
         }, 50); // Small delay to ensure pills are rendered
     }
     
@@ -1370,7 +1370,7 @@
                 pill.matchResults = null;
                 
                 // Update the pill appearance
-                updatePillAppearance(pill);
+                PillRenderer.updatePillAppearance(pill);
                 
                 // Force check for changes (includes timer reset and dirty state)
                 AutoSaveManager.forceCheckChanges();
@@ -1498,7 +1498,7 @@
                     pillData.matchResults = null;
                     
                     // Update the pill appearance
-                    updatePillAppearance(pillData);
+                    PillRenderer.updatePillAppearance(pillData);
                     
                     // Force check for changes (includes timer reset and dirty state)
                     AutoSaveManager.forceCheckChanges();
@@ -1625,18 +1625,6 @@
     // Track temporary empty line
     let temporaryEmptySet = null;
     
-    // Apply landing animation to pills that have been moved
-    function applyLandingAnimation(pillIds) {
-        pillIds.forEach(pillId => {
-            const pillElement = document.querySelector(`[data-pill-id="${pillId}"]`);
-            if (pillElement) {
-                pillElement.classList.add('just-landed');
-                setTimeout(() => {
-                    pillElement.classList.remove('just-landed');
-                }, 3000);
-            }
-        });
-    }
     
     function selectPillsBetweenPositions(startPos, endPos) {
         // Convert positions to cursor format and use PillSelection method
@@ -1814,7 +1802,7 @@
             }
             
             // Update just this pill instead of re-rendering everything
-            updatePillAppearance(pill);
+            PillRenderer.updatePillAppearance(pill);
         } catch (error) {
             console.error(`Network error matching tune "${pill.tuneName}":`, error);
             // Network error - pill becomes unlinked
@@ -1824,45 +1812,10 @@
             // Mark as dirty since we changed the pill state
             AutoSaveManager.markDirty();
             
-            updatePillAppearance(pill);
+            PillRenderer.updatePillAppearance(pill);
         }
     }
     
-    // Update the appearance of a single pill without re-rendering everything
-    function updatePillAppearance(pill) {
-        console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
-        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
-        if (!pillElement) {
-            console.error(`Could not find pill element with ID: ${pill.id}`);
-            return;
-        }
-        
-        console.log(`Found pill element, updating class from "${pillElement.className}" to "tune-pill ${pill.state}"`);
-        // Update the CSS class to reflect the new state
-        pillElement.className = `tune-pill ${pill.state}`;
-        
-        // Update the text content in case it changed (e.g., canonical name from API)
-        const textElement = pillElement.querySelector('.text');
-        if (textElement) {
-            console.log(`Updating text content from "${textElement.textContent}" to "${pill.tuneName}"`);
-            textElement.textContent = pill.tuneName;
-        } else {
-            console.error('Could not find .text element within pill');
-        }
-        
-        // Remove any existing spinner
-        const existingSpinner = pillElement.querySelector('.loading-spinner');
-        if (existingSpinner) {
-            existingSpinner.remove();
-        }
-        
-        // Add spinner if still loading
-        if (pill.state === 'loading') {
-            const spinner = document.createElement('span');
-            spinner.className = 'loading-spinner';
-            pillElement.appendChild(spinner);
-        }
-    }
     
     function deleteTuneAtCursor() {
         const cursorPosition = CursorManager.getCursorPosition();
@@ -2261,14 +2214,14 @@
             pill.state = 'loading';  // Show loading state while re-matching
             
             // Update the pill appearance immediately to show loading state
-            updatePillAppearance(pill);
+            PillRenderer.updatePillAppearance(pill);
             
             // Re-run auto-matching with the new name
             autoMatchTune(pill);
         } else {
             // If it was unlinked, still try to match the new name
             pill.state = 'loading';
-            updatePillAppearance(pill);
+            PillRenderer.updatePillAppearance(pill);
             autoMatchTune(pill);
         }
         
