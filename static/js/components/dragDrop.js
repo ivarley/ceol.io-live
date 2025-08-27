@@ -226,6 +226,11 @@ class DragDrop {
         
         // Desktop drag and drop
         pillElement.addEventListener('dragstart', (e) => {
+            // Hide any open context menu when starting drag
+            if (window.ContextMenu) {
+                window.ContextMenu.hideContextMenu();
+            }
+            
             this.dragState = {
                 draggedPillId: pillData.id,
                 startX: e.clientX,
@@ -280,6 +285,11 @@ class DragDrop {
     
     // Mobile drag support methods
     static startMobileDrag(e, pillData) {
+        // Hide any open context menu when starting mobile drag
+        if (window.ContextMenu) {
+            window.ContextMenu.hideContextMenu();
+        }
+        
         const touch = e.touches[0];
         this.dragState = {
             draggedPillId: pillData.id,

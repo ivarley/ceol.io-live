@@ -26,6 +26,11 @@ class PillSelection {
     }
     
     static selectSingle(pillId) {
+        // Hide any open context menu when selection changes
+        if (window.ContextMenu) {
+            window.ContextMenu.hideContextMenu();
+        }
+        
         this.selectedPills.clear();
         this.selectedPills.add(pillId);
         this.updateSelectionDisplay();
@@ -36,6 +41,11 @@ class PillSelection {
     }
     
     static toggleSelection(pillId) {
+        // Hide any open context menu when selection changes
+        if (window.ContextMenu) {
+            window.ContextMenu.hideContextMenu();
+        }
+        
         if (this.selectedPills.has(pillId)) {
             this.selectedPills.delete(pillId);
         } else {
@@ -49,6 +59,11 @@ class PillSelection {
     }
     
     static extendSelection(pillId) {
+        // Hide any open context menu when selection changes
+        if (window.ContextMenu) {
+            window.ContextMenu.hideContextMenu();
+        }
+        
         // For shift-click selection, we need to select from the last selected pill to this one
         if (this.selectedPills.size === 0) {
             // If no pills are selected, just select this one
@@ -275,6 +290,11 @@ class PillSelection {
     
     static selectFromCursorRange(startCursorPos, endCursorPos) {
         if (!startCursorPos || !endCursorPos) return;
+        
+        // Hide any open context menu when selection changes
+        if (window.ContextMenu) {
+            window.ContextMenu.hideContextMenu();
+        }
         
         this.selectedPills.clear();
         
