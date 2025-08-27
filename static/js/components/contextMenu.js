@@ -52,8 +52,9 @@ class ContextMenu {
         menu.style.left = rect.left + 'px';
         menu.style.top = (rect.bottom + 5) + 'px';
         
-        // For unmatched pills with results, make menu wider to accommodate tune names
-        if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
+        // For unmatched pills with results or unlinked pills, make menu wider to accommodate content
+        if ((pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) || 
+            pillData.state === 'unlinked') {
             menu.style.width = 'auto';
             menu.style.minWidth = Math.max(250, rect.width) + 'px';
             menu.style.maxWidth = Math.min(500, window.innerWidth - rect.left - 20) + 'px';
