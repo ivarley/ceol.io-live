@@ -104,6 +104,8 @@
         .tune-set {
             margin-bottom: 2px;
             min-height: 18px;
+            /* Add consistent left padding to match cursor spacing */
+            padding-left: 6px;
         }
         
         .tune-set:last-child {
@@ -395,6 +397,11 @@
             padding: 0 3px; /* Create hover area without affecting layout */
             margin: 0;
             overflow: visible; /* Allow content to extend beyond boundaries */
+        }
+        
+        /* First cursor position in a set should not add extra spacing since set has padding */
+        .cursor-position[data-position-type="before"][data-pill-index="0"] {
+            margin-left: -6px; /* Counteract the set padding for the first cursor */
         }
         
         .cursor-position:hover::before {
