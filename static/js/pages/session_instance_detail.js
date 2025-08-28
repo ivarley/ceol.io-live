@@ -61,6 +61,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize TextInput module
         textInput = new TextInput();
         
+        // Expose textInput to window for access from other modules
+        window.textInput = textInput;
+        
         // Register callbacks that CursorManager needs
         CursorManager.registerCallbacks({
             finishTyping: (keepKeyboard) => textInput.finishTyping(keepKeyboard),
@@ -199,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
             hideSessionEditModal: () => hideSessionEditModal(),
             confirmLink: () => confirmLink(),
             confirmEdit: () => confirmEdit(),
-            removeTypingMatchResults: () => removeTypingMatchResults()
+            removeTypingMatchResults: () => textInput.removeTypingMatchResults()
         });
         
         // Convert server-side tune sets data to pills format
@@ -553,7 +556,10 @@ async function autoMatchTune(pill, stillTyping = false) {
             pill.state = 'unlinked';
             pill.authenticationFailed = true;  // Mark that this failed due to auth
             pill.matchResults = null;
-            PillRenderer.updatePillAppearance(pill);
+            // Skip updating appearance for typing pills as they don't exist in the DOM yet
+            if (!pill.id.startsWith('typing-')) {
+                PillRenderer.updatePillAppearance(pill);
+            }
             return;
         }
         
@@ -644,7 +650,10 @@ async function autoMatchTune(pill, stillTyping = false) {
         }
         
         // Update just this pill instead of re-rendering everything
-        PillRenderer.updatePillAppearance(pill);
+        // Skip updating appearance for typing pills as they don't exist in the DOM yet
+        if (!pill.id.startsWith('typing-')) {
+            PillRenderer.updatePillAppearance(pill);
+        }
     } catch (error) {
         console.error(`Network error matching tune "${pill.tuneName}":`, error);
         // Network error - pill becomes unlinked
@@ -654,7 +663,10 @@ async function autoMatchTune(pill, stillTyping = false) {
         // Mark as dirty since we changed the pill state
         AutoSaveManager.markDirty();
         
-        PillRenderer.updatePillAppearance(pill);
+        // Skip updating appearance for typing pills as they don't exist in the DOM yet
+        if (!pill.id.startsWith('typing-')) {
+            PillRenderer.updatePillAppearance(pill);
+        }
     }
 }
 
@@ -848,7 +860,7 @@ function setupEventListeners() {
             
             // If user is typing, finish typing first
             if (textInput && textInput.typing) {
-                finishTyping();
+                textInput.finishTyping();
             }
             
             // Clear selection and selection anchor when clicking to move cursor
@@ -862,7 +874,7 @@ function setupEventListeners() {
         
         // If user is typing, finish typing first
         if (textInput && textInput.typing) {
-            finishTyping();
+            textInput.finishTyping();
         }
         
         // Clear selection and selection anchor when clicking to move cursor
@@ -956,7 +968,7 @@ function setupEventListeners() {
                 
                 // If user is typing, finish typing first
                 if (textInput && textInput.typing) {
-                    finishTyping();
+                    textInput.finishTyping();
                 }
                 
                 // Clear selection when touching to move cursor
@@ -966,7 +978,7 @@ function setupEventListeners() {
             } else {
                 // Touch in empty space - set cursor at end
                 if (textInput && textInput.typing) {
-                    finishTyping();
+                    textInput.finishTyping();
                 }
                 
                 PillSelection.selectNone();

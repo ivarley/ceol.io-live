@@ -18,6 +18,7 @@ export interface ExtendedTunePill extends TunePill {
 export interface ContextMenuDependencies {
     PillRenderer: {
         updatePillAppearance(pill: TunePill): void;
+        renderTunePills(): void;
     };
     AutoSaveManager: {
         forceCheckChanges(): void;
@@ -30,6 +31,7 @@ export interface ContextMenuDependencies {
         getTunePillsData(): import('./stateManager.js').TunePillsData;
         setTunePillsData(data: import('./stateManager.js').TunePillsData): void;
         findTuneById(id: string): import('./stateManager.js').TunePosition | null;
+        generateId(): string;
     };
     undoRedoManager: {
         saveToUndo(): void;
@@ -39,10 +41,18 @@ export interface ContextMenuDependencies {
     };
     CursorManager: {
         setCursorPosition(setIndex: number, pillIndex: number, position: string): void;
+        updateCursorWithText(): void;
+        getCursorPosition(): { setIndex: number; pillIndex: number; position: string } | null;
     };
     findPillPosition?: (pillId: string) => import('./stateManager.js').TunePosition | null;
     textInput?: {
         typing: boolean;
+        isTyping: boolean;
+        typingPill: ExtendedTunePill | null;
+        typingBuffer: string;
+        typingTimeout: number | null;
+        finishTyping: (keepKeyboard?: boolean) => void;
+        insertTunesAtCursor: (tunes: any[], keepKeyboard?: boolean) => void;
     };
 }
 
@@ -60,6 +70,7 @@ declare global {
         CursorManager: ContextMenuDependencies['CursorManager'];
         findPillPosition: ContextMenuDependencies['findPillPosition'];
         textInput: ContextMenuDependencies['textInput'];
+        temporaryEmptySet: number | null;
     }
 }
 
@@ -260,19 +271,32 @@ export class ContextMenu {
             return;
         }
         
-        // Find the pill element
-        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
-        if (!pillElement) {
-            console.error(`Could not find pill element for ID: ${pill.id}`);
-            return;
+        // For typing pills, find the typing text element instead of a pill element
+        let elementToPosition: HTMLElement | null = null;
+        let rect: DOMRect;
+        
+        if (pill.id.startsWith('typing-')) {
+            // This is a typing pill - find the typing text element
+            elementToPosition = document.querySelector('.typing-text') as HTMLElement;
+            if (!elementToPosition) {
+                console.log(`Typing text not found for typing pill ${pill.id}`);
+                return;
+            }
+        } else {
+            // Regular pill - find the pill element
+            elementToPosition = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
+            if (!elementToPosition) {
+                console.error(`Could not find pill element for ID: ${pill.id}`);
+                return;
+            }
         }
+        
+        rect = elementToPosition.getBoundingClientRect();
         
         const menu = document.createElement('div');
         menu.className = 'tune-context-menu match-results-menu';
         menu.style.display = 'block';
         menu.dataset.pillId = pill.id;
-        
-        const rect = pillElement.getBoundingClientRect();
         
         // Position menu below the pill
         menu.style.position = 'fixed';
@@ -282,10 +306,17 @@ export class ContextMenu {
         menu.style.minWidth = Math.max(200, rect.width) + 'px';
         menu.style.maxWidth = Math.min(600, window.innerWidth - rect.left - 20) + 'px';
         
-        // Use a neutral background for the menu
-        menu.style.backgroundColor = 'white';
-        menu.style.color = '#212529';
-        menu.style.border = '1px solid #dee2e6';
+        // Use theme-aware styling for the menu
+        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDarkMode) {
+            menu.style.backgroundColor = 'var(--dropdown-bg)';
+            menu.style.color = 'var(--text-color)';
+            menu.style.border = '1px solid var(--border-color)';
+        } else {
+            menu.style.backgroundColor = 'white';
+            menu.style.color = '#212529';
+            menu.style.border = '1px solid #dee2e6';
+        }
         menu.style.borderRadius = '4px';
         menu.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
         
@@ -295,8 +326,8 @@ export class ContextMenu {
             item.style.display = 'block';
             item.style.padding = '8px 12px';
             item.style.cursor = 'pointer';
-            item.style.borderBottom = '1px solid #f0f0f0';
-            item.style.color = '#212529';
+            item.style.borderBottom = isDarkMode ? '1px solid var(--border-color)' : '1px solid #f0f0f0';
+            item.style.color = isDarkMode ? 'var(--text-color)' : '#212529';
             item.style.textDecoration = 'none';
             
             // Show tune name and type
@@ -308,14 +339,14 @@ export class ContextMenu {
             if (result.tune_type) {
                 const typeSpan = document.createElement('span');
                 typeSpan.textContent = ` (${result.tune_type})`;
-                typeSpan.style.color = '#6c757d';
+                typeSpan.style.color = isDarkMode ? 'var(--disabled-text)' : '#6c757d';
                 typeSpan.style.fontSize = '0.9em';
                 item.appendChild(typeSpan);
             }
             
             // Hover effect
             item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = '#f8f9fa';
+                item.style.backgroundColor = isDarkMode ? 'var(--hover-bg)' : '#f8f9fa';
             });
             item.addEventListener('mouseleave', () => {
                 item.style.backgroundColor = 'transparent';
@@ -330,23 +361,43 @@ export class ContextMenu {
                 pill.state = 'linked';
                 pill.matchResults = null;
                 
-                // Update the pill appearance
-                window.PillRenderer.updatePillAppearance(pill);
-                
-                // Force check for changes (includes timer reset and dirty state)
-                window.AutoSaveManager.forceCheckChanges();
+                // Handle typing pills differently than regular pills
+                if (pill.id.startsWith('typing-')) {
+                    // For typing pills, use the same approach as Tab completion
+                    if (window.textInput && window.textInput.typing) {
+                        // Save scroll position before finishTyping
+                        const scrollY = window.scrollY;
+                        const scrollX = window.scrollX;
+                        
+                        // Update the typing pill with the selected match
+                        window.textInput.typingPill = pill;
+                        window.textInput.typingBuffer = result.tune_name;
+                        
+                        // Remove any typing match menus
+                        const menus = document.querySelectorAll('.typing-match-menu, .match-results-menu');
+                        menus.forEach(menu => menu.remove());
+                        
+                        // Temporarily override scrollIntoView during finishTyping
+                        const originalScrollIntoView = Element.prototype.scrollIntoView;
+                        Element.prototype.scrollIntoView = function() { /* prevent scrolling */ };
+                        
+                        // Use the normal finishTyping flow
+                        window.textInput.finishTyping(false);
+                        
+                        // Restore scrollIntoView and scroll position
+                        Element.prototype.scrollIntoView = originalScrollIntoView;
+                        window.scrollTo(scrollX, scrollY);
+                    }
+                } else {
+                    // Regular pill - update its appearance
+                    window.PillRenderer.updatePillAppearance(pill);
+                    
+                    // Force check for changes (includes timer reset and dirty state)
+                    window.AutoSaveManager.forceCheckChanges();
+                }
                 
                 // Hide the menu
                 ContextMenu.hideMatchResultsMenu(pill.id);
-                
-                // If we're still typing, maintain typing state
-                if (window.textInput && window.textInput.typing) {
-                    // Move cursor after this pill
-                    const pillPosition = window.findPillPosition?.(pill.id);
-                    if (pillPosition) {
-                        window.CursorManager.setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
-                    }
-                }
             });
             
             menu.appendChild(item);

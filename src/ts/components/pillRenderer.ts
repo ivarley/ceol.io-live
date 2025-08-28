@@ -406,7 +406,13 @@ export class PillRenderer {
         console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
         const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
         if (!pillElement) {
-            console.error(`Could not find pill element with ID: ${pill.id}`);
+            // If the pill element is not found, it might be a typing pill that hasn't been rendered yet
+            // or has been removed during typing. This is not necessarily an error.
+            if (pill.id.startsWith('typing-')) {
+                console.log(`Typing pill ${pill.id} not found in DOM - this is expected during typing state`);
+            } else {
+                console.error(`Could not find pill element with ID: ${pill.id}`);
+            }
             return;
         }
         

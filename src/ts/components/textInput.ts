@@ -85,6 +85,9 @@ export class TextInput {
             this.typingPill = null;
         }
         
+        // Remove any existing typing match menu when user continues typing
+        this.removeTypingMatchResults();
+        
         // Clear any existing typing timeout
         if (this.typingTimeout) {
             clearTimeout(this.typingTimeout);
@@ -204,13 +207,8 @@ export class TextInput {
         this.typingPill.previousTuneType = previousTuneType;
         
         // Call autoMatchTune with stillTyping flag
-        window.autoMatchTune(this.typingPill, true).then(() => {
-            // If we got results, show them as a dropdown menu
-            if (this.typingPill!.matchResults && this.typingPill!.matchResults.length > 0) {
-                // Show the match results menu positioned at the typing cursor
-                this.showTypingMatchResults(this.typingPill!);
-            }
-        });
+        // Note: autoMatchTune will handle showing the match results menu via ContextMenu.showMatchResultsMenu
+        window.autoMatchTune(this.typingPill, true);
     }
 
     /**
@@ -316,10 +314,9 @@ export class TextInput {
      * Remove typing match results menu
      */
     removeTypingMatchResults(): void {
-        const existingMenu = document.querySelector('.typing-match-menu');
-        if (existingMenu) {
-            existingMenu.remove();
-        }
+        // Remove any match results menu (both typing-match-menu and match-results-menu)
+        const existingMenus = document.querySelectorAll('.typing-match-menu, .match-results-menu');
+        existingMenus.forEach(menu => menu.remove());
     }
 
     /**
