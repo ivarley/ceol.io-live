@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showContextMenu: (e, pillData) => ContextMenu.showContextMenu(e, pillData),
             hideContextMenu: (pillId) => ContextMenu.hideContextMenu(pillId),
             isTyping: () => textInput.typing,
-            finishTyping: () => textInput.finishTyping()
+            finishTyping: () => textInput.finishTyping(CursorManager.isMobileDevice())
         });
         
         // Initialize DragDrop
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
             handleBackspace: () => textInput.handleBackspace(),
             handleDelete: () => textInput.handleDelete(),
             handleEnterKey: () => textInput.handleEnterKey(),
-            finishTyping: () => textInput.finishTyping(),
+            finishTyping: () => textInput.finishTyping(CursorManager.isMobileDevice()),
             cancelTyping: () => textInput.cancelTyping(),
             undo: () => undoRedoManager.undo(),
             redo: () => undoRedoManager.redo(),
@@ -860,7 +860,7 @@ function setupEventListeners() {
             
             // If user is typing, finish typing first
             if (textInput && textInput.typing) {
-                textInput.finishTyping();
+                textInput.finishTyping(CursorManager.isMobileDevice());
             }
             
             // Clear selection and selection anchor when clicking to move cursor
@@ -874,7 +874,7 @@ function setupEventListeners() {
         
         // If user is typing, finish typing first
         if (textInput && textInput.typing) {
-            textInput.finishTyping();
+            textInput.finishTyping(CursorManager.isMobileDevice());
         }
         
         // Clear selection and selection anchor when clicking to move cursor
@@ -968,7 +968,7 @@ function setupEventListeners() {
                 
                 // If user is typing, finish typing first
                 if (textInput && textInput.typing) {
-                    textInput.finishTyping();
+                    textInput.finishTyping(true); // Always keep keyboard open on mobile touch
                 }
                 
                 // Clear selection when touching to move cursor
@@ -978,7 +978,7 @@ function setupEventListeners() {
             } else {
                 // Touch in empty space - set cursor at end
                 if (textInput && textInput.typing) {
-                    textInput.finishTyping();
+                    textInput.finishTyping(true); // Always keep keyboard open on mobile touch
                 }
                 
                 PillSelection.selectNone();
