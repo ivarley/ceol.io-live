@@ -4,38 +4,104 @@
  * Delegates drag & drop specific functionality to the DragDrop module
  */
 
-class PillInteraction {
+// Type definitions
+export interface PillData {
+    id: string;
+    orderNumber: number;
+    tuneId: number | null;
+    tuneName: string;
+    setting: string;
+    tuneType: string;
+    state: 'linked' | 'unlinked';
+}
+
+export interface PillSelection {
+    isSelected(pillId: string): boolean;
+    removeSelection(pillId: string): void;
+    addSelection(pillId: string): void;
+    getSelectionCount(): number;
+    extendSelection(pillId: string): void;
+    selectSingle(pillId: string): void;
+    getSelectedPills(): string[];
+}
+
+export interface CursorManager {
+    selectionAnchor: any;
+}
+
+export interface DragDrop {
+    registerPillDragHandlers?(pillElement: HTMLElement, pillData: PillData): void;
+    startMobileDrag?(event: TouchEvent, pillData: PillData): void;
+    handleMobileDragMove?(event: TouchEvent): void;
+    endMobileDrag?(event: TouchEvent): void;
+    cancelMobileDrag?(event: TouchEvent): void;
+}
+
+export interface StateManager {
+    // Define StateManager methods as needed
+}
+
+export interface PillInteractionCallbacks {
+    [key: string]: any; // Allow dynamic callback assignment
+}
+
+export interface PillInteractionOptions {
+    getPillSelection?: () => PillSelection;
+    getStateManager?: () => StateManager;
+    getCursorManager?: () => CursorManager;
+    getDragDrop?: () => DragDrop;
+    showContextMenu?: (event: MouseEvent | TouchEventLike, pillData: PillData) => void;
+    hideContextMenu?: (pillId?: string) => void;
+    isTyping?: () => boolean;
+    finishTyping?: () => void;
+}
+
+// Custom type for fake touch events
+export interface TouchEventLike {
+    clientX: number;
+    clientY: number;
+    target: HTMLElement;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+}
+
+export class PillInteraction {
     // External dependencies that need to be registered
-    static getPillSelection = null;
-    static getStateManager = null;
-    static getCursorManager = null;
-    static getDragDrop = null;
-    static showContextMenu = null;
-    static hideContextMenu = null;
-    static isTyping = null;
-    static finishTyping = null;
+    private static getPillSelection: (() => PillSelection) | null = null;
+    private static getStateManager: (() => StateManager) | null = null;
+    private static getCursorManager: (() => CursorManager) | null = null;
+    private static getDragDrop: (() => DragDrop) | null = null;
+    private static showContextMenu: ((event: MouseEvent | TouchEventLike, pillData: PillData) => void) | null = null;
+    private static hideContextMenu: ((pillId?: string) => void) | null = null;
+    private static isTyping: (() => boolean) | null = null;
+    private static finishTyping: (() => void) | null = null;
     
-    static initialize(options = {}) {
-        this.getPillSelection = options.getPillSelection || (() => window.PillSelection);
-        this.getStateManager = options.getStateManager || (() => window.StateManager);
-        this.getCursorManager = options.getCursorManager || (() => window.CursorManager);
-        this.getDragDrop = options.getDragDrop || (() => window.DragDrop);
-        this.showContextMenu = options.showContextMenu || window.showContextMenu;
-        this.hideContextMenu = options.hideContextMenu || window.hideContextMenu;
+    public static initialize(options: PillInteractionOptions = {}): void {
+        this.getPillSelection = options.getPillSelection || (() => (window as any).PillSelection);
+        this.getStateManager = options.getStateManager || (() => (window as any).StateManager);
+        this.getCursorManager = options.getCursorManager || (() => (window as any).CursorManager);
+        this.getDragDrop = options.getDragDrop || (() => (window as any).DragDrop);
+        this.showContextMenu = options.showContextMenu || (window as any).showContextMenu;
+        this.hideContextMenu = options.hideContextMenu || (window as any).hideContextMenu;
         this.isTyping = options.isTyping || (() => false);
         this.finishTyping = options.finishTyping || (() => {});
     }
     
-    static registerCallbacks(callbacks) {
+    public static registerCallbacks(callbacks: PillInteractionCallbacks): void {
         Object.assign(this, callbacks);
     }
     
-    static setupPillEventListeners(pillElement, pillData) {
-        const pillSelection = this.getPillSelection();
-        const dragDrop = this.getDragDrop();
+    public static setupPillEventListeners(pillElement: HTMLElement, pillData: PillData): void {
+        const pillSelection = this.getPillSelection?.();
+        const dragDrop = this.getDragDrop?.();
+        
+        if (!pillSelection) {
+            console.warn('PillSelection not available');
+            return;
+        }
         
         // Click to select or show context menu
-        pillElement.addEventListener('click', (e) => {
+        pillElement.addEventListener('click', (e: MouseEvent) => {
             // Calculate if click is on the left side (chevron area)
             const rect = pillElement.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
@@ -50,10 +116,10 @@ class PillInteraction {
                 const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
                 if (existingMenu) {
                     // Menu is open, close it
-                    this.hideContextMenu(pillData.id);
+                    this.hideContextMenu && this.hideContextMenu(pillData.id);
                 } else {
                     // Menu is closed, open it
-                    this.showContextMenu(e, pillData);
+                    this.showContextMenu && this.showContextMenu(e, pillData);
                 }
             } else {
                 // Clicked on tune name area - handle selection
@@ -62,7 +128,7 @@ class PillInteraction {
                 
                 // If user is typing, finish typing first
                 if (this.isTyping && this.isTyping()) {
-                    this.finishTyping();
+                    this.finishTyping && this.finishTyping();
                 }
                 
                 if (e.ctrlKey || e.metaKey) {
@@ -80,7 +146,7 @@ class PillInteraction {
                     pillSelection.selectSingle(pillData.id);
                     
                     // If we had a selection anchor from shift+arrow, clear it
-                    const cursorManager = this.getCursorManager();
+                    const cursorManager = this.getCursorManager?.();
                     if (cursorManager && cursorManager.selectionAnchor !== null) {
                         cursorManager.selectionAnchor = null;
                     }
@@ -90,16 +156,20 @@ class PillInteraction {
         
         // Touch handling for mobile interactions
         let touchStartTime = 0;
-        let longPressTimer = null;
+        let longPressTimer: number | null = null;
         let isDragMode = false;
         let touchStartX = 0, touchStartY = 0;
         
-        pillElement.addEventListener('touchstart', (e) => {
+        pillElement.addEventListener('touchstart', (e: TouchEvent) => {
             touchStartTime = Date.now();
-            clearTimeout(longPressTimer);
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+            }
             isDragMode = false;
             
             const touch = e.touches[0];
+            if (!touch) return;
+            
             touchStartX = touch.clientX;
             touchStartY = touch.clientY;
             
@@ -109,11 +179,11 @@ class PillInteraction {
             const isChevronArea = touchX <= 30;
             
             // Store chevron state for later use
-            pillElement.dataset.touchOnChevron = isChevronArea;
+            pillElement.dataset.touchOnChevron = isChevronArea.toString();
             
             if (!isChevronArea) {
                 // Only set up long press for drag if not on chevron
-                longPressTimer = setTimeout(() => {
+                longPressTimer = window.setTimeout(() => {
                     // Enter drag mode
                     isDragMode = true;
                     pillElement.classList.add('dragging');
@@ -125,7 +195,7 @@ class PillInteraction {
                     
                     // Add dragging class to all selected pills
                     pillSelection.getSelectedPills().forEach(pillId => {
-                        const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                        const pill = document.querySelector(`[data-pill-id="${pillId}"]`) as HTMLElement;
                         if (pill && pill !== pillElement) {
                             pill.classList.add('dragging');
                         }
@@ -144,15 +214,17 @@ class PillInteraction {
             }
         });
         
-        pillElement.addEventListener('touchmove', (e) => {
+        pillElement.addEventListener('touchmove', (e: TouchEvent) => {
             if (isDragMode && dragDrop && dragDrop.handleMobileDragMove) {
                 e.preventDefault();
                 dragDrop.handleMobileDragMove(e);
             }
         });
         
-        pillElement.addEventListener('touchend', (e) => {
-            clearTimeout(longPressTimer);
+        pillElement.addEventListener('touchend', (e: TouchEvent) => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+            }
             
             if (isDragMode) {
                 // End drag mode
@@ -173,6 +245,8 @@ class PillInteraction {
                 
                 // Check for significant movement (scroll/swipe)
                 const touch = e.changedTouches[0];
+                if (!touch) return;
+                
                 const deltaX = Math.abs(touch.clientX - touchStartX);
                 const deltaY = Math.abs(touch.clientY - touchStartY);
                 const hasMoved = deltaX > 10 || deltaY > 10;
@@ -187,18 +261,18 @@ class PillInteraction {
                         const existingMenu = document.querySelector(`.tune-context-menu[data-pill-id="${pillData.id}"]`);
                         if (existingMenu) {
                             // Menu is open, close it
-                            this.hideContextMenu(pillData.id);
+                            this.hideContextMenu && this.hideContextMenu(pillData.id);
                         } else {
                             // Menu is closed, open it
                             // Create a fake event with the touch coordinates
-                            const fakeEvent = {
+                            const fakeEvent: TouchEventLike = {
                                 clientX: touch.clientX,
                                 clientY: touch.clientY,
                                 target: pillElement,
                                 preventDefault: () => {},
                                 stopPropagation: () => {}
                             };
-                            this.showContextMenu(fakeEvent, pillData);
+                            this.showContextMenu && this.showContextMenu(fakeEvent, pillData);
                         }
                     } else if (touchDuration < 500) {
                         // Short tap on tune name area - handle selection
@@ -213,8 +287,10 @@ class PillInteraction {
             delete pillElement.dataset.touchOnChevron;
         });
         
-        pillElement.addEventListener('touchcancel', (e) => {
-            clearTimeout(longPressTimer);
+        pillElement.addEventListener('touchcancel', (e: TouchEvent) => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+            }
             isDragMode = false;
             
             // Clean up dragging state
@@ -230,9 +306,9 @@ class PillInteraction {
         });
         
         // Right-click context menu
-        pillElement.addEventListener('contextmenu', (e) => {
+        pillElement.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
-            this.showContextMenu(e, pillData);
+            this.showContextMenu && this.showContextMenu(e, pillData);
         });
         
         // Register drag event handlers with DragDrop module
@@ -243,4 +319,10 @@ class PillInteraction {
 }
 
 // Export for use in other modules or global scope
-window.PillInteraction = PillInteraction;
+declare global {
+    interface Window {
+        PillInteraction: typeof PillInteraction;
+    }
+}
+
+(window as any).PillInteraction = PillInteraction;
