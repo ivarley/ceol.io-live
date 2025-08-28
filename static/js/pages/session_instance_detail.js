@@ -66,11 +66,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Register callbacks that CursorManager needs
         CursorManager.registerCallbacks({
-            finishTyping: (keepKeyboard) => textInput.finishTyping(keepKeyboard),
+            finishTyping: (keepKeyboard) => finishTypingWithKeyboardFix(keepKeyboard),
             removeTemporaryEmptySet: () => removeTemporaryEmptySet(),
             renderTunePills: () => PillRenderer.renderTunePills(),
             handleTextInput: (char) => textInput.handleTextInput(char),
-            handleBackspace: () => textInput.handleBackspace()
+            handleBackspace: () => textInput.handleBackspace(),
+            syncNativeCursor: () => syncNativeCursorPosition()
         });
         
         // Set typing-related variables that CursorManager needs access to
@@ -1277,4 +1278,69 @@ function markSessionLogIncomplete() {
         showMessage('Failed to mark session log as not complete', 'error');
         console.error('Error:', error);
     });
+}
+
+/**
+ * Wrapper for finishTyping that ensures mobile keyboard stays open after pill creation
+ */
+function finishTypingWithKeyboardFix(keepKeyboard) {
+    const shouldKeepKeyboard = keepKeyboard && CursorManager.isMobileDevice();
+    
+    // Call the original finishTyping method
+    textInput.finishTyping(keepKeyboard);
+    
+    // If we should keep the keyboard open on mobile, ensure it stays open after DOM updates
+    if (shouldKeepKeyboard) {
+        // Wait for any DOM updates to complete, then re-establish focus
+        setTimeout(() => {
+            const container = document.getElementById('tune-pills-container');
+            if (container) {
+                container.contentEditable = 'true';
+                container.inputMode = 'text';
+                container.focus();
+            }
+        }, 50); // Shorter timeout than the original 300ms for better responsiveness
+    }
+}
+
+/**
+ * Synchronize the native browser cursor position with the blue cursor position
+ * This prevents the dual-cursor issue on mobile devices
+ */
+function syncNativeCursorPosition() {
+    const container = document.getElementById('tune-pills-container');
+    if (!container || container.contentEditable !== 'true') {
+        return;
+    }
+    
+    const cursorPosition = CursorManager.getCursorPosition();
+    if (!cursorPosition) {
+        return;
+    }
+    
+    try {
+        // Find the cursor element that represents our current position
+        const cursorElement = document.querySelector('.text-cursor');
+        if (!cursorElement) {
+            return;
+        }
+        
+        // Create a range and set it to the cursor element's position
+        const selection = window.getSelection();
+        const range = document.createRange();
+        
+        // Position the native cursor at the same location as our blue cursor
+        // We'll place it right before the cursor element
+        range.setStartBefore(cursorElement);
+        range.setEndBefore(cursorElement);
+        
+        // Apply the selection to sync the native cursor
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+    } catch (error) {
+        // Silently handle any errors in cursor positioning
+        // This prevents breaking the editor if there are DOM structure issues
+        console.debug('Could not sync native cursor position:', error);
+    }
 }

@@ -101,6 +101,11 @@
             outline: none;
         }
         
+        /* Hide native browser cursor when contentEditable is active */
+        .tune-pills-container[contenteditable="true"] {
+            caret-color: transparent;
+        }
+        
         .tune-set {
             margin-top: 0px;
             margin-bottom: 1px;
