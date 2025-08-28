@@ -6,7 +6,15 @@ module.exports = {
     'undoRedoManager': './src/ts/components/undoRedoManager.ts',
     'keyboardHandler': './src/ts/components/keyboardHandler.ts',
     'pillInteraction': './src/ts/components/pillInteraction.ts',
-    // Add other modules as we convert them
+    'clipboardManager': './src/ts/components/clipboardManager.ts',
+    'modalManager': './src/ts/components/modalManager.ts',
+    'contextMenu': './src/ts/components/contextMenu.ts',
+    'autoSave': './src/ts/components/autoSave.ts',
+    'pillRenderer': './src/ts/components/pillRenderer.ts',
+    'pillSelection': './src/ts/components/pillSelection.ts',
+    'cursorManager': './src/ts/components/cursorManager.ts',
+    'dragDrop': './src/ts/components/dragDrop.ts',
+    'textInput': './src/ts/components/textInput.ts',
   },
   module: {
     rules: [

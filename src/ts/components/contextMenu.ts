@@ -2,13 +2,74 @@
  * Context Menu Module
  * Handles the creation and management of context menus for tune pills
  */
-class ContextMenu {
+
+import { TunePill } from './stateManager.js';
+
+export interface MatchResult {
+    tune_id: number;
+    tune_name: string;
+    tune_type: string;
+}
+
+export interface ExtendedTunePill extends TunePill {
+    matchResults?: MatchResult[] | null;
+}
+
+export interface ContextMenuDependencies {
+    PillRenderer: {
+        updatePillAppearance(pill: TunePill): void;
+    };
+    AutoSaveManager: {
+        forceCheckChanges(): void;
+    };
+    PillSelection: {
+        getSelectionCount(): number;
+        deleteSelectedPills(): void;
+    };
+    StateManager: {
+        getTunePillsData(): import('./stateManager.js').TunePillsData;
+        setTunePillsData(data: import('./stateManager.js').TunePillsData): void;
+        findTuneById(id: string): import('./stateManager.js').TunePosition | null;
+    };
+    undoRedoManager: {
+        saveToUndo(): void;
+    };
+    ModalManager: {
+        showModalWithInput(modalId: string, inputSelector: string, value: string, selectText: boolean): void;
+    };
+    CursorManager: {
+        setCursorPosition(setIndex: number, pillIndex: number, position: string): void;
+    };
+    findPillPosition?: (pillId: string) => import('./stateManager.js').TunePosition | null;
+    textInput?: {
+        typing: boolean;
+    };
+}
+
+declare global {
+    interface Window {
+        ContextMenu: typeof ContextMenu;
+        currentLinkingPill: TunePill;
+        currentEditingPill: TunePill;
+        PillRenderer: ContextMenuDependencies['PillRenderer'];
+        AutoSaveManager: ContextMenuDependencies['AutoSaveManager'];
+        PillSelection: ContextMenuDependencies['PillSelection'];
+        StateManager: ContextMenuDependencies['StateManager'];
+        undoRedoManager: ContextMenuDependencies['undoRedoManager'];
+        ModalManager: ContextMenuDependencies['ModalManager'];
+        CursorManager: ContextMenuDependencies['CursorManager'];
+        findPillPosition: ContextMenuDependencies['findPillPosition'];
+        textInput: ContextMenuDependencies['textInput'];
+    }
+}
+
+export class ContextMenu {
     
     /**
      * Remove all context menus and reset chevron states
-     * @param {string} [pillId] - Optional pill ID for specific targeting
+     * @param pillId - Optional pill ID for specific targeting
      */
-    static hideContextMenu(pillId) {
+    static hideContextMenu(pillId?: string): void {
         // Remove all context menus and reset chevron states
         document.querySelectorAll('.tune-context-menu').forEach(menu => menu.remove());
         document.querySelectorAll('.chevron.open').forEach(chevron => chevron.classList.remove('open'));
@@ -16,9 +77,9 @@ class ContextMenu {
     
     /**
      * Remove match results menu for specific pill
-     * @param {string} pillId - The pill ID to hide match results for
+     * @param pillId - The pill ID to hide match results for
      */
-    static hideMatchResultsMenu(pillId) {
+    static hideMatchResultsMenu(pillId: string): void {
         const menu = document.querySelector(`.match-results-menu[data-pill-id="${pillId}"]`);
         if (menu) {
             menu.remove();
@@ -27,10 +88,10 @@ class ContextMenu {
     
     /**
      * Show context menu for a pill
-     * @param {Event} event - The click event that triggered the menu
-     * @param {Object} pillData - The pill data object
+     * @param event - The click event that triggered the menu
+     * @param pillData - The pill data object
      */
-    static showContextMenu(event, pillData) {
+    static showContextMenu(event: MouseEvent, pillData: ExtendedTunePill): void {
         // Remove existing context menus and reset all chevrons
         ContextMenu.hideContextMenu();
         
@@ -40,11 +101,11 @@ class ContextMenu {
         menu.dataset.pillId = pillData.id; // Track which pill this menu belongs to
         
         // Find the pill element to match its dimensions and color
-        const pillElement = event.target.closest('.tune-pill');
+        const pillElement = (event.target as Element).closest('.tune-pill') as HTMLElement;
         const rect = pillElement.getBoundingClientRect();
         
         // Set chevron to open state
-        const chevron = pillElement.querySelector('.chevron');
+        const chevron = pillElement.querySelector('.chevron') as HTMLElement;
         chevron.classList.add('open');
         
         // Position menu
@@ -116,10 +177,10 @@ class ContextMenu {
                     pillData.matchResults = null;
                     
                     // Update the pill appearance
-                    PillRenderer.updatePillAppearance(pillData);
+                    window.PillRenderer.updatePillAppearance(pillData);
                     
                     // Force check for changes (includes timer reset and dirty state)
-                    AutoSaveManager.forceCheckChanges();
+                    window.AutoSaveManager.forceCheckChanges();
                     ContextMenu.hideContextMenu();
                 });
                 
@@ -151,14 +212,14 @@ class ContextMenu {
             ContextMenu.hideContextMenu();
         });
         
-        if (PillSelection.getSelectionCount() <= 1) {
+        if (window.PillSelection.getSelectionCount() <= 1) {
             ContextMenu.addMenuItem(menu, 'Delete', () => {
                 ContextMenu.deletePill(pillData.id);
                 ContextMenu.hideContextMenu();
             });
         } else {
-            ContextMenu.addMenuItem(menu, `Delete Selected (${PillSelection.getSelectionCount()})`, () => {
-                PillSelection.deleteSelectedPills();
+            ContextMenu.addMenuItem(menu, `Delete Selected (${window.PillSelection.getSelectionCount()})`, () => {
+                window.PillSelection.deleteSelectedPills();
                 ContextMenu.hideContextMenu();
             });
         }
@@ -167,8 +228,8 @@ class ContextMenu {
         
         // Hide menu when clicking elsewhere or scrolling
         setTimeout(() => {
-            const hideMenu = (e) => {
-                if (!menu.contains(e.target)) {
+            const hideMenu = (e: Event) => {
+                if (!menu.contains(e.target as Node)) {
                     ContextMenu.hideContextMenu();
                     document.removeEventListener('click', hideMenu);
                     document.removeEventListener('scroll', hideOnScroll, true);
@@ -189,9 +250,9 @@ class ContextMenu {
     
     /**
      * Show match results menu for a pill during typing
-     * @param {Object} pill - The pill data object with match results
+     * @param pill - The pill data object with match results
      */
-    static showMatchResultsMenu(pill) {
+    static showMatchResultsMenu(pill: ExtendedTunePill): void {
         // Remove any existing match results menu for this pill
         ContextMenu.hideMatchResultsMenu(pill.id);
         
@@ -200,7 +261,7 @@ class ContextMenu {
         }
         
         // Find the pill element
-        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
+        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
         if (!pillElement) {
             console.error(`Could not find pill element for ID: ${pill.id}`);
             return;
@@ -270,10 +331,10 @@ class ContextMenu {
                 pill.matchResults = null;
                 
                 // Update the pill appearance
-                PillRenderer.updatePillAppearance(pill);
+                window.PillRenderer.updatePillAppearance(pill);
                 
                 // Force check for changes (includes timer reset and dirty state)
-                AutoSaveManager.forceCheckChanges();
+                window.AutoSaveManager.forceCheckChanges();
                 
                 // Hide the menu
                 ContextMenu.hideMatchResultsMenu(pill.id);
@@ -281,9 +342,9 @@ class ContextMenu {
                 // If we're still typing, maintain typing state
                 if (window.textInput && window.textInput.typing) {
                     // Move cursor after this pill
-                    const pillPosition = window.findPillPosition(pill.id);
+                    const pillPosition = window.findPillPosition?.(pill.id);
                     if (pillPosition) {
-                        CursorManager.setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
+                        window.CursorManager.setCursorPosition(pillPosition.setIndex, pillPosition.pillIndex, 'after');
                     }
                 }
             });
@@ -295,8 +356,8 @@ class ContextMenu {
         
         // Hide menu when clicking elsewhere or scrolling
         setTimeout(() => {
-            const hideMenu = (e) => {
-                if (!menu.contains(e.target)) {
+            const hideMenu = (e: Event) => {
+                if (!menu.contains(e.target as Node)) {
                     ContextMenu.hideMatchResultsMenu(pill.id);
                     document.removeEventListener('click', hideMenu);
                     document.removeEventListener('scroll', hideOnScroll, true);
@@ -317,11 +378,11 @@ class ContextMenu {
     
     /**
      * Add a menu item to a context menu
-     * @param {Element} menu - The menu element to add the item to
-     * @param {string} text - The text for the menu item
-     * @param {Function} callback - The callback function when clicked
+     * @param menu - The menu element to add the item to
+     * @param text - The text for the menu item
+     * @param callback - The callback function when clicked
      */
-    static addMenuItem(menu, text, callback) {
+    static addMenuItem(menu: HTMLElement, text: string, callback: () => void): void {
         const item = document.createElement('a');
         item.textContent = text;
         item.addEventListener('click', callback);
@@ -330,47 +391,47 @@ class ContextMenu {
     
     /**
      * Show link modal for a pill
-     * @param {Object} pillData - The pill data object
+     * @param pillData - The pill data object
      */
-    static showLinkModal(pillData) {
+    static showLinkModal(pillData: TunePill): void {
         const inputValue = pillData.tuneId ? `https://thesession.org/tunes/${pillData.tuneId}` : '';
-        ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, false);
+        window.ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, false);
         // Store current pill for linking (backward compatibility)
         window.currentLinkingPill = pillData;
     }
     
     /**
      * Show edit modal for a pill
-     * @param {Object} pillData - The pill data object
+     * @param pillData - The pill data object
      */
-    static showEditModal(pillData) {
-        ModalManager.showModalWithInput('edit-tune-modal', '#edit-tune-name-input', pillData.tuneName, true);
+    static showEditModal(pillData: TunePill): void {
+        window.ModalManager.showModalWithInput('edit-tune-modal', '#edit-tune-name-input', pillData.tuneName, true);
         // Store current pill for editing (backward compatibility)
         window.currentEditingPill = pillData;
     }
     
     /**
      * Delete a pill by ID
-     * @param {string} pillId - The ID of the pill to delete
+     * @param pillId - The ID of the pill to delete
      */
-    static deletePill(pillId) {
+    static deletePill(pillId: string): void {
         // Find and remove the pill
-        const tunePillsData = StateManager.getTunePillsData();
+        const tunePillsData = window.StateManager.getTunePillsData();
         for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
-            const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+            const pillIndex = tunePillsData[setIndex]!.findIndex(p => p.id === pillId);
             if (pillIndex !== -1) {
-                undoRedoManager.saveToUndo();
-                tunePillsData[setIndex].splice(pillIndex, 1);
+                window.undoRedoManager.saveToUndo();
+                tunePillsData[setIndex]!.splice(pillIndex, 1);
                 
                 // Remove empty sets
-                if (tunePillsData[setIndex].length === 0) {
+                if (tunePillsData[setIndex]!.length === 0) {
                     tunePillsData.splice(setIndex, 1);
                 }
                 
                 // Update StateManager with the modified data
-                StateManager.setTunePillsData(tunePillsData);
+                window.StateManager.setTunePillsData(tunePillsData);
                 
-                PillRenderer.renderTunePills();
+                window.PillRenderer.renderTunePills();
                 break;
             }
         }
@@ -378,4 +439,4 @@ class ContextMenu {
 }
 
 // Export the ContextMenu class for use in other modules
-window.ContextMenu = ContextMenu;
+(window as any).ContextMenu = ContextMenu;

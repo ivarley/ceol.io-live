@@ -16,21 +16,45 @@
  * ModalManager to specific page knowledge.
  */
 
-class ModalManager {
+// Type definitions
+export interface ModalInputConfig {
+    selector: string;
+    value?: string;
+    placeholder?: string;
+    select?: boolean;
+}
+
+export interface ModalConfig {
+    input?: ModalInputConfig;
+    data?: Record<string, any>;
+    display?: string;
+    autoFocus?: boolean;
+    closeOnOutsideClick?: boolean;
+    populateForm?: boolean;
+}
+
+export interface MessageOptions {
+    position?: Record<string, string>;
+    duration?: number;
+}
+
+export type MessageType = 'success' | 'error' | 'warning' | 'info';
+
+export class ModalManager {
     // Current modal state
-    static currentModals = new Set();
-    static messageTimeout = null;
+    private static currentModals = new Set<string>();
+    private static messageTimeout: number | null = null;
     
     /**
      * Show a modal by ID with optional configuration
-     * @param {string} modalId - The ID of the modal to show
-     * @param {Object} config - Modal configuration options
+     * @param modalId - The ID of the modal to show
+     * @param config - Modal configuration options
      */
-    static showModal(modalId, config = {}) {
+    public static showModal(modalId: string, config: ModalConfig = {}): HTMLElement | null {
         const modal = document.getElementById(modalId);
         if (!modal) {
             console.warn(`ModalManager: Modal with ID "${modalId}" not found`);
-            return;
+            return null;
         }
         
         // Apply configuration options
@@ -66,9 +90,9 @@ class ModalManager {
     
     /**
      * Hide a modal by ID
-     * @param {string} modalId - The ID of the modal to hide
+     * @param modalId - The ID of the modal to hide
      */
-    static hideModal(modalId) {
+    public static hideModal(modalId: string): void {
         const modal = document.getElementById(modalId);
         if (!modal) {
             console.warn(`ModalManager: Modal with ID "${modalId}" not found`);
@@ -88,7 +112,7 @@ class ModalManager {
     /**
      * Hide all currently open modals
      */
-    static hideAllModals() {
+    public static hideAllModals(): void {
         this.currentModals.forEach(modalId => {
             this.hideModal(modalId);
         });
@@ -97,30 +121,30 @@ class ModalManager {
     /**
      * Check if any modals are currently open
      */
-    static hasOpenModals() {
+    public static hasOpenModals(): boolean {
         return this.currentModals.size > 0;
     }
     
     /**
      * Get list of currently open modal IDs
      */
-    static getOpenModals() {
+    public static getOpenModals(): string[] {
         return Array.from(this.currentModals);
     }
     
     /**
      * Configure input field in modal
      */
-    static configureInput(modal, inputConfig) {
-        const input = modal.querySelector(inputConfig.selector);
+    private static configureInput(modal: HTMLElement, inputConfig: ModalInputConfig): void {
+        const input = modal.querySelector(inputConfig.selector) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
         if (input) {
             if (inputConfig.value !== undefined) {
                 input.value = inputConfig.value;
             }
-            if (inputConfig.placeholder !== undefined) {
+            if (inputConfig.placeholder !== undefined && 'placeholder' in input) {
                 input.placeholder = inputConfig.placeholder;
             }
-            if (inputConfig.select) {
+            if (inputConfig.select && 'select' in input) {
                 setTimeout(() => input.select(), 0);
             }
         }
@@ -129,13 +153,13 @@ class ModalManager {
     /**
      * Populate modal with data
      */
-    static populateModal(modal, data) {
+    private static populateModal(modal: HTMLElement, data: Record<string, any>): void {
         // Look for elements with data-field attributes and populate them
         modal.querySelectorAll('[data-field]').forEach(element => {
             const field = element.getAttribute('data-field');
-            if (data[field] !== undefined) {
+            if (field && data[field] !== undefined) {
                 if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
-                    element.value = data[field];
+                    (element as HTMLInputElement).value = data[field];
                 } else {
                     element.textContent = data[field];
                 }
@@ -146,12 +170,12 @@ class ModalManager {
     /**
      * Focus first input in modal
      */
-    static focusFirstInput(modal) {
-        const firstInput = modal.querySelector('input, textarea, select');
+    private static focusFirstInput(modal: HTMLElement): void {
+        const firstInput = modal.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
         if (firstInput) {
             setTimeout(() => {
                 firstInput.focus();
-                if (firstInput.type === 'text' || firstInput.type === 'url') {
+                if ('type' in firstInput && (firstInput.type === 'text' || firstInput.type === 'url') && 'select' in firstInput) {
                     firstInput.select();
                 }
             }, 0);
@@ -161,70 +185,70 @@ class ModalManager {
     /**
      * Store modal data for later retrieval
      */
-    static storeModalData(modalId, data) {
-        window[`current${this.capitalizeFirst(modalId)}Data`] = data;
+    private static storeModalData(modalId: string, data: Record<string, any>): void {
+        (window as any)[`current${this.capitalizeFirst(modalId)}Data`] = data;
     }
     
     /**
      * Clear stored modal data
      */
-    static clearModalData(modalId) {
+    private static clearModalData(modalId: string): void {
         const dataKey = `current${this.capitalizeFirst(modalId)}Data`;
-        if (window[dataKey]) {
-            delete window[dataKey];
+        if ((window as any)[dataKey]) {
+            delete (window as any)[dataKey];
         }
     }
     
     /**
      * Set up modal-specific event listeners
      */
-    static setupModalEvents(modal, modalId, config) {
+    private static setupModalEvents(modal: HTMLElement, modalId: string, config: ModalConfig): void {
         // Click outside to close (if enabled)
         if (config.closeOnOutsideClick !== false) {
-            const handler = (e) => {
+            const handler = (e: Event) => {
                 if (e.target === modal) {
                     this.hideModal(modalId);
                 }
             };
             modal.addEventListener('click', handler);
-            modal._outsideClickHandler = handler;
+            (modal as any)._outsideClickHandler = handler;
         }
         
         // Close button handling
-        const closeBtn = modal.querySelector('.modal-close, .btn-close, [data-dismiss="modal"]');
+        const closeBtn = modal.querySelector('.modal-close, .btn-close, [data-dismiss="modal"]') as HTMLElement;
         if (closeBtn) {
-            const closeHandler = (e) => {
+            const closeHandler = (e: Event) => {
                 e.preventDefault();
                 this.hideModal(modalId);
             };
             closeBtn.addEventListener('click', closeHandler);
-            closeBtn._closeHandler = closeHandler;
+            (closeBtn as any)._closeHandler = closeHandler;
         }
     }
     
     /**
      * Clean up modal event listeners
      */
-    static cleanupModalEvents(modal) {
-        if (modal._outsideClickHandler) {
-            modal.removeEventListener('click', modal._outsideClickHandler);
-            delete modal._outsideClickHandler;
+    private static cleanupModalEvents(modal: HTMLElement): void {
+        if ((modal as any)._outsideClickHandler) {
+            modal.removeEventListener('click', (modal as any)._outsideClickHandler);
+            delete (modal as any)._outsideClickHandler;
         }
         
-        const closeBtn = modal.querySelector('.modal-close, .btn-close, [data-dismiss="modal"]');
-        if (closeBtn && closeBtn._closeHandler) {
-            closeBtn.removeEventListener('click', closeBtn._closeHandler);
-            delete closeBtn._closeHandler;
+        const closeBtn = modal.querySelector('.modal-close, .btn-close, [data-dismiss="modal"]') as HTMLElement;
+        if (closeBtn && (closeBtn as any)._closeHandler) {
+            closeBtn.removeEventListener('click', (closeBtn as any)._closeHandler);
+            delete (closeBtn as any)._closeHandler;
         }
     }
     
     /**
      * Show a toast message
-     * @param {string} message - The message to display
-     * @param {string} type - Message type: 'success', 'error', 'warning', 'info'
-     * @param {Object} options - Display options
+     * @param message - The message to display
+     * @param type - Message type: 'success', 'error', 'warning', 'info'
+     * @param options - Display options
      */
-    static showMessage(message, type = 'success', options = {}) {
+    public static showMessage(message: string, type: MessageType = 'success', options: MessageOptions = {}): HTMLElement {
         // Remove any existing messages first
         const existingMessages = document.querySelectorAll('.message');
         existingMessages.forEach(msg => msg.remove());
@@ -255,7 +279,7 @@ class ModalManager {
         // Auto-hide after specified duration (default 4 seconds)
         const duration = options.duration !== undefined ? options.duration : 4000;
         if (duration > 0) {
-            this.messageTimeout = setTimeout(() => {
+            this.messageTimeout = window.setTimeout(() => {
                 this.hideMessage(messageDiv);
             }, duration);
         }
@@ -266,7 +290,7 @@ class ModalManager {
     /**
      * Hide a message element
      */
-    static hideMessage(messageElement) {
+    public static hideMessage(messageElement: HTMLElement): void {
         messageElement.classList.remove('show');
         setTimeout(() => {
             if (messageElement.parentNode) {
@@ -278,18 +302,18 @@ class ModalManager {
     /**
      * Hide all messages
      */
-    static hideAllMessages() {
+    public static hideAllMessages(): void {
         const messages = document.querySelectorAll('.message');
-        messages.forEach(msg => this.hideMessage(msg));
+        messages.forEach(msg => this.hideMessage(msg as HTMLElement));
     }
     
     /**
      * Confirm dialog using native browser prompt or custom modal
-     * @param {string} message - Confirmation message
-     * @param {Function} onConfirm - Callback for confirmation
-     * @param {Function} onCancel - Callback for cancellation
+     * @param message - Confirmation message
+     * @param onConfirm - Callback for confirmation
+     * @param onCancel - Callback for cancellation
      */
-    static confirm(message, onConfirm, onCancel = null) {
+    public static confirm(message: string, onConfirm?: () => void, onCancel?: () => void): void {
         // Use native confirm for now - can be enhanced with custom modal later
         if (window.confirm(message)) {
             onConfirm && onConfirm();
@@ -302,15 +326,15 @@ class ModalManager {
      * Set up global modal keyboard handling
      * This integrates with KeyboardHandler if available
      */
-    static setupGlobalEvents() {
+    private static setupGlobalEvents(): void {
         // ESC key handling for modals (if KeyboardHandler is not available)
-        if (!window.KeyboardHandler) {
-            document.addEventListener('keydown', (e) => {
+        if (!(window as any).KeyboardHandler) {
+            document.addEventListener('keydown', (e: KeyboardEvent) => {
                 if (e.key === 'Escape' && this.hasOpenModals()) {
                     const openModals = this.getOpenModals();
                     // Close the most recently opened modal
                     if (openModals.length > 0) {
-                        this.hideModal(openModals[openModals.length - 1]);
+                        this.hideModal(openModals[openModals.length - 1]!);
                     }
                 }
             });
@@ -320,7 +344,7 @@ class ModalManager {
     /**
      * Utility function to capitalize first letter
      */
-    static capitalizeFirst(str) {
+    private static capitalizeFirst(str: string): string {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
     
@@ -328,13 +352,19 @@ class ModalManager {
     
     /**
      * Show a modal with input configuration
-     * @param {string} modalId - The modal ID
-     * @param {string} inputSelector - The input element selector
-     * @param {string} inputValue - The value to set
-     * @param {boolean} selectText - Whether to select the text
-     * @param {Object} additionalConfig - Additional configuration
+     * @param modalId - The modal ID
+     * @param inputSelector - The input element selector
+     * @param inputValue - The value to set
+     * @param selectText - Whether to select the text
+     * @param additionalConfig - Additional configuration
      */
-    static showModalWithInput(modalId, inputSelector, inputValue = '', selectText = false, additionalConfig = {}) {
+    public static showModalWithInput(
+        modalId: string, 
+        inputSelector: string, 
+        inputValue: string = '', 
+        selectText: boolean = false, 
+        additionalConfig: ModalConfig = {}
+    ): HTMLElement | null {
         return this.showModal(modalId, {
             input: {
                 selector: inputSelector,
@@ -347,11 +377,15 @@ class ModalManager {
     
     /**
      * Show a modal with form data population
-     * @param {string} modalId - The modal ID
-     * @param {Object} formData - Data to populate form fields
-     * @param {Object} additionalConfig - Additional configuration
+     * @param modalId - The modal ID
+     * @param formData - Data to populate form fields
+     * @param additionalConfig - Additional configuration
      */
-    static showModalWithData(modalId, formData = {}, additionalConfig = {}) {
+    public static showModalWithData(
+        modalId: string, 
+        formData: Record<string, any> = {}, 
+        additionalConfig: ModalConfig = {}
+    ): HTMLElement | null {
         return this.showModal(modalId, {
             data: formData,
             populateForm: true,
@@ -362,7 +396,7 @@ class ModalManager {
     /**
      * Initialize the ModalManager
      */
-    static initialize() {
+    public static initialize(): void {
         this.setupGlobalEvents();
         console.log('ModalManager initialized');
     }
@@ -374,4 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Export for use in other modules or global scope
-window.ModalManager = ModalManager;
+declare global {
+    interface Window {
+        ModalManager: typeof ModalManager;
+    }
+}
+
+(window as any).ModalManager = ModalManager;

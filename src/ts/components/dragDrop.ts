@@ -5,49 +5,107 @@
  * Note: General pill interactions (clicks, selection) are handled by PillInteraction module
  */
 
-class DragDrop {
-    static dragState = null;
-    static globalDragGhost = null;
-    static lastDropZone = null;
-    static lastDropZoneUpdate = 0;
+import { TunePill, TuneSet, TunePillsData } from './stateManager.js';
+
+export interface DragState {
+    draggedPillId: string;
+    startX: number;
+    startY: number;
+    isMobile?: boolean;
+}
+
+export interface DropPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: 'before' | 'after' | 'newset';
+}
+
+export interface DragDropCallbacks {
+    performDrop?(position: DropPosition, draggedIds: string[]): void;
+    dropStructuredSetsAtNewPosition?(dragData: TuneSet[], insertAtSetIndex: number): void;
+    pasteAtPosition?(dragData: TuneSet[], position: DropPosition): void;
+    saveToUndo?(): void;
+    showContextMenu?(event: MouseEvent, pillData: TunePill): void;
+    hideContextMenu?(): void;
+    applyLandingAnimation?(pillIds: string[]): void;
+    setCursorPosition?(setIndex: number, pillIndex: number, position: string): void;
+    clearSelection?(): void;
+}
+
+export interface DragDropDependencies {
+    getPillSelection(): PillSelection;
+    getStateManager(): StateManager;
+    getCursorManager(): CursorManager;
+    getPillInteraction(): PillInteraction;
+}
+
+export interface PillSelection {
+    getSelectedPills(): Set<string>;
+    isSelected(pillId: string): boolean;
+    selectSingle(pillId: string): void;
+}
+
+export interface StateManager {
+    getTunePillsData(): TunePillsData;
+}
+
+export interface CursorManager {
+    getCursorPosition(): CursorPosition | null;
+}
+
+export interface CursorPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: string;
+}
+
+export interface PillInteraction {
+    setupPillEventListeners(pillElement: HTMLElement, pillData: TunePill): void;
+}
+
+export class DragDrop {
+    static dragState: DragState | null = null;
+    static globalDragGhost: HTMLElement | null = null;
+    static lastDropZone: HTMLElement | null = null;
+    static lastDropZoneUpdate: number = 0;
     
     // External dependencies that need to be registered
-    static getPillSelection = null;
-    static getStateManager = null;
-    static getCursorManager = null;
-    static getPillInteraction = null;
-    static performDrop = null;
-    static dropStructuredSetsAtNewPosition = null;
-    static pasteAtPosition = null;
-    static saveToUndo = null;
-    static showContextMenu = null;
-    static hideContextMenu = null;
-    static applyLandingAnimation = null;
-    static setCursorPosition = null;
-    static clearSelection = null;
+    static getPillSelection: (() => PillSelection) | null = null;
+    static getStateManager: (() => StateManager) | null = null;
+    static getCursorManager: (() => CursorManager) | null = null;
+    static getPillInteraction: (() => PillInteraction) | null = null;
+    static performDrop: ((position: DropPosition, draggedIds: string[]) => void) | null = null;
+    static dropStructuredSetsAtNewPosition: ((dragData: TuneSet[], insertAtSetIndex: number) => void) | null = null;
+    static pasteAtPosition: ((dragData: TuneSet[], position: DropPosition) => void) | null = null;
+    static saveToUndo: (() => void) | null = null;
+    static showContextMenu: ((event: MouseEvent, pillData: TunePill) => void) | null = null;
+    static hideContextMenu: (() => void) | null = null;
+    static applyLandingAnimation: ((pillIds: string[]) => void) | null = null;
+    static setCursorPosition: ((setIndex: number, pillIndex: number, position: string) => void) | null = null;
+    static clearSelection: (() => void) | null = null;
     
-    static initialize(options = {}) {
-        this.getPillSelection = options.getPillSelection || (() => window.PillSelection);
-        this.getStateManager = options.getStateManager || (() => window.StateManager);
-        this.getCursorManager = options.getCursorManager || (() => window.CursorManager);
-        this.getPillInteraction = options.getPillInteraction || (() => window.PillInteraction);
-        this.performDrop = options.performDrop || window.performDrop;
-        this.dropStructuredSetsAtNewPosition = options.dropStructuredSetsAtNewPosition || window.dropStructuredSetsAtNewPosition;
-        this.pasteAtPosition = options.pasteAtPosition || window.pasteAtPosition;
-        this.saveToUndo = options.saveToUndo || window.saveToUndo;
-        this.showContextMenu = options.showContextMenu || window.showContextMenu;
-        this.hideContextMenu = options.hideContextMenu || window.hideContextMenu;
-        this.applyLandingAnimation = options.applyLandingAnimation || window.applyLandingAnimation;
-        this.setCursorPosition = options.setCursorPosition || window.setCursorPosition;
-        this.clearSelection = options.clearSelection || window.clearSelection;
+    static initialize(options: Partial<DragDropDependencies> = {}): void {
+        this.getPillSelection = options.getPillSelection || (() => (window as any).PillSelection);
+        this.getStateManager = options.getStateManager || (() => (window as any).StateManager);
+        this.getCursorManager = options.getCursorManager || (() => (window as any).CursorManager);
+        this.getPillInteraction = options.getPillInteraction || (() => (window as any).PillInteraction);
+        this.performDrop = (window as any).performDrop;
+        this.dropStructuredSetsAtNewPosition = (window as any).dropStructuredSetsAtNewPosition;
+        this.pasteAtPosition = (window as any).pasteAtPosition;
+        this.saveToUndo = (window as any).saveToUndo;
+        this.showContextMenu = (window as any).showContextMenu;
+        this.hideContextMenu = (window as any).hideContextMenu;
+        this.applyLandingAnimation = (window as any).applyLandingAnimation;
+        this.setCursorPosition = (window as any).setCursorPosition;
+        this.clearSelection = (window as any).clearSelection;
     }
     
-    static registerCallbacks(callbacks) {
+    static registerCallbacks(callbacks: DragDropCallbacks): void {
         Object.assign(this, callbacks);
     }
     
     // Clean up any existing drag ghosts
-    static cleanupDragGhosts() {
+    static cleanupDragGhosts(): void {
         // Remove the global ghost if it exists
         if (this.globalDragGhost) {
             this.globalDragGhost.remove();
@@ -58,41 +116,41 @@ class DragDrop {
     }
     
     // Create drop indicator element
-    static createDropIndicator() {
+    static createDropIndicator(): HTMLElement {
         const indicator = document.createElement('div');
         indicator.className = 'drop-indicator';
         return indicator;
     }
     
     // Create horizontal drop zone between sets
-    static createHorizontalDropZone(insertAtSetIndex) {
+    static createHorizontalDropZone(insertAtSetIndex: number): HTMLElement {
         const dropZone = document.createElement('div');
         dropZone.className = 'horizontal-drop-zone';
-        dropZone.dataset.insertAtSetIndex = insertAtSetIndex;
+        dropZone.dataset.insertAtSetIndex = insertAtSetIndex.toString();
         
         // Click handler - position cursor for typing new set
-        dropZone.addEventListener('click', (e) => {
+        dropZone.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
             // Clear selection and selection anchor when clicking to move cursor
-            this.clearSelection();
+            this.clearSelection?.();
             
-            this.setCursorPosition(insertAtSetIndex, 0, 'newset');
+            this.setCursorPosition?.(insertAtSetIndex, 0, 'newset');
         });
         
         // Drag and drop handlers
-        dropZone.addEventListener('dragover', (e) => {
+        dropZone.addEventListener('dragover', (e: DragEvent) => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            e.dataTransfer!.dropEffect = 'move';
             dropZone.classList.add('drag-over');
         });
         
-        dropZone.addEventListener('dragleave', (e) => {
+        dropZone.addEventListener('dragleave', (e: DragEvent) => {
             dropZone.classList.remove('drag-over');
         });
         
-        dropZone.addEventListener('drop', (e) => {
+        dropZone.addEventListener('drop', (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation(); // IMPORTANT: Stop the event from bubbling to the container
             dropZone.classList.remove('drag-over');
@@ -100,31 +158,31 @@ class DragDrop {
             if (this.dragState) {
                 // Internal drag and drop - use drag data to preserve set structure
                 try {
-                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    const dragData = JSON.parse(e.dataTransfer!.getData('text/json'));
                     if (dragData && Array.isArray(dragData)) {
                         // Use the existing performDrop logic but with the structured data
-                        this.dropStructuredSetsAtNewPosition(dragData, insertAtSetIndex);
+                        this.dropStructuredSetsAtNewPosition?.(dragData, insertAtSetIndex);
                     } else {
                         // Fallback to old method if drag data is invalid
-                        const pillSelection = this.getPillSelection();
+                        const pillSelection = this.getPillSelection!();
                         const draggedIds = Array.from(pillSelection.getSelectedPills());
-                        const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
-                        this.performDrop(position, draggedIds);
+                        const position: DropPosition = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                        this.performDrop?.(position, draggedIds);
                     }
                 } catch (err) {
                     // Fallback to old method if drag data parsing fails
-                    const pillSelection = this.getPillSelection();
+                    const pillSelection = this.getPillSelection!();
                     const draggedIds = Array.from(pillSelection.getSelectedPills());
-                    const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
-                    this.performDrop(position, draggedIds);
+                    const position: DropPosition = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                    this.performDrop?.(position, draggedIds);
                 }
             } else {
                 // External drag or paste
                 try {
-                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    const dragData = JSON.parse(e.dataTransfer!.getData('text/json'));
                     if (dragData && Array.isArray(dragData)) {
-                        const position = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
-                        this.pasteAtPosition(dragData, position);
+                        const position: DropPosition = { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
+                        this.pasteAtPosition?.(dragData, position);
                     }
                 } catch (err) {
                     // Ignore external drop if can't parse
@@ -136,28 +194,29 @@ class DragDrop {
     }
     
     // Find drop position based on mouse coordinates
-    static findDropPosition(x, y) {
-        const containerElement = document.getElementById('tune-pills-container');
+    static findDropPosition(x: number, y: number): DropPosition {
+        const containerElement = document.getElementById('tune-pills-container')!;
         
         // First check for horizontal drop zones
         const horizontalZones = containerElement.querySelectorAll('.horizontal-drop-zone');
         for (let i = 0; i < horizontalZones.length; i++) {
-            const zoneElement = horizontalZones[i];
+            const zoneElement = horizontalZones[i] as HTMLElement;
             const zoneRect = zoneElement.getBoundingClientRect();
             
             if (y >= zoneRect.top && y <= zoneRect.bottom) {
-                const insertAtSetIndex = parseInt(zoneElement.dataset.insertAtSetIndex);
+                const insertAtSetIndex = parseInt(zoneElement.dataset.insertAtSetIndex!);
                 return { setIndex: insertAtSetIndex, pillIndex: 0, position: 'newset' };
             }
         }
         
         // Enhanced logic: Check all cursor positions directly for better wrapping support
         const allCursorPositions = containerElement.querySelectorAll('.cursor-position');
-        let closestCursor = null;
+        let closestCursor: HTMLElement | null = null;
         let closestDistance = Infinity;
         
         allCursorPositions.forEach(cursor => {
-            const cursorRect = cursor.getBoundingClientRect();
+            const htmlCursor = cursor as HTMLElement;
+            const cursorRect = htmlCursor.getBoundingClientRect();
             const cursorCenterX = cursorRect.left + cursorRect.width / 2;
             const cursorCenterY = cursorRect.top + cursorRect.height / 2;
             
@@ -167,19 +226,19 @@ class DragDrop {
             // Only consider cursors that are reasonably close (within 40px)
             if (distance < 40 && distance < closestDistance) {
                 closestDistance = distance;
-                closestCursor = cursor;
+                closestCursor = htmlCursor;
             }
         });
         
         if (closestCursor) {
-            const setIndex = parseInt(closestCursor.dataset.setIndex);
-            const pillIndex = parseInt(closestCursor.dataset.pillIndex);
-            const positionType = closestCursor.dataset.positionType;
+            const setIndex = parseInt(closestCursor.dataset.setIndex!);
+            const pillIndex = parseInt(closestCursor.dataset.pillIndex!);
+            const positionType = closestCursor.dataset.positionType!;
             
             return { 
                 setIndex, 
                 pillIndex: positionType === 'after' ? pillIndex + 1 : pillIndex, 
-                position: positionType === 'after' ? 'before' : positionType 
+                position: positionType === 'after' ? 'before' : positionType as 'before' | 'after' | 'newset'
             };
         }
         
@@ -187,14 +246,15 @@ class DragDrop {
         const sets = containerElement.querySelectorAll('.tune-set');
         
         for (let setIndex = 0; setIndex < sets.length; setIndex++) {
-            const setElement = sets[setIndex];
+            const setElement = sets[setIndex] as HTMLElement;
             const setRect = setElement.getBoundingClientRect();
             
             if (y >= setRect.top && y <= setRect.bottom) {
                 const pills = setElement.querySelectorAll('.tune-pill');
                 
                 for (let pillIndex = 0; pillIndex < pills.length; pillIndex++) {
-                    const pillRect = pills[pillIndex].getBoundingClientRect();
+                    const pillElement = pills[pillIndex] as HTMLElement;
+                    const pillRect = pillElement.getBoundingClientRect();
                     
                     if (x < pillRect.left + pillRect.width / 2) {
                         return { setIndex, pillIndex, position: 'before' };
@@ -211,8 +271,8 @@ class DragDrop {
     }
     
     // Legacy wrapper - delegates to PillInteraction module
-    static setupPillEventListeners(pillElement, pillData) {
-        const pillInteraction = this.getPillInteraction();
+    static setupPillEventListeners(pillElement: HTMLElement, pillData: TunePill): void {
+        const pillInteraction = this.getPillInteraction?.();
         if (pillInteraction) {
             return pillInteraction.setupPillEventListeners(pillElement, pillData);
         }
@@ -221,14 +281,14 @@ class DragDrop {
     }
     
     // Register only drag-specific event handlers for a pill element
-    static registerPillDragHandlers(pillElement, pillData) {
-        const pillSelection = this.getPillSelection();
+    static registerPillDragHandlers(pillElement: HTMLElement, pillData: TunePill): void {
+        const pillSelection = this.getPillSelection!();
         
         // Desktop drag and drop
-        pillElement.addEventListener('dragstart', (e) => {
+        pillElement.addEventListener('dragstart', (e: DragEvent) => {
             // Hide any open context menu when starting drag
-            if (window.ContextMenu) {
-                window.ContextMenu.hideContextMenu();
+            if ((window as any).ContextMenu) {
+                (window as any).ContextMenu.hideContextMenu();
             }
             
             this.dragState = {
@@ -244,16 +304,16 @@ class DragDrop {
             
             // Visual feedback - apply dragging class to all selected pills
             pillSelection.getSelectedPills().forEach(pillId => {
-                const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+                const pill = document.querySelector(`[data-pill-id="${pillId}"]`) as HTMLElement;
                 if (pill) {
                     pill.classList.add('dragging');
                 }
             });
             
             // Set drag data (for clipboard compatibility) - preserve set structure
-            const stateManager = this.getStateManager();
+            const stateManager = this.getStateManager!();
             const tunePillsData = stateManager.getTunePillsData();
-            const selectedBySet = new Map();
+            const selectedBySet = new Map<number, TunePill[]>();
             
             tunePillsData.forEach((tuneSet, setIndex) => {
                 tuneSet.forEach((pill, pillIndex) => {
@@ -261,7 +321,7 @@ class DragDrop {
                         if (!selectedBySet.has(setIndex)) {
                             selectedBySet.set(setIndex, []);
                         }
-                        selectedBySet.get(setIndex).push(JSON.parse(JSON.stringify(pill)));
+                        selectedBySet.get(setIndex)!.push(JSON.parse(JSON.stringify(pill)));
                     }
                 });
             });
@@ -269,11 +329,11 @@ class DragDrop {
             // Convert to array of sets, preserving set breaks
             const dragData = Array.from(selectedBySet.values()).filter(set => set && set.length > 0);
             
-            e.dataTransfer.setData('text/json', JSON.stringify(dragData));
-            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer!.setData('text/json', JSON.stringify(dragData));
+            e.dataTransfer!.effectAllowed = 'move';
         });
         
-        pillElement.addEventListener('dragend', (e) => {
+        pillElement.addEventListener('dragend', (e: DragEvent) => {
             // Remove dragging class from all pills that might have it
             document.querySelectorAll('.tune-pill.dragging').forEach(pill => {
                 pill.classList.remove('dragging');
@@ -284,13 +344,13 @@ class DragDrop {
     }
     
     // Mobile drag support methods
-    static startMobileDrag(e, pillData) {
+    static startMobileDrag(e: TouchEvent, pillData: TunePill): void {
         // Hide any open context menu when starting mobile drag
-        if (window.ContextMenu) {
-            window.ContextMenu.hideContextMenu();
+        if ((window as any).ContextMenu) {
+            (window as any).ContextMenu.hideContextMenu();
         }
         
-        const touch = e.touches[0];
+        const touch = e.touches[0]!;
         this.dragState = {
             draggedPillId: pillData.id,
             startX: touch.clientX,
@@ -299,11 +359,11 @@ class DragDrop {
         };
     }
     
-    static handleMobileDragMove(e) {
+    static handleMobileDragMove(e: TouchEvent): void {
         if (!this.dragState || !this.dragState.isMobile) return;
         
-        const touch = e.touches[0];
-        const pillSelection = this.getPillSelection();
+        const touch = e.touches[0]!;
+        const pillSelection = this.getPillSelection!();
         
         // Clean up any existing ghosts first
         this.cleanupDragGhosts();
@@ -339,7 +399,7 @@ class DragDrop {
         this.updateMobileDropZone(touch.clientX, touch.clientY);
     }
     
-    static updateMobileDropZone(x, y) {
+    static updateMobileDropZone(x: number, y: number): void {
         const now = Date.now();
         const DROP_ZONE_UPDATE_THROTTLE = 50;
         
@@ -354,15 +414,15 @@ class DragDrop {
         if (!elementBelow) return;
         
         // Find potential drop zone
-        let currentDropZone = null;
-        let dropSide = null;
+        let currentDropZone: HTMLElement | null = null;
+        let dropSide: string | null = null;
         
         // Check for horizontal drop zone first
-        currentDropZone = elementBelow.closest('.horizontal-drop-zone');
+        currentDropZone = elementBelow.closest('.horizontal-drop-zone') as HTMLElement;
         
         // If not, check for pill (but not if it's being dragged)
         if (!currentDropZone) {
-            const pill = elementBelow.closest('.tune-pill');
+            const pill = elementBelow.closest('.tune-pill') as HTMLElement;
             if (pill && !pill.classList.contains('dragging')) {
                 currentDropZone = pill;
                 
@@ -375,7 +435,7 @@ class DragDrop {
         
         // If not over a pill or horizontal zone, check for tune-set
         if (!currentDropZone) {
-            const tuneSet = elementBelow.closest('.tune-set');
+            const tuneSet = elementBelow.closest('.tune-set') as HTMLElement;
             if (tuneSet) {
                 currentDropZone = tuneSet;
                 dropSide = 'set';
@@ -384,7 +444,7 @@ class DragDrop {
         
         // If not over anything specific, check container
         if (!currentDropZone) {
-            currentDropZone = elementBelow.closest('#tune-pills-container');
+            currentDropZone = elementBelow.closest('#tune-pills-container') as HTMLElement;
             if (currentDropZone) {
                 dropSide = 'container';
             }
@@ -411,10 +471,10 @@ class DragDrop {
         }
     }
     
-    static endMobileDrag(e) {
+    static endMobileDrag(e: TouchEvent): void {
         if (!this.dragState || !this.dragState.isMobile) return;
         
-        const touch = e.changedTouches[0];
+        const touch = e.changedTouches[0]!;
         const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         
         // Clean up drag visuals
@@ -431,16 +491,16 @@ class DragDrop {
         
         if (dropPosition) {
             // Perform the drop
-            const pillSelection = this.getPillSelection();
+            const pillSelection = this.getPillSelection!();
             const draggedIds = Array.from(pillSelection.getSelectedPills());
-            this.performDrop(dropPosition, draggedIds);
+            this.performDrop?.(dropPosition, draggedIds);
         }
         
         // Reset drag state
         this.dragState = null;
     }
     
-    static cancelMobileDrag() {
+    static cancelMobileDrag(): void {
         // Clean up any drag ghosts
         this.cleanupDragGhosts();
         
@@ -455,8 +515,8 @@ class DragDrop {
     }
     
     // Helper to find pill by ID
-    static findPillById(pillId) {
-        const stateManager = this.getStateManager();
+    static findPillById(pillId: string): TunePill | null {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         for (const set of tunePillsData) {
@@ -470,12 +530,12 @@ class DragDrop {
     }
     
     // Helper method to get the last row of pills in a tune-set
-    static getLastRowOfPills(tuneSet) {
-        const pills = Array.from(tuneSet.querySelectorAll('.tune-pill'));
+    static getLastRowOfPills(tuneSet: HTMLElement): HTMLElement[] {
+        const pills = Array.from(tuneSet.querySelectorAll('.tune-pill')) as HTMLElement[];
         if (pills.length === 0) return [];
         
         // Get the bottom-most row
-        const lastPill = pills[pills.length - 1];
+        const lastPill = pills[pills.length - 1]!;
         const lastPillRect = lastPill.getBoundingClientRect();
         const lastRowTop = lastPillRect.top;
         
@@ -487,10 +547,10 @@ class DragDrop {
     }
     
     // Calculate drop position when dropping on a pill
-    static calculatePillDropPosition(targetPill, clientX) {
+    static calculatePillDropPosition(targetPill: HTMLElement, clientX: number): DropPosition {
         const rect = targetPill.getBoundingClientRect();
-        const setElement = targetPill.closest('.tune-set');
-        const containerElement = document.getElementById('tune-pills-container');
+        const setElement = targetPill.closest('.tune-set') as HTMLElement;
+        const containerElement = document.getElementById('tune-pills-container')!;
         const setIndex = Array.from(containerElement.querySelectorAll('.tune-set')).indexOf(setElement);
         const pillIndex = Array.from(setElement.querySelectorAll('.tune-pill')).indexOf(targetPill);
         
@@ -503,14 +563,14 @@ class DragDrop {
     }
     
     // Calculate drop position when dropping on a tune-set
-    static calculateTuneSetDropPosition(tuneSet, clientX, clientY) {
-        const containerElement = document.getElementById('tune-pills-container');
+    static calculateTuneSetDropPosition(tuneSet: HTMLElement, clientX: number, clientY: number): DropPosition {
+        const containerElement = document.getElementById('tune-pills-container')!;
         const setIndex = Array.from(containerElement.querySelectorAll('.tune-set')).indexOf(tuneSet);
-        const pills = Array.from(tuneSet.querySelectorAll('.tune-pill'));
+        const pills = Array.from(tuneSet.querySelectorAll('.tune-pill')) as HTMLElement[];
         
         // Find the nearest pill
         for (let i = 0; i < pills.length; i++) {
-            const pillRect = pills[i].getBoundingClientRect();
+            const pillRect = pills[i]!.getBoundingClientRect();
             if (clientY >= pillRect.top && clientY <= pillRect.bottom) {
                 // We're on the same row as this pill
                 if (clientX < pillRect.left + pillRect.width / 2) {
@@ -524,7 +584,7 @@ class DragDrop {
     }
     
     // Clear all drop indicators
-    static clearDropIndicators() {
+    static clearDropIndicators(): void {
         // Remove drop-active class from cursor positions
         document.querySelectorAll('.cursor-position.drop-active').forEach(cursorPos => {
             cursorPos.classList.remove('drop-active');
@@ -539,32 +599,34 @@ class DragDrop {
     }
     
     // Show drop indicator at position
-    static showDropIndicator(position) {
+    static showDropIndicator(position: DropPosition | null): void {
         this.clearDropIndicators();
         
         if (!position) return;
         
-        const container = document.getElementById('tune-pills-container');
+        const container = document.getElementById('tune-pills-container')!;
         const sets = container.querySelectorAll('.tune-set');
         
         if (position.position === 'newset') {
             // Show horizontal drop zone indicator
             const horizontalZones = container.querySelectorAll('.horizontal-drop-zone');
             horizontalZones.forEach(zone => {
-                if (parseInt(zone.dataset.insertAtSetIndex) === position.setIndex) {
-                    zone.classList.add('drag-over');
+                const htmlZone = zone as HTMLElement;
+                if (parseInt(htmlZone.dataset.insertAtSetIndex!) === position.setIndex) {
+                    htmlZone.classList.add('drag-over');
                 }
             });
         } else if (position.setIndex < sets.length) {
             // Use existing cursor positions instead of creating new drop indicators
-            const targetSet = sets[position.setIndex];
+            const targetSet = sets[position.setIndex] as HTMLElement;
             const cursorPositions = targetSet.querySelectorAll('.cursor-position');
             
             // Find the matching cursor position
             cursorPositions.forEach(cursorPos => {
-                const cursorSetIndex = parseInt(cursorPos.dataset.setIndex);
-                const cursorPillIndex = parseInt(cursorPos.dataset.pillIndex);
-                const cursorPositionType = cursorPos.dataset.positionType;
+                const htmlCursor = cursorPos as HTMLElement;
+                const cursorSetIndex = parseInt(htmlCursor.dataset.setIndex!);
+                const cursorPillIndex = parseInt(htmlCursor.dataset.pillIndex!);
+                const cursorPositionType = htmlCursor.dataset.positionType!;
                 
                 // Match based on position
                 let matches = false;
@@ -584,32 +646,32 @@ class DragDrop {
                 }
                 
                 if (matches) {
-                    cursorPos.classList.add('drop-active');
+                    htmlCursor.classList.add('drop-active');
                 }
             });
         }
     }
     
     // Setup container-level drag event listeners
-    static setupContainerDragListeners() {
-        const tuneContainer = document.getElementById('tune-pills-container');
+    static setupContainerDragListeners(): void {
+        const tuneContainer = document.getElementById('tune-pills-container')!;
         
-        tuneContainer.addEventListener('dragover', (e) => {
+        tuneContainer.addEventListener('dragover', (e: DragEvent) => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
+            e.dataTransfer!.dropEffect = 'move';
             
             const position = this.findDropPosition(e.clientX, e.clientY);
             this.showDropIndicator(position);
         });
         
-        tuneContainer.addEventListener('dragleave', (e) => {
+        tuneContainer.addEventListener('dragleave', (e: DragEvent) => {
             // Only clear if we're really leaving the container
-            if (!tuneContainer.contains(e.relatedTarget)) {
+            if (!tuneContainer.contains(e.relatedTarget as Node)) {
                 this.clearDropIndicators();
             }
         });
         
-        tuneContainer.addEventListener('drop', (e) => {
+        tuneContainer.addEventListener('drop', (e: DragEvent) => {
             e.preventDefault();
             this.clearDropIndicators();
             
@@ -617,15 +679,15 @@ class DragDrop {
             
             if (this.dragState) {
                 // Internal drag and drop
-                const pillSelection = this.getPillSelection();
+                const pillSelection = this.getPillSelection!();
                 const draggedIds = Array.from(pillSelection.getSelectedPills());
-                this.performDrop(position, draggedIds);
+                this.performDrop?.(position, draggedIds);
             } else {
                 // External drag or paste
                 try {
-                    const dragData = JSON.parse(e.dataTransfer.getData('text/json'));
+                    const dragData = JSON.parse(e.dataTransfer!.getData('text/json'));
                     if (dragData && Array.isArray(dragData)) {
-                        this.pasteAtPosition(dragData, position);
+                        this.pasteAtPosition?.(dragData, position);
                     }
                 } catch (err) {
                     // Ignore external drop if can't parse
@@ -635,20 +697,26 @@ class DragDrop {
     }
     
     // Get drag state
-    static getDragState() {
+    static getDragState(): DragState | null {
         return this.dragState;
     }
     
     // Set drag state
-    static setDragState(state) {
+    static setDragState(state: DragState | null): void {
         this.dragState = state;
     }
     
     // Clear drag state
-    static clearDragState() {
+    static clearDragState(): void {
         this.dragState = null;
     }
 }
 
 // Export for use in other modules or global scope
-window.DragDrop = DragDrop;
+declare global {
+    interface Window {
+        DragDrop: typeof DragDrop;
+    }
+}
+
+(window as any).DragDrop = DragDrop;

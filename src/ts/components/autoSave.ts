@@ -3,15 +3,34 @@
  * Handles auto-save functionality, dirty state tracking, and save operations
  */
 
-class AutoSaveTimer {
-    constructor() {
-        this.timer = null;
-        this.seconds = 0;
-        this.intervalSeconds = 60;
-        this.isRunning = false;
-    }
+import { TunePillsData } from './stateManager.js';
+
+export interface SaveData {
+    success: boolean;
+    message?: string;
+}
+
+export interface SaveTune {
+    tune_id: number | null;
+    name: string | null;
+    tune_name: string | null;
+}
+
+export interface UserConfig {
+    isUserLoggedIn?: boolean;
+    userAutoSave?: boolean;
+    userAutoSaveInterval?: number;
+}
+
+export class AutoSaveTimer {
+    public timer: number | null = null;
+    public seconds: number = 0;
+    public intervalSeconds: number = 60;
+    public isRunning: boolean = false;
     
-    start(intervalSeconds) {
+    constructor() {}
+    
+    start(intervalSeconds: number): void {
         this.stop(); // Always stop any existing timer first
         this.intervalSeconds = intervalSeconds;
         this.seconds = intervalSeconds;
@@ -22,7 +41,7 @@ class AutoSaveTimer {
         this.showCountdown();
         
         // Start the countdown
-        this.timer = setInterval(() => {
+        this.timer = window.setInterval(() => {
             this.seconds--;
             this.updateDisplay();
             
@@ -34,7 +53,7 @@ class AutoSaveTimer {
                 if (AutoSaveManager.isDirty) {
                     AutoSaveManager.saveSession().then(() => {
                         // After saving, restart if still enabled and dirty again
-                        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+                        const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
                         if (autoSaveCheckbox && autoSaveCheckbox.checked && AutoSaveManager.isDirty) {
                             this.start(this.intervalSeconds);
                         }
@@ -46,13 +65,13 @@ class AutoSaveTimer {
         }, 1000);
     }
     
-    reset(intervalSeconds) {
+    reset(intervalSeconds?: number): void {
         if (this.isRunning) {
             this.start(intervalSeconds || this.intervalSeconds);
         }
     }
     
-    stop() {
+    stop(): void {
         if (this.timer) {
             clearInterval(this.timer);
             this.timer = null;
@@ -60,54 +79,59 @@ class AutoSaveTimer {
         this.isRunning = false;
     }
     
-    updateDisplay() {
+    updateDisplay(): void {
         const countdownSecondsElement = document.getElementById('countdown-seconds');
         const countdownSecondsMobileElement = document.getElementById('countdown-seconds-mobile');
         if (countdownSecondsElement) {
-            countdownSecondsElement.textContent = this.seconds;
+            countdownSecondsElement.textContent = this.seconds.toString();
         }
         if (countdownSecondsMobileElement) {
-            countdownSecondsMobileElement.textContent = this.seconds;
+            countdownSecondsMobileElement.textContent = this.seconds.toString();
         }
     }
     
-    showCountdown() {
-        const countdownElement = document.getElementById('auto-save-countdown');
+    showCountdown(): void {
+        const countdownElement = document.getElementById('auto-save-countdown') as HTMLElement | null;
         if (countdownElement) {
             countdownElement.style.display = 'inline';
         }
     }
     
-    hideCountdown() {
-        const countdownElement = document.getElementById('auto-save-countdown');
+    hideCountdown(): void {
+        const countdownElement = document.getElementById('auto-save-countdown') as HTMLElement | null;
         if (countdownElement) {
             countdownElement.style.display = 'none';
         }
     }
 }
 
-class AutoSaveManager {
-    static isDirty = false;
-    static lastSavedData = null;
-    static lastCheckedData = null;
-    static autoSaveTimer = new AutoSaveTimer();
-    static sessionPath = null;
-    static sessionDate = null;
-    static getTunePillsData = null; // Function to get current data
-    static isUserLoggedIn = false;
-    static userAutoSave = false;
-    static userAutoSaveInterval = 60;
+export class AutoSaveManager {
+    static isDirty: boolean = false;
+    static lastSavedData: TunePillsData | null = null;
+    static lastCheckedData: TunePillsData | null = null;
+    static autoSaveTimer: AutoSaveTimer = new AutoSaveTimer();
+    static sessionPath: string | null = null;
+    static sessionDate: string | null = null;
+    static getTunePillsData: (() => TunePillsData) | null = null; // Function to get current data
+    static isUserLoggedIn: boolean = false;
+    static userAutoSave: boolean = false;
+    static userAutoSaveInterval: number = 60;
     
-    static initialize(sessionPath, sessionDate, getTunePillsDataFunc, userConfig = {}) {
+    static initialize(
+        sessionPath: string, 
+        sessionDate: string, 
+        getTunePillsDataFunc?: () => TunePillsData, 
+        userConfig: UserConfig = {}
+    ): void {
         this.sessionPath = sessionPath;
         this.sessionDate = sessionDate;
-        this.getTunePillsData = getTunePillsDataFunc || (() => window.tunePillsData);
+        this.getTunePillsData = getTunePillsDataFunc || (() => (window as any).tunePillsData);
         this.isUserLoggedIn = userConfig.isUserLoggedIn || false;
         this.userAutoSave = userConfig.userAutoSave || false;
         this.userAutoSaveInterval = userConfig.userAutoSaveInterval || 60;
     }
     
-    static forceCheckChanges() {
+    static forceCheckChanges(): void {
         if (!this.getTunePillsData) return; // Not initialized yet
         const tunePillsData = this.getTunePillsData();
         if (!tunePillsData) return;
@@ -125,16 +149,16 @@ class AutoSaveManager {
             this.isDirty = currentDataStr !== savedDataStr;
             
             // Update save button
-            const saveBtn = document.getElementById('save-session-btn');
+            const saveBtn = document.getElementById('save-session-btn') as HTMLButtonElement | null;
             if (saveBtn) {
                 saveBtn.disabled = !this.isDirty;
             }
             
             // Handle auto-save timer
-            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
             if (autoSaveCheckbox && autoSaveCheckbox.checked) {
-                const intervalSelect = document.getElementById('auto-save-interval');
-                const intervalSeconds = parseInt(intervalSelect.value);
+                const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
+                const intervalSeconds = parseInt(intervalSelect?.value || '60');
                 
                 if (this.isDirty) {
                     // Data changed and we're dirty - start/restart timer
@@ -148,7 +172,7 @@ class AutoSaveManager {
         }
     }
     
-    static checkDirtyState() {
+    static checkDirtyState(): void {
         if (!this.getTunePillsData) return; // Not initialized yet
         const tunePillsData = this.getTunePillsData();
         if (!tunePillsData) return;
@@ -167,10 +191,10 @@ class AutoSaveManager {
         
         // Reset timer on ANY data change (regardless of dirty state)
         if (dataHasChanged) {
-            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
             if (autoSaveCheckbox && autoSaveCheckbox.checked && this.autoSaveTimer.isRunning) {
-                const intervalSelect = document.getElementById('auto-save-interval');
-                this.autoSaveTimer.reset(parseInt(intervalSelect.value));
+                const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
+                this.autoSaveTimer.reset(parseInt(intervalSelect?.value || '60'));
             }
         }
         
@@ -178,17 +202,17 @@ class AutoSaveManager {
         if (isCurrentlyDirty !== this.isDirty) {
             const wasDirty = this.isDirty;
             this.isDirty = isCurrentlyDirty;
-            const saveBtn = document.getElementById('save-session-btn');
+            const saveBtn = document.getElementById('save-session-btn') as HTMLButtonElement | null;
             if (saveBtn) {
                 saveBtn.disabled = !this.isDirty;
             }
             
             // If we just became dirty and auto-save is enabled, start countdown
             if (!wasDirty && this.isDirty) {
-                const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+                const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
                 if (autoSaveCheckbox && autoSaveCheckbox.checked) {
-                    const intervalSelect = document.getElementById('auto-save-interval');
-                    this.autoSaveTimer.start(parseInt(intervalSelect.value));
+                    const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
+                    this.autoSaveTimer.start(parseInt(intervalSelect?.value || '60'));
                 }
             }
             // If we just became clean, stop countdown
@@ -199,14 +223,14 @@ class AutoSaveManager {
         }
     }
     
-    static markDirty() {
+    static markDirty(): void {
         // Call checkDirtyState instead of directly setting dirty
         this.checkDirtyState();
     }
     
-    static markClean() {
+    static markClean(): void {
         this.isDirty = false;
-        const saveBtn = document.getElementById('save-session-btn');
+        const saveBtn = document.getElementById('save-session-btn') as HTMLButtonElement | null;
         if (saveBtn) {
             saveBtn.disabled = true;
         }
@@ -216,15 +240,15 @@ class AutoSaveManager {
         }
     }
     
-    static saveSession() {
+    static saveSession(): Promise<void> {
         if (!this.getTunePillsData) {
             console.error('AutoSaveManager not initialized');
             return Promise.reject(new Error('AutoSaveManager not initialized'));
         }
         
         // Disable save button and show status
-        const saveBtn = document.getElementById('save-session-btn');
-        const saveStatus = document.getElementById('save-status');
+        const saveBtn = document.getElementById('save-session-btn') as HTMLButtonElement | null;
+        const saveStatus = document.getElementById('save-status') as HTMLElement | null;
         
         if (saveBtn) {
             saveBtn.disabled = true;
@@ -243,7 +267,7 @@ class AutoSaveManager {
                 tune_id: pill.tuneId || null,
                 name: pill.tuneName || null,
                 tune_name: pill.tuneName || null
-            }))
+            } as SaveTune))
         );
         
         // Send save request and return the promise
@@ -255,7 +279,7 @@ class AutoSaveManager {
             body: JSON.stringify({ tune_sets: tuneSets })
         })
         .then(response => response.json())
-        .then(data => {
+        .then((data: SaveData) => {
             if (data.success) {
                 this.markClean();
                 if (saveStatus) {
@@ -277,7 +301,7 @@ class AutoSaveManager {
                 throw new Error(data.message || 'Save failed');
             }
         })
-        .catch(error => {
+        .catch((error: Error) => {
             console.error('Save error:', error);
             if (saveStatus) {
                 saveStatus.textContent = 'Save failed: ' + error.message;
@@ -295,9 +319,9 @@ class AutoSaveManager {
         });
     }
     
-    static initializeAutoSavePreference() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-        const intervalSelect = document.getElementById('auto-save-interval');
+    static initializeAutoSavePreference(): void {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
+        const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
         
         if (!autoSaveCheckbox) return;
         
@@ -319,8 +343,8 @@ class AutoSaveManager {
         }
     }
     
-    static saveAutoSavePreference(isEnabled, interval = null) {
-        const intervalSelect = document.getElementById('auto-save-interval');
+    static saveAutoSavePreference(isEnabled: boolean, interval?: number): void {
+        const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
         const saveInterval = interval || (intervalSelect ? parseInt(intervalSelect.value) : 60);
         
         if (this.isUserLoggedIn) {
@@ -351,14 +375,14 @@ class AutoSaveManager {
         }
     }
     
-    static getCookie(name) {
+    static getCookie(name: string): string | null {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
+        if (parts.length === 2) return parts.pop()!.split(';').shift() || null;
         return null;
     }
     
-    static setCookie(name, value, days) {
+    static setCookie(name: string, value: string, days: number): void {
         let expires = "";
         if (days) {
             const date = new Date();
@@ -368,9 +392,9 @@ class AutoSaveManager {
         document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
     }
     
-    static setupAutoSave() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
-        const intervalSelect = document.getElementById('auto-save-interval');
+    static setupAutoSave(): void {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
+        const intervalSelect = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
         
         if (!autoSaveCheckbox) return;
         
@@ -388,8 +412,8 @@ class AutoSaveManager {
         }
     }
     
-    static cancelAutoSave() {
-        const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+    static cancelAutoSave(): void {
+        const autoSaveCheckbox = document.getElementById('auto-save-checkbox') as HTMLInputElement | null;
         
         if (!autoSaveCheckbox) return;
         
@@ -401,8 +425,8 @@ class AutoSaveManager {
         this.autoSaveTimer.hideCountdown();
     }
     
-    static updateOptionText() {
-        const select = document.getElementById('auto-save-interval');
+    static updateOptionText(): void {
+        const select = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
         const isMobile = window.innerWidth <= 768;
         
         if (select) {
@@ -420,4 +444,10 @@ class AutoSaveManager {
 }
 
 // Export for use in other modules or global scope
-window.AutoSaveManager = AutoSaveManager;
+declare global {
+    interface Window {
+        AutoSaveManager: typeof AutoSaveManager;
+    }
+}
+
+(window as any).AutoSaveManager = AutoSaveManager;

@@ -3,32 +3,73 @@
  * Handles cursor positioning, navigation, and text input cursor management
  */
 
-class CursorManager {
-    static cursorPosition = null; // { setIndex, pillIndex, position }
-    static selectionAnchor = null; // For shift+arrow selection
-    static isTyping = () => false; // Callback function set from external code
-    static onCursorChange = null; // Callback for cursor position changes
-    static onSelectionChange = null; // Callback for selection changes
-    static getStateManager = null; // Function to get StateManager reference
+import { TunePillsData } from './stateManager.js';
+
+export interface CursorPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: string;
+}
+
+export interface CursorManagerCallbacks {
+    finishTyping?(): void;
+    removeTemporaryEmptySet?(): boolean;
+    renderTunePills?(): void;
+    handleTextInput?(char: string): void;
+    handleBackspace?(): void;
+}
+
+export interface CursorManagerDependencies {
+    onCursorChange?: (position: CursorPosition) => void;
+    onSelectionChange?: () => void;
+    getStateManager(): StateManager;
+    temporaryEmptySet?: number | null;
+}
+
+export interface StateManager {
+    getTunePillsData(): TunePillsData;
+}
+
+export interface TypingContext {
+    tuneSet: HTMLElement;
+    insertionPoint: Node | null;
+}
+
+export class CursorManager {
+    static cursorPosition: CursorPosition | null = null; // { setIndex, pillIndex, position }
+    static selectionAnchor: CursorPosition | null = null; // For shift+arrow selection
+    static isTyping: (() => boolean) = () => false; // Callback function set from external code
+    static onCursorChange: ((position: CursorPosition) => void) | null = null; // Callback for cursor position changes
+    static onSelectionChange: (() => void) | null = null; // Callback for selection changes
+    static getStateManager: (() => StateManager) | null = null; // Function to get StateManager reference
     // Selection is now managed by PillSelection module
-    static temporaryEmptySet = null;
-    static typingContext = null; // Typing context for updateCursorWithText
+    static temporaryEmptySet: number | null = null;
+    static typingContext: TypingContext | null = null; // Typing context for updateCursorWithText
     
-    static initialize(options = {}) {
-        this.onCursorChange = options.onCursorChange;
-        this.onSelectionChange = options.onSelectionChange;
-        this.getStateManager = options.getStateManager || (() => window.StateManager);
+    // Callback functions that need to be set by other modules
+    static finishTyping: (() => void) | null = null;
+    static removeTemporaryEmptySet: (() => boolean) | null = null;
+    static renderTunePills: (() => void) | null = null;
+    static handleTextInput: ((char: string) => void) | null = null;
+    static handleBackspace: (() => void) | null = null;
+    static typingBuffer: (() => string) | null = null; // Will be set by callbacks
+    static isKeepingKeyboardOpen: boolean = false; // Will be set by callbacks
+    
+    static initialize(options: CursorManagerDependencies = {} as CursorManagerDependencies): void {
+        this.onCursorChange = options.onCursorChange || null;
+        this.onSelectionChange = options.onSelectionChange || null;
+        this.getStateManager = options.getStateManager || (() => (window as any).StateManager);
         // Selection is now managed by PillSelection module
         this.temporaryEmptySet = options.temporaryEmptySet || null;
         this.cursorPosition = null;
         this.selectionAnchor = null;
     }
     
-    static getCursorPosition() {
+    static getCursorPosition(): CursorPosition | null {
         return this.cursorPosition;
     }
     
-    static setCursorPosition(setIndex, pillIndex, positionType, maintainKeyboard = false) {
+    static setCursorPosition(setIndex: number, pillIndex: number, positionType: string, maintainKeyboard: boolean = false): void {
         // Use the internal complex setCursorPosition implementation
         this.setCursorPositionOriginal(setIndex, pillIndex, positionType, maintainKeyboard);
         
@@ -38,21 +79,21 @@ class CursorManager {
         }
     }
     
-    static addCursorPosition(parent, setIndex, pillIndex, positionType) {
+    static addCursorPosition(parent: HTMLElement, setIndex: number, pillIndex: number, positionType: string): HTMLElement {
         const cursorPos = document.createElement('span');
         cursorPos.className = 'cursor-position';
-        cursorPos.dataset.setIndex = setIndex;
-        cursorPos.dataset.pillIndex = pillIndex;
+        cursorPos.dataset.setIndex = setIndex.toString();
+        cursorPos.dataset.pillIndex = pillIndex.toString();
         cursorPos.dataset.positionType = positionType;
         
         // Add click handler for cursor positioning
-        cursorPos.addEventListener('click', (e) => {
+        cursorPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
             // If user is typing, finish typing first
             if (this.isTyping && this.isTyping()) {
-                this.finishTyping();
+                this.finishTyping?.();
             }
             
             // Clear selection when clicking to move cursor
@@ -60,7 +101,7 @@ class CursorManager {
             
             // Remove temporary empty set if clicking away from it
             if (this.removeTemporaryEmptySet && this.removeTemporaryEmptySet()) {
-                this.renderTunePills && this.renderTunePills();
+                this.renderTunePills?.();
             }
             
             this.setCursorPosition(setIndex, pillIndex, positionType);
@@ -70,17 +111,17 @@ class CursorManager {
         return cursorPos;
     }
     
-    static addFinalCursor(containerElement) {
-        const stateManager = this.getStateManager();
+    static addFinalCursor(containerElement: HTMLElement): HTMLElement {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         const finalPos = document.createElement('span');
         finalPos.className = 'cursor-position';
-        finalPos.dataset.setIndex = tunePillsData.length;
-        finalPos.dataset.pillIndex = 0;
+        finalPos.dataset.setIndex = tunePillsData.length.toString();
+        finalPos.dataset.pillIndex = '0';
         finalPos.dataset.positionType = 'newset';
         
-        finalPos.addEventListener('click', (e) => {
+        finalPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -94,26 +135,26 @@ class CursorManager {
         return finalPos;
     }
     
-    static isMobileDevice() {
+    static isMobileDevice(): boolean {
         return ('ontouchstart' in window || navigator.maxTouchPoints > 0) && 
                (window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     }
     
-    static moveCursorLeft(shiftKey = false) {
+    static moveCursorLeft(shiftKey: boolean = false): void {
         if (!this.cursorPosition) return;
         
         // If user is typing, finish typing first
         if (this.isTyping && this.isTyping()) {
-            this.finishTyping && this.finishTyping();
+            this.finishTyping?.();
         }
         
         // Remove temporary empty set if moving away from it
         if (this.removeTemporaryEmptySet && this.removeTemporaryEmptySet()) {
-            this.renderTunePills && this.renderTunePills();
+            this.renderTunePills?.();
         }
         
         let { setIndex, pillIndex, position } = this.cursorPosition;
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Set selection anchor if shift is pressed and we don't have one
@@ -140,7 +181,7 @@ class CursorManager {
             newPosition = 'before';
         } else if (position === 'before' && pillIndex === 0 && setIndex > 0) {
             // Move to beginning of previous set
-            const prevSetLength = tunePillsData[setIndex - 1].length;
+            const prevSetLength = tunePillsData[setIndex - 1]!.length;
             newSetIndex = setIndex - 1;
             newPillIndex = prevSetLength - 1;
             newPosition = 'before';
@@ -161,21 +202,21 @@ class CursorManager {
         }
     }
     
-    static moveCursorRight(shiftKey = false) {
+    static moveCursorRight(shiftKey: boolean = false): void {
         if (!this.cursorPosition) return;
         
         // If user is typing, finish typing first
         if (this.isTyping && this.isTyping()) {
-            this.finishTyping && this.finishTyping();
+            this.finishTyping?.();
         }
         
         // Remove temporary empty set if moving away from it
         if (this.removeTemporaryEmptySet && this.removeTemporaryEmptySet()) {
-            this.renderTunePills && this.renderTunePills();
+            this.renderTunePills?.();
         }
         
         let { setIndex, pillIndex, position } = this.cursorPosition;
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Set selection anchor if shift is pressed and we don't have one
@@ -196,7 +237,7 @@ class CursorManager {
         if (position === 'before') {
             // Move to 'after' the same pill (this selects the current pill)
             newPosition = 'after';
-        } else if (position === 'after' && pillIndex < tunePillsData[setIndex].length - 1) {
+        } else if (position === 'after' && pillIndex < tunePillsData[setIndex]!.length - 1) {
             // Move to 'after' the next pill (this selects the next pill)
             newPillIndex = pillIndex + 1;
             newPosition = 'after';
@@ -227,11 +268,11 @@ class CursorManager {
         }
     }
     
-    static moveCursorUp(shiftKey = false) {
+    static moveCursorUp(shiftKey: boolean = false): void {
         if (!this.cursorPosition) return;
         
         let { setIndex, pillIndex, position } = this.cursorPosition;
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Set selection anchor if shift is pressed and we don't have one
@@ -249,7 +290,7 @@ class CursorManager {
         // Move to previous set if possible
         if (setIndex > 0) {
             newSetIndex = setIndex - 1;
-            const prevSetLength = tunePillsData[newSetIndex].length;
+            const prevSetLength = tunePillsData[newSetIndex]!.length;
             
             // Try to maintain similar position within the set
             if (position === 'newset') {
@@ -271,11 +312,11 @@ class CursorManager {
         }
     }
     
-    static moveCursorDown(shiftKey = false) {
+    static moveCursorDown(shiftKey: boolean = false): void {
         if (!this.cursorPosition) return;
         
         let { setIndex, pillIndex, position } = this.cursorPosition;
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Set selection anchor if shift is pressed and we don't have one
@@ -299,7 +340,7 @@ class CursorManager {
                 newPillIndex = 0;
                 newPosition = 'newset';
             } else {
-                const nextSetLength = tunePillsData[newSetIndex].length;
+                const nextSetLength = tunePillsData[newSetIndex]!.length;
                 newPillIndex = Math.min(pillIndex, nextSetLength - 1);
                 // Keep the same position type if possible
             }
@@ -315,7 +356,7 @@ class CursorManager {
         }
     }
     
-    static updateCursorWithTextOriginal() {
+    static updateCursorWithTextOriginal(): void {
         // Find the active cursor element
         const activeCursor = document.getElementById('active-cursor');
         if (!activeCursor) return;
@@ -323,8 +364,8 @@ class CursorManager {
         if (this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer()) {
             // On first keystroke, capture the typing context
             if (!this.typingContext) {
-                const cursorPosition = activeCursor.parentNode;
-                const tuneSet = cursorPosition?.parentNode;
+                const cursorPosition = activeCursor.parentNode as HTMLElement;
+                const tuneSet = cursorPosition?.parentNode as HTMLElement;
                 
                 if (tuneSet && tuneSet.classList.contains('tune-set')) {
                     this.typingContext = {
@@ -334,7 +375,7 @@ class CursorManager {
                 } else {
                     // Fallback context
                     this.typingContext = {
-                        tuneSet: cursorPosition?.parentNode,
+                        tuneSet: cursorPosition?.parentNode as HTMLElement,
                         insertionPoint: cursorPosition?.nextSibling
                     };
                 }
@@ -389,16 +430,16 @@ class CursorManager {
         }
     }
     
-    static updateCursorWithText() {
+    static updateCursorWithText(): void {
         // Use the internal complex updateCursorWithText implementation
         return this.updateCursorWithTextOriginal();
     }
     
-    static clearSelection() {
+    static clearSelection(): void {
         console.log('CursorManager.clearSelection: Called');
         // Clear selection using PillSelection module
-        if (window.PillSelection) {
-            window.PillSelection.selectNone();
+        if ((window as any).PillSelection) {
+            (window as any).PillSelection.selectNone();
         }
         
         // Call selection change callback if it exists  
@@ -420,11 +461,11 @@ class CursorManager {
         }
     }
     
-    static updateSelection() {
+    static updateSelection(): void {
         if (!this.selectionAnchor || !this.cursorPosition || !this.onSelectionChange) return;
         
         // Calculate pills between anchor and current cursor position
-        const startCursorPos = { 
+        const startCursorPos: CursorPosition = { 
             setIndex: this.selectionAnchor.setIndex, 
             pillIndex: this.selectionAnchor.pillIndex, 
             position: this.selectionAnchor.position || 'before'
@@ -432,27 +473,27 @@ class CursorManager {
         const endCursorPos = this.cursorPosition;
         
         // Use PillSelection to handle cursor-based range selection
-        if (window.PillSelection && window.PillSelection.selectFromCursorRange) {
-            window.PillSelection.selectFromCursorRange(startCursorPos, endCursorPos);
+        if ((window as any).PillSelection && (window as any).PillSelection.selectFromCursorRange) {
+            (window as any).PillSelection.selectFromCursorRange(startCursorPos, endCursorPos);
         }
         
         this.onSelectionChange();
     }
     
-    static setTypingMode(isTyping) {
+    static setTypingMode(isTyping: boolean): void {
         // This method is deprecated - isTyping should be set as callback from external code
         this.isTyping = () => isTyping;
     }
     
-    static getTypingMode() {
+    static getTypingMode(): boolean {
         return this.isTyping && this.isTyping();
     }
     
-    static hasValidCursor() {
+    static hasValidCursor(): boolean {
         return this.cursorPosition !== null;
     }
     
-    static resetCursor() {
+    static resetCursor(): void {
         this.cursorPosition = null;
         this.selectionAnchor = null;
         this.isTyping = () => false;
@@ -463,8 +504,8 @@ class CursorManager {
         });
     }
     
-    static setDefaultCursor() {
-        const stateManager = this.getStateManager();
+    static setDefaultCursor(): void {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         if (tunePillsData.length > 0) {
@@ -474,7 +515,7 @@ class CursorManager {
         }
     }
     
-    static setCursorPositionOriginal(setIndex, pillIndex, positionType, maintainKeyboard = false) {
+    static setCursorPositionOriginal(setIndex: number, pillIndex: number, positionType: string, maintainKeyboard: boolean = false): void {
         // Update internal cursor position
         this.cursorPosition = { setIndex, pillIndex, position: positionType };
         
@@ -496,7 +537,7 @@ class CursorManager {
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
-            cursorElements[0].appendChild(cursor);
+            cursorElements[0]!.appendChild(cursor);
             console.log('CursorManager.setCursorPositionOriginal: Added cursor to cursor-position element');
             console.log('  Cursor element:', cursor);
             console.log('  Cursor parent:', cursorElements[0]);
@@ -520,14 +561,14 @@ class CursorManager {
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
-            document.getElementById('tune-pills-container').appendChild(cursor);
+            document.getElementById('tune-pills-container')!.appendChild(cursor);
             console.log('CursorManager.setCursorPositionOriginal: Added cursor to container (fallback)');
             console.log('  Cursor element:', cursor);
             console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
         }
         
         // Focus the container for keyboard input
-        const container = document.getElementById('tune-pills-container');
+        const container = document.getElementById('tune-pills-container')!;
         
         // On mobile devices, make container contenteditable to trigger keyboard
         if (this.isMobileDevice()) {
@@ -536,7 +577,7 @@ class CursorManager {
             
             // Make the container contenteditable temporarily
             container.contentEditable = 'true';
-            container.inputMode = 'text';
+            (container as any).inputMode = 'text';
             
             // Focus - with special handling for maintaining keyboard
             if (maintainKeyboard) {
@@ -555,7 +596,7 @@ class CursorManager {
             }
             
             // Place the selection at the cursor position
-            const selection = window.getSelection();
+            const selection = window.getSelection()!;
             const range = document.createRange();
             
             // Try to position the caret near the cursor element
@@ -572,40 +613,41 @@ class CursorManager {
                 container.setAttribute('data-mobile-input-setup', 'true');
                 
                 // Prevent default contenteditable behavior
-                container.addEventListener('beforeinput', (e) => {
+                container.addEventListener('beforeinput', (e: Event) => {
+                    const inputEvent = e as InputEvent;
                     e.preventDefault();
                     
-                    if (e.inputType === 'insertText' && e.data) {
+                    if (inputEvent.inputType === 'insertText' && inputEvent.data) {
                         // Handle text input
-                        for (let char of e.data) {
+                        for (let char of inputEvent.data) {
                             if (char === ',' || char === ';') {
-                                this.finishTyping && this.finishTyping();
+                                this.finishTyping?.();
                             } else {
-                                this.handleTextInput && this.handleTextInput(char);
+                                this.handleTextInput?.(char);
                             }
                         }
-                    } else if (e.inputType === 'deleteContentBackward') {
+                    } else if (inputEvent.inputType === 'deleteContentBackward') {
                         // Handle backspace
-                        this.handleBackspace && this.handleBackspace();
-                    } else if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+                        this.handleBackspace?.();
+                    } else if (inputEvent.inputType === 'insertParagraph' || inputEvent.inputType === 'insertLineBreak') {
                         // Handle enter key - keep keyboard open for continued typing
                         e.preventDefault();
                         
                         // Store that we want to keep keyboard open
-                        const shouldKeepKeyboard = this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer.trim();
+                        const shouldKeepKeyboard = this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer().trim();
                         
-                        this.finishTyping && this.finishTyping(shouldKeepKeyboard);
+                        this.finishTyping?.();
                     }
                 });
                 
                 // Prevent any actual content changes to the container
-                container.addEventListener('input', (e) => {
+                container.addEventListener('input', (e: Event) => {
                     e.preventDefault();
                     e.stopPropagation();
                 });
                 
                 // Clean up on blur
-                container.addEventListener('blur', (e) => {
+                container.addEventListener('blur', (e: Event) => {
                     // Only remove contenteditable if we're really blurring
                     setTimeout(() => {
                         const activeEl = document.activeElement;
@@ -613,8 +655,8 @@ class CursorManager {
                             // Don't interfere if we're intentionally keeping keyboard open
                             if (!this.isKeepingKeyboardOpen) {
                                 container.contentEditable = 'false';
-                                if (this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer.trim()) {
-                                    this.finishTyping && this.finishTyping();
+                                if (this.isTyping && this.isTyping() && this.typingBuffer && this.typingBuffer().trim()) {
+                                    this.finishTyping?.();
                                 }
                             }
                         }
@@ -633,16 +675,22 @@ class CursorManager {
     }
     
     // Helper method to register external functions that CursorManager needs to call
-    static registerCallbacks(callbacks = {}) {
-        this.finishTyping = callbacks.finishTyping;
-        this.removeTemporaryEmptySet = callbacks.removeTemporaryEmptySet;
-        this.renderTunePills = callbacks.renderTunePills;
-        this.handleTextInput = callbacks.handleTextInput;
-        this.handleBackspace = callbacks.handleBackspace;
+    static registerCallbacks(callbacks: CursorManagerCallbacks = {}): void {
+        this.finishTyping = callbacks.finishTyping || null;
+        this.removeTemporaryEmptySet = callbacks.removeTemporaryEmptySet || null;
+        this.renderTunePills = callbacks.renderTunePills || null;
+        this.handleTextInput = callbacks.handleTextInput || null;
+        this.handleBackspace = callbacks.handleBackspace || null;
         this.typingBuffer = null; // Will be set by callbacks
         this.isKeepingKeyboardOpen = false; // Will be set by callbacks
     }
 }
 
 // Export for use in other modules or global scope
-window.CursorManager = CursorManager;
+declare global {
+    interface Window {
+        CursorManager: typeof CursorManager;
+    }
+}
+
+(window as any).CursorManager = CursorManager;

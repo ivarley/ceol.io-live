@@ -3,30 +3,67 @@
  * Handles rendering of tune pills, sets, cursor positions, and UI elements
  */
 
-class PillRenderer {
-    static getStateManager = null; // Function to get StateManager reference
-    static getCursorManager = null; // Function to get CursorManager reference
-    static getAutoSaveManager = null; // Function to get AutoSaveManager reference
-    static containerElement = null;
+import { TunePill, TuneSet, TunePillsData } from './stateManager.js';
+
+export interface PillRendererCallbacks {
+    cleanupDragGhosts?(): void;
+    createHorizontalDropZone?(setIndex: number): HTMLElement;
+    setupPillEventListeners?(pillElement: HTMLElement, pillData: TunePill): void;
+    setCursorPosition?(setIndex: number, pillIndex: number, position: string, maintainKeyboard?: boolean): void;
+    clearSelection?(): void;
+}
+
+export interface PillRendererDependencies {
+    getStateManager(): StateManager;
+    getCursorManager(): CursorManager;
+    getAutoSaveManager(): AutoSaveManager;
+    containerElement?: HTMLElement | null;
+}
+
+export interface StateManager {
+    getTunePillsData(): TunePillsData;
+}
+
+export interface CursorManager {
+    getCursorPosition(): CursorPosition | null;
+    addCursorPosition?(parent: HTMLElement, setIndex: number, pillIndex: number, positionType: string): HTMLElement;
+    addFinalCursor?(containerElement: HTMLElement): HTMLElement;
+}
+
+export interface CursorPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: string;
+}
+
+export interface AutoSaveManager {
+    forceCheckChanges(): void;
+}
+
+export class PillRenderer {
+    static getStateManager: (() => StateManager) | null = null; // Function to get StateManager reference
+    static getCursorManager: (() => CursorManager) | null = null; // Function to get CursorManager reference
+    static getAutoSaveManager: (() => AutoSaveManager) | null = null; // Function to get AutoSaveManager reference
+    static containerElement: HTMLElement | null = null;
     
     // External functions that need to be called (will be registered via callbacks)
-    static cleanupDragGhosts = null;
-    static createHorizontalDropZone = null;
-    static setupPillEventListeners = null;
-    static setCursorPosition = null;
-    static clearSelection = null;
+    static cleanupDragGhosts: (() => void) | null = null;
+    static createHorizontalDropZone: ((setIndex: number) => HTMLElement) | null = null;
+    static setupPillEventListeners: ((pillElement: HTMLElement, pillData: TunePill) => void) | null = null;
+    static setCursorPosition: ((setIndex: number, pillIndex: number, position: string, maintainKeyboard?: boolean) => void) | null = null;
+    static clearSelection: (() => void) | null = null;
     
-    static initialize(options = {}) {
-        this.getStateManager = options.getStateManager || (() => window.StateManager);
-        this.getCursorManager = options.getCursorManager || (() => window.CursorManager);
-        this.getAutoSaveManager = options.getAutoSaveManager || (() => window.AutoSaveManager);
+    static initialize(options: PillRendererDependencies = {} as PillRendererDependencies): void {
+        this.getStateManager = options.getStateManager || (() => (window as any).StateManager);
+        this.getCursorManager = options.getCursorManager || (() => (window as any).CursorManager);
+        this.getAutoSaveManager = options.getAutoSaveManager || (() => (window as any).AutoSaveManager);
         this.containerElement = options.containerElement || document.getElementById('tune-pills-container');
     }
     
-    static renderTunePills() {
-        const stateManager = this.getStateManager();
-        const cursorManager = this.getCursorManager();
-        const autoSaveManager = this.getAutoSaveManager();
+    static renderTunePills(): void {
+        const stateManager = this.getStateManager!();
+        const cursorManager = this.getCursorManager!();
+        const autoSaveManager = this.getAutoSaveManager!();
         const tunePillsData = stateManager.getTunePillsData();
         const cursorPosition = cursorManager.getCursorPosition();
         
@@ -38,7 +75,7 @@ class PillRenderer {
             this.cleanupDragGhosts();
         }
         
-        const container = this.containerElement || document.getElementById('tune-pills-container');
+        const container = this.containerElement || document.getElementById('tune-pills-container')!;
         
         // Remember if the container was contentEditable before clearing (for mobile keyboard persistence)
         const wasContentEditable = container.contentEditable === 'true';
@@ -49,7 +86,7 @@ class PillRenderer {
         // If we were contentEditable, restore it immediately after clearing
         if (wasContentEditable) {
             container.contentEditable = 'true';
-            container.inputMode = 'text';
+            (container as any).inputMode = 'text';
         }
         
         if (tunePillsData.length === 0) {
@@ -85,7 +122,7 @@ class PillRenderer {
         }
     }
     
-    static renderEmptyState(container) {
+    static renderEmptyState(container: HTMLElement): void {
         container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
         
         // Add a cursor position for empty container
@@ -99,7 +136,7 @@ class PillRenderer {
         emptyPos.style.left = '50%';
         emptyPos.style.transform = 'translate(-50%, -50%)';
         
-        emptyPos.addEventListener('click', (e) => {
+        emptyPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -121,10 +158,10 @@ class PillRenderer {
         }
     }
     
-    static createTuneSetElement(tuneSet, setIndex) {
+    static createTuneSetElement(tuneSet: TuneSet, setIndex: number): HTMLElement {
         const setDiv = document.createElement('div');
         setDiv.className = 'tune-set';
-        setDiv.dataset.setIndex = setIndex;
+        setDiv.dataset.setIndex = setIndex.toString();
         
         // Handle empty sets (especially temporary ones)
         if (tuneSet.length === 0) {
@@ -164,9 +201,9 @@ class PillRenderer {
         return setDiv;
     }
     
-    static enhanceWrappedCursorVisibility(setDiv, setIndex) {
+    static enhanceWrappedCursorVisibility(setDiv: HTMLElement, setIndex: number): void {
         // Find all tune pills in this set
-        const pills = Array.from(setDiv.querySelectorAll('.tune-pill'));
+        const pills = Array.from(setDiv.querySelectorAll('.tune-pill')) as HTMLElement[];
         
         if (pills.length <= 1) {
             return; // No wrapping possible with 0 or 1 pills
@@ -176,9 +213,9 @@ class PillRenderer {
         setDiv.querySelectorAll('.cursor-position.wrap-cursor').forEach(cursor => cursor.remove());
         
         // Group pills by their top position (same line)
-        const lines = [];
-        let currentLine = [];
-        let currentTop = null;
+        const lines: HTMLElement[][] = [];
+        let currentLine: HTMLElement[] = [];
+        let currentTop: number | null = null;
         
         pills.forEach((pill, index) => {
             const rect = pill.getBoundingClientRect();
@@ -208,17 +245,17 @@ class PillRenderer {
             // Mark all cursor positions in wrapped content for better visibility
             setDiv.querySelectorAll('.cursor-position').forEach(cursor => {
                 // Enhanced visibility for wrapped content cursors
-                cursor.style.backgroundColor = 'rgba(0, 123, 255, 0.05)';
-                cursor.style.minWidth = '6px'; // Make them slightly wider for easier targeting
+                (cursor as HTMLElement).style.backgroundColor = 'rgba(0, 123, 255, 0.05)';
+                (cursor as HTMLElement).style.minWidth = '6px'; // Make them slightly wider for easier targeting
             });
         }
     }
     
-    static createWrapCursorPosition(setIndex, pillIndex, wrapType) {
+    static createWrapCursorPosition(setIndex: number, pillIndex: number, wrapType: string): HTMLElement {
         const cursorPos = document.createElement('span');
         cursorPos.className = 'cursor-position wrap-cursor';
-        cursorPos.dataset.setIndex = setIndex;
-        cursorPos.dataset.pillIndex = pillIndex;
+        cursorPos.dataset.setIndex = setIndex.toString();
+        cursorPos.dataset.pillIndex = pillIndex.toString();
         
         // Set the correct position type based on wrap type
         if (wrapType === 'line-start') {
@@ -231,7 +268,7 @@ class PillRenderer {
         
         cursorPos.dataset.wrapType = wrapType;
         
-        cursorPos.addEventListener('click', (e) => {
+        cursorPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -241,19 +278,19 @@ class PillRenderer {
             }
             
             if (this.setCursorPosition) {
-                this.setCursorPosition(setIndex, pillIndex, cursorPos.dataset.positionType);
+                this.setCursorPosition(setIndex, pillIndex, cursorPos.dataset.positionType!);
             }
         });
         
         return cursorPos;
     }
     
-    static createPillElement(pill, setIndex, pillIndex) {
+    static createPillElement(pill: TunePill, setIndex: number, pillIndex: number): HTMLElement {
         const pillDiv = document.createElement('div');
         pillDiv.className = `tune-pill ${pill.state}`;
         pillDiv.dataset.pillId = pill.id;
-        pillDiv.dataset.setIndex = setIndex;
-        pillDiv.dataset.pillIndex = pillIndex;
+        pillDiv.dataset.setIndex = setIndex.toString();
+        pillDiv.dataset.pillIndex = pillIndex.toString();
         pillDiv.draggable = true;
         
         // Add chevron
@@ -282,8 +319,8 @@ class PillRenderer {
         return pillDiv;
     }
     
-    static addCursorPosition(parent, setIndex, pillIndex, positionType) {
-        const cursorManager = this.getCursorManager();
+    static addCursorPosition(parent: HTMLElement, setIndex: number, pillIndex: number, positionType: string): HTMLElement {
+        const cursorManager = this.getCursorManager!();
         if (cursorManager && cursorManager.addCursorPosition) {
             return cursorManager.addCursorPosition(parent, setIndex, pillIndex, positionType);
         }
@@ -291,11 +328,11 @@ class PillRenderer {
         // Fallback implementation if CursorManager not available
         const cursorPos = document.createElement('span');
         cursorPos.className = 'cursor-position';
-        cursorPos.dataset.setIndex = setIndex;
-        cursorPos.dataset.pillIndex = pillIndex;
+        cursorPos.dataset.setIndex = setIndex.toString();
+        cursorPos.dataset.pillIndex = pillIndex.toString();
         cursorPos.dataset.positionType = positionType;
         
-        cursorPos.addEventListener('click', (e) => {
+        cursorPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -313,23 +350,23 @@ class PillRenderer {
         return cursorPos;
     }
     
-    static addFinalCursor(containerElement) {
-        const cursorManager = this.getCursorManager();
+    static addFinalCursor(containerElement: HTMLElement): HTMLElement {
+        const cursorManager = this.getCursorManager!();
         if (cursorManager && cursorManager.addFinalCursor) {
             return cursorManager.addFinalCursor(containerElement);
         }
         
         // Fallback implementation if CursorManager not available
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         const finalPos = document.createElement('span');
         finalPos.className = 'cursor-position';
-        finalPos.dataset.setIndex = tunePillsData.length;
-        finalPos.dataset.pillIndex = 0;
+        finalPos.dataset.setIndex = tunePillsData.length.toString();
+        finalPos.dataset.pillIndex = '0';
         finalPos.dataset.positionType = 'newset';
         
-        finalPos.addEventListener('click', (e) => {
+        finalPos.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             
@@ -347,27 +384,27 @@ class PillRenderer {
         return finalPos;
     }
     
-    static getContainerElement() {
+    static getContainerElement(): HTMLElement | null {
         return this.containerElement || document.getElementById('tune-pills-container');
     }
     
-    static setContainerElement(element) {
+    static setContainerElement(element: HTMLElement): void {
         this.containerElement = element;
     }
     
     // Helper method to register external functions that PillRenderer needs to call
-    static registerCallbacks(callbacks = {}) {
-        this.cleanupDragGhosts = callbacks.cleanupDragGhosts;
-        this.createHorizontalDropZone = callbacks.createHorizontalDropZone;
-        this.setupPillEventListeners = callbacks.setupPillEventListeners;
-        this.setCursorPosition = callbacks.setCursorPosition;
-        this.clearSelection = callbacks.clearSelection;
+    static registerCallbacks(callbacks: PillRendererCallbacks = {}): void {
+        this.cleanupDragGhosts = callbacks.cleanupDragGhosts || null;
+        this.createHorizontalDropZone = callbacks.createHorizontalDropZone || null;
+        this.setupPillEventListeners = callbacks.setupPillEventListeners || null;
+        this.setCursorPosition = callbacks.setCursorPosition || null;
+        this.clearSelection = callbacks.clearSelection || null;
     }
     
     // Update the appearance of a single pill without re-rendering everything
-    static updatePillAppearance(pill) {
+    static updatePillAppearance(pill: TunePill): void {
         console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
-        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`);
+        const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
         if (!pillElement) {
             console.error(`Could not find pill element with ID: ${pill.id}`);
             return;
@@ -378,7 +415,7 @@ class PillRenderer {
         pillElement.className = `tune-pill ${pill.state}`;
         
         // Update the text content in case it changed (e.g., canonical name from API)
-        const textElement = pillElement.querySelector('.text');
+        const textElement = pillElement.querySelector('.text') as HTMLElement;
         if (textElement) {
             console.log(`Updating text content from "${textElement.textContent}" to "${pill.tuneName}"`);
             textElement.textContent = pill.tuneName;
@@ -401,9 +438,9 @@ class PillRenderer {
     }
     
     // Apply landing animation to pills that have been moved
-    static applyLandingAnimation(pillIds) {
+    static applyLandingAnimation(pillIds: string[]): void {
         pillIds.forEach(pillId => {
-            const pillElement = document.querySelector(`[data-pill-id="${pillId}"]`);
+            const pillElement = document.querySelector(`[data-pill-id="${pillId}"]`) as HTMLElement;
             if (pillElement) {
                 pillElement.classList.add('just-landed');
                 setTimeout(() => {
@@ -415,4 +452,10 @@ class PillRenderer {
 }
 
 // Export for use in other modules or global scope
-window.PillRenderer = PillRenderer;
+declare global {
+    interface Window {
+        PillRenderer: typeof PillRenderer;
+    }
+}
+
+(window as any).PillRenderer = PillRenderer;

@@ -3,32 +3,75 @@
  * Handles pill selection state, visual feedback, and selection operations
  */
 
-class PillSelection {
-    static selectedPills = new Set();
-    static getStateManager = null; // Function to get StateManager reference
-    static getAutoSaveManager = null; // Function to get AutoSaveManager reference
-    static onSelectionChange = null; // Callback for selection changes
+import { TunePill, TuneSet, TunePillsData } from './stateManager.js';
+
+export interface PillSelectionCallbacks {
+    renderTunePills?(): void;
+    saveToUndo?(): void;
+    showMessage?(message: string, type: 'success' | 'error'): void;
+}
+
+export interface PillSelectionDependencies {
+    getStateManager(): StateManager;
+    getAutoSaveManager(): AutoSaveManager;
+    onSelectionChange?: () => void;
+    selectedPills?: Set<string>;
+}
+
+export interface StateManager {
+    getTunePillsData(): TunePillsData;
+    findTuneById(id: string): TunePosition | null;
+    removeTune(setIndex: number, tuneIndex: number): void;
+}
+
+export interface TunePosition {
+    setIndex: number;
+    tuneIndex: number;
+    tune: TunePill;
+}
+
+export interface AutoSaveManager {
+    forceCheckChanges(): void;
+}
+
+export interface CursorPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: string;
+}
+
+export interface PillInfo {
+    pill: TunePill;
+    setIndex: number;
+    pillIndex: number;
+}
+
+export class PillSelection {
+    static selectedPills: Set<string> = new Set();
+    static getStateManager: (() => StateManager) | null = null; // Function to get StateManager reference
+    static getAutoSaveManager: (() => AutoSaveManager) | null = null; // Function to get AutoSaveManager reference
+    static onSelectionChange: (() => void) | null = null; // Callback for selection changes
     
     // External functions that need to be called (will be registered via callbacks)
-    static renderTunePills = null;
-    static saveToUndo = null;
-    static showMessage = null;
+    static renderTunePills: (() => void) | null = null;
+    static saveToUndo: (() => void) | null = null;
+    static showMessage: ((message: string, type: 'success' | 'error') => void) | null = null;
     
-    static initialize(options = {}) {
-        this.getStateManager = options.getStateManager || (() => window.StateManager);
-        this.getAutoSaveManager = options.getAutoSaveManager || (() => window.AutoSaveManager);
-        this.onSelectionChange = options.onSelectionChange;
+    static initialize(options: PillSelectionDependencies = {} as PillSelectionDependencies): void {
+        this.getStateManager = options.getStateManager || (() => (window as any).StateManager);
+        this.getAutoSaveManager = options.getAutoSaveManager || (() => (window as any).AutoSaveManager);
+        this.onSelectionChange = options.onSelectionChange || null;
         this.selectedPills = options.selectedPills || new Set();
     }
     
-    static getSelectedPills() {
+    static getSelectedPills(): Set<string> {
         return this.selectedPills;
     }
     
-    static selectSingle(pillId) {
+    static selectSingle(pillId: string): void {
         // Hide any open context menu when selection changes
-        if (window.ContextMenu) {
-            window.ContextMenu.hideContextMenu();
+        if ((window as any).ContextMenu) {
+            (window as any).ContextMenu.hideContextMenu();
         }
         
         this.selectedPills.clear();
@@ -40,10 +83,10 @@ class PillSelection {
         }
     }
     
-    static toggleSelection(pillId) {
+    static toggleSelection(pillId: string): void {
         // Hide any open context menu when selection changes
-        if (window.ContextMenu) {
-            window.ContextMenu.hideContextMenu();
+        if ((window as any).ContextMenu) {
+            (window as any).ContextMenu.hideContextMenu();
         }
         
         if (this.selectedPills.has(pillId)) {
@@ -58,10 +101,10 @@ class PillSelection {
         }
     }
     
-    static extendSelection(pillId) {
+    static extendSelection(pillId: string): void {
         // Hide any open context menu when selection changes
-        if (window.ContextMenu) {
-            window.ContextMenu.hideContextMenu();
+        if ((window as any).ContextMenu) {
+            (window as any).ContextMenu.hideContextMenu();
         }
         
         // For shift-click selection, we need to select from the last selected pill to this one
@@ -70,8 +113,8 @@ class PillSelection {
             this.selectedPills.add(pillId);
         } else {
             // Find the range between the last selected pill and the current one
-            const allPills = document.querySelectorAll('.tune-pill');
-            const pillIds = Array.from(allPills).map(pill => pill.dataset.pillId);
+            const allPills = document.querySelectorAll('.tune-pill') as NodeListOf<HTMLElement>;
+            const pillIds = Array.from(allPills).map(pill => pill.dataset.pillId!);
             
             // Find the indices of the last selected pill and the current pill
             const lastSelectedId = Array.from(this.selectedPills)[this.selectedPills.size - 1];
@@ -84,7 +127,7 @@ class PillSelection {
                 const endIndex = Math.max(lastIndex, currentIndex);
                 
                 for (let i = startIndex; i <= endIndex; i++) {
-                    this.selectedPills.add(pillIds[i]);
+                    this.selectedPills.add(pillIds[i]!);
                 }
             } else {
                 // Fallback: just add the current pill
@@ -98,18 +141,19 @@ class PillSelection {
         }
     }
     
-    static updateSelectionDisplay() {
+    static updateSelectionDisplay(): void {
         document.querySelectorAll('.tune-pill').forEach(pill => {
-            if (this.selectedPills.has(pill.dataset.pillId)) {
-                pill.classList.add('selected');
+            const htmlPill = pill as HTMLElement;
+            if (this.selectedPills.has(htmlPill.dataset.pillId!)) {
+                htmlPill.classList.add('selected');
             } else {
-                pill.classList.remove('selected');
+                htmlPill.classList.remove('selected');
             }
         });
     }
     
-    static selectAll() {
-        const stateManager = this.getStateManager();
+    static selectAll(): void {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         this.selectedPills.clear();
@@ -123,7 +167,7 @@ class PillSelection {
         }
     }
     
-    static selectNone() {
+    static selectNone(): void {
         this.selectedPills.clear();
         this.updateSelectionDisplay();
         
@@ -132,23 +176,23 @@ class PillSelection {
         }
     }
     
-    static hasSelection() {
+    static hasSelection(): boolean {
         return this.selectedPills.size > 0;
     }
     
-    static getSelectionCount() {
+    static getSelectionCount(): number {
         return this.selectedPills.size;
     }
     
-    static isSelected(pillId) {
+    static isSelected(pillId: string): boolean {
         return this.selectedPills.has(pillId);
     }
     
-    static deleteSelectedPills() {
+    static deleteSelectedPills(): void {
         if (this.selectedPills.size === 0) return;
         
-        const stateManager = this.getStateManager();
-        const autoSaveManager = this.getAutoSaveManager();
+        const stateManager = this.getStateManager!();
+        const autoSaveManager = this.getAutoSaveManager!();
         
         if (this.saveToUndo) {
             this.saveToUndo();
@@ -176,14 +220,14 @@ class PillSelection {
         }
     }
     
-    static copySelectedPills() {
+    static copySelectedPills(): TuneSet[] | null {
         if (this.selectedPills.size === 0) return null;
         
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Group selected pills by their sets, preserving order and set structure
-        const selectedBySet = new Map();
+        const selectedBySet = new Map<number, Array<{pill: TunePill; originalPillIndex: number}>>();
         
         tunePillsData.forEach((tuneSet, setIndex) => {
             tuneSet.forEach((pill, pillIndex) => {
@@ -191,7 +235,7 @@ class PillSelection {
                     if (!selectedBySet.has(setIndex)) {
                         selectedBySet.set(setIndex, []);
                     }
-                    selectedBySet.get(setIndex).push({
+                    selectedBySet.get(setIndex)!.push({
                         pill: JSON.parse(JSON.stringify(pill)),
                         originalPillIndex: pillIndex
                     });
@@ -234,7 +278,7 @@ class PillSelection {
         return clipboard;
     }
     
-    static cutSelectedPills() {
+    static cutSelectedPills(): TuneSet[] | null {
         if (this.selectedPills.size === 0) return null;
         
         const clipboard = this.copySelectedPills();
@@ -242,33 +286,32 @@ class PillSelection {
         return clipboard;
     }
     
-    static addDraggingClass() {
+    static addDraggingClass(): void {
         // Visual feedback - apply dragging class to all selected pills
         this.selectedPills.forEach(pillId => {
-            const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+            const pill = document.querySelector(`[data-pill-id="${pillId}"]`) as HTMLElement;
             if (pill) {
                 pill.classList.add('dragging');
             }
         });
     }
     
-    static removeDraggingClass() {
+    static removeDraggingClass(): void {
         // Remove dragging visual feedback from all selected pills
         this.selectedPills.forEach(pillId => {
-            const pill = document.querySelector(`[data-pill-id="${pillId}"]`);
+            const pill = document.querySelector(`[data-pill-id="${pillId}"]`) as HTMLElement;
             if (pill) {
                 pill.classList.remove('dragging');
             }
         });
     }
     
-    static getSelectedPillsData() {
-        const stateManager = this.getStateManager();
+    static getSelectedPillsData(): Map<number, Array<{pill: TunePill; setIndex: number; pillIndex: number}>> {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
-        const selectedPillsData = [];
         
         // Group selected pills by their sets, preserving order and set structure
-        const selectedBySet = new Map();
+        const selectedBySet = new Map<number, Array<{pill: TunePill; setIndex: number; pillIndex: number}>>();
         
         tunePillsData.forEach((tuneSet, setIndex) => {
             tuneSet.forEach((pill, pillIndex) => {
@@ -276,7 +319,7 @@ class PillSelection {
                     if (!selectedBySet.has(setIndex)) {
                         selectedBySet.set(setIndex, []);
                     }
-                    selectedBySet.get(setIndex).push({
+                    selectedBySet.get(setIndex)!.push({
                         pill: JSON.parse(JSON.stringify(pill)),
                         setIndex: setIndex,
                         pillIndex: pillIndex
@@ -288,21 +331,21 @@ class PillSelection {
         return selectedBySet;
     }
     
-    static selectFromCursorRange(startCursorPos, endCursorPos) {
+    static selectFromCursorRange(startCursorPos: CursorPosition, endCursorPos: CursorPosition): void {
         if (!startCursorPos || !endCursorPos) return;
         
         // Hide any open context menu when selection changes
-        if (window.ContextMenu) {
-            window.ContextMenu.hideContextMenu();
+        if ((window as any).ContextMenu) {
+            (window as any).ContextMenu.hideContextMenu();
         }
         
         this.selectedPills.clear();
         
-        const stateManager = this.getStateManager();
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Get all pills in order for indexing
-        const allPills = [];
+        const allPills: PillInfo[] = [];
         tunePillsData.forEach((set, setIndex) => {
             set.forEach((pill, pillIndex) => {
                 allPills.push({ pill, setIndex, pillIndex });
@@ -324,7 +367,7 @@ class PillSelection {
         }
     }
     
-    static getPillRangeBetweenCursors(startCursor, endCursor, allPills) {
+    static getPillRangeBetweenCursors(startCursor: CursorPosition, endCursor: CursorPosition, allPills: PillInfo[]): PillInfo[] {
         // SIMPLIFIED APPROACH: Select pills based on what's between the cursor positions
         
         const startBoundary = this.getCursorPillBoundary(startCursor, allPills);
@@ -332,19 +375,19 @@ class PillSelection {
         
         if (startBoundary === -1 || endBoundary === -1) return [];
         
-        const selectedPills = [];
+        const selectedPills: PillInfo[] = [];
         const minBoundary = Math.min(startBoundary, endBoundary);
         const maxBoundary = Math.max(startBoundary, endBoundary);
         
         // Select pills between the boundaries (exclusive of boundaries)
         for (let i = minBoundary; i < maxBoundary && i < allPills.length; i++) {
-            selectedPills.push(allPills[i]);
+            selectedPills.push(allPills[i]!);
         }
         
         return selectedPills;
     }
     
-    static getCursorPillBoundary(cursor, allPills) {
+    static getCursorPillBoundary(cursor: CursorPosition, allPills: PillInfo[]): number {
         const { setIndex, pillIndex, position } = cursor;
         
         if (position === 'newset') {
@@ -372,7 +415,7 @@ class PillSelection {
         return pillArrayIndex;
     }
     
-    static getCursorLogicalPosition(cursor, allPills) {
+    static getCursorLogicalPosition(cursor: CursorPosition, allPills: PillInfo[]): number | null {
         const { setIndex, pillIndex, position } = cursor;
         
         if (position === 'newset') {
@@ -400,7 +443,7 @@ class PillSelection {
         return pillArrayIndex;
     }
     
-    static findPillIndexFromCursor(cursor, allPills) {
+    static findPillIndexFromCursor(cursor: CursorPosition, allPills: PillInfo[]): number {
         const { setIndex, pillIndex, position } = cursor;
         
         if (position === 'newset') {
@@ -419,7 +462,7 @@ class PillSelection {
         return pillArrayIndex;
     }
     
-    static cursorPositionToPillBoundary(cursorPos, allPills) {
+    static cursorPositionToPillBoundary(cursorPos: CursorPosition, allPills: PillInfo[]): number {
         const { setIndex, pillIndex, position } = cursorPos;
         
         if (position === 'newset') {
@@ -450,26 +493,26 @@ class PillSelection {
         return pillIndexInArray;
     }
     
-    static getPillsFromCursorPosition(cursorPos) {
-        const stateManager = this.getStateManager();
+    static getPillsFromCursorPosition(cursorPos: CursorPosition): Array<{setIndex: number; pillIndex: number}> {
+        const stateManager = this.getStateManager!();
         const tunePillsData = stateManager.getTunePillsData();
         
         // Convert a cursor position to the pills it represents for selection purposes
         const { setIndex, pillIndex, position } = cursorPos;
         
-        if (position === 'newset' || setIndex >= tunePillsData.length || tunePillsData[setIndex].length === 0) {
+        if (position === 'newset' || setIndex >= tunePillsData.length || tunePillsData[setIndex]!.length === 0) {
             return [];
         }
         
         if (position === 'before') {
             // Before a pill - for selection purposes, we want to start FROM this pill (inclusive)
-            if (pillIndex < tunePillsData[setIndex].length) {
+            if (pillIndex < tunePillsData[setIndex]!.length) {
                 return [{ setIndex, pillIndex }];
             }
         } else if (position === 'after') {
             // After a pill - for selection purposes, we want to end AT this pill (inclusive)
             // But we need to be careful about range boundaries
-            if (pillIndex >= 0 && pillIndex < tunePillsData[setIndex].length) {
+            if (pillIndex >= 0 && pillIndex < tunePillsData[setIndex]!.length) {
                 return [{ setIndex, pillIndex }];
             }
         }
@@ -478,12 +521,18 @@ class PillSelection {
     }
     
     // Helper method to register external functions that PillSelection needs to call
-    static registerCallbacks(callbacks = {}) {
-        this.renderTunePills = callbacks.renderTunePills;
-        this.saveToUndo = callbacks.saveToUndo;
-        this.showMessage = callbacks.showMessage;
+    static registerCallbacks(callbacks: PillSelectionCallbacks = {}): void {
+        this.renderTunePills = callbacks.renderTunePills || null;
+        this.saveToUndo = callbacks.saveToUndo || null;
+        this.showMessage = callbacks.showMessage || null;
     }
 }
 
 // Export for use in other modules or global scope
-window.PillSelection = PillSelection;
+declare global {
+    interface Window {
+        PillSelection: typeof PillSelection;
+    }
+}
+
+(window as any).PillSelection = PillSelection;

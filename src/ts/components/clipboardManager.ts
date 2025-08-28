@@ -1,24 +1,64 @@
 // ClipboardManager - Handles clipboard operations (copy/cut/paste)
-class ClipboardManager {
-    constructor() {
-        this.clipboard = [];
-        this.pillSelection = null;
-        this.cursorManager = null;
-        this.stateManager = null;
-        this.callbacks = {};
-    }
 
-    initialize(dependencies) {
+import { TunePill, TunePillsData, TuneSet } from './stateManager.js';
+
+export interface ClipboardPosition {
+    setIndex: number;
+    pillIndex: number;
+    position: 'before' | 'after' | 'newset';
+}
+
+export interface ClipboardCallbacks {
+    saveToUndo(): void;
+    generateId(): string;
+    autoMatchTune(pill: TunePill): Promise<void>;
+    updatePillAppearance(pill: TunePill): void;
+    renderTunePills(): void;
+    showMatchingResults(pills: TunePill[]): void;
+    showMessage(message: string, type: 'success' | 'error'): void;
+    applyLandingAnimation(pillIds: string[]): void;
+}
+
+export interface ClipboardDependencies {
+    getPillSelection(): PillSelection;
+    getCursorManager(): CursorManager;
+    getStateManager(): StateManager;
+}
+
+export interface PillSelection {
+    copySelectedPills(): TuneSet[] | null;
+    cutSelectedPills(): TuneSet[] | null;
+}
+
+export interface CursorManager {
+    getCursorPosition(): { setIndex: number; pillIndex: number; position: string } | null;
+}
+
+export interface StateManager {
+    getTunePillsData(): TunePillsData;
+    setTunePillsData(data: TunePillsData): void;
+}
+
+export class ClipboardManager {
+    private clipboard: TuneSet[] = [];
+    private pillSelection: PillSelection | null = null;
+    private cursorManager: CursorManager | null = null;
+    private stateManager: StateManager | null = null;
+    private callbacks: ClipboardCallbacks = {} as ClipboardCallbacks;
+
+    public initialize(dependencies: ClipboardDependencies): void {
         this.pillSelection = dependencies.getPillSelection();
         this.cursorManager = dependencies.getCursorManager();
         this.stateManager = dependencies.getStateManager();
     }
 
-    registerCallbacks(callbacks) {
-        this.callbacks = { ...this.callbacks, ...callbacks };
+    public registerCallbacks(callbacks: Partial<ClipboardCallbacks>): void {
+        this.callbacks = { ...this.callbacks, ...callbacks } as ClipboardCallbacks;
     }
 
-    copySelectedPills() {
+    public copySelectedPills(): TuneSet[] | null {
+        if (!this.pillSelection) return null;
+        
         const copiedData = this.pillSelection.copySelectedPills();
         if (copiedData) {
             this.clipboard = copiedData;
@@ -26,7 +66,9 @@ class ClipboardManager {
         return copiedData;
     }
 
-    cutSelectedPills() {
+    public cutSelectedPills(): TuneSet[] | null {
+        if (!this.pillSelection) return null;
+        
         const cutData = this.pillSelection.cutSelectedPills();
         if (cutData) {
             this.clipboard = cutData;
@@ -34,10 +76,13 @@ class ClipboardManager {
         return cutData;
     }
 
-    async pasteFromClipboard() {
+    public async pasteFromClipboard(): Promise<void> {
+        if (!this.cursorManager || !this.stateManager) return;
+        
         // First try to read from external clipboard
-        let externalClipboardData = null;
+        let externalClipboardData: TuneSet[] | null = null;
         let isPlainTextPaste = false;
+        
         if (navigator.clipboard && navigator.clipboard.readText) {
             try {
                 const clipboardText = await navigator.clipboard.readText();
@@ -47,7 +92,7 @@ class ClipboardManager {
                         const parsedData = JSON.parse(clipboardText);
                         if (Array.isArray(parsedData)) {
                             // This is internal JSON data - use it as-is, no need to match
-                            externalClipboardData = parsedData;
+                            externalClipboardData = parsedData as TuneSet[];
                             isPlainTextPaste = false;
                         }
                     } catch (e) {
@@ -66,12 +111,12 @@ class ClipboardManager {
                                 
                                 return tuneNames.map(tunename => ({
                                     id: this.callbacks.generateId(),
-                                    orderNumber: null,
+                                    orderNumber: 0,
                                     tuneId: null,
                                     tuneName: tunename,
-                                    setting: null,
-                                    tuneType: null,
-                                    state: 'loading'  // Show loading spinner during matching
+                                    setting: '',
+                                    tuneType: '',
+                                    state: 'loading' as const  // Show loading spinner during matching
                                 }));
                             });
                             isPlainTextPaste = true;
@@ -90,13 +135,13 @@ class ClipboardManager {
         if (!clipboardData || clipboardData.length === 0) return;
         
         // Paste at current cursor position if available, otherwise at the end
-        let position;
+        let position: ClipboardPosition;
         const cursorPosition = this.cursorManager.getCursorPosition();
         if (cursorPosition) {
             position = {
                 setIndex: cursorPosition.setIndex,
                 pillIndex: cursorPosition.pillIndex,
-                position: cursorPosition.position
+                position: cursorPosition.position as 'before' | 'after' | 'newset'
             };
         } else {
             // Fallback: paste at the end
@@ -115,8 +160,8 @@ class ClipboardManager {
                     
                     // Find the actual pills that were inserted into tunePillsData
                     // Since pasteAtPosition creates new IDs, we need to find them by tune name
-                    const actualPastedPills = [];
-                    const tunePillsData = this.stateManager.getTunePillsData();
+                    const actualPastedPills: TunePill[] = [];
+                    const tunePillsData = this.stateManager!.getTunePillsData();
                     tunePillsData.forEach(tuneSet => {
                         tuneSet.forEach(pill => {
                             if (originalTuneNames.includes(pill.tuneName) && pill.state === 'loading') {
@@ -162,8 +207,8 @@ class ClipboardManager {
         }
     }
 
-    pasteAtPosition(pillsData, position) {
-        if (!pillsData || pillsData.length === 0) return;
+    private pasteAtPosition(pillsData: TuneSet[], position: ClipboardPosition): void {
+        if (!pillsData || pillsData.length === 0 || !this.stateManager) return;
         
         this.callbacks.saveToUndo();
         
@@ -179,7 +224,7 @@ class ClipboardManager {
                 set.map(pill => ({
                     ...pill,
                     id: this.callbacks.generateId(),
-                    orderNumber: null
+                    orderNumber: 0
                 }))
             );
             
@@ -214,7 +259,7 @@ class ClipboardManager {
                     
                     if (newSets.length === 1) {
                         // Single set - insert pills into existing set
-                        newSets[0].forEach((pill, index) => {
+                        newSets[0]!.forEach((pill, index) => {
                             targetSet.splice(insertIndex + index, 0, pill);
                         });
                     } else {
@@ -243,10 +288,10 @@ class ClipboardManager {
             }, 50);
         } else {
             // Old format: flat array of pills - use original logic
-            const newPills = pillsData.map(pill => ({
+            const newPills = (pillsData as unknown as TunePill[]).map(pill => ({
                 ...pill,
                 id: this.callbacks.generateId(),
-                orderNumber: null
+                orderNumber: 0
             }));
             
             if (position.position === 'newset') {
@@ -262,6 +307,8 @@ class ClipboardManager {
                     tunePillsData.push(newPills);
                 } else {
                     const targetSet = tunePillsData[targetSetIndex];
+                    if (!targetSet) return;
+                    
                     let insertIndex = position.pillIndex;
                     
                     if (position.position === 'before') {
@@ -294,3 +341,12 @@ class ClipboardManager {
 
 // Create singleton instance
 const clipboardManager = new ClipboardManager();
+
+// Export for use in other modules or global scope
+declare global {
+    interface Window {
+        clipboardManager: ClipboardManager;
+    }
+}
+
+(window as any).clipboardManager = clipboardManager;
