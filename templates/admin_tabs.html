@@ -2,6 +2,11 @@
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
     <div class="nav nav-tabs" id="admin-tabs" role="tablist">
+        <a class="nav-link {{ 'active' if active_tab == 'sessions_list' else '' }}" 
+           href="{{ url_for('admin_sessions_list') }}" 
+           role="tab">
+            Sessions
+        </a>
         <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}" 
            href="{{ url_for('admin_people') }}" 
            role="tab">
@@ -12,8 +17,8 @@
            role="tab">
             Login History
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
-           href="{{ url_for('admin_sessions') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'login_sessions' else '' }}" 
+           href="{{ url_for('admin_login_sessions') }}" 
            role="tab">
             Active Logins
         </a>
@@ -27,13 +32,16 @@
     <!-- Mobile Dropdown Navigation -->
     <div class="admin-tabs-mobile">
         <select class="form-select" onchange="location = this.value">
+            <option value="{{ url_for('admin_sessions_list') }}" {{ 'selected' if active_tab == 'sessions_list' else '' }}>
+                Sessions
+            </option>
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
                 People
             </option>
             <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
                 Login History
             </option>
-            <option value="{{ url_for('admin_sessions') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
+            <option value="{{ url_for('admin_login_sessions') }}" {{ 'selected' if active_tab == 'login_sessions' else '' }}>
                 Active Logins
             </option>
             <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>

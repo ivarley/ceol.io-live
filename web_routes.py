@@ -1333,12 +1333,155 @@ def admin():
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
-    # Redirect to admin_people as the default tab
-    return redirect(url_for("admin_people"))
+    # Redirect to admin_sessions_list as the default tab
+    return redirect(url_for("admin_sessions_list"))
 
 
 @login_required
-def admin_sessions():
+def admin_sessions_list():
+    # Check if user is system admin
+    if not session.get("is_system_admin"):
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get all sessions with counts of logged instances, players (regulars and total), and latest instance date
+        cur.execute(
+            """
+            SELECT
+                s.session_id,
+                s.thesession_id,
+                s.name,
+                s.path,
+                s.location_name,
+                s.location_street,
+                s.city,
+                s.state,
+                s.country,
+                s.timezone,
+                s.comments,
+                s.unlisted_address,
+                s.initiation_date,
+                s.termination_date,
+                s.recurrence,
+                s.created_date,
+                s.last_modified_date,
+                COALESCE(si_counts.instance_count, 0) as instance_count,
+                COALESCE(player_counts.total_players, 0) as total_players,
+                COALESCE(player_counts.regular_players, 0) as regular_players,
+                latest_si.latest_instance_date
+            FROM session s
+            LEFT JOIN (
+                SELECT
+                    session_id,
+                    COUNT(*) as instance_count
+                FROM session_instance
+                GROUP BY session_id
+            ) si_counts ON s.session_id = si_counts.session_id
+            LEFT JOIN (
+                SELECT
+                    sp.session_id,
+                    COUNT(*) as total_players,
+                    COUNT(CASE WHEN sp.is_regular = TRUE THEN 1 END) as regular_players
+                FROM session_person sp
+                GROUP BY sp.session_id
+            ) player_counts ON s.session_id = player_counts.session_id
+            LEFT JOIN (
+                SELECT DISTINCT ON (si.session_id)
+                    si.session_id,
+                    si.date as latest_instance_date
+                FROM session_instance si
+                ORDER BY si.session_id, si.date DESC
+            ) latest_si ON s.session_id = latest_si.session_id
+            ORDER BY s.name
+        """
+        )
+
+        sessions = []
+        for row in cur.fetchall():
+            (
+                session_id,
+                thesession_id,
+                name,
+                path,
+                location_name,
+                location_street,
+                city,
+                state,
+                country,
+                timezone,
+                comments,
+                unlisted_address,
+                initiation_date,
+                termination_date,
+                recurrence,
+                created_date,
+                last_modified_date,
+                instance_count,
+                total_players,
+                regular_players,
+                latest_instance_date,
+            ) = row
+
+            # Format location for display
+            location_parts = []
+            if location_name:
+                location_parts.append(location_name)
+            if city:
+                location_parts.append(city)
+            if state:
+                location_parts.append(state)
+            location_display = ", ".join(location_parts) if location_parts else "Unknown"
+
+            # Format player count display like "65 (12 regulars)"
+            player_count_display = f"{total_players}"
+            if regular_players > 0:
+                player_count_display += f" ({regular_players} regulars)"
+
+            # Format latest instance date
+            latest_instance_display = ""
+            if latest_instance_date:
+                latest_instance_display = latest_instance_date.strftime("%Y-%m-%d")
+
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "thesession_id": thesession_id,
+                    "name": name,
+                    "path": path,
+                    "location_name": location_name,
+                    "location_street": location_street,
+                    "city": city,
+                    "state": state,
+                    "country": country,
+                    "timezone": timezone,
+                    "comments": comments,
+                    "unlisted_address": unlisted_address,
+                    "initiation_date": initiation_date,
+                    "termination_date": termination_date,
+                    "recurrence": recurrence,
+                    "created_date": created_date,
+                    "last_modified_date": last_modified_date,
+                    "location_display": location_display,
+                    "instance_count": instance_count,
+                    "total_players": total_players,
+                    "regular_players": regular_players,
+                    "player_count_display": player_count_display,
+                    "latest_instance_display": latest_instance_display,
+                }
+            )
+
+        return render_template("admin_sessions_list.html", sessions=sessions, active_tab="sessions_list")
+
+    finally:
+        conn.close()
+
+
+@login_required
+def admin_login_sessions():
     # Check if user is system admin
     if not session.get("is_system_admin"):
         flash("You must be authorized to view this page.", "error")
@@ -1401,7 +1544,7 @@ def admin_sessions():
             )
 
         return render_template(
-            "user_sessions.html", active_sessions=active_sessions, active_tab="sessions"
+            "user_sessions.html", active_sessions=active_sessions, active_tab="login_sessions"
         )
 
     finally:

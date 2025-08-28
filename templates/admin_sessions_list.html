@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Sessions{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Admin Dashboard</h1>
+                <section class="docs-intro">
+                    <p>Manage user sessions and view system activity.</p>
+                </section>
+            </header>
+            
+            {% include 'admin_tabs.html' %}
+            
+            <section class="docs-section" id="sessions">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="section-heading mb-0">Sessions ({{ sessions|length }})</h2>
+                    <button id="add-session-btn" class="btn btn-primary">Add Session</button>
+                </div>
+                
+                <!-- Search Controls -->
+                <div class="mb-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" id="sessions-search" placeholder="Search by name or location...">
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="sessions-content">
+                    {% if sessions %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Venue</th>
+                                    <th>Location</th>
+                                    <th>TheSession.org</th>
+                                    <th>Players</th>
+                                    <th>Instances</th>
+                                    <th>Latest Instance</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessions-tbody">
+                                {% for session in sessions %}
+                                <tr data-session-name="{{ session.name|lower }}" data-session-location="{{ session.location_display|lower }}">
+                                    <td class="session-name">
+                                        <a href="/admin/sessions/{{ session.path }}" class="session-link">{{ session.name }}</a>
+                                    </td>
+                                    <td class="session-venue">{{ session.location_name or '-' }}</td>
+                                    <td class="session-location">{{ session.location_display }}</td>
+                                    <td class="session-thesession">
+                                        {% if session.thesession_id %}
+                                            <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank" rel="noopener noreferrer">
+                                                {{ session.thesession_id }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="session-player-count">
+                                        {% if session.total_players > 0 %}
+                                            <span class="badge bg-primary">{{ session.player_count_display }}</span>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="session-instance-count">
+                                        {% if session.instance_count > 0 %}
+                                            <span class="badge bg-success">{{ session.instance_count }}</span>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="session-latest-instance">
+                                        {% if session.latest_instance_display %}
+                                            <span class="latest-instance-info">{{ session.latest_instance_display }}</span>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="session-status">
+                                        {% if session.termination_date %}
+                                            <span class="text-danger">Terminated</span>
+                                        {% else %}
+                                            <span class="text-success">Active</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" role="alert">
+                        <h4 class="alert-heading">No Sessions Found</h4>
+                        <p>There are currently no session records in the system.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.table {
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--dropdown-shadow);
+}
+
+.table th {
+    background-color: var(--hover-bg);
+    border-top: none;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.table-responsive {
+    margin-top: 1rem;
+}
+
+.session-name {
+    font-weight: 500;
+}
+
+.session-link {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.session-link:hover {
+    text-decoration: underline;
+    color: var(--primary);
+}
+
+.session-venue,
+.session-location {
+    font-size: 0.9rem;
+}
+
+.session-thesession {
+    font-size: 0.9rem;
+}
+
+.session-thesession a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.session-thesession a:hover {
+    text-decoration: underline;
+}
+
+.session-player-count,
+.session-instance-count {
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.session-latest-instance {
+    font-size: 0.9rem;
+    font-family: 'Courier New', monospace;
+}
+
+.session-status {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.latest-instance-info {
+    white-space: nowrap;
+}
+
+.badge {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.alert {
+    margin-top: 2rem;
+}
+
+.btn {
+    padding: 0.375rem 0.75rem;
+    margin-right: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.25rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.justify-content-between {
+    justify-content: space-between;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+    
+    .session-venue,
+    .session-location,
+    .session-thesession,
+    .session-latest-instance {
+        font-size: 0.8rem;
+    }
+    
+    .session-player-count,
+    .session-instance-count {
+        font-size: 0.8rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    /* Ensure mobile margin reduction matches other admin pages */
+    body .docs-content {
+        padding: 0.5rem !important;
+    }
+    
+    body .docs-article {
+        padding: 0.5rem !important;
+    }
+    
+    body .docs-content-inner .container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+        padding-top: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search functionality
+    const searchInput = document.getElementById('sessions-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', filterSessions);
+    }
+    
+    // Add Session Button placeholder functionality
+    const addSessionBtn = document.getElementById('add-session-btn');
+    if (addSessionBtn) {
+        addSessionBtn.addEventListener('click', function() {
+            alert('Add Session functionality is not yet implemented. This would open a modal or redirect to a session creation form.');
+        });
+    }
+    
+    function filterSessions() {
+        const searchTerm = document.getElementById('sessions-search').value.toLowerCase();
+        const tbody = document.getElementById('sessions-tbody');
+        const rows = tbody.getElementsByTagName('tr');
+        let visibleCount = 0;
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const name = row.getAttribute('data-session-name') || '';
+            const location = row.getAttribute('data-session-location') || '';
+            
+            // Check if search term matches any of the fields
+            const matches = name.includes(searchTerm) || 
+                          location.includes(searchTerm);
+            
+            if (matches) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        }
+        
+        // Show "no results" message if no sessions match
+        const sessionsContent = document.getElementById('sessions-content');
+        const existingNoResults = document.getElementById('no-search-results');
+        
+        if (visibleCount === 0 && searchTerm) {
+            if (!existingNoResults) {
+                const noResultsDiv = document.createElement('div');
+                noResultsDiv.id = 'no-search-results';
+                noResultsDiv.className = 'alert alert-info';
+                noResultsDiv.innerHTML = '<p class="mb-0">No sessions match your search criteria.</p>';
+                sessionsContent.appendChild(noResultsDiv);
+            }
+        } else if (existingNoResults) {
+            existingNoResults.remove();
+        }
+    }
+});
+</script>
+
+{% endblock %}
