@@ -15,7 +15,7 @@
         <a class="nav-link {{ 'active' if active_tab == 'sessions' else '' }}" 
            href="{{ url_for('admin_sessions') }}" 
            role="tab">
-            Active Sessions
+            Active Logins
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}" 
            href="{{ url_for('admin_test_links') }}" 
@@ -34,7 +34,7 @@
                 Login History
             </option>
             <option value="{{ url_for('admin_sessions') }}" {{ 'selected' if active_tab == 'sessions' else '' }}>
-                Active Sessions
+                Active Logins
             </option>
             <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>
                 Test Links
