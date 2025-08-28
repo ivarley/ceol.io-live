@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function() {
             handleBackspace: () => textInput.handleBackspace(),
             handleDelete: () => textInput.handleDelete(),
             handleEnterKey: () => textInput.handleEnterKey(),
-            finishTyping: () => textInput.finishTyping(CursorManager.isMobileDevice()),
+            finishTyping: () => finishTypingFromKeyboard(),
             cancelTyping: () => textInput.cancelTyping(),
             undo: () => undoRedoManager.undo(),
             redo: () => undoRedoManager.redo(),
@@ -1281,10 +1281,39 @@ function markSessionLogIncomplete() {
 }
 
 /**
+ * Handle finishTyping calls from the keyboard handler
+ * Always keep keyboard open on mobile when cursor is active
+ */
+function finishTypingFromKeyboard() {
+    const isMobile = CursorManager.isMobileDevice();
+    const cursorPosition = CursorManager.getCursorPosition();
+    
+    // On mobile, if there's an active cursor position, keep keyboard open
+    const shouldKeepKeyboard = isMobile && cursorPosition;
+    
+    console.log('finishTypingFromKeyboard:', {
+        isMobile,
+        hasPosition: !!cursorPosition,
+        shouldKeepKeyboard,
+        isTyping: textInput.typing
+    });
+    
+    textInput.finishTyping(shouldKeepKeyboard);
+}
+
+/**
  * Wrapper for finishTyping that ensures mobile keyboard stays open after pill creation
  */
 function finishTypingWithKeyboardFix(keepKeyboard) {
-    const shouldKeepKeyboard = keepKeyboard && CursorManager.isMobileDevice();
+    const isMobile = CursorManager.isMobileDevice();
+    const shouldKeepKeyboard = keepKeyboard && isMobile;
+    
+    console.log('finishTypingWithKeyboardFix:', {
+        keepKeyboard,
+        isMobile,
+        shouldKeepKeyboard,
+        isTyping: textInput.typing
+    });
     
     // Call the original finishTyping method
     textInput.finishTyping(keepKeyboard);
@@ -1295,6 +1324,7 @@ function finishTypingWithKeyboardFix(keepKeyboard) {
         setTimeout(() => {
             const container = document.getElementById('tune-pills-container');
             if (container) {
+                console.log('Re-establishing keyboard focus after DOM update');
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
                 container.focus();
