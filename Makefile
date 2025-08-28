@@ -39,6 +39,7 @@ setup-test-db:
 # Testing targets
 test:
 	pytest
+	npm test
 
 test-unit:
 	pytest tests/unit/ -v -m unit
@@ -141,3 +142,13 @@ test-auth-flow:
 
 test-user-journeys:
 	pytest tests/functional/test_user_journeys.py -v
+
+# JavaScript/TypeScript testing targets
+test-js:
+	npm test
+
+test-js-coverage:
+	npm run test:coverage
+
+test-js-watch:
+	npm run test:watch
