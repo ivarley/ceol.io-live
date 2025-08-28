@@ -241,6 +241,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up responsive option text
     AutoSaveManager.updateOptionText();
     window.addEventListener('resize', AutoSaveManager.updateOptionText);
+    
+    // Set up mobile keyboard management
+    setupMobileKeyboardManagement();
 });
 
 // Convert tune sets to pills data format - delegated to StateManager
@@ -1286,19 +1289,27 @@ function markSessionLogIncomplete() {
  */
 function finishTypingFromKeyboard() {
     const isMobile = CursorManager.isMobileDevice();
-    const cursorPosition = CursorManager.getCursorPosition();
     
-    // On mobile, if there's an active cursor position, keep keyboard open
-    const shouldKeepKeyboard = isMobile && cursorPosition;
-    
-    console.log('finishTypingFromKeyboard:', {
-        isMobile,
-        hasPosition: !!cursorPosition,
-        shouldKeepKeyboard,
-        isTyping: textInput.typing
-    });
-    
-    textInput.finishTyping(shouldKeepKeyboard);
+    // On mobile, always try to keep keyboard open for continued input
+    if (isMobile) {
+        // Call finishTyping with keepKeyboard=true
+        textInput.finishTyping(true);
+        
+        // Also ensure container stays focused after any DOM updates
+        setTimeout(() => {
+            const container = document.getElementById('tune-pills-container');
+            if (container) {
+                container.contentEditable = 'true';
+                container.inputMode = 'text';
+                if (document.activeElement !== container) {
+                    container.focus();
+                }
+            }
+        }, 100);
+    } else {
+        // Desktop behavior - normal finish typing
+        textInput.finishTyping(false);
+    }
 }
 
 /**
@@ -1306,31 +1317,72 @@ function finishTypingFromKeyboard() {
  */
 function finishTypingWithKeyboardFix(keepKeyboard) {
     const isMobile = CursorManager.isMobileDevice();
-    const shouldKeepKeyboard = keepKeyboard && isMobile;
     
-    console.log('finishTypingWithKeyboardFix:', {
-        keepKeyboard,
-        isMobile,
-        shouldKeepKeyboard,
-        isTyping: textInput.typing
-    });
+    // On mobile, always try to keep keyboard open, regardless of the keepKeyboard parameter
+    const shouldKeepKeyboard = isMobile ? true : keepKeyboard;
     
     // Call the original finishTyping method
-    textInput.finishTyping(keepKeyboard);
+    textInput.finishTyping(shouldKeepKeyboard);
     
-    // If we should keep the keyboard open on mobile, ensure it stays open after DOM updates
-    if (shouldKeepKeyboard) {
-        // Wait for any DOM updates to complete, then re-establish focus
+    // On mobile, ensure focus is maintained after any DOM updates
+    if (isMobile) {
         setTimeout(() => {
             const container = document.getElementById('tune-pills-container');
-            if (container) {
-                console.log('Re-establishing keyboard focus after DOM update');
+            if (container && document.activeElement !== container) {
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
                 container.focus();
             }
-        }, 50); // Shorter timeout than the original 300ms for better responsiveness
+        }, 150); // Wait for DOM updates and original textInput timeout
     }
+}
+
+/**
+ * Set up mobile keyboard management to ensure keyboard stays visible
+ */
+function setupMobileKeyboardManagement() {
+    if (!CursorManager.isMobileDevice()) {
+        return; // Only needed on mobile
+    }
+    
+    const container = document.getElementById('tune-pills-container');
+    if (!container) {
+        return;
+    }
+    
+    // Monitor for blur events and restore focus if cursor is still active
+    container.addEventListener('blur', function() {
+        // Small delay to check if we should restore focus
+        setTimeout(() => {
+            const cursorPosition = CursorManager.getCursorPosition();
+            if (cursorPosition && !textInput.typing) {
+                // Cursor is active but container lost focus - restore it
+                container.contentEditable = 'true';
+                container.inputMode = 'text';
+                container.focus();
+            }
+        }, 50);
+    });
+    
+    // Monitor for DOM changes that might reset contentEditable
+    const observer = new MutationObserver(() => {
+        const cursorPosition = CursorManager.getCursorPosition();
+        if (cursorPosition && container.contentEditable !== 'true') {
+            // Container was reset but cursor is still active
+            container.contentEditable = 'true';
+            container.inputMode = 'text';
+            if (document.activeElement !== container) {
+                container.focus();
+            }
+        }
+    });
+    
+    observer.observe(container, {
+        attributes: true,
+        attributeFilter: ['contenteditable'],
+        childList: true,
+        subtree: true
+    });
 }
 
 /**
