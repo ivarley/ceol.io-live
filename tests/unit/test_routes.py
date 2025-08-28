@@ -477,16 +477,34 @@ class TestAdminRoutes:
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Mock active sessions query
-        # Use timezone-aware datetime objects
+        # Mock sessions query - must match all 21 columns from admin_sessions_list query
         start_time = now_utc().replace(
             year=2023, month=8, day=15, hour=10, minute=0, second=0, microsecond=0
         )
-        end_time = now_utc().replace(
-            year=2023, month=8, day=15, hour=12, minute=0, second=0, microsecond=0
-        )
         mock_cursor.fetchall.return_value = [
-            (1, "Test", "User", start_time, end_time, "127.0.0.1")
+            (
+                1,  # session_id
+                101,  # thesession_id
+                "Test Session",  # name
+                "test-session",  # path
+                "Test Location",  # location_name
+                "123 Test St",  # location_street
+                "Test City",  # city
+                "TX",  # state
+                "USA",  # country
+                "America/Chicago",  # timezone
+                "Test comments",  # comments
+                False,  # unlisted_address
+                start_time.date(),  # initiation_date
+                None,  # termination_date
+                "weekly",  # recurrence
+                start_time,  # created_date
+                start_time,  # last_modified_date
+                5,  # instance_count
+                10,  # total_players
+                3,  # regular_players
+                start_time.date(),  # latest_instance_date
+            )
         ]
 
         with patch("web_routes.current_user", admin_user):
@@ -495,7 +513,7 @@ class TestAdminRoutes:
         # May still require proper authentication context, so accept various responses
         assert response.status_code in [200, 302]
         if response.status_code == 200:
-            assert b"Test User" in response.data
+            assert b"Test Session" in response.data
 
 
 class TestErrorHandlers:

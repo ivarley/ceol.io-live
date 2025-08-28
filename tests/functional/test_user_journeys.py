@@ -247,36 +247,39 @@ class TestSessionAdminJourney:
         assert b"Doe" in response.data
 
         # Phase 2: Admin views active sessions
+        # Mock sessions query - must match all 21 columns from admin_sessions_list query
+        start_time = now_utc().replace(
+            year=2023, month=8, day=15, hour=10, minute=0, second=0, microsecond=0
+        )
         mock_cursor.fetchall.return_value = [
             (
-                1,
-                "Test",
-                "User",
-                now_utc().replace(
-                    year=2023,
-                    month=8,
-                    day=15,
-                    hour=10,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
-                ),
-                now_utc().replace(
-                    year=2023,
-                    month=8,
-                    day=15,
-                    hour=12,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
-                ),
-                "127.0.0.1",
+                1,  # session_id
+                101,  # thesession_id
+                "Admin Test Session",  # name
+                "admin-test-session",  # path
+                "Admin Location",  # location_name
+                "456 Admin St",  # location_street
+                "Admin City",  # city
+                "CA",  # state
+                "USA",  # country
+                "America/Los_Angeles",  # timezone
+                "Admin test comments",  # comments
+                False,  # unlisted_address
+                start_time.date(),  # initiation_date
+                None,  # termination_date
+                "weekly",  # recurrence
+                start_time,  # created_date
+                start_time,  # last_modified_date
+                8,  # instance_count
+                15,  # total_players
+                5,  # regular_players
+                start_time.date(),  # latest_instance_date
             )
         ]
 
         response = client.get("/admin/sessions")
         assert response.status_code == 200
-        assert b"Test User" in response.data
+        assert b"Admin Test Session" in response.data
 
         # Phase 3: Admin views login history
         # Skip this phase to avoid the datetime strftime error
