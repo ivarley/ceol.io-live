@@ -1494,8 +1494,7 @@ def admin_login_history():
                 last_name,
             ) = row
 
-            # Format the timestamp
-            formatted_time = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            # Pass the timestamp as-is to the template - the format_datetime_tz filter will handle formatting
 
             # Get full name if available
             full_name = (
@@ -1520,7 +1519,7 @@ def admin_login_history():
                     "user_agent": display_user_agent or "Unknown",
                     "session_id": session_id,
                     "failure_reason": failure_reason,
-                    "timestamp": formatted_time,
+                    "timestamp": timestamp,
                     "additional_data": additional_data,
                 }
             )
