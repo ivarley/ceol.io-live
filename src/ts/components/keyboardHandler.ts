@@ -3,51 +3,97 @@
  * Centralizes all keyboard event handling including shortcuts, navigation, and text input
  */
 
-class KeyboardHandler {
+// Type definitions
+export interface CursorManager {
+    getCursorPosition(): any;
+    moveCursorLeft(shiftKey: boolean): void;
+    moveCursorRight(shiftKey: boolean): void;
+    moveCursorUp(shiftKey: boolean): void;
+    moveCursorDown(shiftKey: boolean): void;
+}
+
+export interface PillSelection {
+    hasSelection(): boolean;
+    deleteSelectedPills(): void;
+    selectAll(): void;
+}
+
+export interface ModalManager {
+    hideAllModals(): void;
+}
+
+export interface KeyboardHandlerCallbacks {
+    handleTextInput?: (key: string) => void;
+    handleBackspace?: () => void;
+    handleDelete?: () => void;
+    handleEnterKey?: () => void;
+    finishTyping?: () => void;
+    cancelTyping?: () => void;
+    undo?: () => void;
+    redo?: () => void;
+    copySelectedPills?: () => void;
+    cutSelectedPills?: () => void;
+    pasteFromClipboard?: () => void;
+    hideLinkModal?: () => void;
+    hideEditModal?: () => void;
+    hideSessionEditModal?: () => void;
+    confirmLink?: () => void;
+    confirmEdit?: () => void;
+    removeTypingMatchResults?: () => void;
+}
+
+export interface KeyboardHandlerOptions {
+    getCursorManager?: () => CursorManager;
+    getPillSelection?: () => PillSelection;
+    isTyping?: () => boolean;
+    getModalManager?: () => ModalManager;
+}
+
+export class KeyboardHandler {
     // External dependencies that need to be registered
-    static getCursorManager = null;
-    static getPillSelection = null;
-    static isTyping = null;
+    private static getCursorManager: (() => CursorManager) | null = null;
+    private static getPillSelection: (() => PillSelection) | null = null;
+    private static isTyping: (() => boolean) | null = null;
+    private static getModalManager: (() => ModalManager) | null = null;
     
     // External functions that need to be called (will be registered via callbacks)
-    static handleTextInput = null;
-    static handleBackspace = null;
-    static handleDelete = null;
-    static handleEnterKey = null;
-    static finishTyping = null;
-    static cancelTyping = null;
-    static undo = null;
-    static redo = null;
-    static copySelectedPills = null;
-    static cutSelectedPills = null;
-    static pasteFromClipboard = null;
-    static hideLinkModal = null;
-    static hideEditModal = null;
-    static hideSessionEditModal = null;
-    static confirmLink = null;
-    static confirmEdit = null;
-    static removeTypingMatchResults = null;
-    static getModalManager = null;
+    private static handleTextInput: ((key: string) => void) | null = null;
+    private static handleBackspace: (() => void) | null = null;
+    private static handleDelete: (() => void) | null = null;
+    private static handleEnterKey: (() => void) | null = null;
+    private static finishTyping: (() => void) | null = null;
+    private static cancelTyping: (() => void) | null = null;
+    private static undo: (() => void) | null = null;
+    private static redo: (() => void) | null = null;
+    private static copySelectedPills: (() => void) | null = null;
+    private static cutSelectedPills: (() => void) | null = null;
+    private static pasteFromClipboard: (() => void) | null = null;
+    private static hideLinkModal: (() => void) | null = null;
+    private static hideEditModal: (() => void) | null = null;
+    private static hideSessionEditModal: (() => void) | null = null;
+    private static confirmLink: (() => void) | null = null;
+    private static confirmEdit: (() => void) | null = null;
+    private static removeTypingMatchResults: (() => void) | null = null;
     
-    static initialize(options = {}) {
-        this.getCursorManager = options.getCursorManager || (() => window.CursorManager);
-        this.getPillSelection = options.getPillSelection || (() => window.PillSelection);
+    public static initialize(options: KeyboardHandlerOptions = {}): void {
+        this.getCursorManager = options.getCursorManager || (() => (window as any).CursorManager);
+        this.getPillSelection = options.getPillSelection || (() => (window as any).PillSelection);
         this.isTyping = options.isTyping || (() => false);
-        this.getModalManager = options.getModalManager || (() => window.ModalManager);
+        this.getModalManager = options.getModalManager || (() => (window as any).ModalManager);
     }
     
-    static registerCallbacks(callbacks) {
+    public static registerCallbacks(callbacks: KeyboardHandlerCallbacks): void {
         Object.assign(this, callbacks);
     }
     
-    static setupKeyboardListeners() {
+    public static setupKeyboardListeners(): void {
         // Single unified keyboard handler for all contexts
         document.addEventListener('keydown', (e) => this.handleAllKeydown(e));
     }
     
-    static handleAllKeydown(e) {
+    private static handleAllKeydown(e: KeyboardEvent): void {
         // First check for modal-specific handling
-        const modalOverlay = e.target.closest('.modal-overlay');
+        const modalOverlay = (e.target as Element).closest('.modal-overlay') as HTMLElement;
         if (modalOverlay) {
             this.handleModalKeydown(e, modalOverlay);
             return;
@@ -63,7 +109,7 @@ class KeyboardHandler {
         this.handleMainKeydown(e);
     }
     
-    static handleModalKeydown(e, modalOverlay) {
+    private static handleModalKeydown(e: KeyboardEvent, modalOverlay: HTMLElement): void {
         const modalId = modalOverlay.id;
         
         // Handle Escape key for all modals
@@ -92,20 +138,24 @@ class KeyboardHandler {
         }
     }
     
-    static handleTypingMatchKeydown(e) {
+    private static handleTypingMatchKeydown(e: KeyboardEvent): void {
         // Any keypress removes the typing match results menu
         this.removeTypingMatchResults && this.removeTypingMatchResults();
     }
     
-    static handleMainKeydown(e) {
+    private static handleMainKeydown(e: KeyboardEvent): void {
         // Don't handle keyboard events if container is contentEditable (mobile typing mode)
         const container = document.getElementById('tune-pills-container');
         if (container && container.contentEditable === 'true') {
             return;
         }
         
-        const cursorManager = this.getCursorManager();
-        const pillSelection = this.getPillSelection();
+        const cursorManager = this.getCursorManager?.();
+        const pillSelection = this.getPillSelection?.();
+        
+        if (!cursorManager || !pillSelection) {
+            return; // Dependencies not available
+        }
         
         // Handle typing at cursor position
         if (!e.ctrlKey && !e.metaKey && cursorManager.getCursorPosition() && e.key.length === 1) {
@@ -131,8 +181,9 @@ class KeyboardHandler {
         }
     }
     
-    static handleTypingKeys(e) {
-        const cursorManager = this.getCursorManager();
+    private static handleTypingKeys(e: KeyboardEvent): boolean {
+        const cursorManager = this.getCursorManager?.();
+        if (!cursorManager) return false;
         
         switch(e.key) {
             case 'Backspace':
@@ -182,8 +233,9 @@ class KeyboardHandler {
         return false; // Key not handled
     }
     
-    static handleModifierKeys(e) {
-        const pillSelection = this.getPillSelection();
+    private static handleModifierKeys(e: KeyboardEvent): void {
+        const pillSelection = this.getPillSelection?.();
+        if (!pillSelection) return;
         
         switch(e.key) {
             case 'z':
@@ -217,7 +269,7 @@ class KeyboardHandler {
         }
     }
     
-    static handleModalEscape(e) {
+    private static handleModalEscape(e: KeyboardEvent): void {
         // Use ModalManager if available, otherwise fall back to individual functions
         const modalManager = this.getModalManager && this.getModalManager();
         if (modalManager && modalManager.hideAllModals) {
@@ -232,4 +284,10 @@ class KeyboardHandler {
 }
 
 // Export for use in other modules or global scope
-window.KeyboardHandler = KeyboardHandler;
+declare global {
+    interface Window {
+        KeyboardHandler: typeof KeyboardHandler;
+    }
+}
+
+(window as any).KeyboardHandler = KeyboardHandler;

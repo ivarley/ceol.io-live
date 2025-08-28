@@ -4,6 +4,7 @@ module.exports = {
   entry: {
     'stateManager': './src/ts/components/stateManager.ts',
     'undoRedoManager': './src/ts/components/undoRedoManager.ts',
+    'keyboardHandler': './src/ts/components/keyboardHandler.ts',
     // Add other modules as we convert them
   },
   module: {
