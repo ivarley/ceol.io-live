@@ -365,7 +365,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/components/modalManager.js"></script>
+<script src="/static/js/dist/modalManager.js"></script>
 <script>
     const sessionPath = '{{ session.path }}';
     const sessionRecurrence = {{ session.recurrence|tojson if session.recurrence else 'null' }};
