@@ -51,23 +51,23 @@
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation**
 
 ### Contract Tests
-- [ ] T004 [P] Contract test GET /api/session_instance/{id}/attendees in tests/contract/test_get_attendees.py
-- [ ] T005 [P] Contract test POST /api/session_instance/{id}/attendees/checkin in tests/contract/test_checkin_attendee.py
-- [ ] T006 [P] Contract test POST /api/person in tests/contract/test_create_person.py
-- [ ] T007 [P] Contract test GET /api/person/{id}/instruments in tests/contract/test_get_instruments.py
-- [ ] T008 [P] Contract test PUT /api/person/{id}/instruments in tests/contract/test_update_instruments.py
-- [ ] T009 [P] Contract test DELETE /api/session_instance/{id}/attendees/{person_id} in tests/contract/test_remove_attendee.py
-- [ ] T010 [P] Contract test GET /api/session/{id}/people/search in tests/contract/test_search_people.py
+- [x] T004 [P] Contract test GET /api/session_instance/{id}/attendees in tests/contract/test_get_attendees.py
+- [x] T005 [P] Contract test POST /api/session_instance/{id}/attendees/checkin in tests/contract/test_checkin_attendee.py
+- [x] T006 [P] Contract test POST /api/person in tests/contract/test_create_person.py
+- [x] T007 [P] Contract test GET /api/person/{id}/instruments in tests/contract/test_get_instruments.py
+- [x] T008 [P] Contract test PUT /api/person/{id}/instruments in tests/contract/test_update_instruments.py
+- [x] T009 [P] Contract test DELETE /api/session_instance/{id}/attendees/{person_id} in tests/contract/test_remove_attendee.py
+- [x] T010 [P] Contract test GET /api/session/{id}/people/search in tests/contract/test_search_people.py
 
 ### Integration Tests
-- [ ] T011 [P] Integration test for viewing session attendance with permissions in tests/integration/test_attendance_permissions.py
-- [ ] T012 [P] Integration test for regular attendee self check-in in tests/integration/test_self_checkin.py
-- [ ] T013 [P] Integration test for admin adding new person with instruments in tests/integration/test_add_new_person.py
-- [ ] T014 [P] Integration test for searching and adding existing attendees in tests/integration/test_search_add_attendee.py
+- [x] T011 [P] Integration test for viewing session attendance with permissions in tests/integration/test_attendance_permissions.py
+- [x] T012 [P] Integration test for regular attendee self check-in in tests/integration/test_self_checkin.py
+- [x] T013 [P] Integration test for admin adding new person with instruments in tests/integration/test_add_new_person.py
+- [x] T014 [P] Integration test for searching and adding existing attendees in tests/integration/test_search_add_attendee.py
 
 ### Functional Tests
-- [ ] T015 [P] End-to-end test for complete attendance workflow in tests/functional/test_attendance_flow.py
-- [ ] T016 [P] End-to-end test for person management and instruments in tests/functional/test_person_management.py
+- [x] T015 [P] End-to-end test for complete attendance workflow in tests/functional/test_attendance_flow.py
+- [x] T016 [P] End-to-end test for person management and instruments in tests/functional/test_person_management.py
 
 ## Phase 3.3: Core Implementation (ONLY after tests are failing)
 
