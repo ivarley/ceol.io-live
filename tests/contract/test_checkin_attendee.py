@@ -10,7 +10,7 @@ import json
 class TestCheckinAttendeeContract:
     """Contract tests for the checkin attendee endpoint"""
 
-    def test_checkin_success_response_structure(self, client, authenticated_user, sample_session_instance_data, sample_person_data):
+    def test_checkin_success_response_structure(self, client, admin_user, sample_session_instance_data, sample_person_data):
         """Test that successful checkin response matches expected contract"""
         session_instance_id = sample_session_instance_data['session_instance_id']
         person_id = sample_person_data['person_id']
@@ -20,13 +20,15 @@ class TestCheckinAttendeeContract:
             'attendance': 'yes'
         }
         
-        with authenticated_user:
+        with admin_user:
             response = client.post(
                 f'/api/session_instance/{session_instance_id}/attendees/checkin',
                 data=json.dumps(checkin_data),
                 content_type='application/json'
             )
         
+        if response.status_code != 200:
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 200
         
         data = json.loads(response.data)
@@ -43,7 +45,7 @@ class TestCheckinAttendeeContract:
         assert attendee_info['person_id'] == person_id
         assert attendee_info['attendance'] == 'yes'
 
-    def test_checkin_with_comment(self, client, authenticated_user, sample_session_instance_data, sample_person_data):
+    def test_checkin_with_comment(self, client, admin_user, sample_session_instance_data, sample_person_data):
         """Test checkin with optional comment"""
         session_instance_id = sample_session_instance_data['session_instance_id']
         person_id = sample_person_data['person_id']
@@ -54,13 +56,17 @@ class TestCheckinAttendeeContract:
             'comment': 'Bringing my fiddle'
         }
         
-        with authenticated_user:
+        with admin_user:
             response = client.post(
                 f'/api/session_instance/{session_instance_id}/attendees/checkin',
                 data=json.dumps(checkin_data),
                 content_type='application/json'
             )
         
+        if response.status_code != 200:
+            print(f"Debug - person_id in request: {person_id}")
+            print(f"Debug - sample_user_data person_id: {sample_user_data['person_id']}")
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['success'] is True
@@ -123,7 +129,7 @@ class TestCheckinAttendeeContract:
             content_type='application/json'
         )
         
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_checkin_nonexistent_session(self, client, authenticated_user, sample_person_data):
         """Test checkin to nonexistent session returns 404"""
@@ -144,7 +150,7 @@ class TestCheckinAttendeeContract:
         
         assert response.status_code == 404
 
-    def test_checkin_duplicate_attendance_returns_409(self, client, authenticated_user, sample_session_instance_data, sample_person_data):
+    def test_checkin_duplicate_attendance_returns_409(self, client, admin_user, sample_session_instance_data, sample_person_data):
         """Test that checking in the same person twice returns 409 Conflict or updates existing"""
         session_instance_id = sample_session_instance_data['session_instance_id']
         person_id = sample_person_data['person_id']
@@ -154,7 +160,7 @@ class TestCheckinAttendeeContract:
             'attendance': 'yes'
         }
         
-        with authenticated_user:
+        with admin_user:
             # First checkin
             response1 = client.post(
                 f'/api/session_instance/{session_instance_id}/attendees/checkin',

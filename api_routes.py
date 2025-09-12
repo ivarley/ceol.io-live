@@ -4473,9 +4473,9 @@ def check_in_person(session_instance_id):
         # Get current user's admin status for this session
         cur.execute(
             """
-            SELECT sp.is_session_admin 
-            FROM session_person sp 
-            WHERE sp.session_id = %s AND sp.person_id = %s
+            SELECT is_admin 
+            FROM session_person 
+            WHERE session_id = %s AND person_id = %s
             """,
             (session_id, current_person_id)
         )
@@ -4510,19 +4510,49 @@ def check_in_person(session_instance_id):
         if not success:
             return jsonify({"success": False, "message": message}), 500
         
-        # Get person's name for response
-        person_name = f"{person_result[1]} {person_result[2]}"
+        # Get full attendee information for response (as per test contract)
+        conn = get_db_connection()
+        cur = conn.cursor()
         
-        return jsonify({
-            "success": True,
-            "message": f"Successfully {action} attendance for {person_name}",
-            "data": {
-                "person_id": person_id,
-                "attendance": attendance,
-                "comment": comment,
-                "action": action
-            }
-        })
+        try:
+            # Get person details and instruments
+            cur.execute("""
+                SELECT p.person_id, p.first_name, p.last_name, p.email,
+                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       COALESCE(
+                           array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                           '{}'::text[]
+                       ) as instruments
+                FROM person p
+                LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
+                LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+                WHERE p.person_id = %s
+                GROUP BY p.person_id, p.first_name, p.last_name, p.email, sp.is_regular
+            """, (session_id, person_id))
+            
+            attendee_data = cur.fetchone()
+            if not attendee_data:
+                return jsonify({"success": False, "message": "Person not found"}), 404
+            
+            # Format display name
+            first_name, last_name = attendee_data[1], attendee_data[2]
+            display_name = f"{first_name} {last_name}".strip()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully {action} attendance for {display_name}",
+                "data": {
+                    "person_id": attendee_data[0],
+                    "display_name": display_name,
+                    "instruments": list(attendee_data[5]),
+                    "attendance": attendance,
+                    "is_regular": attendee_data[4]
+                }
+            })
+            
+        finally:
+            cur.close()
+            conn.close()
             
     except Exception as e:
         if 'conn' in locals():
@@ -4634,13 +4664,8 @@ def create_person_with_instruments():
             save_to_history(
                 cur,
                 'person',
-                {
-                    'person_id': person_id,
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'email': email
-                },
                 'INSERT',
+                person_id,
                 current_user.user_id
             )
             
@@ -4658,11 +4683,8 @@ def create_person_with_instruments():
                 save_to_history(
                     cur,
                     'person_instrument',
-                    {
-                        'person_id': person_id,
-                        'instrument': instrument
-                    },
                     'INSERT',
+                    (person_id, instrument),
                     current_user.user_id
                 )
             
@@ -5015,9 +5037,9 @@ def remove_person_attendance(session_instance_id, person_id):
         # Get current user's admin status for this session
         cur.execute(
             """
-            SELECT sp.is_session_admin 
-            FROM session_person sp 
-            WHERE sp.session_id = %s AND sp.person_id = %s
+            SELECT is_admin 
+            FROM session_person 
+            WHERE session_id = %s AND person_id = %s
             """,
             (session_id, current_person_id)
         )
@@ -5169,7 +5191,7 @@ def search_session_people(session_id):
                 -- Get all people who have been associated with this session
                 SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
                        COALESCE(sp.is_regular, FALSE) as is_regular,
-                       sp.is_session_admin
+                       COALESCE(sp.is_admin, FALSE) as is_session_admin
                 FROM person p
                 LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
                 LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id

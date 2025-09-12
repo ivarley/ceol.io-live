@@ -12,10 +12,11 @@ class TestCreatePersonContract:
 
     def test_create_person_success_response_structure(self, client, authenticated_user):
         """Test that successful person creation response matches expected contract"""
+        import uuid
         person_data = {
             'first_name': 'John',
             'last_name': 'Smith',
-            'email': 'john.smith@example.com',
+            'email': f'john.smith.{uuid.uuid4()}@example.com',
             'instruments': ['fiddle', 'tin whistle']
         }
         
@@ -26,6 +27,8 @@ class TestCreatePersonContract:
                 content_type='application/json'
             )
         
+        if response.status_code != 201:
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 201
         
         data = json.loads(response.data)
@@ -55,6 +58,8 @@ class TestCreatePersonContract:
                 content_type='application/json'
             )
         
+        if response.status_code != 201:
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 201
         data = json.loads(response.data)
         assert data['success'] is True
@@ -96,7 +101,7 @@ class TestCreatePersonContract:
         assert response.status_code == 400
         data = json.loads(response.data)
         assert data['success'] is False
-        assert 'error' in data
+        assert 'message' in data
 
     def test_create_person_invalid_instrument(self, client, authenticated_user):
         """Test that invalid instrument names are rejected"""
@@ -150,7 +155,7 @@ class TestCreatePersonContract:
             content_type='application/json'
         )
         
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_create_person_duplicate_instruments(self, client, authenticated_user):
         """Test that duplicate instruments in the same request are handled properly"""

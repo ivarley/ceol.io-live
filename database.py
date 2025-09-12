@@ -141,8 +141,8 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
         cur.execute(
             """
             INSERT INTO session_instance_person_history
-            (session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
-            SELECT session_instance_id, person_id, attendance, comment, %s, %s, (NOW() AT TIME ZONE 'UTC'), created_date
+            (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
+            SELECT session_instance_person_id, session_instance_id, person_id, attendance, comment, %s, %s, (NOW() AT TIME ZONE 'UTC'), created_date
             FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s
         """,
             (operation, changed_by, session_instance_id, person_id),
@@ -373,12 +373,14 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
         existing_record = cur.fetchone()
         
         if existing_record:
-            # Update existing record
+            # Get the session_instance_person_id for history logging
             cur.execute("""
-                UPDATE session_instance_person 
-                SET attendance = %s, comment = %s, modified_date = (NOW() AT TIME ZONE 'UTC')
+                SELECT session_instance_person_id 
+                FROM session_instance_person 
                 WHERE session_instance_id = %s AND person_id = %s
-            """, (attendance, comment, session_instance_id, person_id))
+            """, (session_instance_id, person_id))
+            
+            existing_id = cur.fetchone()[0]
             
             # Log to history before update
             save_to_history(
@@ -389,20 +391,30 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
                 changed_by
             )
             
+            # Update existing record
+            cur.execute("""
+                UPDATE session_instance_person 
+                SET attendance = %s, comment = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                WHERE session_instance_id = %s AND person_id = %s
+            """, (attendance, comment, session_instance_id, person_id))
+            
             action = "updated"
         else:
             # Insert new record
             cur.execute("""
                 INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                RETURNING session_instance_person_id
             """, (session_instance_id, person_id, attendance, comment))
+            
+            new_record_id = cur.fetchone()[0]
             
             # Log INSERT to history (manually since record was just created)
             cur.execute("""
                 INSERT INTO session_instance_person_history
-                (session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
-                VALUES (%s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (session_instance_id, person_id, attendance, comment, 'INSERT', changed_by))
+                (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
+            """, (new_record_id, session_instance_id, person_id, attendance, comment, 'INSERT', changed_by))
             
             action = "added"
         

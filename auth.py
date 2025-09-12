@@ -320,7 +320,7 @@ def is_session_regular(person_id, session_id):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT 1 FROM session_regular 
+            SELECT 1 FROM session_person 
             WHERE person_id = %s AND session_id = %s
         """,
             (person_id, session_id)
@@ -346,7 +346,7 @@ def is_session_admin(person_id, session_id):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT 1 FROM session_regular 
+            SELECT 1 FROM session_person 
             WHERE person_id = %s AND session_id = %s AND is_admin = true
         """,
             (person_id, session_id)

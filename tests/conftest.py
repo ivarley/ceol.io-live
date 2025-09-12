@@ -111,7 +111,7 @@ def sample_user_data():
     """Sample user data for testing."""
     return {
         "user_id": 1,
-        "person_id": 1,
+        "person_id": 2,  # Match the sample_person_data person_id for self check-in tests
         "username": "testuser",
         "email": "test@example.com",
         "first_name": "Test",
@@ -195,19 +195,45 @@ def sample_session_instance_data():
 
 
 @pytest.fixture
+def sample_person_data():
+    """Sample person data for testing."""
+    return {
+        "person_id": 2,
+        "first_name": "Test",
+        "last_name": "Person",
+        "email": "testperson@example.com",
+    }
+
+
+@pytest.fixture
 def authenticated_user(client, sample_user_data):
     """Create an authenticated user session."""
-    with patch("auth.User.get_by_username") as mock_get_user:
-        user = User(**sample_user_data)
-        mock_get_user.return_value = user
+    class AuthenticatedUserContext:
+        def __init__(self, client, user_data):
+            self.client = client
+            self.user_data = user_data
+            self.user = None
+            self.mock_get_user = None
+            
+        def __enter__(self):
+            self.mock_get_user = patch("auth.User.get_by_username")
+            mock_get_user = self.mock_get_user.start()
+            self.user = User(**self.user_data)
+            mock_get_user.return_value = self.user
 
-        with client.session_transaction() as sess:
-            sess["_user_id"] = str(sample_user_data["user_id"])
-            sess["_fresh"] = True
-            sess["is_system_admin"] = sample_user_data["is_system_admin"]
-            sess["admin_session_ids"] = []
-
-        yield user
+            with self.client.session_transaction() as sess:
+                sess["_user_id"] = str(self.user_data["user_id"])
+                sess["_fresh"] = True
+                sess["is_system_admin"] = self.user_data["is_system_admin"]
+                sess["admin_session_ids"] = []
+                
+            return self.user
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.mock_get_user:
+                self.mock_get_user.stop()
+    
+    return AuthenticatedUserContext(client, sample_user_data)
 
 
 @pytest.fixture
@@ -218,17 +244,32 @@ def admin_user(client, sample_user_data):
     admin_data["username"] = "admin"
     admin_data["user_id"] = 2
 
-    with patch("auth.User.get_by_username") as mock_get_user:
-        user = User(**admin_data)
-        mock_get_user.return_value = user
+    class AuthenticatedAdminContext:
+        def __init__(self, client, user_data):
+            self.client = client
+            self.user_data = user_data
+            self.user = None
+            self.mock_get_user = None
+            
+        def __enter__(self):
+            self.mock_get_user = patch("auth.User.get_by_username")
+            mock_get_user = self.mock_get_user.start()
+            self.user = User(**self.user_data)
+            mock_get_user.return_value = self.user
 
-        with client.session_transaction() as sess:
-            sess["_user_id"] = str(admin_data["user_id"])
-            sess["_fresh"] = True
-            sess["is_system_admin"] = True
-            sess["admin_session_ids"] = [1, 2, 3]
-
-        yield user
+            with self.client.session_transaction() as sess:
+                sess["_user_id"] = str(self.user_data["user_id"])
+                sess["_fresh"] = True
+                sess["is_system_admin"] = True
+                sess["admin_session_ids"] = [1, 2, 3]
+                
+            return self.user
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.mock_get_user:
+                self.mock_get_user.stop()
+    
+    return AuthenticatedAdminContext(client, admin_data)
 
 
 @pytest.fixture
