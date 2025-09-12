@@ -43,9 +43,9 @@
 - Tests in `tests/` with subdirectories for unit/integration/functional
 
 ## Phase 3.1: Database Setup
-- [ ] T001 Create person_instrument table migration in schema/create_person_instrument_table.sql
-- [ ] T002 Create person_instrument history table migration in schema/create_person_instrument_history_table.sql
-- [ ] T003 Apply database migrations to test database
+- [x] T001 Create person_instrument table migration in schema/create_person_instrument_table.sql
+- [x] T002 Create person_instrument history table migration in schema/create_person_instrument_history_table.sql
+- [x] T003 Apply database migrations to test database
 
 ## Phase 3.2: Tests First (TDD) ⚠️ MUST COMPLETE BEFORE 3.3
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation**
