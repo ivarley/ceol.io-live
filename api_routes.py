@@ -4343,6 +4343,8 @@ def get_session_attendees(session_instance_id):
             person_id, first_name, last_name, is_regular, is_admin, attendance, comment, instruments = row
             regulars.append({
                 'person_id': person_id,
+                'first_name': first_name,
+                'last_name': last_name,
                 'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
                 'instruments': instruments or [],
                 'attendance': attendance,
@@ -4379,6 +4381,8 @@ def get_session_attendees(session_instance_id):
             person_id, first_name, last_name, attendance, comment, is_admin, instruments = row
             attendees.append({
                 'person_id': person_id,
+                'first_name': first_name,
+                'last_name': last_name,
                 'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
                 'instruments': instruments or [],
                 'attendance': attendance,
@@ -4386,6 +4390,32 @@ def get_session_attendees(session_instance_id):
                 'is_admin': is_admin,
                 'comment': comment
             })
+        
+        # Combine all attendees for disambiguation
+        all_attendees = regulars + attendees
+        
+        # Handle display name disambiguation
+        display_name_counts = {}
+        for attendee in all_attendees:
+            display_name = attendee['display_name']
+            if display_name in display_name_counts:
+                display_name_counts[display_name].append(attendee)
+            else:
+                display_name_counts[display_name] = [attendee]
+        
+        # Apply disambiguation to duplicates
+        for display_name, attendees_with_name in display_name_counts.items():
+            if len(attendees_with_name) > 1:
+                # Sort by person_id for consistent disambiguation
+                attendees_with_name.sort(key=lambda x: x['person_id'])
+                for i, attendee in enumerate(attendees_with_name):
+                    # Add person_id for disambiguation
+                    attendee['display_name'] = f"{attendee['first_name']} {attendee['last_name'][0]} (#{attendee['person_id']})"
+        
+        # Remove temporary fields used for disambiguation
+        for attendee in all_attendees:
+            attendee.pop('first_name', None)
+            attendee.pop('last_name', None)
         
         cur.close()
         conn.close()
@@ -4628,9 +4658,18 @@ def create_person_with_instruments():
                 if normalized in valid_instruments and normalized not in normalized_instruments:
                     normalized_instruments.append(normalized)
         
-        # Get database connection
+        # Check if user has admin permissions (system admin can create people anywhere)
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Check if current user is a system admin
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
         
         # Check if person with same name already exists (for display name disambiguation)
         cur.execute(

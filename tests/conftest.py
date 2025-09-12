@@ -264,12 +264,19 @@ def authenticated_non_admin_user(client, sample_user_data):
             self.user_data = user_data
             self.user = None
             self.mock_get_user = None
+            # Set attributes that tests expect to be available outside context
+            self.person_id = user_data["person_id"]
+            self.user_id = user_data["user_id"]
             
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
+            
+            # Add attributes that tests expect
+            self.person_id = self.user_data["person_id"]
+            self.user_id = self.user_data["user_id"]
 
             with self.client.session_transaction() as sess:
                 sess["_user_id"] = str(self.user_data["user_id"])
@@ -306,12 +313,19 @@ def authenticated_user(client, sample_user_data):
             self.user_data = user_data
             self.user = None
             self.mock_get_user = None
+            # Set attributes that tests expect to be available outside context
+            self.person_id = user_data["person_id"]
+            self.user_id = user_data["user_id"]
             
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
+            
+            # Add attributes that tests expect
+            self.person_id = self.user_data["person_id"]
+            self.user_id = self.user_data["user_id"]
 
             with self.client.session_transaction() as sess:
                 sess["_user_id"] = str(self.user_data["user_id"])
@@ -342,12 +356,19 @@ def admin_user(client, sample_user_data):
             self.user_data = user_data
             self.user = None
             self.mock_get_user = None
+            # Set attributes that tests expect to be available outside context
+            self.person_id = user_data["person_id"]
+            self.user_id = user_data["user_id"]
             
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
+            
+            # Add attributes that tests expect
+            self.person_id = self.user_data["person_id"]
+            self.user_id = self.user_data["user_id"]
 
             with self.client.session_transaction() as sess:
                 sess["_user_id"] = str(self.user_data["user_id"])
@@ -362,6 +383,143 @@ def admin_user(client, sample_user_data):
                 self.mock_get_user.stop()
     
     return AuthenticatedAdminContext(client, admin_data)
+
+
+@pytest.fixture
+def authenticated_admin_user(client, sample_user_data):
+    """Create an authenticated admin user session - alias for admin_user for compatibility."""
+    # This is an alias for admin_user to maintain compatibility with existing tests
+    admin_data = sample_user_data.copy()
+    admin_data["is_system_admin"] = True
+    admin_data["username"] = "admin"
+    admin_data["user_id"] = 2
+
+    class AuthenticatedAdminContext:
+        def __init__(self, client, user_data):
+            self.client = client
+            self.user_data = user_data
+            self.user = None
+            self.mock_get_user = None
+            # Set attributes that tests expect to be available outside context
+            self.person_id = user_data["person_id"]
+            self.user_id = user_data["user_id"]
+            
+        def __enter__(self):
+            self.mock_get_user = patch("auth.User.get_by_id")
+            mock_get_user = self.mock_get_user.start()
+            self.user = User(**self.user_data)
+            mock_get_user.return_value = self.user
+            
+            # Add attributes that tests expect
+            self.person_id = self.user_data["person_id"]
+            self.user_id = self.user_data["user_id"]
+
+            with self.client.session_transaction() as sess:
+                sess["_user_id"] = str(self.user_data["user_id"])
+                sess["_fresh"] = True
+                sess["is_system_admin"] = True
+                sess["admin_session_ids"] = [1, 2, 3]
+                
+            return self.user
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.mock_get_user:
+                self.mock_get_user.stop()
+    
+    return AuthenticatedAdminContext(client, admin_data)
+
+
+@pytest.fixture
+def authenticated_regular_user(client, sample_user_data, sample_regular_attendee):
+    """Create an authenticated regular user session (non-admin)."""
+    # Use regular attendee data to ensure proper person_id matching
+    regular_data = sample_user_data.copy()
+    regular_data["is_system_admin"] = False  # Explicitly ensure non-admin
+    regular_data["username"] = "regular_user"
+    regular_data["user_id"] = 3
+    regular_data["person_id"] = sample_regular_attendee["person_id"]  # Use regular attendee person_id
+    regular_data["first_name"] = sample_regular_attendee["first_name"]
+    regular_data["last_name"] = sample_regular_attendee["last_name"]
+
+    class AuthenticatedUserContext:
+        def __init__(self, client, user_data):
+            self.client = client
+            self.user_data = user_data
+            self.user = None
+            self.mock_get_user = None
+            # Set attributes that tests expect to be available outside context
+            self.person_id = user_data["person_id"]
+            self.user_id = user_data["user_id"]
+            
+        def __enter__(self):
+            self.mock_get_user = patch("auth.User.get_by_id")
+            mock_get_user = self.mock_get_user.start()
+            self.user = User(**self.user_data)
+            mock_get_user.return_value = self.user
+            
+            # Add attributes that tests expect
+            self.person_id = self.user_data["person_id"]
+            self.user_id = self.user_data["user_id"]
+
+            with self.client.session_transaction() as sess:
+                sess["_user_id"] = str(self.user_data["user_id"])
+                sess["_fresh"] = True
+                sess["is_system_admin"] = self.user_data["is_system_admin"]
+                sess["admin_session_ids"] = []
+                
+            return self.user
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.mock_get_user:
+                self.mock_get_user.stop()
+    
+    return AuthenticatedUserContext(client, regular_data)
+
+
+@pytest.fixture
+def session_with_multiple_instances(sample_session_data):
+    """Create session data with multiple instances for testing."""
+    return {
+        "session_id": sample_session_data["session_id"],
+        "instances": [
+            {
+                "session_instance_id": 1,
+                "date": "2023-08-15",
+                "start_time": "19:00",
+                "end_time": "22:00"
+            },
+            {
+                "session_instance_id": 2, 
+                "date": "2023-08-22",
+                "start_time": "19:00",
+                "end_time": "22:00"
+            },
+            {
+                "session_instance_id": 3,
+                "date": "2023-08-29", 
+                "start_time": "19:00",
+                "end_time": "22:00"
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def multiple_sessions_data(sample_session_data):
+    """Create multiple session data for testing cross-session functionality."""
+    return {
+        "sessions": [
+            sample_session_data,
+            {
+                "session_id": sample_session_data["session_id"] + 1,
+                "name": "Another Test Session",
+                "path": "another-test-session",
+                "city": "Boston",
+                "state": "MA",
+                "country": "USA"
+            }
+        ]
+    }
 
 
 @pytest.fixture
