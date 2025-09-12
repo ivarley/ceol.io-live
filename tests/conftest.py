@@ -564,3 +564,55 @@ def freeze_time():
     test_time = datetime(2023, 8, 15, 12, 0, 0)
     with ft(test_time) as frozen_time:
         yield frozen_time
+
+
+@pytest.fixture
+def session_instance_user_not_associated(sample_session_data):
+    """Session instance that the authenticated user is NOT associated with."""
+    # Create a separate session instance that the user isn't associated with
+    return {
+        "session_instance_id": 999,  # Different from main test session instance
+        "session_id": 999,  # Different from main test session
+        "date": "2023-09-01",
+        "comments": "Test session user is not associated with"
+    }
+
+
+@pytest.fixture  
+def session_instance_with_user_attending(sample_session_instance_data, authenticated_user):
+    """Session instance where the authenticated user is already attending."""
+    # Return the same session instance, but the test should check in the user first
+    return sample_session_instance_data
+
+
+@pytest.fixture
+def multiple_session_instances(sample_session_data):
+    """Multiple session instances for testing permission inheritance."""
+    session_id = sample_session_data['session_id']
+    return {
+        "instances": [
+            {
+                "session_instance_id": sample_session_data.get('session_instance_id', 1),
+                "session_id": session_id,
+                "date": "2023-08-15",
+                "comments": "First instance"
+            },
+            {
+                "session_instance_id": 998,
+                "session_id": session_id, 
+                "date": "2023-08-22",
+                "comments": "Second instance"
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def different_session_instance():
+    """Session instance from a completely different session for isolation testing."""
+    return {
+        "session_instance_id": 997,
+        "session_id": 997,  # Different session entirely
+        "date": "2023-09-01",
+        "comments": "Different session for isolation testing"
+    }
