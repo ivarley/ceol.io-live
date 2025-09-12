@@ -47,6 +47,13 @@ class TestGetInstrumentsContract:
         person_id = sample_person_data['person_id']
         
         with admin_user:
+            # Clear instruments first to ensure empty state
+            client.put(
+                f'/api/person/{person_id}/instruments',
+                data=json.dumps({'instruments': []}),
+                content_type='application/json'
+            )
+            
             response = client.get(f'/api/person/{person_id}/instruments')
         
         assert response.status_code == 200

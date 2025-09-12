@@ -266,7 +266,7 @@ def authenticated_non_admin_user(client, sample_user_data):
             self.mock_get_user = None
             
         def __enter__(self):
-            self.mock_get_user = patch("auth.User.get_by_username")
+            self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
@@ -308,7 +308,7 @@ def authenticated_user(client, sample_user_data):
             self.mock_get_user = None
             
         def __enter__(self):
-            self.mock_get_user = patch("auth.User.get_by_username")
+            self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user
@@ -344,7 +344,7 @@ def admin_user(client, sample_user_data):
             self.mock_get_user = None
             
         def __enter__(self):
-            self.mock_get_user = patch("auth.User.get_by_username")
+            self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
             self.user = User(**self.user_data)
             mock_get_user.return_value = self.user

@@ -150,38 +150,6 @@ We missed an important criterion in our plan, which is that in addition to being
 
 ## Parallel Execution Examples
 
-### Parallel Test Creation (Phase 3.2)
-```bash
-# Launch T004-T010 together (contract tests):
-Task: "Contract test GET /api/session_instance/{id}/attendees in tests/contract/test_get_attendees.py"
-Task: "Contract test POST /api/session_instance/{id}/attendees/checkin in tests/contract/test_checkin_attendee.py"
-Task: "Contract test POST /api/person in tests/contract/test_create_person.py"
-Task: "Contract test GET /api/person/{id}/instruments in tests/contract/test_get_instruments.py"
-Task: "Contract test PUT /api/person/{id}/instruments in tests/contract/test_update_instruments.py"
-Task: "Contract test DELETE /api/session_instance/{id}/attendees/{person_id} in tests/contract/test_remove_attendee.py"
-Task: "Contract test GET /api/session/{id}/people/search in tests/contract/test_search_people.py"
-
-# Launch T011-T016 together (integration/functional tests):
-Task: "Integration test for viewing session attendance with permissions in tests/integration/test_attendance_permissions.py"
-Task: "Integration test for regular attendee self check-in in tests/integration/test_self_checkin.py"
-Task: "Integration test for admin adding new person with instruments in tests/integration/test_add_new_person.py"
-Task: "Integration test for searching and adding existing attendees in tests/integration/test_search_add_attendee.py"
-Task: "End-to-end test for complete attendance workflow in tests/functional/test_attendance_flow.py"
-Task: "End-to-end test for person management and instruments in tests/functional/test_person_management.py"
-```
-
-### Parallel Database Function Implementation (Phase 3.3)
-```bash
-# Launch T024-T030 together (database functions):
-Task: "Create get_session_attendees() function in database.py"
-Task: "Create check_in_person() function in database.py"
-Task: "Create create_person_with_instruments() function in database.py"
-Task: "Create get_person_instruments() function in database.py"
-Task: "Create update_person_instruments() function in database.py"
-Task: "Create remove_person_attendance() function in database.py"
-Task: "Create search_session_people() function in database.py"
-```
-
 ### Parallel CSS Development (Phase 3.4)
 ```bash
 # Launch T042-T044 together (CSS files):

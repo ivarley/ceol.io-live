@@ -5212,7 +5212,7 @@ def search_session_people(session_id):
             JOIN person_instruments pi ON sp.person_id = pi.person_id
             ORDER BY 
                 sp.is_regular DESC,  -- Regulars first
-                sp.display_name      -- Then alphabetical
+                display_name         -- Then alphabetical
             LIMIT %s
             """,
             (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern, limit)
