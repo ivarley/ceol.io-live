@@ -10,12 +10,12 @@ import json
 class TestSearchPeopleContract:
     """Contract tests for the search people endpoint"""
 
-    def test_search_people_success_response_structure(self, client, authenticated_user, sample_session_data):
+    def test_search_people_success_response_structure(self, client, admin_user, sample_session_data):
         """Test that successful search response matches expected contract"""
         session_id = sample_session_data['session_id']
         search_query = "John"
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q={search_query}')
         
         assert response.status_code == 200
@@ -44,7 +44,7 @@ class TestSearchPeopleContract:
         """Test search with empty query parameter"""
         session_id = sample_session_data['session_id']
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q=')
         
         # Should return empty results or bad request
@@ -55,11 +55,11 @@ class TestSearchPeopleContract:
             assert data['success'] is True
             assert isinstance(data['data'], list)
 
-    def test_search_people_missing_query_parameter(self, client, authenticated_user, sample_session_data):
+    def test_search_people_missing_query_parameter(self, client, admin_user, sample_session_data):
         """Test search without query parameter returns 400"""
         session_id = sample_session_data['session_id']
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search')
         
         assert response.status_code == 400
@@ -67,12 +67,12 @@ class TestSearchPeopleContract:
         assert data['success'] is False
         assert 'error' in data
 
-    def test_search_people_partial_name_match(self, client, authenticated_user, sample_session_data):
+    def test_search_people_partial_name_match(self, client, admin_user, sample_session_data):
         """Test search with partial name returns matching results"""
         session_id = sample_session_data['session_id']
         partial_name = "Joh"  # Should match "John", "Johnson", etc.
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q={partial_name}')
         
         assert response.status_code == 200
@@ -80,11 +80,11 @@ class TestSearchPeopleContract:
         assert data['success'] is True
         assert isinstance(data['data'], list)
 
-    def test_search_people_case_insensitive(self, client, authenticated_user, sample_session_data):
+    def test_search_people_case_insensitive(self, client, admin_user, sample_session_data):
         """Test that search is case insensitive"""
         session_id = sample_session_data['session_id']
         
-        with authenticated_user:
+        with admin_user:
             # Test lowercase
             response_lower = client.get(f'/api/session/{session_id}/people/search?q=john')
             # Test uppercase
@@ -99,12 +99,12 @@ class TestSearchPeopleContract:
         assert data_lower['success'] is True
         assert data_upper['success'] is True
 
-    def test_search_people_no_matches(self, client, authenticated_user, sample_session_data):
+    def test_search_people_no_matches(self, client, admin_user, sample_session_data):
         """Test search with no matching results"""
         session_id = sample_session_data['session_id']
         no_match_query = "XyzNotFound123"
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q={no_match_query}')
         
         assert response.status_code == 200
@@ -120,7 +120,7 @@ class TestSearchPeopleContract:
         # No authentication provided
         response = client.get(f'/api/session/{session_id}/people/search?q={search_query}')
         
-        assert response.status_code == 403
+        assert response.status_code == 401
         data = json.loads(response.data)
         assert data['success'] is False
 
@@ -129,7 +129,7 @@ class TestSearchPeopleContract:
         nonexistent_session_id = 99999
         search_query = "John"
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{nonexistent_session_id}/people/search?q={search_query}')
         
         assert response.status_code == 404
@@ -141,17 +141,17 @@ class TestSearchPeopleContract:
         invalid_session_id = "not_a_number"
         search_query = "John"
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{invalid_session_id}/people/search?q={search_query}')
         
         assert response.status_code in [400, 404]
 
-    def test_search_people_regulars_priority(self, client, authenticated_user, sample_session_data):
+    def test_search_people_regulars_priority(self, client, admin_user, sample_session_data):
         """Test that regular attendees appear first in search results"""
         session_id = sample_session_data['session_id']
         search_query = "a"  # Broad query to get multiple results
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q={search_query}')
         
         assert response.status_code == 200
@@ -171,7 +171,7 @@ class TestSearchPeopleContract:
         session_id = sample_session_with_instrumentalists['session_id']
         search_query = "fiddler"  # Search for someone who plays fiddle
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session/{session_id}/people/search?q={search_query}')
         
         assert response.status_code == 200

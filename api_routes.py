@@ -4299,20 +4299,20 @@ def can_view_attendance(session_instance_id, user_person_id):
 def get_session_attendees(session_instance_id):
     """Get attendance list for a session instance"""
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # First verify session instance exists (before checking permissions)
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        
         user_person_id = current_user.person_id if hasattr(current_user, 'person_id') else None
         
         # Check permissions
         if not can_view_attendance(session_instance_id, user_person_id):
             return jsonify({"success": False, "error": "Not authorized to view attendance"}), 403
-        
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Verify session instance exists
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        session_result = cur.fetchone()
-        if not session_result:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
         
         session_id = session_result[0]
         
@@ -4902,21 +4902,18 @@ def update_person_instruments(person_id):
             # Remove instruments no longer in the list
             instruments_to_remove = existing_instruments - new_instruments
             for instrument in instruments_to_remove:
-                cur.execute(
-                    "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
-                    (person_id, instrument)
-                )
-                
-                # Log removal to history
+                # Log removal to history (must be called before DELETE)
                 save_to_history(
                     cur,
                     'person_instrument',
-                    {
-                        'person_id': person_id,
-                        'instrument': instrument
-                    },
                     'DELETE',
+                    (person_id, instrument),
                     current_user_id
+                )
+                
+                cur.execute(
+                    "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
+                    (person_id, instrument)
                 )
             
             # Add new instruments
@@ -4934,11 +4931,8 @@ def update_person_instruments(person_id):
                 save_to_history(
                     cur,
                     'person_instrument',
-                    {
-                        'person_id': person_id,
-                        'instrument': instrument
-                    },
                     'INSERT',
+                    (person_id, instrument),
                     current_user_id
                 )
             
@@ -5062,24 +5056,19 @@ def remove_person_attendance(session_instance_id, person_id):
         cur.execute("BEGIN")
         
         try:
+            # Log removal to history (must be called before DELETE)
+            save_to_history(
+                cur,
+                'session_instance_person',
+                'DELETE',
+                (session_instance_id, person_id),
+                current_user_id
+            )
+            
             # Delete attendance record
             cur.execute(
                 "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
                 (session_instance_id, person_id)
-            )
-            
-            # Log removal to history
-            save_to_history(
-                cur,
-                'session_instance_person',
-                {
-                    'session_instance_id': session_instance_id,
-                    'person_id': person_id,
-                    'attendance': existing_record[0],
-                    'comment': existing_record[1]
-                },
-                'DELETE',
-                current_user_id
             )
             
             # Commit transaction

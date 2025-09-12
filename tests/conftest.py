@@ -206,6 +206,98 @@ def sample_person_data():
 
 
 @pytest.fixture
+def sample_regular_attendee():
+    """Sample regular attendee data for testing."""
+    return {
+        "person_id": 3,
+        "first_name": "Regular",
+        "last_name": "Player",
+        "email": "regular@example.com",
+        "is_regular": True,
+        "instruments": ["fiddle", "tin whistle"],
+    }
+
+
+@pytest.fixture
+def sample_person_no_instruments():
+    """Sample person data with no instruments for testing."""
+    return {
+        "person_id": 4,
+        "first_name": "No",
+        "last_name": "Instruments",
+        "email": "noinstruments@example.com",
+        "instruments": [],
+    }
+
+
+@pytest.fixture
+def sample_person_with_instruments():
+    """Sample person data with instruments for testing."""
+    return {
+        "person_id": 5,
+        "first_name": "Has",
+        "last_name": "Instruments",
+        "email": "hasinstruments@example.com",
+        "instruments": ["fiddle", "tin whistle"],
+    }
+
+
+@pytest.fixture
+def sample_person_with_multiple_instruments():
+    """Sample person data with multiple instruments for testing."""
+    return {
+        "person_id": 6,
+        "first_name": "Many",
+        "last_name": "Instruments",
+        "email": "manyinstruments@example.com",
+        "instruments": ["zither", "bodhrán", "accordion", "flute"],
+    }
+
+
+@pytest.fixture
+def authenticated_non_admin_user(client, sample_user_data):
+    """Create an authenticated non-admin user session. This is the same as authenticated_user."""
+    # This fixture is identical to authenticated_user since sample_user_data already has is_system_admin=False
+    class AuthenticatedUserContext:
+        def __init__(self, client, user_data):
+            self.client = client
+            self.user_data = user_data
+            self.user = None
+            self.mock_get_user = None
+            
+        def __enter__(self):
+            self.mock_get_user = patch("auth.User.get_by_username")
+            mock_get_user = self.mock_get_user.start()
+            self.user = User(**self.user_data)
+            mock_get_user.return_value = self.user
+
+            with self.client.session_transaction() as sess:
+                sess["_user_id"] = str(self.user_data["user_id"])
+                sess["_fresh"] = True
+                sess["is_system_admin"] = self.user_data["is_system_admin"]
+                sess["admin_session_ids"] = []
+                
+            return self.user
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.mock_get_user:
+                self.mock_get_user.stop()
+    
+    return AuthenticatedUserContext(client, sample_user_data)
+
+
+@pytest.fixture  
+def sample_person_not_attending():
+    """Sample person data who is not attending for testing."""
+    return {
+        "person_id": 7,
+        "first_name": "Not",
+        "last_name": "Attending", 
+        "email": "notattending@example.com",
+    }
+
+
+@pytest.fixture
 def authenticated_user(client, sample_user_data):
     """Create an authenticated user session."""
     class AuthenticatedUserContext:

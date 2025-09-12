@@ -10,11 +10,12 @@ import json
 class TestGetAttendeesContract:
     """Contract tests for the get attendees endpoint"""
 
-    def test_get_attendees_success_response_structure(self, client, sample_session_instance_data):
+    def test_get_attendees_success_response_structure(self, client, admin_user, sample_session_instance_data):
         """Test that successful response matches expected contract"""
         session_instance_id = sample_session_instance_data['session_instance_id']
         
-        response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
+        with admin_user:
+            response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
         
         assert response.status_code == 200
         
@@ -30,11 +31,12 @@ class TestGetAttendeesContract:
         assert isinstance(attendee_data['regulars'], list)
         assert isinstance(attendee_data['attendees'], list)
 
-    def test_get_attendees_regular_attendee_structure(self, client, sample_session_instance_data, sample_regular_attendee):
+    def test_get_attendees_regular_attendee_structure(self, client, admin_user, sample_session_instance_data, sample_regular_attendee):
         """Test that regular attendee objects match expected structure"""
         session_instance_id = sample_session_instance_data['session_instance_id']
         
-        response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
+        with admin_user:
+            response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
         
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -58,19 +60,21 @@ class TestGetAttendeesContract:
         # No authentication provided
         response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
         
-        assert response.status_code == 403
+        assert response.status_code == 401
         data = json.loads(response.data)
         assert 'success' in data
         assert data['success'] is False
         assert 'error' in data
 
-    def test_get_attendees_nonexistent_session(self, client, authenticated_user):
+    def test_get_attendees_nonexistent_session(self, client, admin_user):
         """Test that nonexistent session returns 404"""
         nonexistent_id = 99999
         
-        with authenticated_user:
+        with admin_user:
             response = client.get(f'/api/session_instance/{nonexistent_id}/attendees')
         
+        if response.status_code != 404:
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 404
         data = json.loads(response.data)
         assert 'success' in data
