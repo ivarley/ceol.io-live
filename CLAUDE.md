@@ -45,6 +45,14 @@ This system provides a mobile and desktop web experience for traditional Irish m
 - Set management (grouping tunes played consecutively)
 - Beta version (session_instance_detail_beta) using a word-processor like UI with drag and drop, copy paste, undo
 
+### Session Attendance Tracking (Feature 001)
+
+- Track who attends each session instance with attendance status (yes/maybe/no)
+- One-click check-in for regular attendees
+- Search and add previous attendees or create new people
+- Track instruments played by each person
+- Role-based viewing permissions (regulars/admins can view, admins can edit)
+
 ### Tune Database
 
 - Integration with thesession.org API for tune metadata
@@ -129,7 +137,7 @@ flask --app app run --debug
 - **Maintenance**: `scripts/refresh_tunebook_counts.py` - Updates popularity metrics
 - **Schema**: All DDL files in `schema/` directory with comprehensive documentation
 
-**Note**: Currently no testing framework is implemented.
+**Note**: Comprehensive pytest framework with fixtures for unit, integration, and functional tests.
 
 ## Key Implementation Details
 
@@ -152,6 +160,15 @@ flask --app app run --debug
 - JSON responses for all API calls
 - Consistent error handling and status codes
 - Integration with external thesession.org API
+
+#### Attendance API Endpoints (Feature 001)
+
+- **GET** `/api/session_instance/{id}/attendees` - Get attendance list
+- **POST** `/api/session_instance/{id}/attendees/checkin` - Check in a person
+- **POST** `/api/person` - Create new person with instruments
+- **GET/PUT** `/api/person/{id}/instruments` - Manage person's instruments
+- **DELETE** `/api/session_instance/{id}/attendees/{person_id}` - Remove attendance
+- **GET** `/api/session/{id}/people/search` - Search people for a session
 
 ### Security Features
 

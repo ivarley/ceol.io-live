@@ -1,0 +1,268 @@
+openapi: 3.0.0
+info:
+  title: Session Attendance API
+  version: 1.0.0
+  description: API endpoints for managing session attendance
+
+paths:
+  /api/session_instance/{session_instance_id}/attendees:
+    get:
+      summary: Get attendance list for a session instance
+      parameters:
+        - name: session_instance_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Attendance list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      regulars:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AttendeeInfo'
+                      attendees:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AttendeeInfo'
+        '403':
+          description: User not authorized to view attendance
+        '404':
+          description: Session instance not found
+
+  /api/session_instance/{session_instance_id}/attendees/checkin:
+    post:
+      summary: Check in a person to a session
+      parameters:
+        - name: session_instance_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                person_id:
+                  type: integer
+                attendance:
+                  type: string
+                  enum: ['yes', 'maybe', 'no']
+                comment:
+                  type: string
+              required:
+                - person_id
+                - attendance
+      responses:
+        '200':
+          description: Check-in successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/AttendeeInfo'
+        '403':
+          description: User not authorized to check in
+        '409':
+          description: Person already checked in
+
+  /api/person:
+    post:
+      summary: Create a new person
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                instruments:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - first_name
+                - last_name
+      responses:
+        '201':
+          description: Person created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      person_id:
+                        type: integer
+                      display_name:
+                        type: string
+
+  /api/person/{person_id}/instruments:
+    get:
+      summary: Get person's instruments
+      parameters:
+        - name: person_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Instruments retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: string
+    
+    put:
+      summary: Update person's instruments
+      parameters:
+        - name: person_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instruments:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - instruments
+      responses:
+        '200':
+          description: Instruments updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/session_instance/{session_instance_id}/attendees/{person_id}:
+    delete:
+      summary: Remove person from attendance
+      parameters:
+        - name: session_instance_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: person_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Person removed from attendance
+        '403':
+          description: User not authorized
+        '404':
+          description: Attendance record not found
+
+  /api/session/{session_id}/people/search:
+    get:
+      summary: Search for people associated with a session
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        person_id:
+                          type: integer
+                        display_name:
+                          type: string
+                        instruments:
+                          type: array
+                          items:
+                            type: string
+                        is_regular:
+                          type: boolean
+
+components:
+  schemas:
+    AttendeeInfo:
+      type: object
+      properties:
+        person_id:
+          type: integer
+        display_name:
+          type: string
+        instruments:
+          type: array
+          items:
+            type: string
+        attendance:
+          type: string
+          enum: ['yes', 'maybe', 'no', null]
+        is_regular:
+          type: boolean
+        is_admin:
+          type: boolean
+        comment:
+          type: string
