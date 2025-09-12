@@ -4243,3 +4243,1068 @@ def update_auto_save_preference():
         if "conn" in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# Session Attendance API Endpoints
+
+def can_view_attendance(session_instance_id, user_person_id):
+    """Check if user can view attendance for a session instance"""
+    if not current_user.is_authenticated:
+        return False
+    
+    # System admins can view any attendance
+    if current_user.is_system_admin:
+        return True
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session_id from session_instance_id
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return False
+        
+        session_id = session_result[0]
+        
+        # Check if user is regular or admin for this session
+        cur.execute("""
+            SELECT is_regular, is_admin FROM session_person 
+            WHERE session_id = %s AND person_id = %s
+        """, (session_id, user_person_id))
+        
+        session_person = cur.fetchone()
+        if session_person and (session_person[0] or session_person[1]):  # is_regular or is_admin
+            return True
+        
+        # Check if user is attending this specific instance
+        cur.execute("""
+            SELECT 1 FROM session_instance_person 
+            WHERE session_instance_id = %s AND person_id = %s AND attendance IN ('yes', 'maybe')
+        """, (session_instance_id, user_person_id))
+        
+        attending = cur.fetchone()
+        return attending is not None
+        
+    except Exception:
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+
+@api_login_required
+def get_session_attendees(session_instance_id):
+    """Get attendance list for a session instance"""
+    try:
+        user_person_id = current_user.person_id if hasattr(current_user, 'person_id') else None
+        
+        # Check permissions
+        if not can_view_attendance(session_instance_id, user_person_id):
+            return jsonify({"success": False, "error": "Not authorized to view attendance"}), 403
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Verify session instance exists
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        
+        session_id = session_result[0]
+        
+        # Get regulars for this session with their attendance status
+        cur.execute("""
+            SELECT DISTINCT
+                p.person_id,
+                p.first_name,
+                p.last_name,
+                sp.is_regular,
+                sp.is_admin,
+                sip.attendance,
+                sip.comment,
+                ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
+            FROM person p
+            JOIN session_person sp ON p.person_id = sp.person_id
+            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id AND sip.session_instance_id = %s
+            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+            WHERE sp.session_id = %s AND sp.is_regular = true
+            GROUP BY p.person_id, p.first_name, p.last_name, sp.is_regular, sp.is_admin, sip.attendance, sip.comment
+            ORDER BY p.first_name, p.last_name
+        """, (session_instance_id, session_id))
+        
+        regulars_data = cur.fetchall()
+        regulars = []
+        
+        for row in regulars_data:
+            person_id, first_name, last_name, is_regular, is_admin, attendance, comment, instruments = row
+            regulars.append({
+                'person_id': person_id,
+                'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
+                'instruments': instruments or [],
+                'attendance': attendance,
+                'is_regular': True,
+                'is_admin': is_admin or False,
+                'comment': comment
+            })
+        
+        # Get non-regular attendees for this session instance
+        cur.execute("""
+            SELECT DISTINCT
+                p.person_id,
+                p.first_name,
+                p.last_name,
+                sip.attendance,
+                sip.comment,
+                COALESCE(sp.is_admin, false) as is_admin,
+                ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
+            FROM person p
+            JOIN session_instance_person sip ON p.person_id = sip.person_id
+            LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
+            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+            WHERE sip.session_instance_id = %s 
+            AND (sp.is_regular IS NULL OR sp.is_regular = false)
+            AND sip.attendance IN ('yes', 'maybe')
+            GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.is_admin
+            ORDER BY p.first_name, p.last_name
+        """, (session_id, session_instance_id))
+        
+        attendees_data = cur.fetchall()
+        attendees = []
+        
+        for row in attendees_data:
+            person_id, first_name, last_name, attendance, comment, is_admin, instruments = row
+            attendees.append({
+                'person_id': person_id,
+                'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
+                'instruments': instruments or [],
+                'attendance': attendance,
+                'is_regular': False,
+                'is_admin': is_admin,
+                'comment': comment
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "regulars": regulars,
+                "attendees": attendees
+            }
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def check_in_person(session_instance_id):
+    """
+    Check a person into a session instance or update their attendance status.
+    
+    Expected JSON payload:
+    {
+        "person_id": int,
+        "attendance": "yes" | "maybe" | "no",
+        "comment": "optional comment"
+    }
+    
+    Returns JSON response with success status.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        
+        person_id = data.get('person_id')
+        attendance = data.get('attendance')
+        comment = data.get('comment', '')
+        
+        # Validate required fields
+        if not person_id or not attendance:
+            return jsonify({"success": False, "message": "person_id and attendance are required"}), 400
+        
+        # Validate attendance value
+        valid_attendance = ['yes', 'maybe', 'no']
+        if attendance not in valid_attendance:
+            return jsonify({"success": False, "message": f"attendance must be one of: {valid_attendance}"}), 400
+        
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if session instance exists
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,)
+        )
+        
+        result = cur.fetchone()
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+        
+        session_id = result[0]
+        
+        # Check if person exists
+        cur.execute(
+            "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+            (person_id,)
+        )
+        
+        person_result = cur.fetchone()
+        if not person_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        
+        # Permission check - need to verify user can manage this person's attendance
+        current_user_id = current_user.user_id
+        current_person_id = current_user.person_id
+        
+        # Get current user's admin status for this session
+        cur.execute(
+            """
+            SELECT sp.is_session_admin 
+            FROM session_person sp 
+            WHERE sp.session_id = %s AND sp.person_id = %s
+            """,
+            (session_id, current_person_id)
+        )
+        
+        user_session_admin = cur.fetchone()
+        is_session_admin = user_session_admin and user_session_admin[0]
+        is_system_admin = current_user.is_system_admin
+        is_self_checkin = (person_id == current_person_id)
+        
+        # Permission rules:
+        # - System admins can manage anyone
+        # - Session admins can manage anyone in their session  
+        # - Regular users can only manage themselves
+        if not (is_system_admin or is_session_admin or is_self_checkin):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions to manage this person's attendance"}), 403
+        
+        # Check if attendance record already exists
+        cur.execute(
+            """
+            SELECT attendance, comment, created_date 
+            FROM session_instance_person 
+            WHERE session_instance_id = %s AND person_id = %s
+            """,
+            (session_instance_id, person_id)
+        )
+        
+        existing_record = cur.fetchone()
+        
+        # Begin transaction
+        cur.execute("BEGIN")
+        
+        try:
+            if existing_record:
+                # Update existing record
+                cur.execute(
+                    """
+                    UPDATE session_instance_person 
+                    SET attendance = %s, comment = %s, modified_date = (NOW() AT TIME ZONE 'UTC')
+                    WHERE session_instance_id = %s AND person_id = %s
+                    """,
+                    (attendance, comment, session_instance_id, person_id)
+                )
+                
+                # Log to history
+                save_to_history(
+                    cur,
+                    'session_instance_person',
+                    {
+                        'session_instance_id': session_instance_id,
+                        'person_id': person_id,
+                        'attendance': attendance,
+                        'comment': comment
+                    },
+                    'UPDATE',
+                    current_user_id
+                )
+                
+                action = "updated"
+                
+            else:
+                # Insert new record
+                cur.execute(
+                    """
+                    INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date)
+                    VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    """,
+                    (session_instance_id, person_id, attendance, comment)
+                )
+                
+                # Log to history
+                save_to_history(
+                    cur,
+                    'session_instance_person',
+                    {
+                        'session_instance_id': session_instance_id,
+                        'person_id': person_id,
+                        'attendance': attendance,
+                        'comment': comment
+                    },
+                    'INSERT',
+                    current_user_id
+                )
+                
+                action = "added"
+            
+            # Commit transaction
+            cur.execute("COMMIT")
+            
+            # Get person's name for response
+            person_name = f"{person_result[1]} {person_result[2]}"
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully {action} attendance for {person_name}",
+                "data": {
+                    "person_id": person_id,
+                    "attendance": attendance,
+                    "comment": comment,
+                    "action": action
+                }
+            })
+            
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def create_person_with_instruments():
+    """
+    Create a new person with associated instruments.
+    
+    Expected JSON payload:
+    {
+        "first_name": "string",
+        "last_name": "string", 
+        "email": "string (optional)",
+        "instruments": ["instrument1", "instrument2", ...]
+    }
+    
+    Returns JSON response with person data and display name.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
+        email = data.get('email', '').strip() or None
+        instruments = data.get('instruments', [])
+        
+        # Validate required fields
+        if not first_name or not last_name:
+            return jsonify({"success": False, "message": "first_name and last_name are required"}), 400
+        
+        # Validate email format if provided
+        if email:
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email):
+                return jsonify({"success": False, "message": "Invalid email format"}), 400
+        
+        # Validate instruments list
+        if not isinstance(instruments, list):
+            return jsonify({"success": False, "message": "instruments must be a list"}), 400
+        
+        # Define valid instruments (matching existing system conventions)
+        valid_instruments = {
+            'fiddle', 'tin whistle', 'flute', 'bodhrán', 'guitar', 'mandolin',
+            'banjo', 'bouzouki', 'concertina', 'button accordion', 'piano accordion',
+            'uilleann pipes', 'piano', 'harp', 'viola', 'cello', 'bass', 'drums'
+        }
+        
+        # Check for invalid instruments
+        invalid_instruments = []
+        for instrument in instruments:
+            if isinstance(instrument, str) and instrument.strip():
+                if instrument.strip().lower() not in valid_instruments:
+                    invalid_instruments.append(instrument.strip())
+        
+        if invalid_instruments:
+            return jsonify({
+                "success": False, 
+                "message": f"Invalid instruments: {', '.join(invalid_instruments)}. Valid instruments: {', '.join(sorted(valid_instruments))}"
+            }), 400
+        
+        # Clean and normalize instruments
+        normalized_instruments = []
+        for instrument in instruments:
+            if isinstance(instrument, str) and instrument.strip():
+                normalized = instrument.strip().lower()
+                if normalized in valid_instruments and normalized not in normalized_instruments:
+                    normalized_instruments.append(normalized)
+        
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if person with same name already exists (for display name disambiguation)
+        cur.execute(
+            """
+            SELECT person_id, first_name, last_name, email 
+            FROM person 
+            WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)
+            """,
+            (first_name, last_name)
+        )
+        
+        existing_people = cur.fetchall()
+        
+        # Begin transaction
+        cur.execute("BEGIN")
+        
+        try:
+            # Insert person
+            cur.execute(
+                """
+                INSERT INTO person (first_name, last_name, email, created_date)
+                VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                RETURNING person_id
+                """,
+                (first_name, last_name, email)
+            )
+            
+            person_id = cur.fetchone()[0]
+            
+            # Log person creation to history
+            save_to_history(
+                cur,
+                'person',
+                {
+                    'person_id': person_id,
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'email': email
+                },
+                'INSERT',
+                current_user.user_id
+            )
+            
+            # Insert instruments
+            for instrument in normalized_instruments:
+                cur.execute(
+                    """
+                    INSERT INTO person_instrument (person_id, instrument, created_date)
+                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    """,
+                    (person_id, instrument)
+                )
+                
+                # Log instrument creation to history
+                save_to_history(
+                    cur,
+                    'person_instrument',
+                    {
+                        'person_id': person_id,
+                        'instrument': instrument
+                    },
+                    'INSERT',
+                    current_user.user_id
+                )
+            
+            # Commit transaction
+            cur.execute("COMMIT")
+            
+            # Generate display name (with disambiguation if needed)
+            base_name = f"{first_name} {last_name}"
+            display_name = base_name
+            
+            # If there are existing people with same name, add email or ID for disambiguation
+            if existing_people:
+                if email:
+                    display_name = f"{base_name} ({email})"
+                else:
+                    display_name = f"{base_name} (#{person_id})"
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully created person: {display_name}",
+                "data": {
+                    "person_id": person_id,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "display_name": display_name,
+                    "instruments": normalized_instruments
+                }
+            }), 201
+            
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def get_person_instruments(person_id):
+    """
+    Get all instruments for a specific person.
+    
+    Returns JSON response with list of instruments.
+    """
+    try:
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if person exists
+        cur.execute(
+            "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+            (person_id,)
+        )
+        
+        person_result = cur.fetchone()
+        if not person_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        
+        # Permission check - can user view this person's instruments?
+        current_user_id = current_user.user_id
+        current_person_id = current_user.person_id
+        is_system_admin = current_user.is_system_admin
+        is_self_view = (person_id == current_person_id)
+        
+        # For viewing instruments, allow:
+        # - System admins to view anyone's instruments
+        # - Users to view their own instruments
+        # Note: We're being restrictive here - only self or system admin can view instruments
+        if not (is_system_admin or is_self_view):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions to view this person's instruments"}), 403
+        
+        # Get person's instruments
+        cur.execute(
+            """
+            SELECT instrument 
+            FROM person_instrument 
+            WHERE person_id = %s 
+            ORDER BY instrument
+            """,
+            (person_id,)
+        )
+        
+        instrument_results = cur.fetchall()
+        instruments = [row[0] for row in instrument_results]
+        
+        cur.close()
+        conn.close()
+        
+        # Get person's name for response
+        person_name = f"{person_result[1]} {person_result[2]}"
+        
+        return jsonify({
+            "success": True,
+            "data": instruments,
+            "meta": {
+                "person_id": person_id,
+                "person_name": person_name,
+                "instrument_count": len(instruments)
+            }
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def update_person_instruments(person_id):
+    """
+    Update all instruments for a specific person.
+    
+    Expected JSON payload:
+    {
+        "instruments": ["instrument1", "instrument2", ...]
+    }
+    
+    Returns JSON response with updated instrument list.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        
+        instruments = data.get('instruments', [])
+        
+        # Validate instruments list
+        if not isinstance(instruments, list):
+            return jsonify({"success": False, "message": "instruments must be a list"}), 400
+        
+        # Define valid instruments (matching existing system conventions)
+        valid_instruments = {
+            'fiddle', 'tin whistle', 'flute', 'bodhrán', 'guitar', 'mandolin',
+            'banjo', 'bouzouki', 'concertina', 'button accordion', 'piano accordion',
+            'uilleann pipes', 'piano', 'harp', 'viola', 'cello', 'bass', 'drums'
+        }
+        
+        # Check for invalid instruments
+        invalid_instruments = []
+        for instrument in instruments:
+            if isinstance(instrument, str) and instrument.strip():
+                if instrument.strip().lower() not in valid_instruments:
+                    invalid_instruments.append(instrument.strip())
+        
+        if invalid_instruments:
+            return jsonify({
+                "success": False, 
+                "message": f"Invalid instruments: {', '.join(invalid_instruments)}. Valid instruments: {', '.join(sorted(valid_instruments))}"
+            }), 400
+        
+        # Clean and normalize instruments
+        normalized_instruments = []
+        for instrument in instruments:
+            if isinstance(instrument, str) and instrument.strip():
+                normalized = instrument.strip().lower()
+                if normalized in valid_instruments and normalized not in normalized_instruments:
+                    normalized_instruments.append(normalized)
+        
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if person exists
+        cur.execute(
+            "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+            (person_id,)
+        )
+        
+        person_result = cur.fetchone()
+        if not person_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        
+        # Permission check - can user manage this person's instruments?
+        current_user_id = current_user.user_id
+        current_person_id = current_user.person_id
+        is_system_admin = current_user.is_system_admin
+        is_self_update = (person_id == current_person_id)
+        
+        # For instrument management, allow:
+        # - System admins to manage anyone
+        # - Users to manage their own instruments
+        # - Session admins to manage anyone in their sessions (we'll be permissive here)
+        if not (is_system_admin or is_self_update):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions to manage this person's instruments"}), 403
+        
+        # Get existing instruments for comparison
+        cur.execute(
+            "SELECT instrument FROM person_instrument WHERE person_id = %s",
+            (person_id,)
+        )
+        
+        existing_results = cur.fetchall()
+        existing_instruments = set(row[0] for row in existing_results)
+        new_instruments = set(normalized_instruments)
+        
+        # Begin transaction
+        cur.execute("BEGIN")
+        
+        try:
+            # Remove instruments no longer in the list
+            instruments_to_remove = existing_instruments - new_instruments
+            for instrument in instruments_to_remove:
+                cur.execute(
+                    "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
+                    (person_id, instrument)
+                )
+                
+                # Log removal to history
+                save_to_history(
+                    cur,
+                    'person_instrument',
+                    {
+                        'person_id': person_id,
+                        'instrument': instrument
+                    },
+                    'DELETE',
+                    current_user_id
+                )
+            
+            # Add new instruments
+            instruments_to_add = new_instruments - existing_instruments
+            for instrument in instruments_to_add:
+                cur.execute(
+                    """
+                    INSERT INTO person_instrument (person_id, instrument, created_date)
+                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    """,
+                    (person_id, instrument)
+                )
+                
+                # Log addition to history
+                save_to_history(
+                    cur,
+                    'person_instrument',
+                    {
+                        'person_id': person_id,
+                        'instrument': instrument
+                    },
+                    'INSERT',
+                    current_user_id
+                )
+            
+            # Commit transaction
+            cur.execute("COMMIT")
+            
+            # Get person's name for response
+            person_name = f"{person_result[1]} {person_result[2]}"
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully updated instruments for {person_name}",
+                "data": {
+                    "person_id": person_id,
+                    "person_name": person_name,
+                    "instruments": sorted(normalized_instruments),
+                    "changes": {
+                        "added": sorted(list(instruments_to_add)),
+                        "removed": sorted(list(instruments_to_remove)),
+                        "total_changes": len(instruments_to_add) + len(instruments_to_remove)
+                    }
+                }
+            })
+            
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def remove_person_attendance(session_instance_id, person_id):
+    """
+    Remove a person from a session instance attendance list.
+    
+    Returns JSON response with success status.
+    """
+    try:
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if session instance exists
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,)
+        )
+        
+        result = cur.fetchone()
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+        
+        session_id = result[0]
+        
+        # Check if person exists
+        cur.execute(
+            "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+            (person_id,)
+        )
+        
+        person_result = cur.fetchone()
+        if not person_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        
+        # Check if attendance record exists
+        cur.execute(
+            """
+            SELECT attendance, comment, created_date 
+            FROM session_instance_person 
+            WHERE session_instance_id = %s AND person_id = %s
+            """,
+            (session_instance_id, person_id)
+        )
+        
+        existing_record = cur.fetchone()
+        if not existing_record:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person is not currently attending this session instance"}), 404
+        
+        # Permission check - need to verify user can manage this person's attendance
+        current_user_id = current_user.user_id
+        current_person_id = current_user.person_id
+        
+        # Get current user's admin status for this session
+        cur.execute(
+            """
+            SELECT sp.is_session_admin 
+            FROM session_person sp 
+            WHERE sp.session_id = %s AND sp.person_id = %s
+            """,
+            (session_id, current_person_id)
+        )
+        
+        user_session_admin = cur.fetchone()
+        is_session_admin = user_session_admin and user_session_admin[0]
+        is_system_admin = current_user.is_system_admin
+        is_self_removal = (person_id == current_person_id)
+        
+        # Permission rules:
+        # - System admins can remove anyone
+        # - Session admins can remove anyone from their session  
+        # - Regular users can only remove themselves
+        if not (is_system_admin or is_session_admin or is_self_removal):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions to remove this person from attendance"}), 403
+        
+        # Begin transaction
+        cur.execute("BEGIN")
+        
+        try:
+            # Delete attendance record
+            cur.execute(
+                "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
+                (session_instance_id, person_id)
+            )
+            
+            # Log removal to history
+            save_to_history(
+                cur,
+                'session_instance_person',
+                {
+                    'session_instance_id': session_instance_id,
+                    'person_id': person_id,
+                    'attendance': existing_record[0],
+                    'comment': existing_record[1]
+                },
+                'DELETE',
+                current_user_id
+            )
+            
+            # Commit transaction
+            cur.execute("COMMIT")
+            
+            # Get person's name for response
+            person_name = f"{person_result[1]} {person_result[2]}"
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully removed {person_name} from attendance",
+                "data": {
+                    "person_id": person_id,
+                    "person_name": person_name,
+                    "session_instance_id": session_instance_id,
+                    "previous_attendance": existing_record[0],
+                    "previous_comment": existing_record[1]
+                }
+            })
+            
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def search_session_people(session_id):
+    """
+    Search for people associated with a session.
+    
+    Query parameters:
+    - q: Search query (name to search for)
+    - limit: Maximum number of results (default 20, max 100)
+    
+    Returns JSON response with list of people matching the search.
+    """
+    try:
+        search_query = request.args.get('q', '').strip()
+        limit = min(int(request.args.get('limit', 20)), 100)
+        
+        # Validate search query
+        if not search_query:
+            return jsonify({"success": False, "message": "Search query 'q' parameter is required"}), 400
+        
+        if len(search_query) < 2:
+            return jsonify({"success": False, "message": "Search query must be at least 2 characters"}), 400
+        
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if session exists
+        cur.execute(
+            "SELECT session_id, name FROM session WHERE session_id = %s",
+            (session_id,)
+        )
+        
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        
+        # Permission check - can user search people in this session?
+        current_person_id = current_user.person_id
+        is_system_admin = current_user.is_system_admin
+        
+        # For searching session people, allow:
+        # - System admins to search any session
+        # - Users who are associated with the session (regular, admin, or have attended)
+        if not is_system_admin:
+            # Check if user is associated with this session
+            cur.execute("""
+                SELECT 1 FROM (
+                    -- Check if user is regular/admin for this session
+                    SELECT 1 FROM session_person 
+                    WHERE session_id = %s AND person_id = %s
+                    
+                    UNION
+                    
+                    -- Check if user has attended any instance of this session
+                    SELECT 1 FROM session_instance_person sip
+                    JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                    WHERE si.session_id = %s AND sip.person_id = %s
+                ) AS user_associated
+            """, (session_id, current_person_id, session_id, current_person_id))
+            
+            user_associated = cur.fetchone()
+            if not user_associated:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "message": "Insufficient permissions to search people in this session"}), 403
+        
+        # Search for people associated with this session
+        # Priority order: regulars first, then attendees, then alphabetical within each group
+        search_pattern = f"%{search_query.lower()}%"
+        
+        cur.execute(
+            """
+            WITH session_people AS (
+                -- Get all people who have been associated with this session
+                SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
+                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       sp.is_session_admin
+                FROM person p
+                LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
+                LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
+                LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                WHERE (sp.session_id = %s OR si.session_id = %s)
+                  AND (LOWER(p.first_name) LIKE %s 
+                       OR LOWER(p.last_name) LIKE %s
+                       OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE %s)
+            ),
+            person_instruments AS (
+                -- Get instruments for these people
+                SELECT sp.person_id,
+                       COALESCE(
+                           array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                           '{}'::text[]
+                       ) as instruments
+                FROM session_people sp
+                LEFT JOIN person_instrument pi ON sp.person_id = pi.person_id
+                GROUP BY sp.person_id
+            )
+            SELECT sp.person_id, sp.first_name, sp.last_name, sp.email,
+                   sp.is_regular, sp.is_session_admin,
+                   pi.instruments,
+                   CASE 
+                       WHEN sp.first_name = sp.last_name THEN sp.first_name
+                       ELSE CONCAT(sp.first_name, ' ', sp.last_name)
+                   END as display_name
+            FROM session_people sp
+            JOIN person_instruments pi ON sp.person_id = pi.person_id
+            ORDER BY 
+                sp.is_regular DESC,  -- Regulars first
+                sp.display_name      -- Then alphabetical
+            LIMIT %s
+            """,
+            (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern, limit)
+        )
+        
+        results = cur.fetchall()
+        
+        # Format results
+        people = []
+        for row in results:
+            person_id, first_name, last_name, email, is_regular, is_session_admin, instruments, display_name = row
+            
+            people.append({
+                'person_id': person_id,
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': email,
+                'display_name': display_name,
+                'is_regular': is_regular,
+                'is_session_admin': is_session_admin or False,
+                'instruments': list(instruments) if instruments else []
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "data": people,
+            "meta": {
+                "session_id": session_id,
+                "session_name": session_result[1],
+                "search_query": search_query,
+                "result_count": len(people),
+                "limit": limit
+            }
+        })
+        
+    except ValueError:
+        return jsonify({"success": False, "message": "Invalid limit parameter"}), 400
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500

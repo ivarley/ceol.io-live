@@ -72,13 +72,18 @@
 ## Phase 3.3: Core Implementation (ONLY after tests are failing)
 
 ### API Endpoints
-- [ ] T017 Implement GET /api/session_instance/{id}/attendees endpoint in api_routes.py
-- [ ] T018 Implement POST /api/session_instance/{id}/attendees/checkin endpoint in api_routes.py
-- [ ] T019 Implement POST /api/person endpoint in api_routes.py
-- [ ] T020 Implement GET /api/person/{id}/instruments endpoint in api_routes.py
-- [ ] T021 Implement PUT /api/person/{id}/instruments endpoint in api_routes.py
-- [ ] T022 Implement DELETE /api/session_instance/{id}/attendees/{person_id} endpoint in api_routes.py
-- [ ] T023 Implement GET /api/session/{id}/people/search endpoint in api_routes.py
+- [x] T017 Implement GET /api/session_instance/{id}/attendees endpoint in api_routes.py
+- [x] T018 Implement POST /api/session_instance/{id}/attendees/checkin endpoint in api_routes.py
+- [x] T019 Implement POST /api/person endpoint in api_routes.py
+- [x] T020 Implement GET /api/person/{id}/instruments endpoint in api_routes.py
+- [x] T021 Implement PUT /api/person/{id}/instruments endpoint in api_routes.py
+- [x] T022 Implement DELETE /api/session_instance/{id}/attendees/{person_id} endpoint in api_routes.py
+- [x] T023 Implement GET /api/session/{id}/people/search endpoint in api_routes.py
+
+### TO23.1 - Extend permission to system admins
+
+We missed an important criterion in our plan, which is that in addition to being a regular or admin for the session in question, you can also do anything if you're a global system admin (user_account.is_system_admin). Update the spec, plan, tasks, tests, and code accordingly for this change.
+- [x] T023.1 - Include system admins as having full permission on these capabilities
 
 ### Database Functions
 - [ ] T024 [P] Create get_session_attendees() function in database.py
