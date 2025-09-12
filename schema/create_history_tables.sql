@@ -176,8 +176,7 @@ CREATE TABLE session_instance_person_history (
     -- Copy of all session_instance_person fields at time of change
     session_instance_id INTEGER,
     person_id INTEGER,
-    attended BOOLEAN,
-    plans_to_attend VARCHAR(10),
+    attendance VARCHAR(5) CHECK (attendance IN ('yes', 'maybe', 'no')),
     comment TEXT,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ
