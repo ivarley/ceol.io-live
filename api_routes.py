@@ -7,6 +7,7 @@ from database import (
     save_to_history,
     find_matching_tune,
     normalize_apostrophes,
+    check_in_person as db_check_in_person,
 )
 from email_utils import send_email_via_sendgrid
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
@@ -4493,98 +4494,35 @@ def check_in_person(session_instance_id):
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to manage this person's attendance"}), 403
         
-        # Check if attendance record already exists
-        cur.execute(
-            """
-            SELECT attendance, comment, created_date 
-            FROM session_instance_person 
-            WHERE session_instance_id = %s AND person_id = %s
-            """,
-            (session_instance_id, person_id)
+        # Close the connection since we'll use the database function
+        cur.close()
+        conn.close()
+        
+        # Call the database function to handle the actual database operations
+        success, message, action = db_check_in_person(
+            session_instance_id,
+            person_id,
+            attendance,
+            comment,
+            f"user_{current_user_id}"  # changed_by parameter
         )
         
-        existing_record = cur.fetchone()
+        if not success:
+            return jsonify({"success": False, "message": message}), 500
         
-        # Begin transaction
-        cur.execute("BEGIN")
+        # Get person's name for response
+        person_name = f"{person_result[1]} {person_result[2]}"
         
-        try:
-            if existing_record:
-                # Update existing record
-                cur.execute(
-                    """
-                    UPDATE session_instance_person 
-                    SET attendance = %s, comment = %s, modified_date = (NOW() AT TIME ZONE 'UTC')
-                    WHERE session_instance_id = %s AND person_id = %s
-                    """,
-                    (attendance, comment, session_instance_id, person_id)
-                )
-                
-                # Log to history
-                save_to_history(
-                    cur,
-                    'session_instance_person',
-                    {
-                        'session_instance_id': session_instance_id,
-                        'person_id': person_id,
-                        'attendance': attendance,
-                        'comment': comment
-                    },
-                    'UPDATE',
-                    current_user_id
-                )
-                
-                action = "updated"
-                
-            else:
-                # Insert new record
-                cur.execute(
-                    """
-                    INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date)
-                    VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
-                    """,
-                    (session_instance_id, person_id, attendance, comment)
-                )
-                
-                # Log to history
-                save_to_history(
-                    cur,
-                    'session_instance_person',
-                    {
-                        'session_instance_id': session_instance_id,
-                        'person_id': person_id,
-                        'attendance': attendance,
-                        'comment': comment
-                    },
-                    'INSERT',
-                    current_user_id
-                )
-                
-                action = "added"
-            
-            # Commit transaction
-            cur.execute("COMMIT")
-            
-            # Get person's name for response
-            person_name = f"{person_result[1]} {person_result[2]}"
-            
-            cur.close()
-            conn.close()
-            
-            return jsonify({
-                "success": True,
-                "message": f"Successfully {action} attendance for {person_name}",
-                "data": {
-                    "person_id": person_id,
-                    "attendance": attendance,
-                    "comment": comment,
-                    "action": action
-                }
-            })
-            
-        except Exception as e:
-            cur.execute("ROLLBACK")
-            raise e
+        return jsonify({
+            "success": True,
+            "message": f"Successfully {action} attendance for {person_name}",
+            "data": {
+                "person_id": person_id,
+                "attendance": attendance,
+                "comment": comment,
+                "action": action
+            }
+        })
             
     except Exception as e:
         if 'conn' in locals():

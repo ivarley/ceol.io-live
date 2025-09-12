@@ -653,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadAttendanceData() {
-        fetch(`/api/person/${personId}/attendance`)
+        fetch(`/api/person/${personId}/attended`)
             .then(response => response.json())
             .then(data => {
                 document.getElementById('attended-loading').style.display = 'none';

@@ -86,18 +86,18 @@ We missed an important criterion in our plan, which is that in addition to being
 - [x] T023.1 - Include system admins as having full permission on these capabilities
 
 ### Database Functions
-- [ ] T024 [P] Create get_session_attendees() function in database.py
-- [ ] T025 [P] Create check_in_person() function in database.py
-- [ ] T026 [P] Create create_person_with_instruments() function in database.py
-- [ ] T027 [P] Create get_person_instruments() function in database.py
-- [ ] T028 [P] Create update_person_instruments() function in database.py
-- [ ] T029 [P] Create remove_person_attendance() function in database.py
-- [ ] T030 [P] Create search_session_people() function in database.py
+- [x] T024 [P] Create get_session_attendees() function in database.py
+- [x] T025 [P] Create check_in_person() function in database.py
+- [x] T026 [P] Create create_person_with_instruments() function in database.py
+- [x] T027 [P] Create get_person_instruments() function in database.py
+- [x] T028 [P] Create update_person_instruments() function in database.py
+- [x] T029 [P] Create remove_person_attendance() function in database.py
+- [x] T030 [P] Create search_session_people() function in database.py
 
 ### Permission Helpers
-- [ ] T031 Create can_view_attendance() permission check in auth.py
-- [ ] T032 Create can_manage_attendance() permission check in auth.py
-- [ ] T033 Create is_session_regular() helper in auth.py
+- [x] T031 Create can_view_attendance() permission check in auth.py
+- [x] T032 Create can_manage_attendance() permission check in auth.py
+- [x] T033 Create is_session_regular() helper in auth.py
 
 ## Phase 3.4: Frontend Implementation
 

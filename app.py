@@ -338,7 +338,7 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/person/<int:person_id>/attendance",
+    "/api/person/<int:person_id>/attended",
     "get_person_attendance_ajax",
     get_person_attendance_ajax,
 )
@@ -394,6 +394,50 @@ app.add_url_rule(
     "update_auto_save_preference",
     update_auto_save_preference,
     methods=["POST"],
+)
+
+# Attendance tracking endpoints
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/attendees",
+    "get_session_attendees",
+    get_session_attendees,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/attendees/checkin",
+    "check_in_person",
+    check_in_person,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/person",
+    "create_person_with_instruments",
+    create_person_with_instruments,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/person/<int:person_id>/instruments",
+    "get_person_instruments",
+    get_person_instruments,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/person/<int:person_id>/instruments",
+    "update_person_instruments",
+    update_person_instruments,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/attendees/<int:person_id>",
+    "remove_person_attendance",
+    remove_person_attendance,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/session/<int:session_id>/people/search",
+    "search_session_people",
+    search_session_people,
+    methods=["GET"],
 )
 
 # Error handlers

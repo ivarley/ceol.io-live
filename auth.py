@@ -262,3 +262,95 @@ def log_login_event(
         print(f"Failed to log login event: {str(e)}")
     finally:
         conn.close()
+
+
+# Attendance Permission Helper Functions
+
+def can_view_attendance(user, session_id):
+    """
+    Check if a user can view attendance for a session.
+    
+    Args:
+        user: User object with is_system_admin property
+        session_id: Session ID to check permissions for
+        
+    Returns:
+        bool: True if user can view attendance, False otherwise
+    """
+    # System admins can view any attendance
+    if user.is_system_admin:
+        return True
+    
+    # Check if user is a regular or admin for this session
+    return is_session_regular(user.person_id, session_id) or is_session_admin(user.person_id, session_id)
+
+
+def can_manage_attendance(user, session_id):
+    """
+    Check if a user can manage (add/edit/remove) attendance for a session.
+    
+    Args:
+        user: User object with is_system_admin property
+        session_id: Session ID to check permissions for
+        
+    Returns:
+        bool: True if user can manage attendance, False otherwise
+    """
+    # System admins can manage any attendance
+    if user.is_system_admin:
+        return True
+    
+    # Only session admins can manage attendance (regulars cannot)
+    return is_session_admin(user.person_id, session_id)
+
+
+def is_session_regular(person_id, session_id):
+    """
+    Check if a person is a regular for a given session.
+    
+    Args:
+        person_id: Person ID to check
+        session_id: Session ID to check against
+        
+    Returns:
+        bool: True if person is a regular for the session, False otherwise
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1 FROM session_regular 
+            WHERE person_id = %s AND session_id = %s
+        """,
+            (person_id, session_id)
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def is_session_admin(person_id, session_id):
+    """
+    Check if a person is an admin for a given session.
+    
+    Args:
+        person_id: Person ID to check
+        session_id: Session ID to check against
+        
+    Returns:
+        bool: True if person is an admin for the session, False otherwise
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1 FROM session_regular 
+            WHERE person_id = %s AND session_id = %s AND is_admin = true
+        """,
+            (person_id, session_id)
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
