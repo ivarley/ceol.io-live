@@ -250,6 +250,7 @@
             font-style: italic;
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -375,11 +376,26 @@
         <strong>This session instance was cancelled.</strong>
     </div>
     {% else %}
-    <div id="tunes-container">
-        <h3>Tunes Played:</h3>
-        <div id="tune-sets">
-            <!-- Tunes will be rendered immediately from server-side data -->
-        </div>
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="tunes-tab" data-toggle="tab" href="#tunes-panel" role="tab" aria-controls="tunes-panel" aria-selected="true">Tunes</a>
+        </li>
+        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+        <li class="nav-item">
+            <a class="nav-link" id="attendance-tab" data-toggle="tab" href="#attendance-panel" role="tab" aria-controls="attendance-panel" aria-selected="false">Attendance</a>
+        </li>
+        {% endif %}
+    </ul>
+    
+    <!-- Tab Content -->
+    <div class="tab-content" id="sessionTabContent">
+        <!-- Tunes Tab -->
+        <div class="tab-pane fade show active" id="tunes-panel" role="tabpanel" aria-labelledby="tunes-tab">
+            <div id="tunes-container" style="margin-top: 20px;">
+                <div id="tune-sets">
+                    <!-- Tunes will be rendered immediately from server-side data -->
+                </div>
         
         <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
             <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
@@ -390,11 +406,11 @@
                     <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
                 </span>
             </form>
+            </div>
         </div>
-    </div>
-    
-    <div style="margin-top: 30px;">
-        {% if session_instance.log_complete_date and not is_session_admin %}
+        
+        <div style="margin-top: 30px;">
+            {% if session_instance.log_complete_date and not is_session_admin %}
         <!-- For completed logs, non-admins see completion message only -->
         <p style="color: var(--disabled-text); font-style: italic;">
             This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
@@ -412,6 +428,17 @@
         <a href="#" id="mark-complete-link" class="hidden" style="color: var(--primary); text-decoration: none; margin-left: 20px; font-size: 14px; display: inline-block; padding: 10px 0;">Mark this session log complete</a>
         {% endif %}
     </div>
+        </div>
+        
+        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+        <!-- Attendance Tab -->
+        <div class="tab-pane fade" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
+            <div style="margin-top: 20px;">
+                {% include 'partials/attendance_tab.html' %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
     {% endif %}
     
     <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
@@ -419,6 +446,71 @@
 
 {% block extra_js %}
 <script src="/static/js/dist/modalManager.js"></script>
+<script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
+{% include 'modals/person_edit.html' %}
+<script>
+// Tab switching functionality
+function initializeTabs() {
+    var tabButtons = document.querySelectorAll('#sessionTabs .nav-link');
+    var tabPanes = document.querySelectorAll('#sessionTabContent .tab-pane');
+    
+    tabButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active classes from all tabs and panes
+            tabButtons.forEach(function(btn) {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+            
+            tabPanes.forEach(function(pane) {
+                pane.classList.remove('show', 'active');
+            });
+            
+            // Add active classes to clicked tab and corresponding pane
+            this.classList.add('active');
+            this.setAttribute('aria-selected', 'true');
+            
+            var targetId = this.getAttribute('href').substring(1);
+            var targetPane = document.getElementById(targetId);
+            if (targetPane) {
+                targetPane.classList.add('show', 'active');
+            }
+            
+            // If switching to attendance tab, refresh attendance data
+            if (targetId === 'attendance-panel' && window.attendanceManagerInstance) {
+                window.attendanceManagerInstance.loadAttendance();
+            }
+        });
+    });
+    
+    // Handle URL hash for direct linking to tabs
+    function handleHashChange() {
+        var hash = window.location.hash;
+        if (hash && hash.startsWith('#')) {
+            var tabId = hash.substring(1);
+            var tabButton = document.querySelector('[href="#' + tabId + '"]');
+            if (tabButton) {
+                tabButton.click();
+            }
+        }
+    }
+    
+    // Check hash on load
+    handleHashChange();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+}
+
+// Initialize tabs when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeTabs);
+} else {
+    initializeTabs();
+}
+</script>
 <script>
         const sessionPath = '{{ session_instance.session_path }}';
         const sessionDate = '{{ session_instance.date }}';

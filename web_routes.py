@@ -471,16 +471,23 @@ def session_handler(full_path):
 
                 # Check if current user is an admin of this session
                 is_session_admin = False
+                is_regular = False
                 if current_user.is_authenticated:
                     # session_instance[8] is the session_id from our updated query
                     # Use request.session to access Flask session data
                     from flask import session as flask_session
+                    from auth import is_session_regular
 
                     is_session_admin = flask_session.get(
                         "is_system_admin", False
                     ) or session_instance[8] in flask_session.get(
                         "admin_session_ids", []
                     )
+                    
+                    # Check if user is a regular for this session
+                    user_person_id = getattr(current_user, 'person_id', None)
+                    if user_person_id:
+                        is_regular = is_session_regular(user_person_id, session_instance[8])
 
                 if is_beta:
                     return render_template(
@@ -488,6 +495,7 @@ def session_handler(full_path):
                         session_instance=session_instance_dict,
                         tune_sets=sets,
                         is_session_admin=is_session_admin,
+                        is_session_regular=is_regular,
                     )
                 else:
                     return render_template(
@@ -495,6 +503,7 @@ def session_handler(full_path):
                         session_instance=session_instance_dict,
                         tune_sets=sets,
                         is_session_admin=is_session_admin,
+                        is_session_regular=is_regular,
                     )
             else:
                 cur.close()

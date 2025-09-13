@@ -4389,7 +4389,6 @@ def get_session_attendees(session_instance_id):
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
             WHERE sip.session_instance_id = %s 
             AND (sp.is_regular IS NULL OR sp.is_regular = false)
-            AND sip.attendance IN ('yes', 'maybe')
             GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.is_admin
             ORDER BY p.first_name, p.last_name
         """, (session_id, session_instance_id))

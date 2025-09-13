@@ -1,0 +1,173 @@
+<!-- Person Edit Modal -->
+<div class="modal fade" id="personEditModal" tabindex="-1" role="dialog" aria-labelledby="personEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="personEditModalLabel">Edit Person</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="person-edit-form">
+                    <input type="hidden" id="edit-person-id" name="person_id">
+                    
+                    <div class="form-group">
+                        <label for="edit-first-name">First Name</label>
+                        <input type="text" class="form-control" id="edit-first-name" name="first_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-last-name">Last Name</label>
+                        <input type="text" class="form-control" id="edit-last-name" name="last_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-email">Email</label>
+                        <input type="email" class="form-control" id="edit-email" name="email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Instruments</label>
+                        <div id="instruments-container">
+                            <!-- Instrument checkboxes will be dynamically added here -->
+                        </div>
+                        <div class="mt-2">
+                            <input type="text" class="form-control" id="new-instrument" placeholder="Add new instrument...">
+                            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addInstrument()">
+                                Add Instrument
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-attendance-status">Attendance Status</label>
+                        <select class="form-control" id="edit-attendance-status" name="attendance_status">
+                            <option value="yes">Yes - Attending</option>
+                            <option value="maybe">Maybe</option>
+                            <option value="no">No - Not Attending</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit-comment">Comment</label>
+                        <textarea class="form-control" id="edit-comment" name="comment" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.savePerson()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Person Modal -->
+<div class="modal fade" id="addPersonModal" tabindex="-1" role="dialog" aria-labelledby="addPersonModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addPersonModalLabel">Add New Person</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="person-add-form">
+                    <div class="form-group">
+                        <label for="add-first-name">First Name</label>
+                        <input type="text" class="form-control" id="add-first-name" name="first_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="add-last-name">Last Name</label>
+                        <input type="text" class="form-control" id="add-last-name" name="last_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="add-email">Email (optional)</label>
+                        <input type="email" class="form-control" id="add-email" name="email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Instruments</label>
+                        <div id="add-instruments-container">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="fiddle" id="inst-fiddle">
+                                <label class="form-check-label" for="inst-fiddle">Fiddle</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="flute" id="inst-flute">
+                                <label class="form-check-label" for="inst-flute">Flute</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="tin whistle" id="inst-whistle">
+                                <label class="form-check-label" for="inst-whistle">Tin Whistle</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="button accordion" id="inst-accordion">
+                                <label class="form-check-label" for="inst-accordion">Button Accordion</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="piano accordion" id="inst-piano-accordion">
+                                <label class="form-check-label" for="inst-piano-accordion">Piano Accordion</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="concertina" id="inst-concertina">
+                                <label class="form-check-label" for="inst-concertina">Concertina</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="banjo" id="inst-banjo">
+                                <label class="form-check-label" for="inst-banjo">Banjo</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="guitar" id="inst-guitar">
+                                <label class="form-check-label" for="inst-guitar">Guitar</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="bouzouki" id="inst-bouzouki">
+                                <label class="form-check-label" for="inst-bouzouki">Bouzouki</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="mandolin" id="inst-mandolin">
+                                <label class="form-check-label" for="inst-mandolin">Mandolin</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="bodhrán" id="inst-bodhran">
+                                <label class="form-check-label" for="inst-bodhran">Bodhrán</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="uilleann pipes" id="inst-pipes">
+                                <label class="form-check-label" for="inst-pipes">Uilleann Pipes</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="harp" id="inst-harp">
+                                <label class="form-check-label" for="inst-harp">Harp</label>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <input type="text" class="form-control" id="add-new-instrument" placeholder="Other instrument...">
+                            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addNewInstrument()">
+                                Add Other
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="add-attendance-status">Initial Attendance Status</label>
+                        <select class="form-control" id="add-attendance-status" name="attendance_status">
+                            <option value="yes" selected>Yes - Attending</option>
+                            <option value="maybe">Maybe</option>
+                            <option value="no">No - Not Attending</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.createPerson()">Add Person</button>
+            </div>
+        </div>
+    </div>
+</div>

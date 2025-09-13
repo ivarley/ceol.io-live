@@ -1,0 +1,104 @@
+<!-- Attendance Tab Content -->
+<div class="attendance-container">
+    <div class="attendance-header mb-3">
+        <h4>Session Attendance</h4>
+        {% if is_session_admin %}
+        <div class="attendance-actions">
+            <button class="btn btn-primary btn-sm" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.showAddPersonModal()">
+                <i class="fas fa-plus"></i> Add Person
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.refreshAttendance()">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+        {% elif is_session_regular %}
+        <div class="attendance-actions">
+            <button class="btn btn-success btn-sm" id="quick-checkin-btn" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.quickCheckin()">
+                <i class="fas fa-check"></i> Check In
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="attendance-stats mb-3">
+        <span class="badge badge-success">Yes: <span id="yes-count">0</span></span>
+        <span class="badge badge-warning">Maybe: <span id="maybe-count">0</span></span>
+        <span class="badge badge-danger">No: <span id="no-count">0</span></span>
+        <span class="badge badge-secondary">Total: <span id="total-count">0</span></span>
+    </div>
+
+    <!-- Search Bar for existing attendees -->
+    {% if is_session_admin or current_user.is_system_admin %}
+    <div class="attendance-search mb-3">
+        <div class="input-group">
+            <input type="text" class="form-control" id="attendee-search" 
+                   placeholder="Search and add existing people..." 
+                   autocomplete="off">
+            <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.searchPeople()">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        <div id="search-results" class="search-results-dropdown"></div>
+    </div>
+    {% endif %}
+
+    <!-- Attendance List -->
+    <div class="attendance-list" id="attendance-list">
+        <div class="text-center p-3">
+            <i class="fas fa-spinner fa-spin"></i> Loading attendance...
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Item Template -->
+<template id="attendance-item-template">
+    <div class="attendance-item" data-person-id="">
+        <div class="attendance-info">
+            <div class="person-name"></div>
+            <div class="person-instruments text-muted small"></div>
+        </div>
+        <div class="attendance-controls">
+            {% if is_session_admin %}
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-success attendance-status" data-status="yes">
+                    ✓
+                </button>
+                <button type="button" class="btn btn-outline-warning attendance-status" data-status="maybe">
+                    ?
+                </button>
+                <button type="button" class="btn btn-outline-danger attendance-status" data-status="no">
+                    ✗
+                </button>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary ml-2" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.editPerson(this)">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger ml-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.removePerson(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+            {% else %}
+            <span class="attendance-status-display"></span>
+            {% endif %}
+        </div>
+    </div>
+</template>
+
+{% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+<script>
+// Initialize attendance management when the tab is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof AttendanceManager !== 'undefined') {
+        window.attendanceManagerInstance = new AttendanceManager();
+        window.attendanceManagerInstance.init({
+            sessionInstanceId: {{ session_instance.session_instance_id|default('null') }},
+            sessionId: {{ session_instance.session_id|default('null') }},
+            canManage: {{ (is_session_admin|default(false))|lower }},
+            isRegular: {{ (is_session_regular|default(false))|lower }},
+            currentUserId: {{ current_user.user_id if current_user.is_authenticated else 'null' }}
+        });
+    }
+});
+</script>
+{% endif %}

@@ -748,6 +748,7 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -856,15 +857,30 @@
         <strong>This session instance was cancelled.</strong>
     </div>
     {% else %}
-    <div id="tunes-container">
-        <h3>Tunes Played:</h3>
-        <div id="tune-pills-container" class="tune-pills-container" tabindex="0" role="textbox" aria-label="Tune editor">
-            <!-- Tune pills will be rendered here -->
-        </div>
-    </div>
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="tunes-tab" data-toggle="tab" href="#tunes-panel" role="tab" aria-controls="tunes-panel" aria-selected="true">Tunes</a>
+        </li>
+        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+        <li class="nav-item">
+            <a class="nav-link" id="attendance-tab" data-toggle="tab" href="#attendance-panel" role="tab" aria-controls="attendance-panel" aria-selected="false">Attendance</a>
+        </li>
+        {% endif %}
+    </ul>
     
-    <!-- Save Controls -->
-    <div class="save-controls-container" style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+    <!-- Tab Content -->
+    <div class="tab-content" id="sessionTabContent">
+        <!-- Tunes Tab -->
+        <div class="tab-pane fade show active" id="tunes-panel" role="tabpanel" aria-labelledby="tunes-tab">
+            <div id="tunes-container" style="margin-top: 20px;">
+                <div id="tune-pills-container" class="tune-pills-container" tabindex="0" role="textbox" aria-label="Tune editor">
+                    <!-- Tune pills will be rendered here -->
+                </div>
+            </div>
+            
+            <!-- Save Controls -->
+            <div class="save-controls-container" style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
         <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
             <span class="desktop-text">Save Session</span>
             <span class="mobile-text">Save</span>
@@ -888,6 +904,17 @@
             </a>
         </span>
         <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
+    </div>
+        </div>
+        
+        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+        <!-- Attendance Tab -->
+        <div class="tab-pane fade" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
+            <div style="margin-top: 20px;">
+                {% include 'partials/attendance_tab.html' %}
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
     
@@ -950,4 +977,69 @@ window.sessionConfig = {
 <script src="/static/js/dist/clipboardManager.js"></script>
 <script src="/static/js/dist/contextMenu.js"></script>
 <script src="/static/js/pages/session_instance_detail.js"></script>
+<script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
+{% include 'modals/person_edit.html' %}
+<script>
+// Tab switching functionality
+function initializeTabs() {
+    var tabButtons = document.querySelectorAll('#sessionTabs .nav-link');
+    var tabPanes = document.querySelectorAll('#sessionTabContent .tab-pane');
+    
+    tabButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active classes from all tabs and panes
+            tabButtons.forEach(function(btn) {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+            
+            tabPanes.forEach(function(pane) {
+                pane.classList.remove('show', 'active');
+            });
+            
+            // Add active classes to clicked tab and corresponding pane
+            this.classList.add('active');
+            this.setAttribute('aria-selected', 'true');
+            
+            var targetId = this.getAttribute('href').substring(1);
+            var targetPane = document.getElementById(targetId);
+            if (targetPane) {
+                targetPane.classList.add('show', 'active');
+            }
+            
+            // If switching to attendance tab, refresh attendance data
+            if (targetId === 'attendance-panel' && window.attendanceManagerInstance) {
+                window.attendanceManagerInstance.loadAttendance();
+            }
+        });
+    });
+    
+    // Handle URL hash for direct linking to tabs
+    function handleHashChange() {
+        var hash = window.location.hash;
+        if (hash && hash.startsWith('#')) {
+            var tabId = hash.substring(1);
+            var tabButton = document.querySelector('[href="#' + tabId + '"]');
+            if (tabButton) {
+                tabButton.click();
+            }
+        }
+    }
+    
+    // Check hash on load
+    handleHashChange();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+}
+
+// Initialize tabs when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeTabs);
+} else {
+    initializeTabs();
+}
+</script>
 {% endblock %}
