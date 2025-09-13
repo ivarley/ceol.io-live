@@ -118,70 +118,28 @@ We missed an important criterion in our plan, which is that in addition to being
 - [ ] T043 [P] Add color coding for attendance status in static/css/attendance.css
 - [ ] T044 [P] Add responsive styles for mobile attendance view in static/css/attendance.css
 
-## Phase 3.5: Integration & Polish
+Now some additional tasks to get it to where I want it, in individual sections.
 
-### Data Display
-- [ ] T045 Implement attendee name disambiguation logic in api_routes.py
-- [ ] T046 Add instrument display formatting in templates
-- [ ] T047 Implement alphabetical sorting with regular priority
+### T045 - Session Peson Records
 
-### Performance
-- [ ] T048 Add database indexes for attendance queries (if not existing)
-- [ ] T049 Implement attendance data caching
-- [ ] T050 Performance test attendance operations (<200ms)
+Adding someone as attending a session (i.e. inserting in session_instance_person) should simultaneously add a record to session_person for them if it doesn't already exist, with is_regular defaulted to false. (If it already exists, no change is needed.)
 
-### Documentation
-- [ ] T051 [P] Update CLAUDE.md with attendance feature documentation
-- [ ] T052 [P] Create attendance API documentation in docs/
-- [ ] T053 [P] Update user guide with attendance instructions
+If the last record for a person is deleted from session_instance_person (i.e. if no records remain in session_instance_person with that session_id and person_id) then they should be deleted from session_person for that session_id as well. (They may well exist for other sessions; this only affects the current session.)
 
-### Validation
-- [ ] T054 Run quickstart.md validation checklist
-- [ ] T055 Test with multiple concurrent users
-- [ ] T056 Verify backward compatibility with existing data
+Add tests for these cases first, and show them failing, and then implement the required changes and show the tests passing.
 
-## Dependencies
-- Database setup (T001-T003) must complete first
-- All tests (T004-T016) must be written and failing before implementation (T017-T033)
-- API endpoints (T017-T023) require database functions (T024-T030)
-- Permission checks (T031-T033) needed for API endpoints
-- Frontend (T034-T044) depends on API being complete
-- Polish tasks (T045-T056) come last
+### T046 - Link To Edit Session person
 
-## Parallel Execution Examples
+For system and session admins, show an edit icon on the right edge of the person row in the attendance tab that takes you to the session admin page for that person (admin/sessions/{path}/players/{person_id}). This replaces the two non-functional buttons to the right of the yes/maybe/no buttons that aren't displaying correctly anyway. When you arrive at this page from this route, instead of:
 
-### Parallel CSS Development (Phase 3.4)
-```bash
-# Launch T042-T044 together (CSS files):
-Task: "Create static/css/attendance.css for attendance-specific styles"
-Task: "Add color coding for attendance status in static/css/attendance.css"
-Task: "Add responsive styles for mobile attendance view in static/css/attendance.css"
-```
+"Player details for {session name}. ← Back to players list"
 
-### Parallel Documentation (Phase 3.5)
-```bash
-# Launch T051-T053 together (documentation):
-Task: "Update CLAUDE.md with attendance feature documentation"
-Task: "Create attendance API documentation in docs/"
-Task: "Update user guide with attendance instructions"
-```
+you should see:
 
-## Notes
-- **TDD Enforcement**: Tests MUST fail before implementation
-- **API Consistency**: Follow existing Flask patterns in api_routes.py
-- **Permission Checks**: Every endpoint must validate user permissions
-- **History Tracking**: All database changes must use save_to_history()
-- **Mobile First**: UI must be responsive and work on mobile devices
-- **Backward Compatibility**: Don't break existing session functionality
-- **Commit Strategy**: Commit after each completed task for easy rollback
+"Player details for {session name}. ← Back to session on {session instance date}"
 
-## Validation Checklist
-- [ ] All 6 API endpoints have contract tests
-- [ ] Person_Instrument entity has migration
-- [ ] All endpoints check permissions appropriately
-- [ ] Attendance tab integrated into session detail pages
-- [ ] Search functionality works for existing people
-- [ ] Instruments can be managed per person
-- [ ] Regular attendees can self check-in
-- [ ] Name disambiguation implemented
-- [ ] Performance targets met (<200ms)
+and it should return you to the attendance tab of the session instance detail page. 
+
+### T047 - Always show regulars
+
+The attendance list should always show the session regulars in the list, and if there's no record in the session_instance_person table for them they should show as not attending.

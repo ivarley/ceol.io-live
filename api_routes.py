@@ -5110,33 +5110,17 @@ def remove_person_attendance(session_instance_id, person_id):
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to remove this person from attendance"}), 403
         
-        # Begin transaction
-        cur.execute("BEGIN")
+        # Close the connection since we'll use the database function that manages its own connection
+        cur.close()
+        conn.close()
         
-        try:
-            # Log removal to history (must be called before DELETE)
-            save_to_history(
-                cur,
-                'session_instance_person',
-                'DELETE',
-                (session_instance_id, person_id),
-                current_user_id
-            )
-            
-            # Delete attendance record
-            cur.execute(
-                "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
-                (session_instance_id, person_id)
-            )
-            
-            # Commit transaction
-            cur.execute("COMMIT")
-            
+        # Use the database function that handles session_person management
+        from database import remove_person_attendance as db_remove_person_attendance
+        success, message, previous_data = db_remove_person_attendance(session_instance_id, person_id, current_user_id)
+        
+        if success:
             # Get person's name for response
             person_name = f"{person_result[1]} {person_result[2]}"
-            
-            cur.close()
-            conn.close()
             
             return jsonify({
                 "success": True,
@@ -5145,14 +5129,12 @@ def remove_person_attendance(session_instance_id, person_id):
                     "person_id": person_id,
                     "person_name": person_name,
                     "session_instance_id": session_instance_id,
-                    "previous_attendance": existing_record[0],
-                    "previous_comment": existing_record[1]
+                    "previous_attendance": previous_data['attendance'],
+                    "previous_comment": previous_data['comment']
                 }
             })
-            
-        except Exception as e:
-            cur.execute("ROLLBACK")
-            raise e
+        else:
+            return jsonify({"success": False, "message": message}), 500
             
     except Exception as e:
         if 'conn' in locals():

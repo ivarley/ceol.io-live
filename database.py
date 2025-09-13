@@ -400,7 +400,34 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
             
             action = "updated"
         else:
-            # Insert new record
+            # Get the session_id for this session_instance_id
+            cur.execute("""
+                SELECT session_id FROM session_instance 
+                WHERE session_instance_id = %s
+            """, (session_instance_id,))
+            
+            session_id_result = cur.fetchone()
+            if not session_id_result:
+                raise Exception(f"Session instance {session_instance_id} not found")
+            
+            session_id = session_id_result[0]
+            
+            # Ensure session_person record exists (create if it doesn't)
+            cur.execute("""
+                SELECT COUNT(*) FROM session_person 
+                WHERE session_id = %s AND person_id = %s
+            """, (session_id, person_id))
+            
+            session_person_exists = cur.fetchone()[0] > 0
+            
+            if not session_person_exists:
+                # Create session_person record with is_regular=false by default
+                cur.execute("""
+                    INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+                    VALUES (%s, %s, %s, %s)
+                """, (session_id, person_id, False, False))
+            
+            # Insert new attendance record
             cur.execute("""
                 INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
@@ -638,11 +665,39 @@ def remove_person_attendance(session_instance_id, person_id, changed_by='system'
             changed_by
         )
         
+        # Get the session_id for this session_instance_id
+        cur.execute("""
+            SELECT session_id FROM session_instance 
+            WHERE session_instance_id = %s
+        """, (session_instance_id,))
+        
+        session_id_result = cur.fetchone()
+        if not session_id_result:
+            raise Exception(f"Session instance {session_instance_id} not found")
+        
+        session_id = session_id_result[0]
+        
         # Delete attendance record
         cur.execute("""
             DELETE FROM session_instance_person 
             WHERE session_instance_id = %s AND person_id = %s
         """, (session_instance_id, person_id))
+        
+        # Check if this was the last attendance record for this person in this session
+        cur.execute("""
+            SELECT COUNT(*) FROM session_instance_person sip
+            JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sip.person_id = %s
+        """, (session_id, person_id))
+        
+        remaining_attendances = cur.fetchone()[0]
+        
+        # If no more attendance records exist for this session, delete session_person record
+        if remaining_attendances == 0:
+            cur.execute("""
+                DELETE FROM session_person 
+                WHERE session_id = %s AND person_id = %s
+            """, (session_id, person_id))
         
         # Commit transaction
         cur.execute("COMMIT")
