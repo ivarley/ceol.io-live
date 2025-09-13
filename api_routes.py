@@ -5298,3 +5298,134 @@ def search_session_people(session_id):
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+@api_login_required
+def get_session_non_regulars(session_id):
+    """
+    Get all non-regular people associated with a session for preloading client-side search.
+    
+    Returns JSON response with list of non-regular people who have attended the session.
+    """
+    try:
+        # Get database connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if session exists
+        cur.execute(
+            "SELECT session_id, name FROM session WHERE session_id = %s",
+            (session_id,)
+        )
+        
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        
+        # Permission check - can user access this session?
+        current_person_id = current_user.person_id
+        is_system_admin = current_user.is_system_admin
+        
+        # For accessing session people, allow:
+        # - System admins to access any session
+        # - Users who are associated with the session (regular, admin, or have attended)
+        if not is_system_admin:
+            # Check if user is associated with this session
+            cur.execute("""
+                SELECT 1 FROM (
+                    -- Check if user is regular/admin for this session
+                    SELECT 1 FROM session_person 
+                    WHERE session_id = %s AND person_id = %s
+                    
+                    UNION
+                    
+                    -- Check if user has attended any instance of this session
+                    SELECT 1 FROM session_instance_person sip
+                    JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                    WHERE si.session_id = %s AND sip.person_id = %s
+                ) AS user_associated
+            """, (session_id, current_person_id, session_id, current_person_id))
+            
+            user_associated = cur.fetchone()
+            if not user_associated:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "message": "Insufficient permissions to access people in this session"}), 403
+        
+        # Get non-regular people who have attended this session
+        cur.execute(
+            """
+            WITH session_non_regulars AS (
+                -- Get all people who have attended this session but are not regulars
+                SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
+                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       COALESCE(sp.is_admin, FALSE) as is_session_admin
+                FROM person p
+                LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
+                LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
+                LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                WHERE (sp.session_id = %s OR si.session_id = %s)
+                  AND COALESCE(sp.is_regular, FALSE) = FALSE
+            ),
+            person_instruments AS (
+                -- Get instruments for these people
+                SELECT snr.person_id,
+                       COALESCE(
+                           array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                           '{}'::text[]
+                       ) as instruments
+                FROM session_non_regulars snr
+                LEFT JOIN person_instrument pi ON snr.person_id = pi.person_id
+                GROUP BY snr.person_id
+            )
+            SELECT snr.person_id, snr.first_name, snr.last_name, snr.email,
+                   snr.is_regular, snr.is_session_admin,
+                   pi.instruments,
+                   CASE 
+                       WHEN snr.first_name = snr.last_name THEN snr.first_name
+                       ELSE CONCAT(snr.first_name, ' ', snr.last_name)
+                   END as display_name
+            FROM session_non_regulars snr
+            JOIN person_instruments pi ON snr.person_id = pi.person_id
+            ORDER BY display_name
+            """,
+            (session_id, session_id, session_id)
+        )
+        
+        results = cur.fetchall()
+        
+        # Format results
+        people = []
+        for row in results:
+            person_id, first_name, last_name, email, is_regular, is_session_admin, instruments, display_name = row
+            
+            people.append({
+                'person_id': person_id,
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': email,
+                'display_name': display_name,
+                'is_regular': is_regular,
+                'is_session_admin': is_session_admin or False,
+                'instruments': list(instruments) if instruments else []
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "data": people,
+            "meta": {
+                "session_id": session_id,
+                "session_name": session_result[1],
+                "result_count": len(people)
+            }
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+

@@ -7,6 +7,8 @@
 function AttendanceManager() {
     this.config = null;
     this.attendees = [];
+    this.nonRegulars = [];
+    this.currentSearchQuery = '';
     this.searchTimeout = null;
     this.instruments = [
         'Fiddle', 'Flute', 'Whistle', 'Accordion', 'Concertina', 'Banjo', 
@@ -24,6 +26,7 @@ AttendanceManager.prototype.init = function(config) {
                      document.querySelector('#tune-pills-container') !== null;
     
     this.loadAttendance();
+    this.loadNonRegulars();
     this.setupEventListeners();
     this.initializeQuickCheckin();
     
@@ -61,16 +64,14 @@ AttendanceManager.prototype.setupEventListeners = function() {
     var searchInput = document.getElementById('attendee-search');
     if (searchInput) {
         searchInput.addEventListener('input', function(e) {
-            clearTimeout(self.searchTimeout);
-            self.searchTimeout = setTimeout(function() {
-                self.searchPeople(e.target.value);
-            }, 300);
+            // Use instant search with preloaded data
+            self.performInstantSearch(e.target.value);
         });
 
         searchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === 'Return' || e.key === 'Tab') {
                 e.preventDefault();
-                self.searchPeople(e.target.value);
+                self.handleSearchKeyAction(e.target.value);
             }
         });
     }
@@ -171,6 +172,29 @@ AttendanceManager.prototype.loadAttendance = function() {
         .catch(function(error) {
             console.error('Error loading attendance:', error);
             self.showError('Error loading attendance data');
+        });
+};
+
+AttendanceManager.prototype.loadNonRegulars = function() {
+    var self = this;
+    console.log('loadNonRegulars called for session:', this.config.sessionId);
+    fetch('/api/session/' + this.config.sessionId + '/people/non-regulars')
+        .then(function(response) {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Failed to load non-regular people data');
+            }
+        })
+        .then(function(response) {
+            console.log('Non-regulars API response:', response);
+            self.nonRegulars = response.data || [];
+            console.log('Loaded', self.nonRegulars.length, 'non-regular people for instant search');
+        })
+        .catch(function(error) {
+            console.error('Error loading non-regulars:', error);
+            // Don't show error to user since this is just for optimization
+            self.nonRegulars = [];
         });
 };
 
@@ -404,13 +428,27 @@ AttendanceManager.prototype.searchPeople = function(query) {
         });
 };
 
-AttendanceManager.prototype.displaySearchResults = function(people) {
+AttendanceManager.prototype.displaySearchResults = function(people, query) {
+    var self = this;
     var resultsDiv = document.getElementById('search-results');
     if (!resultsDiv) return;
 
-    if (people.length === 0) {
-        resultsDiv.innerHTML = '<div class="search-result-item text-muted">No people found</div>';
+    if (people.length === 0 && query) {
+        var addPersonDiv = document.createElement('div');
+        addPersonDiv.className = 'search-result-item add-person-result';
+        addPersonDiv.dataset.personName = query;
+        addPersonDiv.innerHTML = '<div class="person-name text-primary"><i class="fas fa-plus"></i> Add a new person "' + 
+                              query + '"</div>';
+        addPersonDiv.onclick = function() {
+            window.attendanceManagerInstance.showAddPersonModalWithName(this.dataset.personName);
+        };
+        
+        resultsDiv.innerHTML = '';
+        resultsDiv.appendChild(addPersonDiv);
         resultsDiv.style.display = 'block';
+        return;
+    } else if (people.length === 0) {
+        resultsDiv.style.display = 'none';
         return;
     }
 
@@ -758,6 +796,116 @@ AttendanceManager.prototype.removePerson = function(personId) {
 };
 
 // Optimistic UI Update Helpers
+AttendanceManager.prototype.performInstantSearch = function(query) {
+    var self = this;
+    
+    if (!query || query.length < 1) {
+        var searchResults = document.getElementById('search-results');
+        if (searchResults) {
+            searchResults.style.display = 'none';
+        }
+        return;
+    }
+    
+    // Filter out people who are already in attendance
+    var currentAttendeeIds = new Set();
+    for (var i = 0; i < this.attendees.length; i++) {
+        currentAttendeeIds.add(this.attendees[i].person_id);
+    }
+    
+    // Filter non-regulars based on search query
+    var searchPattern = query.toLowerCase();
+    var matchedPeople = [];
+    
+    for (var i = 0; i < this.nonRegulars.length; i++) {
+        var person = this.nonRegulars[i];
+        
+        // Skip if person is already attending
+        if (currentAttendeeIds.has(person.person_id)) {
+            continue;
+        }
+        
+        // Check if person matches search query
+        var fullName = person.display_name || (person.first_name + ' ' + person.last_name);
+        if (fullName.toLowerCase().includes(searchPattern) ||
+            person.first_name.toLowerCase().includes(searchPattern) ||
+            person.last_name.toLowerCase().includes(searchPattern)) {
+            matchedPeople.push(person);
+        }
+    }
+    
+    this.currentSearchQuery = query;
+    this.displaySearchResults(matchedPeople, query);
+};
+
+AttendanceManager.prototype.handleSearchKeyAction = function(query) {
+    console.log('handleSearchKeyAction called with query:', query);
+    var searchResults = document.getElementById('search-results');
+    
+    if (searchResults && searchResults.style.display !== 'none') {
+        var firstResult = searchResults.querySelector('.search-result-item');
+        console.log('Found first search result:', firstResult);
+        if (firstResult) {
+            // Add the first search result (could be existing person or "Add new person")
+            console.log('Clicking first search result');
+            firstResult.click();
+            return;
+        }
+    }
+    
+    // No search results, open the Add Person modal with name pre-populated
+    if (query && query.trim()) {
+        console.log('No search results found, opening modal with name:', query.trim());
+        this.showAddPersonModalWithName(query.trim());
+    }
+};
+
+AttendanceManager.prototype.showAddPersonModalWithName = function(name) {
+    var nameParts = name.split(' ');
+    var firstName = nameParts[0] || '';
+    var lastName = nameParts.slice(1).join(' ') || '';
+    
+    console.log('showAddPersonModalWithName called with:', name);
+    console.log('firstName:', firstName, 'lastName:', lastName);
+    
+    // Show the modal
+    this.showAddPersonModal();
+    
+    // Pre-populate the name fields with correct IDs
+    setTimeout(function() {
+        var firstNameInput = document.getElementById('add-first-name');
+        var lastNameInput = document.getElementById('add-last-name');
+        var emailInput = document.getElementById('add-email');
+        
+        console.log('Found firstNameInput:', firstNameInput);
+        console.log('Found lastNameInput:', lastNameInput);
+        
+        if (firstNameInput) {
+            firstNameInput.value = firstName;
+            console.log('Set first name to:', firstName);
+        }
+        if (lastNameInput) {
+            lastNameInput.value = lastName;
+            console.log('Set last name to:', lastName);
+        }
+        
+        // Focus on the next unfilled field
+        if (!firstName && firstNameInput) {
+            // No first name provided, focus on first name field
+            firstNameInput.focus();
+            console.log('Focused on first name input');
+        } else if (!lastName && lastNameInput) {
+            // First name filled but no last name, focus on last name field
+            lastNameInput.focus();
+            console.log('Focused on last name input');
+        } else if (emailInput) {
+            // Both names filled, focus on email field
+            emailInput.focus();
+            console.log('Focused on email input');
+        }
+    }, 150); // Slightly longer delay to ensure modal is fully rendered
+};
+
 AttendanceManager.prototype.updateAttendeeStatusOptimistic = function(personId, newStatus) {
     // Update in-memory data
     for (var i = 0; i < this.attendees.length; i++) {

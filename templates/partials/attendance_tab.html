@@ -4,12 +4,7 @@
         <h4>Session Attendance</h4>
         {% if is_session_admin %}
         <div class="attendance-actions">
-            <button class="btn btn-primary btn-sm" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.showAddPersonModal()">
-                <i class="fas fa-plus"></i> Add Person
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.refreshAttendance()">
-                <i class="fas fa-sync"></i> Refresh
-            </button>
+            <!-- Buttons removed - search now handles adding people -->
         </div>
         {% elif is_session_regular %}
         <div class="attendance-actions">

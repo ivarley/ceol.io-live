@@ -39,10 +39,17 @@ Make the search work to find non-regulars and add them. Clicking the name adds t
 
 ### T048.1 - Search enhancements
 
-Preload all the non-regulars so search is instant. 
+Preload all the non-regulars on page load in a javascript data structure so search is instant.
 In place of "No people found", have it say "Add a new person ..."
-When you hit "enter" (or "return" or "tab"), it adds the top person in the search results (if there are any) or brings up the "Add" modal with the name they typed prepopulated.
+When you hit "enter" (or "return" or "tab"), it adds the top person in the search results (if there are any) or brings up the "Add" modal with the name they typed prepopulated (split between first and last if there's a space in their input).
 Remove the "Add Person" and "Refresh" buttons.
+
+### T048.2 - UI enhancements
+
+A couple other nits:
+
+- Cancel not working on modal
+- Closing modal, screen still dim
 
 ## Backlog
 
@@ -61,11 +68,18 @@ If the person does not have a linked user account, a session admin can edit:
 - State
 - Country
 
-### T050 - Convert to Typescript
+### T050 - Edit instruments
 
-You can also edit instruments. Instruments attach to the person record (in person_instrument), so normally we wouldn't let an individual session 
+You can also edit instruments in the same situation as other details (i.e. if there's not a linked user account).
 
 ### T051 - Convert to Typescript
 
-More
-- 
+Our implementation of attendance.js is in javascript, but all the other important js code in this app is in typescript. Convert it.
+
+Other
+- Clean up console logging
+- white tab in dark mode
+- Thinner rows
+- Remove "Session Attendance", move counts to align right
+- Remove "Back to this session" from the bottom of this and tune page
+- Clicking counts filters (search unfilters)

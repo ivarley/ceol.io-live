@@ -439,6 +439,12 @@ app.add_url_rule(
     search_session_people,
     methods=["GET"],
 )
+app.add_url_rule(
+    "/api/session/<int:session_id>/people/non-regulars",
+    "get_session_non_regulars",
+    get_session_non_regulars,
+    methods=["GET"],
+)
 
 # Error handlers
 FUNNY_ERROR_TEXTS = ["Stroh Piano Accordion", "Traditional Irish Djembe"]
