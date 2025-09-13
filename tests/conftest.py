@@ -117,7 +117,7 @@ def sample_user_data():
         "first_name": "Test",
         "last_name": "User",
         "is_active": True,
-        "is_system_admin": False,
+        "is_system_admin": True,
         "timezone": "America/New_York",
         "email_verified": True,
         "auto_save_tunes": False,
