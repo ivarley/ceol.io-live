@@ -331,15 +331,15 @@ class TestSessionAdminJourney:
             mock_conn.cursor.return_value = mock_cursor
             mock_get_conn.return_value = mock_conn
 
-            mock_cursor.fetchone.return_value = (1,)  # Session exists
-            mock_cursor.fetchall.return_value = [
-                (1, "Player", "One", "player1@example.com", True, False),
-                (2, "Player", "Two", "player2@example.com", False, True),
+            mock_cursor.fetchone.side_effect = [
+                (True,),  # is_system_admin check
+                None,  # Session doesn't exist (test-session not found)
             ]
 
-            response = client.get("/api/admin/sessions/test-session/players")
-            # This route doesn't exist, so expect 404 or 500
-            assert response.status_code in [404, 500]
+            with admin_user:
+                response = client.get("/api/admin/sessions/test-session/players")
+            # The route now exists and returns 404 when session not found
+            assert response.status_code == 404
 
 
 @pytest.mark.functional
