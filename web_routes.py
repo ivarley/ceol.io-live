@@ -427,6 +427,7 @@ def session_handler(full_path):
                     "default_location": session_instance[6],
                     "log_complete_date": session_instance[7],
                     "session_path": session_path,
+                    "session_id": session_instance[8],
                 }
 
                 # Get tunes played in this session instance

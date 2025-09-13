@@ -396,7 +396,7 @@ AttendanceManager.prototype.searchPeople = function(query) {
             }
         })
         .then(function(data) {
-            self.displaySearchResults(data.people || []);
+            self.displaySearchResults(data.data || []);
         })
         .catch(function(error) {
             console.error('Error searching people:', error);
@@ -417,7 +417,7 @@ AttendanceManager.prototype.displaySearchResults = function(people) {
     var html = people.map(function(person) {
         var instruments = person.instruments && person.instruments.length > 0 ? 
             person.instruments.join(', ') : 'No instruments';
-        return '<div class="search-result-item" onclick="window.AttendanceManager.addExistingPerson(' + person.person_id + ')">' +
+        return '<div class="search-result-item" onclick="window.attendanceManagerInstance.addExistingPerson(' + person.person_id + ')">' +
                '<div class="person-name">' + person.first_name + ' ' + person.last_name + '</div>' +
                '<div class="person-instruments text-muted small">' + instruments + '</div>' +
                '</div>';
@@ -429,6 +429,24 @@ AttendanceManager.prototype.displaySearchResults = function(people) {
 
 AttendanceManager.prototype.addExistingPerson = function(personId) {
     var self = this;
+    
+    // Find the person data from the search results or create minimal data
+    var personData = this.getPersonDataForOptimisticAdd(personId);
+    if (!personData) {
+        console.error('Could not find person data for ID:', personId);
+        return;
+    }
+    
+    // Optimistic update: Add person to UI immediately
+    this.addPersonOptimistic(personData);
+    this.updateStatusCountsOptimistic();
+    
+    // Clear search UI
+    var searchInput = document.getElementById('attendee-search');
+    var searchResults = document.getElementById('search-results');
+    if (searchInput) searchInput.value = '';
+    if (searchResults) searchResults.style.display = 'none';
+    
     var payload = { person_id: personId, attendance: 'yes' };
     console.log('Sending checkin payload:', payload);
     
@@ -448,18 +466,66 @@ AttendanceManager.prototype.addExistingPerson = function(personId) {
         }
     })
     .then(function() {
-        console.log('Refreshing attendance list...');
-        self.loadAttendance();
-        var searchInput = document.getElementById('attendee-search');
-        var searchResults = document.getElementById('search-results');
-        if (searchInput) searchInput.value = '';
-        if (searchResults) searchResults.style.display = 'none';
+        // Success - optimistic update was correct
         self.showSuccess('Person added to attendance');
     })
     .catch(function(error) {
         console.error('Error adding person:', error);
+        // Revert optimistic update on error by reloading from server
+        self.loadAttendance();
         self.showError(error.message || 'Error adding person');
     });
+};
+
+// Helper function to get person data for optimistic add
+AttendanceManager.prototype.getPersonDataForOptimisticAdd = function(personId) {
+    // Try to find the person data from the search results first
+    var searchResults = document.getElementById('search-results');
+    if (searchResults) {
+        var searchItems = searchResults.querySelectorAll('.search-result-item');
+        for (var i = 0; i < searchItems.length; i++) {
+            var item = searchItems[i];
+            var onclick = item.getAttribute('onclick');
+            if (onclick && onclick.includes('(' + personId + ')')) {
+                var nameElement = item.querySelector('.person-name');
+                var instrumentsElement = item.querySelector('.person-instruments');
+                if (nameElement) {
+                    var fullName = nameElement.textContent.trim();
+                    var nameParts = fullName.split(' ');
+                    var firstName = nameParts[0] || '';
+                    var lastName = nameParts.slice(1).join(' ') || '';
+                    var instruments = [];
+                    if (instrumentsElement) {
+                        var instrumentText = instrumentsElement.textContent.trim();
+                        if (instrumentText && instrumentText !== 'No instruments') {
+                            instruments = instrumentText.split(', ');
+                        }
+                    }
+                    return {
+                        person_id: parseInt(personId),
+                        first_name: firstName,
+                        last_name: lastName,
+                        display_name: fullName,
+                        attendance: 'yes',
+                        instruments: instruments,
+                        is_regular: false, // Default to false since we're adding them
+                        is_admin: false,
+                        comment: ''
+                    };
+                }
+            }
+        }
+    }
+    return null;
+};
+
+// Helper function to add person to UI optimistically
+AttendanceManager.prototype.addPersonOptimistic = function(personData) {
+    // Add to in-memory data
+    this.attendees.push(personData);
+    
+    // Add to UI
+    this.renderAttendance();
 };
 
 AttendanceManager.prototype.showAddPersonModal = function() {
