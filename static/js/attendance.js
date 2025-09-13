@@ -140,9 +140,12 @@ AttendanceManager.prototype.loadAttendance = function() {
         .then(function(response) {
             console.log('Attendance API response:', response);
             // Handle different response formats
-            if (response.data && response.data.attendees) {
-                self.attendees = response.data.attendees;
-                self.regulars = response.data.regulars || [];
+            if (response.data && (response.data.attendees || response.data.regulars)) {
+                // Combine regulars and attendees into a single array for rendering
+                var regulars = response.data.regulars || [];
+                var attendees = response.data.attendees || [];
+                self.attendees = regulars.concat(attendees);
+                self.regulars = regulars; // Keep for compatibility
             } else {
                 self.attendees = response.attendees || response.data || [];
                 self.regulars = response.regulars || [];
@@ -182,8 +185,7 @@ AttendanceManager.prototype.renderAttendance = function() {
     }
 
     var sortedAttendees = this.attendees.slice().sort(function(a, b) {
-        if (a.is_regular && !b.is_regular) return -1;
-        if (!a.is_regular && b.is_regular) return 1;
+        // Sort everyone together alphabetically, no special treatment for regulars
         var nameA = a.display_name || (a.first_name + ' ' + a.last_name);
         var nameB = b.display_name || (b.first_name + ' ' + b.last_name);
         return nameA.localeCompare(nameB);
@@ -207,9 +209,6 @@ AttendanceManager.prototype.renderAttendance = function() {
         var nameText = attendee.display_name || (attendee.first_name + ' ' + attendee.last_name);
         console.log('Name text:', nameText);
         nameDiv.textContent = nameText;
-        if (attendee.is_regular) {
-            nameDiv.innerHTML = nameText + ' <span class="badge badge-primary badge-sm">Regular</span>';
-        }
 
         var instrumentsDiv = item.querySelector('.person-instruments');
         if (attendee.instruments && attendee.instruments.length > 0) {
@@ -266,6 +265,7 @@ AttendanceManager.prototype.getStatusDisplay = function(status) {
         case 'yes': return '<span class="text-success"><i class="fas fa-check"></i> Yes</span>';
         case 'maybe': return '<span class="text-warning"><i class="fas fa-question"></i> Maybe</span>';
         case 'no': return '<span class="text-danger"><i class="fas fa-times"></i> No</span>';
+        case 'unknown': return '<span class="text-primary"><i class="fas fa-question-circle"></i> Unknown</span>';
         default: return '<span class="text-muted">Unknown</span>';
     }
 };
@@ -274,11 +274,13 @@ AttendanceManager.prototype.updateStats = function() {
     var yesCount = this.attendees.filter(function(a) { return (a.attendance || a.attendance_status) === 'yes'; }).length;
     var maybeCount = this.attendees.filter(function(a) { return (a.attendance || a.attendance_status) === 'maybe'; }).length;
     var noCount = this.attendees.filter(function(a) { return (a.attendance || a.attendance_status) === 'no'; }).length;
+    var unknownCount = this.attendees.filter(function(a) { return (a.attendance || a.attendance_status) === 'unknown'; }).length;
     var totalCount = this.attendees.length;
 
     document.getElementById('yes-count').textContent = yesCount;
     document.getElementById('maybe-count').textContent = maybeCount;
     document.getElementById('no-count').textContent = noCount;
+    document.getElementById('unknown-count').textContent = unknownCount;
     document.getElementById('total-count').textContent = totalCount;
 };
 

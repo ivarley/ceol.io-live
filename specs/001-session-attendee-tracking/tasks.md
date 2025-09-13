@@ -142,4 +142,5 @@ and it should return you to the attendance tab of the session instance detail pa
 
 ### T047 - Always show regulars
 
-The attendance list should always show the session regulars in the list, and if there's no record in the session_instance_person table for them they should show as not attending.
+The attendance list should always show the session regulars in the list, even if there's no record in the session_instance_person table for them (i.e. it should be an outer join). If they're not in session_instance_person for this session, they show as "unknown" status, which is a new fourth status in addition to "yes", "maybe" and "no" (which should also show in the totals, and has a blue color).
+

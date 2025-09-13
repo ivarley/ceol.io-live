@@ -4344,7 +4344,7 @@ def get_session_attendees(session_instance_id):
                 p.last_name,
                 sp.is_regular,
                 sp.is_admin,
-                sip.attendance,
+                COALESCE(sip.attendance, 'unknown') as attendance,
                 sip.comment,
                 ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
             FROM person p

@@ -514,14 +514,22 @@ class TestTuneAPI:
         )
         session_instance_id = db_cursor.fetchone()[0]
 
-        # Add some tunes with unique IDs
-        tune_id_1 = int(unique_id[:6], 16) % 100000 + 22000
-        tune_id_2 = tune_id_1 + 1
+        # Add some tunes with unique IDs - use random.randint for better uniqueness
+        import random
+        tune_id_1 = random.randint(900000, 999999)
+        tune_id_2 = random.randint(900000, 999999)
+        
+        # Ensure they're different
+        while tune_id_2 == tune_id_1:
+            tune_id_2 = random.randint(900000, 999999)
 
         db_cursor.execute(
             """
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s), (%s, %s, %s)
+            ON CONFLICT (tune_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                tune_type = EXCLUDED.tune_type
         """,
             (
                 tune_id_1,
