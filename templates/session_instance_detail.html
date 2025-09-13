@@ -490,6 +490,10 @@ function initializeTabs() {
         var hash = window.location.hash;
         if (hash && hash.startsWith('#')) {
             var tabId = hash.substring(1);
+            // Handle both #players and #attendance-panel for the Players tab
+            if (tabId === 'players') {
+                tabId = 'attendance-panel';
+            }
             var tabButton = document.querySelector('[href="#' + tabId + '"]');
             if (tabButton) {
                 tabButton.click();

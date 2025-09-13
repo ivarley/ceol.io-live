@@ -2478,12 +2478,30 @@ def session_admin_person(session_path, person_id):
                 }
             )
 
+        # Check if coming from attendance tab
+        from_attendance = request.args.get('from') == 'attendance'
+        instance_id = request.args.get('instance_id')
+        session_instance_date = None
+        
+        if from_attendance and instance_id:
+            # Get the session instance date for the breadcrumb
+            cur.execute(
+                "SELECT date FROM session_instance WHERE session_instance_id = %s",
+                (instance_id,)
+            )
+            instance_row = cur.fetchone()
+            if instance_row:
+                session_instance_date = instance_row[0]
+
         return render_template(
             "session_admin_person.html",
             session=session_data,
             session_path=session_path,
             person=person_data,
             attendance_history=attendance_history,
+            from_attendance=from_attendance,
+            session_instance_date=session_instance_date,
+            session_instance_id=instance_id,
         )
 
     finally:

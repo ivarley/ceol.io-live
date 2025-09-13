@@ -72,12 +72,11 @@
                     ✗
                 </button>
             </div>
-            <button class="btn btn-sm btn-outline-secondary ml-2" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.editPerson(this)">
-                <i class="fas fa-edit"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-danger ml-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.removePerson(this)">
-                <i class="fas fa-trash"></i>
-            </button>
+            {% if current_user.is_system_admin or is_session_admin %}
+            <a href="" class="btn btn-sm btn-outline-primary ml-2 person-edit-link" title="Edit person details">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            {% endif %}
             {% else %}
             <span class="attendance-status-display"></span>
             {% endif %}
@@ -94,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.attendanceManagerInstance.init({
             sessionInstanceId: {{ session_instance.session_instance_id|default('null') }},
             sessionId: {{ session_instance.session_id|default('null') }},
+            sessionPath: '{{ session_instance.session_path|default('') }}',
             canManage: {{ (is_session_admin|default(false))|lower }},
             isRegular: {{ (is_session_regular|default(false))|lower }},
             currentUserId: {{ current_user.user_id if current_user.is_authenticated else 'null' }}

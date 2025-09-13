@@ -231,9 +231,9 @@ AttendanceManager.prototype.renderAttendance = function() {
                 };
             });
 
-            var editBtn = item.querySelector('[onclick*="editPerson"]');
+            var editBtn = item.querySelector('.person-edit-link');
             if (editBtn) {
-                editBtn.onclick = function() { self.editPerson(attendee.person_id); };
+                editBtn.href = '/admin/sessions/' + self.config.sessionPath + '/players/' + attendee.person_id + '?from=attendance&instance_id=' + self.config.sessionInstanceId;
             }
 
             var removeBtn = item.querySelector('[onclick*="removePerson"]');
@@ -817,11 +817,9 @@ AttendanceManager.prototype.replaceTemporaryPerson = function(tempId, realId) {
             };
         });
         
-        var editBtn = attendeeElement.querySelector('[onclick*="editPerson"]');
+        var editBtn = attendeeElement.querySelector('.person-edit-link');
         if (editBtn) {
-            editBtn.onclick = function() { 
-                self.editPerson(realId); 
-            };
+            editBtn.href = '/admin/sessions/' + self.config.sessionPath + '/players/' + realId + '?from=attendance&instance_id=' + self.config.sessionInstanceId;
         }
         
         var removeBtn = attendeeElement.querySelector('[onclick*="removePerson"]');
@@ -891,11 +889,9 @@ AttendanceManager.prototype.setupAttendeeEvents = function(attendeeElement, atte
     });
     
     // Set up edit button
-    var editBtn = attendeeElement.querySelector('[onclick*="editPerson"]');
+    var editBtn = attendeeElement.querySelector('.person-edit-link');
     if (editBtn) {
-        editBtn.onclick = function() { 
-            self.editPerson(personId); 
-        };
+        editBtn.href = '/admin/sessions/' + self.config.sessionPath + '/players/' + personId + '?from=attendance&instance_id=' + self.config.sessionInstanceId;
     }
     
     // Set up remove button
