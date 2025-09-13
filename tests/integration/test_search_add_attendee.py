@@ -178,15 +178,3 @@ class TestSearchAddAttendee:
                 assert attendee is not None
                 assert attendee['attendance'] == attendance_statuses[i]
 
-    @pytest.mark.skip(reason="Complex search functionality requires additional database setup")
-    def test_complex_search_functionality_placeholder(self):
-        """Placeholder for complex search tests that require extensive database relationship setup"""
-        # Tests for:
-        # - Search finds previous session attendees
-        # - Search prioritizes regulars over non-regulars  
-        # - Search includes instrument information
-        # - Search is case insensitive
-        # - Search supports partial name matching
-        # - Search respects session boundaries
-        # - Search returns alphabetical results within priority groups
-        pass
