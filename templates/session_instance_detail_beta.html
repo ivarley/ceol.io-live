@@ -864,7 +864,7 @@
         </li>
         {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
         <li class="nav-item">
-            <a class="nav-link" id="attendance-tab" data-toggle="tab" href="#attendance-panel" role="tab" aria-controls="attendance-panel" aria-selected="false">Attendance</a>
+            <a class="nav-link" id="attendance-tab" data-toggle="tab" href="#attendance-panel" role="tab" aria-controls="attendance-panel" aria-selected="false">Players</a>
         </li>
         {% endif %}
     </ul>
@@ -908,7 +908,7 @@
         </div>
         
         {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
-        <!-- Attendance Tab -->
+        <!-- Players Tab -->
         <div class="tab-pane fade" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
             <div style="margin-top: 20px;">
                 {% include 'partials/attendance_tab.html' %}

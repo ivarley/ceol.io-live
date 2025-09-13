@@ -311,7 +311,7 @@
                         <div class="mt-3">
                             <div id="attended-loading" class="text-center">
                                 <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                <span style="margin-left: 8px;">Loading attendance data...</span>
+                                <span style="margin-left: 8px;">Loading players ...</span>
                             </div>
                             <div id="attended-content"></div>
                         </div>
@@ -689,13 +689,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('attended-content').innerHTML = html;
                 } else {
                     document.getElementById('attended-content').innerHTML = 
-                        '<div class="alert alert-info" role="alert">No attendance records found.</div>';
+                        '<div class="alert alert-info" role="alert">No players found.</div>';
                 }
             })
             .catch(error => {
                 document.getElementById('attended-loading').style.display = 'none';
                 document.getElementById('attended-content').innerHTML = 
-                    '<div class="alert alert-danger" role="alert">Error loading attendance data.</div>';
+                    '<div class="alert alert-danger" role="alert">Error loading players.</div>';
                 console.error('Error:', error);
             });
     }

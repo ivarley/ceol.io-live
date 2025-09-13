@@ -17,9 +17,43 @@ function AttendanceManager() {
 AttendanceManager.prototype.init = function(config) {
     this.config = config;
     window.attendanceManagerInstance = this;
+    
+    // Check if we're on the beta page
+    this.isBetaPage = window.location.pathname.includes('/beta') || 
+                     window.TextInput !== undefined || 
+                     document.querySelector('#tune-pills-container') !== null;
+    
     this.loadAttendance();
     this.setupEventListeners();
     this.initializeQuickCheckin();
+    
+    // Set up modal input protection for beta page
+    if (this.isBetaPage) {
+        this.setupBetaPageModalSupport();
+    }
+};
+
+AttendanceManager.prototype.setupBetaPageModalSupport = function() {
+    var self = this;
+    console.log('Setting up beta page modal support');
+    
+    // When modals are shown, prevent the beta page's text input system from interfering
+    var modalIds = ['addPersonModal', 'personEditModal'];
+    modalIds.forEach(function(modalId) {
+        var modal = document.getElementById(modalId);
+        if (modal) {
+            // Stop text input events from propagating to the beta page handlers
+            modal.addEventListener('keydown', function(e) {
+                e.stopPropagation();
+            });
+            modal.addEventListener('keypress', function(e) {
+                e.stopPropagation();
+            });
+            modal.addEventListener('input', function(e) {
+                e.stopPropagation();
+            });
+        }
+    });
 };
 
 AttendanceManager.prototype.setupEventListeners = function() {
@@ -303,6 +337,10 @@ AttendanceManager.prototype.changeMyStatus = function(newStatus) {
 AttendanceManager.prototype.updateAttendanceStatus = function(personId, status) {
     if (!this.config.canManage) return;
 
+    // Optimistic update: Update UI immediately
+    this.updateAttendeeStatusOptimistic(personId, status);
+    this.updateStatusCountsOptimistic();
+
     var self = this;
     fetch('/api/session_instance/' + this.config.sessionInstanceId + '/attendees/checkin', {
         method: 'POST',
@@ -319,10 +357,13 @@ AttendanceManager.prototype.updateAttendanceStatus = function(personId, status) 
         }
     })
     .then(function() {
-        self.loadAttendance();
+        // Success - optimistic update was correct
+        self.showSuccess('Attendance updated');
     })
     .catch(function(error) {
         console.error('Error updating attendance:', error);
+        // Revert optimistic update on error by reloading from server
+        self.loadAttendance();
         self.showError(error.message || 'Error updating attendance');
     });
 };
@@ -420,6 +461,15 @@ AttendanceManager.prototype.addExistingPerson = function(personId) {
 };
 
 AttendanceManager.prototype.showAddPersonModal = function() {
+    // Temporarily disable beta page text input if present
+    if (this.isBetaPage && window.TextInput) {
+        this.originalTextInputTyping = window.TextInput.prototype.handleTextInput;
+        window.TextInput.prototype.handleTextInput = function() {
+            // Disable text input handling while modal is open
+            return;
+        };
+    }
+    
     // Check if ModalManager is available
     if (typeof ModalManager !== 'undefined') {
         var result = ModalManager.showModal('addPersonModal');
@@ -450,6 +500,12 @@ AttendanceManager.prototype.showAddPersonModal = function() {
 };
 
 AttendanceManager.prototype.closeModal = function(modalId) {
+    // Restore beta page text input if it was disabled
+    if (this.isBetaPage && this.originalTextInputTyping && window.TextInput) {
+        window.TextInput.prototype.handleTextInput = this.originalTextInputTyping;
+        this.originalTextInputTyping = null;
+    }
+    
     var modal = document.getElementById(modalId);
     if (modal) {
         modal.style.display = 'none';
@@ -491,11 +547,37 @@ AttendanceManager.prototype.createPerson = function() {
         instruments: instruments
     };
     
+    // Validate form data
+    if (!personData.first_name || !personData.first_name.trim()) {
+        this.showError('First name is required');
+        return;
+    }
+    
+    if (!personData.last_name || !personData.last_name.trim()) {
+        this.showError('Last name is required');
+        return;
+    }
+    
     var attendanceStatus = formData.get('attendance_status') || 'yes';
 
     // Debug logging
     console.log('Creating person with data:', personData);
     console.log('Instruments array:', instruments);
+
+    // Create temporary person for optimistic update
+    var tempPerson = {
+        person_id: 'temp_' + Date.now(), // Temporary ID
+        first_name: personData.first_name,
+        last_name: personData.last_name,
+        display_name: personData.first_name + ' ' + personData.last_name,
+        instruments: instruments,
+        attendance: attendanceStatus,
+        is_admin: false,
+        is_regular: false
+    };
+
+    // Optimistic update: Add person to UI immediately
+    this.addPersonToUIOptimistic(tempPerson);
 
     fetch('/api/person', {
         method: 'POST',
@@ -517,6 +599,9 @@ AttendanceManager.prototype.createPerson = function() {
         console.log('Person creation result:', result);
         var personId = result.data && result.data.person_id ? result.data.person_id : result.person_id;
         console.log('Extracted person ID:', personId);
+        
+        // Replace temporary person with real person ID
+        self.replaceTemporaryPerson(tempPerson.person_id, personId);
         
         // Add person to attendance with chosen status
         var payload = { person_id: personId, attendance: attendanceStatus };
@@ -547,13 +632,12 @@ AttendanceManager.prototype.createPerson = function() {
         }
         if (customInstrument) customInstrument.value = '';
         
-        // Refresh attendance list to show the new person
-        self.loadAttendance();
-        
         self.showSuccess('New person created and added to attendance');
     })
     .catch(function(error) {
         console.error('Error creating person:', error);
+        // Remove optimistic update on error
+        self.removePersonFromUIOptimistic(tempPerson.person_id);
         self.showError(error.message || 'Error creating person');
     });
 };
@@ -605,26 +689,283 @@ AttendanceManager.prototype.removePerson = function(personId) {
     this.updateAttendanceStatus(personId, 'no');
 };
 
+// Optimistic UI Update Helpers
+AttendanceManager.prototype.updateAttendeeStatusOptimistic = function(personId, newStatus) {
+    // Update in-memory data
+    for (var i = 0; i < this.attendees.length; i++) {
+        if (this.attendees[i].person_id == personId) {
+            this.attendees[i].attendance = newStatus;
+            break;
+        }
+    }
+    
+    // Update UI
+    var attendanceItem = document.querySelector('.attendance-item[data-person-id="' + personId + '"]');
+    if (attendanceItem) {
+        // Update data attribute
+        attendanceItem.setAttribute('data-status', newStatus);
+        
+        // Update button states
+        var buttons = attendanceItem.querySelectorAll('.attendance-status');
+        buttons.forEach(function(btn) {
+            var btnStatus = btn.dataset.status;
+            btn.classList.remove('btn-success', 'btn-warning', 'btn-danger');
+            if (btnStatus === newStatus) {
+                // Active state
+                if (newStatus === 'yes') btn.classList.add('btn-success');
+                else if (newStatus === 'maybe') btn.classList.add('btn-warning');
+                else if (newStatus === 'no') btn.classList.add('btn-danger');
+            } else {
+                // Inactive state
+                if (btnStatus === 'yes') btn.classList.add('btn-outline-success');
+                else if (btnStatus === 'maybe') btn.classList.add('btn-outline-warning');
+                else if (btnStatus === 'no') btn.classList.add('btn-outline-danger');
+            }
+        });
+    }
+};
+
+AttendanceManager.prototype.updateStatusCountsOptimistic = function() {
+    // Count statuses from current attendees array
+    var counts = { yes: 0, maybe: 0, no: 0, total: 0 };
+    
+    for (var i = 0; i < this.attendees.length; i++) {
+        var status = this.attendees[i].attendance;
+        if (counts[status] !== undefined) {
+            counts[status]++;
+        }
+        counts.total++;
+    }
+    
+    // Update UI
+    var yesCount = document.getElementById('yes-count');
+    var maybeCount = document.getElementById('maybe-count');
+    var noCount = document.getElementById('no-count');
+    var totalCount = document.getElementById('total-count');
+    
+    if (yesCount) yesCount.textContent = counts.yes;
+    if (maybeCount) maybeCount.textContent = counts.maybe;
+    if (noCount) noCount.textContent = counts.no;
+    if (totalCount) totalCount.textContent = counts.total;
+};
+
+AttendanceManager.prototype.addPersonToUIOptimistic = function(person) {
+    // Add to in-memory data
+    this.attendees.push(person);
+    
+    // Add to UI using existing render function
+    var listContainer = document.getElementById('attendance-list');
+    if (listContainer) {
+        var attendeeHTML = this.renderAttendeeItem(person);
+        var tempDiv = document.createElement('div');
+        tempDiv.innerHTML = attendeeHTML;
+        var attendeeElement = tempDiv.firstElementChild;
+        
+        // Add a visual indicator that this is pending
+        attendeeElement.style.opacity = '0.7';
+        attendeeElement.style.border = '2px dashed var(--warning, #ffc107)';
+        
+        listContainer.appendChild(attendeeElement);
+        this.setupAttendeeEvents(attendeeElement, person);
+    }
+    
+    // Update counts
+    this.updateStatusCountsOptimistic();
+};
+
+AttendanceManager.prototype.removePersonFromUIOptimistic = function(personId) {
+    // Remove from in-memory data
+    this.attendees = this.attendees.filter(function(attendee) {
+        return attendee.person_id !== personId;
+    });
+    
+    // Remove from UI
+    var attendeeElement = document.querySelector('.attendance-item[data-person-id="' + personId + '"]');
+    if (attendeeElement) {
+        attendeeElement.remove();
+    }
+    
+    // Update counts
+    this.updateStatusCountsOptimistic();
+};
+
+AttendanceManager.prototype.replaceTemporaryPerson = function(tempId, realId) {
+    // Update in-memory data
+    for (var i = 0; i < this.attendees.length; i++) {
+        if (this.attendees[i].person_id == tempId) {
+            this.attendees[i].person_id = realId;
+            break;
+        }
+    }
+    
+    // Update UI element
+    var attendeeElement = document.querySelector('.attendance-item[data-person-id="' + tempId + '"]');
+    if (attendeeElement) {
+        // Update data attribute
+        attendeeElement.setAttribute('data-person-id', realId);
+        
+        // Remove pending visual indicators
+        attendeeElement.style.opacity = '';
+        attendeeElement.style.border = '';
+        
+        // Update button onclick handlers with real ID
+        var buttons = attendeeElement.querySelectorAll('.attendance-status');
+        var self = this;
+        buttons.forEach(function(btn) {
+            btn.onclick = function() { 
+                self.updateAttendanceStatus(realId, btn.dataset.status); 
+            };
+        });
+        
+        var editBtn = attendeeElement.querySelector('[onclick*="editPerson"]');
+        if (editBtn) {
+            editBtn.onclick = function() { 
+                self.editPerson(realId); 
+            };
+        }
+        
+        var removeBtn = attendeeElement.querySelector('[onclick*="removePerson"]');
+        if (removeBtn) {
+            removeBtn.onclick = function() { 
+                self.removePerson(realId); 
+            };
+        }
+    }
+};
+
+AttendanceManager.prototype.renderAttendeeItem = function(attendee) {
+    var template = document.getElementById('attendance-item-template');
+    if (!template) {
+        console.error('attendance-item-template not found');
+        return '';
+    }
+    
+    var item = template.content.cloneNode(true);
+    var itemDiv = item.querySelector('.attendance-item');
+    
+    itemDiv.dataset.personId = attendee.person_id;
+    var attendanceStatus = attendee.attendance || attendee.attendance_status;
+    itemDiv.dataset.status = attendanceStatus;
+    
+    var nameDiv = item.querySelector('.person-name');
+    var nameText = attendee.display_name || (attendee.first_name + ' ' + attendee.last_name);
+    nameDiv.textContent = nameText;
+    
+    var instrumentsDiv = item.querySelector('.person-instruments');
+    if (instrumentsDiv) {
+        var instrumentsText = attendee.instruments && attendee.instruments.length > 0 ? 
+            attendee.instruments.join(', ') : 'No instruments';
+        instrumentsDiv.textContent = instrumentsText;
+    }
+    
+    return item.firstElementChild.outerHTML;
+};
+
+AttendanceManager.prototype.setupAttendeeEvents = function(attendeeElement, attendee) {
+    var self = this;
+    var personId = attendee.person_id;
+    
+    // Set up status buttons
+    var buttons = attendeeElement.querySelectorAll('.attendance-status');
+    buttons.forEach(function(btn) {
+        var btnStatus = btn.dataset.status;
+        var attendanceStatus = attendee.attendance || attendee.attendance_status;
+        
+        // Set initial button state
+        btn.classList.remove('btn-success', 'btn-warning', 'btn-danger', 'btn-outline-success', 'btn-outline-warning', 'btn-outline-danger');
+        if (btnStatus === attendanceStatus) {
+            // Active state
+            if (attendanceStatus === 'yes') btn.classList.add('btn-success');
+            else if (attendanceStatus === 'maybe') btn.classList.add('btn-warning');
+            else if (attendanceStatus === 'no') btn.classList.add('btn-danger');
+        } else {
+            // Inactive state
+            if (btnStatus === 'yes') btn.classList.add('btn-outline-success');
+            else if (btnStatus === 'maybe') btn.classList.add('btn-outline-warning');
+            else if (btnStatus === 'no') btn.classList.add('btn-outline-danger');
+        }
+        
+        btn.onclick = function() { 
+            self.updateAttendanceStatus(personId, btn.dataset.status); 
+        };
+    });
+    
+    // Set up edit button
+    var editBtn = attendeeElement.querySelector('[onclick*="editPerson"]');
+    if (editBtn) {
+        editBtn.onclick = function() { 
+            self.editPerson(personId); 
+        };
+    }
+    
+    // Set up remove button
+    var removeBtn = attendeeElement.querySelector('[onclick*="removePerson"]');
+    if (removeBtn) {
+        removeBtn.onclick = function() { 
+            self.removePerson(personId); 
+        };
+    }
+};
+
 AttendanceManager.prototype.showSuccess = function(message) {
     console.log('Success:', message);
-    var messageContainer = document.getElementById('message-container');
-    if (messageContainer) {
-        messageContainer.innerHTML = '<div class="message success"><p>' + message + '</p></div>';
-        setTimeout(function() { 
-            messageContainer.innerHTML = ''; 
-        }, 3000);
+    // Use ModalManager if available (beta page)
+    if (typeof ModalManager !== 'undefined' && ModalManager.showMessage) {
+        ModalManager.showMessage(message, 'success');
+    } else {
+        // Fallback to basic message display
+        this.showBasicMessage(message, 'success');
     }
 };
 
 AttendanceManager.prototype.showError = function(message) {
     console.error('Error:', message);
-    var messageContainer = document.getElementById('message-container');
-    if (messageContainer) {
-        messageContainer.innerHTML = '<div class="message error"><p>' + message + '</p></div>';
-        setTimeout(function() { 
-            messageContainer.innerHTML = ''; 
-        }, 5000);
+    // Use ModalManager if available (beta page)
+    if (typeof ModalManager !== 'undefined' && ModalManager.showMessage) {
+        ModalManager.showMessage(message, 'error');
+    } else {
+        // Fallback to basic message display
+        this.showBasicMessage(message, 'error');
     }
+};
+
+AttendanceManager.prototype.showBasicMessage = function(message, type) {
+    // Create a simple toast-style message
+    var messageDiv = document.createElement('div');
+    messageDiv.className = 'attendance-message attendance-message-' + type;
+    messageDiv.textContent = message;
+    messageDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; ' +
+        'padding: 12px 20px; border-radius: 4px; font-weight: 500; ' +
+        'color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); ' +
+        'max-width: 300px; word-wrap: break-word;';
+    
+    if (type === 'success') {
+        messageDiv.style.backgroundColor = '#28a745';
+    } else if (type === 'error') {
+        messageDiv.style.backgroundColor = '#dc3545';
+    }
+    
+    document.body.appendChild(messageDiv);
+    
+    // Fade in
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(-20px)';
+    setTimeout(function() {
+        messageDiv.style.transition = 'all 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Fade out and remove
+    setTimeout(function() {
+        messageDiv.style.opacity = '0';
+        messageDiv.style.transform = 'translateY(-20px)';
+        setTimeout(function() {
+            if (messageDiv.parentNode) {
+                messageDiv.parentNode.removeChild(messageDiv);
+            }
+        }, 300);
+    }, type === 'error' ? 5000 : 3000);
 };
 
 // Constructor is available globally for initialization
