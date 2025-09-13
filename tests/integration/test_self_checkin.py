@@ -235,6 +235,9 @@ class TestSelfCheckin:
             
             # Session B should not show attendance
             response_b = client.get(f'/api/session_instance/{session_b}/attendees')
+            if response_b.status_code != 200:
+                print(f"Session B response status: {response_b.status_code}")
+                print(f"Session B response: {response_b.data.decode()}")
             data_b = json.loads(response_b.data)
             all_b = data_b['data']['regulars'] + data_b['data']['attendees']
             attending_b = [a for a in all_b if a['person_id'] == user_person_id and a['attendance'] in ['yes', 'maybe']]

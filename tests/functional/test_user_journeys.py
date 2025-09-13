@@ -241,7 +241,8 @@ class TestSessionAdminJourney:
             )
         ]
 
-        response = client.get("/admin/people")
+        with admin_user:
+            response = client.get("/admin/people")
         assert response.status_code == 200
         assert b"John" in response.data
         assert b"Doe" in response.data
@@ -277,7 +278,8 @@ class TestSessionAdminJourney:
             )
         ]
 
-        response = client.get("/admin/sessions")
+        with admin_user:
+            response = client.get("/admin/sessions")
         assert response.status_code == 200
         assert b"Admin Test Session" in response.data
 
@@ -315,7 +317,8 @@ class TestSessionAdminJourney:
             "America/Chicago",
         )
 
-        response = client.get("/admin/sessions/admin-test-session")
+        with admin_user:
+            response = client.get("/admin/sessions/admin-test-session")
         assert response.status_code == 200
         assert b"Admin Test Session" in response.data
 
@@ -595,19 +598,21 @@ class TestPasswordManagementWorkflow:
                 mock_get_conn.return_value = mock_conn
 
                 # Phase 1: Access change password page
-                response = client.get("/change-password")
+                with authenticated_user:
+                    response = client.get("/change-password")
                 assert response.status_code == 200
                 assert b"current password" in response.data.lower()
 
                 # Phase 2: Submit password change
-                response = client.post(
-                    "/change-password",
-                    data={
-                        "current_password": "oldpassword123",
-                        "new_password": "mynewpassword456",
-                        "confirm_password": "mynewpassword456",
-                    },
-                )
+                with authenticated_user:
+                    response = client.post(
+                        "/change-password",
+                        data={
+                            "current_password": "oldpassword123",
+                            "new_password": "mynewpassword456",
+                            "confirm_password": "mynewpassword456",
+                        },
+                    )
 
                 assert response.status_code == 302  # Redirect to home
                 assert "/" in response.headers["Location"]

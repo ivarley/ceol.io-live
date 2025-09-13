@@ -659,9 +659,10 @@ class TestUserAPI:
         db_conn.commit()
 
         # Update auto-save preference
-        response = client.post(
-            "/api/user/auto-save-preference", json={"auto_save_tunes": True}
-        )
+        with authenticated_user:
+            response = client.post(
+                "/api/user/auto-save-preference", json={"auto_save_tunes": True}
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -678,10 +679,11 @@ class TestAdminAPI:
 
     def test_admin_api_requires_privileges(self, client, authenticated_user):
         """Test that admin API endpoints require admin privileges."""
-        response = client.get("/api/admin/sessions/test-session/players")
+        with authenticated_user:
+            response = client.get("/api/admin/sessions/test-session/players")
 
-        # This route doesn't exist in the API, so expect 404
-        assert response.status_code == 404
+        # Non-admin authenticated user should get 403 forbidden
+        assert response.status_code == 403
 
     def test_get_session_players_api(self, client, admin_user, db_conn, db_cursor):
         """Test getting session players via admin API."""
@@ -734,8 +736,11 @@ class TestAdminAPI:
         )
         db_conn.commit()
 
-        response = client.get(f"/api/admin/sessions/{session_path}/players")
+        with admin_user:
+            response = client.get(f"/api/admin/sessions/{session_path}/players")
 
+        if response.status_code != 200:
+            print(f"Error response: {response.data.decode()}")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert "players" in data
@@ -796,10 +801,11 @@ class TestAdminAPI:
         db_conn.commit()
 
         # Update regular status
-        response = client.put(
-            f"/api/admin/sessions/{session_path}/players/{person_id}/regular",
-            json={"is_regular": True},
-        )
+        with admin_user:
+            response = client.put(
+                f"/api/admin/sessions/{session_path}/players/{person_id}/regular",
+                json={"is_regular": True},
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)

@@ -2497,9 +2497,21 @@ def edit_tune_ajax(session_path, date):
 
 def get_session_players_ajax(session_path):
     """Get all players associated with a session"""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    
+    # Check if current user is a system admin
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -2537,7 +2549,7 @@ def get_session_players_ajax(session_path):
                     MAX(si.date) as last_attended
                 FROM session_instance si
                 INNER JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
-                WHERE si.session_id = %s AND sip.attended = true
+                WHERE si.session_id = %s AND sip.attendance = 'yes'
                 GROUP BY sip.person_id, si.session_id
             ) person_session_count ON p.person_id = person_session_count.person_id
             WHERE sp.session_id = %s
@@ -3538,16 +3550,24 @@ def get_available_sessions():
 @login_required
 def update_session_player_regular_status(session_path, person_id):
     """Update the regular status for a person in a specific session"""
-    # Check if user is system admin
-    if not session.get("is_system_admin"):
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
-
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    
+    # Check if current user is a system admin
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
     try:
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+
         data = request.get_json()
         is_regular = data.get("is_regular", False)
-
-        conn = get_db_connection()
-        cur = conn.cursor()
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -5296,3 +5316,4 @@ def search_session_people(session_id):
         if 'conn' in locals():
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
+
