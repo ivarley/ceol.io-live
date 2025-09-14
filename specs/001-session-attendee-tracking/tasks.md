@@ -57,7 +57,6 @@ A couple other nits:
 - Put the the search and the status counts in the same line
 - Once you've done the action from the search box (adding an existing or new player), empty the box
 
-## In Progress
 
 ### T049 - Allow session admins to edit some person information
 
@@ -74,11 +73,15 @@ If the person does not have a linked user account, a session (or system) admin c
 - State
 - Country
 
-## Backlog
+## In Progress
 
 ### T050 - Edit instruments
 
-You can also edit instruments in the same situation as other details (i.e. if there's not a linked user account).
+On the same person admin page, you can also edit instruments (in the same situation as other details, i.e. if there's not a linked user account).
+
+Show it as the same kind of checkbox list. Fix the issue where it can't save "Other" instruments not in the list.
+
+## Backlog
 
 ### T051 - Convert to Typescript
 

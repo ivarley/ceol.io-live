@@ -191,6 +191,82 @@
                 </div>
             </section>
             
+            <!-- Instruments Section -->
+            <section class="docs-section" id="instruments">
+                <h2 class="section-heading">Instruments</h2>
+                <div class="card">
+                    <div class="card-body">
+                        {% if person.username %}
+                            <!-- Person has user account - read only -->
+                            <div class="row">
+                                <div class="col-12">
+                                    {% if person.instruments %}
+                                        <div class="instrument-tags">
+                                            {% for instrument in person.instruments %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ instrument|title }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">No instruments specified.</p>
+                                    {% endif %}
+                                    <small class="text-muted">This person can edit their own instruments by logging into their account.</small>
+                                </div>
+                            </div>
+                        {% else %}
+                            <!-- Person doesn't have user account - editable -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <form id="instruments-form">
+                                        <div class="mb-3">
+                                            <label class="form-label"><strong>Instruments</strong></label>
+                                            <div id="instruments-checkboxes" class="row">
+                                                <!-- Standard instruments (matching attendance.js list, alphabetical) -->
+                                                {% for instrument in ['banjo', 'bodhrán', 'bouzouki', 'button accordion', 'concertina', 'fiddle', 'flute', 'guitar', 'harp', 'mandolin', 'piano', 'piano accordion', 'tin whistle', 'uilleann pipes'] %}
+                                                <div class="col-md-4 col-sm-6 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input instrument-checkbox" type="checkbox" 
+                                                               id="instrument-{{ loop.index }}" value="{{ instrument }}" 
+                                                               {% if instrument in person.instruments %}checked{% endif %}>
+                                                        <label class="form-check-label" for="instrument-{{ loop.index }}">
+                                                            {{ instrument|title }}
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Custom instruments section -->
+                                        <div class="mb-3">
+                                            <label class="form-label"><strong>Other Instruments</strong></label>
+                                            <div id="custom-instruments">
+                                                {% for instrument in person.instruments %}
+                                                    {% if instrument not in ['banjo', 'bodhrán', 'bouzouki', 'button accordion', 'concertina', 'fiddle', 'flute', 'guitar', 'harp', 'mandolin', 'piano', 'piano accordion', 'tin whistle', 'uilleann pipes'] %}
+                                                        <div class="input-group mb-2 custom-instrument-row">
+                                                            <input type="text" class="form-control custom-instrument" value="{{ instrument|title }}" placeholder="Enter instrument name">
+                                                            <button class="btn btn-outline-danger remove-custom-instrument" type="button">Remove</button>
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                            <button type="button" id="add-custom-instrument" class="btn btn-outline-primary btn-sm">Add Other Instrument</button>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <button type="button" id="save-instruments" class="btn btn-primary btn-sm">Save Instruments</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="instruments-save-status" class="mt-3" style="display: none;"></div>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+            
             <!-- Sessions Attended Section -->
             <section class="docs-section" id="sessions-attended">
                 <h2 class="section-heading">Sessions Attended</h2>
@@ -431,6 +507,86 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
                 // Revert checkbox state
                 this.checked = !isRegular;
+            });
+        });
+    }
+    
+    // Handle instruments functionality
+    const addCustomInstrumentBtn = document.getElementById('add-custom-instrument');
+    const saveInstrumentsBtn = document.getElementById('save-instruments');
+    const instrumentsSaveStatus = document.getElementById('instruments-save-status');
+    
+    if (addCustomInstrumentBtn) {
+        addCustomInstrumentBtn.addEventListener('click', function() {
+            const customInstrumentsDiv = document.getElementById('custom-instruments');
+            const newRow = document.createElement('div');
+            newRow.className = 'input-group mb-2 custom-instrument-row';
+            newRow.innerHTML = `
+                <input type="text" class="form-control custom-instrument" placeholder="Enter instrument name">
+                <button class="btn btn-outline-danger remove-custom-instrument" type="button">Remove</button>
+            `;
+            customInstrumentsDiv.appendChild(newRow);
+            
+            // Add event listener to the remove button
+            newRow.querySelector('.remove-custom-instrument').addEventListener('click', function() {
+                newRow.remove();
+            });
+        });
+        
+        // Add event listeners to existing remove buttons
+        document.querySelectorAll('.remove-custom-instrument').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                btn.closest('.custom-instrument-row').remove();
+            });
+        });
+    }
+    
+    if (saveInstrumentsBtn) {
+        saveInstrumentsBtn.addEventListener('click', function() {
+            const personId = document.getElementById('person-id').value;
+            
+            // Collect checked standard instruments
+            const instruments = [];
+            document.querySelectorAll('.instrument-checkbox:checked').forEach(function(checkbox) {
+                instruments.push(checkbox.value);
+            });
+            
+            // Collect custom instruments
+            document.querySelectorAll('.custom-instrument').forEach(function(input) {
+                const value = input.value.trim();
+                if (value && !instruments.includes(value.toLowerCase())) {
+                    instruments.push(value.toLowerCase());
+                }
+            });
+            
+            // Show loading state
+            instrumentsSaveStatus.style.display = 'block';
+            instrumentsSaveStatus.innerHTML = '<div class="alert alert-info">Saving instruments...</div>';
+            
+            // Make API call to update instruments
+            fetch(`/api/person/${personId}/instruments`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    instruments: instruments
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    instrumentsSaveStatus.innerHTML = '<div class="alert alert-success">Instruments updated successfully!</div>';
+                    setTimeout(() => {
+                        instrumentsSaveStatus.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error(data.message || 'Failed to update instruments');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating instruments:', error);
+                instrumentsSaveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
             });
         });
     }

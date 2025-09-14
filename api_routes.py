@@ -4784,32 +4784,12 @@ def create_person_with_instruments():
         if not isinstance(instruments, list):
             return jsonify({"success": False, "message": "instruments must be a list"}), 400
         
-        # Define valid instruments (matching existing system conventions)
-        valid_instruments = {
-            'fiddle', 'tin whistle', 'flute', 'bodhrán', 'guitar', 'mandolin',
-            'banjo', 'bouzouki', 'concertina', 'button accordion', 'piano accordion',
-            'uilleann pipes', 'piano', 'harp', 'viola', 'cello', 'bass', 'drums'
-        }
-        
-        # Check for invalid instruments
-        invalid_instruments = []
-        for instrument in instruments:
-            if isinstance(instrument, str) and instrument.strip():
-                if instrument.strip().lower() not in valid_instruments:
-                    invalid_instruments.append(instrument.strip())
-        
-        if invalid_instruments:
-            return jsonify({
-                "success": False, 
-                "message": f"Invalid instruments: {', '.join(invalid_instruments)}. Valid instruments: {', '.join(sorted(valid_instruments))}"
-            }), 400
-        
-        # Clean and normalize instruments
+        # Clean and normalize instruments - accept any non-empty instrument name
         normalized_instruments = []
         for instrument in instruments:
             if isinstance(instrument, str) and instrument.strip():
                 normalized = instrument.strip().lower()
-                if normalized in valid_instruments and normalized not in normalized_instruments:
+                if normalized not in normalized_instruments:  # Remove duplicates
                     normalized_instruments.append(normalized)
         
         # Check if user has admin permissions (system admin can create people anywhere)
@@ -5019,32 +4999,12 @@ def update_person_instruments(person_id):
         if not isinstance(instruments, list):
             return jsonify({"success": False, "message": "instruments must be a list"}), 400
         
-        # Define valid instruments (matching existing system conventions)
-        valid_instruments = {
-            'fiddle', 'tin whistle', 'flute', 'bodhrán', 'guitar', 'mandolin',
-            'banjo', 'bouzouki', 'concertina', 'button accordion', 'piano accordion',
-            'uilleann pipes', 'piano', 'harp', 'viola', 'cello', 'bass', 'drums'
-        }
-        
-        # Check for invalid instruments
-        invalid_instruments = []
-        for instrument in instruments:
-            if isinstance(instrument, str) and instrument.strip():
-                if instrument.strip().lower() not in valid_instruments:
-                    invalid_instruments.append(instrument.strip())
-        
-        if invalid_instruments:
-            return jsonify({
-                "success": False, 
-                "message": f"Invalid instruments: {', '.join(invalid_instruments)}. Valid instruments: {', '.join(sorted(valid_instruments))}"
-            }), 400
-        
-        # Clean and normalize instruments
+        # Clean and normalize instruments - accept any non-empty instrument name
         normalized_instruments = []
         for instrument in instruments:
             if isinstance(instrument, str) and instrument.strip():
                 normalized = instrument.strip().lower()
-                if normalized in valid_instruments and normalized not in normalized_instruments:
+                if normalized not in normalized_instruments:  # Remove duplicates
                     normalized_instruments.append(normalized)
         
         # Get database connection

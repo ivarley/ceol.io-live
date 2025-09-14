@@ -2472,6 +2472,18 @@ def session_admin_person(session_path, person_id):
             "is_system_admin": person_row[14],
         }
 
+        # Get instruments for this person
+        cur.execute(
+            """
+            SELECT instrument 
+            FROM person_instrument 
+            WHERE person_id = %s 
+            ORDER BY instrument
+            """,
+            (person_id,)
+        )
+        person_data["instruments"] = [row[0] for row in cur.fetchall()]
+
         # Get attendance history for this person at this session
         cur.execute(
             """

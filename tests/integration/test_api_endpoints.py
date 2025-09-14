@@ -1087,3 +1087,94 @@ class TestAdminAPI:
         data = json.loads(response.data)
         assert data["success"] is False
         assert "permission" in data["message"].lower()
+
+    def test_create_person_with_custom_instruments(
+        self, client, admin_user, db_conn, db_cursor
+    ):
+        """Test creating person with custom instruments that are not in predefined list."""
+        # Create test data for person creation
+        unique_id = str(uuid.uuid4())[:8]
+        
+        person_data = {
+            "first_name": "Test",
+            "last_name": "Musician",
+            "email": f"musician{unique_id}@example.com",
+            "instruments": ["fiddle", "spoons", "washboard", "kazoo"]  # Mix of standard and custom
+        }
+
+        with admin_user:
+            response = client.post("/api/person", json=person_data)
+
+        assert response.status_code == 201
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "data" in data
+        assert "person_id" in data["data"]
+
+        person_id = data["data"]["person_id"]
+        
+        # Verify all instruments were saved, including custom ones
+        db_cursor.execute(
+            """
+            SELECT instrument FROM person_instrument 
+            WHERE person_id = %s 
+            ORDER BY instrument
+            """,
+            (person_id,)
+        )
+        
+        saved_instruments = [row[0] for row in db_cursor.fetchall()]
+        expected_instruments = ["fiddle", "kazoo", "spoons", "washboard"]  # Sorted
+        assert saved_instruments == expected_instruments
+
+    def test_update_person_instruments_with_custom(
+        self, client, admin_user, db_conn, db_cursor
+    ):
+        """Test updating person instruments to include custom instruments."""
+        # Create test person
+        unique_id = str(uuid.uuid4())[:8]
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+            """,
+            ("Jane", "Player", f"jane{unique_id}@example.com"),
+        )
+        person_id = db_cursor.fetchone()[0]
+        
+        # Add some initial instruments
+        db_cursor.execute(
+            """
+            INSERT INTO person_instrument (person_id, instrument)
+            VALUES (%s, %s), (%s, %s)
+            """,
+            (person_id, "fiddle", person_id, "guitar"),
+        )
+        db_conn.commit()
+
+        # Update instruments to include custom ones
+        update_data = {
+            "instruments": ["fiddle", "spoons", "djembe", "harmonica"]
+        }
+
+        with admin_user:
+            response = client.put(f"/api/person/{person_id}/instruments", json=update_data)
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+
+        # Verify instruments were updated
+        db_cursor.execute(
+            """
+            SELECT instrument FROM person_instrument 
+            WHERE person_id = %s 
+            ORDER BY instrument
+            """,
+            (person_id,)
+        )
+        
+        saved_instruments = [row[0] for row in db_cursor.fetchall()]
+        expected_instruments = ["djembe", "fiddle", "harmonica", "spoons"]  # Sorted
+        assert saved_instruments == expected_instruments

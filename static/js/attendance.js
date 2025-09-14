@@ -11,8 +11,8 @@ function AttendanceManager() {
     this.currentSearchQuery = '';
     this.searchTimeout = null;
     this.instruments = [
-        'Fiddle', 'Flute', 'Whistle', 'Accordion', 'Concertina', 'Banjo', 
-        'Guitar', 'Bouzouki', 'Mandolin', 'Bodhrán', 'Pipes', 'Harp'
+        'Banjo', 'Bodhrán', 'Bouzouki', 'Button Accordion', 'Concertina', 'Fiddle',
+        'Flute', 'Guitar', 'Harp', 'Mandolin', 'Piano', 'Piano Accordion', 'Tin Whistle', 'Uilleann Pipes'
     ];
 }
 
