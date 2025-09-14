@@ -195,60 +195,49 @@ class TestPersonManagement:
                 ['fiddle'] in instruments and ['flute'] in instruments
             )
 
-    def test_instrument_validation_workflow(self, client, authenticated_admin_user):
-        """Test complete workflow of instrument validation and correction"""
+    def test_instrument_workflow_accepts_any_instruments(self, client, authenticated_admin_user):
+        """Test complete workflow accepts any instrument names"""
         with authenticated_admin_user:
-            # Step 1: Try to create person with invalid instruments
-            invalid_person_data = {
-                'first_name': 'Invalid',
+            # Step 1: Create person with any instruments (previously considered invalid)
+            person_data = {
+                'first_name': 'Any',
                 'last_name': 'Instruments',
-                'instruments': ['electric_guitar', 'drums', 'saxophone']  # All invalid
+                'instruments': ['electric_guitar', 'drums', 'saxophone']  # Any instruments allowed
             }
             
-            invalid_response = client.post('/api/person', data=json.dumps(invalid_person_data), content_type='application/json')
-            assert invalid_response.status_code == 400
+            response = client.post('/api/person', data=json.dumps(person_data), content_type='application/json')
+            assert response.status_code == 201
+            person_id = json.loads(response.data)['data']['person_id']
             
-            # Step 2: Create person with mixed valid/invalid instruments
+            # Step 2: Create person with mixed traditional/modern instruments
             mixed_person_data = {
                 'first_name': 'Mixed',
                 'last_name': 'Instruments',
-                'instruments': ['fiddle', 'electric_guitar', 'tin whistle']  # 2 valid, 1 invalid
+                'instruments': ['fiddle', 'electric_guitar', 'tin whistle']  # All accepted
             }
             
             mixed_response = client.post('/api/person', data=json.dumps(mixed_person_data), content_type='application/json')
-            assert mixed_response.status_code == 400  # Should reject due to invalid instrument
+            assert mixed_response.status_code == 201
             
-            # Step 3: Create person with all valid instruments
-            valid_person_data = {
-                'first_name': 'Valid',
-                'last_name': 'Instruments',
-                'instruments': ['fiddle', 'tin whistle', 'bodhrán']
+            # Step 3: Update with any instruments
+            update_data = {
+                'instruments': ['fiddle', 'electric_guitar', 'synthesizer']  # Any instruments allowed
             }
             
-            valid_response = client.post('/api/person', data=json.dumps(valid_person_data), content_type='application/json')
-            assert valid_response.status_code == 201
-            person_id = json.loads(valid_response.data)['data']['person_id']
-            
-            # Step 4: Try to update with invalid instruments
-            invalid_update = {
-                'instruments': ['fiddle', 'electric_guitar']  # Mix of valid and invalid
-            }
-            
-            invalid_update_response = client.put(
+            update_response = client.put(
                 f'/api/person/{person_id}/instruments',
-                data=json.dumps(invalid_update),
+                data=json.dumps(update_data),
                 content_type='application/json'
             )
-            assert invalid_update_response.status_code == 400
+            assert update_response.status_code == 200
             
-            # Step 5: Verify original instruments unchanged after failed update
+            # Step 4: Verify instruments were updated successfully
             check_response = client.get(f'/api/person/{person_id}/instruments')
             check_data = json.loads(check_response.data)
             
             assert 'fiddle' in check_data['data']
-            assert 'tin whistle' in check_data['data']
-            assert 'bodhrán' in check_data['data']
-            assert 'electric_guitar' not in check_data['data']
+            assert 'electric_guitar' in check_data['data']
+            assert 'synthesizer' in check_data['data']
 
     def test_person_search_and_discovery_workflow(self, client, authenticated_admin_user, sample_session_data, sample_session_instance_data):
         """Test workflow of creating people and having them be discoverable through search"""

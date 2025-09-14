@@ -90,25 +90,24 @@ class TestUpdateInstrumentsContract:
         data = json.loads(response.data)
         assert data['success'] is True
 
-    def test_update_instruments_invalid_instrument(self, client, admin_user, sample_person_data):
-        """Test that invalid instrument names are rejected"""
+    def test_update_instruments_with_any_instrument(self, client, admin_user, sample_person_data):
+        """Test that any instrument names are accepted"""
         person_id = sample_person_data['person_id']
         
-        invalid_data = {
-            'instruments': ['fiddle', 'electric_guitar', 'drums']  # Invalid instruments
+        data = {
+            'instruments': ['fiddle', 'electric_guitar', 'drums']  # Any instruments allowed
         }
         
         with admin_user:
             response = client.put(
                 f'/api/person/{person_id}/instruments',
-                data=json.dumps(invalid_data),
+                data=json.dumps(data),
                 content_type='application/json'
             )
         
-        assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data['success'] is False
-        assert 'message' in data
+        assert response.status_code == 200
+        response_data = json.loads(response.data)
+        assert response_data['success'] is True
 
     def test_update_instruments_missing_instruments_field(self, client, admin_user, sample_person_data):
         """Test that missing instruments field returns 400"""

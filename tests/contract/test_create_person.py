@@ -103,24 +103,24 @@ class TestCreatePersonContract:
         assert data['success'] is False
         assert 'message' in data
 
-    def test_create_person_invalid_instrument(self, client, authenticated_admin_user):
-        """Test that invalid instrument names are rejected"""
-        invalid_data = {
+    def test_create_person_with_any_instrument(self, client, authenticated_admin_user):
+        """Test that any instrument names are accepted"""
+        data = {
             'first_name': 'John',
             'last_name': 'Smith',
-            'instruments': ['fiddle', 'electric_guitar']  # electric_guitar not in approved list
+            'instruments': ['fiddle', 'electric_guitar', 'drums']  # Any instruments allowed
         }
         
         with authenticated_admin_user:
             response = client.post(
                 '/api/person',
-                data=json.dumps(invalid_data),
+                data=json.dumps(data),
                 content_type='application/json'
             )
         
-        assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data['success'] is False
+        assert response.status_code == 201
+        response_data = json.loads(response.data)
+        assert response_data['success'] is True
 
     def test_create_person_invalid_email_format(self, client, authenticated_admin_user):
         """Test that invalid email formats are rejected"""

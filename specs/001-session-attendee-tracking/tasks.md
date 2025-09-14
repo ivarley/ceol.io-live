@@ -87,10 +87,10 @@ Clicking the count icons in the players view should temporarily filter the list 
 
 ## In Progress
 
-## Backlog
-
 ### T052 - Convert to Typescript
 
 Our implementation of attendance.js is in javascript, but all the other important js code in this app is in typescript. Convert it.
 
 While you're at it, clean up all the console logging.
+
+## Backlog

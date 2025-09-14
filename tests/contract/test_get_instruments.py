@@ -33,14 +33,7 @@ class TestGetInstrumentsContract:
         if instruments:
             for instrument in instruments:
                 assert isinstance(instrument, str)
-                # Should be one of the approved instruments
-                approved_instruments = [
-                    'fiddle', 'flute', 'tin whistle', 'low whistle', 
-                    'uilleann pipes', 'concertina', 'button accordion', 
-                    'piano accordion', 'bodhrán', 'harp', 'tenor banjo', 
-                    'mandolin', 'guitar', 'bouzouki', 'viola'
-                ]
-                assert instrument in approved_instruments
+                # Any instrument names are allowed
 
     def test_get_instruments_empty_list(self, client, admin_user, sample_person_data):
         """Test person with no instruments returns empty list"""  

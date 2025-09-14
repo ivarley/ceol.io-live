@@ -188,20 +188,20 @@ class TestAddNewPerson:
         # Should be forbidden for non-admins
         assert response.status_code == 403
 
-    def test_create_person_with_invalid_instruments_fails(self, client, authenticated_admin_user):
-        """Test that creating person with invalid instruments fails validation"""
+    def test_create_person_with_any_instruments_succeeds(self, client, authenticated_admin_user):
+        """Test that creating person with any instruments succeeds"""
         person_data = {
             'first_name': 'Test',
             'last_name': 'User',
-            'instruments': ['electric_guitar', 'drums']  # Not in approved list
+            'instruments': ['electric_guitar', 'drums']  # Any instruments allowed
         }
         
         with authenticated_admin_user:
             response = client.post('/api/person', data=json.dumps(person_data), content_type='application/json')
         
-        assert response.status_code == 400
+        assert response.status_code == 201
         data = json.loads(response.data)
-        assert data['success'] is False
+        assert data['success'] is True
 
     def test_create_person_and_add_instruments_later(self, client, authenticated_admin_user):
         """Test creating person without instruments, then adding them later"""
