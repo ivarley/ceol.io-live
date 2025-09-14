@@ -9687,6 +9687,14 @@
     background-color: rgba(255, 255, 255, 0.075);
   }
 
+  /* Fix nav-tabs active background for dark mode */
+  [data-theme="dark"] .nav-tabs .nav-link.active,
+  [data-theme="dark"] .nav-tabs .nav-item.show .nav-link {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--border-color) var(--border-color) var(--bg-color);
+  }
+
   /* Fix heading visibility in dark mode */
   [data-theme="dark"] h1,
   [data-theme="dark"] h2,
