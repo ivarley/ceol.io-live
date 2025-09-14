@@ -212,7 +212,7 @@ AttendanceManager.prototype.renderAttendance = function() {
         // Sort everyone together alphabetically, no special treatment for regulars
         var nameA = a.display_name || (a.first_name + ' ' + a.last_name);
         var nameB = b.display_name || (b.first_name + ' ' + b.last_name);
-        return nameA.localeCompare(nameB);
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
     });
 
     var template = document.getElementById('attendance-item-template');
@@ -559,8 +559,20 @@ AttendanceManager.prototype.getPersonDataForOptimisticAdd = function(personId) {
 
 // Helper function to add person to UI optimistically
 AttendanceManager.prototype.addPersonOptimistic = function(personData) {
-    // Add to in-memory data
-    this.attendees.push(personData);
+    // Find the correct alphabetical position to insert the new person
+    var displayName = personData.display_name || (personData.first_name + ' ' + personData.last_name);
+    var insertIndex = this.attendees.length;
+    
+    for (var i = 0; i < this.attendees.length; i++) {
+        var existingName = this.attendees[i].display_name || (this.attendees[i].first_name + ' ' + this.attendees[i].last_name);
+        if (displayName.localeCompare(existingName, undefined, { sensitivity: 'base' }) < 0) {
+            insertIndex = i;
+            break;
+        }
+    }
+    
+    // Insert at the correct position
+    this.attendees.splice(insertIndex, 0, personData);
     
     // Add to UI
     this.renderAttendance();
@@ -985,8 +997,20 @@ AttendanceManager.prototype.updateStatusCountsOptimistic = function() {
 };
 
 AttendanceManager.prototype.addPersonToUIOptimistic = function(person) {
-    // Add to in-memory data
-    this.attendees.push(person);
+    // Find the correct alphabetical position to insert the new person
+    var displayName = person.display_name || (person.first_name + ' ' + person.last_name);
+    var insertIndex = this.attendees.length;
+    
+    for (var i = 0; i < this.attendees.length; i++) {
+        var existingName = this.attendees[i].display_name || (this.attendees[i].first_name + ' ' + this.attendees[i].last_name);
+        if (displayName.localeCompare(existingName, undefined, { sensitivity: 'base' }) < 0) {
+            insertIndex = i;
+            break;
+        }
+    }
+    
+    // Insert at the correct position in memory
+    this.attendees.splice(insertIndex, 0, person);
     
     // Add to UI using existing render function
     var listContainer = document.getElementById('attendance-list');
@@ -1000,7 +1024,14 @@ AttendanceManager.prototype.addPersonToUIOptimistic = function(person) {
         attendeeElement.style.opacity = '0.7';
         attendeeElement.style.border = '2px dashed var(--warning, #ffc107)';
         
-        listContainer.appendChild(attendeeElement);
+        // Find the correct DOM position to insert the element
+        var existingItems = listContainer.querySelectorAll('.attendance-item');
+        if (insertIndex < existingItems.length) {
+            listContainer.insertBefore(attendeeElement, existingItems[insertIndex]);
+        } else {
+            listContainer.appendChild(attendeeElement);
+        }
+        
         this.setupAttendeeEvents(attendeeElement, person);
     }
     
