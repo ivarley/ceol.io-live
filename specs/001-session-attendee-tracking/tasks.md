@@ -48,8 +48,16 @@ Remove the "Add Person" and "Refresh" buttons.
 
 A couple other nits:
 
-- Cancel not working on modal
-- Closing modal, screen still dim
+- There's an invisible button to the right of the search box, get rid of it
+- Cancel button is not working on modal
+- Closing the modal, the screen still stays dimmed and shouldn't
+- The selected tab is white even in dark mode and shouldn't be
+- I'd like the rows in the player UI to be vertically thinner by about 10px
+- Remove the "Session Attendance" albel, and move the status counts to align right
+- Remove "Back to this session" from the bottom of this (and from the tunes tab, if it's shared)
+
+- Put the the search and the status counts in the same line
+- Once you've done the action from the search box (adding an existing or new player), empty the box
 
 ## Backlog
 
@@ -78,8 +86,4 @@ Our implementation of attendance.js is in javascript, but all the other importan
 
 Other
 - Clean up console logging
-- white tab in dark mode
-- Thinner rows
-- Remove "Session Attendance", move counts to align right
-- Remove "Back to this session" from the bottom of this and tune page
 - Clicking counts filters (search unfilters)

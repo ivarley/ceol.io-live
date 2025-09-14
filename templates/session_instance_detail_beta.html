@@ -747,6 +747,27 @@
                 display: inline;
             }
         }
+        
+        /* Dark mode tab navigation fixes */
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: var(--bg-color) !important;
+            color: var(--text-color) !important;
+            border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
+        }
+        
+        [data-theme="dark"] .nav-tabs .nav-link {
+            color: var(--text-color);
+            border-color: transparent;
+        }
+        
+        [data-theme="dark"] .nav-tabs .nav-link:hover {
+            border-color: var(--border-color) var(--border-color) var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .nav-tabs {
+            border-bottom: 1px solid var(--border-color);
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
@@ -936,8 +957,6 @@
         </p>
     </div>
     {% endif %}
-    
-    <p><a href="/sessions/{{ session_instance.session_path }}">← Back to this session</a></p>
 </div>
 {% endblock %}
 

@@ -1,44 +1,33 @@
 <!-- Attendance Tab Content -->
 <div class="attendance-container">
     <div class="attendance-header mb-3">
-        <h4>Session Attendance</h4>
-        {% if is_session_admin %}
-        <div class="attendance-actions">
-            <!-- Buttons removed - search now handles adding people -->
-        </div>
-        {% elif is_session_regular %}
-        <div class="attendance-actions">
-            <button class="btn btn-success btn-sm" id="quick-checkin-btn" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.quickCheckin()">
-                <i class="fas fa-check"></i> Check In
-            </button>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="attendance-stats mb-3">
-        <span class="badge badge-success">Yes: <span id="yes-count">0</span></span>
-        <span class="badge badge-warning">Maybe: <span id="maybe-count">0</span></span>
-        <span class="badge badge-danger">No: <span id="no-count">0</span></span>
-        <span class="badge badge-primary">Unknown: <span id="unknown-count">0</span></span>
-        <span class="badge badge-secondary">Total: <span id="total-count">0</span></span>
-    </div>
-
-    <!-- Search Bar for existing attendees -->
-    {% if is_session_admin or current_user.is_system_admin %}
-    <div class="attendance-search mb-3">
-        <div class="input-group">
-            <input type="text" class="form-control" id="attendee-search" 
-                   placeholder="Search and add existing people..." 
-                   autocomplete="off">
-            <div class="input-group-append">
-                <button class="btn btn-outline-secondary" type="button" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.searchPeople()">
-                    <i class="fas fa-search"></i>
+        <div class="attendance-left-section">
+            {% if is_session_admin or current_user.is_system_admin %}
+            <!-- Search Bar for existing attendees -->
+            <div class="attendance-search">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="attendee-search" 
+                           placeholder="Search and add existing people..." 
+                           autocomplete="off">
+                </div>
+                <div id="search-results" class="search-results-dropdown"></div>
+            </div>
+            {% elif is_session_regular %}
+            <div class="attendance-actions">
+                <button class="btn btn-success btn-sm" id="quick-checkin-btn" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.quickCheckin()">
+                    <i class="fas fa-check"></i> Check In
                 </button>
             </div>
+            {% endif %}
         </div>
-        <div id="search-results" class="search-results-dropdown"></div>
+        <div class="attendance-stats">
+            <span class="badge badge-success">Yes: <span id="yes-count">0</span></span>
+            <span class="badge badge-warning">Maybe: <span id="maybe-count">0</span></span>
+            <span class="badge badge-danger">No: <span id="no-count">0</span></span>
+            <span class="badge badge-primary">Unknown: <span id="unknown-count">0</span></span>
+            <span class="badge badge-secondary">Total: <span id="total-count">0</span></span>
+        </div>
     </div>
-    {% endif %}
 
     <!-- Attendance List -->
     <div class="attendance-list" id="attendance-list">

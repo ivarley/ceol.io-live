@@ -615,7 +615,7 @@ AttendanceManager.prototype.closeModal = function(modalId) {
     var modal = document.getElementById(modalId);
     if (modal) {
         modal.style.display = 'none';
-        modal.classList.remove('show');
+        modal.classList.remove('show', 'fade');
         modal.setAttribute('aria-hidden', 'true');
         
         // Remove backdrop
@@ -627,6 +627,19 @@ AttendanceManager.prototype.closeModal = function(modalId) {
             }
             modal.removeAttribute('data-backdrop-id');
         }
+        
+        // Also remove any remaining backdrops (fallback cleanup)
+        var remainingBackdrops = document.querySelectorAll('.modal-backdrop');
+        for (var i = 0; i < remainingBackdrops.length; i++) {
+            remainingBackdrops[i].remove();
+        }
+        
+        // Remove modal-open class from body
+        document.body.classList.remove('modal-open');
+        
+        // Reset body styles that Bootstrap may have set
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
     }
 };
 
@@ -737,6 +750,12 @@ AttendanceManager.prototype.createPerson = function() {
             checkboxes[i].checked = false;
         }
         if (customInstrument) customInstrument.value = '';
+        
+        // Clear search box
+        var searchInput = document.getElementById('attendee-search');
+        var searchResults = document.getElementById('search-results');
+        if (searchInput) searchInput.value = '';
+        if (searchResults) searchResults.style.display = 'none';
         
         self.showSuccess('New person created and added to attendance');
     })
