@@ -15,7 +15,8 @@
     "removeComments": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "types": ["jest", "node"]
   },
   "include": ["src/ts/**/*"],
   "exclude": ["node_modules", "static/js/dist", "**/*.config.js", ".eslintrc.*"]
