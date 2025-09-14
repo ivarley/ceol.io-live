@@ -10,6 +10,7 @@ function AttendanceManager() {
     this.nonRegulars = [];
     this.currentSearchQuery = '';
     this.searchTimeout = null;
+    this.currentFilter = ''; // Empty string means no filter (show all)
     this.instruments = [
         'Banjo', 'Bodhrán', 'Bouzouki', 'Button Accordion', 'Concertina', 'Fiddle',
         'Flute', 'Guitar', 'Harp', 'Mandolin', 'Piano', 'Piano Accordion', 'Tin Whistle', 'Uilleann Pipes'
@@ -28,6 +29,7 @@ AttendanceManager.prototype.init = function(config) {
     this.loadAttendance();
     this.loadNonRegulars();
     this.setupEventListeners();
+    this.setupFilterListeners();
     this.initializeQuickCheckin();
     
     // Set up modal input protection for beta page
@@ -63,6 +65,11 @@ AttendanceManager.prototype.setupEventListeners = function() {
     var self = this;
     var searchInput = document.getElementById('attendee-search');
     if (searchInput) {
+        searchInput.addEventListener('focus', function(e) {
+            // Reset filter when search box gets focus
+            self.resetFilter();
+        });
+        
         searchInput.addEventListener('input', function(e) {
             // Use instant search with preloaded data
             self.performInstantSearch(e.target.value);
@@ -85,6 +92,114 @@ AttendanceManager.prototype.setupEventListeners = function() {
             searchResults.style.display = 'none';
         }
     });
+};
+
+AttendanceManager.prototype.setupFilterListeners = function() {
+    var self = this;
+    
+    // Add click handlers to filter badges
+    var filterBadges = document.querySelectorAll('.attendance-filter-badge');
+    filterBadges.forEach(function(badge) {
+        badge.addEventListener('click', function(e) {
+            e.preventDefault();
+            var filter = this.dataset.filter;
+            self.applyFilter(filter);
+        });
+    });
+    
+    // Set up tab change listener to reset filter
+    var tabs = document.querySelectorAll('[data-toggle="tab"]');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            // Reset filter when switching tabs
+            if (e.target.getAttribute('href') !== '#attendance-panel') {
+                self.resetFilter();
+            }
+        });
+    });
+};
+
+AttendanceManager.prototype.applyFilter = function(filter) {
+    // If clicking the same filter that's already active, turn it off
+    if (this.currentFilter === filter && filter !== '') {
+        this.currentFilter = '';
+        console.log('Toggled filter off');
+    } else {
+        this.currentFilter = filter;
+        console.log('Applied filter:', filter || 'none (show all)');
+    }
+    
+    // Update badge visual states
+    this.updateFilterBadgeStates();
+    
+    // Filter the attendance list
+    this.filterAttendanceList();
+};
+
+AttendanceManager.prototype.resetFilter = function() {
+    if (this.currentFilter !== '') {
+        this.currentFilter = '';
+        this.updateFilterBadgeStates();
+        this.filterAttendanceList();
+        console.log('Reset filter');
+    }
+};
+
+AttendanceManager.prototype.updateFilterBadgeStates = function() {
+    var filterBadges = document.querySelectorAll('.attendance-filter-badge');
+    filterBadges.forEach(function(badge) {
+        if (badge.dataset.filter === this.currentFilter) {
+            // Active filter badge - add visual indication
+            badge.style.opacity = '1';
+            badge.style.transform = 'scale(1.05)';
+            badge.style.fontWeight = 'bold';
+        } else {
+            // Inactive filter badge
+            badge.style.opacity = '0.7';
+            badge.style.transform = 'scale(1)';
+            badge.style.fontWeight = 'normal';
+        }
+    }.bind(this));
+};
+
+AttendanceManager.prototype.filterAttendanceList = function() {
+    var attendanceItems = document.querySelectorAll('.attendance-item');
+    
+    attendanceItems.forEach(function(item) {
+        var itemStatus = item.dataset.status || '';
+        var shouldShow = this.currentFilter === '' || itemStatus === this.currentFilter;
+        
+        if (shouldShow) {
+            item.style.display = '';
+            item.classList.remove('filtered-out', 'dimmed');
+        } else {
+            item.style.display = 'none';
+            item.classList.add('filtered-out');
+        }
+    }.bind(this));
+};
+
+AttendanceManager.prototype.handleStatusChangeFiltering = function(personId, newStatus) {
+    // Only handle special behavior if we have an active filter
+    if (this.currentFilter === '') {
+        return; // No filter active, normal behavior
+    }
+    
+    var attendeeElement = document.querySelector('.attendance-item[data-person-id="' + personId + '"]');
+    if (!attendeeElement) {
+        return;
+    }
+    
+    // If the new status doesn't match the current filter, show as dimmed instead of hiding
+    if (newStatus !== this.currentFilter) {
+        attendeeElement.style.display = ''; // Show the element
+        attendeeElement.classList.add('dimmed'); // But show it as dimmed
+        attendeeElement.classList.remove('filtered-out');
+    } else {
+        // Status now matches filter, show normally
+        attendeeElement.style.display = '';
+        attendeeElement.classList.remove('dimmed', 'filtered-out');
+    }
 };
 
 AttendanceManager.prototype.initializeQuickCheckin = function() {
@@ -366,6 +481,9 @@ AttendanceManager.prototype.updateAttendanceStatus = function(personId, status) 
     // Optimistic update: Update UI immediately
     this.updateAttendeeStatusOptimistic(personId, status);
     this.updateStatusCountsOptimistic();
+    
+    // Handle filtering behavior when status changes
+    this.handleStatusChangeFiltering(personId, status);
 
     var self = this;
     fetch('/api/session_instance/' + this.config.sessionInstanceId + '/attendees/checkin', {

@@ -155,6 +155,27 @@
     color: #721c24;
 }
 
+/* Filtering States */
+.attendance-item.dimmed {
+    opacity: 0.4;
+    transform: scale(0.98);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.attendance-item.filtered-out {
+    display: none;
+}
+
+/* Filter Badge States */
+.attendance-filter-badge {
+    transition: opacity 0.2s ease, transform 0.2s ease, font-weight 0.2s ease;
+}
+
+.attendance-filter-badge:hover {
+    opacity: 1 !important;
+    transform: scale(1.1) !important;
+}
+
 /* Status Buttons */
 .attendance-status {
     min-width: 36px;
