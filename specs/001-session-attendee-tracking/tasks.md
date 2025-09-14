@@ -91,8 +91,6 @@ Our implementation of attendance.js is in javascript, but all the other importan
 
 While you're at it, clean up all the console logging.
 
-## In Progress
-
 ### T053 - Return links
 
 I want to make sure navigation is consistent throughout the app. When you're on the session instance details page (regular or beta):
@@ -102,11 +100,11 @@ sessions/{path}/{date}/beta
 
 The session name is listed at the top. Just to the right of that, put a "return" arrow (⮐) that's a link back to the session home page:
 
-sessions/{path}/
+sessions/{path}/11
 
 The link should be dim (meaning, dark blue in dark mode, or light blue in light mode).
 
-## Backlog
+## In Progress
 
 ### T054 Bulk Player Import
 
@@ -133,3 +131,7 @@ Add a breif explanation of the required format on the page.
 The entry page has a "Next" button which brings you to the second stage: a preview of what would get created, shown as a grid, with "instruments" as a single comma-delimited column. The grid clearly shows which records are not being imported because they're duplicates. A "Back" button lets you go back to your initial textbox view and make changes. A "Save" button lets you perform the actual insert.
 
 Begin by writing a set of failing tests that exercise the two new API endpoints (bulk person pre-process, and bulk person save) thoroughly, where all the tests initially fail; then implement the API such that the tests pass; then build the UI.
+
+Show a spinner while moving from one screen to the next.
+
+## Backlog

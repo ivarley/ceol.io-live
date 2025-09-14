@@ -155,6 +155,11 @@ app.add_url_rule(
 app.add_url_rule(
     "/admin/sessions/<path:session_path>/logs", "session_admin_logs", session_admin_logs
 )
+app.add_url_rule(
+    "/admin/sessions/<path:session_path>/bulk-import",
+    "session_admin_bulk_import",
+    session_admin_bulk_import,
+)
 
 # Register API routes
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
@@ -450,6 +455,20 @@ app.add_url_rule(
     "get_session_non_regulars",
     get_session_non_regulars,
     methods=["GET"],
+)
+
+# Bulk import endpoints
+app.add_url_rule(
+    "/api/session/<int:session_id>/bulk-import/preprocess",
+    "bulk_import_preprocess_session",
+    bulk_import_preprocess_session,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/session/<int:session_id>/bulk-import/save",
+    "bulk_import_save_session",
+    bulk_import_save_session,
+    methods=["POST"],
 )
 
 # Error handlers

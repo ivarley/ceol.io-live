@@ -2541,3 +2541,28 @@ def session_admin_person(session_path, person_id):
 
     finally:
         conn.close()
+
+@login_required
+def session_admin_bulk_import(session_path):
+    """Session admin bulk import page - supports both CSV input and preview steps"""
+    # Check if user is system admin only (per API design)
+    if not session.get("is_system_admin"):
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        from app import render_error_page
+        return render_error_page("Session not found", 404)
+
+    # Get step from query parameter, default to 'input'
+    step = request.args.get('step', 'input')
+    if step not in ['input', 'preview']:
+        step = 'input'
+
+    return render_template(
+        "session_bulk_import.html",
+        session=session_data,
+        session_path=session_path,
+        step=step
+    )

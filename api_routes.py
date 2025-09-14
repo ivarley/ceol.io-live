@@ -5524,3 +5524,536 @@ def get_session_non_regulars(session_id):
             conn.close()
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+
+def parse_csv_data(csv_data, session_city=None, session_state=None, session_country=None):
+    """
+    Parse CSV data and return processed person records.
+    
+    Supports various CSV formats with optional headers.
+    Auto-detects columns based on content.
+    
+    Args:
+        csv_data: Raw CSV string
+        session_city: Default city from session
+        session_state: Default state from session
+        session_country: Default country from session
+        
+    Returns:
+        List of person dictionaries with detected fields
+    """
+    import csv
+    import io
+    import re
+    
+    if not csv_data or not csv_data.strip():
+        raise ValueError("CSV data is empty")
+    
+    lines = csv_data.strip().split('\n')
+    if not lines:
+        raise ValueError("CSV data is empty")
+    
+    reader = csv.reader(lines)
+    rows = list(reader)
+    
+    if not rows:
+        raise ValueError("CSV data is empty")
+    
+    # Detect if first row is header by checking for typical header words
+    header_words = {'first', 'last', 'name', 'email', 'phone', 'sms', 'city', 'state', 'country', 'regular', 'instrument'}
+    first_row_lower = [col.lower().replace(' ', '').replace('_', '') for col in rows[0]]
+    has_header = any(word in ' '.join(first_row_lower) for word in header_words)
+    
+    processed_people = []
+    data_rows = rows[1:] if has_header else rows
+    headers = rows[0] if has_header else None
+    
+    if not data_rows:
+        raise ValueError("No data rows found after header")
+    
+    for row_idx, row in enumerate(data_rows):
+        if not row or all(not cell.strip() for cell in row):
+            continue  # Skip empty rows
+        
+        try:
+            person = parse_csv_row(row, headers, session_city, session_state, session_country)
+            if person:
+                processed_people.append(person)
+        except Exception as e:
+            raise ValueError(f"Error parsing row {row_idx + (2 if has_header else 1)}: {str(e)}")
+    
+    if not processed_people:
+        raise ValueError("No valid person records found in CSV data")
+    
+    return processed_people
+
+
+def parse_csv_row(row, headers, session_city=None, session_state=None, session_country=None):
+    """Parse a single CSV row into a person dictionary."""
+    import re
+    
+    if not row:
+        return None
+    
+    person = {
+        'first_name': '',
+        'last_name': '',
+        'email': None,
+        'sms_number': None,
+        'city': session_city,
+        'state': session_state,
+        'country': session_country,
+        'instruments': [],
+        'is_regular': False
+    }
+    
+    if headers:
+        # Parse with headers
+        for i, value in enumerate(row):
+            if i >= len(headers):
+                break
+                
+            header = headers[i].lower().replace(' ', '').replace('_', '')
+            value = value.strip()
+            
+            if not value:
+                continue
+                
+            if 'firstname' in header or header == 'first':
+                person['first_name'] = value
+            elif 'lastname' in header or header == 'last':
+                person['last_name'] = value
+            elif header in ['name', 'fullname']:
+                # Split full name at last space
+                parts = value.strip().split()
+                if parts:
+                    person['last_name'] = parts[-1]
+                    person['first_name'] = ' '.join(parts[:-1]) if len(parts) > 1 else parts[0]
+            elif 'email' in header:
+                if is_email(value):
+                    person['email'] = value.lower()
+            elif 'sms' in header or 'phone' in header:
+                if is_phone_number(value):
+                    person['sms_number'] = value
+            elif 'city' in header:
+                person['city'] = value
+            elif 'state' in header:
+                person['state'] = value
+            elif 'country' in header:
+                person['country'] = value
+            elif 'regular' in header:
+                person['is_regular'] = value.lower().strip() in ['x', 'true', 'yes', 't', '1']
+            elif 'instrument' in header:
+                instruments = parse_instruments(value)
+                person['instruments'] = instruments
+    else:
+        # Parse without headers - auto-detect based on content
+        used_indices = set()
+        
+        # First, try to identify name (first 1-2 columns that don't look like email/phone)
+        name_found = False
+        for i, value in enumerate(row[:3]):  # Check first 3 columns for name
+            value = value.strip()
+            
+            # If first column is empty, this indicates a malformed CSV
+            if i == 0 and not value:
+                raise ValueError("First column appears to be name but is empty")
+            
+            if not value or i in used_indices:
+                continue
+                
+            if not is_email(value) and not is_phone_number(value):
+                if not name_found:
+                    # This looks like a name - split at last space
+                    parts = value.split()
+                    if parts:
+                        person['last_name'] = parts[-1]
+                        person['first_name'] = ' '.join(parts[:-1]) if len(parts) > 1 else parts[0]
+                        used_indices.add(i)
+                        name_found = True
+                        break
+        
+        # Look for email
+        for i, value in enumerate(row):
+            if i in used_indices:
+                continue
+            if is_email(value.strip()):
+                person['email'] = value.strip().lower()
+                used_indices.add(i)
+                break
+        
+        # Look for phone number
+        for i, value in enumerate(row):
+            if i in used_indices:
+                continue
+            if is_phone_number(value.strip()):
+                person['sms_number'] = value.strip()
+                used_indices.add(i)
+                break
+        
+        # Remaining columns are likely instruments
+        instruments = []
+        for i, value in enumerate(row):
+            if i in used_indices:
+                continue
+            value = value.strip()
+            if value:
+                instruments.extend(parse_instruments(value))
+        
+        person['instruments'] = instruments
+    
+    # Validate required fields
+    if not person['first_name'] or not person['last_name']:
+        raise ValueError("Name is required (either separate first/last name fields or full name)")
+    
+    # Clean and normalize instruments
+    person['instruments'] = [inst.lower().strip() for inst in person['instruments'] if inst.strip()]
+    
+    return person
+
+
+def is_email(value):
+    """Check if a value looks like an email address."""
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, value))
+
+
+def is_phone_number(value):
+    """Check if a value looks like a phone number."""
+    import re
+    # Match various phone number formats
+    phone_pattern = r'^[\+]?[\d\s\-\(\)\.]{10,}$'
+    return bool(re.match(phone_pattern, value)) and len(re.sub(r'[\s\-\(\)\.]', '', value)) >= 10
+
+
+def parse_instruments(value):
+    """Parse instrument string into list of instruments."""
+    if not value:
+        return []
+    
+    # Handle quoted comma-separated lists
+    import re
+    if value.startswith('"') and value.endswith('"'):
+        value = value[1:-1]
+    
+    # Split on commas and clean up
+    instruments = [inst.strip() for inst in value.split(',') if inst.strip()]
+    return instruments
+
+
+def find_duplicate_person(person_data, session_id):
+    """
+    Find if person already exists based on email, phone, or name within session.
+    
+    Returns: (is_duplicate, existing_person_id, duplicate_reason)
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # First check by email (exact match)
+        if person_data.get('email'):
+            cur.execute(
+                "SELECT person_id FROM person WHERE email = %s",
+                (person_data['email'],)
+            )
+            result = cur.fetchone()
+            if result:
+                cur.close()
+                conn.close()
+                return True, result[0], "email"
+        
+        # Then check by SMS number (exact match)
+        if person_data.get('sms_number'):
+            cur.execute(
+                "SELECT person_id FROM person WHERE sms_number = %s",
+                (person_data['sms_number'],)
+            )
+            result = cur.fetchone()
+            if result:
+                cur.close()
+                conn.close()
+                return True, result[0], "phone"
+        
+        # Finally check by name within this session
+        cur.execute(
+            """
+            SELECT p.person_id 
+            FROM person p
+            JOIN session_person sp ON p.person_id = sp.person_id
+            WHERE sp.session_id = %s 
+            AND LOWER(p.first_name) = LOWER(%s) 
+            AND LOWER(p.last_name) = LOWER(%s)
+            """,
+            (session_id, person_data['first_name'], person_data['last_name'])
+        )
+        result = cur.fetchone()
+        if result:
+            cur.close()
+            conn.close()
+            return True, result[0], "name"
+        
+        cur.close()
+        conn.close()
+        return False, None, None
+        
+    except Exception:
+        cur.close()
+        conn.close()
+        return False, None, None
+
+
+@api_login_required  
+def bulk_import_preprocess_session(session_id):
+    """
+    First stage of bulk import: preprocess CSV data and return preview.
+    
+    POST /api/session/{session_id}/bulk-import/preprocess
+    
+    Expected JSON payload:
+    {
+        "csv_data": "CSV string with person data"
+    }
+    
+    Returns processed people with duplicate detection.
+    """
+    if request.method != 'POST':
+        return jsonify({"success": False, "message": "Only POST method allowed"}), 405
+    
+    try:
+        # Check permissions - must be system admin 
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+        
+        # Check if session exists and get location data
+        cur.execute(
+            "SELECT session_id, name, city, state, country FROM session WHERE session_id = %s",
+            (session_id,)
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        
+        session_city = session_result[2]
+        session_state = session_result[3] 
+        session_country = session_result[4]
+        
+        cur.close()
+        conn.close()
+        
+        # Get CSV data from request
+        data = request.get_json()
+        if data is None:
+            return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        
+        csv_data = data.get('csv_data', '').strip()
+        if not csv_data:
+            return jsonify({"success": False, "message": "csv_data field is required"}), 400
+        
+        # Parse CSV data
+        try:
+            processed_people = parse_csv_data(csv_data, session_city, session_state, session_country)
+        except ValueError as e:
+            return jsonify({"success": False, "message": str(e)}), 400
+        
+        # Check for duplicates
+        for person in processed_people:
+            is_duplicate, existing_id, reason = find_duplicate_person(person, session_id)
+            person['is_duplicate'] = is_duplicate
+            if is_duplicate:
+                person['existing_person_id'] = existing_id
+                person['duplicate_reason'] = reason
+        
+        return jsonify({
+            "success": True,
+            "processed_people": processed_people,
+            "session_info": {
+                "session_id": session_id,
+                "name": session_result[1],
+                "city": session_city,
+                "state": session_state,
+                "country": session_country
+            }
+        })
+        
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def bulk_import_save_session(session_id):
+    """
+    Second stage of bulk import: save processed people to database.
+    
+    POST /api/session/{session_id}/bulk-import/save
+    
+    Expected JSON payload:
+    {
+        "processed_people": [array of processed person objects]
+    }
+    
+    Creates new people and associated session_person records.
+    """
+    if request.method != 'POST':
+        return jsonify({"success": False, "message": "Only POST method allowed"}), 405
+    
+    try:
+        # Check permissions - must be system admin
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+        
+        # Check if session exists
+        cur.execute(
+            "SELECT session_id FROM session WHERE session_id = %s",
+            (session_id,)
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        
+        # Get processed people from request
+        data = request.get_json()
+        if data is None:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "No JSON data provided"}), 400
+        
+        processed_people = data.get('processed_people', [])
+        if not processed_people:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "processed_people field is required"}), 400
+        
+        if not isinstance(processed_people, list):
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "processed_people must be an array"}), 400
+        
+        created_count = 0
+        skipped_count = 0
+        created_people = []
+        
+        # Begin transaction
+        cur.execute("BEGIN")
+        
+        try:
+            for person_data in processed_people:
+                # Skip duplicates
+                if person_data.get('is_duplicate', False):
+                    skipped_count += 1
+                    continue
+                
+                # Create person record
+                cur.execute(
+                    """
+                    INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, created_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    RETURNING person_id
+                    """,
+                    (
+                        person_data.get('first_name', '').strip(),
+                        person_data.get('last_name', '').strip(),
+                        person_data.get('email'),
+                        person_data.get('sms_number'),
+                        person_data.get('city'),
+                        person_data.get('state'),
+                        person_data.get('country')
+                    )
+                )
+                
+                person_id = cur.fetchone()[0]
+                
+                # Log person creation
+                save_to_history(cur, 'person', 'INSERT', person_id, current_user.user_id)
+                
+                # Create instruments
+                instruments = person_data.get('instruments', [])
+                for instrument in instruments:
+                    if instrument and instrument.strip():
+                        cur.execute(
+                            """
+                            INSERT INTO person_instrument (person_id, instrument, created_date)
+                            VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                            """,
+                            (person_id, instrument.strip().lower())
+                        )
+                        
+                        # Log instrument creation
+                        save_to_history(cur, 'person_instrument', 'INSERT', 
+                                      (person_id, instrument.strip().lower()), current_user.user_id)
+                
+                # Create session_person record
+                is_regular = person_data.get('is_regular', False)
+                cur.execute(
+                    """
+                    INSERT INTO session_person (session_id, person_id, is_regular, created_date)
+                    VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    """,
+                    (session_id, person_id, is_regular)
+                )
+                
+                # Log session_person creation
+                save_to_history(cur, 'session_person', 'INSERT', 
+                              (session_id, person_id), current_user.user_id)
+                
+                created_count += 1
+                created_people.append({
+                    "person_id": person_id,
+                    "first_name": person_data.get('first_name', ''),
+                    "last_name": person_data.get('last_name', ''),
+                    "email": person_data.get('email'),
+                    "instruments": instruments,
+                    "is_regular": is_regular
+                })
+            
+            # Commit transaction
+            cur.execute("COMMIT")
+            
+            cur.close()
+            conn.close()
+            
+            return jsonify({
+                "success": True,
+                "message": f"Successfully imported {created_count} people ({skipped_count} skipped as duplicates)",
+                "created_count": created_count,
+                "skipped_count": skipped_count,
+                "created_people": created_people
+            })
+            
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": f"Error saving people: {str(e)}"}), 500
+            
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Import - {{ session.name }}{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            <header class="docs-header">
+                <h1 class="docs-heading">Bulk Import Players - {{ session.name }}</h1>
+                <section class="docs-intro">
+                    <p>Import multiple players from CSV data. <a href="/admin/sessions/{{ session.path }}/players">← Back to Players</a></p>
+                </section>
+            </header>
+            
+            {% if step == "input" %}
+            <!-- CSV Input Step -->
+            <section class="docs-section" id="csv-input">
+                <h2 class="section-heading">Paste Comma-Separated Data</h2>
+                
+                <!-- Format Help - Collapsible -->
+                <div class="mb-3">
+                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none d-flex align-items-center" id="format-help-toggle" aria-expanded="false">
+                        <span class="chevron-icon me-2" id="format-help-icon">▶</span>
+                        <span class="text-muted">Need help with CSV format?</span>
+                    </button>
+                </div>
+                
+                <div class="format-help-content" id="format-help" style="display: none;">
+                    <!-- Format Explanation with Examples -->
+                    <div class="alert alert-info mb-4">
+                        <h6>Supported CSV Formats</h6>
+                        <p class="mb-2">The system automatically detects your CSV format. You can use any of these arrangements:</p>
+                        <ul class="mb-3 small">
+                            <li><strong>Basic:</strong> Name, Email, Instruments</li>
+                            <li><strong>With headers:</strong> First Name, Last Name, Email, Instruments</li>
+                            <li><strong>Extended:</strong> Name, Email, Phone, City, State, Country, Instruments, Regular</li>
+                        </ul>
+                        
+                        <p class="mb-2"><strong>Field Notes:</strong></p>
+                        <ul class="mb-3 small">
+                            <li><strong>Name:</strong> Can be "First Last" or separate First/Last columns</li>
+                            <li><strong>Contact:</strong> Email addresses or phone numbers are auto-detected</li>
+                            <li><strong>Instruments:</strong> Comma-separated list (e.g., "Fiddle,Flute" or "Guitar")</li>
+                            <li><strong>Regular:</strong> "yes", "true", "1" marks as regular session player</li>
+                            <li><strong>Location:</strong> Missing city/state/country will default from session settings</li>
+                        </ul>
+                        
+                        <p class="mb-2"><strong>Example CSV formats:</strong></p>
+                        <div class="small font-monospace bg-light p-2 rounded mb-0">
+                            <strong>Simple:</strong><br>
+                            John Smith,john@example.com,Fiddle,Flute<br>
+                            Jane Doe,jane@example.com,Guitar<br><br>
+                            
+                            <strong>With headers:</strong><br>
+                            First Name,Last Name,Email,Regular,Instruments<br>
+                            John,Smith,john@example.com,yes,"Fiddle,Flute"<br>
+                            Jane,Doe,jane@example.com,no,Guitar
+                        </div>
+                    </div>
+                </div>
+                
+                <form id="csv-input-form">
+                    <div class="mb-3">
+                        <label for="csv-data" class="form-label">
+                            <strong>CSV Data</strong>
+                            <span class="text-muted">(paste from Excel, Google Sheets, or any CSV source)</span>
+                        </label>
+                        <textarea 
+                            id="csv-data" 
+                            class="form-control" 
+                            rows="15" 
+                            placeholder="Paste your CSV data here...&#10;&#10;Example:&#10;John Smith,john@example.com,Fiddle,Flute&#10;Jane Doe,jane@example.com,Guitar&#10;Mike Johnson,512-555-1234,Mandolin"
+                            required></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-secondary" onclick="clearCsvData()">Clear</button>
+                        <button type="submit" class="btn btn-primary" id="process-btn">
+                            <span class="btn-text">Next →</span>
+                            <span class="btn-spinner" style="display: none;">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                Processing...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+            
+            {% elif step == "preview" %}
+            <!-- Preview Step -->
+            <section class="docs-section" id="csv-preview">
+                <h2 class="section-heading">Step 2: Review & Confirm</h2>
+                
+                <div class="alert alert-success mb-3" id="processing-summary">
+                    <strong>Processing Results:</strong>
+                    <span id="summary-text"></span>
+                </div>
+                
+                <!-- Preview Table -->
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm table-bordered" id="preview-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Location</th>
+                                <th>Instruments</th>
+                                <th>Regular</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-table-body">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary" id="back-to-input">← Back to Edit CSV</button>
+                    <div>
+                        <button type="button" class="btn btn-outline-primary me-2" id="select-all">Select All</button>
+                        <button type="button" class="btn btn-outline-secondary me-2" id="select-none">Select None</button>
+                        <button type="button" class="btn btn-success" id="save-players">Save Selected Players</button>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+            
+        </article>
+    </div>
+</div>
+
+<!-- Hidden form for saving processed data -->
+<form id="save-form" style="display: none;">
+    <input type="hidden" id="processed-people-data" name="processed_people">
+</form>
+
+<script>
+// Global variables
+let processedPeople = [];
+let sessionId = {{ session.session_id }};
+
+// CSV Input Step Functions
+document.addEventListener('DOMContentLoaded', function() {
+    {% if step == "input" %}
+    setupCsvInputHandlers();
+    setupFormatHelpToggle();
+    {% elif step == "preview" %}
+    setupPreviewHandlers();
+    {% endif %}
+});
+
+function setupFormatHelpToggle() {
+    const formatHelpToggle = document.getElementById('format-help-toggle');
+    const formatHelp = document.getElementById('format-help');
+    const formatHelpIcon = document.getElementById('format-help-icon');
+    
+    if (formatHelpToggle && formatHelp && formatHelpIcon) {
+        formatHelpToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const isVisible = formatHelp.style.display !== 'none';
+            
+            if (isVisible) {
+                // Hide the help section
+                formatHelp.style.display = 'none';
+                formatHelpIcon.classList.remove('rotated');
+                formatHelpToggle.setAttribute('aria-expanded', 'false');
+            } else {
+                // Show the help section
+                formatHelp.style.display = 'block';
+                formatHelpIcon.classList.add('rotated');
+                formatHelpToggle.setAttribute('aria-expanded', 'true');
+            }
+        });
+    }
+}
+
+function clearCsvData() {
+    document.getElementById('csv-data').value = '';
+}
+
+function setupCsvInputHandlers() {
+    document.getElementById('csv-input-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        processCsvData();
+    });
+}
+
+async function processCsvData() {
+    const csvData = document.getElementById('csv-data').value.trim();
+    if (!csvData) {
+        alert('Please enter CSV data');
+        return;
+    }
+    
+    try {
+        // Show loading state
+        const submitBtn = document.getElementById('process-btn');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnSpinner = submitBtn.querySelector('.btn-spinner');
+        
+        btnText.style.display = 'none';
+        btnSpinner.style.display = 'inline';
+        submitBtn.disabled = true;
+        
+        const response = await fetch(`/api/session/${sessionId}/bulk-import/preprocess`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ csv_data: csvData })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            processedPeople = data.processed_people;
+            showPreviewStep();
+        } else {
+            alert('Error processing CSV: ' + data.message);
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error processing CSV data: ' + error.message);
+    } finally {
+        // Restore button state
+        const submitBtn = document.getElementById('process-btn');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnSpinner = submitBtn.querySelector('.btn-spinner');
+        
+        btnText.style.display = 'inline';
+        btnSpinner.style.display = 'none';
+        submitBtn.disabled = false;
+    }
+}
+
+function showPreviewStep() {
+    // Store processed people data in sessionStorage for the preview step
+    sessionStorage.setItem('bulkImportData', JSON.stringify(processedPeople));
+    // Replace the input step with preview step
+    window.location.href = window.location.pathname + '?step=preview';
+}
+
+// Preview Step Functions  
+function setupPreviewHandlers() {
+    // Load processed data from sessionStorage
+    const storedData = sessionStorage.getItem('bulkImportData');
+    if (storedData) {
+        processedPeople = JSON.parse(storedData);
+        populatePreviewTable();
+        updateProcessingSummary();
+    } else {
+        // No data found, redirect back to input
+        alert('No processed data found. Please start over.');
+        window.location.href = window.location.pathname;
+        return;
+    }
+    
+    document.getElementById('back-to-input').addEventListener('click', function() {
+        // Clear stored data when going back
+        sessionStorage.removeItem('bulkImportData');
+        window.location.href = window.location.pathname;
+    });
+    
+    document.getElementById('select-all').addEventListener('click', selectAllPeople);
+    document.getElementById('select-none').addEventListener('click', selectNonePeople);
+    document.getElementById('save-players').addEventListener('click', saveSelectedPlayers);
+    
+    // Setup checkbox change handlers
+    document.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.closest('#preview-table-body')) {
+            updateSaveButtonState();
+        }
+    });
+    
+    // Initialize button state
+    updateSaveButtonState();
+}
+
+function populatePreviewTable() {
+    const tbody = document.getElementById('preview-table-body');
+    tbody.innerHTML = '';
+    
+    processedPeople.forEach((person, index) => {
+        const row = document.createElement('tr');
+        if (person.is_duplicate) {
+            row.classList.add('duplicate-row');
+        }
+        
+        // Create individual instrument badges
+        const instrumentList = Array.isArray(person.instruments) ? person.instruments : [];
+        const instrumentsHtml = instrumentList.length > 0 
+            ? instrumentList.map(inst => `<span class="instrument-badge">${inst}</span>`).join('<span class="instrument-comma">, </span>')
+            : '<span class="text-muted">None</span>';
+        
+        const location = [person.city, person.state, person.country].filter(Boolean).join(', ') || 'From session defaults';
+        
+        row.innerHTML = `
+            <td>
+                <input type="checkbox" ${person.is_duplicate ? 'disabled' : 'checked'} data-index="${index}">
+                ${person.first_name} ${person.last_name}
+            </td>
+            <td>${person.email || ''}</td>
+            <td>${person.sms_number || ''}</td>
+            <td><small class="text-muted">${location}</small></td>
+            <td>${instrumentsHtml}</td>
+            <td>${person.is_regular ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-light text-dark">No</span>'}</td>
+            <td>
+                ${person.is_duplicate 
+                    ? `<span class="badge bg-warning duplicate-badge">Duplicate (${person.duplicate_reason})</span>`
+                    : '<span class="badge bg-success">New</span>'
+                }
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function updateProcessingSummary() {
+    const total = processedPeople.length;
+    const duplicates = processedPeople.filter(p => p.is_duplicate).length;
+    const newPeople = total - duplicates;
+    
+    const summaryText = `Found ${total} entries: ${newPeople} new players, ${duplicates} duplicates`;
+    document.getElementById('summary-text').textContent = summaryText;
+}
+
+function selectAllPeople() {
+    const checkboxes = document.querySelectorAll('#preview-table-body input[type="checkbox"]:not(:disabled)');
+    checkboxes.forEach(cb => cb.checked = true);
+    updateSaveButtonState();
+}
+
+function selectNonePeople() {
+    const checkboxes = document.querySelectorAll('#preview-table-body input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateSaveButtonState();
+}
+
+function updateSaveButtonState() {
+    const checkedBoxes = document.querySelectorAll('#preview-table-body input[type="checkbox"]:checked');
+    const saveBtn = document.getElementById('save-players');
+    saveBtn.disabled = checkedBoxes.length === 0;
+    saveBtn.textContent = `Save Selected Players (${checkedBoxes.length})`;
+}
+
+async function saveSelectedPlayers() {
+    const checkedBoxes = document.querySelectorAll('#preview-table-body input[type="checkbox"]:checked');
+    const selectedPeople = [];
+    
+    checkedBoxes.forEach(cb => {
+        const index = parseInt(cb.dataset.index);
+        selectedPeople.push(processedPeople[index]);
+    });
+    
+    if (selectedPeople.length === 0) {
+        alert('Please select at least one person to save');
+        return;
+    }
+    
+    try {
+        // Show loading state
+        const saveBtn = document.getElementById('save-players');
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+        
+        const response = await fetch(`/api/session/${sessionId}/bulk-import/save`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ processed_people: selectedPeople })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`Successfully saved ${data.created_count} players!${data.skipped_count > 0 ? ` (${data.skipped_count} duplicates skipped)` : ''}`);
+            window.location.href = `/admin/sessions/{{ session.path }}/players`;
+        } else {
+            alert('Error saving players: ' + data.message);
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error saving players: ' + error.message);
+    } finally {
+        // Restore button state
+        const saveBtn = document.getElementById('save-players');
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+}
+
+// Initialize preview table if we have data
+{% if step == "preview" %}
+// This would be populated from session data or URL params in a real implementation
+// For now, we'll handle this via the API flow
+{% endif %}
+</script>
+
+<style>
+.alert h5, .alert h6 {
+    margin-bottom: 0.5rem;
+}
+
+#preview-table {
+    font-size: 0.9rem;
+}
+
+#preview-table td {
+    vertical-align: middle;
+}
+
+.table-responsive {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Dark mode compatible duplicate row highlighting */
+.duplicate-row {
+    background-color: #fff3cd;
+}
+
+[data-theme="dark"] .duplicate-row {
+    background-color: #664d03;
+    color: #fff;
+}
+
+.duplicate-badge {
+    font-size: 0.75rem;
+}
+
+/* Format help toggle styling */
+.chevron-icon {
+    transition: transform 0.3s ease;
+    font-size: 0.75em;
+    display: inline-block;
+    font-weight: bold;
+    color: #6c757d;
+    width: 12px;
+    text-align: center;
+}
+
+.chevron-icon.rotated {
+    transform: rotate(90deg);
+}
+
+[data-theme="dark"] .chevron-icon {
+    color: #adb5bd;
+}
+
+.format-help-content {
+    transition: opacity 0.3s ease;
+}
+
+/* Dark mode support for alerts */
+[data-theme="dark"] .alert-info {
+    background-color: #0f2537;
+    border-color: #1c5a7e;
+    color: #9fd3f3;
+}
+
+[data-theme="dark"] .alert-secondary {
+    background-color: #2d2d2d;
+    border-color: #495057;
+    color: #e9ecef;
+}
+
+[data-theme="dark"] .alert-info h6,
+[data-theme="dark"] .alert-secondary h6 {
+    color: #ffffff;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: #343a40 !important;
+    color: #e9ecef;
+}
+
+/* Improve monospace readability in dark mode */
+[data-theme="dark"] .font-monospace {
+    color: #e9ecef;
+}
+
+/* Better button styling for the help toggle */
+.btn-link.btn-sm {
+    font-size: 0.9rem;
+}
+
+.btn-link:hover {
+    text-decoration: none !important;
+}
+
+.btn-link:hover .text-muted {
+    color: var(--bs-primary) !important;
+}
+
+/* Improve collapse button appearance */
+#format-help-toggle:focus {
+    box-shadow: none;
+    outline: none;
+}
+
+/* Instrument badge styling */
+.instrument-badge {
+    display: inline-block;
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 0.25em 0.5em;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .instrument-badge {
+    background-color: #495057;
+    color: #e9ecef;
+}
+
+.instrument-comma {
+    color: #6c757d;
+    font-size: 0.75rem;
+    margin: 0 0.1em;
+}
+
+[data-theme="dark"] .instrument-comma {
+    color: #adb5bd;
+}
+</style>
+{% endblock %}
