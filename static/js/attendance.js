@@ -695,12 +695,26 @@ AttendanceManager.prototype.createPerson = function() {
     console.log('Creating person with data:', personData);
     console.log('Instruments array:', instruments);
 
+    // Close modal immediately after validation
+    this.closeModal('addPersonModal');
+    if (form) form.reset();
+    var checkboxes = document.querySelectorAll('#add-instruments-container input[type="checkbox"]');
+    for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = false;
+    }
+    var customInstrument = document.getElementById('add-new-instrument');
+    if (customInstrument) customInstrument.value = '';
+    
+    // Show initial toast message
+    var displayName = personData.first_name + ' ' + personData.last_name;
+    this.showSuccess('Adding ' + displayName + '...');
+
     // Create temporary person for optimistic update
     var tempPerson = {
         person_id: 'temp_' + Date.now(), // Temporary ID
         first_name: personData.first_name,
         last_name: personData.last_name,
-        display_name: personData.first_name + ' ' + personData.last_name,
+        display_name: displayName,
         instruments: instruments,
         attendance: attendanceStatus,
         is_admin: false,
@@ -755,21 +769,13 @@ AttendanceManager.prototype.createPerson = function() {
         });
     })
     .then(function() {
-        self.closeModal('addPersonModal');
-        form.reset();
-        var checkboxes = document.querySelectorAll('#add-instruments-container input[type="checkbox"]');
-        for (var i = 0; i < checkboxes.length; i++) {
-            checkboxes[i].checked = false;
-        }
-        if (customInstrument) customInstrument.value = '';
-        
         // Clear search box
         var searchInput = document.getElementById('attendee-search');
         var searchResults = document.getElementById('search-results');
         if (searchInput) searchInput.value = '';
         if (searchResults) searchResults.style.display = 'none';
         
-        self.showSuccess('New person created and added to attendance');
+        self.showSuccess(tempPerson.display_name + ' added successfully');
     })
     .catch(function(error) {
         console.error('Error creating person:', error);
