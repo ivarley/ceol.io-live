@@ -3615,6 +3615,141 @@ def update_session_player_regular_status(session_path, person_id):
 
 
 @login_required
+def update_session_player_details(session_path, person_id):
+    """Update person details for session admins"""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Check if current user is a system admin or session admin
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        is_system_admin = user_row and user_row[0]
+        
+        # If not system admin, check if they're a session admin
+        is_session_admin = False
+        if not is_system_admin:
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "error": "Session not found"}), 404
+            
+            session_id = session_result[0]
+            cur.execute(
+                """SELECT sp.is_admin FROM session_person sp 
+                   WHERE sp.session_id = %s AND sp.person_id = %s""",
+                (session_id, current_user.person_id)
+            )
+            admin_row = cur.fetchone()
+            is_session_admin = admin_row and admin_row[0]
+        
+        if not is_system_admin and not is_session_admin:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+
+        # Get session ID if we don't have it yet
+        if 'session_id' not in locals():
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "error": "Session not found"}), 404
+            session_id = session_result[0]
+
+        # Check if person has a linked user account
+        cur.execute(
+            """SELECT p.person_id, u.user_id FROM person p 
+               LEFT JOIN user_account u ON p.person_id = u.person_id 
+               WHERE p.person_id = %s""",
+            (person_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "Person not found"}), 404
+        
+        has_user_account = person_row[1] is not None
+
+        data = request.get_json()
+        
+        # If person has user account, only allow updating regular status
+        if has_user_account:
+            if 'is_regular' in data:
+                # Update regular status in session_person table
+                cur.execute(
+                    """UPDATE session_person SET is_regular = %s 
+                       WHERE session_id = %s AND person_id = %s""",
+                    (data['is_regular'], session_id, person_id)
+                )
+                save_to_history(
+                    cur,
+                    "session_person",
+                    "UPDATE",
+                    None,
+                    f"admin_update_regular_status:{person_id}:{session_id}:{data['is_regular']}",
+                )
+        else:
+            # Person doesn't have user account - allow updating additional fields
+            updates = []
+            params = []
+            
+            # Fields that can be updated for non-user accounts
+            editable_fields = ['first_name', 'last_name', 'email', 'sms_number', 'city', 'state', 'country', 'thesession_user_id']
+            
+            for field in editable_fields:
+                if field in data:
+                    updates.append(f"{field} = %s")
+                    params.append(data[field])
+            
+            if updates:
+                updates.append("last_modified_date = NOW()")
+                params.append(person_id)
+                
+                update_sql = f"""
+                    UPDATE person 
+                    SET {', '.join(updates)}
+                    WHERE person_id = %s
+                """
+                cur.execute(update_sql, params)
+                
+                save_to_history(
+                    cur,
+                    "person",
+                    "UPDATE",
+                    None,
+                    f"admin_update_person_details:{person_id}:{','.join(data.keys())}",
+                )
+            
+            # Also update regular status if provided
+            if 'is_regular' in data:
+                cur.execute(
+                    """UPDATE session_person SET is_regular = %s 
+                       WHERE session_id = %s AND person_id = %s""",
+                    (data['is_regular'], session_id, person_id)
+                )
+                save_to_history(
+                    cur,
+                    "session_person",
+                    "UPDATE",
+                    None,
+                    f"admin_update_regular_status:{person_id}:{session_id}:{data['is_regular']}",
+                )
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@login_required
 def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin

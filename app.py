@@ -321,6 +321,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/admin/sessions/<path:session_path>/players/<int:person_id>/details",
+    "update_session_player_details",
+    update_session_player_details,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/logs",
     "get_session_logs_ajax",
     get_session_logs_ajax,

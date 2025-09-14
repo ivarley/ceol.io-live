@@ -831,3 +831,259 @@ class TestAdminAPI:
 
         is_regular = db_cursor.fetchone()[0]
         assert is_regular is True
+
+    def test_update_session_player_details_without_user_account(
+        self, client, admin_user, db_conn, db_cursor
+    ):
+        """Test updating player details for person without user account via admin API."""
+        # Create test data
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"player-details-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """,
+            (
+                f"Player Details Session {unique_id}",
+                session_path,
+                "Austin",
+                "TX",
+                "USA",
+            ),
+        )
+        session_id = db_cursor.fetchone()[0]
+
+        # Create person without user account
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email, city)
+            VALUES (%s, %s, %s, %s)
+            RETURNING person_id
+        """,
+            ("John", "Doe", f"john{unique_id}@example.com", "Dallas"),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular)
+            VALUES (%s, %s, %s)
+        """,
+            (session_id, person_id, False),
+        )
+        db_conn.commit()
+
+        # Update person details
+        update_data = {
+            "first_name": "Jane",
+            "last_name": "Smith",
+            "email": f"jane{unique_id}@example.com",
+            "city": "Houston",
+            "state": "TX",
+            "country": "USA",
+            "sms_number": "555-1234",
+            "thesession_user_id": 12345,
+            "is_regular": True
+        }
+
+        with admin_user:
+            response = client.put(
+                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                json=update_data,
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+
+        # Verify person details were updated
+        db_cursor.execute(
+            """
+            SELECT first_name, last_name, email, city, state, country, sms_number, thesession_user_id
+            FROM person
+            WHERE person_id = %s
+        """,
+            (person_id,),
+        )
+        
+        person_row = db_cursor.fetchone()
+        assert person_row[0] == "Jane"  # first_name
+        assert person_row[1] == "Smith"  # last_name
+        assert person_row[2] == f"jane{unique_id}@example.com"  # email
+        assert person_row[3] == "Houston"  # city
+        assert person_row[4] == "TX"  # state
+        assert person_row[5] == "USA"  # country
+        assert person_row[6] == "555-1234"  # sms_number
+        assert person_row[7] == 12345  # thesession_user_id
+
+        # Verify regular status was updated
+        db_cursor.execute(
+            """
+            SELECT is_regular
+            FROM session_person
+            WHERE session_id = %s AND person_id = %s
+        """,
+            (session_id, person_id),
+        )
+        
+        is_regular = db_cursor.fetchone()[0]
+        assert is_regular is True
+
+    def test_update_session_player_details_with_user_account(
+        self, client, admin_user, db_conn, db_cursor
+    ):
+        """Test updating player details for person with user account only allows regular status update."""
+        # Create test data
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"user-details-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """,
+            (
+                f"User Details Session {unique_id}",
+                session_path,
+                "Austin",
+                "TX",
+                "USA",
+            ),
+        )
+        session_id = db_cursor.fetchone()[0]
+
+        # Create person with user account
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        """,
+            ("Alice", "User", f"alice{unique_id}@example.com"),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        # Create user account
+        db_cursor.execute(
+            """
+            INSERT INTO user_account (person_id, username, user_email, hashed_password, is_active, email_verified)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+            (person_id, f"alice{unique_id}", f"alice{unique_id}@example.com", "hashed_password", True, True),
+        )
+
+        db_cursor.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular)
+            VALUES (%s, %s, %s)
+        """,
+            (session_id, person_id, False),
+        )
+        db_conn.commit()
+
+        # Try to update person details - should only update regular status
+        update_data = {
+            "first_name": "Bob",  # This should be ignored
+            "last_name": "Changed",  # This should be ignored
+            "email": f"changed{unique_id}@example.com",  # This should be ignored
+            "is_regular": True  # This should be updated
+        }
+
+        with admin_user:
+            response = client.put(
+                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                json=update_data,
+            )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+
+        # Verify person details were NOT updated (still original values)
+        db_cursor.execute(
+            """
+            SELECT first_name, last_name, email
+            FROM person
+            WHERE person_id = %s
+        """,
+            (person_id,),
+        )
+        
+        person_row = db_cursor.fetchone()
+        assert person_row[0] == "Alice"  # first_name unchanged
+        assert person_row[1] == "User"  # last_name unchanged
+        assert person_row[2] == f"alice{unique_id}@example.com"  # email unchanged
+
+        # Verify regular status WAS updated
+        db_cursor.execute(
+            """
+            SELECT is_regular
+            FROM session_person
+            WHERE session_id = %s AND person_id = %s
+        """,
+            (session_id, person_id),
+        )
+        
+        is_regular = db_cursor.fetchone()[0]
+        assert is_regular is True
+
+    def test_update_session_player_details_unauthorized(
+        self, client, authenticated_regular_user, db_conn, db_cursor
+    ):
+        """Test that unauthorized users cannot update player details."""
+        # Create test data
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"unauthorized-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """,
+            (
+                f"Unauthorized Session {unique_id}",
+                session_path,
+                "Austin",
+                "TX",
+                "USA",
+            ),
+        )
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        """,
+            ("Test", "Person", f"test{unique_id}@example.com"),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular)
+            VALUES (%s, %s, %s)
+        """,
+            (session_id, person_id, False),
+        )
+        db_conn.commit()
+
+        # Try to update as regular user (not admin)
+        update_data = {
+            "first_name": "Hacker",
+            "is_regular": True
+        }
+
+        with authenticated_regular_user:
+            response = client.put(
+                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                json=update_data,
+            )
+
+        assert response.status_code == 403
+        data = json.loads(response.data)
+        assert data["success"] is False
+        assert "permission" in data["message"].lower()

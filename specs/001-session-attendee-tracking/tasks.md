@@ -35,7 +35,6 @@ The attendance list should always show the session regulars in the list, even if
 
 Make the search work to find non-regulars and add them. Clicking the name adds them immediately in the UI and asynchronously updates the database.
 
-## In Progress
 
 ### T048.1 - Search enhancements
 
@@ -55,11 +54,10 @@ A couple other nits:
 - I'd like the rows in the player UI to be vertically thinner by about 10px
 - Remove the "Session Attendance" albel, and move the status counts to align right
 - Remove "Back to this session" from the bottom of this (and from the tunes tab, if it's shared)
-
 - Put the the search and the status counts in the same line
 - Once you've done the action from the search box (adding an existing or new player), empty the box
 
-## Backlog
+## In Progress
 
 ### T049 - Allow session admins to edit some person information
 
@@ -67,7 +65,7 @@ When a session admin clicks through to the person admin page (/admin/sessions/{p
 
 If the person has a user account, you can only update their "regular player" checkbox.
 
-If the person does not have a linked user account, a session admin can edit:
+If the person does not have a linked user account, a session (or system) admin can edit:
 - Name
 - Email
 - SMS Number
@@ -75,6 +73,8 @@ If the person does not have a linked user account, a session admin can edit:
 - City
 - State
 - Country
+
+## Backlog
 
 ### T050 - Edit instruments
 

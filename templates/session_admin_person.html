@@ -24,63 +24,126 @@
                 <h2 class="section-heading">Person Information</h2>
                 <div class="card">
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <dl class="row">
-                                    <dt class="col-sm-4">Name:</dt>
-                                    <dd class="col-sm-8">{{ person.first_name }} {{ person.last_name }}</dd>
-                                    
-                                    <dt class="col-sm-4">Email:</dt>
-                                    <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">SMS Number:</dt>
-                                    <dd class="col-sm-8">{{ person.sms_number or 'Not provided' }}</dd>
-                                </dl>
+                        <form id="person-details-form">
+                            <input type="hidden" id="person-id" value="{{ person.person_id }}">
+                            <input type="hidden" id="session-path" value="{{ session_path }}">
+                            <input type="hidden" id="has-user-account" value="{{ 'true' if person.username else 'false' }}">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Name:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.first_name }} {{ person.last_name }}
+                                            {% else %}
+                                                <input type="text" class="form-control form-control-sm d-inline-block w-auto me-1" id="first-name" value="{{ person.first_name }}" style="width: 120px !important;">
+                                                <input type="text" class="form-control form-control-sm d-inline-block w-auto" id="last-name" value="{{ person.last_name }}" style="width: 120px !important;">
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Email:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.email or 'Not provided' }}
+                                            {% else %}
+                                                <input type="email" class="form-control form-control-sm" id="email" value="{{ person.email or '' }}" placeholder="Not provided">
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">SMS Number:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.sms_number or 'Not provided' }}
+                                            {% else %}
+                                                <input type="tel" class="form-control form-control-sm" id="sms-number" value="{{ person.sms_number or '' }}" placeholder="Not provided">
+                                            {% endif %}
+                                        </dd>
+                                    </dl>
+                                </div>
+                                <div class="col-md-6">
+                                    <dl class="row">
+                                        <dt class="col-sm-4">City:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.city or 'Not provided' }}
+                                            {% else %}
+                                                <input type="text" class="form-control form-control-sm" id="city" value="{{ person.city or '' }}" placeholder="Not provided">
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">State:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.state or 'Not provided' }}
+                                            {% else %}
+                                                <input type="text" class="form-control form-control-sm" id="state" value="{{ person.state or '' }}" placeholder="Not provided">
+                                            {% endif %}
+                                        </dd>
+                                        
+                                        <dt class="col-sm-4">Country:</dt>
+                                        <dd class="col-sm-8">
+                                            {% if person.username %}
+                                                {{ person.country or 'Not provided' }}
+                                            {% else %}
+                                                <input type="text" class="form-control form-control-sm" id="country" value="{{ person.country or '' }}" placeholder="Not provided">
+                                            {% endif %}
+                                        </dd>
+                                    </dl>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <dl class="row">
-                                    <dt class="col-sm-4">City:</dt>
-                                    <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">State:</dt>
-                                    <dd class="col-sm-8">{{ person.state or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">Country:</dt>
-                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
-                                </dl>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <dl class="row">
+                                        <dt class="col-sm-2">TheSession.org ID:</dt>
+                                        <dd class="col-sm-10">
+                                            {% if person.username %}
+                                                {% if person.thesession_user_id %}
+                                                    <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank">
+                                                        {{ person.thesession_user_id }}
+                                                    </a>
+                                                {% else %}
+                                                    Not provided
+                                                {% endif %}
+                                            {% else %}
+                                                <input type="number" class="form-control form-control-sm d-inline-block w-auto" id="thesession-user-id" value="{{ person.thesession_user_id or '' }}" placeholder="Not provided" style="width: 150px !important;">
+                                                {% if person.thesession_user_id %}
+                                                    <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" class="ms-2">View Profile</a>
+                                                {% endif %}
+                                            {% endif %}
+                                        </dd>
+                                    </dl>
+                                </div>
                             </div>
-                        </div>
-                        
-                        {% if person.thesession_user_id %}
-                        <div class="row mt-3">
-                            <div class="col-12">
-                                <dl class="row">
-                                    <dt class="col-sm-2">TheSession.org ID:</dt>
-                                    <dd class="col-sm-10">
-                                        <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank">
-                                            {{ person.thesession_user_id }}
-                                        </a>
-                                    </dd>
-                                </dl>
+                            
+                            {% if person.username %}
+                            <div class="row">
+                                <div class="col-12">
+                                    <dl class="row">
+                                        <dt class="col-sm-2">User Account:</dt>
+                                        <dd class="col-sm-10">
+                                            <span class="badge bg-info">{{ person.username }}</span>
+                                            {% if person.is_system_admin %}
+                                            <span class="badge bg-warning">System Admin</span>
+                                            {% endif %}
+                                        </dd>
+                                    </dl>
+                                </div>
                             </div>
-                        </div>
-                        {% endif %}
-                        
-                        {% if person.username %}
-                        <div class="row">
-                            <div class="col-12">
-                                <dl class="row">
-                                    <dt class="col-sm-2">User Account:</dt>
-                                    <dd class="col-sm-10">
-                                        <span class="badge bg-info">{{ person.username }}</span>
-                                        {% if person.is_system_admin %}
-                                        <span class="badge bg-warning">System Admin</span>
-                                        {% endif %}
-                                    </dd>
-                                </dl>
+                            {% endif %}
+                            
+                            {% if not person.username %}
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <button type="button" id="save-person-details" class="btn btn-primary btn-sm">Save Changes</button>
+                                    <span class="text-muted ms-2 small">Note: This person can edit these details themselves if they create an account</span>
+                                </div>
                             </div>
-                        </div>
-                        {% endif %}
+                            {% endif %}
+                            
+                            <div id="person-save-status" class="mt-3" style="display: none;"></div>
+                        </form>
                     </div>
                 </div>
             </section>
@@ -328,7 +391,10 @@ dl.row dd {
 document.addEventListener('DOMContentLoaded', function() {
     const isRegularCheckbox = document.getElementById('is-regular');
     const saveStatus = document.getElementById('save-status');
+    const savePersonDetailsBtn = document.getElementById('save-person-details');
+    const personSaveStatus = document.getElementById('person-save-status');
     
+    // Handle regular status changes
     if (isRegularCheckbox) {
         isRegularCheckbox.addEventListener('change', function() {
             const personId = document.getElementById('person-id').value;
@@ -365,6 +431,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
                 // Revert checkbox state
                 this.checked = !isRegular;
+            });
+        });
+    }
+    
+    // Handle person details save
+    if (savePersonDetailsBtn) {
+        savePersonDetailsBtn.addEventListener('click', function() {
+            const personId = document.getElementById('person-id').value;
+            const sessionPath = document.getElementById('session-path').value;
+            const hasUserAccount = document.getElementById('has-user-account').value === 'true';
+            
+            // Collect form data
+            const formData = {};
+            
+            if (!hasUserAccount) {
+                // Only include editable fields for users without accounts
+                const firstName = document.getElementById('first-name')?.value;
+                const lastName = document.getElementById('last-name')?.value;
+                const email = document.getElementById('email')?.value;
+                const smsNumber = document.getElementById('sms-number')?.value;
+                const city = document.getElementById('city')?.value;
+                const state = document.getElementById('state')?.value;
+                const country = document.getElementById('country')?.value;
+                const thesessionUserId = document.getElementById('thesession-user-id')?.value;
+                
+                if (firstName) formData.first_name = firstName;
+                if (lastName) formData.last_name = lastName;
+                if (email) formData.email = email;
+                if (smsNumber) formData.sms_number = smsNumber;
+                if (city) formData.city = city;
+                if (state) formData.state = state;
+                if (country) formData.country = country;
+                if (thesessionUserId) formData.thesession_user_id = parseInt(thesessionUserId);
+            }
+            
+            // Always include regular status if checkbox exists
+            if (isRegularCheckbox) {
+                formData.is_regular = isRegularCheckbox.checked;
+            }
+            
+            // Show loading state
+            personSaveStatus.style.display = 'block';
+            personSaveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+            
+            // Make API call to update person details
+            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/details`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    personSaveStatus.innerHTML = '<div class="alert alert-success">Person details updated successfully!</div>';
+                    setTimeout(() => {
+                        personSaveStatus.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error(data.error || 'Failed to update person details');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating person details:', error);
+                personSaveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
             });
         });
     }

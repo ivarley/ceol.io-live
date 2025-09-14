@@ -2381,8 +2381,30 @@ def session_admin_logs(session_path):
 @login_required
 def session_admin_person(session_path, person_id):
     """Session admin person details page"""
-    # Check if user is system admin
-    if not session.get("is_system_admin"):
+    # Check if user is system admin or session admin
+    is_system_admin = session.get("is_system_admin", False)
+    is_session_admin = False
+    
+    if not is_system_admin:
+        # Check if user is an admin for this specific session
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if session_result:
+                session_id = session_result[0]
+                cur.execute(
+                    """SELECT sp.is_admin FROM session_person sp 
+                       WHERE sp.session_id = %s AND sp.person_id = %s""",
+                    (session_id, current_user.person_id)
+                )
+                admin_row = cur.fetchone()
+                is_session_admin = admin_row and admin_row[0]
+        finally:
+            conn.close()
+    
+    if not is_system_admin and not is_session_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
