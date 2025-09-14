@@ -170,25 +170,22 @@
                 <!-- Players Tab -->
                 <div class="tab-pane fade {{ 'show active' if active_tab == 'players' else '' }}" id="players" role="tabpanel">
                     <section class="docs-section">
-                        <!-- Header with filter dropdown and bulk import -->
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="section-heading mb-0">Players</h2>
-                            <div class="d-flex align-items-center gap-2">
-                                <a href="/admin/sessions/{{ session.path }}/bulk-import" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-upload me-1"></i>Bulk Import
-                                </a>
-                                <select class="form-select players-filter-select" id="players-filter">
-                                    <option value="regulars">Regulars Only</option>
-                                    <option value="everyone">Everyone</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <!-- Search Controls -->
+                        <!-- Controls -->
                         <div class="mb-3">
-                            <div class="row">
-                                <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="flex-grow-1">
                                     <input type="text" class="form-control" id="players-search" placeholder="Search by name...">
+                                </div>
+                                <div>
+                                    <a href="/admin/sessions/{{ session.path }}/bulk-import" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-upload me-1"></i>Bulk Import
+                                    </a>
+                                </div>
+                                <div class="ms-auto">
+                                    <select class="form-select players-filter-select" id="players-filter">
+                                        <option value="regulars">Regulars Only</option>
+                                        <option value="everyone">Everyone</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -239,7 +236,15 @@
 
 <style>
 .session-admin-tabs-nav {
-    margin-bottom: 2rem;
+    margin-bottom: 5px;
+}
+
+.player-status {
+    white-space: nowrap;
+}
+
+.player-admin {
+    white-space: nowrap;
 }
 
 /* Desktop/Mobile visibility */
@@ -495,7 +500,7 @@ body.modal-open {
     }
     
     .session-admin-tabs-nav {
-        margin-bottom: 1rem !important;
+        margin-bottom: 5px !important;
     }
     
     /* Adjust form spacing on mobile */
@@ -611,8 +616,10 @@ function displayPlayers(allPlayers) {
         return;
     }
     
-    // Store all players for filtering
+    // Store all players for filtering and initialize sorting state
     window.allPlayers = allPlayers;
+    window.sortColumn = 'name'; // Default sort by name
+    window.sortDirection = 'asc'; // Default ascending
     
     // Apply current filters
     filterPlayers();
@@ -620,6 +627,18 @@ function displayPlayers(allPlayers) {
     // Add event listeners for filters
     document.getElementById('players-filter').addEventListener('change', filterPlayers);
     document.getElementById('players-search').addEventListener('input', filterPlayers);
+}
+
+function sortPlayers(column) {
+    if (window.sortColumn === column) {
+        // Toggle direction if same column
+        window.sortDirection = window.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New column, default to ascending
+        window.sortColumn = column;
+        window.sortDirection = 'asc';
+    }
+    filterPlayers();
 }
 
 function filterPlayers() {
@@ -643,6 +662,37 @@ function filterPlayers() {
         );
     }
     
+    // Apply sorting
+    filteredPlayers.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch(window.sortColumn) {
+            case 'name':
+                aValue = a.name.toLowerCase();
+                bValue = b.name.toLowerCase();
+                break;
+            case 'email':
+                aValue = (a.email || '').toLowerCase();
+                bValue = (b.email || '').toLowerCase();
+                break;
+            case 'attendance':
+                aValue = a.attendance_count || 0;
+                bValue = b.attendance_count || 0;
+                break;
+            case 'last_attended':
+                aValue = a.last_attended ? new Date(a.last_attended).getTime() : 0;
+                bValue = b.last_attended ? new Date(b.last_attended).getTime() : 0;
+                break;
+            default:
+                aValue = 0;
+                bValue = 0;
+        }
+        
+        if (aValue < bValue) return window.sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return window.sortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
     // Render filtered players
     const playersContainer = document.getElementById('players-content');
     
@@ -651,16 +701,22 @@ function filterPlayers() {
         return;
     }
     
+    // Helper function to get sort indicator
+    function getSortIndicator(column) {
+        if (window.sortColumn !== column) return '';
+        return window.sortDirection === 'asc' ? ' ↑' : ' ↓';
+    }
+    
     let html = `
         <div class="table-responsive">
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Email</th>
+                        <th style="cursor: pointer;" onclick="sortPlayers('name')">Name${getSortIndicator('name')}</th>
+                        <th style="cursor: pointer;" onclick="sortPlayers('email')">Email${getSortIndicator('email')}</th>
                         <th>Status</th>
-                        <th>Attendance</th>
-                        <th>Last Attended</th>
+                        <th style="cursor: pointer;" onclick="sortPlayers('attendance')">Attendance${getSortIndicator('attendance')}</th>
+                        <th style="cursor: pointer;" onclick="sortPlayers('last_attended')">Last Attended${getSortIndicator('last_attended')}</th>
                         <th>Admin</th>
                     </tr>
                 </thead>
@@ -670,8 +726,11 @@ function filterPlayers() {
     filteredPlayers.forEach(player => {
         const statusBadges = [];
         if (player.is_regular) statusBadges.push('<span class="badge bg-success">Regular</span>');
-        if (player.username) statusBadges.push('<span class="badge bg-info">User Account</span>');
-        if (player.is_system_admin) statusBadges.push('<span class="badge bg-warning">System Admin</span>');
+        if (player.username) statusBadges.push('<span class="badge bg-info">User</span>');
+        
+        const adminBadges = [];
+        if (player.is_admin) adminBadges.push('<span class="badge bg-primary">Session</span>');
+        if (player.is_system_admin) adminBadges.push('<span class="badge bg-warning">System</span>');
         
         html += `
             <tr>
@@ -687,7 +746,7 @@ function filterPlayers() {
                     ${player.last_attended ? new Date(player.last_attended).toLocaleDateString() : '<span class="text-muted">Never</span>'}
                 </td>
                 <td class="player-admin">
-                    ${player.is_admin ? '<span class="badge bg-primary">Session Admin</span>' : ''}
+                    ${adminBadges.join(' ')}
                 </td>
             </tr>
         `;

@@ -104,8 +104,6 @@ sessions/{path}/11
 
 The link should be dim (meaning, dark blue in dark mode, or light blue in light mode).
 
-## In Progress
-
 ### T054 Bulk Player Import
 
 Build a new screen in the session admin screen allowing a session organizer to bulk import people (linked from a button on the "People" tab). It should have two screens; the first has a big text box  allowing you to paste in comma separated (csv) data, with or without header, with any of the following fields:
@@ -133,5 +131,13 @@ The entry page has a "Next" button which brings you to the second stage: a previ
 Begin by writing a set of failing tests that exercise the two new API endpoints (bulk person pre-process, and bulk person save) thoroughly, where all the tests initially fail; then implement the API such that the tests pass; then build the UI.
 
 Show a spinner while moving from one screen to the next.
+
+### T055 - Updates to session players screen
+
+Sort the list alphabetically by name by default. Allow clicking on column titles to resort the list (first click ascending, second descending). Do this all in javascript on the page.
+
+Move the "Bulk Import" button to underneath the "Regulars/All" droplist (on the same line as the "Search by name ..." box).
+
+## In Progress
 
 ## Backlog
