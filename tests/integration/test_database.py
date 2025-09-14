@@ -9,6 +9,8 @@ import pytest
 from datetime import datetime, date, timedelta
 from unittest.mock import patch
 import uuid
+import time
+import random
 
 from database import (
     get_db_connection,
@@ -208,17 +210,39 @@ class TestHistoryTracking:
 
     def test_tune_history_tracking(self, db_conn, db_cursor):
         """Test that tune changes are tracked in history."""
-        # Create test tune with unique ID
-        unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 20000
-        db_cursor.execute(
-            """
-            INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
-            VALUES (%s, %s, %s, %s)
-        """,
-            (tune_id, "History Tune", "Reel", 25),
-        )
-        db_conn.commit()
+        # Create test tune with unique ID that's less likely to collide
+        # Use timestamp + random to ensure uniqueness across test runs
+        
+        # Generate a unique ID based on current time and randomness
+        # Keep it within reasonable integer bounds while still being unique
+        base_id = int(time.time()) % 100000  # Last 5 digits of timestamp in seconds
+        random_part = random.randint(100, 999)  
+        tune_id = 800000 + (base_id % 10000) * 100 + random_part  # Range: 800000-899999
+        
+        # If by very small chance this ID exists, try a few more times
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                db_cursor.execute(
+                    """
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
+                    VALUES (%s, %s, %s, %s)
+                """,
+                    (tune_id, "History Tune", "Reel", 25),
+                )
+                db_conn.commit()
+                break  # Success, exit retry loop
+            except Exception as e:
+                # If it's a uniqueness violation, try with a different ID
+                if "unique constraint" in str(e).lower() and attempt < max_attempts - 1:
+                    # Generate new ID for retry
+                    base_id = int(time.time()) % 100000
+                    random_part = random.randint(100, 999)
+                    tune_id = 800000 + (base_id % 10000) * 100 + random_part + attempt  # Add attempt to ensure different ID
+                    continue
+                else:
+                    # If it's not a uniqueness violation or we've exhausted attempts, re-raise
+                    raise
 
         # Save to history before update
         save_to_history(db_cursor, "tune", "UPDATE", tune_id, "tune_admin")
