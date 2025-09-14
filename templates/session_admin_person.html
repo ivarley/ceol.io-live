@@ -323,7 +323,55 @@
                     </div>
                 </div>
             </section>
+            
+            <!-- Danger Zone Section -->
+            <section class="docs-section" id="danger-zone">
+                <h2 class="section-heading text-danger">Danger Zone</h2>
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <h5 class="card-title text-danger">Remove Player from Session</h5>
+                        <p class="card-text text-muted">
+                            This will remove {{ person.first_name }} {{ person.last_name }} from the session "{{ session.name }}". 
+                            {% if not person.username %}
+                            If this person is not associated with any other sessions and has no user account, the person record will also be deleted permanently.
+                            {% endif %}
+                        </p>
+                        <button type="button" class="btn btn-outline-danger" id="delete-player-btn">
+                            <i class="fas fa-trash-alt me-1"></i>Delete Player From This Session
+                        </button>
+                    </div>
+                </div>
+            </section>
         </article>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="delete-player-modal" tabindex="-1" aria-labelledby="delete-player-modal-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="delete-player-modal-label">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Are you sure?</strong></p>
+                <p>This will permanently remove <strong>{{ person.first_name }} {{ person.last_name }}</strong> from the session "<strong>{{ session.name }}</strong>".</p>
+                {% if not person.username %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> Since this person has no user account and may not be associated with other sessions, their entire person record could be deleted permanently.
+                </div>
+                {% endif %}
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash-alt me-1"></i>Delete Player
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -460,6 +508,41 @@ dl.row dd {
     .status-badges {
         margin-top: 1rem;
     }
+}
+
+/* Modal backdrop and display fixes for non-Bootstrap JS usage */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1055;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+}
+
+.modal.show {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-dialog {
+    position: relative;
+    margin: 1.75rem auto;
+    pointer-events: none;
+    max-width: 500px;
+}
+
+.modal.show .modal-dialog {
+    pointer-events: auto;
+}
+
+.modal-open {
+    overflow: hidden;
 }
 </style>
 
@@ -655,6 +738,146 @@ document.addEventListener('DOMContentLoaded', function() {
                 personSaveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
             });
         });
+    }
+    
+    // Handle delete player functionality
+    const deletePlayerBtn = document.getElementById('delete-player-btn');
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+    const deleteModal = document.getElementById('delete-player-modal');
+    
+    if (deletePlayerBtn) {
+        deletePlayerBtn.addEventListener('click', function() {
+            deleteModal.style.display = 'block';
+            deleteModal.classList.add('show');
+            document.body.classList.add('modal-open');
+        });
+    }
+    
+    // Handle modal close buttons
+    const closeModalBtns = deleteModal.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+    closeModalBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            deleteModal.style.display = 'none';
+            deleteModal.classList.remove('show');
+            document.body.classList.remove('modal-open');
+        });
+    });
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', async function() {
+            const personId = document.getElementById('person-id').value;
+            const sessionPath = document.getElementById('session-path').value;
+            
+            // Disable button and show loading state
+            confirmDeleteBtn.disabled = true;
+            confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting...';
+            
+            try {
+                const response = await fetch(`/api/admin/sessions/${sessionPath}/players/${personId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message and redirect
+                    deleteModal.style.display = 'none';
+                    deleteModal.classList.remove('show');
+                    document.body.classList.remove('modal-open');
+                    showMessage('Player successfully removed from session', 'success');
+                    
+                    // Redirect back to players list after a short delay
+                    setTimeout(() => {
+                        window.location.href = `/admin/sessions/${sessionPath}/players`;
+                    }, 1500);
+                } else {
+                    throw new Error(data.message || 'Failed to delete player');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage('Error deleting player: ' + error.message, 'error');
+                
+                // Reset button
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Delete Player';
+            }
+        });
+    }
+    
+    // Helper function to show messages (similar to base.html showMessage)
+    function showMessage(message, type = 'success') {
+        const container = getOrCreateMessageContainer();
+        const messageDiv = document.createElement('div');
+        
+        // Remove Bootstrap classes that might cause transparency
+        messageDiv.className = 'custom-alert';
+        
+        // Add completely solid background and better styling
+        const alertType = type === 'error' ? 'danger' : type;
+        const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        if (alertType === 'success') {
+            if (isDarkMode) {
+                messageDiv.style.backgroundColor = '#1e5128'; // Solid dark green
+                messageDiv.style.borderColor = '#28a745';
+                messageDiv.style.color = '#d4f7dc';
+            } else {
+                messageDiv.style.backgroundColor = '#d4edda'; // Solid light green
+                messageDiv.style.borderColor = '#c3e6cb';
+                messageDiv.style.color = '#155724';
+            }
+        } else if (alertType === 'danger') {
+            if (isDarkMode) {
+                messageDiv.style.backgroundColor = '#5a1a1a'; // Solid dark red
+                messageDiv.style.borderColor = '#dc3545';
+                messageDiv.style.color = '#f8d7da';
+            } else {
+                messageDiv.style.backgroundColor = '#f8d7da'; // Solid light red
+                messageDiv.style.borderColor = '#f5c6cb';
+                messageDiv.style.color = '#721c24';
+            }
+        }
+        
+        // Ensure completely solid styling
+        messageDiv.style.opacity = '1';
+        messageDiv.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+        messageDiv.style.border = '2px solid';
+        messageDiv.style.borderRadius = '6px';
+        messageDiv.style.padding = '1rem 1.5rem';
+        messageDiv.style.fontWeight = '500';
+        messageDiv.style.textAlign = 'center';
+        
+        // No close button - just the message
+        messageDiv.textContent = message;
+        
+        container.innerHTML = '';
+        container.appendChild(messageDiv);
+        
+        // Auto-hide after 4 seconds
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.parentNode.removeChild(messageDiv);
+            }
+        }, 4000);
+    }
+    
+    function getOrCreateMessageContainer() {
+        let container = document.getElementById('message-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'message-container';
+            container.style.position = 'fixed';
+            container.style.top = '20px';
+            container.style.left = '50%';
+            container.style.transform = 'translateX(-50%)';
+            container.style.zIndex = '10000';
+            container.style.minWidth = '300px';
+            document.body.appendChild(container);
+        }
+        return container;
     }
 });
 </script>

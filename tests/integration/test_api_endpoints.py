@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import json
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 
 from flask import url_for
 
@@ -1178,3 +1178,186 @@ class TestAdminAPI:
         saved_instruments = [row[0] for row in db_cursor.fetchall()]
         expected_instruments = ["djembe", "fiddle", "harmonica", "spoons"]  # Sorted
         assert saved_instruments == expected_instruments
+
+    def test_delete_session_player_with_orphan_cleanup(
+        self, client, authenticated_admin_user, db_conn, db_cursor
+    ):
+        """Test deleting a player from a session, including orphaned person cleanup."""
+        # Create a test session first
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"test-delete-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country, initiation_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING session_id
+            """,
+            (
+                f"Test Delete Session {unique_id}",
+                session_path,
+                "Austin",
+                "TX", 
+                "USA",
+                datetime(2023, 1, 1).date(),
+            ),
+        )
+        session_id = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        # Create a test person without user account (will be orphaned)
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+            """,
+            ("John", "Delete", f"john-delete-{unique_id}@example.com"),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        # Add person to session
+        db_cursor.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (session_id, person_id, True, False),
+        )
+
+        # Add some instruments
+        db_cursor.execute(
+            """
+            INSERT INTO person_instrument (person_id, instrument)
+            VALUES (%s, 'fiddle'), (%s, 'guitar')
+            """,
+            (person_id, person_id),
+        )
+
+        # Add session instance and attendance
+        db_cursor.execute(
+            """
+            INSERT INTO session_instance (session_id, date, start_time, end_time)
+            VALUES (%s, %s, %s, %s)
+            RETURNING session_instance_id
+            """,
+            (session_id, date(2023, 6, 1), time(19, 0), time(22, 0)),
+        )
+        session_instance_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute(
+            """
+            INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+            VALUES (%s, %s, 'yes')
+            """,
+            (session_instance_id, person_id),
+        )
+        db_conn.commit()
+
+        # Verify person exists before deletion
+        db_cursor.execute("SELECT COUNT(*) FROM person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 1
+
+        db_cursor.execute("SELECT COUNT(*) FROM session_person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 1
+
+        db_cursor.execute("SELECT COUNT(*) FROM person_instrument WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 2
+
+        # Delete player from session
+        with authenticated_admin_user:
+            response = client.delete(f"/api/admin/sessions/{session_path}/players/{person_id}")
+
+        print(f"Response status: {response.status_code}")
+        print(f"Response data: {response.data.decode()}")
+        
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "person record deleted" in data["message"]
+
+        # Verify complete cleanup - person should be deleted entirely
+        db_cursor.execute("SELECT COUNT(*) FROM person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 0
+
+        db_cursor.execute("SELECT COUNT(*) FROM session_person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 0
+
+        db_cursor.execute("SELECT COUNT(*) FROM person_instrument WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 0
+
+        db_cursor.execute("SELECT COUNT(*) FROM session_instance_person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 0
+
+    def test_delete_session_player_with_user_account(
+        self, client, authenticated_admin_user, db_conn, db_cursor
+    ):
+        """Test deleting a player with user account (should not delete person record)."""
+        # Create a test session
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"test-delete-user-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country, initiation_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING session_id
+            """,
+            (
+                f"Test Delete Session {unique_id}",
+                session_path,
+                "Austin",
+                "TX",
+                "USA", 
+                datetime(2023, 1, 1).date(),
+            ),
+        )
+        session_id = db_cursor.fetchone()[0]
+
+        # Create a test person with user account
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+            """,
+            ("Jane", "User", f"jane-user-{unique_id}@example.com"),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        # Create user account for this person
+        db_cursor.execute(
+            """
+            INSERT INTO user_account (person_id, username, user_email, hashed_password, is_system_admin)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (person_id, f"janeuser{unique_id}", f"jane-user-{unique_id}@example.com", "hashed_pw", False),
+        )
+
+        # Add person to session
+        db_cursor.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (session_id, person_id, False, False),
+        )
+        db_conn.commit()
+
+        # Delete player from session
+        with authenticated_admin_user:
+            response = client.delete(f"/api/admin/sessions/{session_path}/players/{person_id}")
+
+        print(f"Response status: {response.status_code}")
+        print(f"Response data: {response.data.decode()}")
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "successfully removed from session" in data["message"]
+
+        # Verify person record is preserved (has user account)
+        db_cursor.execute("SELECT COUNT(*) FROM person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 1
+
+        # But removed from session
+        db_cursor.execute("SELECT COUNT(*) FROM session_person WHERE person_id = %s", (person_id,))
+        assert db_cursor.fetchone()[0] == 0

@@ -140,4 +140,8 @@ Move the "Bulk Import" button to underneath the "Regulars/All" droplist (on the 
 
 ## In Progress
 
+### T056 - Delete Player
+
+On the admin view for a player, add a "Delete Player From This Session" link. When clicked, there's an "Are you sure?" confirmation dialog box, then it deletes the player from the session_person table for this session. If the person record isn't connected with any other sessions and doesn't have a user account connection, it also deletes the person record.
+
 ## Backlog

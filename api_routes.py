@@ -3750,6 +3750,145 @@ def update_session_player_details(session_path, person_id):
 
 
 @login_required
+def delete_session_player(session_path, person_id):
+    """Delete a player from a session and potentially the person record if orphaned"""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Check if current user is a system admin or session admin
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        is_system_admin = user_row and user_row[0]
+        
+        # If not system admin, check if they're a session admin
+        is_session_admin = False
+        if not is_system_admin:
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "message": "Session not found"}), 404
+            
+            session_id = session_result[0]
+            cur.execute(
+                """SELECT sp.is_admin FROM session_person sp 
+                   WHERE sp.session_id = %s AND sp.person_id = %s""",
+                (session_id, current_user.person_id)
+            )
+            admin_row = cur.fetchone()
+            is_session_admin = admin_row and admin_row[0]
+        
+        if not is_system_admin and not is_session_admin:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+
+        # Get session ID if we don't have it yet
+        if 'session_id' not in locals():
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "message": "Session not found"}), 404
+            session_id = session_result[0]
+
+        # Check if person exists and get info about user account
+        cur.execute(
+            """SELECT p.person_id, u.user_id FROM person p 
+               LEFT JOIN user_account u ON p.person_id = u.person_id 
+               WHERE p.person_id = %s""",
+            (person_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        
+        has_user_account = person_row[1] is not None
+
+        # Check if person is actually in this session
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Person is not in this session"}), 404
+
+        # If person has no user account, check if they should be deleted entirely BEFORE we delete from session_person
+        person_deleted = False
+        other_sessions_count = 0  # Initialize to 0, only matters if no user account
+        if not has_user_account:
+            # Check if person is associated with any other sessions (excluding this one)
+            cur.execute(
+                "SELECT COUNT(*) FROM session_person WHERE person_id = %s AND session_id != %s",
+                (person_id, session_id)
+            )
+            result = cur.fetchone()
+            other_sessions_count = result[0] if result else 0
+
+        # Remove from session_person table
+        cur.execute(
+            "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id)
+        )
+        # TODO: Add session_person history tracking
+
+        # Remove from session_instance_person table (all instances for this session)
+        cur.execute(
+            """DELETE FROM session_instance_person 
+               WHERE person_id = %s AND session_instance_id IN (
+                   SELECT session_instance_id FROM session_instance WHERE session_id = %s
+               )""",
+            (person_id, session_id)
+        )
+        # TODO: Add session_instance_person history tracking with proper record_id tuple
+
+        # Complete the orphan cleanup if needed
+        if not has_user_account and other_sessions_count == 0:
+            # No other session associations - delete the person record entirely
+            
+            # First delete person_instrument records
+            cur.execute(
+                "DELETE FROM person_instrument WHERE person_id = %s",
+                (person_id,)
+            )
+            # TODO: Add person_instrument history tracking with proper record_id tuple
+            
+            # Then delete the person record
+            cur.execute(
+                "DELETE FROM person WHERE person_id = %s",
+                (person_id,)
+            )
+            save_to_history(
+                cur,
+                "person",
+                "DELETE",
+                None,
+                f"admin_delete_orphaned_person:{person_id}",
+            )
+            person_deleted = True
+
+        conn.commit()
+        
+        response_data = {"success": True}
+        if person_deleted:
+            response_data["message"] = "Player removed from session and person record deleted (no other session associations)"
+        else:
+            response_data["message"] = "Player successfully removed from session"
+            
+        return jsonify(response_data)
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@login_required
 def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin

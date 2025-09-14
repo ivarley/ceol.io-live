@@ -332,6 +332,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/admin/sessions/<path:session_path>/players/<int:person_id>",
+    "delete_session_player",
+    delete_session_player,
+    methods=["DELETE"],
+)
+app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/logs",
     "get_session_logs_ajax",
     get_session_logs_ajax,
