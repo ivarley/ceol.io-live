@@ -107,3 +107,29 @@ sessions/{path}/
 The link should be dim (meaning, dark blue in dark mode, or light blue in light mode).
 
 ## Backlog
+
+### T054 Bulk Player Import
+
+Build a new screen in the session admin screen allowing a session organizer to bulk import people (linked from a button on the "People" tab). It should have two screens; the first has a big text box  allowing you to paste in comma separated (csv) data, with or without header, with any of the following fields:
+- First Name
+- Last Name
+- Name or Full Name (which is separated into first and last based on splitting at the final space)
+- Email - looks like an email
+- SMS - looks like a phone number
+- City - only include if there's a header row; if blank, default to the city of this session.
+- State - only include if there's a header row; if blank, default to the state of this session.
+- Country - only include if there's a header row; if blank, default to the country of this session.
+- Regular - a boolean field where the values "x", "true", "yes", and "t" all work for true and any other value is false. Only include if there's a header row
+- Instruments (which is itself a comma delimited list, either quote enclosed or not if it's at the end of the row).
+
+Name is mandatory, everything else is optional. If there's no header row, try to determine the content of the data from context using the rules above.
+
+So for example if a row has "John Smith, john@smith.com, Flute, Fiddle" then it should figure out that John is the first ame, Smith is the last name, john@smith.com is the email, and there are two instruments to add, Flute & Fiddle
+
+For duplicate resolution, first look for a person with the same email or phone number, as that's definitely a duplicate; then look for the same name on a person already associated with this session and if there is one, count that as a match.
+
+Add a breif explanation of the required format on the page.
+
+The entry page has a "Next" button which brings you to the second stage: a preview of what would get created, shown as a grid, with "instruments" as a single comma-delimited column. The grid clearly shows which records are not being imported because they're duplicates. A "Back" button lets you go back to your initial textbox view and make changes. A "Save" button lets you perform the actual insert.
+
+Begin by writing a set of failing tests that exercise the two new API endpoints (bulk person pre-process, and bulk person save) thoroughly, where all the tests initially fail; then implement the API such that the tests pass; then build the UI.
