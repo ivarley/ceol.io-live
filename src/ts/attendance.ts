@@ -1326,7 +1326,3 @@ class AttendanceManager {
 // Make AttendanceManager available globally
 window.AttendanceManager = AttendanceManager;
 window.attendanceManagerInstance = null;
-
-// Export for module systems if needed
-export { AttendanceManager };
-export type { AttendanceConfig, Person, Attendee, AttendanceStatus, APIResponse };

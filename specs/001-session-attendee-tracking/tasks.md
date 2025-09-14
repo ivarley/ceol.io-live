@@ -85,12 +85,25 @@ Show it as the same kind of checkbox list. Fix the issue where it can't save "Ot
 
 Clicking the count icons in the players view should temporarily filter the list to only those in that status. Putting focus in the search box, changing tabs, or (obviously) clicking the "Total" reverts it to unfiltered. Changing a status while in filtered mode should correctly change the status, which would make it drop out of the current view, but that's a confusing UX so instead show it as dimmed out if that happens (and remove the dimming if the status is changed back to something that would show in this filter, or if total is clicked, or anything else that would reset the filter).
 
-## In Progress
-
 ### T052 - Convert to Typescript
 
 Our implementation of attendance.js is in javascript, but all the other important js code in this app is in typescript. Convert it.
 
 While you're at it, clean up all the console logging.
+
+## In Progress
+
+### T053 - Return links
+
+I want to make sure navigation is consistent throughout the app. When you're on the session instance details page (regular or beta):
+
+sessions/{path}/{date}
+sessions/{path}/{date}/beta
+
+The session name is listed at the top. Just to the right of that, put a "return" arrow (⮐) that's a link back to the session home page:
+
+sessions/{path}/
+
+The link should be dim (meaning, dark blue in dark mode, or light blue in light mode).
 
 ## Backlog
