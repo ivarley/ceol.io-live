@@ -457,9 +457,9 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/session/<int:session_id>/people/non-regulars",
-    "get_session_non_regulars",
-    get_session_non_regulars,
+    "/api/session/<int:session_id>/people/session-people",
+    "get_session_people",
+    get_session_people,
     methods=["GET"],
 )
 

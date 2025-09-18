@@ -63,7 +63,7 @@ declare global {
 class AttendanceManager {
     private config: AttendanceConfig | null = null;
     private attendees: Attendee[] = [];
-    private nonRegulars: Person[] = [];
+    private sessionPeople: Person[] = [];  // All searchable people associated with this session
     private regulars: Person[] = [];
     private currentSearchQuery = '';
     private searchTimeout: number | null = null;
@@ -87,7 +87,7 @@ class AttendanceManager {
                          document.querySelector('#tune-pills-container') !== null;
         
         this.loadAttendance();
-        this.loadNonRegulars();
+        this.loadSessionPeople();
         this.setupEventListeners();
         this.setupFilterListeners();
         this.initializeQuickCheckin();
@@ -326,20 +326,21 @@ class AttendanceManager {
         }
     }
 
-    private async loadNonRegulars(): Promise<void> {
+    private async loadSessionPeople(): Promise<void> {
         if (!this.config) return;
-        
+
         try {
-            const response = await fetch(`/api/session/${this.config.sessionId}/people/non-regulars`);
+            // Load ALL people associated with this session for instant search functionality
+            const response = await fetch(`/api/session/${this.config.sessionId}/people/session-people`);
             if (!response.ok) {
-                throw new Error('Failed to load non-regular people data');
+                throw new Error('Failed to load session people data');
             }
-            
+
             const result = await response.json() as APIResponse<Person[]>;
-            this.nonRegulars = result.data || [];
+            this.sessionPeople = result.data || [];  // Contains all searchable people
         } catch (error) {
             // Don't show error to user since this is just for optimization
-            this.nonRegulars = [];
+            this.sessionPeople = [];
         }
     }
 
@@ -955,11 +956,11 @@ class AttendanceManager {
             currentAttendeeIds.add(attendee.person_id);
         });
         
-        // Filter non-regulars based on search query
+        // Filter all searchable people (regulars and non-regulars) based on search query
         const searchPattern = query.toLowerCase();
         const matchedPeople: Person[] = [];
-        
-        this.nonRegulars.forEach(person => {
+
+        this.sessionPeople.forEach(person => {
             // Skip if person is already attending
             if (currentAttendeeIds.has(person.person_id)) {
                 return;

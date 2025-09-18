@@ -4610,44 +4610,8 @@ def get_session_attendees(session_instance_id):
         
         session_id = session_result[0]
         
-        # Get regulars for this session with their attendance status
-        cur.execute("""
-            SELECT DISTINCT
-                p.person_id,
-                p.first_name,
-                p.last_name,
-                sp.is_regular,
-                sp.is_admin,
-                COALESCE(sip.attendance, 'unknown') as attendance,
-                sip.comment,
-                ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
-            FROM person p
-            JOIN session_person sp ON p.person_id = sp.person_id
-            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id AND sip.session_instance_id = %s
-            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            WHERE sp.session_id = %s AND sp.is_regular = true
-            GROUP BY p.person_id, p.first_name, p.last_name, sp.is_regular, sp.is_admin, sip.attendance, sip.comment
-            ORDER BY p.first_name, p.last_name
-        """, (session_instance_id, session_id))
-        
-        regulars_data = cur.fetchall()
-        regulars = []
-        
-        for row in regulars_data:
-            person_id, first_name, last_name, is_regular, is_admin, attendance, comment, instruments = row
-            regulars.append({
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,
-                'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
-                'instruments': instruments or [],
-                'attendance': attendance,
-                'is_regular': True,
-                'is_admin': is_admin or False,
-                'comment': comment
-            })
-        
-        # Get non-regular attendees for this session instance
+        # Get all attendees who have been explicitly added to this session instance
+        # Don't pre-populate with regulars - only show those who have actually been added
         cur.execute("""
             SELECT DISTINCT
                 p.person_id,
@@ -4655,23 +4619,23 @@ def get_session_attendees(session_instance_id):
                 p.last_name,
                 sip.attendance,
                 sip.comment,
+                COALESCE(sp.is_regular, false) as is_regular,
                 COALESCE(sp.is_admin, false) as is_admin,
                 ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
             FROM person p
             JOIN session_instance_person sip ON p.person_id = sip.person_id
             LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            WHERE sip.session_instance_id = %s 
-            AND (sp.is_regular IS NULL OR sp.is_regular = false)
-            GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.is_admin
+            WHERE sip.session_instance_id = %s
+            GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.is_regular, sp.is_admin
             ORDER BY p.first_name, p.last_name
         """, (session_id, session_instance_id))
-        
+
         attendees_data = cur.fetchall()
         attendees = []
-        
+
         for row in attendees_data:
-            person_id, first_name, last_name, attendance, comment, is_admin, instruments = row
+            person_id, first_name, last_name, attendance, comment, is_regular, is_admin, instruments = row
             attendees.append({
                 'person_id': person_id,
                 'first_name': first_name,
@@ -4679,10 +4643,13 @@ def get_session_attendees(session_instance_id):
                 'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
                 'instruments': instruments or [],
                 'attendance': attendance,
-                'is_regular': False,
+                'is_regular': is_regular,
                 'is_admin': is_admin,
                 'comment': comment
             })
+
+        # Return empty for regulars since we're not pre-populating
+        regulars = []
         
         # Combine all attendees for disambiguation
         all_attendees = regulars + attendees
@@ -5534,11 +5501,12 @@ def search_session_people(session_id):
 
 
 @api_login_required
-def get_session_non_regulars(session_id):
+def get_session_people(session_id):
     """
-    Get all non-regular people associated with a session for preloading client-side search.
-    
-    Returns JSON response with list of non-regular people who have attended the session.
+    Get all people associated with a session for preloading client-side search.
+
+    Returns JSON response with list of all people who are associated with the session
+    (both regulars and non-regulars).
     """
     try:
         # Get database connection
@@ -5587,11 +5555,11 @@ def get_session_non_regulars(session_id):
                 conn.close()
                 return jsonify({"success": False, "message": "Insufficient permissions to access people in this session"}), 403
         
-        # Get non-regular people who have attended this session
+        # Get all people associated with this session
         cur.execute(
             """
-            WITH session_non_regulars AS (
-                -- Get all people who have attended this session but are not regulars
+            WITH session_all_people AS (
+                -- Get all people who are associated with this session (regulars, admins, or have attended)
                 SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
                        COALESCE(sp.is_regular, FALSE) as is_regular,
                        COALESCE(sp.is_admin, FALSE) as is_session_admin
@@ -5600,29 +5568,30 @@ def get_session_non_regulars(session_id):
                 LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
                 LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                 WHERE (sp.session_id = %s OR si.session_id = %s)
-                  AND COALESCE(sp.is_regular, FALSE) = FALSE
             ),
             person_instruments AS (
                 -- Get instruments for these people
-                SELECT snr.person_id,
+                SELECT sap.person_id,
                        COALESCE(
                            array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
                            '{}'::text[]
                        ) as instruments
-                FROM session_non_regulars snr
-                LEFT JOIN person_instrument pi ON snr.person_id = pi.person_id
-                GROUP BY snr.person_id
+                FROM session_all_people sap
+                LEFT JOIN person_instrument pi ON sap.person_id = pi.person_id
+                GROUP BY sap.person_id
             )
-            SELECT snr.person_id, snr.first_name, snr.last_name, snr.email,
-                   snr.is_regular, snr.is_session_admin,
+            SELECT sap.person_id, sap.first_name, sap.last_name, sap.email,
+                   sap.is_regular, sap.is_session_admin,
                    pi.instruments,
-                   CASE 
-                       WHEN snr.first_name = snr.last_name THEN snr.first_name
-                       ELSE CONCAT(snr.first_name, ' ', snr.last_name)
+                   CASE
+                       WHEN sap.first_name = sap.last_name THEN sap.first_name
+                       ELSE CONCAT(sap.first_name, ' ', sap.last_name)
                    END as display_name
-            FROM session_non_regulars snr
-            JOIN person_instruments pi ON snr.person_id = pi.person_id
-            ORDER BY display_name
+            FROM session_all_people sap
+            JOIN person_instruments pi ON sap.person_id = pi.person_id
+            ORDER BY
+                sap.is_regular DESC,  -- Regulars first
+                display_name          -- Then alphabetical
             """,
             (session_id, session_id, session_id)
         )
