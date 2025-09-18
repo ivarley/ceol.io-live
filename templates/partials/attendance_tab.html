@@ -40,30 +40,23 @@
 <template id="attendance-item-template">
     <div class="attendance-item" data-person-id="">
         <div class="attendance-info">
+            {% if is_session_admin or current_user.is_system_admin %}
+            <a href="" class="person-name person-edit-link" title="Click to edit person details"></a>
+            {% else %}
             <div class="person-name"></div>
+            {% endif %}
             <div class="person-instruments text-muted small"></div>
         </div>
         <div class="attendance-controls">
             {% if is_session_admin %}
-            <div class="btn-group btn-group-sm" role="group">
-                <button type="button" class="btn btn-outline-success attendance-status" data-status="yes">
-                    ✓
-                </button>
-                <button type="button" class="btn btn-outline-warning attendance-status" data-status="maybe">
-                    ?
-                </button>
-                <button type="button" class="btn btn-outline-danger attendance-status" data-status="no">
-                    ✗
-                </button>
+            <div class="attendance-dropdown">
+                <select class="form-control form-control-sm attendance-status-select">
+                    <option value="yes" class="attendance-option-yes">✓ Yes</option>
+                    <option value="maybe" class="attendance-option-maybe">? Maybe</option>
+                    <option value="no" class="attendance-option-no">✗ No</option>
+                    <option value="remove" class="attendance-option-remove">🗑 Remove</option>
+                </select>
             </div>
-            {% if current_user.is_system_admin or is_session_admin %}
-            <a href="" class="btn btn-sm btn-outline-primary ml-2 person-edit-link" title="Edit person details">
-                <i class="fas fa-edit"></i> Edit
-            </a>
-            <button type="button" class="btn btn-sm btn-outline-danger ml-1 person-remove-btn" title="Remove from this session instance">
-                <i class="fas fa-times"></i> Remove
-            </button>
-            {% endif %}
             {% else %}
             <span class="attendance-status-display"></span>
             {% endif %}

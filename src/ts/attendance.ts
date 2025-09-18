@@ -385,26 +385,31 @@ class AttendanceManager {
             }
 
             if (this.config!.canManage) {
-                const statusButtons = item.querySelectorAll('.attendance-status') as NodeListOf<HTMLButtonElement>;
-                statusButtons.forEach(btn => {
+                // Set up dropdown for status selection
+                const statusSelect = item.querySelector('.attendance-status-select') as HTMLSelectElement;
+                if (statusSelect) {
                     const attendanceStatus = attendee.attendance || attendee.attendance_status!;
-                    if (btn.dataset.status === attendanceStatus) {
-                        btn.classList.remove('btn-outline-success', 'btn-outline-warning', 'btn-outline-danger');
-                        btn.classList.add(this.getStatusButtonClass(attendanceStatus));
-                    }
-                    btn.onclick = () => {
-                        this.updateAttendanceStatus(attendee.person_id, btn.dataset.status as AttendanceStatus);
-                    };
-                });
+                    statusSelect.value = attendanceStatus;
+                    this.updateDropdownStyle(statusSelect, attendanceStatus);
 
-                const editBtn = item.querySelector('.person-edit-link') as HTMLAnchorElement;
-                if (editBtn) {
-                    editBtn.href = `/admin/sessions/${this.config!.sessionPath}/players/${attendee.person_id}?from=attendance&instance_id=${this.config!.sessionInstanceId}`;
+                    statusSelect.onchange = () => {
+                        const selectedValue = statusSelect.value;
+                        if (selectedValue === 'remove') {
+                            this.removePersonFromSession(attendee.person_id);
+                            // Reset dropdown to previous value since remove is an action, not a status
+                            statusSelect.value = attendanceStatus;
+                            this.updateDropdownStyle(statusSelect, attendanceStatus);
+                        } else {
+                            this.updateAttendanceStatus(attendee.person_id, selectedValue as AttendanceStatus);
+                            this.updateDropdownStyle(statusSelect, selectedValue);
+                        }
+                    };
                 }
 
-                const removeBtn = item.querySelector('.person-remove-btn') as HTMLButtonElement;
-                if (removeBtn) {
-                    removeBtn.onclick = () => this.removePersonFromSession(attendee.person_id);
+                // Set up clickable name for editing
+                const editLink = item.querySelector('.person-edit-link') as HTMLAnchorElement;
+                if (editLink) {
+                    editLink.href = `/admin/sessions/${this.config!.sessionPath}/players/${attendee.person_id}?from=attendance&instance_id=${this.config!.sessionInstanceId}`;
                 }
             } else {
                 const statusDisplay = item.querySelector('.attendance-status-display') as HTMLElement;
@@ -418,14 +423,6 @@ class AttendanceManager {
         });
     }
 
-    private getStatusButtonClass(status: AttendanceStatus): string {
-        switch (status) {
-            case 'yes': return 'btn-success';
-            case 'maybe': return 'btn-warning';
-            case 'no': return 'btn-danger';
-            default: return 'btn-secondary';
-        }
-    }
 
     private getStatusDisplay(status: AttendanceStatus): string {
         switch (status) {
@@ -433,6 +430,24 @@ class AttendanceManager {
             case 'maybe': return '<span class="text-warning"><i class="fas fa-question"></i> Maybe</span>';
             case 'no': return '<span class="text-danger"><i class="fas fa-times"></i> No</span>';
             default: return '<span class="text-muted">Unknown</span>';
+        }
+    }
+
+    private updateDropdownStyle(selectElement: HTMLSelectElement, status: string): void {
+        // Remove all status classes
+        selectElement.classList.remove('dropdown-status-yes', 'dropdown-status-maybe', 'dropdown-status-no');
+
+        // Add appropriate status class
+        switch (status) {
+            case 'yes':
+                selectElement.classList.add('dropdown-status-yes');
+                break;
+            case 'maybe':
+                selectElement.classList.add('dropdown-status-maybe');
+                break;
+            case 'no':
+                selectElement.classList.add('dropdown-status-no');
+                break;
         }
     }
 
@@ -1066,30 +1081,19 @@ class AttendanceManager {
         if (attendee) {
             attendee.attendance = newStatus;
         }
-        
+
         // Update UI
         const attendanceItem = document.querySelector(`.attendance-item[data-person-id="${personId}"]`) as HTMLElement;
         if (attendanceItem) {
             // Update data attribute
             attendanceItem.setAttribute('data-status', newStatus);
-            
-            // Update button states
-            const buttons = attendanceItem.querySelectorAll('.attendance-status') as NodeListOf<HTMLButtonElement>;
-            buttons.forEach(btn => {
-                const btnStatus = btn.dataset.status as AttendanceStatus;
-                btn.classList.remove('btn-success', 'btn-warning', 'btn-danger');
-                if (btnStatus === newStatus) {
-                    // Active state
-                    if (newStatus === 'yes') btn.classList.add('btn-success');
-                    else if (newStatus === 'maybe') btn.classList.add('btn-warning');
-                    else if (newStatus === 'no') btn.classList.add('btn-danger');
-                } else {
-                    // Inactive state
-                    if (btnStatus === 'yes') btn.classList.add('btn-outline-success');
-                    else if (btnStatus === 'maybe') btn.classList.add('btn-outline-warning');
-                    else if (btnStatus === 'no') btn.classList.add('btn-outline-danger');
-                }
-            });
+
+            // Update dropdown value and styling
+            const statusSelect = attendanceItem.querySelector('.attendance-status-select') as HTMLSelectElement;
+            if (statusSelect) {
+                statusSelect.value = newStatus;
+                this.updateDropdownStyle(statusSelect, newStatus);
+            }
         }
     }
 
@@ -1199,24 +1203,27 @@ class AttendanceManager {
             attendeeElement.style.opacity = '';
             attendeeElement.style.border = '';
             
-            // Update button onclick handlers with real ID
-            const buttons = attendeeElement.querySelectorAll('.attendance-status') as NodeListOf<HTMLButtonElement>;
-            buttons.forEach(btn => {
-                btn.onclick = () => {
-                    this.updateAttendanceStatus(realId, btn.dataset.status as AttendanceStatus);
+            // Update dropdown handler with real ID
+            const statusSelect = attendeeElement.querySelector('.attendance-status-select') as HTMLSelectElement;
+            if (statusSelect) {
+                const attendanceStatus = attendee?.attendance || 'yes';
+                statusSelect.onchange = () => {
+                    const selectedValue = statusSelect.value;
+                    if (selectedValue === 'remove') {
+                        this.removePersonFromSession(realId);
+                        statusSelect.value = attendanceStatus;
+                        this.updateDropdownStyle(statusSelect, attendanceStatus);
+                    } else {
+                        this.updateAttendanceStatus(realId, selectedValue as AttendanceStatus);
+                        this.updateDropdownStyle(statusSelect, selectedValue);
+                    }
                 };
-            });
-            
+            }
+
+            // Update edit link with real ID
             const editBtn = attendeeElement.querySelector('.person-edit-link') as HTMLAnchorElement;
             if (editBtn && this.config) {
                 editBtn.href = `/admin/sessions/${this.config.sessionPath}/players/${realId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
-            }
-            
-            const removeBtn = attendeeElement.querySelector('.person-remove-btn') as HTMLButtonElement;
-            if (removeBtn) {
-                removeBtn.onclick = () => {
-                    this.removePersonFromSession(realId);
-                };
             }
         }
     }
@@ -1251,30 +1258,26 @@ class AttendanceManager {
     private setupAttendeeEvents(attendeeElement: HTMLElement, attendee: Attendee): void {
         const personId = attendee.person_id;
         
-        // Set up status buttons
-        const buttons = attendeeElement.querySelectorAll('.attendance-status') as NodeListOf<HTMLButtonElement>;
-        buttons.forEach(btn => {
-            const btnStatus = btn.dataset.status as AttendanceStatus;
+        // Set up status dropdown
+        const statusSelect = attendeeElement.querySelector('.attendance-status-select') as HTMLSelectElement;
+        if (statusSelect) {
             const attendanceStatus = attendee.attendance || attendee.attendance_status!;
-            
-            // Set initial button state
-            btn.classList.remove('btn-success', 'btn-warning', 'btn-danger', 'btn-outline-success', 'btn-outline-warning', 'btn-outline-danger');
-            if (btnStatus === attendanceStatus) {
-                // Active state
-                if (attendanceStatus === 'yes') btn.classList.add('btn-success');
-                else if (attendanceStatus === 'maybe') btn.classList.add('btn-warning');
-                else if (attendanceStatus === 'no') btn.classList.add('btn-danger');
-            } else {
-                // Inactive state
-                if (btnStatus === 'yes') btn.classList.add('btn-outline-success');
-                else if (btnStatus === 'maybe') btn.classList.add('btn-outline-warning');
-                else if (btnStatus === 'no') btn.classList.add('btn-outline-danger');
-            }
-            
-            btn.onclick = () => {
-                this.updateAttendanceStatus(personId, btn.dataset.status as AttendanceStatus);
+            statusSelect.value = attendanceStatus;
+            this.updateDropdownStyle(statusSelect, attendanceStatus);
+
+            statusSelect.onchange = () => {
+                const selectedValue = statusSelect.value;
+                if (selectedValue === 'remove') {
+                    this.removePersonFromSession(personId);
+                    // Reset dropdown to previous value since remove is an action, not a status
+                    statusSelect.value = attendanceStatus;
+                    this.updateDropdownStyle(statusSelect, attendanceStatus);
+                } else {
+                    this.updateAttendanceStatus(personId, selectedValue as AttendanceStatus);
+                    this.updateDropdownStyle(statusSelect, selectedValue);
+                }
             };
-        });
+        }
         
         // Set up edit button
         const editBtn = attendeeElement.querySelector('.person-edit-link') as HTMLAnchorElement;

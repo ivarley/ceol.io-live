@@ -99,7 +99,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 11px 20px;
+    padding: 12px 20px;
     border: 1px solid var(--border-color, #dee2e6);
     border-radius: 8px;
     margin-bottom: 12px;
@@ -115,25 +115,28 @@
 .attendance-info {
     flex: 1;
     min-width: 0; /* Allow text truncation */
+    text-align: left;
 }
 
 .attendance-info .person-name {
     font-weight: 500;
     font-size: 1.1em;
     color: var(--text-color);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+    text-align: left;
 }
 
 .attendance-info .person-instruments {
     font-size: 0.9em;
     color: var(--text-muted, #6c757d);
+    text-align: left;
 }
 
 .attendance-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
     margin-left: 16px;
+    flex-shrink: 0;
 }
 
 /* Status Color Coding */
@@ -373,21 +376,18 @@
     }
     
     .attendance-item {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 11px;
-        gap: 12px;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 15px;
     }
-    
+
     .attendance-info {
-        text-align: center;
+        text-align: left;
     }
-    
+
     .attendance-controls {
-        justify-content: center;
-        margin-left: 0;
-        flex-wrap: wrap;
-        gap: 12px;
+        margin-left: 12px;
     }
     
     .btn-group {
@@ -549,5 +549,112 @@
     .attendance-stats {
         font-size: 12pt;
         margin-bottom: 16pt;
+    }
+}
+
+/* Attendance Dropdown Styles */
+.attendance-dropdown {
+    min-width: 120px;
+}
+
+.attendance-status-select {
+    font-weight: 500;
+    font-size: 0.9em;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.attendance-status-select:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+/* Dropdown color states */
+.dropdown-status-yes {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+    border-color: var(--success, #28a745) !important;
+    color: var(--success, #28a745) !important;
+}
+
+.dropdown-status-maybe {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+    border-color: var(--warning, #ffc107) !important;
+    color: var(--warning, #856404) !important;
+}
+
+.dropdown-status-no {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    border-color: var(--danger, #dc3545) !important;
+    color: var(--danger, #dc3545) !important;
+}
+
+/* Option colors (for browsers that support it) */
+.attendance-option-yes {
+    color: var(--success, #28a745);
+}
+
+.attendance-option-maybe {
+    color: var(--warning, #856404);
+}
+
+.attendance-option-no {
+    color: var(--danger, #dc3545);
+}
+
+.attendance-option-remove {
+    color: var(--danger, #dc3545);
+    font-weight: bold;
+}
+
+/* Clickable person name */
+.person-name.person-edit-link {
+    color: var(--primary, #007bff);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.person-name.person-edit-link:hover {
+    color: var(--primary, #0056b3);
+    text-decoration: underline;
+}
+
+.person-name.person-edit-link:focus {
+    outline: 2px solid var(--primary, #007bff);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Additional mobile adjustments for dropdown */
+@media (max-width: 768px) {
+    .attendance-dropdown {
+        min-width: 110px;
+    }
+
+    .attendance-status-select {
+        font-size: 0.85em;
+        padding: 5px 8px;
+        min-width: 110px;
+    }
+}
+
+/* Dark mode support for dropdown */
+@media (prefers-color-scheme: dark) {
+    .attendance-status-select {
+        background-color: var(--bg-color, #2d3748);
+        color: var(--text-color, #e2e8f0);
+        border-color: var(--border-color, #4a5568);
+    }
+
+    .person-name.person-edit-link {
+        color: var(--primary, #63b3ed);
+    }
+
+    .person-name.person-edit-link:hover {
+        color: var(--primary, #90cdf4);
     }
 }
