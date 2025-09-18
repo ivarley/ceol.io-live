@@ -2,6 +2,7 @@ const path = require('path');
 
 module.exports = {
   entry: {
+    'attendance': './src/ts/attendance.ts',
     'stateManager': './src/ts/components/stateManager.ts',
     'undoRedoManager': './src/ts/components/undoRedoManager.ts',
     'keyboardHandler': './src/ts/components/keyboardHandler.ts',
