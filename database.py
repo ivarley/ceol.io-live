@@ -679,25 +679,9 @@ def remove_person_attendance(session_instance_id, person_id, changed_by='system'
         
         # Delete attendance record
         cur.execute("""
-            DELETE FROM session_instance_person 
+            DELETE FROM session_instance_person
             WHERE session_instance_id = %s AND person_id = %s
         """, (session_instance_id, person_id))
-        
-        # Check if this was the last attendance record for this person in this session
-        cur.execute("""
-            SELECT COUNT(*) FROM session_instance_person sip
-            JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-            WHERE si.session_id = %s AND sip.person_id = %s
-        """, (session_id, person_id))
-        
-        remaining_attendances = cur.fetchone()[0]
-        
-        # If no more attendance records exist for this session, delete session_person record
-        if remaining_attendances == 0:
-            cur.execute("""
-                DELETE FROM session_person 
-                WHERE session_id = %s AND person_id = %s
-            """, (session_id, person_id))
         
         # Commit transaction
         cur.execute("COMMIT")
