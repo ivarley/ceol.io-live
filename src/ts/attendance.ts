@@ -31,7 +31,7 @@ interface Attendee extends Person {
     attendance: AttendanceStatus;
 }
 
-type AttendanceStatus = 'yes' | 'maybe' | 'no' | 'unknown';
+type AttendanceStatus = 'yes' | 'maybe' | 'no';
 
 interface APIResponse<T = any> {
     data?: T;
@@ -432,7 +432,6 @@ class AttendanceManager {
             case 'yes': return '<span class="text-success"><i class="fas fa-check"></i> Yes</span>';
             case 'maybe': return '<span class="text-warning"><i class="fas fa-question"></i> Maybe</span>';
             case 'no': return '<span class="text-danger"><i class="fas fa-times"></i> No</span>';
-            case 'unknown': return '<span class="text-primary"><i class="fas fa-question-circle"></i> Unknown</span>';
             default: return '<span class="text-muted">Unknown</span>';
         }
     }
@@ -441,7 +440,6 @@ class AttendanceManager {
         const yesCount = this.attendees.filter(a => (a.attendance || a.attendance_status) === 'yes').length;
         const maybeCount = this.attendees.filter(a => (a.attendance || a.attendance_status) === 'maybe').length;
         const noCount = this.attendees.filter(a => (a.attendance || a.attendance_status) === 'no').length;
-        const unknownCount = this.attendees.filter(a => (a.attendance || a.attendance_status) === 'unknown').length;
         const totalCount = this.attendees.length;
 
         const updateElement = (id: string, value: number) => {
@@ -452,7 +450,6 @@ class AttendanceManager {
         updateElement('yes-count', yesCount);
         updateElement('maybe-count', maybeCount);
         updateElement('no-count', noCount);
-        updateElement('unknown-count', unknownCount);
         updateElement('total-count', totalCount);
     }
 
@@ -1067,8 +1064,8 @@ class AttendanceManager {
 
     private updateStatusCountsOptimistic(): void {
         // Count statuses from current attendees array
-        const counts = { yes: 0, maybe: 0, no: 0, unknown: 0, total: 0 };
-        
+        const counts = { yes: 0, maybe: 0, no: 0, total: 0 };
+
         this.attendees.forEach(attendee => {
             const status = attendee.attendance;
             if (status && counts.hasOwnProperty(status)) {
@@ -1076,7 +1073,7 @@ class AttendanceManager {
             }
             counts.total++;
         });
-        
+
         // Update UI
         const updateElement = (id: string, value: number) => {
             const element = document.getElementById(id);
@@ -1086,7 +1083,6 @@ class AttendanceManager {
         updateElement('yes-count', counts.yes);
         updateElement('maybe-count', counts.maybe);
         updateElement('no-count', counts.no);
-        updateElement('unknown-count', counts.unknown);
         updateElement('total-count', counts.total);
     }
 

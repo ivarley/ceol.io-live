@@ -50,7 +50,7 @@ class TestGetAttendeesContract:
             assert isinstance(regular['person_id'], int)
             assert isinstance(regular['display_name'], str)
             assert isinstance(regular['instruments'], list)
-            assert regular['attendance'] in ['yes', 'maybe', 'no', 'unknown', None]
+            assert regular['attendance'] in ['yes', 'maybe', 'no', None]
             assert regular['is_regular'] is True
 
     def test_get_attendees_unauthorized_access(self, client, sample_session_instance_data):
