@@ -402,9 +402,9 @@ class AttendanceManager {
                     editBtn.href = `/admin/sessions/${this.config!.sessionPath}/players/${attendee.person_id}?from=attendance&instance_id=${this.config!.sessionInstanceId}`;
                 }
 
-                const removeBtn = item.querySelector('[onclick*="removePerson"]') as HTMLButtonElement;
+                const removeBtn = item.querySelector('.person-remove-btn') as HTMLButtonElement;
                 if (removeBtn) {
-                    removeBtn.onclick = () => this.removePerson(attendee.person_id);
+                    removeBtn.onclick = () => this.removePersonFromSession(attendee.person_id);
                 }
             } else {
                 const statusDisplay = item.querySelector('.attendance-status-display') as HTMLElement;
@@ -932,9 +932,40 @@ class AttendanceManager {
 
     removePerson(personId: number | string): void {
         if (!confirm('Mark this person as not attending?')) return;
-        
+
         // Set their status to "no" instead of removing them entirely
         this.updateAttendanceStatus(personId, 'no');
+    }
+
+    async removePersonFromSession(personId: number | string): Promise<void> {
+        if (!this.config) return;
+
+        if (!confirm('Remove this person from this session instance? This will not affect their general session membership.')) {
+            return;
+        }
+
+        // Optimistically remove from UI
+        this.removePersonFromUIOptimistic(personId);
+
+        try {
+            const response = await fetch(`/api/session_instance/${this.config.sessionInstanceId}/attendees/${personId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to remove person from session');
+            }
+
+            this.showSuccess('Person removed from session instance');
+        } catch (error) {
+            // Reload attendance on error to restore accurate state
+            await this.loadAttendance();
+            this.showError((error as Error).message || 'Error removing person from session');
+        }
     }
 
     // Optimistic UI Update Helpers
@@ -1181,10 +1212,10 @@ class AttendanceManager {
                 editBtn.href = `/admin/sessions/${this.config.sessionPath}/players/${realId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
             }
             
-            const removeBtn = attendeeElement.querySelector('[onclick*="removePerson"]') as HTMLButtonElement;
+            const removeBtn = attendeeElement.querySelector('.person-remove-btn') as HTMLButtonElement;
             if (removeBtn) {
                 removeBtn.onclick = () => {
-                    this.removePerson(realId);
+                    this.removePersonFromSession(realId);
                 };
             }
         }
@@ -1252,10 +1283,10 @@ class AttendanceManager {
         }
         
         // Set up remove button
-        const removeBtn = attendeeElement.querySelector('[onclick*="removePerson"]') as HTMLButtonElement;
+        const removeBtn = attendeeElement.querySelector('.person-remove-btn') as HTMLButtonElement;
         if (removeBtn) {
             removeBtn.onclick = () => {
-                this.removePerson(personId);
+                this.removePersonFromSession(personId);
             };
         }
     }
