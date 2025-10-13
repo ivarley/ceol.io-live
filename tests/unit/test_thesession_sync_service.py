@@ -11,21 +11,33 @@ from services.thesession_sync_service import ThesessionSyncService
 
 class TestThesessionSyncService:
     """Test suite for ThesessionSyncService."""
-    
+
     @pytest.fixture
     def sync_service(self):
         """Create a ThesessionSyncService instance."""
         return ThesessionSyncService()
-    
+
+    @pytest.fixture
+    def mock_db_connection(self):
+        """Create a properly mocked database connection for psycopg2."""
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value = mock_cur
+        # Add connection.encoding for psycopg2's execute_values
+        mock_cur.connection = MagicMock()
+        mock_cur.connection.encoding = 'UTF8'
+        return mock_conn, mock_cur
+
     @pytest.fixture
     def mock_tunebook_response(self):
         """Mock tunebook API response."""
         return {
-            'tunebook': [
+            'tunes': [
                 {'id': 1, 'name': 'The Kesh', 'type': 'jig'},
                 {'id': 2, 'name': 'The Banshee', 'type': 'reel'},
                 {'id': 3, 'name': 'The Butterfly', 'type': 'slip jig'}
-            ]
+            ],
+            'pages': 1
         }
     
     @pytest.fixture
@@ -112,11 +124,11 @@ class TestThesessionSyncService:
         """Test tunebook fetch with empty tunebook."""
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {'tunebook': []}
+        mock_response.json.return_value = {'tunes': [], 'pages': 1}
         mock_get.return_value = mock_response
-        
+
         success, message, tunebook = sync_service.fetch_tunebook(12345)
-        
+
         assert success is True
         assert "Successfully fetched 0 tunes" in message
         assert len(tunebook) == 0
@@ -251,17 +263,16 @@ class TestThesessionSyncService:
     
     # Test sync_tunebook_to_person
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_tunebook_to_person_success(self, mock_get_conn, sync_service):
+    def test_sync_tunebook_to_person_success(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
         """Test successful tunebook sync."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        
-        # Mock fetchone to return None (person_tune doesn't exist)
-        mock_cur.fetchone.return_value = None
-        
+
+        # Mock fetchall for batch operations (no existing tunes or person_tunes)
+        mock_cur.fetchall.return_value = []
+
         # Mock fetch_tunebook
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [
@@ -285,65 +296,61 @@ class TestThesessionSyncService:
                 assert len(results['errors']) == 0
                 mock_conn.commit.assert_called()
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_tunebook_to_person_with_duplicates(self, mock_get_conn, sync_service):
+    def test_sync_tunebook_to_person_with_duplicates(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
         """Test tunebook sync with existing person_tunes."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        
-        # Mock fetchone to alternate between existing and new
-        mock_cur.fetchone.side_effect = [(1,), None]  # First exists, second doesn't
-        
+
+        # Mock fetchall for batch operations
+        # First fetchall: tune existence check (both exist)
+        # Second fetchall: person_tune existence check (tune 1 exists, tune 2 doesn't)
+        mock_cur.fetchall.side_effect = [
+            [(1,), (2,)],  # Both tunes exist in tune table
+            [(1,)]  # Only tune 1 exists in person_tune
+        ]
+
         # Mock fetch_tunebook
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [
                 {'id': 1, 'name': 'The Kesh'},
                 {'id': 2, 'name': 'The Banshee'}
             ])
-            
-            # Mock ensure_tune_exists
-            with patch.object(sync_service, 'ensure_tune_exists') as mock_ensure:
-                mock_ensure.return_value = (True, "Tune already exists")
-                
-                success, message, results = sync_service.sync_tunebook_to_person(
-                    person_id=1,
-                    thesession_user_id=12345
-                )
-                
-                assert success is True
-                assert results['person_tunes_added'] == 1
-                assert results['person_tunes_skipped'] == 1
+
+            success, message, results = sync_service.sync_tunebook_to_person(
+                person_id=1,
+                thesession_user_id=12345
+            )
+
+            assert success is True
+            assert results['person_tunes_added'] == 1
+            assert results['person_tunes_skipped'] == 1
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_tunebook_to_person_creates_missing_tunes(self, mock_get_conn, sync_service):
+    def test_sync_tunebook_to_person_creates_missing_tunes(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
         """Test tunebook sync creates missing tune records."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        
-        mock_cur.fetchone.return_value = None
-        
+
+        # Mock fetchall for batch operations (no existing tunes or person_tunes)
+        mock_cur.fetchall.return_value = []
+
         # Mock fetch_tunebook
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [
-                {'id': 1, 'name': 'The Kesh'}
+                {'id': 1, 'name': 'The Kesh', 'type': 'jig'}
             ])
-            
-            # Mock ensure_tune_exists to indicate tune was created
-            with patch.object(sync_service, 'ensure_tune_exists') as mock_ensure:
-                mock_ensure.return_value = (True, "Created tune #1: The Kesh")
-                
-                success, message, results = sync_service.sync_tunebook_to_person(
-                    person_id=1,
-                    thesession_user_id=12345
-                )
-                
-                assert success is True
-                assert results['tunes_created'] == 1
-                assert results['person_tunes_added'] == 1
+
+            success, message, results = sync_service.sync_tunebook_to_person(
+                person_id=1,
+                thesession_user_id=12345
+            )
+
+            assert success is True
+            assert results['tunes_created'] == 1
+            assert results['person_tunes_added'] == 1
     
     def test_sync_tunebook_to_person_fetch_fails(self, sync_service):
         """Test tunebook sync when fetch fails."""
@@ -361,66 +368,66 @@ class TestThesessionSyncService:
             assert results['tunes_fetched'] == 0
             assert len(results['errors']) > 0
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_tunebook_to_person_handles_errors(self, mock_get_conn, sync_service):
-        """Test tunebook sync handles individual tune errors."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+    def test_sync_tunebook_to_person_handles_errors(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
+        """Test tunebook sync handles batch operation errors."""
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        
-        mock_cur.fetchone.return_value = None
-        
+
+        # Mock fetchall to return empty sets (no existing tunes)
+        mock_cur.fetchall.return_value = []
+
+        # Mock execute_values to raise an error during batch insert
+        mock_execute_values.side_effect = Exception("Database connection lost")
+
         # Mock fetch_tunebook
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [
                 {'id': 1, 'name': 'The Kesh'},
                 {'id': 2, 'name': 'The Banshee'}
             ])
-            
-            # Mock ensure_tune_exists to fail for second tune
-            with patch.object(sync_service, 'ensure_tune_exists') as mock_ensure:
-                mock_ensure.side_effect = [
-                    (True, "Tune already exists"),
-                    (False, "API error")
-                ]
-                
-                success, message, results = sync_service.sync_tunebook_to_person(
-                    person_id=1,
-                    thesession_user_id=12345
-                )
-                
-                assert results['person_tunes_added'] == 1
-                assert len(results['errors']) == 1
-                assert "Tune #2" in results['errors'][0]
+
+            success, message, results = sync_service.sync_tunebook_to_person(
+                person_id=1,
+                thesession_user_id=12345
+            )
+
+            # Should continue despite tune creation error
+            assert len(results['errors']) >= 1
+            assert any('Database connection lost' in error or 'creating tunes' in error for error in results['errors'])
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_tunebook_to_person_missing_tune_id(self, mock_get_conn, sync_service):
-        """Test tunebook sync handles entries with missing tune IDs."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+    def test_sync_tunebook_to_person_missing_tune_id(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
+        """Test tunebook sync silently skips entries with missing tune IDs."""
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        
+
+        # Mock fetchall for batch operations
+        # First fetchall: tune existence check (tune 2 doesn't exist yet)
+        # Second fetchall: person_tune existence check (none exist)
+        mock_cur.fetchall.side_effect = [
+            [],  # No existing tunes in tune table
+            []  # No existing person_tunes
+        ]
+
         # Mock fetch_tunebook with entry missing ID
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [
-                {'name': 'The Kesh'},  # Missing 'id'
+                {'name': 'The Kesh'},  # Missing 'id' - should be skipped
                 {'id': 2, 'name': 'The Banshee'}
             ])
-            
-            # Mock ensure_tune_exists
-            with patch.object(sync_service, 'ensure_tune_exists') as mock_ensure:
-                mock_ensure.return_value = (True, "Tune already exists")
-                mock_cur.fetchone.return_value = None
-                
-                success, message, results = sync_service.sync_tunebook_to_person(
-                    person_id=1,
-                    thesession_user_id=12345
-                )
-                
-                assert results['person_tunes_added'] == 1  # Only second tune
-                assert len(results['errors']) == 1  # Error for missing ID
+
+            success, message, results = sync_service.sync_tunebook_to_person(
+                person_id=1,
+                thesession_user_id=12345
+            )
+
+            assert success is True
+            assert results['person_tunes_added'] == 1  # Only second tune
+            # No error - tunes without IDs are silently filtered out
+            assert len(results['errors']) == 0
     
     # Test get_sync_preview
     
@@ -518,15 +525,15 @@ class TestThesessionSyncService:
         # First call times out, second call succeeds
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {'tunebook': [{'id': 1, 'name': 'The Kesh'}]}
-        
+        mock_response.json.return_value = {'tunes': [{'id': 1, 'name': 'The Kesh'}], 'pages': 1}
+
         mock_get.side_effect = [
             requests.exceptions.Timeout(),
             mock_response
         ]
-        
+
         success, message, tunebook = sync_service.fetch_tunebook(12345, retry=True)
-        
+
         assert success is True
         assert len(tunebook) == 1
         assert mock_get.call_count == 2
@@ -627,20 +634,21 @@ class TestThesessionSyncService:
     
     # Test progress tracking
     
+    @patch('psycopg2.extras.execute_values')
     @patch('services.thesession_sync_service.get_db_connection')
-    def test_sync_with_progress_callback(self, mock_get_conn, sync_service):
+    def test_sync_with_progress_callback(self, mock_get_conn, mock_execute_values, sync_service, mock_db_connection):
         """Test sync calls progress callback with status updates."""
-        mock_conn = MagicMock()
-        mock_cur = MagicMock()
-        mock_conn.cursor.return_value = mock_cur
+        mock_conn, mock_cur = mock_db_connection
         mock_get_conn.return_value = mock_conn
-        mock_cur.fetchone.return_value = None
-        
+
+        # Mock fetchall for batch operations (no existing tunes or person_tunes)
+        mock_cur.fetchall.return_value = []
+
         progress_updates = []
-        
+
         def progress_callback(progress):
             progress_updates.append(progress.copy())
-        
+
         # Mock fetch_tunebook
         with patch.object(sync_service, 'fetch_tunebook') as mock_fetch_tb:
             mock_fetch_tb.return_value = (True, "Success", [

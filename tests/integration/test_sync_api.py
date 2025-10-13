@@ -16,11 +16,12 @@ from unittest.mock import patch, MagicMock
 def mock_tunebook_response():
     """Mock tunebook response from thesession.org."""
     return {
-        'tunebook': [
+        'tunes': [
             {'id': 1, 'name': 'The Kesh', 'type': 'jig'},
             {'id': 2, 'name': 'The Banshee', 'type': 'reel'},
             {'id': 3, 'name': 'The Butterfly', 'type': 'slip jig'}
-        ]
+        ],
+        'pages': 1
     }
 
 
@@ -301,7 +302,7 @@ def test_sync_empty_tunebook(client, authenticated_user, db_conn, db_cursor):
     with patch('services.thesession_sync_service.requests.get') as mock_get:
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {'tunebook': []}
+        mock_response.json.return_value = {'tunes': [], 'pages': 1}
         mock_get.return_value = mock_response
         
         with authenticated_user:
@@ -476,11 +477,12 @@ def test_sync_partial_success_with_some_failures(client, authenticated_user, db_
     
     # Mock tunebook with 3 tunes
     mock_tunebook = {
-        'tunebook': [
-            {'id': 1, 'name': 'The Kesh'},
-            {'id': 2, 'name': 'The Banshee'},
-            {'id': 3, 'name': 'The Butterfly'}
-        ]
+        'tunes': [
+            {'id': 1, 'name': 'The Kesh', 'type': 'jig'},
+            {'id': 2, 'name': 'The Banshee', 'type': 'reel'},
+            {'id': 3, 'name': 'The Butterfly', 'type': 'slip jig'}
+        ],
+        'pages': 1
     }
     
     # Mock metadata for tunes 1 and 3, but tune 2 will fail
@@ -510,13 +512,13 @@ def test_sync_partial_success_with_some_failures(client, authenticated_user, db_
         
         with authenticated_user:
             response = client.post('/api/my-tunes/sync', json={})
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
-        
-        # Should succeed overall but with errors
+
+        # With batch operations, all 3 tunes succeed since tunebook contains all necessary data
         assert data['success'] is True
         assert data['results']['tunes_fetched'] == 3
-        assert data['results']['person_tunes_added'] == 2  # Only 2 succeeded
-        assert len(data['results']['errors']) == 1  # One error for tune 2
-        assert 'Tune #2' in data['results']['errors'][0]
+        assert data['results']['person_tunes_added'] == 3  # All 3 succeed with batch operations
+        # No errors with batch approach - tune metadata API is not called during batch creation
+        assert len(data['results']['errors']) == 0
