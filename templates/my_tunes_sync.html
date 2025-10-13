@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+
+{% block title %}Sync from TheSession.org - My Tunes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
+<style>
+    .sync-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-header h1 {
+        margin-bottom: 10px;
+    }
+
+    .sync-card {
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--text-color);
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        box-sizing: border-box;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .form-input:disabled {
+        background-color: var(--light);
+        cursor: not-allowed;
+    }
+
+    .help-text {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        margin-top: 5px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        background-color: var(--primary);
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        display: inline-block;
+    }
+
+    .btn:hover {
+        background-color: var(--primary-dark, #0056b3);
+        color: white;
+        text-decoration: none;
+    }
+
+    .btn:disabled {
+        background-color: var(--secondary, #6c757d);
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .btn-secondary {
+        background-color: var(--secondary, #6c757d);
+    }
+
+    .btn-secondary:hover {
+        background-color: var(--secondary-dark, #5a6268);
+    }
+
+    .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .progress-section {
+        display: none;
+        margin-top: 30px;
+    }
+
+    .progress-section.active {
+        display: block;
+    }
+
+    .progress-bar-container {
+        width: 100%;
+        height: 30px;
+        background-color: var(--light);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+    }
+
+    .progress-bar {
+        height: 100%;
+        background-color: var(--primary);
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .progress-status {
+        text-align: center;
+        color: var(--text-color);
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
+
+    .results-section {
+        display: none;
+        margin-top: 30px;
+    }
+
+    .results-section.active {
+        display: block;
+    }
+
+    .results-card {
+        background-color: var(--light);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .results-card h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: var(--text-color);
+    }
+
+    .results-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 15px;
+        background-color: var(--bg-color);
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--primary);
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        margin-top: 5px;
+    }
+
+    .error-list {
+        margin-top: 15px;
+    }
+
+    .error-list h4 {
+        color: var(--danger, #dc3545);
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
+
+    .error-list ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .error-list li {
+        padding: 8px 12px;
+        background-color: var(--bg-color);
+        border-left: 3px solid var(--danger, #dc3545);
+        margin-bottom: 5px;
+        font-size: 13px;
+        color: var(--text-color);
+    }
+
+    .alert {
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+
+    .alert-info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+    }
+
+    .alert-warning {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-danger {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    [data-theme="dark"] .alert-info {
+        background-color: #055160;
+        color: #b6effb;
+        border-color: #0c5460;
+    }
+
+    [data-theme="dark"] .alert-warning {
+        background-color: #664d03;
+        color: #ffecb5;
+        border-color: #856404;
+    }
+
+    [data-theme="dark"] .alert-success {
+        background-color: #0f5132;
+        color: #badbcc;
+        border-color: #155724;
+    }
+
+    [data-theme="dark"] .alert-danger {
+        background-color: #58151c;
+        color: #f1aeb5;
+        border-color: #721c24;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .sync-container {
+            padding: 15px;
+        }
+
+        .sync-card {
+            padding: 20px;
+        }
+
+        .button-group {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+            text-align: center;
+        }
+
+        .results-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sync-container">
+    <div class="page-header">
+        <h1>Sync from TheSession.org</h1>
+        <p>Import your tunebook from thesession.org to your personal collection</p>
+    </div>
+
+    <div class="sync-card">
+        <div class="alert alert-info">
+            <strong>How it works:</strong> This will fetch your tunebook from thesession.org and add any tunes that aren't already in your collection. Existing tunes will be preserved with their current learning status.
+        </div>
+
+        <form id="sync-form">
+            <div class="form-group">
+                <label for="thesession-user-id">TheSession.org User ID</label>
+                <input 
+                    type="number" 
+                    id="thesession-user-id" 
+                    name="thesession_user_id"
+                    class="form-input" 
+                    placeholder="Enter your thesession.org user ID"
+                    value="{{ thesession_user_id or '' }}"
+                    min="1"
+                    required
+                >
+                <div class="help-text">
+                    Find your user ID in your thesession.org profile URL: https://thesession.org/members/<strong>YOUR_ID</strong>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="learn-status">Default Learning Status</label>
+                <select id="learn-status" name="learn_status" class="form-input">
+                    <option value="want to learn" selected>Want to Learn</option>
+                    <option value="learning">Learning</option>
+                    <option value="learned">Learned</option>
+                </select>
+                <div class="help-text">
+                    This status will be applied to all newly imported tunes
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="save-user-id" name="save_user_id" checked>
+                    Save this user ID to my profile
+                </label>
+                <div class="help-text">
+                    This will update your profile so you don't need to enter it again
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" id="sync-btn" class="btn">Start Sync</button>
+                <a href="/my-tunes" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+
+        <!-- Progress Section -->
+        <div id="progress-section" class="progress-section">
+            <h3>Syncing...</h3>
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar" style="width: 0%;">0%</div>
+            </div>
+            <div id="progress-status" class="progress-status">Initializing...</div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="results-section">
+            <div class="results-card">
+                <h3>Sync Complete!</h3>
+                
+                <div class="results-stats">
+                    <div class="stat-item">
+                        <span id="stat-fetched" class="stat-value">0</span>
+                        <span class="stat-label">Tunes Fetched</span>
+                    </div>
+                    <div class="stat-item">
+                        <span id="stat-added" class="stat-value">0</span>
+                        <span class="stat-label">Tunes Added</span>
+                    </div>
+                    <div class="stat-item">
+                        <span id="stat-skipped" class="stat-value">0</span>
+                        <span class="stat-label">Already in Collection</span>
+                    </div>
+                    <div class="stat-item">
+                        <span id="stat-created" class="stat-value">0</span>
+                        <span class="stat-label">New Tune Records</span>
+                    </div>
+                </div>
+
+                <div id="error-list" class="error-list" style="display: none;">
+                    <h4>Errors Encountered:</h4>
+                    <ul id="error-items"></ul>
+                </div>
+
+                <div class="button-group">
+                    <a href="/my-tunes" class="btn">View My Tunes</a>
+                    <button type="button" id="sync-again-btn" class="btn btn-secondary">Sync Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Helper functions for API calls
+function fetchWithRetry(url, options = {}) {
+    return fetch(url, options);
+}
+
+function handleApiError(error, response = null) {
+    if (response) {
+        if (response.status === 401) {
+            return { message: 'Please log in again', action: () => window.location.href = '/login' };
+        }
+        if (response.status === 404) {
+            return { message: 'Not found', retryable: false };
+        }
+        if (response.status >= 500) {
+            return { message: 'Server error. Please try again.', retryable: true };
+        }
+        return { message: 'An error occurred. Please try again.', retryable: true };
+    }
+    return { message: error?.message || 'An error occurred', retryable: true };
+}
+
+function showLoading(message = 'Loading...') {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-overlay';
+    loadingDiv.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(255,255,255,0.9); z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 15px;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="width: 40px; height: 40px; border: 4px solid #ddd;
+                    border-top-color: #007bff; border-radius: 50%;
+                    animation: spin 0.8s linear infinite;"></div>
+        <div style="color: #333; font-size: 16px;">${message}</div>
+    `;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    document.body.appendChild(loadingDiv);
+    return {
+        hide: () => {
+            if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
+            if (style.parentNode) style.parentNode.removeChild(style);
+        }
+    };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('sync-form');
+    const syncBtn = document.getElementById('sync-btn');
+    const progressSection = document.getElementById('progress-section');
+    const resultsSection = document.getElementById('results-section');
+    const progressBar = document.getElementById('progress-bar');
+    const progressStatus = document.getElementById('progress-status');
+    const syncAgainBtn = document.getElementById('sync-again-btn');
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        startSync();
+    });
+
+    syncAgainBtn.addEventListener('click', function() {
+        // Reset UI
+        resultsSection.classList.remove('active');
+        form.style.display = 'block';
+        syncBtn.disabled = false;
+    });
+
+    async function startSync() {
+        const thesessionUserId = document.getElementById('thesession-user-id').value;
+        const learnStatus = document.getElementById('learn-status').value;
+        const saveUserId = document.getElementById('save-user-id').checked;
+
+        if (!thesessionUserId || thesessionUserId < 1) {
+            showMessage('Please enter a valid thesession.org user ID', 'error');
+            return;
+        }
+
+        // Check if offline
+        if (!navigator.onLine) {
+            showMessage('You are offline. Sync requires an internet connection.', 'error');
+            return;
+        }
+
+        // Hide form and show progress
+        form.style.display = 'none';
+        progressSection.classList.add('active');
+        resultsSection.classList.remove('active');
+        syncBtn.disabled = true;
+
+        // Reset progress
+        updateProgress(0, 'Starting sync...');
+
+        try {
+            // First, save the user ID if requested
+            if (saveUserId) {
+                await saveThesessionUserId(thesessionUserId);
+            }
+
+            // Start the sync with retry capability
+            // Use longer timeout for large tunebooks (5 minutes)
+            const response = await fetchWithRetry('/api/my-tunes/sync', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    thesession_user_id: parseInt(thesessionUserId),
+                    learn_status: learnStatus
+                })
+            }, 1, 300000); // 1 retry, 5 minute timeout
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Use the specific error message from the API if available
+                const errorMessage = data.error || data.message || 'An error occurred during sync';
+                throw new Error(errorMessage);
+            }
+
+            // Show results
+            displayResults(data);
+
+        } catch (error) {
+            console.error('Sync error:', error);
+            const errorInfo = handleApiError(error);
+            showMessage(errorInfo.message, 'error', 7000);
+            
+            // Show inline error with retry option
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'inline-error';
+            errorDiv.innerHTML = `
+                <span class="inline-error-icon">⚠️</span>
+                <div style="flex: 1;">
+                    <strong>Sync Failed:</strong> ${errorInfo.message}
+                    ${errorInfo.retryable ? '<br><small>You can try again or check your connection.</small>' : ''}
+                </div>
+            `;
+            progressSection.appendChild(errorDiv);
+            
+            // Reset UI
+            setTimeout(() => {
+                progressSection.classList.remove('active');
+                form.style.display = 'block';
+                syncBtn.disabled = false;
+            }, 3000);
+        }
+    }
+
+    async function saveThesessionUserId(userId) {
+        try {
+            // Update person record with thesession_user_id
+            const response = await fetchWithRetry('/api/person/me', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    thesession_user_id: parseInt(userId)
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('Failed to save thesession_user_id to profile');
+            }
+        } catch (error) {
+            console.warn('Error saving thesession_user_id:', error);
+        }
+    }
+
+    function updateProgress(percent, status) {
+        progressBar.style.width = percent + '%';
+        progressBar.textContent = Math.round(percent) + '%';
+        progressStatus.textContent = status;
+    }
+
+    function displayResults(data) {
+        const results = data.results || {};
+
+        // Hide progress, show results
+        progressSection.classList.remove('active');
+        resultsSection.classList.add('active');
+
+        // Update stats
+        document.getElementById('stat-fetched').textContent = results.tunes_fetched || 0;
+        document.getElementById('stat-added').textContent = results.person_tunes_added || 0;
+        document.getElementById('stat-skipped').textContent = results.person_tunes_skipped || 0;
+        document.getElementById('stat-created').textContent = results.tunes_created || 0;
+
+        // Show errors if any
+        const errors = results.errors || [];
+        const errorList = document.getElementById('error-list');
+        const errorItems = document.getElementById('error-items');
+
+        if (errors.length > 0) {
+            errorList.style.display = 'block';
+            errorItems.innerHTML = errors.map(error => `<li>${escapeHtml(error)}</li>`).join('');
+        } else {
+            errorList.style.display = 'none';
+        }
+
+        // Show success message
+        if (results.person_tunes_added > 0) {
+            showMessage(data.message || 'Sync completed successfully!', 'success', 7000);
+        } else if (errors.length > 0) {
+            showMessage('Sync completed with errors', 'warning', 7000);
+        } else {
+            showMessage('No new tunes to add', 'info', 7000);
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+});
+</script>
+<script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
+{% endblock %}

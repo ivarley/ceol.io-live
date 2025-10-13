@@ -8,6 +8,16 @@ from dotenv import load_dotenv
 from auth import User
 from api_routes import *
 from web_routes import *
+from api_person_tune_routes import (
+    get_my_tunes,
+    get_person_tune_detail,
+    add_my_tune,
+    update_tune_status,
+    increment_tune_heard_count,
+    sync_my_tunes,
+    search_tunes,
+    update_my_profile
+)
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -127,6 +137,9 @@ app.add_url_rule(
     "/change-password", "change_password", change_password, methods=["GET", "POST"]
 )
 app.add_url_rule("/me", "user_profile", person_details)
+app.add_url_rule("/my-tunes", "my_tunes", my_tunes)
+app.add_url_rule("/my-tunes/add", "add_my_tune_page", add_my_tune_page)
+app.add_url_rule("/my-tunes/sync", "sync_my_tunes_page", sync_my_tunes_page)
 app.add_url_rule("/verify-email/<token>", "verify_email", verify_email)
 app.add_url_rule(
     "/resend-verification",
@@ -475,6 +488,56 @@ app.add_url_rule(
     "bulk_import_save_session",
     bulk_import_save_session,
     methods=["POST"],
+)
+
+# Personal tune management endpoints
+app.add_url_rule(
+    "/api/my-tunes",
+    "get_my_tunes",
+    get_my_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>",
+    "get_person_tune_detail",
+    get_person_tune_detail,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes",
+    "add_my_tune",
+    add_my_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>/status",
+    "update_tune_status",
+    update_tune_status,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>/heard",
+    "increment_tune_heard_count",
+    increment_tune_heard_count,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/my-tunes/sync",
+    "sync_my_tunes",
+    sync_my_tunes,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/tunes/search",
+    "search_tunes",
+    search_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/person/me",
+    "update_my_profile",
+    update_my_profile,
+    methods=["PATCH"],
 )
 
 # Error handlers

@@ -519,6 +519,7 @@ if (document.readyState === 'loading') {
         const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
         const isSessionAdmin = {{ 'true' if is_session_admin else 'false' }};
         const isLogComplete = {{ 'true' if session_instance.log_complete_date else 'false' }};
+        const isUserAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
         
         // Session instance data for editing
         const sessionInstanceData = {
@@ -1146,6 +1147,87 @@ if (document.readyState === 'loading') {
                     relinkLink.addEventListener('click', relinkHandler);
                     relinkLink.addEventListener('touchend', relinkHandler);
                     contextMenu.appendChild(relinkLink);
+                    
+                    // Add to My Tunes option - only for authenticated users
+                    if (isUserAuthenticated) {
+                        const myTunesLink = document.createElement('a');
+                        myTunesLink.textContent = 'Add to My Tunes';
+                        myTunesLink.style.color = 'var(--success, #28a745)';
+                        myTunesLink.dataset.tuneId = tuneId;
+                        myTunesLink.dataset.tuneName = tuneName;
+                        
+                        // Check if tune is already in collection and update menu item
+                        checkPersonTune(tuneId).then(personTune => {
+                            if (personTune) {
+                                // Tune is already in collection - show status update options
+                                myTunesLink.textContent = `My Tunes: ${personTune.learn_status}`;
+                                myTunesLink.style.color = 'var(--primary)';
+                                
+                                // Create submenu for status updates
+                                const myTunesContainer = document.createElement('div');
+                                myTunesContainer.className = 'menu-item-with-submenu';
+                                
+                                const submenu = document.createElement('div');
+                                submenu.className = 'submenu';
+                                
+                                // Status options
+                                const statuses = ['want to learn', 'learning', 'learned'];
+                                statuses.forEach(status => {
+                                    const statusLink = document.createElement('a');
+                                    statusLink.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                                    
+                                    if (status === personTune.learn_status) {
+                                        statusLink.style.fontWeight = 'bold';
+                                        statusLink.style.color = 'var(--primary)';
+                                    }
+                                    
+                                    const statusHandler = function(event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        updateTuneStatus(personTune.person_tune_id, status, tuneName);
+                                        contextMenu.style.display = 'none';
+                                    };
+                                    statusLink.addEventListener('click', statusHandler);
+                                    statusLink.addEventListener('touchend', statusHandler);
+                                    submenu.appendChild(statusLink);
+                                });
+                                
+                                // Add "Increment Heard" option if status is "want to learn"
+                                if (personTune.learn_status === 'want to learn') {
+                                    const heardLink = document.createElement('a');
+                                    heardLink.textContent = `Heard (${personTune.heard_before_learning_count || 0})`;
+                                    heardLink.style.borderTop = '1px solid rgba(255,255,255,0.2)';
+                                    heardLink.style.marginTop = '4px';
+                                    heardLink.style.paddingTop = '8px';
+                                    
+                                    const heardHandler = function(event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        incrementHeardCount(personTune.person_tune_id, tuneName);
+                                        contextMenu.style.display = 'none';
+                                    };
+                                    heardLink.addEventListener('click', heardHandler);
+                                    heardLink.addEventListener('touchend', heardHandler);
+                                    submenu.appendChild(heardLink);
+                                }
+                                
+                                myTunesContainer.appendChild(myTunesLink);
+                                myTunesContainer.appendChild(submenu);
+                                contextMenu.appendChild(myTunesContainer);
+                            } else {
+                                // Tune not in collection - show add option
+                                const myTunesHandler = function(event) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    addToMyTunes(tuneId, tuneName);
+                                    contextMenu.style.display = 'none';
+                                };
+                                myTunesLink.addEventListener('click', myTunesHandler);
+                                myTunesLink.addEventListener('touchend', myTunesHandler);
+                                contextMenu.appendChild(myTunesLink);
+                            }
+                        });
+                    }
                     
                     // Move options - only in edit mode
                     if (editMode) {
@@ -2027,6 +2109,181 @@ if (document.readyState === 'loading') {
                 showMessage('Failed to mark session log as not complete', 'error');
                 console.error('Error:', error);
             });
+        }
+        
+        // Personal Tune Management Functions
+        // Cache for person_tune status to avoid repeated API calls
+        const personTuneCache = {};
+        
+        /**
+         * Check if a tune is in the user's personal collection
+         * @param {number} tuneId - The tune ID to check
+         * @returns {Promise<Object|null>} - PersonTune data if exists, null otherwise
+         */
+        async function checkPersonTune(tuneId) {
+            if (!isUserAuthenticated || !tuneId) {
+                return null;
+            }
+            
+            // Check cache first
+            if (personTuneCache[tuneId] !== undefined) {
+                return personTuneCache[tuneId];
+            }
+            
+            try {
+                // Get all tunes and filter for this specific tune_id
+                // This is not optimal but works with current API
+                const response = await fetch(`/api/my-tunes?per_page=200`);
+                const data = await response.json();
+                
+                if (data.success && data.tunes && data.tunes.length > 0) {
+                    // Find the tune with matching tune_id
+                    const personTune = data.tunes.find(t => t.tune_id === tuneId);
+                    personTuneCache[tuneId] = personTune || null;
+                    return personTune;
+                }
+                
+                personTuneCache[tuneId] = null;
+                return null;
+            } catch (error) {
+                console.error('Error checking person tune:', error);
+                return null;
+            }
+        }
+        
+        /**
+         * Add a tune to the user's personal collection
+         * @param {number} tuneId - The tune ID to add
+         * @param {string} tuneName - The tune name for display
+         * @returns {Promise<boolean>} - Success status
+         */
+        async function addToMyTunes(tuneId, tuneName) {
+            if (!isUserAuthenticated) {
+                showMessage('Please log in to add tunes to your collection', 'error');
+                return false;
+            }
+            
+            if (!tuneId) {
+                showMessage('Cannot add unlinked tune to collection', 'error');
+                return false;
+            }
+            
+            try {
+                const response = await fetch('/api/my-tunes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tune_id: tuneId,
+                        learn_status: 'want to learn'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`Added "${tuneName}" to your tunes!`);
+                    // Update cache
+                    personTuneCache[tuneId] = data.person_tune;
+                    return true;
+                } else {
+                    if (response.status === 409) {
+                        showMessage('This tune is already in your collection', 'error');
+                    } else {
+                        showMessage(data.error || 'Failed to add tune', 'error');
+                    }
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error adding tune:', error);
+                showMessage('Failed to add tune to collection', 'error');
+                return false;
+            }
+        }
+        
+        /**
+         * Update the learning status of a tune in the user's collection
+         * @param {number} personTuneId - The person_tune ID
+         * @param {string} newStatus - The new learning status
+         * @param {string} tuneName - The tune name for display
+         * @returns {Promise<boolean>} - Success status
+         */
+        async function updateTuneStatus(personTuneId, newStatus, tuneName) {
+            if (!isUserAuthenticated) {
+                showMessage('Please log in to update tune status', 'error');
+                return false;
+            }
+            
+            try {
+                const response = await fetch(`/api/my-tunes/${personTuneId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        learn_status: newStatus
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`Updated "${tuneName}" status to "${newStatus}"`);
+                    // Update cache
+                    if (data.person_tune) {
+                        personTuneCache[data.person_tune.tune_id] = data.person_tune;
+                    }
+                    return true;
+                } else {
+                    showMessage(data.error || 'Failed to update status', 'error');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error updating tune status:', error);
+                showMessage('Failed to update tune status', 'error');
+                return false;
+            }
+        }
+        
+        /**
+         * Increment the heard count for a tune with "want to learn" status
+         * @param {number} personTuneId - The person_tune ID
+         * @param {string} tuneName - The tune name for display
+         * @returns {Promise<boolean>} - Success status
+         */
+        async function incrementHeardCount(personTuneId, tuneName) {
+            if (!isUserAuthenticated) {
+                showMessage('Please log in to track heard count', 'error');
+                return false;
+            }
+            
+            try {
+                const response = await fetch(`/api/my-tunes/${personTuneId}/heard`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`Heard count for "${tuneName}" incremented to ${data.heard_before_learning_count}`);
+                    // Update cache
+                    if (data.person_tune) {
+                        personTuneCache[data.person_tune.tune_id] = data.person_tune;
+                    }
+                    return true;
+                } else {
+                    showMessage(data.error || 'Failed to increment heard count', 'error');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error incrementing heard count:', error);
+                showMessage('Failed to increment heard count', 'error');
+                return false;
+            }
         }
     </script>
 {% endblock %}

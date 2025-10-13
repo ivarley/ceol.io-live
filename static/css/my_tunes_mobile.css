@@ -1,0 +1,547 @@
+/* Mobile-First Responsive CSS for Personal Tune Management */
+
+/* ============================================
+   MOBILE-FIRST BASE STYLES
+   ============================================ */
+
+/* Touch-friendly minimum sizes */
+:root {
+    --touch-target-min: 44px;
+    --mobile-padding: 15px;
+    --mobile-gap: 12px;
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS FOR MY TUNES LIST
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Override parent container padding */
+    .docs-content {
+        padding: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    /* Container adjustments */
+    .my-tunes-container {
+        padding: 0;
+        margin-top: -40px;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    /* Page header */
+    .page-header {
+        padding: 0 2px;
+        margin-bottom: 4px;
+    }
+
+    .page-header h1 {
+        font-size: 22px;
+        margin-bottom: 0;
+    }
+
+    .page-header p {
+        font-size: 14px;
+    }
+
+    /* Touch-friendly action buttons */
+    .page-actions {
+        flex-direction: row;
+        gap: 6px;
+    }
+
+    .page-actions .btn {
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        padding: 4px 10px;
+        line-height: 1.2;
+    }
+
+    /* Filters container - Keep on one line */
+    .filters-container {
+        margin-bottom: 6px;
+        padding: 0 2px;
+    }
+
+    .filter-row {
+        flex-direction: row;
+        gap: 5px;
+        flex-wrap: nowrap;
+    }
+
+    .filter-group {
+        min-width: 0;
+    }
+
+    .filter-group:first-child {
+        flex: 1;
+    }
+
+    .filter-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 8px 6px;
+    }
+
+    .filter-select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 8px 4px;
+        width: 85px;
+    }
+
+    .status-filter-btn {
+        font-size: 16px;
+        padding: 8px 6px;
+        min-width: 45px;
+    }
+
+    /* Tune grid - single column on mobile */
+    .tunes-grid {
+        grid-template-columns: 1fr;
+        gap: var(--mobile-padding);
+    }
+
+    /* Tune cards */
+    .tune-card {
+        padding: var(--mobile-padding);
+    }
+
+    .tune-card-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .tune-name {
+        font-size: 16px;
+        flex: 1 1 100%;
+    }
+
+    .tune-type {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+
+    /* Touch-friendly action buttons */
+    .tune-action-btn {
+        min-height: var(--touch-target-min);
+        font-size: 14px;
+        padding: 12px;
+    }
+
+    .increment-heard-btn {
+        min-height: var(--touch-target-min);
+        min-width: var(--touch-target-min);
+        font-size: 20px;
+    }
+
+    /* Modal adjustments */
+    .modal-dialog {
+        width: 95%;
+        max-width: 95vw;
+        max-height: 90vh;
+        margin: 20px auto;
+    }
+
+    #tune-detail-content {
+        padding: var(--mobile-padding);
+    }
+
+    #tune-detail-content h2 {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+
+    #tune-detail-content h3 {
+        font-size: 16px;
+        margin: 15px 0 10px 0;
+    }
+
+    .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        padding: 12px 0;
+    }
+
+    .detail-label {
+        width: 100%;
+        font-size: 13px;
+    }
+
+    .detail-value {
+        width: 100%;
+        font-size: 14px;
+    }
+
+    .status-select {
+        width: 100%;
+        min-height: var(--touch-target-min);
+        font-size: 16px;
+    }
+
+    .modal-footer {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .modal-footer .btn,
+    .modal-footer a {
+        width: 100%;
+        margin-left: 0;
+        text-align: center;
+        min-height: var(--touch-target-min);
+    }
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS FOR ADD TUNE PAGE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .add-tune-container {
+        padding: var(--mobile-padding);
+        margin: 20px auto;
+    }
+
+    .form-container {
+        padding: var(--mobile-padding);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        min-height: var(--touch-target-min);
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    /* Autocomplete results */
+    .autocomplete-results {
+        max-height: 50vh;
+    }
+
+    .autocomplete-item {
+        padding: 15px 12px;
+        min-height: var(--touch-target-min);
+    }
+
+    .autocomplete-item .tune-name {
+        font-size: 15px;
+    }
+
+    .autocomplete-item .tune-meta {
+        font-size: 12px;
+    }
+
+    /* Form actions */
+    .form-actions {
+        flex-direction: column;
+        gap: var(--mobile-gap);
+    }
+
+    .form-actions .btn {
+        width: 100%;
+        min-height: var(--touch-target-min);
+        font-size: 16px;
+    }
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS FOR SYNC PAGE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .sync-container {
+        padding: var(--mobile-padding);
+    }
+
+    .sync-card {
+        padding: var(--mobile-padding);
+    }
+
+    .form-input {
+        min-height: var(--touch-target-min);
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    .button-group {
+        flex-direction: column;
+        gap: var(--mobile-gap);
+    }
+
+    .button-group .btn {
+        width: 100%;
+        text-align: center;
+        min-height: var(--touch-target-min);
+        font-size: 16px;
+    }
+
+    /* Results stats */
+    .results-stats {
+        grid-template-columns: 1fr;
+        gap: var(--mobile-gap);
+    }
+
+    .stat-item {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+    }
+
+    .stat-label {
+        font-size: 12px;
+    }
+
+    /* Alert messages */
+    .alert {
+        padding: 12px;
+        font-size: 14px;
+    }
+}
+
+/* ============================================
+   SWIPE GESTURE SUPPORT
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Enable smooth scrolling for swipe gestures */
+    .tunes-grid {
+        scroll-behavior: smooth;
+    }
+
+    /* Add visual feedback for swipeable cards */
+    .tune-card {
+        touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: transform 0.2s ease-out, box-shadow 0.2s;
+    }
+
+    .tune-card:active {
+        transform: scale(0.98);
+    }
+
+    /* Pull-to-refresh indicator */
+    .pull-to-refresh {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%) translateY(-100%);
+        background: var(--primary);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        z-index: 9999;
+        transition: transform 0.3s ease-out;
+        pointer-events: none;
+        opacity: 0;
+    }
+
+    .pull-to-refresh.active {
+        transform: translateX(-50%) translateY(20px);
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Reduce animations on mobile for better performance */
+    @media (prefers-reduced-motion: reduce) {
+        * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+
+    /* Optimize rendering */
+    .tune-card,
+    .modal-dialog,
+    .autocomplete-results {
+        will-change: transform;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+
+    /* Optimize scrolling */
+    .tunes-grid,
+    .autocomplete-results,
+    .modal-dialog {
+        -webkit-overflow-scrolling: touch;
+        overflow-scrolling: touch;
+    }
+}
+
+/* ============================================
+   SMALL MOBILE DEVICES (< 375px)
+   ============================================ */
+
+@media (max-width: 374px) {
+    .my-tunes-container,
+    .add-tune-container,
+    .sync-container {
+        padding: 10px;
+    }
+
+    .page-header h1 {
+        font-size: 20px;
+    }
+
+    .tune-name {
+        font-size: 15px;
+    }
+
+    .tune-card {
+        padding: 12px;
+    }
+
+    .filters-container {
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+    }
+}
+
+/* ============================================
+   LANDSCAPE ORIENTATION
+   ============================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+    /* Adjust modal height for landscape */
+    .modal-dialog {
+        max-height: 85vh;
+    }
+
+    /* Optimize grid for landscape */
+    .tunes-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Reduce vertical spacing */
+    .page-header {
+        margin-bottom: 15px;
+    }
+
+    .filters-container {
+        padding: 12px;
+    }
+}
+
+/* ============================================
+   TABLET DEVICES (768px - 1024px)
+   ============================================ */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    .tunes-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .my-tunes-container {
+        padding: 20px;
+    }
+
+    /* Touch-friendly buttons on tablets too */
+    .btn,
+    .tune-action-btn,
+    .increment-heard-btn {
+        min-height: 40px;
+        min-width: 40px;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================ */
+
+/* Focus indicators for keyboard navigation */
+@media (max-width: 768px) {
+    .btn:focus,
+    .filter-input:focus,
+    .filter-select:focus,
+    .tune-action-btn:focus,
+    .increment-heard-btn:focus {
+        outline: 3px solid var(--primary);
+        outline-offset: 2px;
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+        .tune-card {
+            border-width: 2px;
+        }
+
+        .btn {
+            border: 2px solid currentColor;
+        }
+    }
+
+    /* Larger text support */
+    @media (prefers-reduced-motion: no-preference) {
+        * {
+            scroll-behavior: smooth;
+        }
+    }
+}
+
+/* ============================================
+   LOADING STATES
+   ============================================ */
+
+@media (max-width: 768px) {
+    .loading,
+    .no-results {
+        padding: 40px 20px;
+        font-size: 14px;
+    }
+
+    .loading::after {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 40px;
+        margin: 20px auto 0;
+        border: 4px solid var(--border-color);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+}
+
+/* ============================================
+   SAFE AREA INSETS (for notched devices)
+   ============================================ */
+
+@supports (padding: max(0px)) {
+    @media (max-width: 768px) {
+        .my-tunes-container,
+        .add-tune-container,
+        .sync-container {
+            padding-left: max(var(--mobile-padding), env(safe-area-inset-left));
+            padding-right: max(var(--mobile-padding), env(safe-area-inset-right));
+            padding-bottom: max(var(--mobile-padding), env(safe-area-inset-bottom));
+        }
+
+        .modal-dialog {
+            margin-left: max(10px, env(safe-area-inset-left));
+            margin-right: max(10px, env(safe-area-inset-right));
+        }
+    }
+}

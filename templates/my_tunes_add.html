@@ -1,0 +1,616 @@
+{% extends "base.html" %}
+
+{% block title %}Add Tune - My Tunes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
+<style>
+    .add-tune-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-header h1 {
+        margin-bottom: 10px;
+    }
+
+    .back-link {
+        color: var(--primary);
+        text-decoration: none;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    .form-container {
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 30px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-color);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-group .help-text {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        margin-top: 5px;
+    }
+
+    .autocomplete-container {
+        position: relative;
+    }
+
+    .autocomplete-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--dropdown-bg, white);
+        border: 1px solid var(--border-color);
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px var(--dropdown-shadow);
+    }
+
+    .autocomplete-results.show {
+        display: block;
+    }
+
+    .autocomplete-item {
+        padding: 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s;
+    }
+
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: var(--hover-bg);
+    }
+
+    .autocomplete-item .tune-name {
+        font-weight: 600;
+        color: var(--text-color);
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .autocomplete-item .tune-meta {
+        font-size: 12px;
+        color: var(--text-muted, #6c757d);
+    }
+
+    .autocomplete-item .tune-type {
+        display: inline-block;
+        padding: 2px 6px;
+        background-color: var(--primary);
+        color: white;
+        border-radius: 3px;
+        font-size: 11px;
+        text-transform: capitalize;
+        margin-right: 8px;
+    }
+
+    .no-results {
+        padding: 12px;
+        color: var(--text-muted, #6c757d);
+        font-style: italic;
+        text-align: center;
+    }
+
+    .loading-indicator {
+        padding: 12px;
+        color: var(--text-muted, #6c757d);
+        text-align: center;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background-color: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background-color: var(--primary-dark, #0056b3);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background-color: var(--secondary, #6c757d);
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: var(--secondary-dark, #5a6268);
+        text-decoration: none;
+        color: white;
+    }
+
+    .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #f5c6cb;
+    }
+
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #c3e6cb;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .add-tune-container {
+            padding: 15px;
+            margin: 20px auto;
+        }
+
+        .form-container {
+            padding: 20px;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+        }
+    }
+
+    /* Dark mode adjustments */
+    [data-theme="dark"] .error-message {
+        background-color: #5a1f1f;
+        color: #f8d7da;
+        border-color: #721c24;
+    }
+
+    [data-theme="dark"] .success-message {
+        background-color: #1f4a2f;
+        color: #d4edda;
+        border-color: #155724;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="add-tune-container">
+    <a href="/my-tunes" class="back-link">← Back to My Tunes</a>
+    
+    <div class="page-header">
+        <h1>Add Tune to Collection</h1>
+        <p>Search for a tune from our database to add to your personal collection</p>
+    </div>
+
+    <div id="message-container"></div>
+
+    <div class="form-container">
+        <form id="add-tune-form">
+            <div class="form-group">
+                <label for="tune-search">Search for Tune *</label>
+                <div class="autocomplete-container">
+                    <input 
+                        type="text" 
+                        id="tune-search" 
+                        name="tune-search"
+                        placeholder="Start typing a tune name..."
+                        autocomplete="off"
+                        required
+                    >
+                    <div id="autocomplete-results" class="autocomplete-results"></div>
+                </div>
+                <div class="help-text">
+                    Type to search for tunes in our database. Select a tune from the dropdown to add it.
+                </div>
+            </div>
+
+            <input type="hidden" id="selected-tune-id" name="tune_id">
+
+            <div class="form-group">
+                <label for="learn-status">Initial Learning Status</label>
+                <select id="learn-status" name="learn_status">
+                    <option value="want to learn" selected>Want to Learn</option>
+                    <option value="learning">Learning</option>
+                    <option value="learned">Learned</option>
+                </select>
+                <div class="help-text">
+                    Choose the initial status for this tune in your collection
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="notes">Notes (Optional)</label>
+                <textarea 
+                    id="notes" 
+                    name="notes"
+                    placeholder="Add any notes about this tune..."
+                ></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                    Add to My Tunes
+                </button>
+                <a href="/my-tunes" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Helper functions for API calls
+function fetchWithRetry(url, options = {}) {
+    return fetch(url, options);
+}
+
+function handleApiError(error, response = null) {
+    if (response) {
+        if (response.status === 401) {
+            return { message: 'Please log in again', action: () => window.location.href = '/login' };
+        }
+        if (response.status === 404) {
+            return { message: 'Not found', retryable: false };
+        }
+        if (response.status >= 500) {
+            return { message: 'Server error. Please try again.', retryable: true };
+        }
+        return { message: 'An error occurred. Please try again.', retryable: true };
+    }
+    return { message: error?.message || 'An error occurred', retryable: true };
+}
+
+// Note: There are TWO showLoading functions in this file
+// 1. This full-page overlay version (used during form submission)
+// 2. The autocomplete-specific version below (line ~456, used during search)
+function showLoading(message = 'Loading...') {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-overlay';
+    loadingDiv.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(255,255,255,0.9); z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 15px;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="width: 40px; height: 40px; border: 4px solid #ddd;
+                    border-top-color: #007bff; border-radius: 50%;
+                    animation: spin 0.8s linear infinite;"></div>
+        <div style="color: #333; font-size: 16px;">${message}</div>
+    `;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    document.body.appendChild(loadingDiv);
+    return {
+        hide: () => {
+            if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
+            if (style.parentNode) style.parentNode.removeChild(style);
+        }
+    };
+}
+
+let searchTimeout;
+let selectedTuneId = null;
+let selectedIndex = -1;
+let searchResults = [];
+
+const tuneSearchInput = document.getElementById('tune-search');
+const autocompleteResults = document.getElementById('autocomplete-results');
+const selectedTuneIdInput = document.getElementById('selected-tune-id');
+const submitBtn = document.getElementById('submit-btn');
+const addTuneForm = document.getElementById('add-tune-form');
+
+// Setup event listeners
+tuneSearchInput.addEventListener('input', handleSearchInput);
+tuneSearchInput.addEventListener('keydown', handleKeyDown);
+tuneSearchInput.addEventListener('blur', handleBlur);
+addTuneForm.addEventListener('submit', handleSubmit);
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autocomplete-container')) {
+        hideAutocomplete();
+    }
+});
+
+function handleSearchInput(e) {
+    const query = e.target.value.trim();
+    
+    // Clear selection when user types
+    if (selectedTuneId) {
+        selectedTuneId = null;
+        selectedTuneIdInput.value = '';
+        submitBtn.disabled = true;
+    }
+    
+    // Clear previous timeout
+    clearTimeout(searchTimeout);
+    
+    if (query.length < 2) {
+        hideAutocomplete();
+        return;
+    }
+    
+    // Debounce search
+    searchTimeout = setTimeout(() => {
+        searchTunes(query);
+    }, 300);
+}
+
+function handleKeyDown(e) {
+    if (!autocompleteResults.classList.contains('show')) {
+        return;
+    }
+    
+    const items = autocompleteResults.querySelectorAll('.autocomplete-item');
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelection(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
+            selectTune(searchResults[selectedIndex]);
+        }
+    } else if (e.key === 'Escape') {
+        hideAutocomplete();
+    }
+}
+
+function handleBlur(e) {
+    // Delay to allow click events on autocomplete items
+    setTimeout(() => {
+        if (!document.activeElement.closest('.autocomplete-container')) {
+            hideAutocomplete();
+        }
+    }, 200);
+}
+
+function updateSelection(items) {
+    items.forEach((item, index) => {
+        if (index === selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+function searchTunes(query) {
+    showAutocompleteLoading();
+
+    fetchWithRetry(`/api/tunes/search?q=${encodeURIComponent(query)}`)
+        .then(response => {
+            if (!response.ok) {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(errorInfo.message);
+            }
+            return response.json();
+        })
+        .then(data => {
+            searchResults = data.tunes || [];
+            displayResults(searchResults);
+        })
+        .catch(error => {
+            console.error('Search error:', error);
+            const errorInfo = handleApiError(error);
+            autocompleteResults.innerHTML = `
+                <div class="no-results">
+                    ${errorInfo.message}
+                    ${errorInfo.retryable ? '<br><small>Please try again.</small>' : ''}
+                </div>
+            `;
+            autocompleteResults.classList.add('show');
+        });
+}
+
+function showAutocompleteLoading() {
+    autocompleteResults.innerHTML = '<div class="loading-indicator">Searching...</div>';
+    autocompleteResults.classList.add('show');
+    selectedIndex = -1;
+}
+
+function displayResults(tunes) {
+    if (tunes.length === 0) {
+        autocompleteResults.innerHTML = '<div class="no-results">No tunes found. Try a different search term.</div>';
+        autocompleteResults.classList.add('show');
+        return;
+    }
+    
+    const html = tunes.map((tune, index) => `
+        <div class="autocomplete-item" data-index="${index}" onclick="selectTuneByIndex(${index})">
+            <span class="tune-name">${escapeHtml(tune.name)}</span>
+            <div class="tune-meta">
+                ${tune.tune_type ? `<span class="tune-type">${escapeHtml(tune.tune_type)}</span>` : ''}
+                ${tune.tunebook_count ? `${tune.tunebook_count} tunebook${tune.tunebook_count !== 1 ? 's' : ''}` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    autocompleteResults.innerHTML = html;
+    autocompleteResults.classList.add('show');
+    selectedIndex = -1;
+}
+
+function selectTuneByIndex(index) {
+    if (index >= 0 && index < searchResults.length) {
+        selectTune(searchResults[index]);
+    }
+}
+
+function selectTune(tune) {
+    selectedTuneId = tune.tune_id;
+    selectedTuneIdInput.value = tune.tune_id;
+    tuneSearchInput.value = tune.name;
+    submitBtn.disabled = false;
+    hideAutocomplete();
+}
+
+function hideAutocomplete() {
+    autocompleteResults.classList.remove('show');
+    selectedIndex = -1;
+}
+
+function handleSubmit(e) {
+    e.preventDefault();
+    
+    if (!selectedTuneId) {
+        showMessage('Please select a tune from the search results', 'error');
+        return;
+    }
+    
+    // Check if offline
+    if (!navigator.onLine) {
+        showMessage('You are offline. Please check your connection.', 'error');
+        return;
+    }
+    
+    const formData = {
+        tune_id: selectedTuneId,
+        learn_status: document.getElementById('learn-status').value,
+        notes: document.getElementById('notes').value.trim() || null
+    };
+    
+    // Disable submit button
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+    
+    const loading = showLoading('Adding tune to your collection...');
+    
+    fetchWithRetry('/api/my-tunes', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(data.error || errorInfo.message);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        loading.hide();
+        if (data.success) {
+            // Show success message before redirect
+            showMessage('Tune added successfully!', 'success');
+            // Redirect to my tunes page with success message
+            setTimeout(() => {
+                window.location.href = '/my-tunes?added=' + encodeURIComponent(tuneSearchInput.value);
+            }, 1000);
+        } else {
+            throw new Error(data.error || 'Failed to add tune');
+        }
+    })
+    .catch(error => {
+        loading.hide();
+        console.error('Error adding tune:', error);
+        const errorInfo = handleApiError(error);
+        showMessage(errorInfo.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add to My Tunes';
+    });
+}
+
+function showMessage(message, type) {
+    const container = document.getElementById('message-container');
+    const className = type === 'error' ? 'error-message' : 'success-message';
+    container.innerHTML = `<div class="${className}">${escapeHtml(message)}</div>`;
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function showError(message) {
+    showMessage(message, 'error');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+<script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
+{% endblock %}

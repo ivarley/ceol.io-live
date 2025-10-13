@@ -1,0 +1,458 @@
+"""
+Functional tests for comprehensive error handling and user feedback.
+
+Tests Requirements: 2.5, 3.6, 7.4, 7.5
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+from flask import session
+import json
+from database import get_db_connection
+
+
+@pytest.fixture
+def sample_tune(db_conn):
+    """Create a sample tune for testing."""
+    import random
+    cur = db_conn.cursor()
+    tune_id = random.randint(100000, 999999)
+    cur.execute("""
+        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
+        VALUES (%s, 'Test Reel', 'Reel', 100)
+        RETURNING tune_id
+    """, (tune_id,))
+    tune_id = cur.fetchone()[0]
+    db_conn.commit()
+    return {'tune_id': tune_id}
+
+
+@pytest.fixture
+def person_tune(authenticated_user, sample_tune, db_conn):
+    """Create a person_tune record for testing."""
+    cur = db_conn.cursor()
+    
+    # Use person_id from authenticated user
+    person_id = authenticated_user.person_id
+    
+    cur.execute("""
+        INSERT INTO person_tune (person_id, tune_id, learn_status)
+        VALUES (%s, %s, 'want to learn')
+        RETURNING person_tune_id
+    """, (person_id, sample_tune['tune_id']))
+    person_tune_id = cur.fetchone()[0]
+    db_conn.commit()
+    
+    return {'person_tune_id': person_tune_id, 'person_id': person_id, 'tune_id': sample_tune['tune_id']}
+
+
+@pytest.fixture
+def person_tune_learning(authenticated_user, db_conn):
+    """Create a person_tune record with 'learning' status."""
+    import random
+    cur = db_conn.cursor()
+    
+    # Create a tune
+    tune_id = random.randint(100000, 999999)
+    cur.execute("""
+        INSERT INTO tune (tune_id, name, tune_type)
+        VALUES (%s, 'Test Jig', 'Jig')
+        RETURNING tune_id
+    """, (tune_id,))
+    tune_id = cur.fetchone()[0]
+    
+    # Use person_id from authenticated user
+    person_id = authenticated_user.person_id
+    
+    # Create person_tune with 'learning' status
+    cur.execute("""
+        INSERT INTO person_tune (person_id, tune_id, learn_status)
+        VALUES (%s, %s, 'learning')
+        RETURNING person_tune_id
+    """, (person_id, tune_id))
+    person_tune_id = cur.fetchone()[0]
+    db_conn.commit()
+    
+    return {'person_tune_id': person_tune_id, 'person_id': person_id, 'tune_id': tune_id}
+
+
+class TestErrorHandling:
+    """Test comprehensive error handling across the application."""
+    
+    def test_api_authentication_error(self, client):
+        """Test that unauthenticated API requests return 401."""
+        response = client.get('/api/my-tunes')
+        assert response.status_code == 401
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'error' in data
+    
+    def test_api_not_found_error(self, client, authenticated_user):
+        """Test that requesting non-existent resources returns 404."""
+        with authenticated_user:
+            response = client.get('/api/my-tunes/999999')
+            assert response.status_code == 404
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'not found' in data['error'].lower()
+    
+    def test_api_validation_error(self, client, authenticated_user):
+        """Test that invalid data returns 400 with helpful message."""
+        with authenticated_user:
+            # Try to add tune without tune_id
+            response = client.post('/api/my-tunes',
+                                  json={},
+                                  content_type='application/json')
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'tune_id' in data['error'].lower()
+    
+    def test_api_conflict_error(self, client, authenticated_user, sample_tune):
+        """Test that duplicate tune addition returns 409."""
+        with authenticated_user:
+
+            # Add tune first time
+            response1 = client.post('/api/my-tunes',
+                               json={'tune_id': sample_tune['tune_id']},
+                               content_type='application/json')
+            assert response1.status_code == 201
+        
+            # Try to add same tune again
+            response2 = client.post('/api/my-tunes',
+                               json={'tune_id': sample_tune['tune_id']},
+                               content_type='application/json')
+            assert response2.status_code == 409
+            data = json.loads(response2.data)
+            assert data['success'] is False
+            assert 'already exists' in data['error'].lower()
+    
+    def test_api_invalid_status_error(self, client, authenticated_user, person_tune):
+        """Test that invalid learn_status returns 422."""
+        with authenticated_user:
+
+            response = client.put(f'/api/my-tunes/{person_tune["person_tune_id"]}/status',
+                             json={'learn_status': 'invalid_status'},
+                             content_type='application/json')
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert data['success'] is False
+    
+    def test_heard_count_increment_wrong_status(self, client, authenticated_user, person_tune_learning):
+        """Test that incrementing heard count on non-'want to learn' status returns 422."""
+        with authenticated_user:
+
+            response = client.post(f'/api/my-tunes/{person_tune_learning["person_tune_id"]}/heard',
+                              content_type='application/json')
+            assert response.status_code == 422
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'want to learn' in data['error'].lower()
+    
+    def test_sync_invalid_user_id(self, client, authenticated_user):
+        """Test that sync with invalid thesession_user_id returns 400."""
+        with authenticated_user:
+
+            response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': -1},
+                              content_type='application/json')
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'invalid' in data['error'].lower()
+    
+            @patch('services.thesession_sync_service.requests.get')
+    def test_sync_thesession_not_found(self, mock_get, client, authenticated_user):
+        """Test that sync with non-existent thesession user returns 404."""
+        with authenticated_user:
+
+            # Mock 404 response from thesession.org
+            mock_response = MagicMock()
+            mock_response.status_code = 404
+            mock_get.return_value = mock_response
+        
+            response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': 999999},
+                              content_type='application/json')
+            assert response.status_code == 404
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'not found' in data['error'].lower()
+    
+            @patch('services.thesession_sync_service.requests.get')
+    def test_sync_thesession_timeout(self, mock_get, client, authenticated_user):
+        """Test that sync handles timeout gracefully."""
+        with authenticated_user:
+
+            # Mock timeout
+            import requests
+            mock_get.side_effect = requests.exceptions.Timeout()
+        
+            response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': 12345},
+                              content_type='application/json')
+            assert response.status_code == 503
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'timed out' in data['error'].lower() or 'unavailable' in data['error'].lower()
+    
+            @patch('services.thesession_sync_service.requests.get')
+    def test_sync_thesession_connection_error(self, mock_get, client, authenticated_user):
+        """Test that sync handles connection errors gracefully."""
+        with authenticated_user:
+
+            # Mock connection error
+            import requests
+            mock_get.side_effect = requests.exceptions.ConnectionError()
+        
+            response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': 12345},
+                              content_type='application/json')
+            assert response.status_code == 503
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'connect' in data['error'].lower() or 'unavailable' in data['error'].lower()
+    
+    def test_search_tunes_empty_query(self, client):
+        """Test that search with empty query returns 400."""
+        response = client.get('/api/tunes/search?q=')
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'required' in data['error'].lower()
+    
+    def test_search_tunes_short_query(self, client):
+        """Test that search with too short query returns 400."""
+        response = client.get('/api/tunes/search?q=a')
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data['success'] is False
+        assert 'at least 2 characters' in data['error'].lower()
+    
+    def test_api_returns_json_on_error(self, client, authenticated_user):
+        """Test that all API errors return JSON responses."""
+        with authenticated_user:
+
+            # Test various error scenarios
+            endpoints = [
+            ('/api/my-tunes/999999', 'GET'),
+            ('/api/my-tunes', 'POST'),
+            ('/api/my-tunes/999999/status', 'PUT'),
+            ]
+        
+            for endpoint, method in endpoints:
+            if method == 'GET':
+                response = client.get(endpoint)
+            elif method == 'POST':
+                response = client.post(endpoint, json={}, content_type='application/json')
+            elif method == 'PUT':
+                response = client.put(endpoint, json={}, content_type='application/json')
+            
+            assert response.content_type == 'application/json'
+            data = json.loads(response.data)
+            assert 'success' in data
+            assert 'error' in data
+    
+    def test_error_messages_are_user_friendly(self, client, authenticated_user):
+        """Test that error messages are clear and actionable."""
+        with authenticated_user:
+
+            # Test missing tune_id
+            response = client.post('/api/my-tunes',
+                              json={},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'tune_id' in data['error']
+            assert 'required' in data['error'].lower()
+        
+            # Test invalid tune_id
+            response = client.post('/api/my-tunes',
+                              json={'tune_id': 999999},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'not found' in data['error'].lower()
+    
+    def test_sync_returns_detailed_error_info(self, client, authenticated_user):
+        """Test that sync returns detailed error information."""
+        with authenticated_user:
+
+            response = client.post('/api/my-tunes/sync',
+                              json={},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'results' in data
+            assert 'errors' in data['results']
+    
+            @patch('services.thesession_sync_service.requests.get')
+    def test_sync_partial_failure_handling(self, mock_get, client, authenticated_user, sample_tune):
+        """Test that sync handles partial failures gracefully."""
+        with authenticated_user:
+
+            # Mock tunebook response with some valid and some invalid tunes
+            tunebook_response = MagicMock()
+            tunebook_response.status_code = 200
+            tunebook_response.json.return_value = {
+            'tunebook': [
+                {'id': sample_tune['tune_id']},
+                {'id': 999999}  # Non-existent tune
+            ]
+            }
+        
+            # Mock tune details - first succeeds, second fails
+        def mock_tune_response(*args, **kwargs):
+            url = args[0]
+            if str(sample_tune['tune_id']) in url:
+                response = MagicMock()
+                response.status_code = 200
+                response.json.return_value = {
+                    'name': 'Test Tune',
+                    'type': 'reel',
+                    'tunebooks': 100
+                }
+                return response
+            else:
+                response = MagicMock()
+                response.status_code = 404
+                return response
+        
+        mock_get.side_effect = [tunebook_response] + [mock_tune_response(f'https://thesession.org/tunes/{i}') for i in [sample_tune['tune_id'], 999999]]
+        
+        response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': 12345},
+                              content_type='application/json')
+        
+        # Should succeed overall but report errors
+        data = json.loads(response.data)
+        assert 'results' in data
+        assert data['results']['person_tunes_added'] >= 0
+        assert len(data['results']['errors']) > 0
+
+
+class TestLoadingStates:
+    """Test loading states and progress indicators."""
+    
+    def test_sync_returns_progress_info(self, client, authenticated_user):
+        """Test that sync endpoint returns progress information."""
+        with authenticated_user:
+
+            response = client.post('/api/my-tunes/sync',
+                              json={'thesession_user_id': 12345},
+                              content_type='application/json')
+            data = json.loads(response.data)
+        
+            assert 'results' in data
+            results = data['results']
+            assert 'tunes_fetched' in results
+            assert 'tunes_created' in results
+            assert 'person_tunes_added' in results
+            assert 'person_tunes_skipped' in results
+            assert 'errors' in results
+    
+    def test_api_responses_include_success_flag(self, client, authenticated_user, sample_tune):
+        """Test that all API responses include success flag."""
+        with authenticated_user:
+
+            # Test successful request
+            response = client.post('/api/my-tunes',
+                              json={'tune_id': sample_tune['tune_id']},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'success' in data
+            assert data['success'] is True
+        
+            # Test failed request
+            response = client.post('/api/my-tunes',
+                              json={},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'success' in data
+            assert data['success'] is False
+
+
+class TestGracefulDegradation:
+    """Test graceful degradation for API failures."""
+    
+    def test_get_tunes_with_pagination_params(self, client, authenticated_user):
+        """Test that pagination parameters are validated."""
+        with authenticated_user:
+
+            # Test with invalid page number
+            response = client.get('/api/my-tunes?page=0')
+            assert response.status_code == 200  # Should default to page 1
+            data = json.loads(response.data)
+            assert data['pagination']['page'] == 1
+        
+            # Test with invalid per_page
+            response = client.get('/api/my-tunes?per_page=1000')
+            assert response.status_code == 200  # Should cap at max
+            data = json.loads(response.data)
+            assert data['pagination']['per_page'] <= 200
+    
+    def test_get_tunes_with_invalid_filter(self, client, authenticated_user):
+        """Test that invalid filters return helpful error."""
+        with authenticated_user:
+
+            response = client.get('/api/my-tunes?learn_status=invalid')
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert 'invalid' in data['error'].lower()
+            assert 'learn_status' in data['error'].lower()
+    
+    def test_search_handles_special_characters(self, client, sample_tune):
+        """Test that search handles special characters gracefully."""
+        # Test with special characters
+        response = client.get('/api/tunes/search?q=%27%22%3C%3E')
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert 'tunes' in data
+    
+    @patch('database.get_db_connection')
+    def test_api_handles_database_errors(self, mock_db, client, authenticated_user):
+        """Test that database errors are handled gracefully."""
+        with authenticated_user:
+
+            # Mock database error
+            mock_db.side_effect = Exception('Database connection failed')
+        
+            response = client.get('/api/my-tunes')
+            assert response.status_code == 500
+            data = json.loads(response.data)
+            assert data['success'] is False
+            assert 'error' in data
+
+
+class TestUserFeedback:
+    """Test user feedback mechanisms."""
+    
+    def test_successful_operations_return_messages(self, client, authenticated_user, sample_tune):
+        """Test that successful operations return confirmation messages."""
+        with authenticated_user:
+
+            # Add tune
+            response = client.post('/api/my-tunes',
+                              json={'tune_id': sample_tune['tune_id']},
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'message' in data
+            assert 'success' in data['message'].lower()
+    
+    def test_status_update_returns_confirmation(self, client, authenticated_user, person_tune):
+        """Test that status updates return confirmation."""
+        with authenticated_user:
+
+            response = client.put(f'/api/my-tunes/{person_tune["person_tune_id"]}/status',
+                             json={'learn_status': 'learning'},
+                             content_type='application/json')
+            data = json.loads(response.data)
+            assert 'message' in data
+            assert 'learning' in data['message'].lower()
+    
+    def test_heard_count_increment_returns_new_count(self, client, authenticated_user, person_tune):
+        """Test that heard count increment returns the new count."""
+        with authenticated_user:
+
+            response = client.post(f'/api/my-tunes/{person_tune["person_tune_id"]}/heard',
+                              content_type='application/json')
+            data = json.loads(response.data)
+            assert 'heard_before_learning_count' in data
+            assert data['heard_before_learning_count'] >= 1

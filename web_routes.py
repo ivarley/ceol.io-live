@@ -2566,3 +2566,39 @@ def session_admin_bulk_import(session_path):
         session_path=session_path,
         step=step
     )
+
+
+@login_required
+def my_tunes():
+    """Personal tune collection page"""
+    return render_template("my_tunes.html")
+
+
+@login_required
+def add_my_tune_page():
+    """Add tune to personal collection page"""
+    return render_template("my_tunes_add.html")
+
+
+@login_required
+def sync_my_tunes_page():
+    """Sync tunes from thesession.org page"""
+    # Get current user's thesession_user_id from person table
+    thesession_user_id = None
+    if hasattr(current_user, 'person_id'):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT thesession_user_id FROM person WHERE person_id = %s",
+                (current_user.person_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                thesession_user_id = row[0]
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error fetching thesession_user_id: {e}")
+    
+    return render_template("my_tunes_sync.html", thesession_user_id=thesession_user_id)

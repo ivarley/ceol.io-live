@@ -5,11 +5,17 @@ This file contains shared fixtures and configuration for all tests.
 """
 
 import os
+import sys
 import tempfile
 import pytest
 import psycopg2
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
+
+# Add project root to Python path so we can import app modules
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Set test environment before importing app
 os.environ["FLASK_ENV"] = "testing"
