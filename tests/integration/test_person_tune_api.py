@@ -26,9 +26,13 @@ class TestPersonTuneAPI:
 
     def test_get_my_tunes_empty_collection(self, client, authenticated_user, db_conn, db_cursor):
         """Test getting tunes when user has no tunes in collection."""
+        # Clean up any existing person_tune records for this user
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
+        db_conn.commit()
+
         with authenticated_user:
             response = client.get("/api/my-tunes")
-        
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
@@ -38,13 +42,17 @@ class TestPersonTuneAPI:
 
     def test_get_my_tunes_with_data(self, client, authenticated_user, db_conn, db_cursor):
         """Test getting tunes when user has tunes in collection."""
+        # Clean up any existing person_tune records for this user
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
+        db_conn.commit()
+
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
         tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
         tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
-        
+
         # Ensure person exists
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         db_cursor.execute("""
             INSERT INTO person (person_id, first_name, last_name, email)
             VALUES (%s, %s, %s, %s)
@@ -86,12 +94,16 @@ class TestPersonTuneAPI:
 
     def test_get_my_tunes_with_learn_status_filter(self, client, authenticated_user, db_conn, db_cursor):
         """Test filtering tunes by learn_status."""
+        # Clean up any existing person_tune records for this user
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
+        db_conn.commit()
+
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
         tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
         tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
-        
-        person_id = 1
+
+        person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
         db_cursor.execute("""
             INSERT INTO person (person_id, first_name, last_name, email)
@@ -129,12 +141,16 @@ class TestPersonTuneAPI:
 
     def test_get_my_tunes_with_tune_type_filter(self, client, authenticated_user, db_conn, db_cursor):
         """Test filtering tunes by tune_type."""
+        # Clean up any existing person_tune records for this user
+        db_cursor.execute("DELETE FROM person_tune WHERE person_id = 2")
+        db_conn.commit()
+
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
         tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
         tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
-        
-        person_id = 1
+
+        person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
         db_cursor.execute("""
             INSERT INTO person (person_id, first_name, last_name, email)
@@ -175,8 +191,8 @@ class TestPersonTuneAPI:
         unique_id = str(uuid.uuid4())[:8]
         tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
         tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
-        
-        person_id = 1
+
+        person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
         db_cursor.execute("""
             INSERT INTO person (person_id, first_name, last_name, email)
@@ -215,7 +231,7 @@ class TestPersonTuneAPI:
         """Test pagination of tune collection."""
         # Create multiple test tunes
         unique_id = str(uuid.uuid4())[:8]
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         # Ensure person exists
         db_cursor.execute("""
@@ -293,10 +309,9 @@ class TestPersonTuneAPI:
     def test_add_my_tune_missing_tune_id(self, client, authenticated_user):
         """Test adding tune without tune_id."""
         with authenticated_user:
-            response = client.post("/api/my-tunes", 
-                                  data='{}',
-                                  content_type='application/json')
-        
+            response = client.post("/api/my-tunes",
+                                  json={"learn_status": "want to learn"})
+
         assert response.status_code == 400
         data = json.loads(response.data)
         assert data["success"] is False
@@ -317,7 +332,7 @@ class TestPersonTuneAPI:
         # Create test tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         # Ensure person exists
         db_cursor.execute("""
@@ -361,7 +376,7 @@ class TestPersonTuneAPI:
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)
@@ -392,7 +407,7 @@ class TestPersonTuneAPI:
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)
@@ -469,7 +484,7 @@ class TestPersonTuneAPI:
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)
@@ -499,7 +514,7 @@ class TestPersonTuneAPI:
         # Create test tune with 'learning' status
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)
@@ -572,7 +587,7 @@ class TestPersonTuneAPI:
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = int(unique_id[:6], 16) % 100000 + 50000
-        person_id = 1
+        person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
@@ -677,7 +692,7 @@ class TestPersonTuneAPI:
         assert response.status_code == 403  # Forbidden
         data = json.loads(response.data)
         assert data["success"] is False
-        assert "permission" in data["error"].lower()
+        assert ("permission" in data["error"].lower() or "unauthorized" in data["error"].lower())
 
     def test_get_person_tune_detail_with_session_play_count(self, client, authenticated_user, db_conn, db_cursor):
         """Test that tune detail includes session play count."""

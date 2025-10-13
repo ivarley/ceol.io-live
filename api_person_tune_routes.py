@@ -6,7 +6,7 @@ including CRUD operations, learning status updates, and heard count tracking.
 """
 
 from flask import request, jsonify
-from flask_login import current_user, login_required
+from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
 from services.person_tune_service import PersonTuneService
@@ -20,6 +20,19 @@ thesession_sync_service = ThesessionSyncService()
 
 
 # Auth helpers (temporary - will be moved to person_tune_auth module)
+def api_login_required(f):
+    """
+    Decorator for API endpoints that require authentication.
+    Returns JSON error response instead of redirecting to login page.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({"success": False, "error": "Authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def get_user_person_id() -> int:
     """Get the person_id for the current logged-in user."""
     if not current_user.is_authenticated:
@@ -38,14 +51,14 @@ def require_person_tune_ownership(func):
 
         # Check if the current user owns this person_tune
         if person_tune.person_id != current_user.person_id:
-            return jsonify({"success": False, "error": "Unauthorized"}), 403
+            return jsonify({"success": False, "error": "You do not have permission to access this tune"}), 403
 
         return func(person_tune_id, *args, **kwargs)
     return wrapper
 
 
-# Alias for consistency (will use login_required from flask_login)
-person_tune_login_required = login_required
+# Alias for consistency
+person_tune_login_required = api_login_required
 
 
 def _get_tune_details(tune_id: int) -> Optional[Dict[str, Any]]:
