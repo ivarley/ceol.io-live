@@ -501,6 +501,49 @@
         margin-bottom: 15px;
         color: var(--text-muted, #6c757d);
         font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .sort-toggle {
+        padding: 4px 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    .sort-toggle:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .sort-toggle.active {
+        background-color: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    @media (max-width: 768px) {
+        .results-count {
+            font-size: 12px;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .sort-toggle {
+            font-size: 11px;
+            padding: 3px 6px;
+        }
     }
 
     /* Mobile optimizations */
@@ -681,6 +724,7 @@
         align-items: center;
         gap: 10px;
         margin-bottom: 12px;
+        width: 100%;
     }
 
     .modal-status-select {
@@ -692,7 +736,29 @@
         color: var(--text-color);
         cursor: pointer;
         flex: 1;
-        max-width: 180px;
+        min-width: 0;
+    }
+
+    .modal-save-btn {
+        padding: 6px 16px;
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .modal-save-btn:hover:not(:disabled) {
+        background-color: var(--primary-dark, #0056b3);
+    }
+
+    .modal-save-btn:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+        opacity: 0.6;
     }
 
     .modal-info-line {
@@ -822,7 +888,12 @@
         </div>
     </div>
 
-    <div class="results-count" id="results-count"></div>
+    <div class="results-count">
+        <span id="results-count-text"></span>
+        <button id="sort-toggle" class="sort-toggle" onclick="cycleSortMode()" title="Toggle sort order">
+            <span id="sort-icon">a-z</span>
+        </button>
+    </div>
 
     <div id="loading" class="loading" style="display: none;">
         <p>Loading your tunes...</p>
@@ -914,6 +985,15 @@ const statusFilterStates = [
     { value: 'want to learn', label: 'Want to Learn', icon: '★' }
 ];
 let currentStatusFilterIndex = 0;
+
+// Sort mode cycle states
+const sortModes = [
+    { id: 'alpha-asc', label: 'a-z', icon: 'a-z', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
+    { id: 'alpha-desc', label: 'z-a', icon: 'z-a', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
+    { id: 'popularity-desc', label: 'popularity high', icon: '#', sortFn: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0) },
+    { id: 'popularity-asc', label: 'popularity low', icon: '#ꜜ', sortFn: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0) }
+];
+let currentSortModeIndex = 0;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -1045,6 +1125,17 @@ function cycleStatusFilter() {
     applyFilters();
 }
 
+function cycleSortMode() {
+    currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
+    const mode = sortModes[currentSortModeIndex];
+
+    // Update button display
+    const icon = document.getElementById('sort-icon');
+    icon.textContent = mode.icon;
+
+    applyFilters();
+}
+
 function loadFiltersFromURL() {
     const params = new URLSearchParams(window.location.search);
 
@@ -1074,15 +1165,31 @@ function loadFiltersFromURL() {
             }
         }
     }
+
+    if (params.has('sort')) {
+        const sortId = params.get('sort');
+        const index = sortModes.findIndex(s => s.id === sortId);
+        if (index >= 0) {
+            currentSortModeIndex = index;
+            const mode = sortModes[index];
+            document.getElementById('sort-icon').textContent = mode.icon;
+        }
+    }
 }
 
 function updateURL() {
     const params = new URLSearchParams();
-    
+
     if (currentFilters.search) params.set('search', currentFilters.search);
     if (currentFilters.type) params.set('type', currentFilters.type);
     if (currentFilters.status) params.set('status', currentFilters.status);
-    
+
+    // Only add sort param if not default (alpha-asc)
+    const sortMode = sortModes[currentSortModeIndex];
+    if (sortMode && sortMode.id !== 'alpha-asc') {
+        params.set('sort', sortMode.id);
+    }
+
     const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
     window.history.replaceState({}, '', newURL);
 }
@@ -1171,50 +1278,56 @@ function applyFilters() {
             const nameMatch = tune.tune_name && tune.tune_name.toLowerCase().includes(searchLower);
             if (!nameMatch) return false;
         }
-        
+
         // Type filter
         if (currentFilters.type && tune.tune_type !== currentFilters.type) {
             return false;
         }
-        
+
         // Status filter
         if (currentFilters.status && tune.learn_status !== currentFilters.status) {
             return false;
         }
-        
+
         return true;
     });
-    
+
+    // Apply sorting
+    const sortMode = sortModes[currentSortModeIndex];
+    if (sortMode && sortMode.sortFn) {
+        filteredTunes.sort(sortMode.sortFn);
+    }
+
     updateURL();
     renderTunes();
 }
 
 function renderTunes() {
     document.getElementById('loading').style.display = 'none';
-    
+
     const grid = document.getElementById('tunes-grid');
     const noResults = document.getElementById('no-results');
-    const resultsCount = document.getElementById('results-count');
-    
+    const resultsCountText = document.getElementById('results-count-text');
+
     if (filteredTunes.length === 0) {
         grid.style.display = 'none';
         noResults.style.display = 'block';
-        resultsCount.textContent = '';
+        resultsCountText.textContent = '';
         return;
     }
-    
+
     grid.style.display = 'grid';
     noResults.style.display = 'none';
-    
+
     // Update results count
     const total = allTunes.length;
     const filtered = filteredTunes.length;
     if (filtered < total) {
-        resultsCount.textContent = `Showing ${filtered} of ${total} tunes`;
+        resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
     } else {
-        resultsCount.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+        resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
     }
-    
+
     // Render tune cards
     grid.innerHTML = filteredTunes.map(tune => createTuneCard(tune)).join('');
 }
@@ -1233,16 +1346,23 @@ function createTuneCard(tune) {
                <span style="font-size: 12px;">Mark as heard</span>
            </div>`
         : '';
-    
-    const thesessionLink = tune.tune_id 
+
+    const thesessionLink = tune.tune_id
         ? `<a href="https://thesession.org/tunes/${tune.tune_id}" target="_blank" class="tune-action-btn" onclick="event.stopPropagation();">View on TheSession.org</a>`
         : '';
-    
+
+    // Determine what to show in the tune type badge based on sort mode
+    const sortMode = sortModes[currentSortModeIndex];
+    const isPopularityMode = sortMode.id === 'popularity-desc' || sortMode.id === 'popularity-asc';
+    const typeLabel = isPopularityMode
+        ? (tune.tunebook_count || 0).toString()
+        : tune.tune_type || '';
+
     return `
         <div class="tune-card" onclick="showTuneDetail(${tune.person_tune_id}, event)">
             <div class="tune-card-header">
                 <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
-                ${tune.tune_type ? `<span class="tune-type">${tune.tune_type}</span>` : ''}
+                ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
             </div>
             <div class="tune-meta">
                 <div class="tune-meta-item">
@@ -1415,9 +1535,10 @@ function displayTuneDetailModalBasic(tune) {
         <h2 class="modal-tune-title">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
         <div class="modal-header-row">
             ${tuneTypeBadge}
-            <select id="modal-status-select" class="modal-status-select" onchange="updateStatusFromModal(${tune.person_tune_id})">
+            <select id="modal-status-select" class="modal-status-select" onchange="onModalStatusChange()">
                 ${statusOptions}
             </select>
+            <button id="modal-save-btn" class="modal-save-btn" onclick="saveStatusFromModal()" disabled>Save</button>
         </div>
         <div id="modal-additional-info">
             <div class="modal-info-line">TheSession.org Tunebooks: <span class="loading-dots">...</span></div>
@@ -1425,8 +1546,9 @@ function displayTuneDetailModalBasic(tune) {
         </div>
     `;
 
-    // Store current tune ID for updates
+    // Store current tune ID and original status for updates
     modal.dataset.personTuneId = tune.person_tune_id;
+    modal.dataset.originalStatus = tune.learn_status;
 
     // Show modal
     console.log('SHOWING MODAL - setting display = flex');
@@ -1551,11 +1673,44 @@ function closeTuneDetailModal() {
     console.log('Modal closed');
 }
 
-function updateStatusFromModal(personTuneId) {
+function onModalStatusChange() {
+    // Enable/disable the Save button based on whether status changed
+    const modal = document.getElementById('tune-detail-modal');
     const select = document.getElementById('modal-status-select');
-    const newStatus = select.value;
-    const loading = showLoading('Updating status...');
+    const saveBtn = document.getElementById('modal-save-btn');
+    const originalStatus = modal.dataset.originalStatus;
 
+    if (select && saveBtn && originalStatus) {
+        saveBtn.disabled = (select.value === originalStatus);
+    }
+}
+
+function saveStatusFromModal() {
+    const modal = document.getElementById('tune-detail-modal');
+    const select = document.getElementById('modal-status-select');
+    const personTuneId = parseInt(modal.dataset.personTuneId);
+    const newStatus = select.value;
+    const originalStatus = modal.dataset.originalStatus;
+
+    // Don't save if nothing changed
+    if (newStatus === originalStatus) {
+        return;
+    }
+
+    // Update the tune in local data immediately (optimistic update)
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    if (tune) {
+        tune.learn_status = newStatus;
+        if (newStatus === 'learned') {
+            tune.learned_date = new Date().toISOString();
+        }
+        applyFilters(); // Re-render grid immediately
+    }
+
+    // Close the modal immediately
+    closeTuneDetailModal();
+
+    // Save to server in the background
     fetchWithRetry(`/api/my-tunes/${personTuneId}/status`, {
         method: 'PUT',
         headers: {
@@ -1571,32 +1726,32 @@ function updateStatusFromModal(personTuneId) {
         return response.json();
     })
     .then(data => {
-        loading.hide();
         showMessage('Learning status updated!', 'success');
 
-        // Update the tune in our local data
-        const tune = allTunes.find(t => t.person_tune_id === personTuneId);
-        if (tune) {
-            tune.learn_status = newStatus;
-            if (newStatus === 'learned') {
+        // Update with server response (in case learned_date differs)
+        if (tune && data.person_tune) {
+            if (data.person_tune.learned_date) {
                 tune.learned_date = data.person_tune.learned_date;
             }
-            applyFilters(); // Re-render grid
+            applyFilters(); // Re-render with accurate data
         }
-
-        // No need to refresh modal - status is already updated in the dropdown
     })
     .catch(error => {
-        loading.hide();
         console.error('Error updating status:', error);
         const errorInfo = handleApiError(error);
         showMessage(errorInfo.message, 'error');
-        // Revert select to previous value
-        const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+
+        // Revert to original status on error
         if (tune) {
-            select.value = tune.learn_status;
+            tune.learn_status = originalStatus;
+            applyFilters(); // Re-render with reverted data
         }
     });
+}
+
+// Keep old function for backward compatibility if needed elsewhere
+function updateStatusFromModal(personTuneId) {
+    saveStatusFromModal();
 }
 
 function incrementHeardCountFromModal(personTuneId) {

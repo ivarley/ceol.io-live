@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test My Tunes Sorting</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-section h2 {
+            margin-top: 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>My Tunes Sorting Test</h1>
+
+    <div class="test-section">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Navigate to <a href="http://127.0.0.1:5001/my-tunes" target="_blank">/my-tunes</a></li>
+            <li>Look for the tune count display (e.g., "10 tunes")</li>
+            <li>Next to it, you should see a button with "a-z"</li>
+            <li>Click the button to cycle through sort modes:
+                <ul>
+                    <li><strong>a-z</strong> - Alphabetical ascending</li>
+                    <li><strong>z-a</strong> - Alphabetical descending</li>
+                    <li><strong>#</strong> - Popularity (highest first), tune type shows tunebook count</li>
+                    <li><strong>#ꜜ</strong> - Popularity (lowest first), tune type shows tunebook count</li>
+                </ul>
+            </li>
+            <li>Verify that:
+                <ul>
+                    <li>Tunes are sorted correctly in each mode</li>
+                    <li>When in # or #ꜜ mode, the tune type badge shows the tunebook count number</li>
+                    <li>When in a-z or z-a mode, the tune type badge shows the tune type (e.g., "reel", "jig")</li>
+                    <li>The sort mode persists in the URL (e.g., ?sort=popularity-desc)</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Expected Behavior</h2>
+        <ul>
+            <li>Clicking the sort button cycles through 4 modes in order</li>
+            <li>The icon changes to show current mode: a-z → z-a → # → #ꜜ → (back to a-z)</li>
+            <li>Tunes re-render immediately when sort mode changes</li>
+            <li>The tune type badge switches between showing tune type and tunebook count</li>
+            <li>Sort preference is saved in URL and restored on page reload</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Quick Links</h2>
+        <div>
+            <button onclick="window.open('http://127.0.0.1:5001/my-tunes', '_blank')">Open My Tunes</button>
+            <button onclick="window.open('http://127.0.0.1:5001/my-tunes?sort=alpha-desc', '_blank')">Open with z-a Sort</button>
+            <button onclick="window.open('http://127.0.0.1:5001/my-tunes?sort=popularity-desc', '_blank')">Open with # Sort</button>
+            <button onclick="window.open('http://127.0.0.1:5001/my-tunes?sort=popularity-asc', '_blank')">Open with #ꜜ Sort</button>
+        </div>
+    </div>
+</body>
+</html>
