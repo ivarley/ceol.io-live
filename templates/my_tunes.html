@@ -497,6 +497,35 @@
         color: var(--text-muted, #6c757d);
     }
 
+    .loading-more {
+        text-align: center;
+        padding: 20px;
+        color: var(--text-muted, #6c757d);
+        font-size: 14px;
+        display: none;
+    }
+
+    .loading-more.visible {
+        display: block;
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid var(--primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
     .results-count {
         margin-bottom: 15px;
         color: var(--text-muted, #6c757d);
@@ -907,6 +936,11 @@
     <div class="tunes-grid" id="tunes-grid">
         <!-- Tune cards will be inserted here by JavaScript -->
     </div>
+
+    <div id="loading-more" class="loading-more">
+        <span class="loading-spinner"></span>
+        <span>Loading more tunes...</span>
+    </div>
 </div>
 
 <!-- Tune Detail Modal -->
@@ -976,6 +1010,8 @@ let currentFilters = {
 };
 let modalShowTime = 0;
 let modalFetchController = null; // AbortController for modal fetch requests
+let isLoadingFullTunes = false; // Track if full tune list is still loading
+let fullTunesLoaded = false; // Track if we have all tunes
 
 // Status filter cycle states
 const statusFilterStates = [
@@ -1001,7 +1037,36 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     loadFiltersFromURL();
     checkForSuccessMessage();
+    setupScrollDetection();
 });
+
+function setupScrollDetection() {
+    // Detect scroll to show loading indicator if still loading
+    window.addEventListener('scroll', function() {
+        if (!isLoadingFullTunes || fullTunesLoaded) {
+            return;
+        }
+
+        const tunesGrid = document.getElementById('tunes-grid');
+        const loadingMore = document.getElementById('loading-more');
+
+        if (!tunesGrid || !loadingMore) {
+            return;
+        }
+
+        // Get the bottom position of the tunes grid
+        const gridRect = tunesGrid.getBoundingClientRect();
+        const gridBottom = gridRect.bottom;
+
+        // Get viewport height
+        const viewportHeight = window.innerHeight;
+
+        // If we're within 200px of the bottom of the grid, show loading indicator
+        if (gridBottom < viewportHeight + 200) {
+            loadingMore.classList.add('visible');
+        }
+    });
+}
 
 function checkForSuccessMessage() {
     const params = new URLSearchParams(window.location.search);
@@ -1133,6 +1198,7 @@ function cycleSortMode() {
     const icon = document.getElementById('sort-icon');
     icon.textContent = mode.icon;
 
+    // Re-apply filters and sorting (no DB reload needed)
     applyFilters();
 }
 
@@ -1198,8 +1264,18 @@ function loadTunes() {
     document.getElementById('loading').style.display = 'block';
     document.getElementById('tunes-grid').style.display = 'none';
     document.getElementById('no-results').style.display = 'none';
+    document.getElementById('loading-more').classList.remove('visible');
 
-    fetchWithRetry('/api/my-tunes?per_page=2000')
+    // Reset state
+    fullTunesLoaded = false;
+    isLoadingFullTunes = true;
+
+    // Get current sort mode for API query
+    const sortMode = sortModes[currentSortModeIndex];
+    const sortParam = sortMode ? sortMode.id : 'alpha-asc';
+
+    // First, fetch initial 20 tunes for fast display
+    fetchWithRetry(`/api/my-tunes?per_page=20&sort=${sortParam}`)
         .then(response => {
             if (!response.ok) {
                 const errorInfo = handleApiError(null, response);
@@ -1212,21 +1288,61 @@ function loadTunes() {
             return response.json();
         })
         .then(data => {
+            // Show initial 20 tunes immediately
             allTunes = data.tunes || [];
             populateTuneTypes();
             applyFilters();
+
+            // If we got fewer than 20, we have all tunes
+            if (allTunes.length < 20) {
+                fullTunesLoaded = true;
+                isLoadingFullTunes = false;
+            }
         })
         .catch(error => {
-            console.error('Error loading tunes:', error);
+            console.error('Error loading initial tunes:', error);
             const errorInfo = handleApiError(error);
             showMessage(errorInfo.message, 'error');
-            
+
             // Show retry option if retryable
             if (errorInfo.retryable) {
                 showRetryOption();
             }
-            
+
             document.getElementById('loading').style.display = 'none';
+            isLoadingFullTunes = false;
+        });
+
+    // In parallel, fetch all tunes (up to 2000)
+    fetchWithRetry(`/api/my-tunes?per_page=2000&sort=${sortParam}`)
+        .then(response => {
+            if (!response.ok) {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(errorInfo.message);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Replace with full tune list
+            allTunes = data.tunes || [];
+            fullTunesLoaded = true;
+            isLoadingFullTunes = false;
+
+            // Hide loading-more indicator
+            document.getElementById('loading-more').classList.remove('visible');
+
+            populateTuneTypes();
+            applyFilters();
+        })
+        .catch(error => {
+            console.error('Error loading full tune list:', error);
+            isLoadingFullTunes = false;
+            // Don't show error if we already have initial tunes
+            if (allTunes.length === 0) {
+                const errorInfo = handleApiError(error);
+                showMessage(errorInfo.message, 'error');
+            }
+            document.getElementById('loading-more').classList.remove('visible');
         });
 }
 
@@ -1292,7 +1408,7 @@ function applyFilters() {
         return true;
     });
 
-    // Apply sorting
+    // Apply client-side sorting
     const sortMode = sortModes[currentSortModeIndex];
     if (sortMode && sortMode.sortFn) {
         filteredTunes.sort(sortMode.sortFn);
@@ -1319,13 +1435,18 @@ function renderTunes() {
     grid.style.display = 'grid';
     noResults.style.display = 'none';
 
-    // Update results count
-    const total = allTunes.length;
-    const filtered = filteredTunes.length;
-    if (filtered < total) {
-        resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+    // Update results count - only show if full tunes are loaded
+    if (fullTunesLoaded) {
+        const total = allTunes.length;
+        const filtered = filteredTunes.length;
+        if (filtered < total) {
+            resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+        } else {
+            resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+        }
     } else {
-        resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+        // Don't show count until full data is loaded
+        resultsCountText.textContent = '';
     }
 
     // Render tune cards

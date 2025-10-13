@@ -436,7 +436,8 @@ class PersonTuneService:
         tune_type_filter: Optional[str] = None,
         search_query: Optional[str] = None,
         page: int = 1,
-        per_page: int = 2000
+        per_page: int = 2000,
+        sort_by: str = 'alpha-asc'
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Get person tunes with joined tune details - optimized for display.
@@ -451,6 +452,7 @@ class PersonTuneService:
             search_query: Optional search string for tune name
             page: Page number (1-indexed)
             per_page: Items per page (max 2000)
+            sort_by: Sort order - one of: alpha-asc, alpha-desc, popularity-desc, popularity-asc
 
         Returns:
             Tuple of (list of tune dictionaries, total_count)
@@ -490,8 +492,17 @@ class PersonTuneService:
             cur.execute(count_query, params)
             total_count = cur.fetchone()[0]
 
+            # Determine sort order based on sort_by parameter
+            sort_map = {
+                'alpha-asc': 'LOWER(t.name) ASC',
+                'alpha-desc': 'LOWER(t.name) DESC',
+                'popularity-desc': 't.tunebook_count_cached DESC NULLS LAST, LOWER(t.name) ASC',
+                'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(t.name) ASC'
+            }
+            order_by = sort_map.get(sort_by, 'LOWER(t.name) ASC')  # Default to alpha-asc
+
             # Add ordering and pagination
-            query += " ORDER BY pt.created_date DESC LIMIT %s OFFSET %s"
+            query += f" ORDER BY {order_by} LIMIT %s OFFSET %s"
             offset = (page - 1) * per_page
             params.extend([per_page, offset])
 

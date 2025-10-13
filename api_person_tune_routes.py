@@ -148,12 +148,21 @@ def get_my_tunes():
         learn_status_filter = request.args.get('learn_status')
         tune_type_filter = request.args.get('tune_type')
         search_query = request.args.get('search', '').strip()
+        sort_by = request.args.get('sort', 'alpha-asc')
 
         # Validate learn_status if provided
         if learn_status_filter and learn_status_filter not in ['want to learn', 'learning', 'learned']:
             return jsonify({
                 "success": False,
                 "error": "Invalid learn_status. Must be 'want to learn', 'learning', or 'learned'"
+            }), 400
+
+        # Validate sort_by if provided
+        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc', 'popularity-asc']
+        if sort_by not in valid_sorts:
+            return jsonify({
+                "success": False,
+                "error": f"Invalid sort. Must be one of: {', '.join(valid_sorts)}"
             }), 400
 
         person_id = get_user_person_id()
@@ -165,7 +174,8 @@ def get_my_tunes():
             tune_type_filter=tune_type_filter,
             search_query=search_query if search_query else None,
             page=page,
-            per_page=per_page
+            per_page=per_page,
+            sort_by=sort_by
         )
 
         # Calculate pagination metadata
