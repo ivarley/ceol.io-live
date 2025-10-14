@@ -143,6 +143,26 @@
         text-align: center;
     }
 
+    .no-results.clickable {
+        cursor: pointer;
+        color: var(--primary);
+        text-decoration: underline;
+    }
+
+    .no-results.clickable:hover {
+        color: var(--primary-dark, #0056b3);
+    }
+
+    .thesession-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        background-color: #ff9800;
+        color: white;
+        border-radius: 3px;
+        font-size: 11px;
+        margin-right: 8px;
+    }
+
     .loading-indicator {
         padding: 12px;
         color: var(--text-muted, #6c757d);
@@ -338,17 +358,24 @@ function handleApiError(error, response = null) {
 function showLoading(message = 'Loading...') {
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'loading-overlay';
+
+    // Check if dark mode is active
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgColor = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    const textColor = isDarkMode ? '#e0e0e0' : '#333';
+    const spinnerBorderColor = isDarkMode ? '#444' : '#ddd';
+
     loadingDiv.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(255,255,255,0.9); z-index: 9999;
+        background: ${bgColor}; z-index: 9999;
         display: flex; align-items: center; justify-content: center;
         flex-direction: column; gap: 15px;
     `;
     loadingDiv.innerHTML = `
-        <div style="width: 40px; height: 40px; border: 4px solid #ddd;
+        <div style="width: 40px; height: 40px; border: 4px solid ${spinnerBorderColor};
                     border-top-color: #007bff; border-radius: 50%;
                     animation: spin 0.8s linear infinite;"></div>
-        <div style="color: #333; font-size: 16px;">${message}</div>
+        <div style="color: ${textColor}; font-size: 16px;">${message}</div>
     `;
     const style = document.createElement('style');
     style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
@@ -366,6 +393,8 @@ let searchTimeout;
 let selectedTuneId = null;
 let selectedIndex = -1;
 let searchResults = [];
+let lastSearchQuery = '';
+let isSearchingTheSession = false;
 
 const tuneSearchInput = document.getElementById('tune-search');
 const autocompleteResults = document.getElementById('autocomplete-results');
@@ -457,6 +486,8 @@ function updateSelection(items) {
 
 function searchTunes(query) {
     showAutocompleteLoading();
+    lastSearchQuery = query;
+    isSearchingTheSession = false;
 
     fetchWithRetry(`/api/tunes/search?q=${encodeURIComponent(query)}`)
         .then(response => {
@@ -468,7 +499,7 @@ function searchTunes(query) {
         })
         .then(data => {
             searchResults = data.tunes || [];
-            displayResults(searchResults);
+            displayResults(searchResults, query);
         })
         .catch(error => {
             console.error('Search error:', error);
@@ -483,29 +514,104 @@ function searchTunes(query) {
         });
 }
 
+function normalizeTuneType(type) {
+    if (!type) return null;
+
+    // Map TheSession.org tune types to our database format
+    const typeMap = {
+        'jig': 'Jig',
+        'reel': 'Reel',
+        'slip jig': 'Slip Jig',
+        'hop jig': 'Hop Jig',
+        'hornpipe': 'Hornpipe',
+        'polka': 'Polka',
+        'set dance': 'Set Dance',
+        'slide': 'Slide',
+        'waltz': 'Waltz',
+        'barndance': 'Barndance',
+        'strathspey': 'Strathspey',
+        'three-two': 'Three-Two',
+        'mazurka': 'Mazurka',
+        'march': 'March',
+        'air': 'Air'
+    };
+
+    return typeMap[type.toLowerCase()] || null;
+}
+
+function searchTheSession(query) {
+    showAutocompleteLoading();
+    isSearchingTheSession = true;
+    lastSearchQuery = query;
+
+    const url = `https://thesession.org/tunes/search?q=${encodeURIComponent(query)}&format=json`;
+
+    fetchWithRetry(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch from TheSession.org');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Transform TheSession.org results to match our format
+            const tunes = (data.tunes || []).map(tune => ({
+                tune_id: tune.id,
+                name: tune.name,
+                tune_type: normalizeTuneType(tune.type),
+                tunebook_count: tune.tunebooks || 0
+            }));
+            searchResults = tunes;
+            displayResults(searchResults, query);
+        })
+        .catch(error => {
+            console.error('TheSession.org search error:', error);
+            autocompleteResults.innerHTML = `
+                <div class="no-results">
+                    Error searching TheSession.org: ${escapeHtml(error.message)}
+                    <br><small>Please try again.</small>
+                </div>
+            `;
+            autocompleteResults.classList.add('show');
+        });
+}
+
 function showAutocompleteLoading() {
     autocompleteResults.innerHTML = '<div class="loading-indicator">Searching...</div>';
     autocompleteResults.classList.add('show');
     selectedIndex = -1;
 }
 
-function displayResults(tunes) {
-    if (tunes.length === 0) {
-        autocompleteResults.innerHTML = '<div class="no-results">No tunes found. Try a different search term.</div>';
+function displayResults(tunes, query) {
+    if (tunes.length === 0 && !isSearchingTheSession) {
+        autocompleteResults.innerHTML = `
+            <div class="no-results clickable" onclick="searchTheSession('${escapeHtml(query || lastSearchQuery)}')">
+                No tunes found from existing sessions; click to search TheSession.org
+            </div>
+        `;
         autocompleteResults.classList.add('show');
         return;
     }
-    
+
+    if (tunes.length === 0 && isSearchingTheSession) {
+        autocompleteResults.innerHTML = '<div class="no-results">No tunes found on TheSession.org either. Try a different search term.</div>';
+        autocompleteResults.classList.add('show');
+        return;
+    }
+
     const html = tunes.map((tune, index) => `
         <div class="autocomplete-item" data-index="${index}" onclick="selectTuneByIndex(${index})">
-            <span class="tune-name">${escapeHtml(tune.name)}</span>
+            <span class="tune-name">
+                ${isSearchingTheSession ? '<span class="thesession-badge">TheSession</span>' : ''}
+                ${escapeHtml(tune.name)}
+            </span>
             <div class="tune-meta">
                 ${tune.tune_type ? `<span class="tune-type">${escapeHtml(tune.tune_type)}</span>` : ''}
                 ${tune.tunebook_count ? `${tune.tunebook_count} tunebook${tune.tunebook_count !== 1 ? 's' : ''}` : ''}
             </div>
         </div>
     `).join('');
-    
+
     autocompleteResults.innerHTML = html;
     autocompleteResults.classList.add('show');
     selectedIndex = -1;
@@ -521,6 +627,19 @@ function selectTune(tune) {
     selectedTuneId = tune.tune_id;
     selectedTuneIdInput.value = tune.tune_id;
     tuneSearchInput.value = tune.name;
+
+    // Store tune details if from TheSession.org for later insertion
+    if (isSearchingTheSession) {
+        tuneSearchInput.dataset.theSessionTune = JSON.stringify({
+            tune_id: tune.tune_id,
+            name: tune.name,
+            tune_type: tune.tune_type,
+            tunebook_count: tune.tunebook_count
+        });
+    } else {
+        delete tuneSearchInput.dataset.theSessionTune;
+    }
+
     submitBtn.disabled = false;
     hideAutocomplete();
 }
@@ -532,30 +651,41 @@ function hideAutocomplete() {
 
 function handleSubmit(e) {
     e.preventDefault();
-    
+
     if (!selectedTuneId) {
         showMessage('Please select a tune from the search results', 'error');
         return;
     }
-    
+
     // Check if offline
     if (!navigator.onLine) {
         showMessage('You are offline. Please check your connection.', 'error');
         return;
     }
-    
+
     const formData = {
         tune_id: selectedTuneId,
         learn_status: document.getElementById('learn-status').value,
         notes: document.getElementById('notes').value.trim() || null
     };
-    
+
+    // If this is a tune from TheSession.org, include the tune details for insertion
+    if (tuneSearchInput.dataset.theSessionTune) {
+        const tuneDetails = JSON.parse(tuneSearchInput.dataset.theSessionTune);
+        formData.new_tune = {
+            tune_id: tuneDetails.tune_id,
+            name: tuneDetails.name,
+            tune_type: tuneDetails.tune_type,
+            tunebook_count: tuneDetails.tunebook_count
+        };
+    }
+
     // Disable submit button
     submitBtn.disabled = true;
     submitBtn.textContent = 'Adding...';
-    
+
     const loading = showLoading('Adding tune to your collection...');
-    
+
     fetchWithRetry('/api/my-tunes', {
         method: 'POST',
         headers: {
@@ -573,15 +703,11 @@ function handleSubmit(e) {
         return response.json();
     })
     .then(data => {
-        loading.hide();
         if (data.success) {
-            // Show success message before redirect
-            showMessage('Tune added successfully!', 'success');
-            // Redirect to my tunes page with success message
-            setTimeout(() => {
-                window.location.href = '/my-tunes?added=' + encodeURIComponent(tuneSearchInput.value);
-            }, 1000);
+            // Redirect immediately without hiding loading overlay
+            window.location.href = '/my-tunes?added=' + encodeURIComponent(tuneSearchInput.value);
         } else {
+            loading.hide();
             throw new Error(data.error || 'Failed to add tune');
         }
     })

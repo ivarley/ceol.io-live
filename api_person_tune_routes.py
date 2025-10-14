@@ -294,17 +294,22 @@ def get_person_tune_detail(person_tune_id):
 def add_my_tune():
     """
     POST /api/my-tunes
-    
+
     Add a tune to the current user's collection.
-    
+
     Request Body:
         - tune_id (int, required): ID of the tune to add
         - learn_status (str, optional): Initial learning status (default: 'want to learn')
         - notes (str, optional): Optional notes
-        
+        - new_tune (dict, optional): Tune details from TheSession.org if tune doesn't exist locally
+            - tune_id (int): TheSession.org tune ID
+            - name (str): Tune name
+            - tune_type (str): Tune type
+            - tunebook_count (int): Popularity count
+
     Returns:
         JSON response with created person_tune data
-        
+
     Requirements: 5.2
     """
     try:
@@ -314,28 +319,64 @@ def add_my_tune():
                 "success": False,
                 "error": "No data provided"
             }), 400
-        
+
         tune_id = data.get('tune_id')
         if not tune_id:
             return jsonify({
                 "success": False,
                 "error": "tune_id is required"
             }), 400
-        
-        # Validate tune exists
+
+        # Check if tune exists locally
         tune_details = _get_tune_details(tune_id)
+
+        # If tune doesn't exist and new_tune data is provided, insert it
+        if not tune_details and data.get('new_tune'):
+            new_tune_data = data.get('new_tune')
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+
+                # Insert the tune into the tune table
+                cur.execute("""
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, last_modified_date)
+                    VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    ON CONFLICT (tune_id) DO NOTHING
+                    RETURNING tune_id
+                """, (
+                    new_tune_data.get('tune_id'),
+                    new_tune_data.get('name'),
+                    new_tune_data.get('tune_type'),
+                    new_tune_data.get('tunebook_count', 0)
+                ))
+
+                conn.commit()
+
+                # Get the tune details after insertion
+                tune_details = _get_tune_details(tune_id)
+
+            except Exception as e:
+                conn.rollback()
+                return jsonify({
+                    "success": False,
+                    "error": f"Error inserting tune: {str(e)}"
+                }), 500
+            finally:
+                conn.close()
+
+        # Validate tune exists (either was already there or just inserted)
         if not tune_details:
             return jsonify({
                 "success": False,
                 "error": f"Tune with ID {tune_id} not found"
             }), 404
-        
+
         learn_status = data.get('learn_status', 'want to learn')
         notes = data.get('notes')
-        
+
         person_id = get_user_person_id()
         changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
-        
+
         # Create the person_tune
         success, message, person_tune = person_tune_service.create_person_tune(
             person_id=person_id,
@@ -344,7 +385,7 @@ def add_my_tune():
             notes=notes,
             changed_by=changed_by
         )
-        
+
         if not success:
             if "already exists" in message:
                 return jsonify({
@@ -356,16 +397,16 @@ def add_my_tune():
                     "success": False,
                     "error": message
                 }), 400
-        
+
         # Build response with tune details
         response_data = _build_person_tune_response(person_tune, include_tune_details=True)
-        
+
         return jsonify({
             "success": True,
             "message": "Tune added to your collection successfully",
             "person_tune": response_data
         }), 201
-        
+
     except AttributeError:
         return jsonify({
             "success": False,
@@ -446,6 +487,75 @@ def update_tune_status(person_tune_id):
         return jsonify({
             "success": False,
             "error": f"Error updating status: {str(e)}"
+        }), 500
+
+
+@person_tune_login_required
+@require_person_tune_ownership
+def update_tune_notes(person_tune_id):
+    """
+    PUT /api/my-tunes/<person_tune_id>/notes
+
+    Update the notes for a tune in the user's collection.
+
+    Route Parameters:
+        - person_tune_id (int): ID of the person_tune record
+
+    Request Body:
+        - notes (str, required): New notes text (can be empty string)
+
+    Returns:
+        JSON response with updated person_tune data
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "No data provided"
+            }), 400
+
+        notes = data.get('notes')
+        if notes is None:
+            return jsonify({
+                "success": False,
+                "error": "notes field is required"
+            }), 400
+
+        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+
+        # Update the notes
+        success, message, person_tune = person_tune_service.update_person_tune(
+            person_tune_id=person_tune_id,
+            notes=notes,
+            changed_by=changed_by
+        )
+
+        if not success:
+            if "not found" in message:
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 404
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 400
+
+        # Build response with tune details
+        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "person_tune": response_data
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error updating notes: {str(e)}"
         }), 500
 
 

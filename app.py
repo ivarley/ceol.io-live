@@ -13,6 +13,7 @@ from api_person_tune_routes import (
     get_person_tune_detail,
     add_my_tune,
     update_tune_status,
+    update_tune_notes,
     increment_tune_heard_count,
     sync_my_tunes,
     search_tunes,
@@ -513,6 +514,12 @@ app.add_url_rule(
     "/api/my-tunes/<int:person_tune_id>/status",
     "update_tune_status",
     update_tune_status,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>/notes",
+    "update_tune_notes",
+    update_tune_notes,
     methods=["PUT"],
 )
 app.add_url_rule(

@@ -778,6 +778,9 @@
         cursor: pointer;
         transition: all 0.2s;
         white-space: nowrap;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     .modal-save-btn:hover:not(:disabled) {
@@ -785,9 +788,13 @@
     }
 
     .modal-save-btn:disabled {
-        background-color: #ccc;
+        background-color: var(--secondary, #6c757d);
         cursor: not-allowed;
-        opacity: 0.6;
+        opacity: 0.5;
+    }
+
+    [data-theme="dark"] .modal-save-btn:disabled {
+        background-color: #555;
     }
 
     .modal-info-line {
@@ -838,6 +845,35 @@
         color: var(--text-color);
         font-size: 14px;
         line-height: 1.5;
+    }
+
+    .modal-notes-textarea {
+        width: 100%;
+        min-height: 80px;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    .modal-notes-textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .modal-notes-textarea:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: var(--light, #f8f9fa);
+    }
+
+    [data-theme="dark"] .modal-notes-textarea:disabled {
+        background-color: #2a2a2a;
     }
 
     /* Mobile adjustments for modal */
@@ -1650,20 +1686,24 @@ function displayTuneDetailModalBasic(tune) {
         ? `<a href="https://thesession.org/tunes/${tune.tune_id}" target="_blank" class="thesession-link-icon" title="View on TheSession.org">🔗</a>`
         : '';
 
-    // Show basic info with inline loading dots for numbers
+    // Show basic info with inline loading dots for numbers and disabled notes field
     modalContent.innerHTML = `
         <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
         <h2 class="modal-tune-title">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
         <div class="modal-header-row">
             ${tuneTypeBadge}
-            <select id="modal-status-select" class="modal-status-select" onchange="onModalStatusChange()">
+            <select id="modal-status-select" class="modal-status-select" onchange="onModalFieldChange()">
                 ${statusOptions}
             </select>
-            <button id="modal-save-btn" class="modal-save-btn" onclick="saveStatusFromModal()" disabled>Save</button>
         </div>
         <div id="modal-additional-info">
             <div class="modal-info-line">TheSession.org Tunebooks: <span class="loading-dots">...</span></div>
             <div class="modal-info-line">Play count at your sessions: <span class="loading-dots">...</span></div>
+            <div class="modal-notes-section">
+                <div class="modal-notes-label">Notes:</div>
+                <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Loading..." disabled oninput="onModalFieldChange()"></textarea>
+                <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled style="margin-top: 8px;">Save</button>
+            </div>
         </div>
     `;
 
@@ -1704,12 +1744,11 @@ function displayTuneDetailModalFull(tune) {
     const additionalInfo = `
         <div class="modal-info-line">TheSession.org Tunebooks: ${tune.tunebook_count || 0}</div>
         ${sessionPlayInfo}
-
-        ${tune.notes ? `
         <div class="modal-notes-section">
             <div class="modal-notes-label">Notes:</div>
-            <p>${tune.notes}</p>
-        </div>` : ''}
+            <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Add notes about this tune..." oninput="onModalFieldChange()">${tune.notes || ''}</textarea>
+            <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled style="margin-top: 8px;">Save</button>
+        </div>
     `;
 
     // Replace the loading dots with the full info
@@ -1717,6 +1756,16 @@ function displayTuneDetailModalFull(tune) {
     if (additionalInfoDiv) {
         additionalInfoDiv.innerHTML = additionalInfo;
     }
+
+    // Enable the notes textarea now that data is loaded
+    const notesTextarea = document.getElementById('modal-notes-textarea');
+    if (notesTextarea) {
+        notesTextarea.disabled = false;
+    }
+
+    // Store original notes for comparison
+    const modal = document.getElementById('tune-detail-modal');
+    modal.dataset.originalNotes = tune.notes || '';
 }
 
 function displayTuneDetailModal(tune) {
@@ -1794,87 +1843,6 @@ function closeTuneDetailModal() {
     console.log('Modal closed');
 }
 
-function onModalStatusChange() {
-    // Enable/disable the Save button based on whether status changed
-    const modal = document.getElementById('tune-detail-modal');
-    const select = document.getElementById('modal-status-select');
-    const saveBtn = document.getElementById('modal-save-btn');
-    const originalStatus = modal.dataset.originalStatus;
-
-    if (select && saveBtn && originalStatus) {
-        saveBtn.disabled = (select.value === originalStatus);
-    }
-}
-
-function saveStatusFromModal() {
-    const modal = document.getElementById('tune-detail-modal');
-    const select = document.getElementById('modal-status-select');
-    const personTuneId = parseInt(modal.dataset.personTuneId);
-    const newStatus = select.value;
-    const originalStatus = modal.dataset.originalStatus;
-
-    // Don't save if nothing changed
-    if (newStatus === originalStatus) {
-        return;
-    }
-
-    // Update the tune in local data immediately (optimistic update)
-    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
-    if (tune) {
-        tune.learn_status = newStatus;
-        if (newStatus === 'learned') {
-            tune.learned_date = new Date().toISOString();
-        }
-        applyFilters(); // Re-render grid immediately
-    }
-
-    // Close the modal immediately
-    closeTuneDetailModal();
-
-    // Save to server in the background
-    fetchWithRetry(`/api/my-tunes/${personTuneId}/status`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ learn_status: newStatus })
-    })
-    .then(response => {
-        if (!response.ok) {
-            const errorInfo = handleApiError(null, response);
-            throw new Error(errorInfo.message);
-        }
-        return response.json();
-    })
-    .then(data => {
-        showMessage('Learning status updated!', 'success');
-
-        // Update with server response (in case learned_date differs)
-        if (tune && data.person_tune) {
-            if (data.person_tune.learned_date) {
-                tune.learned_date = data.person_tune.learned_date;
-            }
-            applyFilters(); // Re-render with accurate data
-        }
-    })
-    .catch(error => {
-        console.error('Error updating status:', error);
-        const errorInfo = handleApiError(error);
-        showMessage(errorInfo.message, 'error');
-
-        // Revert to original status on error
-        if (tune) {
-            tune.learn_status = originalStatus;
-            applyFilters(); // Re-render with reverted data
-        }
-    });
-}
-
-// Keep old function for backward compatibility if needed elsewhere
-function updateStatusFromModal(personTuneId) {
-    saveStatusFromModal();
-}
-
 function incrementHeardCountFromModal(personTuneId) {
     const loading = showLoading('Updating heard count...');
     
@@ -1914,6 +1882,143 @@ function incrementHeardCountFromModal(personTuneId) {
         const errorInfo = handleApiError(error);
         showMessage(errorInfo.message, 'error');
     });
+}
+
+function onModalFieldChange() {
+    // Enable/disable the Save button based on whether status or notes changed
+    const modal = document.getElementById('tune-detail-modal');
+    const statusSelect = document.getElementById('modal-status-select');
+    const textarea = document.getElementById('modal-notes-textarea');
+    const saveBtn = document.getElementById('modal-save-btn');
+
+    const originalStatus = modal.dataset.originalStatus || '';
+    const originalNotes = modal.dataset.originalNotes || '';
+
+    if (statusSelect && textarea && saveBtn) {
+        const statusChanged = (statusSelect.value !== originalStatus);
+        const notesChanged = (textarea.value !== originalNotes);
+        const anyChanges = statusChanged || notesChanged;
+
+        saveBtn.disabled = !anyChanges;
+
+        // Make button blue when enabled
+        if (anyChanges) {
+            saveBtn.style.backgroundColor = 'var(--primary)';
+            saveBtn.style.opacity = '1';
+        } else {
+            saveBtn.style.backgroundColor = '';
+            saveBtn.style.opacity = '';
+        }
+    }
+}
+
+function saveModalChanges() {
+    const modal = document.getElementById('tune-detail-modal');
+    const statusSelect = document.getElementById('modal-status-select');
+    const textarea = document.getElementById('modal-notes-textarea');
+    const personTuneId = parseInt(modal.dataset.personTuneId);
+
+    const newStatus = statusSelect ? statusSelect.value : '';
+    const newNotes = textarea ? textarea.value : '';
+    const originalStatus = modal.dataset.originalStatus || '';
+    const originalNotes = modal.dataset.originalNotes || '';
+
+    const statusChanged = (newStatus !== originalStatus);
+    const notesChanged = (newNotes !== originalNotes);
+
+    // Don't save if nothing changed
+    if (!statusChanged && !notesChanged) {
+        return;
+    }
+
+    // Disable save button while saving
+    const saveBtn = document.getElementById('modal-save-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+    }
+
+    // Prepare promises for API calls
+    const promises = [];
+
+    // Save status if changed
+    if (statusChanged) {
+        promises.push(
+            fetchWithRetry(`/api/my-tunes/${personTuneId}/status`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ learn_status: newStatus })
+            })
+        );
+    }
+
+    // Save notes if changed
+    if (notesChanged) {
+        promises.push(
+            fetchWithRetry(`/api/my-tunes/${personTuneId}/notes`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ notes: newNotes })
+            })
+        );
+    }
+
+    // Execute all promises
+    Promise.all(promises)
+        .then(responses => {
+            // Check all responses are OK
+            const allOk = responses.every(r => r.ok);
+            if (!allOk) {
+                throw new Error('Failed to save changes');
+            }
+            return Promise.all(responses.map(r => r.json()));
+        })
+        .then(results => {
+            showMessage('Changes saved successfully!', 'success');
+
+            // Update original values in modal
+            modal.dataset.originalStatus = newStatus;
+            modal.dataset.originalNotes = newNotes;
+
+            // Update the tune in our local data
+            const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+            if (tune) {
+                tune.learn_status = newStatus;
+                tune.notes = newNotes;
+                if (newStatus === 'learned') {
+                    tune.learned_date = new Date().toISOString();
+                }
+            }
+
+            // Re-render the grid to show status change
+            applyFilters();
+
+            // Reset button
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Save';
+                saveBtn.style.backgroundColor = '';
+                saveBtn.style.opacity = '';
+            }
+
+            // Close modal after successful save
+            closeTuneDetailModal();
+        })
+        .catch(error => {
+            console.error('Error saving changes:', error);
+            const errorInfo = handleApiError(error);
+            showMessage(errorInfo.message, 'error');
+
+            // Re-enable button
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
+            }
+        });
 }
 
 function showMessage(message, type) {
