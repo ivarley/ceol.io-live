@@ -200,11 +200,6 @@
         
         buttons.forEach(button => {
             button.addEventListener('touchstart', () => {
-                // Haptic feedback (if supported)
-                if (navigator.vibrate) {
-                    navigator.vibrate(10);
-                }
-                
                 // Visual feedback
                 button.style.opacity = '0.7';
             }, { passive: true });
