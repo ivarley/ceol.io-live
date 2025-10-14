@@ -65,10 +65,51 @@
         margin-top: 5px;
     }
 
+    .saved-user-id-display {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        background-color: var(--light);
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+    }
+
+    .saved-user-id-display label {
+        margin: 0;
+        font-weight: 500;
+    }
+
+    .saved-user-id-value {
+        font-weight: 600;
+        color: var(--primary);
+    }
+
+    .clear-user-id-btn {
+        margin-left: auto;
+        padding: 4px 12px;
+        background-color: transparent;
+        color: var(--text-muted, #6c757d);
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: color 0.2s, background-color 0.2s;
+    }
+
+    .clear-user-id-btn:hover {
+        color: var(--text-color);
+        background-color: var(--hover-bg, rgba(0,0,0,0.05));
+    }
+
+    .hidden {
+        display: none;
+    }
+
     .btn {
         padding: 12px 24px;
         background-color: var(--primary);
-        color: white;
+        color: white !important;
         text-decoration: none;
         border-radius: 4px;
         border: none;
@@ -80,8 +121,17 @@
 
     .btn:hover {
         background-color: var(--primary-dark, #0056b3);
-        color: white;
+        color: white !important;
         text-decoration: none;
+    }
+
+    .btn:visited {
+        color: white !important;
+    }
+
+    .btn:active,
+    .btn:focus {
+        color: white !important;
     }
 
     .btn:disabled {
@@ -121,18 +171,36 @@
         overflow: hidden;
         margin-bottom: 15px;
         border: 1px solid var(--border-color);
+        position: relative;
     }
 
     .progress-bar {
         height: 100%;
-        background-color: var(--primary);
-        transition: width 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 13px;
-        font-weight: 500;
+        width: 100%;
+        background: var(--primary);
+        background-image: repeating-linear-gradient(
+            45deg,
+            var(--primary),
+            var(--primary) 10px,
+            rgba(255, 255, 255, 0.3) 10px,
+            rgba(255, 255, 255, 0.3) 20px
+        );
+        background-size: 28px 28px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-bar.animated {
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+
+    @keyframes progress-bar-stripes {
+        0% {
+            background-position: 0 0;
+        }
+        100% {
+            background-position: 28px 0;
+        }
     }
 
     .progress-status {
@@ -310,13 +378,23 @@
         </div>
 
         <form id="sync-form">
-            <div class="form-group">
-                <label for="thesession-user-id">TheSession.org User ID</label>
-                <input 
-                    type="number" 
-                    id="thesession-user-id" 
+            <!-- Saved User ID Display (shown when user has saved ID) -->
+            <div id="saved-user-id-group" class="form-group{% if not thesession_user_id %} hidden{% endif %}">
+                <div class="saved-user-id-display">
+                    <label>TheSession.org ID:</label>
+                    <span class="saved-user-id-value">{{ thesession_user_id or '' }}</span>
+                    <button type="button" class="clear-user-id-btn" onclick="clearSavedUserId()">✕</button>
+                </div>
+            </div>
+
+            <!-- User ID Input (shown when user does not have saved ID) -->
+            <div id="user-id-input-group" class="form-group{% if thesession_user_id %} hidden{% endif %}">
+                <label for="thesession-user-id">TheSession.org ID</label>
+                <input
+                    type="number"
+                    id="thesession-user-id"
                     name="thesession_user_id"
-                    class="form-input" 
+                    class="form-input"
                     placeholder="Enter your thesession.org user ID"
                     value="{{ thesession_user_id or '' }}"
                     min="1"
@@ -325,6 +403,14 @@
                 <div class="help-text">
                     Find your user ID in your thesession.org profile URL: https://thesession.org/members/<strong>YOUR_ID</strong>
                 </div>
+            </div>
+
+            <!-- Save to Profile Checkbox (only shown when entering new ID) -->
+            <div id="save-checkbox-group" class="form-group{% if thesession_user_id %} hidden{% endif %}">
+                <label>
+                    <input type="checkbox" id="save-user-id" name="save_user_id" checked>
+                    Save to my profile
+                </label>
             </div>
 
             <div class="form-group">
@@ -339,16 +425,6 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="save-user-id" name="save_user_id" checked>
-                    Save this user ID to my profile
-                </label>
-                <div class="help-text">
-                    This will update your profile so you don't need to enter it again
-                </div>
-            </div>
-
             <div class="button-group">
                 <button type="submit" id="sync-btn" class="btn">Start Sync</button>
                 <a href="/my-tunes" class="btn btn-secondary">Cancel</a>
@@ -359,9 +435,9 @@
         <div id="progress-section" class="progress-section">
             <h3>Syncing...</h3>
             <div class="progress-bar-container">
-                <div id="progress-bar" class="progress-bar" style="width: 0%;">0%</div>
+                <div id="progress-bar" class="progress-bar"></div>
             </div>
-            <div id="progress-status" class="progress-status">Initializing...</div>
+            <div id="progress-status" class="progress-status">Syncing your tunes from TheSession.org...</div>
         </div>
 
         <!-- Results Section -->
@@ -451,6 +527,19 @@ function showLoading(message = 'Loading...') {
     };
 }
 
+function clearSavedUserId() {
+    // Show the input fields, hide the saved ID display
+    document.getElementById('saved-user-id-group').classList.add('hidden');
+    document.getElementById('user-id-input-group').classList.remove('hidden');
+    document.getElementById('save-checkbox-group').classList.remove('hidden');
+
+    // Clear the input field
+    document.getElementById('thesession-user-id').value = '';
+
+    // Update the saved user ID value
+    document.querySelector('.saved-user-id-value').textContent = '';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('sync-form');
     const syncBtn = document.getElementById('sync-btn');
@@ -473,9 +562,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     async function startSync() {
-        const thesessionUserId = document.getElementById('thesession-user-id').value;
+        // Get user ID from either saved display or input field
+        let thesessionUserId;
+        const savedUserIdDisplay = document.getElementById('saved-user-id-group');
+        if (!savedUserIdDisplay.classList.contains('hidden')) {
+            // Use the saved user ID
+            thesessionUserId = document.querySelector('.saved-user-id-value').textContent.trim();
+        } else {
+            // Use the input field
+            thesessionUserId = document.getElementById('thesession-user-id').value;
+        }
+
         const learnStatus = document.getElementById('learn-status').value;
-        const saveUserId = document.getElementById('save-user-id').checked;
+        const saveUserIdCheckbox = document.getElementById('save-user-id');
+        const saveUserId = saveUserIdCheckbox ? saveUserIdCheckbox.checked : false;
 
         if (!thesessionUserId || thesessionUserId < 1) {
             showMessage('Please enter a valid thesession.org user ID', 'error');
@@ -494,8 +594,8 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsSection.classList.remove('active');
         syncBtn.disabled = true;
 
-        // Reset progress
-        updateProgress(0, 'Starting sync...');
+        // Start animation
+        progressBar.classList.add('animated');
 
         try {
             // First, save the user ID if requested
@@ -531,7 +631,10 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Sync error:', error);
             const errorInfo = handleApiError(error);
             showMessage(errorInfo.message, 'error', 7000);
-            
+
+            // Remove animation
+            progressBar.classList.remove('animated');
+
             // Show inline error with retry option
             const errorDiv = document.createElement('div');
             errorDiv.className = 'inline-error';
@@ -543,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
             progressSection.appendChild(errorDiv);
-            
+
             // Reset UI
             setTimeout(() => {
                 progressSection.classList.remove('active');
@@ -574,14 +677,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updateProgress(percent, status) {
-        progressBar.style.width = percent + '%';
-        progressBar.textContent = Math.round(percent) + '%';
-        progressStatus.textContent = status;
-    }
-
     function displayResults(data) {
         const results = data.results || {};
+
+        // Remove animation from progress bar
+        progressBar.classList.remove('animated');
 
         // Hide progress, show results
         progressSection.classList.remove('active');
