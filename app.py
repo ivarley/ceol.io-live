@@ -2,6 +2,7 @@ from flask import Flask, render_template
 from flask_login import LoginManager
 import os
 import random
+import logging
 from dotenv import load_dotenv
 
 # Import our custom modules
@@ -24,6 +25,15 @@ from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Log to stdout (captured by Render/Gunicorn)
+    ]
+)
 
 app = Flask(__name__)
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)

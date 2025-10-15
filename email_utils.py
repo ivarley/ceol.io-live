@@ -1,7 +1,11 @@
 import os
+import logging
 from flask import url_for
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+
+# Configure logger for email operations
+logger = logging.getLogger(__name__)
 
 
 def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
@@ -9,10 +13,14 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
     try:
         api_key = os.environ.get("SENDGRID_API_KEY")
         if not api_key:
-            print("SendGrid API key not configured")
+            logger.error("SendGrid API key not configured")
             return False
 
         from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
+
+        logger.info(
+            f"Sending email via SendGrid - To: {to_email}, From: {from_email}, Subject: {subject}"
+        )
 
         sg = SendGridAPIClient(api_key=api_key)
         message = Mail(
@@ -27,23 +35,33 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
 
         # Check response status
         if response.status_code in [200, 201, 202]:
-            print(f"Email sent successfully to {to_email}")
+            logger.info(
+                f"Email sent successfully - To: {to_email}, Subject: {subject}, Status: {response.status_code}"
+            )
             return True
         else:
-            print(f"SendGrid returned status {response.status_code}: {response.body}")
+            logger.error(
+                f"SendGrid error - To: {to_email}, Subject: {subject}, Status: {response.status_code}, Response: {response.body}"
+            )
             return False
 
     except Exception as e:
-        print(f"SendGrid email error: {str(e)}")
+        logger.error(
+            f"SendGrid email error - To: {to_email}, Subject: {subject}, Error: {str(e)}"
+        )
         # Log more specific error types
         if "unauthorized" in str(e).lower():
-            print("Check your SENDGRID_API_KEY")
+            logger.error("SendGrid authentication failed - check SENDGRID_API_KEY")
         elif "forbidden" in str(e).lower():
-            print("Check that sender email is verified in SendGrid")
+            logger.error(
+                "SendGrid access forbidden - check that sender email is verified in SendGrid"
+            )
         return False
 
 
 def send_password_reset_email(user, token):
+    logger.info(f"Initiating password reset email - User: {user.username}, Email: {user.email}")
+
     reset_url = url_for("reset_password", token=token, _external=True)
 
     subject = "Password Reset Request - Irish Music Sessions"
@@ -63,10 +81,19 @@ This link will expire in 1 hour.
     <p><strong>This link will expire in 1 hour.</strong></p>
     """
 
-    return send_email_via_sendgrid(user.email, subject, body_text, body_html)
+    result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
+
+    if result:
+        logger.info(f"Password reset email sent successfully - User: {user.username}")
+    else:
+        logger.error(f"Password reset email failed - User: {user.username}, Email: {user.email}")
+
+    return result
 
 
 def send_verification_email(user, token):
+    logger.info(f"Initiating verification email - User: {user.username}, Email: {user.email}")
+
     verification_url = url_for("verify_email", token=token, _external=True)
 
     subject = "Verify Your Email Address - Irish Music Sessions"
@@ -90,4 +117,11 @@ This link will expire in 24 hours.
     <p><strong>This link will expire in 24 hours.</strong></p>
     """
 
-    return send_email_via_sendgrid(user.email, subject, body_text, body_html)
+    result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
+
+    if result:
+        logger.info(f"Verification email sent successfully - User: {user.username}")
+    else:
+        logger.error(f"Verification email failed - User: {user.username}, Email: {user.email}")
+
+    return result
