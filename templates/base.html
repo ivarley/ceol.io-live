@@ -215,6 +215,9 @@
                     <div class="hamburger-dropdown" id="hamburgerDropdown">
                         {% if current_user.is_authenticated %}
                             <a href="/me" class="hamburger-item">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</a>
+                            {% if session.get('is_system_admin') %}
+                            <a href="/admin" class="hamburger-item">Admin</a>
+                            {% endif %}
                             <a href="/my-tunes" class="hamburger-item">My Tunes</a>
                             <a href="/sessions" class="hamburger-item">My Sessions</a>
                             <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">

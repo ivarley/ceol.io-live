@@ -60,6 +60,12 @@
     --warning-bg: #fff3cd;
     --warning-border: #ffeaa7;
     --warning-text: #856404;
+    --link-color: #00a1e0;
+    --link-hover-color: #005b7f;
+    --input-bg: #fff;
+    --primary-color: #00a1e0;
+    --secondary-text: #adb4c0;
+    --table-header-bg: #f5f6f8;
   }
 
   [data-theme="dark"] {
@@ -89,6 +95,12 @@
     --warning-bg: #5a4a2d;
     --warning-border: #6e5a3d;
     --warning-text: #ffd700;
+    --link-color: #4da6ff;
+    --link-hover-color: #80c0ff;
+    --input-bg: #2d2d2d;
+    --primary-color: #4da6ff;
+    --secondary-text: #888;
+    --table-header-bg: #3d3d3d;
   }
   *,
   *::before,
