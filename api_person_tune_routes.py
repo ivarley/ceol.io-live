@@ -96,24 +96,30 @@ def _get_tune_details(tune_id: int) -> Optional[Dict[str, Any]]:
 def _build_person_tune_response(person_tune, include_tune_details: bool = True) -> Dict[str, Any]:
     """
     Helper function to build a response dictionary for a PersonTune.
-    
+
     Args:
         person_tune: PersonTune instance
         include_tune_details: Whether to include full tune details
-        
+
     Returns:
         Dictionary with person_tune data and optional tune details
     """
     response = person_tune.to_dict()
-    
+
     if include_tune_details:
         tune_details = _get_tune_details(person_tune.tune_id)
         if tune_details:
-            response['tune_name'] = tune_details['name']
+            # Use name_alias if it exists, otherwise use the official tune name
+            response['tune_name'] = person_tune.name_alias if person_tune.name_alias else tune_details['name']
             response['tune_type'] = tune_details['type']
             response['tunebook_count'] = tune_details['tunebook_count']
-            response['thesession_url'] = f"https://thesession.org/tunes/{person_tune.tune_id}"
-    
+            # Build thesession.org URL with setting_id if available
+            base_url = f"https://thesession.org/tunes/{person_tune.tune_id}"
+            if person_tune.setting_id:
+                response['thesession_url'] = f"{base_url}?setting={person_tune.setting_id}#setting{person_tune.setting_id}"
+            else:
+                response['thesession_url'] = base_url
+
     return response
 
 
@@ -421,22 +427,25 @@ def add_my_tune():
 
 @person_tune_login_required
 @require_person_tune_ownership
-def update_tune_status(person_tune_id):
+def update_person_tune(person_tune_id):
     """
-    PUT /api/my-tunes/<person_tune_id>/status
-    
-    Update the learning status of a tune in the user's collection.
-    
+    PUT /api/my-tunes/<person_tune_id>
+
+    Update any fields of a tune in the user's collection.
+    All fields are optional - only provided fields will be updated.
+
     Route Parameters:
         - person_tune_id (int): ID of the person_tune record
-        
-    Request Body:
-        - learn_status (str, required): New learning status
-        
+
+    Request Body (all optional):
+        - learn_status (str): Learning status ('want to learn', 'learning', 'learned')
+        - notes (str): Notes about the tune (empty string clears notes)
+        - setting_id (int): thesession.org setting ID (null/empty string clears)
+        - name_alias (str): Custom name/alias for the tune (null/empty string clears)
+        - heard_before_learning_count (int): Heard count (must be >= 0)
+
     Returns:
         JSON response with updated person_tune data
-        
-    Requirements: 1.2, 1.5
     """
     try:
         data = request.get_json()
@@ -445,89 +454,64 @@ def update_tune_status(person_tune_id):
                 "success": False,
                 "error": "No data provided"
             }), 400
-        
-        new_status = data.get('learn_status')
-        if not new_status:
-            return jsonify({
-                "success": False,
-                "error": "learn_status is required"
-            }), 400
-        
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
-        
-        # Update the status
-        success, message, person_tune = person_tune_service.update_learn_status(
-            person_tune_id=person_tune_id,
-            new_status=new_status,
-            changed_by=changed_by
-        )
-        
-        if not success:
-            if "not found" in message:
+
+        # Extract fields from request
+        learn_status = data.get('learn_status') if 'learn_status' in data else None
+        notes = data.get('notes') if 'notes' in data else None
+        setting_id = data.get('setting_id') if 'setting_id' in data else None
+        name_alias = data.get('name_alias') if 'name_alias' in data else None
+        heard_before_learning_count = data.get('heard_before_learning_count') if 'heard_before_learning_count' in data else None
+
+        # Validate setting_id if provided
+        if setting_id is not None and setting_id != '':
+            try:
+                setting_id = int(setting_id)
+                if setting_id <= 0:
+                    return jsonify({
+                        "success": False,
+                        "error": "setting_id must be a positive integer"
+                    }), 400
+            except (ValueError, TypeError):
                 return jsonify({
                     "success": False,
-                    "error": message
-                }), 404
-            else:
-                return jsonify({
-                    "success": False,
-                    "error": message
+                    "error": "setting_id must be a valid integer"
                 }), 400
-        
-        # Build response with tune details
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
-        
-        return jsonify({
-            "success": True,
-            "message": message,
-            "person_tune": response_data
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Error updating status: {str(e)}"
-        }), 500
+        elif setting_id == '':
+            setting_id = None
 
+        # Validate heard_before_learning_count if provided
+        if heard_before_learning_count is not None:
+            try:
+                heard_before_learning_count = int(heard_before_learning_count)
+                if heard_before_learning_count < 0:
+                    return jsonify({
+                        "success": False,
+                        "error": "heard_before_learning_count cannot be negative"
+                    }), 400
+            except (ValueError, TypeError):
+                return jsonify({
+                    "success": False,
+                    "error": "heard_before_learning_count must be a valid integer"
+                }), 400
 
-@person_tune_login_required
-@require_person_tune_ownership
-def update_tune_notes(person_tune_id):
-    """
-    PUT /api/my-tunes/<person_tune_id>/notes
+        # Handle empty string for name_alias (means clear it)
+        if name_alias == '':
+            name_alias = None
 
-    Update the notes for a tune in the user's collection.
-
-    Route Parameters:
-        - person_tune_id (int): ID of the person_tune record
-
-    Request Body:
-        - notes (str, required): New notes text (can be empty string)
-
-    Returns:
-        JSON response with updated person_tune data
-    """
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                "success": False,
-                "error": "No data provided"
-            }), 400
-
-        notes = data.get('notes')
-        if notes is None:
-            return jsonify({
-                "success": False,
-                "error": "notes field is required"
-            }), 400
+        # Convert empty string to None for notes if needed
+        if notes == '':
+            notes = None
 
         changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
 
-        # Update the notes
+        # Update the person_tune
         success, message, person_tune = person_tune_service.update_person_tune(
             person_tune_id=person_tune_id,
+            learn_status=learn_status,
             notes=notes,
+            setting_id=setting_id,
+            name_alias=name_alias,
+            heard_before_learning_count=heard_before_learning_count,
             changed_by=changed_by
         )
 
@@ -555,7 +539,7 @@ def update_tune_notes(person_tune_id):
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": f"Error updating notes: {str(e)}"
+            "error": f"Error updating tune: {str(e)}"
         }), 500
 
 

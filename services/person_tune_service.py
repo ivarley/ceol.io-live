@@ -199,17 +199,23 @@ class PersonTuneService:
         person_tune_id: int,
         learn_status: Optional[str] = None,
         notes: Optional[str] = None,
+        setting_id: Optional[int] = None,
+        name_alias: Optional[str] = None,
+        heard_before_learning_count: Optional[int] = None,
         changed_by: str = 'system'
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Update multiple fields of a PersonTune.
-        
+
         Args:
             person_tune_id: ID of the PersonTune to update
             learn_status: Optional new learning status
             notes: Optional new notes
+            setting_id: Optional thesession.org setting ID
+            name_alias: Optional custom name/alias for the tune
+            heard_before_learning_count: Optional heard count (must be >= 0)
             changed_by: User who made the change
-            
+
         Returns:
             Tuple of (success, message, updated_person_tune)
         """
@@ -217,29 +223,47 @@ class PersonTuneService:
             person_tune = PersonTune.get_by_id(person_tune_id)
             if not person_tune:
                 return False, f"PersonTune with ID {person_tune_id} not found", None
-            
+
             changes_made = []
-            
+
             # Update learn_status if provided
             if learn_status is not None and learn_status != person_tune.learn_status:
                 status_changed = person_tune.set_learn_status(learn_status, changed_by=changed_by)
                 if status_changed:
                     changes_made.append(f"status to '{learn_status}'")
-            
+
             # Update notes if provided
             if notes is not None and notes != person_tune.notes:
                 person_tune.notes = notes
                 changes_made.append("notes")
-            
+
+            # Update setting_id if provided (can be None to clear it)
+            if setting_id != person_tune.setting_id:
+                person_tune.setting_id = setting_id
+                changes_made.append("setting_id")
+
+            # Update name_alias if provided (can be None to clear it)
+            if name_alias != person_tune.name_alias:
+                person_tune.name_alias = name_alias
+                changes_made.append("name_alias")
+
+            # Update heard_before_learning_count if provided (must be >= 0)
+            if heard_before_learning_count is not None:
+                if heard_before_learning_count < 0:
+                    return False, "heard_before_learning_count cannot be negative", None
+                if heard_before_learning_count != person_tune.heard_before_learning_count:
+                    person_tune.heard_before_learning_count = heard_before_learning_count
+                    changes_made.append("heard_before_learning_count")
+
             # Save changes if any were made
             if changes_made:
                 person_tune.save(changed_by=changed_by)
                 message = f"Updated {', '.join(changes_made)} successfully"
             else:
                 message = "No changes were made"
-            
+
             return True, message, person_tune
-            
+
         except ValueError as e:
             return False, f"Validation error: {str(e)}", None
         except Exception as e:
@@ -461,13 +485,14 @@ class PersonTuneService:
         try:
             cur = conn.cursor()
 
-            # Base query
+            # Base query - use name_alias if it exists, otherwise fall back to tune name
             query = """
                 SELECT
                     pt.person_tune_id, pt.person_id, pt.tune_id, pt.learn_status,
                     pt.heard_before_learning_count, pt.learned_date, pt.notes,
+                    pt.setting_id, pt.name_alias,
                     pt.created_date, pt.last_modified_date,
-                    t.name AS tune_name, t.tune_type, t.tunebook_count_cached
+                    COALESCE(pt.name_alias, t.name) AS tune_name, t.tune_type, t.tunebook_count_cached
                 FROM person_tune pt
                 LEFT JOIN tune t ON pt.tune_id = t.tune_id
                 WHERE pt.person_id = %s
@@ -484,7 +509,8 @@ class PersonTuneService:
                 params.append(tune_type_filter)
 
             if search_query:
-                query += " AND LOWER(t.name) LIKE LOWER(%s)"
+                # Search in both name_alias and tune name
+                query += " AND (LOWER(COALESCE(pt.name_alias, t.name)) LIKE LOWER(%s))"
                 params.append(f"%{search_query}%")
 
             # Get total count
@@ -493,13 +519,14 @@ class PersonTuneService:
             total_count = cur.fetchone()[0]
 
             # Determine sort order based on sort_by parameter
+            # Use COALESCE to sort by name_alias if it exists, otherwise by tune name
             sort_map = {
-                'alpha-asc': 'LOWER(t.name) ASC',
-                'alpha-desc': 'LOWER(t.name) DESC',
-                'popularity-desc': 't.tunebook_count_cached DESC NULLS LAST, LOWER(t.name) ASC',
-                'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(t.name) ASC'
+                'alpha-asc': 'LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                'alpha-desc': 'LOWER(COALESCE(pt.name_alias, t.name)) DESC',
+                'popularity-desc': 't.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC'
             }
-            order_by = sort_map.get(sort_by, 'LOWER(t.name) ASC')  # Default to alpha-asc
+            order_by = sort_map.get(sort_by, 'LOWER(COALESCE(pt.name_alias, t.name)) ASC')  # Default to alpha-asc
 
             # Add ordering and pagination
             query += f" ORDER BY {order_by} LIMIT %s OFFSET %s"
@@ -521,11 +548,13 @@ class PersonTuneService:
                     'heard_before_learning_count': row[4],
                     'learned_date': row[5].isoformat() if row[5] else None,
                     'notes': row[6],
-                    'created_date': row[7].isoformat() if row[7] else None,
-                    'last_modified_date': row[8].isoformat() if row[8] else None,
-                    'tune_name': row[9],
-                    'tune_type': row[10],
-                    'tunebook_count': row[11],
+                    'setting_id': row[7],
+                    'name_alias': row[8],
+                    'created_date': row[9].isoformat() if row[9] else None,
+                    'last_modified_date': row[10].isoformat() if row[10] else None,
+                    'tune_name': row[11],
+                    'tune_type': row[12],
+                    'tunebook_count': row[13],
                     'thesession_url': f"https://thesession.org/tunes/{row[2]}" if row[2] else None
                 }
                 tunes.append(tune_data)

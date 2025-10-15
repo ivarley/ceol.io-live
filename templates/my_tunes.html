@@ -208,7 +208,7 @@
             border-left: none;
             border-right: none;
             border-top: none;
-            padding: 6px 2px; /* Keep small padding for content */
+            padding: 8px 2px; /* Increased from 6px to 8px for 4px total height increase (2px top + 2px bottom) */
             margin: 0; /* No margin - border goes to edge */
             display: grid;
             grid-template-columns: 20px 1fr auto;
@@ -792,6 +792,7 @@
         display: block;
         margin-left: auto;
         margin-right: auto;
+        margin-bottom: 20px;
     }
 
     .modal-save-btn:hover:not(:disabled) {
@@ -885,6 +886,175 @@
 
     [data-theme="dark"] .modal-notes-textarea:disabled {
         background-color: #2a2a2a;
+    }
+
+    /* Setting ID and Name Alias field styles */
+    .modal-field-section {
+        margin-bottom: 12px;
+    }
+
+    .modal-field-label {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .modal-field-input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        box-sizing: border-box;
+    }
+
+    .modal-field-input:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .modal-field-input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: var(--light, #f8f9fa);
+    }
+
+    [data-theme="dark"] .modal-field-input:disabled {
+        background-color: #2a2a2a;
+    }
+
+    .modal-tune-title-editable {
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .modal-tune-title-editable:hover {
+        opacity: 0.7;
+    }
+
+    .name-alias-hint {
+        font-size: 11px;
+        color: var(--text-muted, #999);
+        font-style: italic;
+        margin-top: 2px;
+    }
+
+    .modal-field-error {
+        font-size: 12px;
+        color: #dc3545;
+        margin-top: 4px;
+        font-weight: 500;
+    }
+
+    /* Heard count controls */
+    .heard-count-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        padding: 12px;
+        background-color: var(--light, #f8f9fa);
+        border-radius: 4px;
+    }
+
+    [data-theme="dark"] .heard-count-row {
+        background-color: #2a2a2a;
+    }
+
+    .heard-count-label {
+        font-size: 14px;
+        color: var(--text-color);
+        flex: 1;
+        transition: opacity 0.2s;
+    }
+
+    /* Dim the label when increment button is disabled (data not loaded) */
+    .heard-count-btn-increment:disabled ~ .heard-count-label,
+    .heard-count-controls:has(.heard-count-btn-increment:disabled) ~ .heard-count-label {
+        opacity: 0.4;
+    }
+
+    /* Alternative approach using parent container */
+    .heard-count-row:has(.heard-count-btn-increment:disabled) .heard-count-label {
+        opacity: 0.4;
+    }
+
+    .heard-count-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .heard-count-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        border: none;
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.2s;
+    }
+
+    .heard-count-btn:hover:not(:disabled) {
+        opacity: 0.8;
+    }
+
+    .heard-count-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .heard-count-btn-decrement {
+        background-color: #dc3545;
+    }
+
+    .heard-count-btn-increment {
+        background-color: #28a745;
+    }
+
+    .heard-count-value {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-color);
+        min-width: 30px;
+        text-align: center;
+    }
+
+    /* Swipe gesture styles for mobile heard count */
+    @media (max-width: 768px) {
+        .tune-card-swipe-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tune-card-swipe-action {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background-color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            transform: translateX(100%);
+            transition: transform 0.2s ease-out;
+        }
+
+        .tune-card-swipe-container.swiping .tune-card-swipe-action {
+            transform: translateX(0);
+        }
     }
 
     /* Mobile adjustments for modal - full page slide-in */
@@ -1101,6 +1271,116 @@ function showLoading(message = 'Loading...') {
     };
 }
 
+// Build a thesession.org URL with optional setting parameter
+// Format: https://thesession.org/tunes/{tune_id}?setting={setting_id}#setting{setting_id}
+function buildTheSessionUrl(tuneId, settingId) {
+    if (!tuneId) return '';
+
+    const baseUrl = `https://thesession.org/tunes/${tuneId}`;
+
+    if (settingId) {
+        return `${baseUrl}?setting=${settingId}#setting${settingId}`;
+    }
+
+    return baseUrl;
+}
+
+// Extract setting ID from thesession.org URL or plain number
+// Handles formats:
+// - Plain number: 123
+// - Query param: ?setting=123 or &setting=123
+// - Hash anchor: #setting123
+// - Combined: ?setting=123#setting123
+function extractSettingId(input) {
+    if (!input || input.trim() === '') {
+        return null;
+    }
+
+    const trimmed = input.trim();
+
+    // If it's already just a number, return it
+    if (/^\d+$/.test(trimmed)) {
+        return parseInt(trimmed);
+    }
+
+    // Try to extract from URL query param format first: ?setting=123 or &setting=123
+    // This is the authoritative source if present
+    const queryMatch = trimmed.match(/[?&]setting=(\d+)/);
+    if (queryMatch) {
+        return parseInt(queryMatch[1]);
+    }
+
+    // Fall back to hash format: #setting123
+    const hashMatch = trimmed.match(/#setting(\d+)/);
+    if (hashMatch) {
+        return parseInt(hashMatch[1]);
+    }
+
+    // Couldn't parse - return null
+    return null;
+}
+
+// Validate that input is either empty, a number, or a valid thesession.org URL
+function validateSettingId(input) {
+    if (!input || input.trim() === '') {
+        return { valid: true, settingId: null };
+    }
+
+    const trimmed = input.trim();
+
+    // Check if it's just a number
+    if (/^\d+$/.test(trimmed)) {
+        return { valid: true, settingId: parseInt(trimmed) };
+    }
+
+    // Check if it's a valid thesession.org URL
+    if (trimmed.includes('thesession.org')) {
+        const settingId = extractSettingId(trimmed);
+        if (settingId !== null) {
+            return { valid: true, settingId: settingId };
+        }
+    }
+
+    // Invalid input
+    return { valid: false, settingId: null, error: 'Please enter a number or paste a valid TheSession.org URL' };
+}
+
+// Handle setting ID input with instant parsing and validation
+function onSettingIdInput() {
+    const input = document.getElementById('modal-setting-id-input');
+    const errorDiv = document.getElementById('modal-setting-id-error');
+
+    if (!input || !errorDiv) return;
+
+    const value = input.value;
+    const validation = validateSettingId(value);
+
+    if (!validation.valid) {
+        // Show error
+        errorDiv.textContent = validation.error;
+        errorDiv.style.display = 'block';
+        input.style.borderColor = '#dc3545';
+
+        // Disable save button
+        const saveBtn = document.getElementById('modal-save-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
+    } else {
+        // Clear error
+        errorDiv.style.display = 'none';
+        input.style.borderColor = '';
+
+        // If we extracted a setting ID from a URL, replace the input with just the number
+        if (validation.settingId !== null && value !== validation.settingId.toString()) {
+            input.value = validation.settingId.toString();
+        }
+
+        // Trigger field change detection
+        onModalFieldChange();
+    }
+}
+
 let allTunes = [];
 let filteredTunes = [];
 let currentFilters = {
@@ -1271,6 +1551,69 @@ function setupEventListeners() {
 
     // Setup swipe-to-close for mobile
     setupSwipeToClose();
+
+    // Setup swipe-right for heard count on tune cards
+    setupTuneCardSwipe();
+}
+
+function setupTuneCardSwipe() {
+    // This will be called after each render to attach swipe handlers to tune cards
+    // We'll set up a delegated event listener on the grid
+    const grid = document.getElementById('tunes-grid');
+    if (!grid) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swipedCard = null;
+
+    grid.addEventListener('touchstart', function(e) {
+        // Check if touch is on a tune card with "want to learn" status
+        const card = e.target.closest('.tune-card[data-can-swipe="true"]');
+        if (!card) return;
+
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        swipedCard = card;
+    }, { passive: true });
+
+    grid.addEventListener('touchmove', function(e) {
+        if (!swipedCard) return;
+
+        const touchCurrentX = e.touches[0].clientX;
+        const touchCurrentY = e.touches[0].clientY;
+        const deltaX = touchCurrentX - touchStartX;
+        const deltaY = touchCurrentY - touchStartY;
+
+        // Check if it's a right swipe (and mostly horizontal)
+        if (deltaX > 20 && Math.abs(deltaX) > Math.abs(deltaY) * 2) {
+            swipedCard.classList.add('swiping');
+        } else {
+            swipedCard.classList.remove('swiping');
+        }
+    }, { passive: true });
+
+    grid.addEventListener('touchend', function(e) {
+        if (!swipedCard) return;
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+
+        // If swiped far enough to the right, trigger the heard count increment
+        if (deltaX > 80) {
+            const personTuneId = parseInt(swipedCard.dataset.personTuneId);
+            if (personTuneId) {
+                incrementHeardCount(personTuneId);
+            }
+        }
+
+        // Reset
+        if (swipedCard) {
+            swipedCard.classList.remove('swiping');
+        }
+        swipedCard = null;
+        touchStartX = 0;
+        touchStartY = 0;
+    }, { passive: true });
 }
 
 function setupSwipeToClose() {
@@ -1675,8 +2018,9 @@ function createTuneCard(tune) {
            </div>`
         : '';
 
-    const thesessionLink = tune.tune_id
-        ? `<a href="https://thesession.org/tunes/${tune.tune_id}" target="_blank" class="tune-action-btn" onclick="event.stopPropagation();">View on TheSession.org</a>`
+    const thesessionUrl = buildTheSessionUrl(tune.tune_id, tune.setting_id);
+    const thesessionLink = thesessionUrl
+        ? `<a href="${thesessionUrl}" target="_blank" class="tune-action-btn" onclick="event.stopPropagation();">View on TheSession.org</a>`
         : '';
 
     // Determine what to show in the tune type badge based on sort mode
@@ -1686,8 +2030,12 @@ function createTuneCard(tune) {
         ? (tune.tunebook_count || 0).toString()
         : tune.tune_type || '';
 
+    // Add data attribute for swipe functionality on mobile (only for "want to learn" status)
+    const canSwipe = tune.learn_status === 'want to learn';
+    const swipeAttr = canSwipe ? `data-can-swipe="true" data-person-tune-id="${tune.person_tune_id}"` : '';
+
     return `
-        <div class="tune-card" onclick="showTuneDetail(${tune.person_tune_id}, event)">
+        <div class="tune-card" ${swipeAttr} onclick="showTuneDetail(${tune.person_tune_id}, event)">
             <div class="tune-card-header">
                 <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
                 ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
@@ -1853,34 +2201,55 @@ function displayTuneDetailModalBasic(tune) {
         : '';
 
     // Build thesession.org link icon - we can show this immediately if we have tune_id
-    const thesessionLinkIcon = tune.tune_id
-        ? `<a href="https://thesession.org/tunes/${tune.tune_id}" target="_blank" class="thesession-link-icon" title="View on TheSession.org">🔗</a>`
+    // Use setting_id if available to link to specific setting
+    const thesessionUrl = buildTheSessionUrl(tune.tune_id, tune.setting_id);
+    const thesessionLinkIcon = thesessionUrl
+        ? `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`
         : '';
 
     // Show basic info with inline loading dots for numbers and disabled notes field
     modalContent.innerHTML = `
         <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-        <h2 class="modal-tune-title">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
+        <h2 class="modal-tune-title modal-tune-title-editable" id="modal-tune-title" onclick="toggleNameAliasEdit()" title="Click to set custom name">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
+        <div class="modal-field-section" id="name-alias-section" style="display: none;">
+            <label class="modal-field-label">I call this:</label>
+            <input type="text" id="modal-name-alias-input" class="modal-field-input" placeholder="Enter your custom name for this tune" oninput="onModalFieldChange()">
+            <div class="name-alias-hint">Click title again to hide this field</div>
+        </div>
         <div class="modal-header-row">
             ${tuneTypeBadge}
             <select id="modal-status-select" class="modal-status-select" onchange="onModalFieldChange()">
                 ${statusOptions}
             </select>
         </div>
+        <div class="modal-notes-section">
+            <div class="modal-notes-label">Notes:</div>
+            <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Loading..." disabled oninput="onModalFieldChange()"></textarea>
+        </div>
+        <div class="modal-field-section">
+            <label class="modal-field-label">If you play a specific setting of the tune, enter the URL or setting ID here:</label>
+            <input type="text" id="modal-setting-id-input" class="modal-field-input" placeholder="e.g., 123 or paste URL" disabled oninput="onSettingIdInput()">
+            <div id="modal-setting-id-error" class="modal-field-error" style="display: none;"></div>
+        </div>
+        <div class="heard-count-row">
+            <div class="heard-count-label">I've heard this <span id="modal-heard-count-value">0</span> <span id="modal-heard-count-unit">times</span></div>
+            <div class="heard-count-controls">
+                <button class="heard-count-btn heard-count-btn-decrement" onclick="decrementHeardCountModal()" title="Decrement heard count" disabled>-</button>
+                <button class="heard-count-btn heard-count-btn-increment" onclick="incrementHeardCountModal()" title="Increment heard count" disabled>+</button>
+            </div>
+        </div>
+        <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled>Save</button>
         <div id="modal-additional-info">
             <div class="modal-info-line">TheSession.org Tunebooks: <span class="loading-dots">...</span></div>
             <div class="modal-info-line">Play count at your sessions: <span class="loading-dots">...</span></div>
-            <div class="modal-notes-section">
-                <div class="modal-notes-label">Notes:</div>
-                <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Loading..." disabled oninput="onModalFieldChange()"></textarea>
-                <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled style="margin-top: 8px;">Save</button>
-            </div>
         </div>
     `;
 
     // Store current tune ID and original status for updates
     modal.dataset.personTuneId = tune.person_tune_id;
     modal.dataset.originalStatus = tune.learn_status;
+    modal.dataset.originalSettingId = '';
+    modal.dataset.originalNameAlias = '';
 
     // Show modal
     console.log('SHOWING MODAL - setting display = flex');
@@ -1905,10 +2274,11 @@ function displayTuneDetailModalFull(tune) {
         ? `<a href="${tune.thesession_url}" target="_blank" class="thesession-link-icon" title="View on TheSession.org">🔗</a>`
         : '';
 
-    // Update the title to include the link
+    // Update the title to include the link - show name_alias if it exists, otherwise tune_name
+    const displayName = tune.name_alias || tune.tune_name || 'Unknown Tune';
     const modalTitle = document.querySelector('.modal-tune-title');
     if (modalTitle) {
-        modalTitle.innerHTML = `${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}`;
+        modalTitle.innerHTML = `${displayName} ${thesessionLinkIcon}`;
     }
 
     // Build session play info
@@ -1916,15 +2286,18 @@ function displayTuneDetailModalFull(tune) {
         ? `<div class="modal-info-line">Play count at your sessions: ${tune.session_play_count}</div>`
         : '';
 
-    // Build full additional info
+    // Populate notes field
+    const notesTextarea = document.getElementById('modal-notes-textarea');
+    if (notesTextarea) {
+        notesTextarea.value = tune.notes || '';
+        notesTextarea.disabled = false;
+        notesTextarea.placeholder = 'Add notes about this tune...';
+    }
+
+    // Build full additional info (just the read-only stats)
     const additionalInfo = `
         <div class="modal-info-line">TheSession.org Tunebooks: ${tune.tunebook_count || 0}</div>
         ${sessionPlayInfo}
-        <div class="modal-notes-section">
-            <div class="modal-notes-label">Notes:</div>
-            <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Add notes about this tune..." oninput="onModalFieldChange()">${tune.notes || ''}</textarea>
-            <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled style="margin-top: 8px;">Save</button>
-        </div>
     `;
 
     // Replace the loading dots with the full info
@@ -1933,15 +2306,31 @@ function displayTuneDetailModalFull(tune) {
         additionalInfoDiv.innerHTML = additionalInfo;
     }
 
-    // Enable the notes textarea now that data is loaded
-    const notesTextarea = document.getElementById('modal-notes-textarea');
-    if (notesTextarea) {
-        notesTextarea.disabled = false;
+    // Populate the setting ID input field (it's in the main modal HTML now)
+    const settingIdInput = document.getElementById('modal-setting-id-input');
+    if (settingIdInput) {
+        settingIdInput.value = tune.setting_id || '';
+        settingIdInput.disabled = false;
     }
 
-    // Store original notes for comparison
+    // Populate name alias field if it exists
+    const nameAliasInput = document.getElementById('modal-name-alias-input');
+    if (nameAliasInput) {
+        nameAliasInput.value = tune.name_alias || '';
+    }
+
+    // Update heard count display
+    updateHeardCountDisplay(tune.heard_before_learning_count || 0);
+
+    // Update button states
+    updateHeardCountButtonStates();
+
+    // Store original values for comparison
     const modal = document.getElementById('tune-detail-modal');
     modal.dataset.originalNotes = tune.notes || '';
+    modal.dataset.originalSettingId = tune.setting_id || '';
+    modal.dataset.originalNameAlias = tune.name_alias || '';
+    modal.dataset.currentHeardCount = tune.heard_before_learning_count || 0;
 }
 
 function displayTuneDetailModal(tune) {
@@ -2072,20 +2461,200 @@ function incrementHeardCountFromModal(personTuneId) {
     });
 }
 
+function toggleNameAliasEdit() {
+    const section = document.getElementById('name-alias-section');
+    if (section) {
+        const isHidden = section.style.display === 'none';
+        section.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+            // Focus the input when shown
+            const input = document.getElementById('modal-name-alias-input');
+            if (input) {
+                setTimeout(() => input.focus(), 100);
+            }
+        }
+    }
+}
+
+function updateHeardCountDisplay(count) {
+    const heardCountValue = document.getElementById('modal-heard-count-value');
+    const heardCountUnit = document.getElementById('modal-heard-count-unit');
+
+    if (heardCountValue) {
+        heardCountValue.textContent = count;
+    }
+
+    if (heardCountUnit) {
+        heardCountUnit.textContent = count === 1 ? 'time' : 'times';
+    }
+}
+
+function updateHeardCountButtonStates() {
+    const heardCountValue = document.getElementById('modal-heard-count-value');
+    const decrementBtn = document.querySelector('.heard-count-btn-decrement');
+    const incrementBtn = document.querySelector('.heard-count-btn-increment');
+
+    if (heardCountValue && decrementBtn && incrementBtn) {
+        const currentCount = parseInt(heardCountValue.textContent) || 0;
+
+        // Enable both buttons (data is loaded)
+        incrementBtn.disabled = false;
+
+        // Disable decrement only if count is 0
+        decrementBtn.disabled = currentCount === 0;
+    }
+}
+
+function incrementHeardCountModal() {
+    const heardCountValue = document.getElementById('modal-heard-count-value');
+    const modal = document.getElementById('tune-detail-modal');
+    const personTuneId = parseInt(modal.dataset.personTuneId);
+
+    if (!heardCountValue) return;
+
+    const currentCount = parseInt(heardCountValue.textContent) || 0;
+    const newCount = currentCount + 1;
+
+    // Update UI immediately
+    updateHeardCountDisplay(newCount);
+    updateHeardCountButtonStates();
+
+    // Update the tune in our local data
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    if (tune) {
+        tune.heard_before_learning_count = newCount;
+        applyFilters(); // Re-render
+    }
+
+    // Update stored count
+    modal.dataset.currentHeardCount = newCount;
+
+    // Send update to server in background
+    fetchWithRetry(`/api/my-tunes/${personTuneId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ heard_before_learning_count: newCount })
+    })
+    .then(response => {
+        if (!response.ok) {
+            const errorInfo = handleApiError(null, response);
+            throw new Error(errorInfo.message);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to update heard count');
+        }
+        // Success - no toast, already updated UI
+    })
+    .catch(error => {
+        console.error('Error incrementing heard count:', error);
+        // Revert the change on error
+        updateHeardCountDisplay(currentCount);
+        updateHeardCountButtonStates();
+        if (tune) {
+            tune.heard_before_learning_count = currentCount;
+            applyFilters();
+        }
+        modal.dataset.currentHeardCount = currentCount;
+
+        const errorInfo = handleApiError(error);
+        showMessage(errorInfo.message, 'error');
+    });
+}
+
+function decrementHeardCountModal() {
+    const heardCountValue = document.getElementById('modal-heard-count-value');
+    const modal = document.getElementById('tune-detail-modal');
+    const personTuneId = parseInt(modal.dataset.personTuneId);
+
+    if (!heardCountValue) return;
+
+    const currentCount = parseInt(heardCountValue.textContent) || 0;
+    if (currentCount === 0) return; // Can't go below zero
+
+    const newCount = currentCount - 1;
+
+    // Update UI immediately
+    updateHeardCountDisplay(newCount);
+    updateHeardCountButtonStates();
+
+    // Update the tune in our local data
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    if (tune) {
+        tune.heard_before_learning_count = newCount;
+        applyFilters(); // Re-render
+    }
+
+    // Update stored count
+    modal.dataset.currentHeardCount = newCount;
+
+    // Send update to server in background
+    fetchWithRetry(`/api/my-tunes/${personTuneId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ heard_before_learning_count: newCount })
+    })
+    .then(response => {
+        if (!response.ok) {
+            const errorInfo = handleApiError(null, response);
+            throw new Error(errorInfo.message);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to update heard count');
+        }
+        // Success - no toast, already updated UI
+    })
+    .catch(error => {
+        console.error('Error decrementing heard count:', error);
+        // Revert the change on error
+        updateHeardCountDisplay(currentCount);
+        updateHeardCountButtonStates();
+        if (tune) {
+            tune.heard_before_learning_count = currentCount;
+            applyFilters();
+        }
+        modal.dataset.currentHeardCount = currentCount;
+
+        const errorInfo = handleApiError(error);
+        showMessage(errorInfo.message, 'error');
+    });
+}
+
 function onModalFieldChange() {
-    // Enable/disable the Save button based on whether status or notes changed
+    // Enable/disable the Save button based on whether any field changed
     const modal = document.getElementById('tune-detail-modal');
     const statusSelect = document.getElementById('modal-status-select');
     const textarea = document.getElementById('modal-notes-textarea');
+    const settingIdInput = document.getElementById('modal-setting-id-input');
+    const nameAliasInput = document.getElementById('modal-name-alias-input');
     const saveBtn = document.getElementById('modal-save-btn');
 
     const originalStatus = modal.dataset.originalStatus || '';
     const originalNotes = modal.dataset.originalNotes || '';
+    const originalSettingId = modal.dataset.originalSettingId || '';
+    const originalNameAlias = modal.dataset.originalNameAlias || '';
 
-    if (statusSelect && textarea && saveBtn) {
-        const statusChanged = (statusSelect.value !== originalStatus);
-        const notesChanged = (textarea.value !== originalNotes);
-        const anyChanges = statusChanged || notesChanged;
+    if (saveBtn) {
+        const statusChanged = statusSelect && (statusSelect.value !== originalStatus);
+        const notesChanged = textarea && (textarea.value !== originalNotes);
+
+        // For setting ID, extract the numeric value and compare
+        const currentSettingId = settingIdInput ? extractSettingId(settingIdInput.value) : null;
+        const originalSettingIdNum = originalSettingId ? parseInt(originalSettingId) : null;
+        const settingIdChanged = (currentSettingId !== originalSettingIdNum);
+
+        const nameAliasChanged = nameAliasInput && (nameAliasInput.value !== originalNameAlias);
+
+        const anyChanges = statusChanged || notesChanged || settingIdChanged || nameAliasChanged;
 
         saveBtn.disabled = !anyChanges;
 
@@ -2104,18 +2673,46 @@ function saveModalChanges() {
     const modal = document.getElementById('tune-detail-modal');
     const statusSelect = document.getElementById('modal-status-select');
     const textarea = document.getElementById('modal-notes-textarea');
+    const settingIdInput = document.getElementById('modal-setting-id-input');
+    const nameAliasInput = document.getElementById('modal-name-alias-input');
     const personTuneId = parseInt(modal.dataset.personTuneId);
 
     const newStatus = statusSelect ? statusSelect.value : '';
     const newNotes = textarea ? textarea.value : '';
+    const newSettingIdRaw = settingIdInput ? settingIdInput.value : '';
+    const newNameAlias = nameAliasInput ? nameAliasInput.value : '';
+
+    // Validate setting ID before proceeding
+    const settingIdValidation = validateSettingId(newSettingIdRaw);
+    if (!settingIdValidation.valid) {
+        const errorDiv = document.getElementById('modal-setting-id-error');
+        if (errorDiv) {
+            errorDiv.textContent = settingIdValidation.error;
+            errorDiv.style.display = 'block';
+        }
+        if (settingIdInput) {
+            settingIdInput.style.borderColor = '#dc3545';
+        }
+        return; // Don't proceed with save
+    }
+
     const originalStatus = modal.dataset.originalStatus || '';
     const originalNotes = modal.dataset.originalNotes || '';
+    const originalSettingId = modal.dataset.originalSettingId || '';
+    const originalNameAlias = modal.dataset.originalNameAlias || '';
 
     const statusChanged = (newStatus !== originalStatus);
     const notesChanged = (newNotes !== originalNotes);
 
+    // Extract numeric setting ID
+    const newSettingId = settingIdValidation.settingId;
+    const originalSettingIdNum = originalSettingId ? parseInt(originalSettingId) : null;
+    const settingIdChanged = (newSettingId !== originalSettingIdNum);
+
+    const nameAliasChanged = (newNameAlias !== originalNameAlias);
+
     // Don't save if nothing changed
-    if (!statusChanged && !notesChanged) {
+    if (!statusChanged && !notesChanged && !settingIdChanged && !nameAliasChanged) {
         return;
     }
 
@@ -2126,75 +2723,89 @@ function saveModalChanges() {
         saveBtn.textContent = 'Saving...';
     }
 
-    // Prepare promises for API calls
-    const promises = [];
+    // Build update payload - only include changed fields
+    const updates = {};
+    if (statusChanged) updates.learn_status = newStatus;
+    if (notesChanged) updates.notes = newNotes;
+    if (settingIdChanged) updates.setting_id = newSettingId;
+    if (nameAliasChanged) updates.name_alias = newNameAlias || null; // Convert empty string to null
 
-    // Save status if changed
-    if (statusChanged) {
-        promises.push(
-            fetchWithRetry(`/api/my-tunes/${personTuneId}/status`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ learn_status: newStatus })
-            })
-        );
-    }
-
-    // Save notes if changed
-    if (notesChanged) {
-        promises.push(
-            fetchWithRetry(`/api/my-tunes/${personTuneId}/notes`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ notes: newNotes })
-            })
-        );
-    }
-
-    // Execute all promises
-    Promise.all(promises)
-        .then(responses => {
-            // Check all responses are OK
-            const allOk = responses.every(r => r.ok);
-            if (!allOk) {
-                throw new Error('Failed to save changes');
+    // Call unified API endpoint
+    fetchWithRetry(`/api/my-tunes/${personTuneId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+    })
+        .then(response => {
+            if (!response.ok) {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(errorInfo.message);
             }
-            return Promise.all(responses.map(r => r.json()));
+            return response.json();
         })
-        .then(results => {
-            showMessage('Changes saved successfully!', 'success');
+        .then(data => {
+            if (data.success) {
+                showMessage('Changes saved successfully!', 'success');
 
-            // Update original values in modal
-            modal.dataset.originalStatus = newStatus;
-            modal.dataset.originalNotes = newNotes;
+                // Update original values in modal
+                modal.dataset.originalStatus = newStatus;
+                modal.dataset.originalNotes = newNotes;
+                modal.dataset.originalSettingId = newSettingId || '';
+                modal.dataset.originalNameAlias = newNameAlias;
 
-            // Update the tune in our local data
-            const tune = allTunes.find(t => t.person_tune_id === personTuneId);
-            if (tune) {
-                tune.learn_status = newStatus;
-                tune.notes = newNotes;
-                if (newStatus === 'learned') {
-                    tune.learned_date = new Date().toISOString();
+                // Update the tune in our local data
+                const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+                if (tune) {
+                    if (statusChanged) {
+                        tune.learn_status = newStatus;
+                        if (newStatus === 'learned') {
+                            tune.learned_date = new Date().toISOString();
+                        }
+                    }
+                    if (notesChanged) tune.notes = newNotes;
+                    if (settingIdChanged) tune.setting_id = newSettingId;
+                    if (nameAliasChanged) {
+                        tune.name_alias = newNameAlias || null;
+                        // Update tune_name to reflect the change
+                        // The backend returns the updated tune with the correct tune_name,
+                        // but we need to update it locally for immediate display
+                        if (data.person_tune && data.person_tune.tune_name) {
+                            tune.tune_name = data.person_tune.tune_name;
+                        }
+                    }
                 }
+
+                // Update the modal title if name alias or setting changed
+                if (nameAliasChanged || settingIdChanged) {
+                    const modalTitle = document.querySelector('.modal-tune-title');
+                    if (modalTitle && tune) {
+                        const displayName = tune.name_alias || tune.tune_name || 'Unknown Tune';
+                        const thesessionUrl = buildTheSessionUrl(tune.tune_id, tune.setting_id);
+                        const linkHtml = thesessionUrl
+                            ? `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`
+                            : '';
+                        modalTitle.innerHTML = `${displayName} ${linkHtml}`;
+                    }
+                }
+
+                // Re-render the grid to show changes
+                applyFilters();
+
+                // Reset button
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'Save';
+                    saveBtn.style.backgroundColor = '';
+                    saveBtn.style.opacity = '';
+                }
+
+                // Close modal after successful save
+                closeTuneDetailModal();
+            } else {
+                throw new Error(data.error || 'Failed to save changes');
             }
-
-            // Re-render the grid to show status change
-            applyFilters();
-
-            // Reset button
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = 'Save';
-                saveBtn.style.backgroundColor = '';
-                saveBtn.style.opacity = '';
-            }
-
-            // Close modal after successful save
-            closeTuneDetailModal();
         })
         .catch(error => {
             console.error('Error saving changes:', error);

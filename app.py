@@ -12,8 +12,9 @@ from api_person_tune_routes import (
     get_my_tunes,
     get_person_tune_detail,
     add_my_tune,
-    update_tune_status,
-    update_tune_notes,
+    update_person_tune,
+    
+    
     increment_tune_heard_count,
     sync_my_tunes,
     search_tunes,
@@ -39,11 +40,9 @@ login_manager.init_app(app)
 login_manager.login_view = "login"  # type: ignore
 login_manager.login_message = "Please log in to access this page."
 
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.get_by_id(int(user_id))
-
 
 # Template filters for timezone handling
 @app.template_filter("format_datetime_tz")
@@ -78,7 +77,6 @@ def format_datetime_tz(dt, session_timezone=None, format_str="%Y-%m-%d %H:%M"):
     # Default: show as UTC
     return format_datetime_with_timezone(dt, "UTC", format_str)
 
-
 @app.template_filter("to_user_timezone")
 def to_user_timezone(dt, session_timezone=None):
     """Convert UTC datetime to user's timezone (or session timezone if no user)"""
@@ -99,7 +97,6 @@ def to_user_timezone(dt, session_timezone=None):
     # Default: return as UTC
     return dt
 
-
 @app.template_global("get_user_timezone")
 def get_user_timezone():
     """Get current user's timezone for use in templates"""
@@ -109,7 +106,6 @@ def get_user_timezone():
     except Exception:
         pass
     return "UTC"
-
 
 # Register web page routes
 app.add_url_rule("/", "home", home)
@@ -505,23 +501,18 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>",
+    "update_person_tune",
+    update_person_tune,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/my-tunes",
     "add_my_tune",
     add_my_tune,
     methods=["POST"],
 )
-app.add_url_rule(
-    "/api/my-tunes/<int:person_tune_id>/status",
-    "update_tune_status",
-    update_tune_status,
-    methods=["PUT"],
-)
-app.add_url_rule(
-    "/api/my-tunes/<int:person_tune_id>/notes",
-    "update_tune_notes",
-    update_tune_notes,
-    methods=["PUT"],
-)
+
 app.add_url_rule(
     "/api/my-tunes/<int:person_tune_id>/heard",
     "increment_tune_heard_count",
@@ -556,7 +547,6 @@ FUNNY_ERROR_IMAGES = [
     "djembe.avif",
 ]
 
-
 def get_random_funny_content():
     """Get random funny text and image for error pages"""
     if FUNNY_ERROR_TEXTS:
@@ -568,7 +558,6 @@ def get_random_funny_content():
         )
         return funny_text, funny_image
     return None, None
-
 
 def render_error_page(message, status_code=400):
     """Helper function to render error page with consistent formatting"""
@@ -583,7 +572,6 @@ def render_error_page(message, status_code=400):
         status_code,
     )
 
-
 @app.errorhandler(404)
 def not_found_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
@@ -596,7 +584,6 @@ def not_found_error(error):  # pylint: disable=unused-argument
         ),
         404,
     )
-
 
 @app.errorhandler(403)
 def forbidden_error(error):  # pylint: disable=unused-argument
@@ -611,7 +598,6 @@ def forbidden_error(error):  # pylint: disable=unused-argument
         403,
     )
 
-
 @app.errorhandler(401)
 def unauthorized_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
@@ -625,7 +611,6 @@ def unauthorized_error(error):  # pylint: disable=unused-argument
         401,
     )
 
-
 @app.errorhandler(500)
 def internal_error(error):  # pylint: disable=unused-argument
     funny_text, funny_image = get_random_funny_content()
@@ -638,7 +623,6 @@ def internal_error(error):  # pylint: disable=unused-argument
         ),
         500,
     )
-
 
 @app.errorhandler(Exception)
 def handle_exception(error):
@@ -655,7 +639,6 @@ def handle_exception(error):
         ),
         500,
     )
-
 
 if __name__ == "__main__":
     app.run(
