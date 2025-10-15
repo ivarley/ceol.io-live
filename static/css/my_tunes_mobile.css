@@ -209,7 +209,7 @@ html, body {
     font-weight: 500;
     color: var(--text-color);
     margin: 0;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
 }
 
 .tune-type {
@@ -220,7 +220,7 @@ html, body {
     border-radius: 3px;
     text-transform: capitalize;
     white-space: nowrap;
-    margin-left: 0;
+    margin-left: auto;
 }
 
 .tune-meta {
@@ -232,6 +232,7 @@ html, body {
     color: var(--text-muted, #6c757d);
     align-items: center;
     grid-column: 2;
+    justify-content: flex-end;
 }
 
 .tune-meta-item {
