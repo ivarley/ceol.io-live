@@ -240,7 +240,7 @@
         .tune-card:hover {
             box-shadow: none;
             transform: none;
-            background-color: var(--hover-bg);
+            background-color: transparent;
         }
     }
 
@@ -620,12 +620,16 @@
             font-size: 16px;
             padding: 8px 6px;
             max-width: none;
+            height: 40px;
+            box-sizing: border-box;
         }
 
         .filter-select {
             width: 85px;
             font-size: 13px;
             padding: 8px 4px;
+            height: 40px;
+            box-sizing: border-box;
         }
 
         .status-filter-btn {
@@ -633,6 +637,8 @@
             font-size: 13px;
             min-width: 45px;
             gap: 4px;
+            height: 40px;
+            box-sizing: border-box;
         }
 
         /* Touch-friendly button sizes */
@@ -893,10 +899,10 @@
         .modal-dialog {
             width: 100%;
             max-width: 100%;
-            height: calc(100vh - 60px); /* Account for header height */
-            max-height: calc(100vh - 60px);
+            height: calc(100vh - 68px); /* Account for header height */
+            max-height: calc(100vh - 68px);
             margin: 0;
-            margin-top: 60px; /* Start below header */
+            margin-top: 68px; /* Start below header */
             border-radius: 0;
             position: fixed;
             right: 0;
