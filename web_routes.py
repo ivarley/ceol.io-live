@@ -1263,7 +1263,7 @@ def verify_email(token):
             conn.commit()
 
             flash("Email verified successfully! You can now log in.", "success")
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=url_for("home")))
         else:
             flash(
                 "Invalid or expired verification link. Please request a new verification email.",
