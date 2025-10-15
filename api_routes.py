@@ -6170,13 +6170,177 @@ def bulk_import_save_session(session_id):
                 "skipped_count": skipped_count,
                 "created_people": created_people
             })
-            
+
         except Exception as e:
             cur.execute("ROLLBACK")
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": f"Error saving people: {str(e)}"}), 500
-            
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def get_sessions_with_today_status():
+    """
+    Get all sessions with indicators for today's status:
+    - has_instance_today: Boolean indicating if an instance exists for today
+    - instance_id_today: The session_instance_id if one exists for today
+    - recurrence: The recurrence pattern for client-side parsing
+    """
+    try:
+        from datetime import date
+        today = date.today()
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get user's person_id if logged in
+        user_person_id = None
+        if current_user.is_authenticated:
+            user_person_id = getattr(current_user, 'person_id', None)
+
+        # Get all sessions with today's instance info
+        cur.execute(
+            """
+            SELECT
+                s.session_id,
+                s.name,
+                s.path,
+                s.city,
+                s.state,
+                s.country,
+                s.termination_date,
+                s.recurrence,
+                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member,
+                si.session_instance_id as instance_id_today,
+                si.date as instance_date_today
+            FROM session s
+            LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
+            LEFT JOIN session_instance si ON s.session_id = si.session_id AND si.date = %s
+            ORDER BY s.name
+            """,
+            (user_person_id, today)
+        )
+
+        sessions = []
+        for row in cur.fetchall():
+            sessions.append({
+                'session_id': row[0],
+                'name': row[1],
+                'path': row[2],
+                'city': row[3],
+                'state': row[4],
+                'country': row[5],
+                'termination_date': row[6].isoformat() if row[6] else None,
+                'recurrence': row[7],
+                'user_is_member': row[8],
+                'has_instance_today': row[9] is not None,
+                'instance_id_today': row[9],
+                'instance_date_today': row[10].isoformat() if row[10] else None
+            })
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'sessions': sessions,
+            'today': today.isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def create_or_get_today_session_instance(session_path):
+    """
+    Create a new session instance for today, or return existing one if it already exists.
+    This is idempotent - safe to call multiple times.
+
+    Returns:
+    - session_instance_id: The ID of the instance (new or existing)
+    - created: Boolean indicating if a new instance was created
+    - date: The date of the instance (today)
+    """
+    try:
+        from datetime import date
+        today = date.today()
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id and name for this session_path
+        cur.execute(
+            "SELECT session_id, name FROM session WHERE path = %s",
+            (session_path,),
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id, session_name = session_result
+
+        # Check if session instance already exists for today (race condition check)
+        cur.execute(
+            """
+            SELECT session_instance_id FROM session_instance
+            WHERE session_id = %s AND date = %s
+            """,
+            (session_id, today),
+        )
+        existing_instance = cur.fetchone()
+
+        if existing_instance:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "session_instance_id": existing_instance[0],
+                "created": False,
+                "date": today.isoformat(),
+                "session_name": session_name,
+                "session_path": session_path
+            })
+
+        # Create new session instance for today
+        cur.execute(
+            """
+            INSERT INTO session_instance (session_id, date, comments)
+            VALUES (%s, %s, %s)
+            RETURNING session_instance_id
+            """,
+            (session_id, today, None),
+        )
+        new_instance = cur.fetchone()
+
+        if not new_instance:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Failed to create session instance"}), 500
+
+        session_instance_id = new_instance[0]
+
+        # Save to history
+        save_to_history(cur, "session_instance", "INSERT", session_instance_id, f"Created instance for {today}")
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "session_instance_id": session_instance_id,
+            "created": True,
+            "date": today.isoformat(),
+            "session_name": session_name,
+            "session_path": session_path
+        })
+
     except Exception as e:
         if 'conn' in locals():
             conn.close()

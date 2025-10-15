@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .action-page-container {
+        max-width: 700px;
+        margin: 2rem auto;
+        padding: 2rem;
+    }
+
+    .session-header {
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 1rem;
+    }
+
+    .session-header h1 {
+        margin-bottom: 0.5rem;
+    }
+
+    .session-location {
+        color: var(--secondary-text);
+        font-size: 1.1rem;
+    }
+
+    .action-options {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .action-card {
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        background-color: var(--input-bg);
+    }
+
+    .action-card:hover {
+        border-color: var(--primary-color);
+        background-color: var(--hover-bg);
+    }
+
+    .action-card h2 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.3rem;
+        color: var(--primary-color);
+    }
+
+    .action-card p {
+        margin: 0;
+        color: var(--secondary-text);
+    }
+
+    .recent-instances {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .recent-instance-link {
+        display: block;
+        padding: 0.4rem 0;
+        color: var(--link-color);
+        text-decoration: none;
+    }
+
+    .recent-instance-link:hover {
+        text-decoration: underline;
+    }
+
+    .btn-create-today {
+        display: inline-block;
+        margin-top: 1rem;
+        padding: 0.75rem 1.5rem;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 500;
+        transition: opacity 0.2s;
+    }
+
+    .btn-create-today:hover {
+        opacity: 0.9;
+    }
+
+    .back-link {
+        display: inline-block;
+        margin-top: 2rem;
+        color: var(--link-color);
+        text-decoration: none;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="action-page-container">
+    <div class="session-header">
+        <h1>{{ session.name }}</h1>
+        <div class="session-location">{{ session_location }}</div>
+    </div>
+
+    <p>What would you like to do?</p>
+
+    <div class="action-options">
+        {% if recent_instances %}
+        <div class="action-card">
+            <h2>Go to an existing session</h2>
+            <p>View a session log from a previous date.</p>
+            <div class="recent-instances">
+                <strong>Recent sessions:</strong>
+                {% for instance in recent_instances[:5] %}
+                <a href="/sessions/{{ session.path }}/{{ instance[0] }}" class="recent-instance-link">
+                    {{ instance[0].strftime('%B %d, %Y') }}
+                </a>
+                {% endfor %}
+                {% if recent_instances|length > 5 %}
+                <a href="/sessions/{{ session.path }}" class="recent-instance-link">
+                    <em>See all {{ recent_instances|length }} sessions...</em>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="action-card">
+            <h2>Create a new session for today</h2>
+            <p>Start logging tunes from today's session ({{ today_formatted }}).</p>
+            <button class="btn-create-today" onclick="createTodaySession()">Create Today's Session</button>
+        </div>
+
+        <a href="/sessions/{{ session.path }}" class="action-card" style="text-decoration: none; color: inherit;">
+            <h2>View session details</h2>
+            <p>See information about this session, popular tunes, and all session dates.</p>
+        </a>
+    </div>
+
+    <a href="/sessions" class="back-link">← Back to sessions list</a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function createTodaySession() {
+        try {
+            const response = await fetch('/api/sessions/{{ session.path }}/instances/today', {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                // Redirect to the session instance
+                window.location.href = `/sessions/{{ session.path }}/${data.date}`;
+            } else {
+                alert('Failed to create session: ' + (data.message || data.error));
+            }
+        } catch (error) {
+            console.error('Error creating session:', error);
+            alert('Error creating session. Please try again.');
+        }
+    }
+</script>
+{% endblock %}

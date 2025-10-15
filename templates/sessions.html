@@ -88,6 +88,40 @@
         text-align: center;
         color: var(--secondary-text);
     }
+
+    .today-action-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-goto-today {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .btn-goto-today:hover {
+        background-color: #218838;
+    }
+
+    .btn-start-today {
+        background-color: #007bff;
+        color: white;
+    }
+
+    .btn-start-today:hover {
+        background-color: #0069d9;
+    }
+
+    .action-cell {
+        text-align: right;
+        white-space: nowrap;
+    }
 </style>
 {% endblock %}
 
@@ -107,38 +141,19 @@
         <div class="session-count" id="session-count">Showing <span id="count-number">0</span> <span id="count-filter-type">active</span>.</div>
     </div>
 
-    {% if sessions %}
-        <table class="sessions-grid" id="sessions-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Location</th>
-                </tr>
-            </thead>
-            <tbody id="sessions-tbody">
-                <!-- Sessions will be populated by JavaScript -->
-            </tbody>
-        </table>
-        <div id="no-results" class="no-sessions" style="display: none;">No sessions found.</div>
-
-        <!-- Hidden data storage -->
-        <div style="display: none;">
-            {% for session in sessions %}
-            <div class="session-data"
-                 data-id="{{ session[0] }}"
-                 data-name="{{ session[1] }}"
-                 data-path="{{ session[2] }}"
-                 data-city="{{ session[3] or '' }}"
-                 data-state="{{ session[4] or '' }}"
-                 data-country="{{ session[5] or '' }}"
-                 data-termination="{{ session[6] or '' }}"
-                 data-is-member="{{ session[7] }}">
-            </div>
-            {% endfor %}
-        </div>
-    {% else %}
-        <div class="no-sessions">No sessions found.</div>
-    {% endif %}
+    <table class="sessions-grid" id="sessions-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="sessions-tbody">
+            <!-- Sessions will be populated by JavaScript -->
+        </tbody>
+    </table>
+    <div id="no-results" class="no-sessions" style="display: none;">No sessions found.</div>
 
     <p><a href="/">← Back to home</a></p>
 {% endblock %}
@@ -146,6 +161,7 @@
 {% block extra_js %}
 <script>
     let allSessions = [];
+    let todayStr = '';
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
 
     // Define filter states based on login status
@@ -167,21 +183,23 @@
     document.addEventListener('DOMContentLoaded', function() {
         loadSessionData();
         setupEventListeners();
-        updateDisplay();
     });
 
-    function loadSessionData() {
-        const sessionElements = document.querySelectorAll('.session-data');
-        allSessions = Array.from(sessionElements).map(el => ({
-            id: parseInt(el.dataset.id),
-            name: el.dataset.name,
-            path: el.dataset.path,
-            city: el.dataset.city,
-            state: el.dataset.state,
-            country: el.dataset.country,
-            termination: el.dataset.termination,
-            isMember: el.dataset.isMember === 'True'
-        }));
+    async function loadSessionData() {
+        try {
+            const response = await fetch('/api/sessions/with-today-status');
+            const data = await response.json();
+
+            if (data.success) {
+                allSessions = data.sessions;
+                todayStr = data.today;
+                updateDisplay();
+            } else {
+                console.error('Failed to load sessions:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading sessions:', error);
+        }
     }
 
     function setupEventListeners() {
@@ -200,6 +218,31 @@
         });
     }
 
+    function isScheduledToday(recurrence) {
+        if (!recurrence) return false;
+
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const todayName = dayNames[dayOfWeek];
+
+        const recurrenceLower = recurrence.toLowerCase();
+
+        // Check for day of week mentions
+        if (recurrenceLower.includes(todayName)) {
+            return true;
+        }
+
+        // Check for "weekly" or "every week" (assume scheduled every week on same day)
+        if (recurrenceLower.includes('weekly') || recurrenceLower.includes('every week')) {
+            return true;
+        }
+
+        // For "monthly" or "biweekly", we can't determine without more info
+        // For now, return false to be conservative
+        return false;
+    }
+
     function filterSessions() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -208,19 +251,19 @@
             // Apply status filter
             let passesStatusFilter = false;
             if (currentFilter === 'my') {
-                passesStatusFilter = session.isMember;
+                passesStatusFilter = session.user_is_member;
             } else if (currentFilter === 'active') {
-                if (!session.termination) {
+                if (!session.termination_date) {
                     passesStatusFilter = true;
                 } else {
-                    const terminationDate = new Date(session.termination);
+                    const terminationDate = new Date(session.termination_date);
                     passesStatusFilter = terminationDate > today;
                 }
             } else if (currentFilter === 'all') {
                 passesStatusFilter = true;
             } else if (currentFilter === 'inactive') {
-                if (session.termination) {
-                    const terminationDate = new Date(session.termination);
+                if (session.termination_date) {
+                    const terminationDate = new Date(session.termination_date);
                     passesStatusFilter = terminationDate <= today;
                 } else {
                     passesStatusFilter = false;
@@ -242,6 +285,25 @@
 
             return true;
         });
+    }
+
+    async function startTodaySession(sessionPath) {
+        try {
+            const response = await fetch(`/api/sessions/${sessionPath}/instances/today`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                // Redirect to the session instance
+                window.location.href = `/sessions/${sessionPath}/${data.date}`;
+            } else {
+                alert('Failed to create session: ' + (data.message || data.error));
+            }
+        } catch (error) {
+            console.error('Error creating session:', error);
+            alert('Error creating session. Please try again.');
+        }
     }
 
     function updateDisplay() {
@@ -280,9 +342,21 @@
                     .filter(x => x)
                     .join(', ') || 'Unknown';
 
+                // Determine what action to show
+                let actionHTML = '';
+                if (session.has_instance_today) {
+                    // Has an instance today - show "Go to today's session"
+                    actionHTML = `<button class="today-action-btn btn-goto-today" onclick="window.location.href='/sessions/${session.path}/${session.instance_date_today}'">Go to today's session</button>`;
+                } else if (isScheduledToday(session.recurrence)) {
+                    // Scheduled today but no instance - show "Start today's session"
+                    actionHTML = `<button class="today-action-btn btn-start-today" onclick="startTodaySession('${session.path}')">Start today's session</button>`;
+                }
+                // Otherwise no button - regular link only
+
                 row.innerHTML = `
                     <td><a href="/sessions/${session.path}">${session.name}</a></td>
                     <td>${location}</td>
+                    <td class="action-cell">${actionHTML}</td>
                 `;
                 tbody.appendChild(row);
             });

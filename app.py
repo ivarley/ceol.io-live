@@ -549,6 +549,20 @@ app.add_url_rule(
     methods=["PATCH"],
 )
 
+# Session today status endpoints
+app.add_url_rule(
+    "/api/sessions/with-today-status",
+    "get_sessions_with_today_status",
+    get_sessions_with_today_status,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/instances/today",
+    "create_or_get_today_session_instance",
+    create_or_get_today_session_instance,
+    methods=["POST"],
+)
+
 # Error handlers
 FUNNY_ERROR_TEXTS = ["Stroh Piano Accordion", "Traditional Irish Djembe"]
 
