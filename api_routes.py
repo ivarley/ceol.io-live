@@ -193,6 +193,7 @@ def sessions_data():
         return jsonify({"error": f"Database connection failed: {str(e)}"}), 500
 
 
+@login_required
 def refresh_tunebook_count_ajax(session_path, tune_id):
     try:
         # Fetch data from thesession.org API
@@ -329,6 +330,7 @@ def get_session_tune_aliases(session_path, tune_id):
         )
 
 
+@login_required
 def add_session_tune_alias(session_path, tune_id):
     """Add a new alias for a tune in a session"""
     if not request.json:
@@ -431,6 +433,7 @@ def add_session_tune_alias(session_path, tune_id):
         return jsonify({"success": False, "message": f"Error adding alias: {str(e)}"})
 
 
+@login_required
 def delete_session_tune_alias(session_path, tune_id, alias_id):
     """Delete an alias for a tune in a session"""
     try:
@@ -491,6 +494,7 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
         return jsonify({"success": False, "message": f"Error deleting alias: {str(e)}"})
 
 
+@login_required
 def add_session_instance_ajax(session_path):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -595,6 +599,7 @@ def add_session_instance_ajax(session_path):
         )
 
 
+@login_required
 def update_session_instance_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -735,6 +740,7 @@ def get_session_tune_count_ajax(session_path, date):
         )
 
 
+@login_required
 def delete_session_instance_ajax(session_path, date):
     try:
         conn = get_db_connection()
@@ -820,6 +826,7 @@ def delete_session_instance_ajax(session_path, date):
         )
 
 
+@login_required
 def mark_session_log_complete_ajax(session_path, date):
     try:
         conn = get_db_connection()
@@ -897,6 +904,7 @@ def mark_session_log_complete_ajax(session_path, date):
         )
 
 
+@login_required
 def mark_session_log_incomplete_ajax(session_path, date):
     try:
         conn = get_db_connection()
@@ -1159,6 +1167,7 @@ def fetch_session_data_ajax():
         )
 
 
+@login_required
 def add_session_ajax():
     data = request.json
     if not data:
@@ -1256,6 +1265,7 @@ def add_session_ajax():
         )
 
 
+@login_required
 def add_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -1440,6 +1450,7 @@ def add_tune_ajax(session_path, date):
         )
 
 
+@login_required
 def delete_tune_by_order_ajax(session_path, date, order_number):
     try:
         conn = get_db_connection()
@@ -1542,6 +1553,7 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
         )
 
 
+@login_required
 def link_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -1876,6 +1888,7 @@ def get_session_tunes_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to get tunes: {str(e)}"})
 
 
+@login_required
 def move_set_ajax(session_path, date):
     data = request.get_json()
     order_number = data.get("order_number")
@@ -2055,6 +2068,7 @@ def move_set_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to move set: {str(e)}"})
 
 
+@login_required
 def move_tune_ajax(session_path, date):
     data = request.get_json()
     order_number = data.get("order_number")
@@ -2262,6 +2276,7 @@ def move_tune_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to move tune: {str(e)}"})
 
 
+@login_required
 def add_tunes_to_set_ajax(session_path, date):
     data = request.get_json()
     tune_names_input = data.get("tune_names", "").strip()
@@ -2337,6 +2352,7 @@ def add_tunes_to_set_ajax(session_path, date):
         )
 
 
+@login_required
 def edit_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
