@@ -28,20 +28,24 @@
             margin-right: 0;
         }
 
+        .my-tunes-header-section {
+            padding: 10px;
+        }
+
         .page-header {
             margin-bottom: 4px;
-            padding: 0 2px;
+            padding: 0;
         }
 
         .filters-container {
             margin-bottom: 6px;
-            padding: 0 2px;
+            padding: 0;
         }
 
         .results-count {
             margin-bottom: 4px;
             font-size: 12px;
-            padding: 0 2px;
+            padding: 0;
         }
     }
 
@@ -204,7 +208,8 @@
             border-left: none;
             border-right: none;
             border-top: none;
-            padding: 6px 2px;
+            padding: 6px 2px; /* Keep small padding for content */
+            margin: 0; /* No margin - border goes to edge */
             display: grid;
             grid-template-columns: 20px 1fr auto;
             grid-template-rows: auto; /* Single row only */
@@ -270,7 +275,7 @@
 
     @media (max-width: 768px) {
         .tune-name {
-            font-size: 14px;
+            font-size: 16px; /* Increased from 14px */
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
@@ -294,7 +299,7 @@
 
     @media (max-width: 768px) {
         .tune-type {
-            font-size: 10px;
+            font-size: 12px; /* Increased from 10px */
             padding: 2px 6px;
             margin-left: 0;
             flex-shrink: 0; /* Never shrink */
@@ -578,7 +583,7 @@
     /* Mobile optimizations */
     @media (max-width: 768px) {
         .my-tunes-container {
-            padding: 15px;
+            padding: 0;
         }
 
         .page-header {
@@ -876,26 +881,76 @@
         background-color: #2a2a2a;
     }
 
-    /* Mobile adjustments for modal */
+    /* Mobile adjustments for modal - full page slide-in */
     @media (max-width: 768px) {
+        .modal-overlay {
+            background-color: transparent;
+            align-items: flex-start;
+            justify-content: flex-end;
+            pointer-events: none; /* Allow clicks through to header */
+        }
+
         .modal-dialog {
-            width: 95%;
-            max-height: 95vh;
+            width: 100%;
+            max-width: 100%;
+            height: calc(100vh - 60px); /* Account for header height */
+            max-height: calc(100vh - 60px);
+            margin: 0;
+            margin-top: 60px; /* Start below header */
+            border-radius: 0;
+            position: fixed;
+            right: 0;
+            top: 0;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-out;
+            overflow-y: auto;
+            box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+            pointer-events: auto; /* Re-enable clicks on the dialog */
+        }
+
+        .modal-overlay.show .modal-dialog {
+            transform: translateX(0);
         }
 
         #tune-detail-content {
             padding: 16px;
+            padding-top: 16px; /* No extra space at top */
         }
 
         .modal-tune-title {
             font-size: 18px;
-            margin-right: 28px;
+            margin-right: 48px; /* Space for back button */
+            margin-top: 0;
+            margin-left: 0;
         }
 
         .modal-close-btn {
+            position: fixed;
+            top: 8px; /* Top corner of screen */
+            right: 8px; /* Right corner of screen */
+            left: auto;
+            font-size: 0; /* Hide the × */
+            width: 40px;
+            height: 40px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            z-index: 10001; /* Above modal */
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close-btn::before {
+            content: '>';
             font-size: 24px;
-            width: 28px;
-            height: 28px;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        .modal-close-btn:hover {
+            background-color: var(--hover-bg);
         }
 
         .modal-header-row {
@@ -920,44 +975,46 @@
 
 {% block content %}
 <div class="my-tunes-container">
-    <div class="page-header">
-        <h1>My Tunes</h1>
-        <div class="page-actions">
-            <a href="/my-tunes/add" class="btn">Add</a>
-            <a href="/my-tunes/sync" class="btn btn-secondary">Sync</a>
-        </div>
-    </div>
-
-    <div class="filters-container">
-        <div class="filter-row">
-            <div class="filter-group">
-                <input
-                    type="text"
-                    id="search-input"
-                    class="filter-input"
-                    placeholder="Search"
-                    title="Search tunes"
-                    autocomplete="off"
-                >
-            </div>
-            <div class="filter-group">
-                <select id="type-filter" class="filter-select" title="Tune type">
-                    <option value="">All Types</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <button id="status-filter-btn" class="status-filter-btn" onclick="cycleStatusFilter()" title="Filter by learning status">
-                    <span id="status-filter-icon">All</span>
-                </button>
+    <div class="my-tunes-header-section">
+        <div class="page-header">
+            <h1>My Tunes</h1>
+            <div class="page-actions">
+                <a href="/my-tunes/add" class="btn">Add</a>
+                <a href="/my-tunes/sync" class="btn btn-secondary">Sync</a>
             </div>
         </div>
-    </div>
 
-    <div class="results-count">
-        <span id="results-count-text"></span>
-        <button id="sort-toggle" class="sort-toggle" onclick="cycleSortMode()" title="Toggle sort order">
-            <span id="sort-icon">a-z</span>
-        </button>
+        <div class="filters-container">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <input
+                        type="text"
+                        id="search-input"
+                        class="filter-input"
+                        placeholder="Search"
+                        title="Search tunes"
+                        autocomplete="off"
+                    >
+                </div>
+                <div class="filter-group">
+                    <select id="type-filter" class="filter-select" title="Tune type">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button id="status-filter-btn" class="status-filter-btn" onclick="cycleStatusFilter()" title="Filter by learning status">
+                        <span id="status-filter-icon">All</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-count">
+            <span id="results-count-text"></span>
+            <button id="sort-toggle" class="sort-toggle" onclick="cycleSortMode()" title="Toggle sort order">
+                <span id="sort-icon">a-z</span>
+            </button>
+        </div>
     </div>
 
     <div id="loading" class="loading" style="display: none;">
@@ -1204,6 +1261,97 @@ function setupEventListeners() {
         }
         console.log('=== END MODAL CLICK EVENT ===');
     });
+
+    // Setup swipe-to-close for mobile
+    setupSwipeToClose();
+}
+
+function setupSwipeToClose() {
+    const modalDialog = document.querySelector('.modal-dialog');
+    if (!modalDialog) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isSwiping = false;
+
+    modalDialog.addEventListener('touchstart', function(e) {
+        // Don't intercept touches on input controls
+        const target = e.target;
+        if (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.tagName === 'BUTTON' ||
+            target.tagName === 'A') {
+            return;
+        }
+
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        isSwiping = false;
+    }, { passive: true });
+
+    modalDialog.addEventListener('touchmove', function(e) {
+        if (!touchStartX) return;
+
+        const target = e.target;
+        if (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.tagName === 'BUTTON' ||
+            target.tagName === 'A') {
+            return;
+        }
+
+        const touchCurrentX = e.touches[0].clientX;
+        const touchCurrentY = e.touches[0].clientY;
+        const deltaX = touchCurrentX - touchStartX;
+        const deltaY = touchCurrentY - touchStartY;
+
+        // Detect horizontal swipe (more horizontal than vertical)
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+            isSwiping = true;
+        }
+    }, { passive: true });
+
+    modalDialog.addEventListener('touchend', function(e) {
+        if (!touchStartX || !isSwiping) {
+            touchStartX = 0;
+            touchStartY = 0;
+            return;
+        }
+
+        const target = e.target;
+        if (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.tagName === 'BUTTON' ||
+            target.tagName === 'A') {
+            touchStartX = 0;
+            touchStartY = 0;
+            isSwiping = false;
+            return;
+        }
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        const deltaTime = Date.now() - touchStartTime;
+
+        // Swipe right: deltaX > 0 and significant horizontal movement
+        // Must be mostly horizontal (not diagonal) and fast enough or far enough
+        if (deltaX > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 2) {
+            // Swipe right detected - close modal
+            console.log('Swipe right detected, closing modal');
+            closeTuneDetailModal();
+        }
+
+        touchStartX = 0;
+        touchStartY = 0;
+        isSwiping = false;
+    }, { passive: true });
 }
 
 function cycleStatusFilter() {
@@ -1717,6 +1865,11 @@ function displayTuneDetailModalBasic(tune) {
     modal.style.display = 'flex';
     console.log('Modal display after setting:', modal.style.display);
 
+    // Add 'show' class after a small delay to trigger slide-in animation
+    setTimeout(() => {
+        modal.classList.add('show');
+    }, 10);
+
     // Record the time when modal is shown (used to ignore immediate clicks)
     modalShowTime = Date.now();
     console.log('modalShowTime set to:', modalShowTime);
@@ -1821,6 +1974,11 @@ function displayTuneDetailModal(tune) {
     console.log('Showing modal - display: flex');
     modal.style.display = 'flex';
 
+    // Add 'show' class after a small delay to trigger slide-in animation
+    setTimeout(() => {
+        modal.classList.add('show');
+    }, 10);
+
     // Record the time when modal is shown (used to ignore immediate clicks)
     modalShowTime = Date.now();
     console.log('Set modalShowTime to', modalShowTime);
@@ -1839,8 +1997,15 @@ function closeTuneDetailModal() {
     }
 
     const modal = document.getElementById('tune-detail-modal');
-    modal.style.display = 'none';
-    console.log('Modal closed');
+
+    // Remove 'show' class to trigger slide-out animation
+    modal.classList.remove('show');
+
+    // Wait for animation to complete before hiding
+    setTimeout(() => {
+        modal.style.display = 'none';
+        console.log('Modal closed');
+    }, 300); // Match the CSS transition duration
 }
 
 function incrementHeardCountFromModal(personTuneId) {
