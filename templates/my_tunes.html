@@ -54,7 +54,7 @@
         <div class="results-count">
             <span id="results-count-text"></span>
             <button id="sort-toggle" class="sort-toggle" onclick="cycleSortMode()" title="Toggle sort order">
-                <span id="sort-icon">a-z</span>
+                <span id="sort-icon">↓</span>
             </button>
         </div>
     </div>
@@ -270,8 +270,8 @@ let currentStatusFilterIndex = 0;
 
 // Sort mode cycle states
 const sortModes = [
-    { id: 'alpha-asc', label: 'a-z', icon: 'a-z', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
-    { id: 'alpha-desc', label: 'z-a', icon: 'z-a', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
+    { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
+    { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
     { id: 'popularity-desc', label: 'popularity high', icon: '#', sortFn: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0) },
     { id: 'popularity-asc', label: 'popularity low', icon: '#ꜜ', sortFn: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0) }
 ];
