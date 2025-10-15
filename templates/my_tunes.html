@@ -44,6 +44,12 @@
                     </select>
                 </div>
                 <div class="filter-group">
+                    <select id="status-filter-select" class="filter-select status-filter-select" title="Filter by learning status">
+                        <option value="">All Tunes</option>
+                        <option value="learned">Learned</option>
+                        <option value="learning">Learning</option>
+                        <option value="want to learn">Want To Learn</option>
+                    </select>
                     <button id="status-filter-btn" class="status-filter-btn" onclick="cycleStatusFilter()" title="Filter by learning status">
                         <span id="status-filter-icon">All</span>
                     </button>
@@ -343,6 +349,15 @@ function setupEventListeners() {
         applyFilters();
     });
 
+    // Status filter dropdown (desktop)
+    const statusFilterSelect = document.getElementById('status-filter-select');
+    if (statusFilterSelect) {
+        statusFilterSelect.addEventListener('change', function(e) {
+            currentFilters.status = e.target.value;
+            applyFilters();
+        });
+    }
+
     // Modal overlay click handler - close when clicking outside
     const modalOverlay = document.getElementById('tune-detail-modal');
 
@@ -619,7 +634,13 @@ function loadFiltersFromURL() {
         const status = params.get('status');
         currentFilters.status = status;
 
-        // Find the matching status filter state
+        // Set desktop dropdown
+        const statusFilterSelect = document.getElementById('status-filter-select');
+        if (statusFilterSelect) {
+            statusFilterSelect.value = status;
+        }
+
+        // Set mobile button (find the matching status filter state)
         const index = statusFilterStates.findIndex(s => s.value === status);
         if (index >= 0) {
             currentStatusFilterIndex = index;
@@ -1148,7 +1169,13 @@ function clearFilters() {
     document.getElementById('search-input').value = '';
     document.getElementById('type-filter').value = '';
 
-    // Reset status filter to "All"
+    // Reset desktop dropdown
+    const statusFilterSelect = document.getElementById('status-filter-select');
+    if (statusFilterSelect) {
+        statusFilterSelect.value = '';
+    }
+
+    // Reset mobile button to "All"
     currentStatusFilterIndex = 0;
     document.getElementById('status-filter-icon').textContent = 'All';
     document.getElementById('status-filter-btn').classList.remove('active');

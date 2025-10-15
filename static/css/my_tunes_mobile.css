@@ -139,6 +139,11 @@ html, body {
     flex-shrink: 0;
 }
 
+.status-filter-select {
+    display: block;
+    width: 140px;
+}
+
 .status-filter-btn {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
@@ -148,7 +153,7 @@ html, body {
     cursor: pointer;
     font-size: 14px;
     transition: all 0.2s;
-    display: flex;
+    display: none;
     align-items: center;
     gap: 6px;
     min-width: 60px;
@@ -167,72 +172,79 @@ html, body {
 }
 
 .tunes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    display: block;
     margin-bottom: 30px;
 }
 
 .tune-card {
     background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 20px;
-    transition: box-shadow 0.2s, transform 0.2s;
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 8px;
+    transition: background-color 0.1s;
     cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.tune-card:first-child {
+    border-top: 1px solid var(--border-color);
 }
 
 .tune-card:hover {
-    box-shadow: 0 4px 12px var(--dropdown-shadow);
-    transform: translateY(-2px);
+    background-color: var(--hover-bg);
 }
 
 .tune-card-header {
     display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: 15px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+    grid-column: 1;
 }
 
 .tune-name {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 500;
     color: var(--text-color);
     margin: 0;
-    flex: 1;
+    flex: 0 0 auto;
 }
 
 .tune-type {
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: 11px;
+    padding: 3px 6px;
     background-color: var(--primary);
     color: white;
-    border-radius: 4px;
+    border-radius: 3px;
     text-transform: capitalize;
     white-space: nowrap;
-    margin-left: 10px;
+    margin-left: 0;
 }
 
 .tune-meta {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 15px;
-    font-size: 14px;
+    flex-direction: row;
+    gap: 12px;
+    margin-bottom: 0;
+    font-size: 13px;
     color: var(--text-muted, #6c757d);
+    align-items: center;
+    grid-column: 2;
 }
 
 .tune-meta-item {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
 }
 
 .status-badge {
     display: inline-block;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
     font-weight: 500;
     text-transform: capitalize;
 }
@@ -253,9 +265,7 @@ html, body {
 }
 
 .tune-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 15px;
+    display: none;
 }
 
 .tune-action-btn {
@@ -279,13 +289,7 @@ html, body {
 }
 
 .heard-count-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-    padding: 8px;
-    background-color: var(--light);
-    border-radius: 4px;
+    display: none;
 }
 
 .heard-count {
@@ -867,7 +871,12 @@ html, body {
         box-sizing: border-box;
     }
 
+    .status-filter-select {
+        display: none;
+    }
+
     .status-filter-btn {
+        display: flex;
         font-size: 13px;
         padding: 8px 6px;
         min-width: 45px;
