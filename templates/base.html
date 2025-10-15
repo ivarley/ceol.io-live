@@ -41,9 +41,9 @@
                 const logoImg = document.getElementById('logo-img');
                 if (logoImg) {
                     if (theme === 'dark') {
-                        logoImg.src = logoImg.src.replace('logo1.png', 'logo1-dark-transparent.png');
+                        logoImg.src = logoImg.src.replace('logo1-3.png', 'logo1-dark-transparent-3.png');
                     } else {
-                        logoImg.src = logoImg.src.replace('logo1-dark-transparent.png', 'logo1.png');
+                        logoImg.src = logoImg.src.replace('logo1-dark-transparent-3.png', 'logo1-3.png');
                     }
                 }
             }
@@ -51,6 +51,33 @@
     </script>
 
     <style>
+        /* Header customization for new logo */
+        body {
+            padding-top: 40px !important;
+        }
+
+        .docs-branding {
+            min-height: auto !important;
+        }
+
+        .docs-logo-wrapper {
+            top: 2px !important;
+            left: 9px !important;
+        }
+
+        .site-logo .navbar-brand {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        .site-logo .navbar-brand img {
+            display: block;
+        }
+
+        .docs-content {
+            padding-top: 10px !important;
+        }
+
         /* Ephemeral Flash Message Styles */
         .message {
             position: fixed;
@@ -168,9 +195,9 @@
 <body class="docs-page">
 <header class="header fixed-top">	    
     <div class="branding docs-branding">
-        <div class="container-fluid position-relative py-2">
+        <div class="container-fluid position-relative" style="padding-top: 3px; padding-bottom: 3px;">
             <div class="docs-logo-wrapper">
-                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img id="logo-img" width="150" src="{{ url_for('static', filename='images/logo1.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
+                <div class="site-logo"><a class="navbar-brand" href="{{ url_for('home') }}"><img id="logo-img" width="150" src="{{ url_for('static', filename='images/logo1-3.png') }}" alt="logo"><span class="logo-text" style="font-weight: 50;">Traditional Irish Session Logs</span></a></div>
             </div><!--//docs-logo-wrapper-->
             <div class="docs-top-utilities d-flex justify-content-end align-items-center">
 
@@ -254,9 +281,9 @@ function updateLogo(theme) {
     const logoImg = document.getElementById('logo-img');
     if (logoImg) {
         if (theme === 'dark') {
-            logoImg.src = logoImg.src.replace('logo1.png', 'logo1-dark-transparent.png');
+            logoImg.src = logoImg.src.replace('logo1-3.png', 'logo1-dark-transparent-3.png');
         } else {
-            logoImg.src = logoImg.src.replace('logo1-dark-transparent.png', 'logo1.png');
+            logoImg.src = logoImg.src.replace('logo1-dark-transparent-3.png', 'logo1-3.png');
         }
     }
 }
