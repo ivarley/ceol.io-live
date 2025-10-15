@@ -9237,6 +9237,7 @@
     color: #252930;
     font-size: 1.25rem;
     font-weight: bold;
+    white-space: nowrap;
   }
   .site-logo .text-alt {
     font-weight: 300;
@@ -9245,6 +9246,9 @@
     font-size: 2rem;
     font-weight: 600;
     padding-top: 0;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
   }
   .page-header.theme-bg-dark .page-heading {
     color: #fff;
@@ -9359,6 +9363,7 @@
     position: absolute;
     left: 15px;
     top: 0.5rem;
+    max-width: calc(100% - 100px);
   }
   .docs-logo-wrapper .site-logo {
     display: inline-block;
@@ -9659,6 +9664,19 @@
   @media (max-width: 767.98px) {
     .site-logo .logo-text {
       display: none;
+    }
+  }
+
+  /* Keep logo text inline on desktop */
+  @media (min-width: 768px) {
+    .site-logo .navbar-brand {
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+    .site-logo .logo-text {
+      margin-left: 10px;
+      white-space: nowrap;
     }
   }
 
