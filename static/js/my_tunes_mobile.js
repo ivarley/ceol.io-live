@@ -22,6 +22,9 @@
     let refreshIndicator = null;
 
     function initPullToRefresh() {
+        // DISABLED: Conflicts with horizontal swipe gestures
+        return;
+
         // Only enable on my-tunes list page
         if (!document.querySelector('.my-tunes-container')) return;
         if (!document.querySelector('.tunes-grid')) return;

@@ -70,7 +70,7 @@ class TestPersonTuneAPI:
         
         # Add tunes to user's collection
         db_cursor.execute("""
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s), (%s, %s, %s, %s)
         """, (
             person_id, tune_id_1, 'want to learn', 3,
@@ -493,7 +493,7 @@ class TestPersonTuneAPI:
         """, (tune_id, f"Heard Count Tune {unique_id}", "Reel"))
         
         db_cursor.execute("""
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
         """, (person_id, tune_id, 'want to learn', 2))
@@ -506,8 +506,8 @@ class TestPersonTuneAPI:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
-        assert data["heard_before_learning_count"] == 3
-        assert data["person_tune"]["heard_before_learning_count"] == 3
+        assert data["heard_count"] == 3
+        assert data["person_tune"]["heard_count"] == 3
 
     def test_increment_heard_count_only_for_want_to_learn(self, client, authenticated_user, db_conn, db_cursor):
         """Test that heard count can only be incremented for 'want to learn' status."""
@@ -523,7 +523,7 @@ class TestPersonTuneAPI:
         """, (tune_id, f"Learning Status Tune {unique_id}", "Reel"))
         
         db_cursor.execute("""
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
         """, (person_id, tune_id, 'learning', 0))
@@ -559,7 +559,7 @@ class TestPersonTuneAPI:
         """, (tune_id, f"Other User Heard Tune {unique_id}", "Reel"))
         
         db_cursor.execute("""
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
             RETURNING person_tune_id
         """, (other_person_id, tune_id, 'want to learn', 0))
@@ -596,7 +596,7 @@ class TestPersonTuneAPI:
         """, (tune_id, f"Detail Tune {unique_id}", "Reel", 150))
         
         db_cursor.execute("""
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count, notes)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING person_tune_id
         """, (person_id, tune_id, 'want to learn', 5, 'Test notes'))
@@ -613,7 +613,7 @@ class TestPersonTuneAPI:
         assert data["person_tune"]["tune_name"] == f"Detail Tune {unique_id}"
         assert data["person_tune"]["tune_type"] == "Reel"
         assert data["person_tune"]["learn_status"] == "want to learn"
-        assert data["person_tune"]["heard_before_learning_count"] == 5
+        assert data["person_tune"]["heard_count"] == 5
         assert data["person_tune"]["notes"] == "Test notes"
         assert data["person_tune"]["tunebook_count"] == 150
         assert data["person_tune"]["thesession_url"] == f"https://thesession.org/tunes/{tune_id}"

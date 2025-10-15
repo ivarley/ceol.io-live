@@ -10,7 +10,7 @@ CREATE TABLE person_tune_history (
     person_id INTEGER NOT NULL,
     tune_id INTEGER NOT NULL,
     learn_status VARCHAR(20) NOT NULL,
-    heard_before_learning_count INTEGER DEFAULT 0,
+    heard_count INTEGER DEFAULT 0,
     learned_date TIMESTAMPTZ,
     notes TEXT,
     created_date TIMESTAMPTZ,

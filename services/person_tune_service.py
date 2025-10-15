@@ -170,7 +170,7 @@ class PersonTuneService:
         changed_by: str = 'system'
     ) -> Tuple[bool, str, Optional[int]]:
         """
-        Increment the heard_before_learning_count for a PersonTune.
+        Increment the heard_count for a PersonTune.
         
         Args:
             person_tune_id: ID of the PersonTune to update
@@ -201,7 +201,7 @@ class PersonTuneService:
         notes: Optional[str] = None,
         setting_id: Optional[int] = None,
         name_alias: Optional[str] = None,
-        heard_before_learning_count: Optional[int] = None,
+        heard_count: Optional[int] = None,
         changed_by: str = 'system'
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
@@ -213,7 +213,7 @@ class PersonTuneService:
             notes: Optional new notes
             setting_id: Optional thesession.org setting ID
             name_alias: Optional custom name/alias for the tune
-            heard_before_learning_count: Optional heard count (must be >= 0)
+            heard_count: Optional heard count (must be >= 0)
             changed_by: User who made the change
 
         Returns:
@@ -247,13 +247,13 @@ class PersonTuneService:
                 person_tune.name_alias = name_alias
                 changes_made.append("name_alias")
 
-            # Update heard_before_learning_count if provided (must be >= 0)
-            if heard_before_learning_count is not None:
-                if heard_before_learning_count < 0:
-                    return False, "heard_before_learning_count cannot be negative", None
-                if heard_before_learning_count != person_tune.heard_before_learning_count:
-                    person_tune.heard_before_learning_count = heard_before_learning_count
-                    changes_made.append("heard_before_learning_count")
+            # Update heard_count if provided (must be >= 0)
+            if heard_count is not None:
+                if heard_count < 0:
+                    return False, "heard_count cannot be negative", None
+                if heard_count != person_tune.heard_count:
+                    person_tune.heard_count = heard_count
+                    changes_made.append("heard_count")
 
             # Save changes if any were made
             if changes_made:
@@ -418,7 +418,7 @@ class PersonTuneService:
                 learn_status_filter='want to learn'
             )
             
-            heard_counts = [tune.heard_before_learning_count for tune in want_to_learn_tunes]
+            heard_counts = [tune.heard_count for tune in want_to_learn_tunes]
             
             if not heard_counts:
                 return {
@@ -489,7 +489,7 @@ class PersonTuneService:
             query = """
                 SELECT
                     pt.person_tune_id, pt.person_id, pt.tune_id, pt.learn_status,
-                    pt.heard_before_learning_count, pt.learned_date, pt.notes,
+                    pt.heard_count, pt.learned_date, pt.notes,
                     pt.setting_id, pt.name_alias,
                     pt.created_date, pt.last_modified_date,
                     COALESCE(pt.name_alias, t.name) AS tune_name, t.tune_type, t.tunebook_count_cached
@@ -545,7 +545,7 @@ class PersonTuneService:
                     'person_id': row[1],
                     'tune_id': row[2],
                     'learn_status': row[3],
-                    'heard_before_learning_count': row[4],
+                    'heard_count': row[4],
                     'learned_date': row[5].isoformat() if row[5] else None,
                     'notes': row[6],
                     'setting_id': row[7],

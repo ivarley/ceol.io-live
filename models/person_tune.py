@@ -27,7 +27,7 @@ class PersonTune:
         person_id: Optional[int] = None,
         tune_id: Optional[int] = None,
         learn_status: str = DEFAULT_LEARN_STATUS,
-        heard_before_learning_count: int = 0,
+        heard_count: int = 0,
         learned_date: Optional[datetime] = None,
         notes: Optional[str] = None,
         setting_id: Optional[int] = None,
@@ -39,7 +39,7 @@ class PersonTune:
         self.person_id = person_id
         self.tune_id = tune_id
         self.learn_status = learn_status
-        self.heard_before_learning_count = heard_before_learning_count
+        self.heard_count = heard_count
         self.learned_date = learned_date
         self.notes = notes
         self.setting_id = setting_id
@@ -64,11 +64,11 @@ class PersonTune:
                 f"got '{self.learn_status}'"
             )
         
-        # Validate heard_before_learning_count
-        if self.heard_before_learning_count < 0:
+        # Validate heard_count
+        if self.heard_count < 0:
             raise ValueError(
-                f"heard_before_learning_count must be non-negative, "
-                f"got {self.heard_before_learning_count}"
+                f"heard_count must be non-negative, "
+                f"got {self.heard_count}"
             )
         
         # Validate person_id and tune_id if provided
@@ -144,30 +144,21 @@ class PersonTune:
     
     def increment_heard_count(self, changed_by: str = 'system') -> int:
         """
-        Increment the heard_before_learning_count by 1.
-        
+        Increment the heard_count by 1.
+
         Args:
             changed_by: User who made the change
-            
+
         Returns:
             int: New heard count value
-            
-        Raises:
-            ValueError: If tune is not in 'want to learn' status
         """
-        if self.learn_status != 'want to learn':
-            raise ValueError(
-                f"Can only increment heard count for tunes with 'want to learn' status, "
-                f"current status is '{self.learn_status}'"
-            )
-        
-        self.heard_before_learning_count += 1
-        
+        self.heard_count += 1
+
         # Update in database if this is a persisted record
         if self.person_tune_id is not None:
             self._update_in_database(changed_by)
-        
-        return self.heard_before_learning_count
+
+        return self.heard_count
     
     def _update_in_database(self, changed_by: str = 'system') -> None:
         """
@@ -191,7 +182,7 @@ class PersonTune:
             cur.execute("""
                 UPDATE person_tune
                 SET learn_status = %s,
-                    heard_before_learning_count = %s,
+                    heard_count = %s,
                     learned_date = %s,
                     notes = %s,
                     setting_id = %s,
@@ -200,7 +191,7 @@ class PersonTune:
                 WHERE person_tune_id = %s
             """, (
                 self.learn_status,
-                self.heard_before_learning_count,
+                self.heard_count,
                 self.learned_date,
                 self.notes,
                 self.setting_id,
@@ -241,7 +232,7 @@ class PersonTune:
                 # Insert new record
                 cur.execute("""
                     INSERT INTO person_tune (
-                        person_id, tune_id, learn_status, heard_before_learning_count,
+                        person_id, tune_id, learn_status, heard_count,
                         learned_date, notes, setting_id, name_alias, created_date, last_modified_date
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
                              (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
@@ -250,7 +241,7 @@ class PersonTune:
                     self.person_id,
                     self.tune_id,
                     self.learn_status,
-                    self.heard_before_learning_count,
+                    self.heard_count,
                     self.learned_date,
                     self.notes,
                     self.setting_id,
@@ -266,14 +257,14 @@ class PersonTune:
                 cur.execute("""
                     INSERT INTO person_tune_history (
                         person_tune_id, person_id, tune_id, learn_status,
-                        heard_before_learning_count, learned_date, notes,
+                        heard_count, learned_date, notes,
                         setting_id, name_alias,
                         operation, changed_by, changed_at, created_date
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                              (NOW() AT TIME ZONE 'UTC'), %s)
                 """, (
                     self.person_tune_id, self.person_id, self.tune_id,
-                    self.learn_status, self.heard_before_learning_count,
+                    self.learn_status, self.heard_count,
                     self.learned_date, self.notes, self.setting_id, self.name_alias,
                     'INSERT', changed_by,
                     self.created_date
@@ -308,7 +299,7 @@ class PersonTune:
             cur = conn.cursor()
             cur.execute("""
                 SELECT person_tune_id, person_id, tune_id, learn_status,
-                       heard_before_learning_count, learned_date, notes,
+                       heard_count, learned_date, notes,
                        setting_id, name_alias,
                        created_date, last_modified_date
                 FROM person_tune
@@ -322,7 +313,7 @@ class PersonTune:
                     person_id=row[1],
                     tune_id=row[2],
                     learn_status=row[3],
-                    heard_before_learning_count=row[4],
+                    heard_count=row[4],
                     learned_date=row[5],
                     notes=row[6],
                     setting_id=row[7],
@@ -352,7 +343,7 @@ class PersonTune:
             cur = conn.cursor()
             cur.execute("""
                 SELECT person_tune_id, person_id, tune_id, learn_status,
-                       heard_before_learning_count, learned_date, notes,
+                       heard_count, learned_date, notes,
                        setting_id, name_alias,
                        created_date, last_modified_date
                 FROM person_tune
@@ -366,7 +357,7 @@ class PersonTune:
                     person_id=row[1],
                     tune_id=row[2],
                     learn_status=row[3],
-                    heard_before_learning_count=row[4],
+                    heard_count=row[4],
                     learned_date=row[5],
                     notes=row[6],
                     setting_id=row[7],
@@ -405,38 +396,38 @@ class PersonTune:
             
             query = """
                 SELECT person_tune_id, person_id, tune_id, learn_status,
-                       heard_before_learning_count, learned_date, notes,
+                       heard_count, learned_date, notes,
                        setting_id, name_alias,
                        created_date, last_modified_date
                 FROM person_tune
                 WHERE person_id = %s
             """
             params = [person_id]
-            
+
             if learn_status_filter:
                 query += " AND learn_status = %s"
                 params.append(learn_status_filter)
-            
+
             query += " ORDER BY created_date DESC"
-            
+
             if limit:
                 query += " LIMIT %s"
                 params.append(limit)
-            
+
             if offset > 0:
                 query += " OFFSET %s"
                 params.append(offset)
-            
+
             cur.execute(query, params)
             rows = cur.fetchall()
-            
+
             return [
                 cls(
                     person_tune_id=row[0],
                     person_id=row[1],
                     tune_id=row[2],
                     learn_status=row[3],
-                    heard_before_learning_count=row[4],
+                    heard_count=row[4],
                     learned_date=row[5],
                     notes=row[6],
                     setting_id=row[7],
@@ -493,7 +484,7 @@ class PersonTune:
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert the PersonTune to a dictionary representation.
-        
+
         Returns:
             Dict containing all PersonTune fields
         """
@@ -502,7 +493,7 @@ class PersonTune:
             'person_id': self.person_id,
             'tune_id': self.tune_id,
             'learn_status': self.learn_status,
-            'heard_before_learning_count': self.heard_before_learning_count,
+            'heard_count': self.heard_count,
             'learned_date': self.learned_date.isoformat() if self.learned_date else None,
             'notes': self.notes,
             'setting_id': self.setting_id,
@@ -510,16 +501,16 @@ class PersonTune:
             'created_date': self.created_date.isoformat() if self.created_date else None,
             'last_modified_date': self.last_modified_date.isoformat() if self.last_modified_date else None
         }
-    
+
     def __repr__(self) -> str:
         return (
             f"PersonTune(person_tune_id={self.person_tune_id}, "
             f"person_id={self.person_id}, tune_id={self.tune_id}, "
             f"learn_status='{self.learn_status}', "
-            f"heard_before_learning_count={self.heard_before_learning_count}, "
+            f"heard_count={self.heard_count}, "
             f"setting_id={self.setting_id}, name_alias='{self.name_alias}')"
         )
-    
+
     def __eq__(self, other) -> bool:
         if not isinstance(other, PersonTune):
             return False
@@ -528,7 +519,7 @@ class PersonTune:
             self.person_id == other.person_id and
             self.tune_id == other.tune_id and
             self.learn_status == other.learn_status and
-            self.heard_before_learning_count == other.heard_before_learning_count and
+            self.heard_count == other.heard_count and
             self.learned_date == other.learned_date and
             self.notes == other.notes and
             self.setting_id == other.setting_id and

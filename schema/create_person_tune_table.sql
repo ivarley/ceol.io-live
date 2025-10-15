@@ -5,7 +5,7 @@ CREATE TABLE person_tune (
     tune_id INTEGER NOT NULL REFERENCES tune(tune_id) ON DELETE CASCADE,
     learn_status VARCHAR(20) NOT NULL DEFAULT 'want to learn' 
         CHECK (learn_status IN ('want to learn', 'learning', 'learned')),
-    heard_before_learning_count INTEGER DEFAULT 0 CHECK (heard_before_learning_count >= 0),
+    heard_count INTEGER DEFAULT 0 CHECK (heard_count >= 0),
     learned_date TIMESTAMPTZ, -- Set when status changes to 'learned'
     notes TEXT,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),

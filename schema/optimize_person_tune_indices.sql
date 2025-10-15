@@ -15,10 +15,10 @@ ON person_tune (person_id, created_date DESC);
 -- Already has UNIQUE constraint, but explicit index helps query planner
 -- This is already covered by the UNIQUE constraint, so we skip it
 
--- Index for heard_before_learning_count queries
+-- Index for heard_count queries
 -- Optimizes queries that filter or sort by heard count
 CREATE INDEX IF NOT EXISTS idx_person_tune_heard_count 
-ON person_tune (person_id, heard_before_learning_count) 
+ON person_tune (person_id, heard_count) 
 WHERE learn_status = 'want to learn';
 
 -- Analyze the table to update statistics for query planner

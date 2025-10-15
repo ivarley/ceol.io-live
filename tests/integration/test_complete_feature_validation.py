@@ -121,7 +121,7 @@ class TestRequirement1_LearningProgressTracking:
             assert b'my-tunes' in response.data.lower()
     
     def test_1_6_increment_heard_count(self, client, authenticated_user, db_conn, db_cursor):
-        """WHEN user clicks '+' button THEN system SHALL increment heard_before_learning_count."""
+        """WHEN user clicks '+' button THEN system SHALL increment heard_count."""
         with authenticated_user:
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)
@@ -132,7 +132,7 @@ class TestRequirement1_LearningProgressTracking:
                 DELETE FROM person_tune WHERE person_id = %s AND tune_id = 1005
             """, (authenticated_user.person_id,))
             db_cursor.execute("""
-                INSERT INTO person_tune (person_id, tune_id, learn_status, heard_before_learning_count)
+                INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
                 VALUES (%s, 1005, 'want to learn', 0)
                 RETURNING person_tune_id
             """, (authenticated_user.person_id,))
@@ -144,7 +144,7 @@ class TestRequirement1_LearningProgressTracking:
             
             # Verify increment
             db_cursor.execute("""
-                SELECT heard_before_learning_count FROM person_tune
+                SELECT heard_count FROM person_tune
                 WHERE person_tune_id = %s
             """, (person_tune_id,))
             assert db_cursor.fetchone()[0] == 1
@@ -498,7 +498,7 @@ class TestCompleteWorkflows:
             
             # Verify final state
             db_cursor.execute("""
-                SELECT learn_status, heard_before_learning_count, learned_date
+                SELECT learn_status, heard_count, learned_date
                 FROM person_tune WHERE person_tune_id = %s
             """, (person_tune_id,))
             row = db_cursor.fetchone()

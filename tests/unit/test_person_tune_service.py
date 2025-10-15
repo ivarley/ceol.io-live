@@ -560,11 +560,11 @@ class TestPersonTuneServiceStatistics:
         """Test getting heard count statistics."""
         # Create mock PersonTune objects with different heard counts
         mock_tunes = [
-            MagicMock(heard_before_learning_count=0),  # Never heard
-            MagicMock(heard_before_learning_count=1),  # Heard once
-            MagicMock(heard_before_learning_count=3),  # Heard multiple times
-            MagicMock(heard_before_learning_count=5),  # Heard multiple times
-            MagicMock(heard_before_learning_count=0)   # Never heard
+            MagicMock(heard_count=0),  # Never heard
+            MagicMock(heard_count=1),  # Heard once
+            MagicMock(heard_count=3),  # Heard multiple times
+            MagicMock(heard_count=5),  # Heard multiple times
+            MagicMock(heard_count=0)   # Never heard
         ]
         
         with patch.object(self.service, 'get_person_tunes') as mock_get_tunes:

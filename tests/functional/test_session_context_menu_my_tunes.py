@@ -57,7 +57,7 @@ class TestSessionContextMenuMyTunes:
         assert 'learned' in template_content
         
         # Check for heard count increment option
-        assert 'Heard (' in template_content or 'heard_before_learning_count' in template_content
+        assert 'Heard (' in template_content or 'heard_count' in template_content
     
     def test_cannot_add_unlinked_tune_to_collection(
         self, client, authenticated_user

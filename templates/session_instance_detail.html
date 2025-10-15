@@ -1195,7 +1195,7 @@ if (document.readyState === 'loading') {
                                 // Add "Increment Heard" option if status is "want to learn"
                                 if (personTune.learn_status === 'want to learn') {
                                     const heardLink = document.createElement('a');
-                                    heardLink.textContent = `Heard (${personTune.heard_before_learning_count || 0})`;
+                                    heardLink.textContent = `Heard (${personTune.heard_count || 0})`;
                                     heardLink.style.borderTop = '1px solid rgba(255,255,255,0.2)';
                                     heardLink.style.marginTop = '4px';
                                     heardLink.style.paddingTop = '8px';
@@ -2269,7 +2269,7 @@ if (document.readyState === 'loading') {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage(`Heard count for "${tuneName}" incremented to ${data.heard_before_learning_count}`);
+                    showMessage(`Heard count for "${tuneName}" incremented to ${data.heard_count}`);
                     // Update cache
                     if (data.person_tune) {
                         personTuneCache[data.person_tune.tune_id] = data.person_tune;

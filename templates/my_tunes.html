@@ -5,6 +5,12 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <style>
+    /* Prevent page bounce/overscroll and pull-to-refresh on mobile */
+    html, body {
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh */
+        overscroll-behavior-x: none; /* Prevent horizontal bounce */
+    }
+
     .my-tunes-container {
         max-width: 1200px;
         margin: 0 auto;
@@ -1028,34 +1034,7 @@
         text-align: center;
     }
 
-    /* Swipe gesture styles for mobile heard count */
-    @media (max-width: 768px) {
-        .tune-card-swipe-container {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .tune-card-swipe-action {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 60px;
-            background-color: var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            transform: translateX(100%);
-            transition: transform 0.2s ease-out;
-        }
-
-        .tune-card-swipe-container.swiping .tune-card-swipe-action {
-            transform: translateX(0);
-        }
-    }
+    /* Old swipe styles removed - see new implementation near bottom of file */
 
     /* Mobile adjustments for modal - full page slide-in */
     @media (max-width: 768px) {
@@ -2000,15 +1979,201 @@ function renderTunes() {
     }
 
     // Render tune cards
+    console.log('Rendering', filteredTunes.length, 'tunes. Window width:', window.innerWidth);
+    const wantToLearnCount = filteredTunes.filter(t => t.learn_status === 'want to learn').length;
+    console.log('Want to learn tunes:', wantToLearnCount);
+
     grid.innerHTML = filteredTunes.map(tune => createTuneCard(tune)).join('');
+
+    // Initialize swipe listeners for mobile
+    if (window.innerWidth <= 768) {
+        initializeSwipeListeners();
+    }
+}
+
+function initializeSwipeListeners() {
+    const swipeContainers = document.querySelectorAll('.tune-card-swipe-container');
+
+    console.log('Initializing swipe listeners for', swipeContainers.length, 'containers');
+
+    // Global variable to track currently revealed row
+    let currentlyRevealed = null;
+
+    swipeContainers.forEach((container, index) => {
+        const card = container.querySelector('.tune-card-swipeable');
+        const button = container.querySelector('.swipe-action-btn');
+        const actionDiv = container.querySelector('.tune-card-swipe-action');
+
+        if (!card || !button || !actionDiv) {
+            console.error('Missing elements in container', index);
+            return;
+        }
+
+        const buttonWidth = 80; // matches CSS
+        let startX = 0;
+        let startY = 0;
+        let currentX = 0;
+        let isDragging = false;
+        let isRevealed = false;
+        let swipeDirection = null; // 'horizontal' or 'vertical'
+
+        // Track touch/mouse position during swipe
+        card.addEventListener('touchstart', (e) => {
+            console.log('touchstart');
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            currentX = 0;
+            isDragging = true;
+            swipeDirection = null;
+
+            // Close any previously revealed row (different from current)
+            if (currentlyRevealed && currentlyRevealed !== container) {
+                const prevCard = currentlyRevealed.querySelector('.tune-card-swipeable');
+                const prevActionDiv = currentlyRevealed.querySelector('.tune-card-swipe-action');
+                if (prevCard && prevActionDiv) {
+                    prevCard.classList.remove('revealed');
+                    prevCard.style.transform = '';
+                    prevActionDiv.style.width = '0px';
+                }
+                currentlyRevealed = null;
+            }
+
+            // If this card was previously revealed, close it immediately when starting new drag
+            if (isRevealed) {
+                card.classList.remove('revealed');
+                isRevealed = false;
+                card.style.transform = '';
+                actionDiv.style.width = '0px';
+            }
+        }, { passive: true });
+
+        card.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+
+            const touch = e.touches[0];
+            const diffX = touch.clientX - startX; // Changed: now positive when moving right
+            const diffY = touch.clientY - startY;
+
+            // Determine swipe direction on first move
+            if (swipeDirection === null && (Math.abs(diffX) > 5 || Math.abs(diffY) > 5)) {
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    swipeDirection = 'horizontal';
+                    card.classList.add('swiping');
+                } else {
+                    swipeDirection = 'vertical';
+                }
+            }
+
+            // Only handle horizontal swipes
+            if (swipeDirection === 'horizontal') {
+                // Only allow right swipe (positive diffX means finger moving right)
+                if (diffX > 0) {
+                    currentX = Math.min(diffX, buttonWidth * 2); // Allow swipe up to 2x button width
+
+                    // Update card position - move card right
+                    card.style.transform = `translateX(${currentX}px)`;
+
+                    // Button width matches drag distance (so it reveals progressively)
+                    actionDiv.style.width = `${currentX}px`;
+
+                    // Prevent scrolling for horizontal swipes
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
+        card.addEventListener('touchend', (e) => {
+            console.log('touchend - swipeDirection:', swipeDirection, 'currentX:', currentX);
+            if (!isDragging) return;
+            isDragging = false;
+            card.classList.remove('swiping');
+
+            // Only process horizontal swipes
+            if (swipeDirection === 'horizontal') {
+                // Determine action based on swipe distance
+                if (currentX > buttonWidth) {
+                    // Swiped past button width - trigger increment
+                    console.log('Triggering increment (swiped past button width)');
+                    currentlyRevealed = null; // Clear global tracking
+                    triggerIncrementWithAnimation(container, button);
+                } else if (currentX > buttonWidth * 0.25) {
+                    // Swiped more than 25% - stay revealed
+                    console.log('Staying revealed');
+                    // Set transform to current position, force reflow, then add class to animate
+                    const currentPosition = currentX;
+                    card.style.transform = `translateX(${currentPosition}px)`;
+                    card.offsetHeight; // Force reflow
+                    card.classList.add('revealed');
+                    isRevealed = true;
+                    currentlyRevealed = container; // Track globally
+                    // Clear inline transform so class takes over
+                    setTimeout(() => {
+                        card.style.transform = '';
+                    }, 0);
+                    actionDiv.style.width = `${buttonWidth}px`;
+                } else {
+                    // Swiped less than 25% - slide back
+                    console.log('Sliding back');
+                    card.classList.remove('revealed');
+                    isRevealed = false;
+                    currentlyRevealed = null; // Clear global tracking
+                    card.style.transform = '';
+                    actionDiv.style.width = '0px';
+                }
+            }
+
+            currentX = 0;
+            swipeDirection = null;
+        }, { passive: true });
+
+        // Handle button click
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Button clicked');
+            currentlyRevealed = null; // Clear global tracking
+            triggerIncrementWithAnimation(container, button);
+        });
+
+        // Close revealed state when tapping elsewhere
+        document.addEventListener('click', (e) => {
+            if (isRevealed && !container.contains(e.target)) {
+                card.classList.remove('revealed');
+                isRevealed = false;
+                currentlyRevealed = null; // Clear global tracking
+                actionDiv.style.width = '0px';
+            }
+        });
+    });
+}
+
+function triggerIncrementWithAnimation(container, button) {
+    const personTuneId = parseInt(button.dataset.personTuneId);
+    const card = container.querySelector('.tune-card-swipeable');
+
+    // Get current heard count
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    const oldCount = tune ? tune.heard_count : 0;
+
+    // Animate button click
+    button.style.backgroundColor = '#218838';
+    setTimeout(() => {
+        button.style.backgroundColor = '';
+    }, 200);
+
+    // Slide card back
+    card.classList.remove('revealed');
+    card.style.transform = '';
+
+    // Call increment function with old count for toast message
+    incrementHeardCountWithToast(personTuneId, oldCount);
 }
 
 function createTuneCard(tune) {
     const statusClass = `status-${tune.learn_status.replace(/ /g, '-')}`;
-    const heardCountHTML = tune.learn_status === 'want to learn' && tune.heard_before_learning_count > 0
+    const heardCountHTML = tune.learn_status === 'want to learn' && tune.heard_count > 0
         ? `<div class="heard-count-container">
                <span>Heard at sessions:</span>
-               <span class="heard-count">${tune.heard_before_learning_count}</span>
+               <span class="heard-count">${tune.heard_count}</span>
                <button class="increment-heard-btn" onclick="incrementHeardCount(${tune.person_tune_id}); event.stopPropagation();" title="Increment heard count">+</button>
            </div>`
         : tune.learn_status === 'want to learn'
@@ -2030,28 +2195,60 @@ function createTuneCard(tune) {
         ? (tune.tunebook_count || 0).toString()
         : tune.tune_type || '';
 
-    // Add data attribute for swipe functionality on mobile (only for "want to learn" status)
-    const canSwipe = tune.learn_status === 'want to learn';
-    const swipeAttr = canSwipe ? `data-can-swipe="true" data-person-tune-id="${tune.person_tune_id}"` : '';
+    // Add data attribute for swipe functionality on mobile
+    const swipeAttr = `data-person-tune-id="${tune.person_tune_id}"`;
 
-    return `
-        <div class="tune-card" ${swipeAttr} onclick="showTuneDetail(${tune.person_tune_id}, event)">
-            <div class="tune-card-header">
-                <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
-                ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
-            </div>
-            <div class="tune-meta">
-                <div class="tune-meta-item">
-                    <span class="status-badge ${statusClass}">${tune.learn_status}</span>
+    // Show increment button for all tunes on mobile
+    const canIncrement = true;
+
+    // For mobile, wrap all cards in a container with the action button
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        return `
+            <div class="tune-card-swipe-container" ${swipeAttr}>
+                <div class="tune-card-swipe-action">
+                    <button class="swipe-action-btn" data-action="increment" data-person-tune-id="${tune.person_tune_id}">
+                        <span class="swipe-action-icon">+</span>
+                    </button>
                 </div>
-                ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
+                <div class="tune-card tune-card-swipeable" onclick="showTuneDetail(${tune.person_tune_id}, event)">
+                    <div class="tune-card-header">
+                        <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
+                        ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
+                    </div>
+                    <div class="tune-meta">
+                        <div class="tune-meta-item">
+                            <span class="status-badge ${statusClass}">${tune.learn_status}</span>
+                        </div>
+                        ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
+                    </div>
+                    ${heardCountHTML}
+                    <div class="tune-actions">
+                        ${thesessionLink}
+                    </div>
+                </div>
             </div>
-            ${heardCountHTML}
-            <div class="tune-actions">
-                ${thesessionLink}
+        `;
+    } else {
+        return `
+            <div class="tune-card" ${swipeAttr} onclick="showTuneDetail(${tune.person_tune_id}, event)">
+                <div class="tune-card-header">
+                    <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
+                    ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
+                </div>
+                <div class="tune-meta">
+                    <div class="tune-meta-item">
+                        <span class="status-badge ${statusClass}">${tune.learn_status}</span>
+                    </div>
+                    ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
+                </div>
+                ${heardCountHTML}
+                <div class="tune-actions">
+                    ${thesessionLink}
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 function clearFilters() {
@@ -2073,8 +2270,24 @@ function clearFilters() {
 }
 
 function incrementHeardCount(personTuneId) {
-    const loading = showLoading('Updating heard count...');
-    
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    const oldCount = tune ? tune.heard_count : 0;
+    incrementHeardCountWithToast(personTuneId, oldCount);
+}
+
+function incrementHeardCountWithToast(personTuneId, oldCount) {
+    // Optimistically update UI and show toast immediately
+    const newCount = oldCount + 1;
+    showMessage(`Heard count: ${oldCount} → ${newCount}`, 'success');
+
+    // Update local data immediately
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    if (tune) {
+        tune.heard_count = newCount;
+        applyFilters(); // Re-render
+    }
+
+    // Send update to server in background
     fetchWithRetry(`/api/my-tunes/${personTuneId}/heard`, {
         method: 'POST',
         headers: {
@@ -2089,18 +2302,19 @@ function incrementHeardCount(personTuneId) {
         return response.json();
     })
     .then(data => {
-        loading.hide();
-        showMessage('Heard count updated!', 'success');
-        // Update the tune in our local data
-        const tune = allTunes.find(t => t.person_tune_id === personTuneId);
-        if (tune) {
-            tune.heard_before_learning_count = data.heard_before_learning_count;
-            applyFilters(); // Re-render
+        // Silently sync the actual count from server
+        if (tune && data.heard_count !== newCount) {
+            tune.heard_count = data.heard_count;
+            applyFilters(); // Re-render with actual count
         }
     })
     .catch(error => {
-        loading.hide();
         console.error('Error incrementing heard count:', error);
+        // Revert the optimistic update on error
+        if (tune) {
+            tune.heard_count = oldCount;
+            applyFilters();
+        }
         const errorInfo = handleApiError(error);
         showMessage(errorInfo.message, 'error');
     });
@@ -2320,7 +2534,7 @@ function displayTuneDetailModalFull(tune) {
     }
 
     // Update heard count display
-    updateHeardCountDisplay(tune.heard_before_learning_count || 0);
+    updateHeardCountDisplay(tune.heard_count || 0);
 
     // Update button states
     updateHeardCountButtonStates();
@@ -2330,7 +2544,7 @@ function displayTuneDetailModalFull(tune) {
     modal.dataset.originalNotes = tune.notes || '';
     modal.dataset.originalSettingId = tune.setting_id || '';
     modal.dataset.originalNameAlias = tune.name_alias || '';
-    modal.dataset.currentHeardCount = tune.heard_before_learning_count || 0;
+    modal.dataset.currentHeardCount = tune.heard_count || 0;
 }
 
 function displayTuneDetailModal(tune) {
@@ -2443,14 +2657,14 @@ function incrementHeardCountFromModal(personTuneId) {
         // Update the tune in our local data
         const tune = allTunes.find(t => t.person_tune_id === personTuneId);
         if (tune) {
-            tune.heard_before_learning_count = data.heard_before_learning_count;
+            tune.heard_count = data.heard_count;
             applyFilters(); // Re-render
         }
         
         // Update the modal display
         const heardCountSpan = document.getElementById('modal-heard-count');
         if (heardCountSpan) {
-            heardCountSpan.textContent = data.heard_before_learning_count;
+            heardCountSpan.textContent = data.heard_count;
         }
     })
     .catch(error => {
@@ -2522,7 +2736,7 @@ function incrementHeardCountModal() {
     // Update the tune in our local data
     const tune = allTunes.find(t => t.person_tune_id === personTuneId);
     if (tune) {
-        tune.heard_before_learning_count = newCount;
+        tune.heard_count = newCount;
         applyFilters(); // Re-render
     }
 
@@ -2535,7 +2749,7 @@ function incrementHeardCountModal() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ heard_before_learning_count: newCount })
+        body: JSON.stringify({ heard_count: newCount })
     })
     .then(response => {
         if (!response.ok) {
@@ -2556,7 +2770,7 @@ function incrementHeardCountModal() {
         updateHeardCountDisplay(currentCount);
         updateHeardCountButtonStates();
         if (tune) {
-            tune.heard_before_learning_count = currentCount;
+            tune.heard_count = currentCount;
             applyFilters();
         }
         modal.dataset.currentHeardCount = currentCount;
@@ -2585,7 +2799,7 @@ function decrementHeardCountModal() {
     // Update the tune in our local data
     const tune = allTunes.find(t => t.person_tune_id === personTuneId);
     if (tune) {
-        tune.heard_before_learning_count = newCount;
+        tune.heard_count = newCount;
         applyFilters(); // Re-render
     }
 
@@ -2598,7 +2812,7 @@ function decrementHeardCountModal() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ heard_before_learning_count: newCount })
+        body: JSON.stringify({ heard_count: newCount })
     })
     .then(response => {
         if (!response.ok) {
@@ -2619,7 +2833,7 @@ function decrementHeardCountModal() {
         updateHeardCountDisplay(currentCount);
         updateHeardCountButtonStates();
         if (tune) {
-            tune.heard_before_learning_count = currentCount;
+            tune.heard_count = currentCount;
             applyFilters();
         }
         modal.dataset.currentHeardCount = currentCount;
@@ -2864,6 +3078,73 @@ function showMessage(message, type) {
 </script>
 
 <style>
+/* Swipe-to-reveal styles for mobile */
+@media (max-width: 768px) {
+    .tune-card-swipe-container {
+        position: relative;
+        overflow: visible; /* Changed from hidden to see button */
+        width: 100%;
+        height: 100%;
+    }
+
+    .tune-card-swipe-action {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0; /* Start hidden, will be set by JS during drag */
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #28a745;
+        z-index: 0; /* Behind the card */
+        overflow: hidden;
+    }
+
+    .swipe-action-btn {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: transparent;
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: background-color 0.2s;
+    }
+
+    .swipe-action-btn:active {
+        background-color: #218838;
+    }
+
+    .swipe-action-icon {
+        display: block;
+        line-height: 1;
+    }
+
+    .tune-card-swipeable {
+        position: relative;
+        z-index: 1; /* In front of the button */
+        background-color: var(--bg-color);
+        transition: transform 0.3s ease-out;
+        transform: translateX(0);
+        width: 100%;
+    }
+
+    .tune-card-swipeable.swiping {
+        transition: none;
+    }
+
+    .tune-card-swipeable.revealed {
+        transform: translateX(80px);
+    }
+}
+
 @keyframes slideDown {
     from {
         opacity: 0;
@@ -2889,5 +3170,6 @@ function showMessage(message, type) {
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/swipe-listener.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
 {% endblock %}

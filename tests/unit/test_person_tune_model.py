@@ -20,13 +20,13 @@ class TestPersonTuneValidation:
             person_id=1,
             tune_id=100,
             learn_status='learning',
-            heard_before_learning_count=3
+            heard_count=3
         )
         
         assert person_tune.person_id == 1
         assert person_tune.tune_id == 100
         assert person_tune.learn_status == 'learning'
-        assert person_tune.heard_before_learning_count == 3
+        assert person_tune.heard_count == 3
         assert person_tune.learned_date is None
         assert person_tune.notes is None
     
@@ -35,7 +35,7 @@ class TestPersonTuneValidation:
         person_tune = PersonTune()
         
         assert person_tune.learn_status == 'want to learn'
-        assert person_tune.heard_before_learning_count == 0
+        assert person_tune.heard_count == 0
         assert person_tune.person_tune_id is None
         assert person_tune.person_id is None
         assert person_tune.tune_id is None
@@ -47,8 +47,8 @@ class TestPersonTuneValidation:
     
     def test_negative_heard_count(self):
         """Test validation fails with negative heard count."""
-        with pytest.raises(ValueError, match="heard_before_learning_count must be non-negative"):
-            PersonTune(heard_before_learning_count=-1)
+        with pytest.raises(ValueError, match="heard_count must be non-negative"):
+            PersonTune(heard_count=-1)
     
     def test_invalid_person_id(self):
         """Test validation fails with invalid person_id."""
@@ -176,13 +176,13 @@ class TestPersonTuneHeardCount:
         """Test incrementing heard count for 'want to learn' status."""
         person_tune = PersonTune(
             learn_status='want to learn',
-            heard_before_learning_count=2
+            heard_count=2
         )
         
         result = person_tune.increment_heard_count()
         
         assert result == 3
-        assert person_tune.heard_before_learning_count == 3
+        assert person_tune.heard_count == 3
     
     def test_increment_heard_count_invalid_status(self):
         """Test incrementing heard count fails for non-'want to learn' status."""
@@ -197,12 +197,12 @@ class TestPersonTuneHeardCount:
         person_tune = PersonTune(
             person_tune_id=1,
             learn_status='want to learn',
-            heard_before_learning_count=0
+            heard_count=0
         )
         
         person_tune.increment_heard_count(changed_by='test_user')
         
-        assert person_tune.heard_before_learning_count == 1
+        assert person_tune.heard_count == 1
         mock_update.assert_called_once_with('test_user')
 
 
@@ -307,7 +307,7 @@ class TestPersonTuneDatabaseOperations:
         assert result.person_id == 1
         assert result.tune_id == 100
         assert result.learn_status == 'learning'
-        assert result.heard_before_learning_count == 2
+        assert result.heard_count == 2
         assert result.notes == 'Test notes'
     
     @patch('models.person_tune.get_db_connection')
@@ -431,7 +431,7 @@ class TestPersonTuneUtilityMethods:
             person_id=1,
             tune_id=100,
             learn_status='learned',
-            heard_before_learning_count=5,
+            heard_count=5,
             learned_date=mock_date,
             notes='Test notes',
             created_date=mock_date,
@@ -445,7 +445,7 @@ class TestPersonTuneUtilityMethods:
             'person_id': 1,
             'tune_id': 100,
             'learn_status': 'learned',
-            'heard_before_learning_count': 5,
+            'heard_count': 5,
             'learned_date': mock_date.isoformat(),
             'notes': 'Test notes',
             'created_date': mock_date.isoformat(),
@@ -471,14 +471,14 @@ class TestPersonTuneUtilityMethods:
             person_id=1,
             tune_id=100,
             learn_status='learning',
-            heard_before_learning_count=3
+            heard_count=3
         )
         
         result = repr(person_tune)
         
         expected = (
             "PersonTune(person_tune_id=123, person_id=1, tune_id=100, "
-            "learn_status='learning', heard_before_learning_count=3)"
+            "learn_status='learning', heard_count=3)"
         )
         assert result == expected
     
@@ -491,7 +491,7 @@ class TestPersonTuneUtilityMethods:
             person_id=1,
             tune_id=100,
             learn_status='learned',  # Use 'learned' status to allow learned_date
-            heard_before_learning_count=2,
+            heard_count=2,
             learned_date=mock_date,
             notes='Test'
         )
@@ -501,7 +501,7 @@ class TestPersonTuneUtilityMethods:
             person_id=1,
             tune_id=100,
             learn_status='learned',  # Use 'learned' status to allow learned_date
-            heard_before_learning_count=2,
+            heard_count=2,
             learned_date=mock_date,
             notes='Test'
         )
@@ -511,7 +511,7 @@ class TestPersonTuneUtilityMethods:
             person_id=1,
             tune_id=100,
             learn_status='learned',  # Use 'learned' status to allow learned_date
-            heard_before_learning_count=2,
+            heard_count=2,
             learned_date=mock_date,
             notes='Test'
         )

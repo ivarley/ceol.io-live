@@ -442,7 +442,7 @@ def update_person_tune(person_tune_id):
         - notes (str): Notes about the tune (empty string clears notes)
         - setting_id (int): thesession.org setting ID (null/empty string clears)
         - name_alias (str): Custom name/alias for the tune (null/empty string clears)
-        - heard_before_learning_count (int): Heard count (must be >= 0)
+        - heard_count (int): Heard count (must be >= 0)
 
     Returns:
         JSON response with updated person_tune data
@@ -460,7 +460,7 @@ def update_person_tune(person_tune_id):
         notes = data.get('notes') if 'notes' in data else None
         setting_id = data.get('setting_id') if 'setting_id' in data else None
         name_alias = data.get('name_alias') if 'name_alias' in data else None
-        heard_before_learning_count = data.get('heard_before_learning_count') if 'heard_before_learning_count' in data else None
+        heard_count = data.get('heard_count') if 'heard_count' in data else None
 
         # Validate setting_id if provided
         if setting_id is not None and setting_id != '':
@@ -479,19 +479,19 @@ def update_person_tune(person_tune_id):
         elif setting_id == '':
             setting_id = None
 
-        # Validate heard_before_learning_count if provided
-        if heard_before_learning_count is not None:
+        # Validate heard_count if provided
+        if heard_count is not None:
             try:
-                heard_before_learning_count = int(heard_before_learning_count)
-                if heard_before_learning_count < 0:
+                heard_count = int(heard_count)
+                if heard_count < 0:
                     return jsonify({
                         "success": False,
-                        "error": "heard_before_learning_count cannot be negative"
+                        "error": "heard_count cannot be negative"
                     }), 400
             except (ValueError, TypeError):
                 return jsonify({
                     "success": False,
-                    "error": "heard_before_learning_count must be a valid integer"
+                    "error": "heard_count must be a valid integer"
                 }), 400
 
         # Handle empty string for name_alias (means clear it)
@@ -511,7 +511,7 @@ def update_person_tune(person_tune_id):
             notes=notes,
             setting_id=setting_id,
             name_alias=name_alias,
-            heard_before_learning_count=heard_before_learning_count,
+            heard_count=heard_count,
             changed_by=changed_by
         )
 
@@ -548,15 +548,15 @@ def update_person_tune(person_tune_id):
 def increment_tune_heard_count(person_tune_id):
     """
     POST /api/my-tunes/<person_tune_id>/heard
-    
-    Increment the heard_before_learning_count for a tune with 'want to learn' status.
-    
+
+    Increment the heard_count for a tune.
+
     Route Parameters:
         - person_tune_id (int): ID of the person_tune record
-        
+
     Returns:
         JSON response with updated heard count
-        
+
     Requirements: 1.6, 1.7, 1.8
     """
     try:
@@ -592,7 +592,7 @@ def increment_tune_heard_count(person_tune_id):
         return jsonify({
             "success": True,
             "message": message,
-            "heard_before_learning_count": new_count,
+            "heard_count": new_count,
             "person_tune": response_data
         }), 200
         
