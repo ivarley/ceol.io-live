@@ -279,7 +279,11 @@ const sortModes = [
     { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
     { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
     { id: 'popularity-desc', label: 'popularity high', icon: '#', sortFn: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0) },
-    { id: 'popularity-asc', label: 'popularity low', icon: '#ꜜ', sortFn: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0) }
+    { id: 'heard-desc', label: 'heard high', icon: '👂', sortFn: (a, b) => {
+        const heardDiff = (b.heard_count || 0) - (a.heard_count || 0);
+        if (heardDiff !== 0) return heardDiff;
+        return (b.tunebook_count || 0) - (a.tunebook_count || 0);
+    }}
 ];
 let currentSortModeIndex = 0;
 
@@ -1099,8 +1103,11 @@ function createTuneCard(tune) {
     // Determine what to show in the tune type badge based on sort mode
     const sortMode = sortModes[currentSortModeIndex];
     const isPopularityMode = sortMode.id === 'popularity-desc' || sortMode.id === 'popularity-asc';
+    const isHeardMode = sortMode.id === 'heard-desc';
     const typeLabel = isPopularityMode
         ? (tune.tunebook_count || 0).toString()
+        : isHeardMode
+        ? (tune.heard_count || 0).toString()
         : tune.tune_type || '';
 
     // Add data attribute for swipe functionality on mobile
@@ -1360,10 +1367,10 @@ function displayTuneDetailModalBasic(tune) {
             <div id="modal-setting-id-error" class="modal-field-error" style="display: none;"></div>
         </div>
         <div class="heard-count-row">
-            <div class="heard-count-label">I've heard this <span id="modal-heard-count-value">0</span> <span id="modal-heard-count-unit">times</span></div>
+            <div class="heard-count-label">I've heard this <span id="modal-heard-count-value">${tune.heard_count || 0}</span> <span id="modal-heard-count-unit">${(tune.heard_count || 0) === 1 ? 'time' : 'times'}</span></div>
             <div class="heard-count-controls">
-                <button class="heard-count-btn heard-count-btn-decrement" onclick="decrementHeardCountModal()" title="Decrement heard count" disabled>-</button>
-                <button class="heard-count-btn heard-count-btn-increment" onclick="incrementHeardCountModal()" title="Increment heard count" disabled>+</button>
+                <button class="heard-count-btn heard-count-btn-decrement" onclick="decrementHeardCountModal()" title="Decrement heard count" ${(tune.heard_count || 0) === 0 ? 'disabled' : ''}>-</button>
+                <button class="heard-count-btn heard-count-btn-increment" onclick="incrementHeardCountModal()" title="Increment heard count">+</button>
             </div>
         </div>
         <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled>Save</button>
@@ -1378,6 +1385,7 @@ function displayTuneDetailModalBasic(tune) {
     modal.dataset.originalStatus = tune.learn_status;
     modal.dataset.originalSettingId = '';
     modal.dataset.originalNameAlias = '';
+    modal.dataset.currentHeardCount = tune.heard_count || 0;
 
     // Show modal
     console.log('SHOWING MODAL - setting display = flex');

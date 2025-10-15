@@ -476,7 +476,7 @@ class PersonTuneService:
             search_query: Optional search string for tune name
             page: Page number (1-indexed)
             per_page: Items per page (max 2000)
-            sort_by: Sort order - one of: alpha-asc, alpha-desc, popularity-desc, popularity-asc
+            sort_by: Sort order - one of: alpha-asc, alpha-desc, popularity-desc, popularity-asc, heard-desc, heard-asc
 
         Returns:
             Tuple of (list of tune dictionaries, total_count)
@@ -524,7 +524,9 @@ class PersonTuneService:
                 'alpha-asc': 'LOWER(COALESCE(pt.name_alias, t.name)) ASC',
                 'alpha-desc': 'LOWER(COALESCE(pt.name_alias, t.name)) DESC',
                 'popularity-desc': 't.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
-                'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC'
+                'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                'heard-desc': 'pt.heard_count DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                'heard-asc': 'pt.heard_count ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC'
             }
             order_by = sort_map.get(sort_by, 'LOWER(COALESCE(pt.name_alias, t.name)) ASC')  # Default to alpha-asc
 
