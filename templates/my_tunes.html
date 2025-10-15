@@ -1029,7 +1029,8 @@
 
     <div id="no-results" class="no-results" style="display: none;">
         <h3>No tunes found</h3>
-        <p>Try adjusting your filters or add your first tune to get started!</p>
+        <p id="no-results-message">Try adjusting your filters or add your first tune to get started!</p>
+        <div id="no-results-action" style="margin-top: 15px;"></div>
     </div>
 
     <div class="tunes-grid" id="tunes-grid">
@@ -1478,15 +1479,18 @@ function loadTunes() {
             return response.json();
         })
         .then(data => {
-            // Show initial 20 tunes immediately
-            allTunes = data.tunes || [];
-            populateTuneTypes();
-            applyFilters();
+            // Only update if we don't already have the full tune list
+            // This prevents the 20-tune response from overwriting the 2000-tune response
+            if (!fullTunesLoaded) {
+                allTunes = data.tunes || [];
+                populateTuneTypes();
+                applyFilters();
 
-            // If we got fewer than 20, we have all tunes
-            if (allTunes.length < 20) {
-                fullTunesLoaded = true;
-                isLoadingFullTunes = false;
+                // If we got fewer than 20, we have all tunes
+                if (allTunes.length < 20) {
+                    fullTunesLoaded = true;
+                    isLoadingFullTunes = false;
+                }
             }
         })
         .catch(error => {
@@ -1513,7 +1517,7 @@ function loadTunes() {
             return response.json();
         })
         .then(data => {
-            // Replace with full tune list
+            // Replace with full tune list - this should always take precedence
             allTunes = data.tunes || [];
             fullTunesLoaded = true;
             isLoadingFullTunes = false;
@@ -1619,6 +1623,19 @@ function renderTunes() {
         grid.style.display = 'none';
         noResults.style.display = 'block';
         resultsCountText.textContent = '';
+
+        // Check if any filters are active (excluding search)
+        const hasActiveFilters = currentFilters.type || currentFilters.status;
+        const actionDiv = document.getElementById('no-results-action');
+
+        if (hasActiveFilters) {
+            // Show "Clear Filters" link
+            actionDiv.innerHTML = '<a href="#" onclick="clearFilters(); return false;" class="btn">Clear Filters</a>';
+        } else {
+            // Show "Add Tune" link
+            actionDiv.innerHTML = '<a href="/my-tunes/add" class="btn">Add Tune</a>';
+        }
+
         return;
     }
 
