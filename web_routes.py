@@ -999,10 +999,10 @@ def forgot_password():
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT ua.user_id, ua.username, p.email, p.first_name
+                SELECT ua.user_id, ua.username, ua.user_email, p.first_name
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
-                WHERE p.email = %s AND ua.is_active = TRUE
+                WHERE ua.user_email = %s AND ua.is_active = TRUE
             """,
                 (email,),
             )
