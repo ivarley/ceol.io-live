@@ -16,41 +16,18 @@
     {% endif %}
 {% endwith %}
 
-<p>Welcome to <strong>ceol.io</strong>, an online repository of traditional music session setlists and recordings.</p>
-<p>If you're new to traditional Irish music, there's a brief guide <a href="/help#whats-a-session">here</a>.</p>
-<h2 id="subcategories">Latest Session Logs</h2>
-
-{% if active_sessions %}
-    {% for session in active_sessions %}
-        <div style="margin-bottom: 20px;">
-            <h3><a href="/sessions/{{ session.path }}">{{ session.name }}</a></h3>
-            {% if session.city or session.state or session.country %}
-                <p style="margin: 5px 0; color: var(--disabled-text); font-size: 0.9em;">
-                    {% if session.city %}{{ session.city }}{% endif %}{% if session.city and (session.state or session.country) %}, {% endif %}{% if session.state %}{{ session.state }}{% endif %}{% if session.state and session.country %}, {% endif %}{% if session.country %}{{ session.country }}{% endif %}
-                </p>
-            {% endif %}
-            {% if session.recent_instances %}
-                <ul style="margin: 5px 0 0 20px;">
-                    {% for instance_date in session.recent_instances %}
-                        <li><a href="/sessions/{{ session.path }}/{{ instance_date }}">{{ instance_date }}</a></li>
-                    {% endfor %}
-                    {% if session.total_instances > 3 %}
-                        <li><a href="/sessions/{{ session.path }}">{{ session.total_instances - 3 }} more...</a></li>
-                    {% endif %}
-                </ul>
-            {% else %}
-                <p style="margin: 5px 0; color: var(--disabled-text); font-style: italic;">No session instances recorded yet.</p>
-            {% endif %}
-        </div>
-    {% endfor %}
-{% else %}
-    <p>No active sessions found.</p>
-{% endif %}
-
-<div style="margin-top: 30px;">
-    <a href="/sessions">More Sessions -></a>
+<div style="margin-top: 20px; margin-bottom: 30px;">
+    {% if current_user.is_authenticated %}
+        <a href="/my-tunes" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">View My Tunes</a>
+        <a href="/sessions" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">I'm At A Session</a>
+    {% else %}
+        <a href="/login" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">Log In</a>
+        <a href="/sessions" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">Explore Session Logs</a>
+    {% endif %}
 </div>
-    
+
+<p>This app lets you track traditional Irish tunes you know (or want to learn). You can also log tunes you play at sessions. (If you're new to this kind of music, read <a href="https://www.ceol.io/help#whats-a-session">this</a>.)</p>
+
 <!-- end landing page -->
 </div>
 {% endblock %}

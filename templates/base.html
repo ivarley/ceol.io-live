@@ -216,19 +216,20 @@
                         {% if current_user.is_authenticated %}
                             <a href="/me" class="hamburger-item">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</a>
                             <a href="/my-tunes" class="hamburger-item">My Tunes</a>
-                            {% if current_user.is_authenticated and current_user.is_system_admin %}
-                            <a href="/admin" class="hamburger-item">Admin</a>
-                            {% endif %}
-                            <a href="/logout" class="hamburger-item">Logout</a>
+                            <a href="/sessions" class="hamburger-item">My Sessions</a>
+                            <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
+                                <span id="dark-mode-text">🌙 Dark Mode</span>
+                            </a>
+                            <a href="/logout" class="hamburger-item">Log Out</a>
+                            <a href="/help" class="hamburger-item">Help</a>
                         {% else %}
-                            <a href="/login" class="hamburger-item">Login</a>
-                            <a href="/register" class="hamburger-item">Register</a>
+                            <a href="/login" class="hamburger-item">Log In</a>
+                            <a href="/sessions" class="hamburger-item">Session Logs</a>
+                            <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
+                                <span id="dark-mode-text">🌙 Dark Mode</span>
+                            </a>
+                            <a href="/help" class="hamburger-item">Help</a>
                         {% endif %}
-                        <a href="/add-session" class="hamburger-item">Add A Session</a>
-                        <a href="/help" class="hamburger-item">Help</a>
-                        <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
-                            <span id="dark-mode-text">🌙 Dark Mode</span>
-                        </a>
                     </div>
                 </div>
                 
