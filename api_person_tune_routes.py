@@ -561,13 +561,13 @@ def increment_tune_heard_count(person_tune_id):
     """
     try:
         changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
-        
+
         # Increment the heard count
         success, message, new_count = person_tune_service.increment_heard_count(
             person_tune_id=person_tune_id,
             changed_by=changed_by
         )
-        
+
         if not success:
             if "not found" in message:
                 return jsonify({
@@ -584,22 +584,69 @@ def increment_tune_heard_count(person_tune_id):
                     "success": False,
                     "error": message
                 }), 400
-        
+
         # Get updated person_tune for full response
         person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
         response_data = _build_person_tune_response(person_tune, include_tune_details=True)
-        
+
         return jsonify({
             "success": True,
             "message": message,
             "heard_count": new_count,
             "person_tune": response_data
         }), 200
-        
+
     except Exception as e:
         return jsonify({
             "success": False,
             "error": f"Error incrementing heard count: {str(e)}"
+        }), 500
+
+
+@person_tune_login_required
+@require_person_tune_ownership
+def delete_person_tune(person_tune_id):
+    """
+    DELETE /api/my-tunes/<person_tune_id>
+
+    Delete a tune from the current user's collection.
+
+    Route Parameters:
+        - person_tune_id (int): ID of the person_tune record
+
+    Returns:
+        JSON response with success status
+    """
+    try:
+        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+
+        # Delete the person_tune
+        success, message = person_tune_service.delete_person_tune(
+            person_tune_id=person_tune_id,
+            changed_by=changed_by
+        )
+
+        if not success:
+            if "not found" in message:
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 404
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 400
+
+        return jsonify({
+            "success": True,
+            "message": message
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error deleting tune: {str(e)}"
         }), 500
 
 

@@ -854,20 +854,29 @@ function renderTunes() {
     const resultsCountText = document.getElementById('results-count-text');
 
     if (filteredTunes.length === 0) {
-        grid.style.display = 'none';
-        noResults.style.display = 'block';
-        resultsCountText.textContent = '';
+        // Only show "No matching tunes" if the full tune list has been loaded
+        // This prevents the flash when filtering before all tunes are fetched
+        if (fullTunesLoaded) {
+            grid.style.display = 'none';
+            noResults.style.display = 'block';
+            resultsCountText.textContent = '';
 
-        // Check if any filters are active (excluding search)
-        const hasActiveFilters = currentFilters.type || currentFilters.status;
-        const actionDiv = document.getElementById('no-results-action');
+            // Check if any filters are active (excluding search)
+            const hasActiveFilters = currentFilters.type || currentFilters.status;
+            const actionDiv = document.getElementById('no-results-action');
 
-        if (hasActiveFilters) {
-            // Show "Clear Filters" link
-            actionDiv.innerHTML = '<a href="#" onclick="clearFilters(); return false;" class="btn">Clear Filters</a>';
+            if (hasActiveFilters) {
+                // Show "Clear Filters" link
+                actionDiv.innerHTML = '<a href="#" onclick="clearFilters(); return false;" class="btn">Clear Filters</a>';
+            } else {
+                // Show "Add Tune" link
+                actionDiv.innerHTML = '<a href="/my-tunes/add" class="btn">Add Tune</a>';
+            }
         } else {
-            // Show "Add Tune" link
-            actionDiv.innerHTML = '<a href="/my-tunes/add" class="btn">Add Tune</a>';
+            // Still loading - keep showing loading state
+            grid.style.display = 'none';
+            noResults.style.display = 'none';
+            resultsCountText.textContent = '';
         }
 
         return;
@@ -1373,7 +1382,13 @@ function displayTuneDetailModalBasic(tune) {
                 <button class="heard-count-btn heard-count-btn-increment" onclick="incrementHeardCountModal()" title="Increment heard count">+</button>
             </div>
         </div>
-        <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled>Save</button>
+        <div class="modal-button-group">
+            <button id="modal-cancel-btn" class="modal-cancel-btn" onclick="closeTuneDetailModal()">Cancel</button>
+            <button id="modal-save-btn" class="modal-save-btn" onclick="saveModalChanges()" disabled>Save</button>
+        </div>
+        <div class="modal-remove-link-container">
+            <a href="#" id="modal-remove-link" class="modal-remove-link" onclick="removeTuneFromMyTunes(); return false;">Remove From My Tunes</a>
+        </div>
         <div id="modal-additional-info">
             <div class="modal-info-line">TheSession.org Tunebooks: <span class="loading-dots">...</span></div>
             <div class="modal-info-line">Play count at your sessions: <span class="loading-dots">...</span></div>
@@ -1956,6 +1971,68 @@ function saveModalChanges() {
         });
 }
 
+function removeTuneFromMyTunes() {
+    const modal = document.getElementById('tune-detail-modal');
+    const personTuneId = parseInt(modal.dataset.personTuneId);
+
+    // Get tune name for confirmation
+    const tuneName = document.querySelector('.modal-tune-title').textContent.replace('🔗', '').trim();
+
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to remove "${tuneName}" from your tune collection? This action cannot be undone.`)) {
+        return;
+    }
+
+    // Disable the remove link during deletion
+    const removeLink = document.getElementById('modal-remove-link');
+    if (removeLink) {
+        removeLink.style.opacity = '0.5';
+        removeLink.style.pointerEvents = 'none';
+    }
+
+    // Call DELETE endpoint
+    fetchWithRetry(`/api/my-tunes/${personTuneId}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (!response.ok) {
+            const errorInfo = handleApiError(null, response);
+            throw new Error(errorInfo.message);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showMessage(`"${tuneName}" removed from your collection`, 'success');
+
+            // Remove from local allTunes array
+            const index = allTunes.findIndex(t => t.person_tune_id === personTuneId);
+            if (index >= 0) {
+                allTunes.splice(index, 1);
+            }
+
+            // Close modal
+            closeTuneDetailModal();
+
+            // Re-render the grid
+            applyFilters();
+        } else {
+            throw new Error(data.error || 'Failed to remove tune');
+        }
+    })
+    .catch(error => {
+        console.error('Error removing tune:', error);
+        const errorInfo = handleApiError(error);
+        showMessage(errorInfo.message, 'error');
+
+        // Re-enable the remove link
+        if (removeLink) {
+            removeLink.style.opacity = '';
+            removeLink.style.pointerEvents = '';
+        }
+    });
+}
+
 function showMessage(message, type) {
     // Create a temporary message element
     const messageDiv = document.createElement('div');
@@ -1971,7 +2048,7 @@ function showMessage(message, type) {
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         animation: slideDown 0.3s ease-out;
     `;
-    
+
     if (type === 'success') {
         messageDiv.style.backgroundColor = '#d4edda';
         messageDiv.style.color = '#155724';
@@ -1985,10 +2062,10 @@ function showMessage(message, type) {
         messageDiv.style.color = '#0c5460';
         messageDiv.style.border = '1px solid #bee5eb';
     }
-    
+
     messageDiv.textContent = message;
     document.body.appendChild(messageDiv);
-    
+
     // Remove after 5 seconds
     setTimeout(() => {
         messageDiv.style.animation = 'slideUp 0.3s ease-out';

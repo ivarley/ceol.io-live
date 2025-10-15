@@ -14,8 +14,7 @@ from api_person_tune_routes import (
     get_person_tune_detail,
     add_my_tune,
     update_person_tune,
-    
-    
+    delete_person_tune,
     increment_tune_heard_count,
     sync_my_tunes,
     search_tunes,
@@ -516,6 +515,12 @@ app.add_url_rule(
     "update_person_tune",
     update_person_tune,
     methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/my-tunes/<int:person_tune_id>",
+    "delete_person_tune",
+    delete_person_tune,
+    methods=["DELETE"],
 )
 app.add_url_rule(
     "/api/my-tunes",

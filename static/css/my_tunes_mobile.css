@@ -526,10 +526,8 @@ html, body {
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-    margin-bottom: 20px;
+    flex: 1;
+    max-width: 120px;
 }
 
 .modal-save-btn:hover:not(:disabled) {
@@ -1447,4 +1445,54 @@ html, body {
             margin-right: 0;
         }
     }
+}
+
+/* ============================================
+   MODAL BUTTONS AND REMOVE LINK
+   ============================================ */
+
+.modal-button-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.modal-cancel-btn {
+    padding: 6px 16px;
+    background-color: #1e3a5f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex: 1;
+    max-width: 120px;
+}
+
+.modal-cancel-btn:hover {
+    background-color: #152b47;
+}
+
+.modal-remove-link-container {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.modal-remove-link {
+    font-size: 13px;
+    color: #dc3545;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.modal-remove-link:hover {
+    text-decoration: underline;
+    opacity: 0.8;
+}
+
+[data-theme="dark"] .modal-remove-link {
+    color: #ff6b6b;
 }
