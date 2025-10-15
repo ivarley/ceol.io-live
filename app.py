@@ -121,6 +121,7 @@ app.add_url_rule(
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
 app.add_url_rule("/add-session", "add_session", add_session)
 app.add_url_rule("/help", "help_page", help_page)
+app.add_url_rule("/help/my-tunes", "help_my_tunes", help_my_tunes)
 app.add_url_rule("/register", "register", register, methods=["GET", "POST"])
 app.add_url_rule("/login", "login", login, methods=["GET", "POST"])
 app.add_url_rule("/logout", "logout", logout)

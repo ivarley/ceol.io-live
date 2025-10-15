@@ -176,13 +176,28 @@ def sessions():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+
+        # Get user's person_id if logged in
+        user_person_id = None
+        if current_user.is_authenticated:
+            user_person_id = getattr(current_user, 'person_id', None)
+
+        # Get all sessions with location info
         cur.execute(
-            "SELECT name, path, city, state, country, termination_date FROM session ORDER BY name;"
+            """
+            SELECT s.session_id, s.name, s.path, s.city, s.state, s.country, s.termination_date,
+                   CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member
+            FROM session s
+            LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
+            ORDER BY s.name
+            """,
+            (user_person_id,)
         )
         sessions = cur.fetchall()
         cur.close()
         conn.close()
-        return render_template("sessions.html", sessions=sessions)
+
+        return render_template("sessions.html", sessions=sessions, is_logged_in=current_user.is_authenticated)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
@@ -645,6 +660,10 @@ def add_session():
 
 def help_page():
     return render_template("help.html")
+
+
+def help_my_tunes():
+    return render_template("help_my_tunes.html")
 
 
 def register():

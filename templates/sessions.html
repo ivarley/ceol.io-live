@@ -2,43 +2,142 @@
 
 {% block extra_css %}
 <style>
-        .loading-spinner {
-            display: inline-block;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-    </style>
+    .sessions-controls {
+        margin-bottom: 1.5rem;
+    }
+
+    .search-and-toggle {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        align-items: stretch;
+    }
+
+    .search-bar {
+        flex: 1;
+        padding: 0.75rem;
+        font-size: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background-color: var(--input-bg);
+        color: var(--text-color);
+    }
+
+    .filter-toggle-button {
+        padding: 0.75rem 1.5rem;
+        border: 1px solid var(--border-color);
+        background-color: var(--primary-color);
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        font-weight: 500;
+    }
+
+    .filter-toggle-button:hover {
+        opacity: 0.9;
+    }
+
+    .session-count {
+        margin-bottom: 1rem;
+        color: var(--secondary-text);
+    }
+
+    .sessions-grid {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1.5rem;
+    }
+
+    .sessions-grid thead {
+        background-color: var(--table-header-bg);
+        border-bottom: 2px solid var(--border-color);
+    }
+
+    .sessions-grid th {
+        padding: 0.75rem;
+        text-align: left;
+        font-weight: 600;
+    }
+
+    .sessions-grid tbody tr {
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s;
+    }
+
+    .sessions-grid tbody tr:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .sessions-grid td {
+        padding: 0.75rem;
+    }
+
+    .sessions-grid a {
+        color: var(--link-color);
+        text-decoration: none;
+    }
+
+    .sessions-grid a:hover {
+        text-decoration: underline;
+    }
+
+    .no-sessions {
+        padding: 2rem;
+        text-align: center;
+        color: var(--secondary-text);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="landing-page" style="display: block;">
 
-    <h1>Irish Music Sessions</h1>
-    
-    <div id="loading-state">
-        <p>Loading sessions... <span class="loading-spinner">⟳</span></p>
+    <h1>Sessions</h1>
+
+    <div class="sessions-controls">
+        <div class="search-and-toggle">
+            <input type="text" id="search-bar" class="search-bar" placeholder="Search by name or location...">
+            <button class="filter-toggle-button" id="filter-toggle-button">
+                {% if is_logged_in %}My Sessions{% else %}All Active{% endif %}
+            </button>
+        </div>
+
+        <div class="session-count" id="session-count">Showing <span id="count-number">0</span> <span id="count-filter-type">active</span>.</div>
     </div>
-    
-    <p id="filter-info" style="display: none;">
-        There are <span id="session-count">0</span> <span id="filter-type">active</span> sessions on the site. 
-        (<a href="#" id="toggle-filter">Show all sessions</a>)
-    </p>
-    
+
     {% if sessions %}
-        <ul id="sessions-list" style="display: none;">
+        <table class="sessions-grid" id="sessions-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody id="sessions-tbody">
+                <!-- Sessions will be populated by JavaScript -->
+            </tbody>
+        </table>
+        <div id="no-results" class="no-sessions" style="display: none;">No sessions found.</div>
+
+        <!-- Hidden data storage -->
+        <div style="display: none;">
             {% for session in sessions %}
-            <li data-session='{{ session | tojson }}'>
-                <a href="/sessions/{{ session[1] }}">{{ session[0] }}</a>, 
-                {{ session[2] }}, {{ session[3] }}, {{ session[4] }}
-            </li>
+            <div class="session-data"
+                 data-id="{{ session[0] }}"
+                 data-name="{{ session[1] }}"
+                 data-path="{{ session[2] }}"
+                 data-city="{{ session[3] or '' }}"
+                 data-state="{{ session[4] or '' }}"
+                 data-country="{{ session[5] or '' }}"
+                 data-termination="{{ session[6] or '' }}"
+                 data-is-member="{{ session[7] }}">
+            </div>
             {% endfor %}
-        </ul>
+        </div>
     {% else %}
-        <p id="no-sessions" style="display: none;">No sessions found.</p>
+        <div class="no-sessions">No sessions found.</div>
     {% endif %}
 
     <p><a href="/">← Back to home</a></p>
@@ -46,93 +145,148 @@
 
 {% block extra_js %}
 <script>
-        let allSessions = [];
-        let showingAllSessions = false;
+    let allSessions = [];
+    const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
 
-        // Load session data on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            parseExistingSessionData();
+    // Define filter states based on login status
+    const filterStates = isLoggedIn
+        ? ['my', 'active', 'all', 'inactive']
+        : ['active', 'all', 'inactive'];
+
+    let currentFilterIndex = 0;
+    let currentFilter = filterStates[currentFilterIndex];
+    let searchTerm = '';
+
+    const filterButtonLabels = {
+        'my': 'My Sessions',
+        'active': 'All Active',
+        'all': 'All',
+        'inactive': 'Inactive'
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSessionData();
+        setupEventListeners();
+        updateDisplay();
+    });
+
+    function loadSessionData() {
+        const sessionElements = document.querySelectorAll('.session-data');
+        allSessions = Array.from(sessionElements).map(el => ({
+            id: parseInt(el.dataset.id),
+            name: el.dataset.name,
+            path: el.dataset.path,
+            city: el.dataset.city,
+            state: el.dataset.state,
+            country: el.dataset.country,
+            termination: el.dataset.termination,
+            isMember: el.dataset.isMember === 'True'
+        }));
+    }
+
+    function setupEventListeners() {
+        // Toggle button - cycles through filter states
+        document.getElementById('filter-toggle-button').addEventListener('click', function() {
+            currentFilterIndex = (currentFilterIndex + 1) % filterStates.length;
+            currentFilter = filterStates[currentFilterIndex];
+            this.textContent = filterButtonLabels[currentFilter];
+            updateDisplay();
         });
 
-        function parseExistingSessionData() {
-            try {
-                const sessionItems = document.querySelectorAll('#sessions-list li[data-session]');
-                allSessions = Array.from(sessionItems).map(item => {
-                    return JSON.parse(item.getAttribute('data-session'));
-                });
-                console.log('Parsed sessions:', allSessions);
-                updateSessionDisplay();
-            } catch (error) {
-                console.error('Error parsing session data:', error);
-                // If all else fails, just show the loading content and hide loading state
-                document.getElementById('loading-state').style.display = 'none';
-                document.getElementById('filter-info').style.display = 'block';
-                document.getElementById('sessions-list').style.display = 'block';
-                document.getElementById('session-count').textContent = '0';
-            }
-        }
+        // Search bar
+        document.getElementById('search-bar').addEventListener('input', function(e) {
+            searchTerm = e.target.value.toLowerCase();
+            updateDisplay();
+        });
+    }
 
-        function updateSessionDisplay() {
-            let sessionsToShow;
-            
-            if (showingAllSessions) {
-                sessionsToShow = allSessions;
-                document.getElementById('filter-type').textContent = '';
-                document.getElementById('toggle-filter').textContent = 'Show only active sessions';
-            } else {
-                // Filter for active sessions (no termination_date or termination_date > today)
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                
-                sessionsToShow = allSessions.filter(session => {
-                    if (!session[5]) return true; // No termination_date means active
-                    const terminationDate = new Date(session[5]);
-                    return terminationDate > today;
-                });
-                
-                document.getElementById('filter-type').textContent = 'active ';
-                document.getElementById('toggle-filter').textContent = 'Show all sessions';
+    function filterSessions() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return allSessions.filter(session => {
+            // Apply status filter
+            let passesStatusFilter = false;
+            if (currentFilter === 'my') {
+                passesStatusFilter = session.isMember;
+            } else if (currentFilter === 'active') {
+                if (!session.termination) {
+                    passesStatusFilter = true;
+                } else {
+                    const terminationDate = new Date(session.termination);
+                    passesStatusFilter = terminationDate > today;
+                }
+            } else if (currentFilter === 'all') {
+                passesStatusFilter = true;
+            } else if (currentFilter === 'inactive') {
+                if (session.termination) {
+                    const terminationDate = new Date(session.termination);
+                    passesStatusFilter = terminationDate <= today;
+                } else {
+                    passesStatusFilter = false;
+                }
             }
 
-            // Update count
-            document.getElementById('session-count').textContent = sessionsToShow.length;
+            if (!passesStatusFilter) return false;
 
-            // Update the session list
-            const sessionsList = document.getElementById('sessions-list');
-            const noSessionsMsg = document.getElementById('no-sessions');
-            
-            sessionsList.innerHTML = '';
-            sessionsList.style.display = 'none';
-            if (noSessionsMsg) {
-                noSessionsMsg.style.display = 'none';
+            // Apply search filter
+            if (searchTerm) {
+                const location = [session.city, session.state, session.country]
+                    .filter(x => x)
+                    .join(', ')
+                    .toLowerCase();
+                const nameMatch = session.name.toLowerCase().includes(searchTerm);
+                const locationMatch = location.includes(searchTerm);
+                return nameMatch || locationMatch;
             }
-            
-            sessionsToShow.forEach(session => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <a href="/sessions/${session[1]}">${session[0]}</a>, 
-                    ${session[2]}, ${session[3]}, ${session[4]}
+
+            return true;
+        });
+    }
+
+    function updateDisplay() {
+        const filteredSessions = filterSessions();
+        const tbody = document.getElementById('sessions-tbody');
+        const noResults = document.getElementById('no-results');
+        const table = document.getElementById('sessions-table');
+
+        // Update count
+        const countNumber = document.getElementById('count-number');
+        const countFilterType = document.getElementById('count-filter-type');
+        countNumber.textContent = filteredSessions.length;
+
+        const filterLabels = {
+            'my': 'sessions in your list',
+            'active': 'active sessions',
+            'all': 'sessions',
+            'inactive': 'inactive sessions'
+        };
+        countFilterType.textContent = filterLabels[currentFilter] || 'sessions';
+
+        // Clear tbody
+        tbody.innerHTML = '';
+
+        if (filteredSessions.length === 0) {
+            table.style.display = 'none';
+            noResults.style.display = 'block';
+        } else {
+            table.style.display = 'table';
+            noResults.style.display = 'none';
+
+            filteredSessions.forEach(session => {
+                const row = document.createElement('tr');
+
+                const location = [session.city, session.state, session.country]
+                    .filter(x => x)
+                    .join(', ') || 'Unknown';
+
+                row.innerHTML = `
+                    <td><a href="/sessions/${session.path}">${session.name}</a></td>
+                    <td>${location}</td>
                 `;
-                sessionsList.appendChild(li);
+                tbody.appendChild(row);
             });
-            
-            // Hide loading state and show the content
-            document.getElementById('loading-state').style.display = 'none';
-            document.getElementById('filter-info').style.display = 'block';
-            
-            // Show the appropriate content
-            if (sessionsToShow.length > 0) {
-                sessionsList.style.display = 'block';
-            } else if (noSessionsMsg) {
-                noSessionsMsg.style.display = 'block';
-            }
         }
-
-        // Toggle filter when link is clicked
-        document.getElementById('toggle-filter').addEventListener('click', function(e) {
-            e.preventDefault();
-            showingAllSessions = !showingAllSessions;
-            updateSessionDisplay();
-        });
-    </script>
+    }
+</script>
 {% endblock %}
