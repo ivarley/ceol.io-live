@@ -122,6 +122,27 @@
         text-align: right;
         white-space: nowrap;
     }
+
+    .loading-message {
+        padding: 2rem;
+        text-align: center;
+        color: var(--text-color);
+        font-size: 1.1rem;
+    }
+
+    .loading-dots {
+        font-weight: bold;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 0.3;
+        }
+        50% {
+            opacity: 1;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -141,7 +162,11 @@
         <div class="session-count" id="session-count">Showing <span id="count-number">0</span> <span id="count-filter-type">active</span>.</div>
     </div>
 
-    <table class="sessions-grid" id="sessions-table">
+    <div id="loading-message" class="loading-message">
+        Loading<span class="loading-dots">...</span>
+    </div>
+
+    <table class="sessions-grid" id="sessions-table" style="display: none;">
         <thead>
             <tr>
                 <th>Name</th>
@@ -193,12 +218,18 @@
             if (data.success) {
                 allSessions = data.sessions;
                 todayStr = data.today;
+
+                // Hide loading message
+                document.getElementById('loading-message').style.display = 'none';
+
                 updateDisplay();
             } else {
                 console.error('Failed to load sessions:', data.error);
+                document.getElementById('loading-message').textContent = 'Error loading sessions';
             }
         } catch (error) {
             console.error('Error loading sessions:', error);
+            document.getElementById('loading-message').textContent = 'Error loading sessions';
         }
     }
 
