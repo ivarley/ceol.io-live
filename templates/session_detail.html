@@ -396,11 +396,18 @@
     <!-- Tabbed Interface -->
     <div class="tabs-container">
         <div class="tab-buttons">
-            <button class="tab-button active" data-tab="logs">Logs</button>
+            <button class="tab-button active" data-tab="tunes">Tunes</button>
+            <button class="tab-button" data-tab="logs">Logs</button>
+        </div>
+
+        <!-- Tunes Tab Content -->
+        <div class="tab-content active" id="tunes-tab">
+            <div id="tunes-loading" style="padding: 20px; text-align: center; color: var(--secondary-text);">Loading tunes...</div>
+            <div id="tunes-content" style="display: none;"></div>
         </div>
 
         <!-- Logs Tab Content -->
-        <div class="tab-content active" id="logs-tab">
+        <div class="tab-content" id="logs-tab">
             {% if instances_by_year %}
             <div class="past-instances">
                 <h2 class="session-logs-heading">Session Logs:<span class="add-link" id="add-session-btn">Add</span></h2>
@@ -703,8 +710,76 @@
         viewLink.classList.remove('visible');
     }
 
+    // Tab switching functionality
+    function switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`.tab-button[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+
+        // Load tunes content if switching to tunes tab and not already loaded
+        if (tabName === 'tunes' && !window.tunesLoaded) {
+            loadTunesContent();
+        }
+    }
+
+    // Load tunes content via AJAX
+    function loadTunesContent() {
+        fetch(`/sessions/${sessionPath}/tunes`)
+            .then(response => response.text())
+            .then(html => {
+                // Parse the HTML and extract just the content we need
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Extract the main content (everything after the h1 and back link)
+                const sortLinks = doc.querySelector('.sort-links');
+                const tunesTable = doc.querySelector('.tunes-table');
+
+                if (sortLinks && tunesTable) {
+                    const tunesContent = document.getElementById('tunes-content');
+                    tunesContent.innerHTML = '';
+                    tunesContent.appendChild(sortLinks.cloneNode(true));
+                    tunesContent.appendChild(tunesTable.cloneNode(true));
+
+                    // Copy and execute the scripts from the tunes page
+                    const scripts = doc.querySelectorAll('script');
+                    scripts.forEach(script => {
+                        if (script.textContent && !script.src) {
+                            eval(script.textContent);
+                        }
+                    });
+
+                    document.getElementById('tunes-loading').style.display = 'none';
+                    tunesContent.style.display = 'block';
+                    window.tunesLoaded = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading tunes:', error);
+                document.getElementById('tunes-loading').textContent = 'Error loading tunes. Please try again.';
+            });
+    }
+
     // Show initial flash messages and setup event listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
+        // Setup tab switching
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', function() {
+                switchTab(this.getAttribute('data-tab'));
+            });
+        });
+
+        // Load tunes content on page load since it's the default tab
+        loadTunesContent();
+
         // Event listeners for buttons and modals
         const addSessionBtn = document.getElementById('add-session-btn');
         if (addSessionBtn) {
