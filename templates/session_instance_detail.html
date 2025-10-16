@@ -90,15 +90,68 @@
             cursor: text;
             position: relative;
             transition: border-color 0.2s ease;
+            touch-action: pan-y pan-x; /* Allow scrolling on touch devices */
         }
-        
+
         .tune-pills-container:hover {
             border-color: var(--primary);
         }
-        
+
         .tune-pills-container:focus-within {
             border-color: var(--primary);
             outline: none;
+        }
+
+        /* View mode styles */
+        .tune-pills-container.view-mode {
+            border: 1px solid var(--border-color);
+            cursor: default;
+        }
+
+        .tune-pills-container.view-mode:hover {
+            border-color: var(--border-color);
+        }
+
+        .tune-pills-container.view-mode .tune-pill {
+            cursor: default;
+        }
+
+        /* Hide the blinking cursor in view mode */
+        .tune-pills-container.view-mode .text-cursor {
+            display: none;
+        }
+
+        /* Disable caret in view mode */
+        .tune-pills-container.view-mode {
+            caret-color: transparent;
+        }
+
+        .view-mode .tune-pill.unlinked,
+        .view-mode .tune-pill.linked,
+        .view-mode .tune-pill.unmatched,
+        .view-mode .tune-pill.loading {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+        }
+
+        [data-theme="dark"] .view-mode .tune-pill.unlinked,
+        [data-theme="dark"] .view-mode .tune-pill.linked,
+        [data-theme="dark"] .view-mode .tune-pill.unmatched,
+        [data-theme="dark"] .view-mode .tune-pill.loading {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+        }
+
+        /* Hide the chevron (menu triangle) in view mode */
+        .view-mode .tune-pill .chevron {
+            display: none;
+        }
+
+        /* Remove text margin in view mode since there's no chevron */
+        .view-mode .tune-pill .text {
+            margin-left: 0;
         }
         
         /* Hide native browser cursor when contentEditable is active */
@@ -576,6 +629,12 @@
             align-items: center;
             justify-content: center;
         }
+
+        /* When modal is open, make everything inert */
+        body.modal-open #tune-pills-container {
+            pointer-events: none !important;
+            user-select: none !important;
+        }
         
         .modal-content {
             background: var(--bg-color, white);
@@ -616,6 +675,12 @@
             box-sizing: border-box;
             background-color: var(--bg-color);
             color: var(--text-color);
+        }
+
+        .modal-body input:focus, .modal-body textarea:focus, .modal-body select:focus {
+            outline: none;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
         }
         
         .modal-footer {
@@ -777,7 +842,7 @@
 
     <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}/" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
-    
+
     {% if session_instance.location_override %}
     <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
         <strong>Note</strong> - actual location of this session: {{ session_instance.location_override }}
@@ -805,7 +870,7 @@
             <div class="modal-body">
                 <p>Enter a URL or tune ID from thesession.org to link for this name:</p>
                 <label for="tune-link-input">Tune ID or URL:</label>
-                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234">
+                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234" autocomplete="off">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="link-cancel-btn">Cancel</button>
@@ -890,17 +955,31 @@
         <!-- Tunes Tab -->
         <div class="tab-pane fade show active" id="tunes-panel" role="tabpanel" aria-labelledby="tunes-tab">
             <div id="tunes-container" style="margin-top: 20px;">
-                <div id="tune-pills-container" class="tune-pills-container" tabindex="0" role="textbox" aria-label="Tune editor">
+                <div id="tune-pills-container" class="tune-pills-container view-mode" tabindex="0" role="textbox" aria-label="Tune editor">
                     <!-- Tune pills will be rendered here -->
                 </div>
+
+                <!-- Edit Button (shown in view mode for logged-in users) -->
+                {% if current_user.is_authenticated %}
+                <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
+                    <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+                        Edit
+                    </button>
+                </div>
+                {% endif %}
             </div>
-            
-            <!-- Save Controls -->
-            <div class="save-controls-container" style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
-        <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
-            <span class="desktop-text">Save Session</span>
-            <span class="mobile-text">Save</span>
-        </button>
+
+            <!-- Save Controls (shown in edit mode) -->
+            <div class="save-controls-container" style="display: none; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
+                <span class="desktop-text">Save Session</span>
+                <span class="mobile-text">Save</span>
+            </button>
+            <button id="exit-edit-mode-btn" class="btn-secondary" style="padding: 10px 20px; background-color: var(--secondary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Done
+            </button>
+        </div>
         <div style="display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="auto-save-checkbox" style="cursor: pointer;">
             <label for="auto-save-checkbox" style="margin: 0; cursor: pointer;">Auto-save after</label>
@@ -957,6 +1036,9 @@
 
 {% block extra_js %}
 <script>
+// View/Edit mode management - SET THIS FIRST before anything else!
+window.editorMode = 'view'; // Start in view mode
+
 // Pass template variables to JavaScript
 window.sessionConfig = {
     sessionPath: '{{ session_instance.session_path }}',
@@ -976,6 +1058,45 @@ window.sessionConfig = {
     userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }},
     userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }}
 };
+
+window.enterEditMode = function() {
+    window.editorMode = 'edit';
+    const container = document.getElementById('tune-pills-container');
+    const editButton = document.getElementById('edit-mode-button-container');
+    const saveControls = document.querySelector('.save-controls-container');
+
+    container.classList.remove('view-mode');
+    container.setAttribute('contenteditable', 'true');
+
+    if (editButton) editButton.style.display = 'none';
+    if (saveControls) saveControls.style.display = 'flex';
+
+    // Re-render to show cursors and enable editing features
+    if (window.PillRenderer) {
+        window.PillRenderer.renderTunePills();
+    }
+
+    // Don't auto-focus the container - let it be focused naturally when user clicks/interacts
+    // Auto-focusing was causing issues with modals that open immediately after entering edit mode
+};
+
+window.exitEditMode = function() {
+    window.editorMode = 'view';
+    const container = document.getElementById('tune-pills-container');
+    const editButton = document.getElementById('edit-mode-button-container');
+    const saveControls = document.querySelector('.save-controls-container');
+
+    container.classList.add('view-mode');
+    container.setAttribute('contenteditable', 'false');
+
+    if (editButton) editButton.style.display = 'block';
+    if (saveControls) saveControls.style.display = 'none';
+
+    // Re-render to hide cursors and disable editing features
+    if (window.PillRenderer) {
+        window.PillRenderer.renderTunePills();
+    }
+};
 </script>
 <script src="/static/js/dist/autoSave.js"></script>
 <script src="/static/js/dist/stateManager.js"></script>
@@ -994,6 +1115,29 @@ window.sessionConfig = {
 <script src="{{ url_for('static', filename='js/dist/attendance.js') }}"></script>
 {% include 'modals/person_edit.html' %}
 <script>
+// Initialize edit mode button
+document.addEventListener('DOMContentLoaded', function() {
+    const editModeBtn = document.getElementById('enter-edit-mode-btn');
+    if (editModeBtn) {
+        editModeBtn.addEventListener('click', function() {
+            window.enterEditMode();
+        });
+    }
+
+    const exitEditModeBtn = document.getElementById('exit-edit-mode-btn');
+    if (exitEditModeBtn) {
+        exitEditModeBtn.addEventListener('click', function() {
+            window.exitEditMode();
+        });
+    }
+
+    // Start in view mode - disable contenteditable initially
+    const container = document.getElementById('tune-pills-container');
+    if (container) {
+        container.setAttribute('contenteditable', 'false');
+    }
+});
+
 // Tab switching functionality
 function initializeTabs() {
     var tabButtons = document.querySelectorAll('#sessionTabs .nav-link');

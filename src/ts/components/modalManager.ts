@@ -44,6 +44,8 @@ export class ModalManager {
     // Current modal state
     private static currentModals = new Set<string>();
     private static messageTimeout: number | null = null;
+    private static focusCheckInterval: number | null = null;
+    private static currentFocusTarget: HTMLElement | null = null;
     
     /**
      * Show a modal by ID with optional configuration
@@ -56,35 +58,61 @@ export class ModalManager {
             console.warn(`ModalManager: Modal with ID "${modalId}" not found`);
             return null;
         }
-        
-        // Apply configuration options
+
+        // FIRST: Add modal-open class so any renders will see it
+        document.body.classList.add('modal-open');
+
+        // SECOND: Disable ALL contentEditable elements that might interfere with modal input
+        // ContentEditable elements can steal keyboard events even when they don't have focus
+        document.querySelectorAll('[contenteditable="true"]').forEach(element => {
+            const el = element as HTMLElement;
+
+            // Blur if it has focus
+            if (document.activeElement === el) {
+                el.blur();
+            }
+
+            // Temporarily disable contentEditable to prevent it from capturing keyboard events
+            // MUST set both the property AND the attribute
+            el.setAttribute('data-was-contenteditable', 'true');
+            el.contentEditable = 'false';
+            el.setAttribute('contenteditable', 'false');
+
+            // Also remove tabindex temporarily to prevent it from stealing focus back
+            if (el.hasAttribute('tabindex')) {
+                el.setAttribute('data-original-tabindex', el.getAttribute('tabindex') || '0');
+                el.removeAttribute('tabindex');
+            }
+        });
+
+        // THIRD: Apply configuration options (input values, data population)
         if (config.input) {
             this.configureInput(modal, config.input);
         }
-        
+
         if (config.data) {
             this.populateModal(modal, config.data);
         }
-        
-        // Show the modal
+
+        // FOURTH: Show the modal
         modal.style.display = config.display || 'flex';
-        
+
         // Track active modal
         this.currentModals.add(modalId);
-        
+
         // Focus first input if exists and autoFocus is not disabled
         if (config.autoFocus !== false) {
             this.focusFirstInput(modal);
         }
-        
+
         // Store modal data if provided
         if (config.data) {
             this.storeModalData(modalId, config.data);
         }
-        
+
         // Set up one-time event listeners for this modal instance
         this.setupModalEvents(modal, modalId, config);
-        
+
         return modal;
     }
     
@@ -98,13 +126,35 @@ export class ModalManager {
             console.warn(`ModalManager: Modal with ID "${modalId}" not found`);
             return;
         }
-        
+
+        // Stop the focus keeper
+        this.stopFocusKeeper();
+
         modal.style.display = 'none';
         this.currentModals.delete(modalId);
-        
+
+        // Remove modal-open class from body if no more modals are open
+        if (this.currentModals.size === 0) {
+            document.body.classList.remove('modal-open');
+        }
+
+        // Restore contentEditable and tabindex to elements that were modified
+        document.querySelectorAll('[data-was-contenteditable]').forEach(el => {
+            (el as HTMLElement).contentEditable = 'true';
+            el.removeAttribute('data-was-contenteditable');
+        });
+
+        document.querySelectorAll('[data-original-tabindex]').forEach(el => {
+            const originalTabindex = el.getAttribute('data-original-tabindex');
+            if (originalTabindex) {
+                el.setAttribute('tabindex', originalTabindex);
+                el.removeAttribute('data-original-tabindex');
+            }
+        });
+
         // Clear stored modal data
         this.clearModalData(modalId);
-        
+
         // Remove modal-specific event listeners
         this.cleanupModalEvents(modal);
     }
@@ -173,13 +223,96 @@ export class ModalManager {
     private static focusFirstInput(modal: HTMLElement): void {
         const firstInput = modal.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
         if (firstInput) {
-            setTimeout(() => {
-                firstInput.focus();
-                if ('type' in firstInput && (firstInput.type === 'text' || firstInput.type === 'url') && 'select' in firstInput) {
-                    firstInput.select();
+            this.currentFocusTarget = firstInput;
+
+            // Add a document-level capture listener to intercept ALL keyboard events while modal is open
+            // This prevents the first keystroke from going to the container if it's still the target
+            const documentCaptureListener = (e: KeyboardEvent) => {
+                // If the target is NOT the modal input (or modal-related), stop the event
+                // This handles the case where the first keystroke targets the container
+                const target = e.target as Element;
+                const isModalInput = target === firstInput;
+                const isInModal = target.closest('.modal-overlay') !== null;
+
+                if (!isModalInput && !isInModal) {
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+
+                    // Redirect the keystroke to the modal input if it's a character
+                    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        // Force focus explicitly
+                        if (document.activeElement !== firstInput) {
+                            firstInput.focus();
+                        }
+                        // Manually insert the character
+                        const currentValue = firstInput.value;
+                        const selectionStart = firstInput.selectionStart || 0;
+                        const selectionEnd = firstInput.selectionEnd || 0;
+                        firstInput.value = currentValue.substring(0, selectionStart) + e.key + currentValue.substring(selectionEnd);
+                        firstInput.selectionStart = firstInput.selectionEnd = selectionStart + 1;
+
+                        // Trigger input event so any listeners are notified
+                        firstInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
                 }
-            }, 0);
+            };
+            document.addEventListener('keydown', documentCaptureListener, true);
+            (firstInput as any)._documentCaptureListener = documentCaptureListener;
+
+            // Add event listener to stop propagation of keyboard events from modal inputs
+            // This prevents the main keyboard handler from processing them
+            // Use capture phase to intercept events before they reach document listeners
+            const stopKeyPropagation = (e: KeyboardEvent) => {
+                // Don't stop Escape or Enter as those need to be handled by the modal
+                if (e.key !== 'Escape' && e.key !== 'Enter') {
+                    e.stopPropagation();
+                    e.stopImmediatePropagation(); // Also stop other listeners on the same element
+                }
+            };
+
+            firstInput.addEventListener('keydown', stopKeyPropagation, true); // true = capture phase
+            (firstInput as any)._stopKeyPropagation = stopKeyPropagation; // Store for cleanup
+
+            // Don't use focus keeper - it causes focus battles
+            // The contentEditable disabling should be sufficient
+
+            // Use requestAnimationFrame to ensure modal is fully rendered
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    firstInput.focus();
+                    if ('type' in firstInput && (firstInput.type === 'text' || firstInput.type === 'url') && 'select' in firstInput) {
+                        firstInput.select();
+                    }
+                }, 50);
+            });
         }
+    }
+
+    /**
+     * Start an interval that keeps checking and maintaining focus on the target input
+     */
+    private static startFocusKeeper(): void {
+        // Clear any existing interval
+        this.stopFocusKeeper();
+
+        // Check every 50ms to ensure focus stays on the target
+        this.focusCheckInterval = window.setInterval(() => {
+            if (this.currentFocusTarget && document.activeElement !== this.currentFocusTarget) {
+                this.currentFocusTarget.focus();
+            }
+        }, 50);
+    }
+
+    /**
+     * Stop the focus keeper interval
+     */
+    private static stopFocusKeeper(): void {
+        if (this.focusCheckInterval) {
+            clearInterval(this.focusCheckInterval);
+            this.focusCheckInterval = null;
+        }
+        this.currentFocusTarget = null;
     }
     
     /**
@@ -234,11 +367,24 @@ export class ModalManager {
             modal.removeEventListener('click', (modal as any)._outsideClickHandler);
             delete (modal as any)._outsideClickHandler;
         }
-        
+
         const closeBtn = modal.querySelector('.modal-close, .btn-close, [data-dismiss="modal"]') as HTMLElement;
         if (closeBtn && (closeBtn as any)._closeHandler) {
             closeBtn.removeEventListener('click', (closeBtn as any)._closeHandler);
             delete (closeBtn as any)._closeHandler;
+        }
+
+        // Clean up input event listeners
+        const firstInput = modal.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+        if (firstInput) {
+            if ((firstInput as any)._stopKeyPropagation) {
+                firstInput.removeEventListener('keydown', (firstInput as any)._stopKeyPropagation, true);
+                delete (firstInput as any)._stopKeyPropagation;
+            }
+            if ((firstInput as any)._documentCaptureListener) {
+                document.removeEventListener('keydown', (firstInput as any)._documentCaptureListener, true);
+                delete (firstInput as any)._documentCaptureListener;
+            }
         }
     }
     
@@ -398,7 +544,6 @@ export class ModalManager {
      */
     public static initialize(): void {
         this.setupGlobalEvents();
-        console.log('ModalManager initialized');
     }
 }
 

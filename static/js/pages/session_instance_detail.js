@@ -1298,7 +1298,8 @@ function finishTypingFromKeyboard() {
         // Also ensure container stays focused after any DOM updates
         setTimeout(() => {
             const container = document.getElementById('tune-pills-container');
-            if (container) {
+            const hasOpenModal = document.body.classList.contains('modal-open');
+            if (container && !hasOpenModal) {
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
                 if (document.activeElement !== container) {
@@ -1328,7 +1329,8 @@ function finishTypingWithKeyboardFix(keepKeyboard) {
     if (isMobile) {
         setTimeout(() => {
             const container = document.getElementById('tune-pills-container');
-            if (container && document.activeElement !== container) {
+            const hasOpenModal = document.body.classList.contains('modal-open');
+            if (container && document.activeElement !== container && !hasOpenModal) {
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
                 container.focus();
@@ -1355,7 +1357,8 @@ function setupMobileKeyboardManagement() {
         // Small delay to check if we should restore focus
         setTimeout(() => {
             const cursorPosition = CursorManager.getCursorPosition();
-            if (cursorPosition && !textInput.typing) {
+            const hasOpenModal = document.body.classList.contains('modal-open');
+            if (cursorPosition && !textInput.typing && !hasOpenModal) {
                 // Cursor is active but container lost focus - restore it
                 container.contentEditable = 'true';
                 container.inputMode = 'text';
@@ -1367,7 +1370,8 @@ function setupMobileKeyboardManagement() {
     // Monitor for DOM changes that might reset contentEditable
     const observer = new MutationObserver(() => {
         const cursorPosition = CursorManager.getCursorPosition();
-        if (cursorPosition && container.contentEditable !== 'true') {
+        const hasOpenModal = document.body.classList.contains('modal-open');
+        if (cursorPosition && container.contentEditable !== 'true' && !hasOpenModal) {
             // Container was reset but cursor is still active
             container.contentEditable = 'true';
             container.inputMode = 'text';

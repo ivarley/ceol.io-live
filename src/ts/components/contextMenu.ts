@@ -75,7 +75,9 @@ declare global {
 }
 
 export class ContextMenu {
-    
+    // Store event listeners so we can remove them when hiding
+    private static activeMenuListeners: Array<{hideMenu: (e: Event) => void, hideOnScroll: () => void}> = [];
+
     /**
      * Remove all context menus and reset chevron states
      * @param pillId - Optional pill ID for specific targeting
@@ -84,6 +86,13 @@ export class ContextMenu {
         // Remove all context menus and reset chevron states
         document.querySelectorAll('.tune-context-menu').forEach(menu => menu.remove());
         document.querySelectorAll('.chevron.open').forEach(chevron => chevron.classList.remove('open'));
+
+        // Remove any lingering event listeners
+        this.activeMenuListeners.forEach(({hideMenu, hideOnScroll}) => {
+            document.removeEventListener('click', hideMenu);
+            document.removeEventListener('scroll', hideOnScroll, true);
+        });
+        this.activeMenuListeners = [];
     }
     
     /**
@@ -158,8 +167,8 @@ export class ContextMenu {
             });
             
             ContextMenu.addMenuItem(menu, 'Relink', () => {
-                ContextMenu.showLinkModal(pillData);
                 ContextMenu.hideContextMenu();
+                ContextMenu.showLinkModal(pillData);
             });
         } else if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
             // Show match results first if available
@@ -212,21 +221,21 @@ export class ContextMenu {
             
             // Add manual link option
             ContextMenu.addMenuItem(menu, 'Manual Link...', () => {
-                ContextMenu.showLinkModal(pillData);
                 ContextMenu.hideContextMenu();
+                ContextMenu.showLinkModal(pillData);
             });
         } else {
             // Unlinked tune options
             ContextMenu.addMenuItem(menu, 'Link', () => {
-                ContextMenu.showLinkModal(pillData);
                 ContextMenu.hideContextMenu();
+                ContextMenu.showLinkModal(pillData);
             });
         }
         
         // Common options
         ContextMenu.addMenuItem(menu, 'Edit Text', () => {
-            ContextMenu.showEditModal(pillData);
             ContextMenu.hideContextMenu();
+            ContextMenu.showEditModal(pillData);
         });
         
         if (window.PillSelection.getSelectionCount() <= 1) {
@@ -242,23 +251,22 @@ export class ContextMenu {
         }
         
         document.body.appendChild(menu);
-        
+
         // Hide menu when clicking elsewhere or scrolling
         setTimeout(() => {
             const hideMenu = (e: Event) => {
                 if (!menu.contains(e.target as Node)) {
                     ContextMenu.hideContextMenu();
-                    document.removeEventListener('click', hideMenu);
-                    document.removeEventListener('scroll', hideOnScroll, true);
                 }
             };
-            
+
             const hideOnScroll = () => {
                 ContextMenu.hideContextMenu();
-                document.removeEventListener('click', hideMenu);
-                document.removeEventListener('scroll', hideOnScroll, true);
             };
-            
+
+            // Store the listeners so we can remove them later
+            this.activeMenuListeners.push({hideMenu, hideOnScroll});
+
             document.addEventListener('click', hideMenu);
             // Use capture phase to catch scroll on any element
             document.addEventListener('scroll', hideOnScroll, true);
@@ -451,6 +459,9 @@ export class ContextMenu {
      * @param pillData - The pill data object
      */
     static showLinkModal(pillData: TunePill): void {
+        // Add modal-open class IMMEDIATELY to prevent enterEditMode from focusing container
+        document.body.classList.add('modal-open');
+
         const inputValue = pillData.tuneId ? `https://thesession.org/tunes/${pillData.tuneId}` : '';
         window.ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, false);
         // Store current pill for linking (backward compatibility)

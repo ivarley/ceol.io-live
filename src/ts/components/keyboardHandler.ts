@@ -92,37 +92,44 @@ export class KeyboardHandler {
     }
     
     private static handleAllKeydown(e: KeyboardEvent): void {
-        // First check for modal-specific handling
+        // First check if any modal is open - if so, only handle modal-specific keys
+        const openModal = document.querySelector('.modal-overlay[style*="display: flex"], .modal-overlay[style*="display:flex"]') as HTMLElement;
+        if (openModal) {
+            this.handleModalKeydown(e, openModal);
+            return;
+        }
+
+        // Check for modal-specific handling based on event target
         const modalOverlay = (e.target as Element).closest('.modal-overlay') as HTMLElement;
         if (modalOverlay) {
             this.handleModalKeydown(e, modalOverlay);
             return;
         }
-        
+
         // Check for typing match results (document-level temporary menus)
         if (document.querySelector('.typing-match-menu')) {
             this.handleTypingMatchKeydown(e);
             return;
         }
-        
+
         // Handle main application keyboard events
         this.handleMainKeydown(e);
     }
     
     private static handleModalKeydown(e: KeyboardEvent, modalOverlay: HTMLElement): void {
         const modalId = modalOverlay.id;
-        
+
         // Handle Escape key for all modals
         if (e.key === 'Escape') {
             e.preventDefault();
             this.handleModalEscape(e);
             return;
         }
-        
+
         // Handle Enter key for specific modals with inputs
         if (e.key === 'Enter') {
             e.preventDefault();
-            
+
             switch (modalId) {
                 case 'link-tune-modal':
                     this.confirmLink && this.confirmLink();
@@ -136,6 +143,9 @@ export class KeyboardHandler {
             }
             return;
         }
+
+        // For all other keys, allow normal input behavior (don't preventDefault, don't handle)
+        // This allows typing in modal input fields
     }
     
     private static handleTypingMatchKeydown(e: KeyboardEvent): void {
@@ -144,15 +154,9 @@ export class KeyboardHandler {
     }
     
     private static handleMainKeydown(e: KeyboardEvent): void {
-        // Don't handle keyboard events if container is contentEditable (mobile typing mode)
-        const container = document.getElementById('tune-pills-container');
-        if (container && container.contentEditable === 'true') {
-            return;
-        }
-        
         const cursorManager = this.getCursorManager?.();
         const pillSelection = this.getPillSelection?.();
-        
+
         if (!cursorManager || !pillSelection) {
             return; // Dependencies not available
         }

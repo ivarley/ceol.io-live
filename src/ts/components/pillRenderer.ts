@@ -66,49 +66,60 @@ export class PillRenderer {
         const autoSaveManager = this.getAutoSaveManager!();
         const tunePillsData = stateManager.getTunePillsData();
         const cursorPosition = cursorManager.getCursorPosition();
-        
+
+        // Check if we're in view mode
+        const isViewMode = (window as any).editorMode === 'view';
+
         // Check for data changes before rendering (safety net)
         autoSaveManager.forceCheckChanges();
-        
+
         // Clean up any lingering drag ghosts before re-rendering
         if (this.cleanupDragGhosts) {
             this.cleanupDragGhosts();
         }
-        
+
         const container = this.containerElement || document.getElementById('tune-pills-container')!;
-        
+
         // Remember if the container was contentEditable before clearing (for mobile keyboard persistence)
         const wasContentEditable = container.contentEditable === 'true';
         const wasFocused = document.activeElement === container;
-        
+
         container.innerHTML = '';
-        
-        // If we were contentEditable, restore it immediately after clearing
-        if (wasContentEditable) {
+
+        // If we were contentEditable, restore it immediately after clearing (unless in view mode or modal is open)
+        // Check body.modal-open class which is set BEFORE the modal is displayed
+        const hasOpenModal = document.body.classList.contains('modal-open');
+        if (wasContentEditable && !isViewMode && !hasOpenModal) {
             container.contentEditable = 'true';
             (container as any).inputMode = 'text';
         }
-        
+
         if (tunePillsData.length === 0) {
             this.renderEmptyState(container);
             return;
         }
-        
+
         tunePillsData.forEach((tuneSet, setIndex) => {
-            // Add horizontal drop zone before each set (except the first one)
-            if (setIndex > 0 && this.createHorizontalDropZone) {
+            // Add horizontal drop zone before each set (except the first one) - only in edit mode
+            if (setIndex > 0 && this.createHorizontalDropZone && !isViewMode) {
                 const dropZone = this.createHorizontalDropZone(setIndex);
                 container.appendChild(dropZone);
             }
-            
+
             const setDiv = this.createTuneSetElement(tuneSet, setIndex);
             container.appendChild(setDiv);
         });
-        
-        // Add final cursor position at the end
-        this.addFinalCursor(container);
-        
-        // Set default cursor position at the end if none exists
+
+        // Add final cursor position at the end - only in edit mode
+        if (!isViewMode) {
+            this.addFinalCursor(container);
+        }
+
+        // Set default cursor position at the end if none exists - only in edit mode
+        if (isViewMode) {
+            return; // Skip cursor positioning in view mode
+        }
+
         if (!cursorPosition) {
             if (this.setCursorPosition) {
                 this.setCursorPosition(tunePillsData.length, 0, 'newset');
@@ -159,32 +170,37 @@ export class PillRenderer {
     }
     
     static createTuneSetElement(tuneSet: TuneSet, setIndex: number): HTMLElement {
+        const isViewMode = (window as any).editorMode === 'view';
         const setDiv = document.createElement('div');
         setDiv.className = 'tune-set';
         setDiv.dataset.setIndex = setIndex.toString();
-        
+
         // Handle empty sets (especially temporary ones)
         if (tuneSet.length === 0) {
-            // Add cursor position for empty set
-            this.addCursorPosition(setDiv, setIndex, 0, 'before');
-            
+            // Add cursor position for empty set - only in edit mode
+            if (!isViewMode) {
+                this.addCursorPosition(setDiv, setIndex, 0, 'before');
+            }
+
             // Add some minimal height so the empty set is visible
             setDiv.style.minHeight = '25px';
             return setDiv;
         }
-        
+
         tuneSet.forEach((pill, pillIndex) => {
-            // Add cursor position before the first pill only
-            if (pillIndex === 0) {
+            // Add cursor position before the first pill only - only in edit mode
+            if (pillIndex === 0 && !isViewMode) {
                 this.addCursorPosition(setDiv, setIndex, pillIndex, 'before');
             }
-            
+
             const pillElement = this.createPillElement(pill, setIndex, pillIndex);
             setDiv.appendChild(pillElement);
-            
-            // Add cursor position after each pill (this becomes the "before" position for the next pill)
-            this.addCursorPosition(setDiv, setIndex, pillIndex, 'after');
-            
+
+            // Add cursor position after each pill (this becomes the "before" position for the next pill) - only in edit mode
+            if (!isViewMode) {
+                this.addCursorPosition(setDiv, setIndex, pillIndex, 'after');
+            }
+
             // Add spacing between pills
             if (pillIndex < tuneSet.length - 1) {
                 const spacer = document.createElement('span');
@@ -192,12 +208,14 @@ export class PillRenderer {
                 setDiv.appendChild(spacer);
             }
         });
-        
-        // After initial render, check for line wrapping and improve cursor positioning
-        setTimeout(() => {
-            this.enhanceWrappedCursorVisibility(setDiv, setIndex);
-        }, 10);
-        
+
+        // After initial render, check for line wrapping and improve cursor positioning - only in edit mode
+        if (!isViewMode) {
+            setTimeout(() => {
+                this.enhanceWrappedCursorVisibility(setDiv, setIndex);
+            }, 10);
+        }
+
         return setDiv;
     }
     
@@ -286,36 +304,38 @@ export class PillRenderer {
     }
     
     static createPillElement(pill: TunePill, setIndex: number, pillIndex: number): HTMLElement {
+        const isViewMode = (window as any).editorMode === 'view';
         const pillDiv = document.createElement('div');
         pillDiv.className = `tune-pill ${pill.state}`;
         pillDiv.dataset.pillId = pill.id;
         pillDiv.dataset.setIndex = setIndex.toString();
         pillDiv.dataset.pillIndex = pillIndex.toString();
-        pillDiv.draggable = true;
-        
+        // Make pills draggable only in edit mode
+        pillDiv.draggable = !isViewMode;
+
         // Add chevron
         const chevron = document.createElement('div');
         chevron.className = 'chevron';
         pillDiv.appendChild(chevron);
-        
+
         // Add text
         const text = document.createElement('span');
         text.className = 'text';
         text.textContent = pill.tuneName;
         pillDiv.appendChild(text);
-        
+
         // Add loading spinner if pill is in loading state
         if (pill.state === 'loading') {
             const spinner = document.createElement('span');
             spinner.className = 'loading-spinner';
             pillDiv.appendChild(spinner);
         }
-        
-        // Add event listeners
-        if (this.setupPillEventListeners) {
+
+        // Add event listeners only in edit mode
+        if (this.setupPillEventListeners && !isViewMode) {
             this.setupPillEventListeners(pillDiv, pill);
         }
-        
+
         return pillDiv;
     }
     

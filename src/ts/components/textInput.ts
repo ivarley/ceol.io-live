@@ -618,12 +618,14 @@ export class TextInput {
             }
         } else if (window.CursorManager.isMobileDevice() && keepKeyboardOpen) {
             // When keeping keyboard open, ensure the container stays focused and editable
+            // BUT NOT if a modal is open - modals need exclusive keyboard access
+            const hasOpenModal = document.body.classList.contains('modal-open');
             const container = document.getElementById('tune-pills-container') as HTMLElement;
-            if (container) {
+            if (container && !hasOpenModal) {
                 // Keep contentEditable true and don't blur
                 container.contentEditable = 'true';
                 (container as any).inputMode = 'text';
-                
+
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
                     container.focus();

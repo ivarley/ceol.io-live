@@ -571,10 +571,12 @@ export class CursorManager {
         const container = document.getElementById('tune-pills-container')!;
         
         // On mobile devices, make container contenteditable to trigger keyboard
-        if (this.isMobileDevice()) {
+        // BUT NOT if a modal is open - modals need exclusive keyboard access
+        const hasOpenModal = document.body.classList.contains('modal-open');
+        if (this.isMobileDevice() && !hasOpenModal) {
             // Check if contentEditable is already true (keyboard already open)
             const wasAlreadyEditable = container.contentEditable === 'true';
-            
+
             // Make the container contenteditable temporarily
             container.contentEditable = 'true';
             (container as any).inputMode = 'text';
