@@ -427,6 +427,139 @@ def get_session_tune_detail(session_path, tune_id):
         )
 
 
+@login_required
+def update_session_tune_details(session_path, tune_id):
+    """Update session-specific tune details (setting_id, key, and aliases)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"})
+
+        setting_id = data.get("setting_id", "").strip()
+        key = data.get("key", "").strip()
+        aliases_str = data.get("aliases", "").strip()
+
+        # Parse setting_id - convert to int or None
+        parsed_setting_id = None
+        if setting_id:
+            try:
+                parsed_setting_id = int(setting_id)
+            except ValueError:
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": "Setting ID must be a number",
+                    }
+                )
+
+        # Parse aliases - split by comma and clean up
+        new_aliases = []
+        if aliases_str:
+            new_aliases = [a.strip() for a in aliases_str.split(",") if a.strip()]
+
+        # Convert empty strings to None for key
+        parsed_key = key if key else None
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"})
+
+        session_id = session_result[0]
+
+        # Check if tune exists in session_tune
+        cur.execute(
+            "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id),
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "Tune not found in this session",
+                }
+            )
+
+        # Save to history before making changes
+        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id))
+
+        # Update session_tune with setting_id and key
+        cur.execute(
+            """
+            UPDATE session_tune
+            SET setting_id = %s, key = %s
+            WHERE session_id = %s AND tune_id = %s
+        """,
+            (parsed_setting_id, parsed_key, session_id, tune_id),
+        )
+
+        # Now handle aliases in session_tune_alias table
+        # First, get existing aliases
+        cur.execute(
+            """
+            SELECT session_tune_alias_id, alias
+            FROM session_tune_alias
+            WHERE session_id = %s AND tune_id = %s
+        """,
+            (session_id, tune_id),
+        )
+        existing_aliases = cur.fetchall()
+        existing_alias_map = {row[1]: row[0] for row in existing_aliases}
+
+        # Determine which aliases to add and which to remove
+        existing_alias_set = set(existing_alias_map.keys())
+        new_alias_set = set(new_aliases)
+
+        aliases_to_add = new_alias_set - existing_alias_set
+        aliases_to_remove = existing_alias_set - new_alias_set
+
+        # Add new aliases
+        for alias in aliases_to_add:
+            cur.execute(
+                """
+                INSERT INTO session_tune_alias (session_id, tune_id, alias)
+                VALUES (%s, %s, %s)
+                RETURNING session_tune_alias_id
+            """,
+                (session_id, tune_id, alias),
+            )
+            alias_id = cur.fetchone()[0]
+            save_to_history(cur, "session_tune_alias", "INSERT", alias_id)
+
+        # Remove old aliases
+        for alias in aliases_to_remove:
+            alias_id = existing_alias_map[alias]
+            save_to_history(cur, "session_tune_alias", "DELETE", alias_id)
+            cur.execute(
+                "DELETE FROM session_tune_alias WHERE session_tune_alias_id = %s",
+                (alias_id,),
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Tune details saved successfully",
+            }
+        )
+
+    except Exception as e:
+        return jsonify(
+            {"success": False, "message": f"Error updating tune details: {str(e)}"}
+        )
+
+
 def get_session_tune_aliases(session_path, tune_id):
     """Get all aliases for a tune in a session"""
     try:

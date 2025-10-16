@@ -1487,21 +1487,58 @@
         saveButton.disabled = true;
         saveButton.textContent = 'Saving...';
 
-        // TODO: Make API call to save the tune details
-        // For now, just show a success message
-        console.log('Saving tune details:', { tuneId, aliases, settingId, key });
+        // Make API call to save the tune details
+        fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                aliases: aliases,
+                setting_id: settingId,
+                key: key
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                saveButton.textContent = 'Saved!';
+                saveButton.style.backgroundColor = '#28a745';
 
-        // Simulate API call
-        setTimeout(() => {
-            saveButton.textContent = 'Saved!';
-            saveButton.style.backgroundColor = '#28a745';
+                // Update the tune list if needed (refresh setting_id in memory)
+                const tuneIndex = allTunes.findIndex(t => t[0] === tuneId);
+                if (tuneIndex !== -1) {
+                    allTunes[tuneIndex][5] = settingId ? parseInt(settingId) : null;
+                }
+
+                setTimeout(() => {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'Save';
+                    saveButton.style.backgroundColor = '';
+                }, 1500);
+            } else {
+                saveButton.textContent = 'Error';
+                saveButton.style.backgroundColor = '#dc3545';
+                console.error('Error saving tune details:', data.message);
+
+                setTimeout(() => {
+                    saveButton.disabled = false;
+                    saveButton.textContent = 'Save';
+                    saveButton.style.backgroundColor = '';
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            saveButton.textContent = 'Error';
+            saveButton.style.backgroundColor = '#dc3545';
 
             setTimeout(() => {
                 saveButton.disabled = false;
                 saveButton.textContent = 'Save';
                 saveButton.style.backgroundColor = '';
-            }, 1500);
-        }, 500);
+            }, 2000);
+        });
     }
 
     function closeTuneDetailModal() {
