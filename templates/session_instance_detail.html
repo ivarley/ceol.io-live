@@ -133,6 +133,14 @@
             border: none;
         }
 
+        .view-mode .tune-pill.linked {
+            cursor: pointer;
+        }
+
+        .view-mode .tune-pill.linked:hover {
+            opacity: 0.8;
+        }
+
         [data-theme="dark"] .view-mode .tune-pill.linked,
         [data-theme="dark"] .view-mode .tune-pill.loading {
             background-color: #003366;
@@ -1151,6 +1159,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('tune-pills-container');
     if (container) {
         container.setAttribute('contenteditable', 'false');
+    }
+
+    // Add click handler for linked tune pills in view mode
+    if (container) {
+        container.addEventListener('click', function(e) {
+            // Only handle clicks in view mode
+            if (window.editorMode !== 'view') return;
+
+            // Find the clicked pill
+            const pill = e.target.closest('.tune-pill.linked');
+            if (!pill) return;
+
+            // Get the pill data from StateManager
+            const pillId = pill.dataset.pillId;
+            const tunePillsData = window.StateManager ? window.StateManager.getTunePillsData() : [];
+
+            // Find the pill in the data
+            let pillData = null;
+            for (const set of tunePillsData) {
+                pillData = set.find(p => p.id === pillId);
+                if (pillData) break;
+            }
+
+            if (!pillData || !pillData.tuneId) return;
+
+            // Navigate to session detail page with tune highlight
+            const sessionPath = window.sessionConfig.sessionPath;
+            window.location.href = `/sessions/${sessionPath}?highlight_tune=${pillData.tuneId}#tunes`;
+        });
     }
 });
 

@@ -1584,6 +1584,21 @@
         // Initialize tunes tab on page load since it's the default tab
         initializeTunesTab();
 
+        // Check for highlight_tune parameter and open tune modal if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const highlightTuneId = urlParams.get('highlight_tune');
+        if (highlightTuneId) {
+            // Find the tune in the allTunes array
+            const tuneIdNum = parseInt(highlightTuneId);
+            const tune = allTunes.find(t => t[0] === tuneIdNum);
+            if (tune) {
+                // Show the tune detail modal
+                setTimeout(() => {
+                    showTuneDetail(tune[0], tune[1], tune[2], tune[3], tune[4], tune[5]);
+                }, 100);
+            }
+        }
+
         // Event listeners for buttons and modals
         const addSessionBtn = document.getElementById('add-session-btn');
         if (addSessionBtn) {
