@@ -964,8 +964,8 @@
                     <!-- Tune pills will be rendered here -->
                 </div>
 
-                <!-- Edit Button (shown in view mode for logged-in users) -->
-                {% if current_user.is_authenticated %}
+                <!-- Edit Button (shown in view mode for logged-in users, hidden when log is complete) -->
+                {% if current_user.is_authenticated and not session_instance.log_complete_date %}
                 <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
                     <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
                         Edit
