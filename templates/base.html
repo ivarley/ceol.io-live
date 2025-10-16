@@ -13,7 +13,20 @@
     <meta http-equiv="Expires" content="0">
     {% endif %}
     
-    <meta name="description" content="{% block description %}Index{% endblock %}">
+    <meta name="description" content="{% block description %}Track your traditional Irish music sessions and tunes{% endblock %}">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ceol.io">
+    <meta name="application-name" content="ceol.io">
+    <meta name="theme-color" content="#5f6bd8">
+    <meta name="msapplication-TileColor" content="#5f6bd8">
+    <meta name="msapplication-tap-highlight" content="no">
 
     <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
@@ -34,9 +47,9 @@
     <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
     <script>
         (function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
+            const savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
-            
+
             // Set logo based on theme once DOM is ready
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
@@ -45,7 +58,7 @@
             } else {
                 updateLogo(savedTheme);
             }
-            
+
             function updateLogo(theme) {
                 const logoImg = document.getElementById('logo-img');
                 if (logoImg) {
@@ -312,10 +325,10 @@ function updateDarkModeText(theme) {
 
 // Initialize theme toggle text and logo on page load
 document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('theme') || 'light';
+    const savedTheme = localStorage.getItem('theme') || 'dark';
     updateDarkModeText(savedTheme);
     updateLogo(savedTheme);
-    
+
     // Show any server-side flash messages as ephemeral messages
     showServerFlashMessages();
 });
@@ -365,7 +378,7 @@ function getOrCreateMessageContainer() {
 
 function showServerFlashMessages() {
     // Find only flash-type alerts that should be converted to ephemeral messages
-    // Only convert alerts that are dismissible (typically flash messages) 
+    // Only convert alerts that are dismissible (typically flash messages)
     // and don't contain alert-heading (which are usually permanent info boxes)
     const alerts = document.querySelectorAll('.alert.alert-dismissible[role="alert"]');
     alerts.forEach(alert => {
@@ -373,22 +386,75 @@ function showServerFlashMessages() {
         if (alert.querySelector('.alert-heading')) {
             return;
         }
-        
+
         const message = alert.textContent.replace('×', '').trim();
         let type = 'info';
-        
+
         if (alert.classList.contains('alert-success')) type = 'success';
         else if (alert.classList.contains('alert-danger')) type = 'error';
         else if (alert.classList.contains('alert-warning')) type = 'warning';
         else if (alert.classList.contains('alert-info')) type = 'info';
-        
+
         // Hide the original alert
         alert.style.display = 'none';
-        
+
         // Show as ephemeral message
         showMessage(message, type);
     });
 }
+
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/service-worker.js')
+            .then((registration) => {
+                console.log('[PWA] Service Worker registered:', registration.scope);
+
+                // Check for updates periodically
+                setInterval(() => {
+                    registration.update();
+                }, 60000); // Check every minute
+
+                // Handle service worker updates
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New service worker available, show update notification
+                            if (confirm('A new version is available! Reload to update?')) {
+                                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                window.location.reload();
+                            }
+                        }
+                    });
+                });
+            })
+            .catch((error) => {
+                console.log('[PWA] Service Worker registration failed:', error);
+            });
+
+        // Handle controller change (when new service worker takes over)
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+        });
+    });
+}
+
+// PWA Install Prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent Chrome 67 and earlier from automatically showing the prompt
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    console.log('[PWA] Install prompt available');
+    // Optionally, you could show a custom install button here
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('[PWA] App installed successfully');
+    deferredPrompt = null;
+});
 </script>
 
 {% block extra_js %}{% endblock %}
