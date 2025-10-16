@@ -126,19 +126,30 @@
             caret-color: transparent;
         }
 
-        .view-mode .tune-pill.unlinked,
         .view-mode .tune-pill.linked,
-        .view-mode .tune-pill.unmatched,
         .view-mode .tune-pill.loading {
+            background-color: #003366;
+            color: white;
+            border: none;
+        }
+
+        [data-theme="dark"] .view-mode .tune-pill.linked,
+        [data-theme="dark"] .view-mode .tune-pill.loading {
+            background-color: #003366;
+            color: white;
+            border: none;
+        }
+
+        /* Unlinked and unmatched tunes should be gray in view mode */
+        .view-mode .tune-pill.unlinked,
+        .view-mode .tune-pill.unmatched {
             background-color: #6c757d;
             color: white;
             border: none;
         }
 
         [data-theme="dark"] .view-mode .tune-pill.unlinked,
-        [data-theme="dark"] .view-mode .tune-pill.linked,
-        [data-theme="dark"] .view-mode .tune-pill.unmatched,
-        [data-theme="dark"] .view-mode .tune-pill.loading {
+        [data-theme="dark"] .view-mode .tune-pill.unmatched {
             background-color: #6c757d;
             color: white;
             border: none;

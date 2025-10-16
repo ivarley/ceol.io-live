@@ -1276,7 +1276,7 @@ function markSessionLogIncomplete() {
             showMessage(data.message);
             // Reload the page to show updated status
             setTimeout(() => {
-                window.location.href = `/sessions/${sessionPath}/${sessionDate}/beta`;
+                window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
             }, 1500);
         } else {
             showMessage(data.message, 'error');
