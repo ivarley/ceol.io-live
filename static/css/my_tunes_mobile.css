@@ -813,10 +813,16 @@ html, body {
         margin-right: 0;
     }
 
+    /* Override safe area insets for tune list container */
+    .my-tunes-container {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
     .my-tunes-header-section {
-        padding-top: 10px;
-        padding-left: 1px;
-        padding-right: 1px;
+        padding-top: 14px;
+        padding-left: 8px;
+        padding-right: 8px;
     }
 
     .page-header {
@@ -925,7 +931,7 @@ html, body {
         border-left: none;
         border-right: none;
         border-top: none;
-        padding: 8px 2px;
+        padding: 8px 8px;
         margin: 0;
         display: grid;
         grid-template-columns: 20px 1fr auto;
@@ -1445,11 +1451,15 @@ html, body {
 
 @supports (padding: max(0px)) {
     @media (max-width: 768px) {
-        .my-tunes-container,
         .add-tune-container,
         .sync-container {
             padding-left: max(15px, env(safe-area-inset-left));
             padding-right: max(15px, env(safe-area-inset-right));
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+        }
+
+        .my-tunes-container {
+            /* No horizontal padding - let borders go edge-to-edge */
             padding-bottom: max(15px, env(safe-area-inset-bottom));
         }
 
