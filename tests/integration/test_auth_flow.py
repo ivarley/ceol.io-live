@@ -127,8 +127,11 @@ class TestRegistrationFlow:
         assert response.status_code == 200
         assert b"already exists" in response.data
 
-    def test_registration_duplicate_email(self, client, db_conn, db_cursor):
-        """Test registration fails with duplicate email."""
+    @patch("web_routes.send_verification_email")
+    def test_registration_duplicate_email(self, mock_send_email, client, db_conn, db_cursor):
+        """Test registration succeeds by linking to existing person without user account."""
+        mock_send_email.return_value = True
+
         # Create person with existing email using unique identifier
         unique_id = str(uuid.uuid4())[:8]
         duplicate_email = f"duplicate{unique_id}@example.com"
@@ -136,9 +139,11 @@ class TestRegistrationFlow:
             """
             INSERT INTO person (first_name, last_name, email)
             VALUES (%s, %s, %s)
+            RETURNING person_id
         """,
             ("Existing", "Person", duplicate_email),
         )
+        existing_person_id = db_cursor.fetchone()[0]
         db_conn.commit()
 
         response = client.post(
@@ -147,14 +152,81 @@ class TestRegistrationFlow:
                 "username": f"newuser{unique_id}",  # Unique username
                 "password": "newpass123",
                 "confirm_password": "newpass123",
-                "first_name": "New",
-                "last_name": "User",
-                "email": duplicate_email,  # Same email to trigger duplicate error
+                "first_name": "Updated",
+                "last_name": "Name",
+                "email": duplicate_email,  # Same email - should link to existing person
             },
         )
 
+        # Should redirect to login page after successful registration
+        assert response.status_code == 302
+        assert "/login" in response.headers["Location"]
+
+        # Verify user account was created with existing person_id
+        db_cursor.execute(
+            """
+            SELECT person_id, username
+            FROM user_account
+            WHERE username = %s
+        """,
+            (f"newuser{unique_id}",),
+        )
+        user_record = db_cursor.fetchone()
+        assert user_record is not None
+        assert user_record[0] == existing_person_id  # Should use existing person_id
+
+        # Verify person name was updated
+        db_cursor.execute(
+            """
+            SELECT first_name, last_name
+            FROM person
+            WHERE person_id = %s
+        """,
+            (existing_person_id,),
+        )
+        person_record = db_cursor.fetchone()
+        assert person_record[0] == "Updated"
+        assert person_record[1] == "Name"
+
+    def test_registration_email_with_existing_user_account(self, client, db_conn, db_cursor):
+        """Test registration fails when email already has a user account."""
+        # Create person with existing email and user account
+        unique_id = str(uuid.uuid4())[:8]
+        duplicate_email = f"hasaccount{unique_id}@example.com"
+        db_cursor.execute(
+            """
+            INSERT INTO person (first_name, last_name, email)
+            VALUES (%s, %s, %s)
+            RETURNING person_id
+        """,
+            ("Has", "Account", duplicate_email),
+        )
+        person_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute(
+            """
+            INSERT INTO user_account (person_id, username, user_email, hashed_password)
+            VALUES (%s, %s, %s, %s)
+        """,
+            (person_id, f"existinguser{unique_id}", duplicate_email, "hashedpass"),
+        )
+        db_conn.commit()
+
+        response = client.post(
+            "/register",
+            data={
+                "username": f"newuser{unique_id}",  # Different username
+                "password": "newpass123",
+                "confirm_password": "newpass123",
+                "first_name": "New",
+                "last_name": "User",
+                "email": duplicate_email,  # Email already has user account
+            },
+        )
+
+        # Should stay on registration page with error
         assert response.status_code == 200
-        assert b"already registered" in response.data
+        assert b"already registered with a user account" in response.data
 
 
 @pytest.mark.integration

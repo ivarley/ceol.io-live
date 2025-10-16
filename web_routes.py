@@ -718,17 +718,39 @@ def register():
             flash("Username already exists. Please choose a different one.", "error")
             return render_template("auth/register.html")
 
-        # Check if email already exists
+        # Check if email already exists and whether it has a user account
+        existing_person_id = None
+        existing_person = None
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT person_id FROM person WHERE email = %s", (email,))
-            if cur.fetchone():
-                flash(
-                    "Email address already registered. Please use a different email or try logging in.",
-                    "error",
+            # Get person details if email exists
+            cur.execute(
+                "SELECT person_id, first_name, last_name FROM person WHERE email = %s",
+                (email,)
+            )
+            person_result = cur.fetchone()
+
+            if person_result:
+                existing_person_id, existing_first_name, existing_last_name = person_result
+                existing_person = {
+                    'person_id': existing_person_id,
+                    'first_name': existing_first_name,
+                    'last_name': existing_last_name
+                }
+
+                # Check if this person already has a user account
+                cur.execute(
+                    "SELECT user_id FROM user_account WHERE person_id = %s",
+                    (existing_person_id,)
                 )
-                return render_template("auth/register.html")
+                if cur.fetchone():
+                    flash(
+                        "Email address already registered with a user account. Please try logging in or use password reset if needed.",
+                        "error",
+                    )
+                    return render_template("auth/register.html")
+                # If we get here, person exists but has no user account - we'll link to it
         finally:
             conn.close()
 
@@ -736,20 +758,43 @@ def register():
             conn = get_db_connection()
             cur = conn.cursor()
 
-            # Create person record
-            cur.execute(
-                """
-                INSERT INTO person (first_name, last_name, email)
-                VALUES (%s, %s, %s)
-                RETURNING person_id
-            """,
-                (first_name, last_name, email),
-            )
-            result = cur.fetchone()
-            if not result:
-                flash("Failed to create person record", "error")
-                return redirect(url_for("register"))
-            person_id = result[0]
+            # Create or update person record
+            if existing_person_id:
+                # Use existing person and update their name if different
+                person_id = existing_person_id
+                if (first_name != existing_person['first_name'] or
+                    last_name != existing_person['last_name']):
+                    # Update person's name to match registration
+                    save_to_history(
+                        cur,
+                        "person",
+                        "UPDATE",
+                        person_id,
+                        f"name_update_during_registration:{username}"
+                    )
+                    cur.execute(
+                        """
+                        UPDATE person
+                        SET first_name = %s, last_name = %s, last_modified_date = %s
+                        WHERE person_id = %s
+                        """,
+                        (first_name, last_name, now_utc(), person_id)
+                    )
+            else:
+                # Create new person record
+                cur.execute(
+                    """
+                    INSERT INTO person (first_name, last_name, email)
+                    VALUES (%s, %s, %s)
+                    RETURNING person_id
+                """,
+                    (first_name, last_name, email),
+                )
+                result = cur.fetchone()
+                if not result:
+                    flash("Failed to create person record", "error")
+                    return redirect(url_for("register"))
+                person_id = result[0]
 
             # Create user record (unverified)
             hashed_password = bcrypt.hashpw(
@@ -780,6 +825,16 @@ def register():
                 flash("Failed to create user account", "error")
                 return redirect(url_for("register"))
             user_id = result[0]
+
+            # Log history entry for linking existing person to new user account
+            if existing_person_id:
+                save_to_history(
+                    cur,
+                    "user_account",
+                    "INSERT",
+                    user_id,
+                    f"linked_existing_person:{person_id}:{username}"
+                )
 
             conn.commit()
 
