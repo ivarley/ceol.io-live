@@ -287,10 +287,16 @@ const sortModes = [
 ];
 let currentSortModeIndex = 0;
 
-// Helper function to normalize strings by removing accents
+// Helper function to normalize strings by removing accents and normalizing quotes
 function normalizeString(str) {
     if (!str) return '';
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // Remove accents
+    let normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // Normalize smart quotes to straight quotes
+    normalized = normalized
+        .replace(/['']/g, "'")  // Single smart quotes to straight quote
+        .replace(/[""]/g, '"'); // Double smart quotes to straight quote
+    return normalized;
 }
 
 // Initialize on page load
@@ -1183,13 +1189,17 @@ function createTuneCard(tune) {
 }
 
 function clearFilters() {
+    // Preserve the current search query
+    const currentSearch = currentFilters.search;
+
     currentFilters = {
-        search: '',
+        search: currentSearch,  // Keep the search
         type: '',
         status: ''
     };
 
-    document.getElementById('search-input').value = '';
+    // Don't clear the search input - keep it as is
+    // document.getElementById('search-input').value = '';
     document.getElementById('type-filter').value = '';
 
     // Reset desktop dropdown

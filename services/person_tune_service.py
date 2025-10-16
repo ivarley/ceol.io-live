@@ -509,16 +509,24 @@ class PersonTuneService:
                 params.append(tune_type_filter)
 
             if search_query:
-                # Search in both name_alias and tune name (accent-insensitive)
-                # Using translate() to remove accents for PostgreSQL compatibility
+                # Search in both name_alias and tune name (accent-insensitive and quote-insensitive)
+                # Using translate() to remove accents and normalize quotes for PostgreSQL compatibility
                 query += """ AND (
-                    translate(LOWER(COALESCE(pt.name_alias, t.name)),
-                             'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
-                             'aaaaaaaeeeeeiiiiioooooooouuuuuyycn')
+                    translate(
+                        translate(LOWER(COALESCE(pt.name_alias, t.name)),
+                                 'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
+                                 'aaaaaaaeeeeeiiiiioooooooouuuuuyycn'),
+                        '''""',
+                        ''''''
+                    )
                     LIKE
-                    translate(LOWER(%s),
-                             'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
-                             'aaaaaaaeeeeeiiiiioooooooouuuuuyycn')
+                    translate(
+                        translate(LOWER(%s),
+                                 'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
+                                 'aaaaaaaeeeeeiiiiioooooooouuuuuyycn'),
+                        '''""',
+                        ''''''
+                    )
                 )"""
                 params.append(f"%{search_query}%")
 
