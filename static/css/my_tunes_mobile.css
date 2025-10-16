@@ -8,6 +8,18 @@
 html, body {
     overscroll-behavior-y: none; /* Prevent pull-to-refresh */
     overscroll-behavior-x: none; /* Prevent horizontal bounce */
+    overflow-x: hidden; /* Prevent horizontal scroll when swiping cards */
+}
+
+/* Ensure header and hamburger menu stay fixed during swipe gestures */
+.header.fixed-top {
+    position: fixed;
+    width: 100%;
+    z-index: 10000;
+    /* Isolate from transforms applied to page content */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
 }
 
 .my-tunes-container {
@@ -1152,7 +1164,7 @@ html, body {
     /* Swipe-to-reveal styles */
     .tune-card-swipe-container {
         position: relative;
-        overflow: visible;
+        overflow: hidden; /* Prevent expansion beyond container */
         width: 100%;
         height: 100%;
     }
