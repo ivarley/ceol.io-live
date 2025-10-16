@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Share Ceol - Irish Music Sessions{% endblock %}
+{% block description %}Share Ceol{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Reset UL color completely and inherit from body */
+    .landing-page ul {
+        color: unset !important;
+        color: inherit !important;
+    }
+
+    .landing-page ul li {
+        color: unset !important;
+        color: inherit !important;
+    }
+
+    /* Try to match the computed style of paragraphs exactly */
+    .landing-page p {
+        color: var(--text-color);
+    }
+
+    .landing-page ul {
+        color: var(--text-color) !important;
+        opacity: 0.9;
+    }
+
+    .landing-page ul li {
+        color: var(--text-color) !important;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-page" style="display: block;">
+    <h1>Share Ceol</h1>
+    <p>This app is free to use for anyone; just visit <a href="/">ceol.io</a> to get started!</p>
+</div>
+{% endblock %}

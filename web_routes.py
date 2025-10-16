@@ -662,6 +662,10 @@ def help_page():
     return render_template("help.html")
 
 
+def share_page():
+    return render_template("share.html")
+
+
 def help_my_tunes():
     return render_template("help_my_tunes.html")
 
