@@ -410,8 +410,6 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/static/service-worker.js')
             .then((registration) => {
-                console.log('[PWA] Service Worker registered:', registration.scope);
-
                 // Handle service worker updates
                 registration.addEventListener('updatefound', () => {
                     const newWorker = registration.installing;
@@ -426,8 +424,8 @@ if ('serviceWorker' in navigator) {
                     });
                 });
             })
-            .catch((error) => {
-                console.log('[PWA] Service Worker registration failed:', error);
+            .catch(() => {
+                // Service Worker registration failed silently
             });
 
         // Handle controller change (when new service worker takes over)
@@ -444,12 +442,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     // Stash the event so it can be triggered later
     deferredPrompt = e;
-    console.log('[PWA] Install prompt available');
     // Optionally, you could show a custom install button here
 });
 
 window.addEventListener('appinstalled', () => {
-    console.log('[PWA] App installed successfully');
     deferredPrompt = null;
 });
 </script>

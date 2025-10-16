@@ -257,7 +257,6 @@ export class PillSelection {
             
             // Try to write plain text tune names to external clipboard
             navigator.clipboard.writeText(tuneNames).then(() => {
-                console.log('Successfully copied to external clipboard:', tuneNames);
             }).catch(err => {
                 console.warn('Failed to write tune names to clipboard, trying JSON fallback:', err);
                 // Fallback to JSON format if plain text fails

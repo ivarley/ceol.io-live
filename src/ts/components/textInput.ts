@@ -149,58 +149,40 @@ export class TextInput {
         const cursorPosition = window.CursorManager.getCursorPosition();
         if (cursorPosition) {
             const { setIndex, pillIndex, position } = cursorPosition;
-            console.log(`Finding previous tune type - cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
             const tunePillsData = window.StateManager.getTunePillsData();
-            console.log(`tunePillsData structure:`, tunePillsData.map((set, i) => `Set ${i}: ${set.length} pills`));
             if (setIndex < tunePillsData.length) {
                 const set = tunePillsData[setIndex]!;
-                console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
-                
+
                 // Different logic based on cursor position
                 if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
                     // Cursor is after a pill - look backwards from current pill
-                    console.log(`Looking backwards from pill ${pillIndex} in 'after' position`);
                     for (let i = pillIndex; i >= 0; i--) {
-                        console.log(`Checking pill ${i}: ${set[i]!.tuneName} (${set[i]!.tuneType})`);
                         if (set[i]!.tuneType) {
                             previousTuneType = set[i]!.tuneType;
-                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
                             break;
                         }
                     }
                 } else if (position === 'before' && pillIndex > 0 && pillIndex <= set.length) {
                     // Cursor is before a pill but not the first - look at previous pill
-                    console.log(`Looking backwards from pill ${pillIndex - 1} in 'before' position`);
                     for (let i = pillIndex - 1; i >= 0; i--) {
-                        console.log(`Checking pill ${i}: ${set[i]!.tuneName} (${set[i]!.tuneType})`);
                         if (set[i]!.tuneType) {
                             previousTuneType = set[i]!.tuneType;
-                            console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
                             break;
                         }
                     }
                 } else if (position === 'newset' && setIndex > 0) {
                     // Starting a new set - check the last tune of the previous set
                     const prevSet = tunePillsData[setIndex - 1]!;
-                    console.log(`Looking in previous set (${setIndex - 1}) with ${prevSet ? prevSet.length : 0} pills`);
                     if (prevSet && prevSet.length > 0) {
                         for (let i = prevSet.length - 1; i >= 0; i--) {
-                            console.log(`Checking prev set pill ${i}: ${prevSet[i]!.tuneName} (${prevSet[i]!.tuneType})`);
                             if (prevSet[i]!.tuneType) {
                                 previousTuneType = prevSet[i]!.tuneType;
-                                console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
                                 break;
                             }
                         }
                     }
-                } else {
-                    console.log(`No matching cursor position logic for setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
                 }
-            } else {
-                console.log(`setIndex ${setIndex} >= tunePillsData.length ${tunePillsData.length}`);
             }
-        } else {
-            console.log(`No cursorPosition available`);
         }
         
         // Store previous tune type on the pill for the API call
@@ -683,19 +665,16 @@ export class TextInput {
         
         // Calculate the previous tune type based on cursor position before inserting pills
         let previousTuneType: string | null = null;
-        console.log(`insertTunesAtCursor - Finding previous tune type for cursor at: setIndex=${setIndex}, pillIndex=${pillIndex}, position=${position}`);
-        
+
         const tunePillsData = window.StateManager.getTunePillsData();
         if (setIndex < tunePillsData.length) {
             const set = tunePillsData[setIndex]!;
-            console.log(`Current set has ${set.length} pills:`, set.map(p => `${p.tuneName}(${p.tuneType})`));
-            
+
             if (position === 'after' && pillIndex >= 0 && pillIndex < set.length) {
                 // Cursor is after a pill - look backwards from current pill
                 for (let i = pillIndex; i >= 0; i--) {
                     if (set[i]!.tuneType) {
                         previousTuneType = set[i]!.tuneType;
-                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
                         break;
                     }
                 }
@@ -704,7 +683,6 @@ export class TextInput {
                 for (let i = pillIndex - 1; i >= 0; i--) {
                     if (set[i]!.tuneType) {
                         previousTuneType = set[i]!.tuneType;
-                        console.log(`Found previous tune type from pill ${i}: ${previousTuneType}`);
                         break;
                     }
                 }
@@ -717,13 +695,12 @@ export class TextInput {
                 for (let i = prevSet.length - 1; i >= 0; i--) {
                     if (prevSet[i]!.tuneType) {
                         previousTuneType = prevSet[i]!.tuneType;
-                        console.log(`Found previous tune type from previous set pill ${i}: ${previousTuneType}`);
                         break;
                     }
                 }
             }
         }
-        
+
         // Create new pills with the calculated previous tune type
         const newPills: TypingPill[] = tuneNames.map(name => ({
             id: window.StateManager.generateId(),
@@ -735,8 +712,6 @@ export class TextInput {
             state: 'loading',  // Show loading spinner until API responds
             previousTuneType: previousTuneType  // Store for API call
         }));
-        
-        console.log(`Created ${newPills.length} pills with previousTuneType: ${previousTuneType}`);
         
         // Attempt to auto-match each tune via API
         const matchPromises = newPills.map(pill => window.autoMatchTune(pill));

@@ -293,7 +293,6 @@ export class ContextMenu {
             // This is a typing pill - find the typing text element
             elementToPosition = document.querySelector('.typing-text') as HTMLElement;
             if (!elementToPosition) {
-                console.log(`Typing text not found for typing pill ${pill.id}`);
                 return;
             }
         } else {

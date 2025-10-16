@@ -423,27 +423,23 @@ export class PillRenderer {
     
     // Update the appearance of a single pill without re-rendering everything
     static updatePillAppearance(pill: TunePill): void {
-        console.log(`Updating appearance for pill ID: ${pill.id}, state: ${pill.state}, name: ${pill.tuneName}`);
         const pillElement = document.querySelector(`[data-pill-id="${pill.id}"]`) as HTMLElement;
         if (!pillElement) {
             // If the pill element is not found, it might be a typing pill that hasn't been rendered yet
             // or has been removed during typing. This is not necessarily an error.
             if (pill.id.startsWith('typing-')) {
-                console.log(`Typing pill ${pill.id} not found in DOM - this is expected during typing state`);
             } else {
                 console.error(`Could not find pill element with ID: ${pill.id}`);
             }
             return;
         }
         
-        console.log(`Found pill element, updating class from "${pillElement.className}" to "tune-pill ${pill.state}"`);
         // Update the CSS class to reflect the new state
         pillElement.className = `tune-pill ${pill.state}`;
         
         // Update the text content in case it changed (e.g., canonical name from API)
         const textElement = pillElement.querySelector('.text') as HTMLElement;
         if (textElement) {
-            console.log(`Updating text content from "${textElement.textContent}" to "${pill.tuneName}"`);
             textElement.textContent = pill.tuneName;
         } else {
             console.error('Could not find .text element within pill');

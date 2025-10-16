@@ -161,7 +161,6 @@ export class CursorManager {
         if (shiftKey && !this.selectionAnchor) {
             // Set anchor to current position BEFORE moving cursor
             this.selectionAnchor = { setIndex, pillIndex, position };
-            console.log('CursorManager.moveCursorLeft: Setting selection anchor to:', this.selectionAnchor);
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             this.selectionAnchor = null;
@@ -194,11 +193,7 @@ export class CursorManager {
         
         // Update selection if shift key is pressed
         if (shiftKey && this.selectionAnchor) {
-            console.log('CursorManager.moveCursorLeft: Updating selection after cursor move');
-            console.log('  Selection anchor:', this.selectionAnchor);
-            console.log('  Current cursor:', this.cursorPosition);
             this.updateSelection();
-            console.log('  Selection update complete');
         }
     }
     
@@ -223,7 +218,6 @@ export class CursorManager {
         if (shiftKey && !this.selectionAnchor) {
             // Set anchor to current position BEFORE moving cursor
             this.selectionAnchor = { setIndex, pillIndex, position };
-            console.log('CursorManager.moveCursorRight: Setting selection anchor to:', this.selectionAnchor);
         } else if (!shiftKey) {
             // Clear selection anchor if shift is not pressed
             this.selectionAnchor = null;
@@ -260,11 +254,7 @@ export class CursorManager {
         
         // Update selection if shift key is pressed
         if (shiftKey && this.selectionAnchor) {
-            console.log('CursorManager.moveCursorRight: Updating selection after cursor move');
-            console.log('  Selection anchor:', this.selectionAnchor);
-            console.log('  Current cursor:', this.cursorPosition);
             this.updateSelection();
-            console.log('  Selection update complete');
         }
     }
     
@@ -410,8 +400,7 @@ export class CursorManager {
                 this.typingContext.tuneSet.insertBefore(textSpan, this.typingContext.insertionPoint);
                 this.typingContext.tuneSet.insertBefore(newCursor, textSpan.nextSibling);
             } else {
-                // Emergency fallback
-                console.error('CursorManager: No typing context available!');
+                // Emergency fallback - typing context unavailable
             }
             
             // Debug the actual layout
@@ -436,7 +425,6 @@ export class CursorManager {
     }
     
     static clearSelection(): void {
-        console.log('CursorManager.clearSelection: Called');
         // Clear selection using PillSelection module
         if ((window as any).PillSelection) {
             (window as any).PillSelection.selectNone();
@@ -452,7 +440,6 @@ export class CursorManager {
         
         // Re-render cursor to make it visible again after clearing selection
         if (this.cursorPosition) {
-            console.log('CursorManager.clearSelection: Re-rendering cursor at', this.cursorPosition);
             this.setCursorPositionOriginal(
                 this.cursorPosition.setIndex, 
                 this.cursorPosition.pillIndex, 
@@ -521,39 +508,20 @@ export class CursorManager {
         
         // Always remove existing cursors before creating new one
         // The cursor should always be visible, whether in selection mode or not
-        const hasSelection = this.selectionAnchor !== null;
-        console.log('CursorManager.setCursorPositionOriginal: hasSelection =', hasSelection, 'position =', {setIndex, pillIndex, positionType});
-        
+
         // Remove all existing cursors so we can place the new one
         document.querySelectorAll('.text-cursor').forEach(cursor => cursor.remove());
         
         // Add cursor at the specified position
         const selector = `.cursor-position[data-set-index="${setIndex}"][data-pill-index="${pillIndex}"][data-position-type="${positionType}"]`;
         const cursorElements = document.querySelectorAll(selector);
-        
-        console.log('CursorManager.setCursorPositionOriginal: Adding cursor, selector =', selector, 'found elements:', cursorElements.length);
-        
+
         if (cursorElements.length > 0) {
             const cursor = document.createElement('div');
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
             cursorElements[0]!.appendChild(cursor);
-            console.log('CursorManager.setCursorPositionOriginal: Added cursor to cursor-position element');
-            console.log('  Cursor element:', cursor);
-            console.log('  Cursor parent:', cursorElements[0]);
-            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
-            
-            // Check if cursor is still there after a short delay
-            setTimeout(() => {
-                const stillThere = document.getElementById('active-cursor');
-                console.log('CursorManager.setCursorPositionOriginal: Cursor still in DOM after 100ms:', stillThere);
-                if (stillThere) {
-                    console.log('  Cursor parent after delay:', stillThere.parentNode);
-                    console.log('  Cursor computed style display:', getComputedStyle(stillThere).display);
-                    console.log('  Cursor computed style visibility:', getComputedStyle(stillThere).visibility);
-                }
-            }, 100);
-            
+
             // Only scroll cursor into view for user-initiated actions (not after drag/drop)
             // Skip scrolling to prevent unwanted view changes after move operations
         } else {
@@ -562,9 +530,6 @@ export class CursorManager {
             cursor.className = 'text-cursor';
             cursor.id = 'active-cursor';
             document.getElementById('tune-pills-container')!.appendChild(cursor);
-            console.log('CursorManager.setCursorPositionOriginal: Added cursor to container (fallback)');
-            console.log('  Cursor element:', cursor);
-            console.log('  Cursor in DOM:', document.getElementById('active-cursor'));
         }
         
         // Focus the container for keyboard input

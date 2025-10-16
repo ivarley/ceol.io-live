@@ -156,7 +156,6 @@ export class ClipboardManager {
             requestAnimationFrame(() => {
                 setTimeout(async () => {
                     const originalTuneNames = clipboardData.flat().map(p => p.tuneName);
-                    console.log('Starting tune matching for pasted pills:', originalTuneNames);
                     
                     // Find the actual pills that were inserted into tunePillsData
                     // Since pasteAtPosition creates new IDs, we need to find them by tune name
@@ -170,7 +169,6 @@ export class ClipboardManager {
                         });
                     });
                     
-                    console.log('Found actual pasted pills in tunePillsData:', actualPastedPills.map(p => `${p.tuneName} (${p.id})`));
                     
                     // Verify pills exist in DOM
                     const missingPills = actualPastedPills.filter(pill => 
@@ -184,9 +182,7 @@ export class ClipboardManager {
                     const matchingPromises = actualPastedPills
                         .filter(pill => pill.state === 'loading')
                         .map(pill => {
-                            console.log(`Attempting to match tune: "${pill.tuneName}"`);
                             return this.callbacks.autoMatchTune(pill).then(() => {
-                                console.log(`Match result for "${pill.tuneName}": ${pill.state}`);
                                 this.callbacks.updatePillAppearance(pill);
                             }).catch(err => {
                                 console.error(`Error matching "${pill.tuneName}":`, err);
@@ -200,7 +196,6 @@ export class ClipboardManager {
                     this.callbacks.renderTunePills();
                     
                     // Now show matching results with accurate pill states
-                    console.log('All matching complete, showing results for pills:', actualPastedPills.map(p => `${p.tuneName}: ${p.state}`));
                     this.callbacks.showMatchingResults(actualPastedPills);
                 }, 200); // Small additional delay after requestAnimationFrame
             });
