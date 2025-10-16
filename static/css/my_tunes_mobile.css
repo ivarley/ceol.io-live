@@ -178,9 +178,9 @@ html, body {
 }
 
 .status-filter-btn.active {
-    background-color: var(--primary);
+    background-color: #000000;
     color: white;
-    border-color: var(--primary);
+    border-color: #000000;
 }
 
 .tunes-grid {
@@ -903,6 +903,12 @@ html, body {
         box-sizing: border-box;
     }
 
+    /* Mobile status filter button with colored icons */
+    .status-filter-btn.active {
+        background-color: #000000 !important;
+        border-color: #000000 !important;
+    }
+
     .results-count {
         margin-bottom: 4px;
         font-size: 12px;
@@ -1031,7 +1037,7 @@ html, body {
     }
 
     .status-want-to-learn::before {
-        content: '★';
+        content: '●';
         color: #f0ad4e;
     }
 

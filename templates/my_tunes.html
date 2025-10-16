@@ -270,7 +270,7 @@ const statusFilterStates = [
     { value: '', label: 'All', icon: 'All' },
     { value: 'learned', label: 'Learned', icon: '✓' },
     { value: 'learning', label: 'Learning', icon: '⋯' },
-    { value: 'want to learn', label: 'Want to Learn', icon: '★' }
+    { value: 'want to learn', label: 'Want to Learn', icon: '●' }
 ];
 let currentStatusFilterIndex = 0;
 
@@ -636,11 +636,21 @@ function cycleStatusFilter() {
     const icon = document.getElementById('status-filter-icon');
     icon.textContent = state.icon;
 
-    // Add active class if filtering
+    // Add active class and set icon color if filtering
     if (state.value) {
         btn.classList.add('active');
+
+        // Set icon color based on status
+        if (state.value === 'learned') {
+            icon.style.color = '#5cb85c'; // green
+        } else if (state.value === 'learning') {
+            icon.style.color = '#5bc0de'; // blue
+        } else if (state.value === 'want to learn') {
+            icon.style.color = '#f0ad4e'; // yellow
+        }
     } else {
         btn.classList.remove('active');
+        icon.style.color = ''; // reset color for "All"
     }
 
     applyFilters();
@@ -686,10 +696,20 @@ function loadFiltersFromURL() {
         if (index >= 0) {
             currentStatusFilterIndex = index;
             const state = statusFilterStates[index];
-            document.getElementById('status-filter-icon').textContent = state.icon;
+            const icon = document.getElementById('status-filter-icon');
+            icon.textContent = state.icon;
 
             if (state.value) {
                 document.getElementById('status-filter-btn').classList.add('active');
+
+                // Set icon color based on status
+                if (state.value === 'learned') {
+                    icon.style.color = '#5cb85c'; // green
+                } else if (state.value === 'learning') {
+                    icon.style.color = '#5bc0de'; // blue
+                } else if (state.value === 'want to learn') {
+                    icon.style.color = '#f0ad4e'; // yellow
+                }
             }
         }
     }
