@@ -671,6 +671,9 @@ def help_my_tunes():
 
 
 def register():
+    # Get session_id from query parameter if present
+    session_id_param = request.args.get("session_id")
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -801,7 +804,7 @@ def register():
         finally:
             conn.close()
 
-    return render_template("auth/register.html")
+    return render_template("auth/register.html", session_id=session_id_param)
 
 
 def login():

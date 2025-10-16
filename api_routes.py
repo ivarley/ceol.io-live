@@ -1,4 +1,4 @@
-from flask import request, jsonify, session
+from flask import request, jsonify, session, send_file
 import requests
 import re
 from flask_login import login_required
@@ -13,6 +13,8 @@ from email_utils import send_email_via_sendgrid
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 from functools import wraps
+import qrcode
+from io import BytesIO
 
 
 def api_login_required(f):
@@ -6344,4 +6346,45 @@ def create_or_get_today_session_instance(session_path):
     except Exception as e:
         if 'conn' in locals():
             conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def generate_qr_code(session_id=None):
+    """
+    Generate a QR code for session registration.
+    Returns a PNG image that when scanned directs to the registration page with session_id.
+    If session_id is 0 or not provided, generates QR code for general registration.
+    """
+    try:
+        # Build the registration URL with session_id query parameter
+        # In production this would be https://ceol.io/register?session_id=X
+        base_url = request.host_url.rstrip('/')
+
+        if session_id and session_id != 0:
+            registration_url = f"{base_url}/register?session_id={session_id}"
+        else:
+            # General registration without a specific session
+            registration_url = f"{base_url}/register"
+
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,  # Size of QR code (1 is smallest, auto-sizes if data too large)
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(registration_url)
+        qr.make(fit=True)
+
+        # Create image
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Save to BytesIO buffer
+        img_io = BytesIO()
+        img.save(img_io, 'PNG')
+        img_io.seek(0)
+
+        return send_file(img_io, mimetype='image/png', as_attachment=False)
+
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

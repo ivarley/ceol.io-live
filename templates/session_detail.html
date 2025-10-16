@@ -233,7 +233,16 @@
         <p><strong>About this session:</strong> {{ session.comments }}</p>
         {% endif %}
     </div>
-    
+
+    {% if is_session_admin %}
+    <div style="margin: 20px 0; padding: 15px; background-color: var(--hover-bg); border-radius: 8px; border: 1px solid var(--border-color);">
+        <h3 style="margin-top: 0;">Registration QR Code</h3>
+        <p>Scan this QR code to register for ceol.io with this session pre-selected:</p>
+        <img src="/api/qr/{{ session.session_id }}" alt="QR Code for Registration" style="max-width: 200px; display: block; margin: 10px 0; background: white; padding: 10px; border-radius: 4px;">
+        <p style="font-size: 0.9em; color: var(--secondary-text); margin-bottom: 0;">Share this QR code at your session to help attendees sign up!</p>
+    </div>
+    {% endif %}
+
     <p><a href="/sessions">← Back to all sessions</a></p>
     
     {% if popular_tunes %}

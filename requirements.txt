@@ -8,3 +8,4 @@ bcrypt
 Flask-Login
 email-validator
 backports.zoneinfo
+qrcode[pil]

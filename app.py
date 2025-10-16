@@ -569,6 +569,20 @@ app.add_url_rule(
     methods=["POST"],
 )
 
+# QR Code generation endpoints
+app.add_url_rule(
+    "/api/qr/<int:session_id>",
+    "generate_qr_code_with_session",
+    generate_qr_code,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/qr",
+    "generate_qr_code_general",
+    lambda: generate_qr_code(0),
+    methods=["GET"],
+)
+
 # Error handlers
 FUNNY_ERROR_TEXTS = ["Stroh Piano Accordion", "Traditional Irish Djembe"]
 
