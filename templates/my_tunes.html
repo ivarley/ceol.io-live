@@ -907,7 +907,55 @@ function renderTunes() {
             noResults.style.display = 'block';
             resultsCountText.textContent = '';
 
-            // Check if any filters are active (excluding search)
+            // Build a descriptive message based on active filters
+            let message;
+
+            // Check if search is a tune ID or URL
+            const searchedTuneId = currentFilters.search ? extractTuneId(currentFilters.search) : null;
+
+            if (searchedTuneId) {
+                // Special message for tune ID/URL searches
+                message = `No tune with ID ${searchedTuneId} found`;
+            } else {
+                // Build regular message for text searches and filters
+                const messageParts = [];
+
+                if (currentFilters.type) {
+                    const typeCapitalized = currentFilters.type.charAt(0).toUpperCase() + currentFilters.type.slice(1);
+                    messageParts.push(typeCapitalized + 's');
+                } else {
+                    messageParts.push('tunes');
+                }
+
+                if (currentFilters.search) {
+                    messageParts.push(`containing '${currentFilters.search}'`);
+                }
+
+                if (currentFilters.status) {
+                    const statusLabels = {
+                        'learned': 'Learned',
+                        'learning': 'Learning',
+                        'want to learn': 'Want To Learn'
+                    };
+                    const statusLabel = statusLabels[currentFilters.status] || currentFilters.status;
+                    messageParts.push(`in '${statusLabel}' status`);
+                }
+
+                // Build the final message
+                message = 'No ' + messageParts[0];
+                if (messageParts.length > 1) {
+                    message += ' ' + messageParts.slice(1).join(' ');
+                }
+                message += ' found';
+            }
+
+            // Update the no-results message
+            const noResultsMessage = document.getElementById('no-results-message');
+            if (noResultsMessage) {
+                noResultsMessage.textContent = message;
+            }
+
+            // Check if any filters are active (excluding search for button logic)
             const hasActiveFilters = currentFilters.type || currentFilters.status;
             const actionDiv = document.getElementById('no-results-action');
 
