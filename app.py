@@ -148,6 +148,11 @@ app.add_url_rule("/me", "user_profile", person_details)
 app.add_url_rule("/my-tunes", "my_tunes", my_tunes)
 app.add_url_rule("/my-tunes/add", "add_my_tune_page", add_my_tune_page)
 app.add_url_rule("/my-tunes/sync", "sync_my_tunes_page", sync_my_tunes_page)
+app.add_url_rule(
+    "/sessions/<path:session_path>/tunes/add",
+    "add_session_tune_page",
+    add_session_tune_page,
+)
 app.add_url_rule("/verify-email/<token>", "verify_email", verify_email)
 app.add_url_rule(
     "/resend-verification",
@@ -201,6 +206,12 @@ app.add_url_rule(
     "update_session_tune_details",
     update_session_tune_details,
     methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes",
+    "add_session_tune",
+    add_session_tune,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases",

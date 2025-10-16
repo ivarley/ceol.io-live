@@ -560,6 +560,99 @@ def update_session_tune_details(session_path, tune_id):
         )
 
 
+@login_required
+def add_session_tune(session_path):
+    """Add a tune to a session's session_tune table"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        tune_id = data.get("tune_id")
+        if not tune_id:
+            return jsonify({"success": False, "error": "tune_id is required"}), 400
+
+        alias = (data.get("alias") or "").strip() or None
+        setting_id = data.get("setting_id")
+        key = (data.get("key") or "").strip() or None
+
+        # Parse setting_id
+        parsed_setting_id = None
+        if setting_id:
+            try:
+                parsed_setting_id = int(setting_id)
+            except (ValueError, TypeError):
+                return jsonify({"success": False, "error": "Invalid setting_id"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Check if tune exists in tune table
+        cur.execute("SELECT tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        if not cur.fetchone():
+            # If new_tune data provided, insert it
+            if data.get("new_tune"):
+                new_tune_data = data.get("new_tune")
+                cur.execute(
+                    """
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, last_modified_date)
+                    VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    ON CONFLICT (tune_id) DO NOTHING
+                """,
+                    (
+                        new_tune_data.get("tune_id"),
+                        new_tune_data.get("name"),
+                        new_tune_data.get("tune_type"),
+                        new_tune_data.get("tunebook_count", 0),
+                    ),
+                )
+            else:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "error": "Tune not found"}), 404
+
+        # Check if tune already exists in session_tune
+        cur.execute(
+            "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id),
+        )
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Tune already exists in this session"}), 409
+
+        # Insert into session_tune
+        cur.execute(
+            """
+            INSERT INTO session_tune (session_id, tune_id, alias, setting_id, key)
+            VALUES (%s, %s, %s, %s, %s)
+        """,
+            (session_id, tune_id, alias, parsed_setting_id, key),
+        )
+
+        # Save to history
+        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "Tune added to session successfully"}), 201
+
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error adding tune: {str(e)}"}), 500
+
+
 def get_session_tune_aliases(session_path, tune_id):
     """Get all aliases for a tune in a session"""
     try:

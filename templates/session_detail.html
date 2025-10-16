@@ -1190,8 +1190,27 @@
             resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
         }
 
-        // Render tune rows
-        list.innerHTML = filteredTunes.map(tune => createTuneRow(tune)).join('');
+        // Render tune rows or show "no results" message with add button
+        if (filtered === 0 && currentFilters.search) {
+            list.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                    <p style="margin-bottom: 20px;">No tunes found matching "${escapeHtml(currentFilters.search)}"</p>
+                    <a href="/sessions/${sessionPath}/tunes/add?q=${encodeURIComponent(currentFilters.search)}"
+                       class="btn btn-primary"
+                       style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
+                        Add Tune
+                    </a>
+                </div>
+            `;
+        } else {
+            list.innerHTML = filteredTunes.map(tune => createTuneRow(tune)).join('');
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function createTuneRow(tune) {

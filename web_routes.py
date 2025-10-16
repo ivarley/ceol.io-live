@@ -2635,5 +2635,38 @@ def sync_my_tunes_page():
             conn.close()
         except Exception as e:
             print(f"Error fetching thesession_user_id: {e}")
-    
+
     return render_template("my_tunes_sync.html", thesession_user_id=thesession_user_id)
+
+
+def add_session_tune_page(session_path):
+    """Add tune to session page"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session info
+        cur.execute(
+            "SELECT session_id, name FROM session WHERE path = %s",
+            (session_path,)
+        )
+        session_info = cur.fetchone()
+
+        if not session_info:
+            cur.close()
+            conn.close()
+            from app import render_error_page
+            return render_error_page(f"Session not found: {session_path}", 404)
+
+        session_id, session_name = session_info
+        cur.close()
+        conn.close()
+
+        return render_template(
+            "session_tune_add.html",
+            session_path=session_path,
+            session_name=session_name
+        )
+
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"

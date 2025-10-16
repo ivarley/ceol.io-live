@@ -1,0 +1,949 @@
+{% extends "base.html" %}
+
+{% block title %}Add Tune - {{ session_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .add-tune-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-header h1 {
+        margin-bottom: 10px;
+    }
+
+    .back-link {
+        color: var(--primary);
+        text-decoration: none;
+        font-size: 14px;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+    .form-container {
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 30px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-color);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        box-sizing: border-box;
+    }
+
+    .form-group .help-text {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        margin-top: 5px;
+    }
+
+    .autocomplete-container {
+        position: relative;
+    }
+
+    .autocomplete-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background-color: var(--dropdown-bg, white);
+        border: 1px solid var(--border-color);
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px var(--dropdown-shadow);
+    }
+
+    .autocomplete-results.show {
+        display: block;
+    }
+
+    .autocomplete-item {
+        padding: 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+        transition: background-color 0.2s;
+    }
+
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: var(--hover-bg);
+    }
+
+    .autocomplete-item .tune-name {
+        font-weight: 600;
+        color: var(--text-color);
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .autocomplete-item .tune-meta {
+        font-size: 12px;
+        color: var(--text-muted, #6c757d);
+    }
+
+    .autocomplete-item .tune-type {
+        display: inline-block;
+        padding: 2px 6px;
+        background-color: var(--primary);
+        color: white;
+        border-radius: 3px;
+        font-size: 11px;
+        text-transform: capitalize;
+        margin-right: 8px;
+    }
+
+    .autocomplete-item .tune-count-badge {
+        font-size: 11px;
+        padding: 3px 6px;
+        background-color: var(--secondary-text, #6c757d);
+        color: white;
+        border-radius: 3px;
+        white-space: nowrap;
+    }
+
+    .no-results {
+        padding: 12px;
+        color: var(--text-muted, #6c757d);
+        font-style: italic;
+        text-align: center;
+    }
+
+    .no-results.clickable {
+        cursor: pointer;
+        color: var(--primary);
+        text-decoration: underline;
+    }
+
+    .no-results.clickable:hover {
+        color: var(--primary-dark, #0056b3);
+    }
+
+    .thesession-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        background-color: #ff9800;
+        color: white;
+        border-radius: 3px;
+        font-size: 11px;
+        margin-right: 8px;
+    }
+
+    .loading-indicator {
+        padding: 12px;
+        color: var(--text-muted, #6c757d);
+        text-align: center;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background-color: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background-color: var(--primary-dark, #0056b3);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background-color: var(--secondary, #6c757d);
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background-color: var(--secondary-dark, #5a6268);
+        text-decoration: none;
+        color: white;
+    }
+
+    .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #f5c6cb;
+    }
+
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #c3e6cb;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+        .add-tune-container {
+            padding: 15px;
+            margin: 20px auto;
+        }
+
+        .form-container {
+            padding: 20px;
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+        }
+    }
+
+    /* Dark mode adjustments */
+    [data-theme="dark"] .error-message {
+        background-color: #5a1f1f;
+        color: #f8d7da;
+        border-color: #721c24;
+    }
+
+    [data-theme="dark"] .success-message {
+        background-color: #1f4a2f;
+        color: #d4edda;
+        border-color: #155724;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="add-tune-container">
+    <a href="/sessions/{{ session_path }}" class="back-link">← Back to {{ session_name }}</a>
+
+    <div class="page-header">
+        <h1>Add Tune to Session</h1>
+        <p>Search for a tune to add to {{ session_name }}</p>
+    </div>
+
+    <div id="message-container"></div>
+
+    <div class="form-container">
+        <form id="add-tune-form">
+            <div class="form-group">
+                <label for="tune-search">Search for Tune *</label>
+                <div class="autocomplete-container">
+                    <input
+                        type="text"
+                        id="tune-search"
+                        name="tune-search"
+                        placeholder="Start typing a tune name, or paste tune ID/URL..."
+                        autocomplete="off"
+                        required
+                    >
+                    <div id="autocomplete-results" class="autocomplete-results"></div>
+                </div>
+                <div class="help-text">
+                    Type to search for tunes. You can also paste a TheSession.org URL or tune ID.
+                </div>
+            </div>
+
+            <input type="hidden" id="selected-tune-id" name="tune_id">
+
+            <div class="form-group">
+                <label for="alias">We call this:</label>
+                <input
+                    type="text"
+                    id="alias"
+                    name="alias"
+                    placeholder="Alternative name (optional)"
+                >
+                <div class="help-text">
+                    If you call this tune by a different name in this session
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="setting-id">We play this setting:</label>
+                <input
+                    type="text"
+                    id="setting-id"
+                    name="setting_id"
+                    placeholder="Setting ID or URL (optional)"
+                >
+                <div class="help-text">
+                    If you play a specific setting, enter the URL or setting ID here
+                </div>
+                <div id="setting-id-error" class="error-message" style="display: none; margin-top: 5px;"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="key">We play it in this key:</label>
+                <input
+                    type="text"
+                    id="key"
+                    name="key"
+                    placeholder="e.g., D, G, Am (optional)"
+                >
+                <div class="help-text">
+                    The key your session typically plays this tune in
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                    Add Tune
+                </button>
+                <a href="/sessions/{{ session_path }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Helper functions for API calls
+function fetchWithRetry(url, options = {}) {
+    return fetch(url, options);
+}
+
+function handleApiError(error, response = null) {
+    if (response) {
+        if (response.status === 401) {
+            return { message: 'Please log in again', action: () => window.location.href = '/login' };
+        }
+        if (response.status === 404) {
+            return { message: 'Not found', retryable: false };
+        }
+        if (response.status >= 500) {
+            return { message: 'Server error. Please try again.', retryable: true };
+        }
+        return { message: 'An error occurred. Please try again.', retryable: true };
+    }
+    return { message: error?.message || 'An error occurred', retryable: true };
+}
+
+function showLoading(message = 'Loading...') {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-overlay';
+
+    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgColor = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    const textColor = isDarkMode ? '#e0e0e0' : '#333';
+    const spinnerBorderColor = isDarkMode ? '#444' : '#ddd';
+
+    loadingDiv.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: ${bgColor}; z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 15px;
+    `;
+    loadingDiv.innerHTML = `
+        <div style="width: 40px; height: 40px; border: 4px solid ${spinnerBorderColor};
+                    border-top-color: #007bff; border-radius: 50%;
+                    animation: spin 0.8s linear infinite;"></div>
+        <div style="color: ${textColor}; font-size: 16px;">${message}</div>
+    `;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    document.body.appendChild(loadingDiv);
+    return {
+        hide: () => {
+            if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
+            if (style.parentNode) style.parentNode.removeChild(style);
+        }
+    };
+}
+
+// Extract setting ID from thesession.org URL or plain number
+function extractSettingId(input) {
+    if (!input || input.trim() === '') {
+        return null;
+    }
+
+    const trimmed = input.trim();
+
+    // If it's already just a number, return it
+    if (/^\d+$/.test(trimmed)) {
+        return parseInt(trimmed);
+    }
+
+    // Try to extract from URL query param format first: ?setting=123 or &setting=123
+    const queryMatch = trimmed.match(/[?&]setting=(\d+)/);
+    if (queryMatch) {
+        return parseInt(queryMatch[1]);
+    }
+
+    // Fall back to hash format: #setting123
+    const hashMatch = trimmed.match(/#setting(\d+)/);
+    if (hashMatch) {
+        return parseInt(hashMatch[1]);
+    }
+
+    return null;
+}
+
+// Validate that input is either empty, a number, or a valid thesession.org URL
+function validateSettingId(input) {
+    if (!input || input.trim() === '') {
+        return { valid: true, settingId: null };
+    }
+
+    const trimmed = input.trim();
+
+    // Check if it's just a number
+    if (/^\d+$/.test(trimmed)) {
+        return { valid: true, settingId: parseInt(trimmed) };
+    }
+
+    // Check if it's a valid thesession.org URL
+    if (trimmed.includes('thesession.org')) {
+        const settingId = extractSettingId(trimmed);
+        if (settingId !== null) {
+            return { valid: true, settingId: settingId };
+        }
+    }
+
+    return { valid: false, settingId: null, error: 'Please enter a number or paste a valid TheSession.org URL' };
+}
+
+// Handle setting ID input with instant parsing and validation
+function onSettingIdInput() {
+    const input = document.getElementById('setting-id');
+    const errorDiv = document.getElementById('setting-id-error');
+
+    if (!input || !errorDiv) return;
+
+    const value = input.value;
+    const validation = validateSettingId(value);
+
+    if (!validation.valid) {
+        errorDiv.textContent = validation.error;
+        errorDiv.style.display = 'block';
+        input.style.borderColor = '#dc3545';
+    } else {
+        errorDiv.style.display = 'none';
+        input.style.borderColor = '';
+
+        // If we extracted a setting ID from a URL, replace the input with just the number
+        if (validation.settingId !== null && value !== validation.settingId.toString()) {
+            input.value = validation.settingId.toString();
+        }
+    }
+}
+
+let searchTimeout;
+let selectedTuneId = null;
+let selectedIndex = -1;
+let searchResults = [];
+let lastSearchQuery = '';
+let isSearchingTheSession = false;
+
+const tuneSearchInput = document.getElementById('tune-search');
+const autocompleteResults = document.getElementById('autocomplete-results');
+const selectedTuneIdInput = document.getElementById('selected-tune-id');
+const submitBtn = document.getElementById('submit-btn');
+const addTuneForm = document.getElementById('add-tune-form');
+const settingIdInput = document.getElementById('setting-id');
+
+// Setup event listeners
+tuneSearchInput.addEventListener('input', handleSearchInput);
+tuneSearchInput.addEventListener('keydown', handleKeyDown);
+tuneSearchInput.addEventListener('blur', handleBlur);
+addTuneForm.addEventListener('submit', handleSubmit);
+if (settingIdInput) {
+    settingIdInput.addEventListener('input', onSettingIdInput);
+}
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.autocomplete-container')) {
+        hideAutocomplete();
+    }
+});
+
+// Check for query parameter and auto-search
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('q')) {
+        const query = params.get('q').trim();
+        if (query) {
+            const settingId = extractSettingId(query);
+            if (settingId) {
+                const settingIdInput = document.getElementById('setting-id');
+                if (settingIdInput) {
+                    settingIdInput.value = settingId.toString();
+                }
+            }
+
+            tuneSearchInput.value = query;
+            searchTunes(query);
+        }
+    }
+});
+
+function handleSearchInput(e) {
+    const query = e.target.value.trim();
+
+    // Clear selection when user types
+    if (selectedTuneId) {
+        selectedTuneId = null;
+        selectedTuneIdInput.value = '';
+        submitBtn.disabled = true;
+    }
+
+    clearTimeout(searchTimeout);
+
+    if (query.length < 2) {
+        hideAutocomplete();
+        return;
+    }
+
+    // Debounce search
+    searchTimeout = setTimeout(() => {
+        searchTunes(query);
+    }, 300);
+}
+
+function handleKeyDown(e) {
+    if (!autocompleteResults.classList.contains('show')) {
+        return;
+    }
+
+    const items = autocompleteResults.querySelectorAll('.autocomplete-item');
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelection(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
+            selectTune(searchResults[selectedIndex]);
+        }
+    } else if (e.key === 'Escape') {
+        hideAutocomplete();
+    }
+}
+
+function handleBlur(e) {
+    setTimeout(() => {
+        if (!document.activeElement.closest('.autocomplete-container')) {
+            hideAutocomplete();
+        }
+    }, 200);
+}
+
+function updateSelection(items) {
+    items.forEach((item, index) => {
+        if (index === selectedIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+// Extract tune ID from TheSession.org URL or plain number
+function extractTuneId(input) {
+    if (!input) return null;
+
+    const trimmed = input.trim();
+
+    // If it's already just a number, return it
+    if (/^\d+$/.test(trimmed)) {
+        return parseInt(trimmed);
+    }
+
+    // Try to extract from URL: https://thesession.org/tunes/123
+    const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i);
+    if (urlMatch) {
+        return parseInt(urlMatch[1]);
+    }
+
+    return null;
+}
+
+function searchTunes(query) {
+    showAutocompleteLoading();
+    lastSearchQuery = query;
+    isSearchingTheSession = false;
+
+    // Check if the query is a tune ID or URL
+    const tuneId = extractTuneId(query);
+    if (tuneId) {
+        // Search for this specific tune ID in local database first
+        fetchWithRetry(`/api/tunes/search?q=${tuneId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to search local database');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Check if we found the exact tune ID
+                const exactMatch = (data.tunes || []).find(t => t.tune_id === tuneId);
+                if (exactMatch) {
+                    searchResults = [exactMatch];
+                    displayResults(searchResults, query);
+                } else {
+                    // Not found locally - fetch from TheSession.org API directly
+                    fetchTuneFromTheSession(tuneId);
+                }
+            })
+            .catch(error => {
+                console.error('Local search error:', error);
+                fetchTuneFromTheSession(tuneId);
+            });
+        return;
+    }
+
+    // Regular text search
+    fetchWithRetry(`/api/tunes/search?q=${encodeURIComponent(query)}`)
+        .then(response => {
+            if (!response.ok) {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(errorInfo.message);
+            }
+            return response.json();
+        })
+        .then(data => {
+            searchResults = data.tunes || [];
+            displayResults(searchResults, query);
+        })
+        .catch(error => {
+            console.error('Search error:', error);
+            const errorInfo = handleApiError(error);
+            autocompleteResults.innerHTML = `
+                <div class="no-results">
+                    ${errorInfo.message}
+                    ${errorInfo.retryable ? '<br><small>Please try again.</small>' : ''}
+                </div>
+            `;
+            autocompleteResults.classList.add('show');
+        });
+}
+
+// Fetch a specific tune by ID from TheSession.org API
+function fetchTuneFromTheSession(tuneId) {
+    showAutocompleteLoading();
+    isSearchingTheSession = true;
+
+    const url = `https://thesession.org/tunes/${tuneId}?format=json`;
+
+    fetchWithRetry(url)
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('Tune not found on TheSession.org');
+                }
+                throw new Error('Failed to fetch from TheSession.org');
+            }
+            return response.json();
+        })
+        .then(data => {
+            const tune = {
+                tune_id: data.id,
+                name: data.name,
+                tune_type: normalizeTuneType(data.type),
+                tunebook_count: data.tunebooks || 0
+            };
+            searchResults = [tune];
+            displayResults(searchResults, lastSearchQuery);
+            selectTune(tune);
+        })
+        .catch(error => {
+            console.error('TheSession.org API error:', error);
+            autocompleteResults.innerHTML = `
+                <div class="no-results">
+                    ${escapeHtml(error.message)}
+                    <br><small>Please check the tune ID and try again.</small>
+                </div>
+            `;
+            autocompleteResults.classList.add('show');
+        });
+}
+
+function normalizeTuneType(type) {
+    if (!type) return null;
+
+    const typeMap = {
+        'jig': 'Jig',
+        'reel': 'Reel',
+        'slip jig': 'Slip Jig',
+        'hop jig': 'Hop Jig',
+        'hornpipe': 'Hornpipe',
+        'polka': 'Polka',
+        'set dance': 'Set Dance',
+        'slide': 'Slide',
+        'waltz': 'Waltz',
+        'barndance': 'Barndance',
+        'strathspey': 'Strathspey',
+        'three-two': 'Three-Two',
+        'mazurka': 'Mazurka',
+        'march': 'March',
+        'air': 'Air'
+    };
+
+    return typeMap[type.toLowerCase()] || null;
+}
+
+function searchTheSession(query) {
+    showAutocompleteLoading();
+    isSearchingTheSession = true;
+    lastSearchQuery = query;
+
+    const url = `https://thesession.org/tunes/search?q=${encodeURIComponent(query)}&format=json`;
+
+    fetchWithRetry(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch from TheSession.org');
+            }
+            return response.json();
+        })
+        .then(data => {
+            const tunes = (data.tunes || []).map(tune => ({
+                tune_id: tune.id,
+                name: tune.name,
+                tune_type: normalizeTuneType(tune.type),
+                tunebook_count: tune.tunebooks || 0
+            }));
+            searchResults = tunes;
+            displayResults(searchResults, query);
+        })
+        .catch(error => {
+            console.error('TheSession.org search error:', error);
+            autocompleteResults.innerHTML = `
+                <div class="no-results">
+                    Error searching TheSession.org: ${escapeHtml(error.message)}
+                    <br><small>Please try again.</small>
+                </div>
+            `;
+            autocompleteResults.classList.add('show');
+        });
+}
+
+function showAutocompleteLoading() {
+    autocompleteResults.innerHTML = '<div class="loading-indicator">Searching...</div>';
+    autocompleteResults.classList.add('show');
+    selectedIndex = -1;
+}
+
+function displayResults(tunes, query) {
+    if (tunes.length === 0 && !isSearchingTheSession) {
+        autocompleteResults.innerHTML = `
+            <div class="no-results clickable" onclick="searchTheSession('${escapeHtml(query || lastSearchQuery)}')">
+                No tunes found; click to search TheSession.org
+            </div>
+        `;
+        autocompleteResults.classList.add('show');
+        return;
+    }
+
+    if (tunes.length === 0 && isSearchingTheSession) {
+        autocompleteResults.innerHTML = '<div class="no-results">No tunes found on TheSession.org either. Try a different search term.</div>';
+        autocompleteResults.classList.add('show');
+        return;
+    }
+
+    const html = tunes.map((tune, index) => `
+        <div class="autocomplete-item" data-index="${index}" onclick="selectTuneByIndex(${index})">
+            <span class="tune-name">
+                ${isSearchingTheSession ? '<span class="thesession-badge">TheSession</span>' : ''}
+                ${escapeHtml(tune.name)}
+            </span>
+            <div class="tune-meta">
+                ${tune.tune_type ? `<span class="tune-type">${escapeHtml(tune.tune_type)}</span>` : ''}
+                ${tune.tunebook_count ? `<span class="tune-count-badge">${tune.tunebook_count}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    autocompleteResults.innerHTML = html;
+    autocompleteResults.classList.add('show');
+    selectedIndex = -1;
+}
+
+function selectTuneByIndex(index) {
+    if (index >= 0 && index < searchResults.length) {
+        selectTune(searchResults[index]);
+    }
+}
+
+function selectTune(tune) {
+    selectedTuneId = tune.tune_id;
+    selectedTuneIdInput.value = tune.tune_id;
+    tuneSearchInput.value = tune.name;
+
+    // Store tune details if from TheSession.org for later insertion
+    if (isSearchingTheSession) {
+        tuneSearchInput.dataset.theSessionTune = JSON.stringify({
+            tune_id: tune.tune_id,
+            name: tune.name,
+            tune_type: tune.tune_type,
+            tunebook_count: tune.tunebook_count
+        });
+    } else {
+        delete tuneSearchInput.dataset.theSessionTune;
+    }
+
+    submitBtn.disabled = false;
+    hideAutocomplete();
+}
+
+function hideAutocomplete() {
+    autocompleteResults.classList.remove('show');
+    selectedIndex = -1;
+}
+
+function handleSubmit(e) {
+    e.preventDefault();
+
+    if (!selectedTuneId) {
+        showMessage('Please select a tune from the search results', 'error');
+        return;
+    }
+
+    if (!navigator.onLine) {
+        showMessage('You are offline. Please check your connection.', 'error');
+        return;
+    }
+
+    // Validate setting ID before proceeding
+    const settingIdValue = document.getElementById('setting-id').value;
+    const settingIdValidation = validateSettingId(settingIdValue);
+    if (!settingIdValidation.valid) {
+        showMessage(settingIdValidation.error, 'error');
+        return;
+    }
+
+    const formData = {
+        tune_id: selectedTuneId,
+        alias: document.getElementById('alias').value.trim() || null,
+        setting_id: settingIdValidation.settingId,
+        key: document.getElementById('key').value.trim() || null
+    };
+
+    // If this is a tune from TheSession.org, include the tune details for insertion
+    if (tuneSearchInput.dataset.theSessionTune) {
+        const tuneDetails = JSON.parse(tuneSearchInput.dataset.theSessionTune);
+        formData.new_tune = {
+            tune_id: tuneDetails.tune_id,
+            name: tuneDetails.name,
+            tune_type: tuneDetails.tune_type,
+            tunebook_count: tuneDetails.tunebook_count
+        };
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
+    const loading = showLoading('Adding tune to session...');
+    const sessionPath = '{{ session_path }}';
+
+    fetchWithRetry(`/api/sessions/${sessionPath}/tunes`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                const errorInfo = handleApiError(null, response);
+                throw new Error(data.error || errorInfo.message);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            window.location.href = `/sessions/${sessionPath}?added=` + encodeURIComponent(tuneSearchInput.value);
+        } else {
+            loading.hide();
+            throw new Error(data.error || 'Failed to add tune');
+        }
+    })
+    .catch(error => {
+        loading.hide();
+        console.error('Error adding tune:', error);
+        const errorInfo = handleApiError(error);
+        showMessage(errorInfo.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Tune';
+    });
+}
+
+function showMessage(message, type) {
+    const container = document.getElementById('message-container');
+    const className = type === 'error' ? 'error-message' : 'success-message';
+    container.innerHTML = `<div class="${className}">${escapeHtml(message)}</div>`;
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}
