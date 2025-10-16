@@ -4,96 +4,364 @@
 
 {% block extra_css %}
 <style>
-        .sort-links {
-            margin: 20px 0;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-        }
-        .sort-links a {
-            padding: 8px 12px;
-            background-color: var(--light);
-            color: var(--primary);
-            text-decoration: none;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        .search-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .search-input {
-            padding: 8px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 14px;
-            min-width: 200px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-        }
-        .clear-search {
-            color: var(--primary);
-            text-decoration: none;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .clear-search:hover {
-            text-decoration: underline;
-        }
-        @media (max-width: 768px) {
-            .sort-links {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .sort-links a {
-                text-align: center;
-            }
-            .search-container {
-                justify-content: flex-start;
-            }
-            .search-input {
-                min-width: 150px;
-            }
-        }
-        .sort-links a:hover {
-            background-color: var(--hover-bg);
-        }
-        .sort-links a.active {
-            background-color: var(--primary);
-            color: white;
-        }
-        .tunes-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        .tunes-table th, .tunes-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .tunes-table th {
-            background-color: var(--light);
-            font-weight: bold;
-        }
-        .tunes-table tr:hover {
-            background-color: var(--hover-bg);
-        }
-        .tune-link {
-            color: var(--primary);
-            text-decoration: none;
-        }
-        .tune-link:hover {
-            text-decoration: underline;
-        }
-        .numeric {
-            text-align: right;
-        }
-    </style>
+/* Base container styles */
+.tunes-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Filters section */
+.filters-container {
+    margin-bottom: 20px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.filter-group:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-input {
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    width: 100%;
+    min-width: 0;
+    max-width: 200px;
+}
+
+.filter-select {
+    padding: 8px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    width: 110px;
+    flex-shrink: 0;
+}
+
+/* Results count and sort toggle */
+.results-count {
+    margin-bottom: 15px;
+    color: var(--text-muted, #6c757d);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sort-toggle {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.sort-toggle:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Tune list styles */
+.tunes-list {
+    display: block;
+    margin-bottom: 30px;
+}
+
+.tune-row {
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 8px;
+    transition: background-color 0.1s;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.tune-row:first-child {
+    border-top: 1px solid var(--border-color);
+}
+
+.tune-row:hover {
+    background-color: var(--hover-bg);
+}
+
+.tune-row-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+    grid-column: 1;
+}
+
+.tune-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-color);
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.tune-type {
+    font-size: 11px;
+    padding: 3px 6px;
+    background-color: var(--primary);
+    color: white;
+    border-radius: 3px;
+    text-transform: capitalize;
+    white-space: nowrap;
+    margin-left: 0;
+}
+
+.tune-meta {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    margin-bottom: 0;
+    font-size: 13px;
+    color: var(--text-muted, #6c757d);
+    align-items: center;
+    grid-column: 2;
+}
+
+/* Tune detail modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+.modal-dialog {
+    background: var(--bg-color, white);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    color: var(--text-color);
+    position: relative;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+#tune-detail-content {
+    padding: 20px;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--text-muted, #999);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.modal-close-btn:hover {
+    color: var(--text-color);
+}
+
+.modal-tune-title {
+    margin: 0 32px 12px 0;
+    color: var(--text-color);
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.modal-info-line {
+    color: var(--text-muted, #6c757d);
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.modal-tune-link {
+    display: inline-block;
+    color: var(--primary);
+    text-decoration: none;
+    margin-top: 12px;
+    padding: 6px 12px;
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.modal-tune-link:hover {
+    background-color: var(--primary);
+    color: white;
+    text-decoration: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .tunes-container {
+        padding: 0;
+        max-width: 100%;
+        margin: 0;
+    }
+
+    .filters-container {
+        padding: 8px;
+    }
+
+    .filter-input {
+        font-size: 16px;
+        padding: 8px 6px;
+        max-width: none;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    .filter-select {
+        font-size: 13px;
+        padding: 8px 4px;
+        width: 85px;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    .results-count {
+        margin-bottom: 4px;
+        padding: 0 8px;
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .sort-toggle {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+
+    .tune-row {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        padding: 8px 8px;
+        margin: 0;
+    }
+
+    .tune-name {
+        font-size: 18px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        max-width: calc(100vw - 100px);
+    }
+
+    .tune-type {
+        font-size: 12px;
+        padding: 2px 6px;
+    }
+
+    /* Modal slides in from right on mobile */
+    .modal-overlay {
+        background-color: transparent;
+        align-items: flex-start;
+        justify-content: flex-end;
+        pointer-events: none;
+    }
+
+    .modal-dialog {
+        width: 100%;
+        max-width: 100%;
+        height: calc(100vh - 40px);
+        max-height: calc(100vh - 40px);
+        margin: 0;
+        margin-top: 40px;
+        border-radius: 0;
+        position: fixed;
+        right: 0;
+        top: 0;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        overflow-y: auto;
+        box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+        pointer-events: auto;
+        padding-left: 16px;
+        padding-right: 16px;
+        box-sizing: border-box;
+    }
+
+    .modal-overlay.show .modal-dialog {
+        transform: translateX(0);
+    }
+
+    #tune-detail-content {
+        padding: 16px 0;
+        box-sizing: border-box;
+    }
+
+    .modal-close-btn {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        font-size: 0;
+        width: 40px;
+        height: 40px;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        z-index: 10001;
+    }
+
+    .modal-close-btn::before {
+        content: '>';
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--text-color);
+    }
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -103,155 +371,288 @@
 
     <p><a href="/sessions/{{ session_path }}">← Back to {{ session_name }}</a></p>
 
-    <div class="sort-links">
-        <a href="#" id="sort-name" onclick="sortTable('name')">Sort by Name</a>
-        <a href="#" id="sort-session-popularity" onclick="sortTable('session_popularity')" class="active">Sort by Popularity At This Session</a>
-        <a href="#" id="sort-thesession-popularity" onclick="sortTable('thesession_popularity')">Sort by TheSession.org Tunebook Count</a>
-        
-        <div class="search-container">
-            <input type="text" id="tune-search" class="search-input" placeholder="Search tunes by name...">
-            <a href="#" id="clear-search" class="clear-search" style="display: none;">clear</a>
+    <div class="tunes-container">
+        <div class="filters-container">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <select id="type-filter" class="filter-select" title="Tune type">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-count">
+            <span id="results-count-text"></span>
+            <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
+                <span id="sort-icon">👂</span>
+            </button>
+        </div>
+
+        <div class="tunes-list" id="tunes-list">
+            <!-- Tune rows will be inserted here by JavaScript -->
         </div>
     </div>
-    
-    <table class="tunes-table" id="tunes-table">
-        <thead>
-            <tr>
-                <th>Tune Name</th>
-                <th>Type</th>
-                <th class="numeric">Times Played</th>
-                <th class="numeric">TheSession.org Tunebook Count</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for tune in tunes %}
-            <tr data-name="{{ tune[1] or '' }}" data-session-popularity="{{ tune[3] }}" data-thesession-popularity="{{ tune[4] }}">
-                <td>
-                    <span style="margin-right: 10px;">{{ tune[1] or 'Unknown' }}</span>
-                    {% if tune[0] %}
-                        <a href="https://thesession.org/tunes/{{ tune[0] }}{% if tune[5] %}#setting{{ tune[5] }}{% endif %}" target="_blank" class="tune-link" style="margin-right: 8px;">Dots</a>
-                    {% endif %}
-                    <a href="/sessions/{{ session_path }}/tunes/{{ tune[0] }}" class="tune-link">Info</a>
-                </td>
-                <td>{{ tune[2] or 'Unknown' }}</td>
-                <td class="numeric">{{ tune[3] }}</td>
-                <td class="numeric">{{ tune[4] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
+
+    <!-- Tune Detail Modal -->
+    <div id="tune-detail-modal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div id="tune-detail-content">
+                <!-- Content will be inserted by JavaScript -->
+            </div>
+        </div>
+    </div>
 
     <script>
-        let currentSort = 'session_popularity';
-        let sortOrder = 'desc'; // desc for session_popularity default
-        let allRows = []; // Store all table rows for filtering
-        let currentFilter = ''; // Current search filter
-        
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            // Store all table rows
-            const tbody = document.querySelector('#tunes-table tbody');
-            allRows = Array.from(tbody.querySelectorAll('tr'));
-            
-            // Set up search functionality
-            const searchInput = document.getElementById('tune-search');
-            const clearButton = document.getElementById('clear-search');
-            
-            searchInput.addEventListener('input', function() {
-                filterTable(this.value);
+        // Initial tune data from server
+        const allTunes = {{ tunes|tojson }};
+        const sessionPath = '{{ session_path }}';
+        const sessionName = '{{ session_name }}';
+
+        let filteredTunes = [];
+        let currentFilters = {
+            search: '',
+            type: ''
+        };
+        let modalShowTime = 0;
+
+        // Sort mode cycle states (with icons)
+        const sortModes = [
+            { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a[1] || '').localeCompare(b[1] || '') },
+            { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b[1] || '').localeCompare(a[1] || '') },
+            { id: 'session-desc', label: 'session high', icon: '👂', sortFn: (a, b) => (b[3] || 0) - (a[3] || 0) },
+            { id: 'session-asc', label: 'session low', icon: '👂↑', sortFn: (a, b) => (a[3] || 0) - (b[3] || 0) },
+            { id: 'tunebooks-desc', label: 'tunebooks high', icon: '#', sortFn: (a, b) => (b[4] || 0) - (a[4] || 0) },
+            { id: 'tunebooks-asc', label: 'tunebooks low', icon: '#↑', sortFn: (a, b) => (a[4] || 0) - (b[4] || 0) }
+        ];
+        let currentSortModeIndex = 2; // Start with session popularity descending
+
+        // Initialize on page load
+        function initializeTunesPage() {
+            console.log('Initializing tunes page with', allTunes.length, 'tunes');
+            populateTuneTypes();
+            setupEventListeners();
+            applyFilters();
+        }
+
+        // Run immediately if already loaded, otherwise wait for DOMContentLoaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeTunesPage);
+        } else {
+            // DOM is already loaded (this happens when loaded via AJAX)
+            initializeTunesPage();
+        }
+
+        function populateTuneTypes() {
+            // Extract unique tune types from the data
+            const types = [...new Set(allTunes.map(tune => tune[2]).filter(Boolean))];
+            types.sort();
+
+            const typeFilter = document.getElementById('type-filter');
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                typeFilter.appendChild(option);
             });
-            
-            clearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearSearch();
+        }
+
+        function setupEventListeners() {
+            // Search input with debounce
+            let searchTimeout;
+            document.getElementById('tune-search').addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentFilters.search = e.target.value.toLowerCase().trim();
+                    applyFilters();
+                }, 300);
             });
+
+            // Type filter
+            document.getElementById('type-filter').addEventListener('change', function(e) {
+                currentFilters.type = e.target.value;
+                applyFilters();
+            });
+
+            // Sort toggle button
+            document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
+
+            // Modal overlay click handler
+            const modalOverlay = document.getElementById('tune-detail-modal');
+            modalOverlay.addEventListener('click', function(event) {
+                const timeSinceShown = Date.now() - modalShowTime;
+                if (timeSinceShown < 500) {
+                    return;
+                }
+
+                if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                    closeTuneDetailModal();
+                }
+            });
+        }
+
+        function cycleSortMode() {
+            currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
+            const mode = sortModes[currentSortModeIndex];
+
+            // Update button display
+            const icon = document.getElementById('sort-icon');
+            icon.textContent = mode.icon;
+
+            // Re-apply filters and sorting
+            applyFilters();
+        }
+
+        function applyFilters() {
+            // Filter tunes based on search and type
+            filteredTunes = allTunes.filter(tune => {
+                // Search filter
+                if (currentFilters.search) {
+                    const tuneName = (tune[1] || '').toLowerCase();
+                    if (!tuneName.includes(currentFilters.search)) {
+                        return false;
+                    }
+                }
+
+                // Type filter
+                if (currentFilters.type && tune[2] !== currentFilters.type) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Apply sorting
+            const sortMode = sortModes[currentSortModeIndex];
+            if (sortMode && sortMode.sortFn) {
+                filteredTunes.sort(sortMode.sortFn);
+            }
+
+            renderTunes();
+        }
+
+        function renderTunes() {
+            const list = document.getElementById('tunes-list');
+            const resultsCountText = document.getElementById('results-count-text');
+
+            // Update results count
+            const total = allTunes.length;
+            const filtered = filteredTunes.length;
+            if (filtered < total) {
+                resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+            } else {
+                resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+            }
+
+            // Render tune rows
+            list.innerHTML = filteredTunes.map(tune => createTuneRow(tune)).join('');
+        }
+
+        function createTuneRow(tune) {
+            // tune is [tune_id, tune_name, tune_type, times_played, tunebook_count, setting_id]
+            const tuneId = tune[0];
+            const tuneName = tune[1] || 'Unknown';
+            const tuneType = tune[2] || '';
+            const timesPlayed = tune[3] || 0;
+            const tunebookCount = tune[4] || 0;
+            const settingId = tune[5];
+
+            // Determine what to show based on sort mode
+            const sortMode = sortModes[currentSortModeIndex];
+            const isSessionMode = sortMode.id.startsWith('session-');
+            const isTunebooksMode = sortMode.id.startsWith('tunebooks-');
+
+            let countBadge = '';
+            let typeBadge = '';
+
+            if (isSessionMode) {
+                countBadge = `<span class="tune-count-badge">${timesPlayed}</span>`;
+                typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+            } else if (isTunebooksMode) {
+                countBadge = `<span class="tune-count-badge">${tunebookCount}</span>`;
+                typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+            } else {
+                // Alphabetical sort - show tune type only
+                typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+            }
+
+            return `
+                <div class="tune-row" onclick="showTuneDetail(${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
+                    <div class="tune-row-header">
+                        <h3 class="tune-name">${tuneName}</h3>
+                    </div>
+                    <div class="tune-meta">
+                        ${typeBadge}
+                        ${countBadge}
+                    </div>
+                </div>
+            `;
+        }
+
+        function showTuneDetail(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
+            const modal = document.getElementById('tune-detail-modal');
+            const modalContent = document.getElementById('tune-detail-content');
+
+            // Build thesession.org link
+            let thesessionLink = '';
+            if (tuneId) {
+                const url = settingId
+                    ? `https://thesession.org/tunes/${tuneId}#setting${settingId}`
+                    : `https://thesession.org/tunes/${tuneId}`;
+                thesessionLink = `<a href="${url}" target="_blank" class="modal-tune-link">View on TheSession.org</a>`;
+            }
+
+            // Build info page link
+            const infoLink = `<a href="/sessions/${sessionPath}/tunes/${tuneId}" class="modal-tune-link">Tune Info</a>`;
+
+            modalContent.innerHTML = `
+                <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
+                <h2 class="modal-tune-title">${tuneName}</h2>
+                <div class="modal-info-line">Type: ${tuneType || 'Unknown'}</div>
+                <div class="modal-info-line">Times played at this session: ${timesPlayed}</div>
+                <div class="modal-info-line">TheSession.org Tunebooks: ${tunebookCount || 0}</div>
+                <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${thesessionLink}
+                    ${infoLink}
+                </div>
+            `;
+
+            // Show modal
+            modal.style.display = 'flex';
+
+            // Add 'show' class after a small delay to trigger slide-in animation
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+
+            // Record the time when modal is shown
+            modalShowTime = Date.now();
+        }
+
+        function closeTuneDetailModal() {
+            const modal = document.getElementById('tune-detail-modal');
+
+            // Remove 'show' class to trigger slide-out animation
+            modal.classList.remove('show');
+
+            // Wait for animation to complete before hiding
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('tune-detail-modal');
+                if (modal.style.display === 'flex') {
+                    closeTuneDetailModal();
+                }
+            }
         });
-        
-        function filterTable(searchTerm) {
-            currentFilter = searchTerm.toLowerCase().trim();
-            const clearButton = document.getElementById('clear-search');
-            
-            // Show/hide clear button
-            if (currentFilter) {
-                clearButton.style.display = 'inline';
-            } else {
-                clearButton.style.display = 'none';
-            }
-            
-            // Filter and display rows
-            const filteredRows = allRows.filter(row => {
-                if (!currentFilter) return true;
-                
-                const tuneName = row.dataset.name.toLowerCase();
-                return tuneName.includes(currentFilter);
-            });
-            
-            // Apply current sort to filtered rows
-            const sortedRows = applySortToRows(filteredRows);
-            
-            // Update table display
-            const tbody = document.querySelector('#tunes-table tbody');
-            tbody.innerHTML = '';
-            sortedRows.forEach(row => tbody.appendChild(row));
-        }
-        
-        function clearSearch() {
-            const searchInput = document.getElementById('tune-search');
-            const clearButton = document.getElementById('clear-search');
-            
-            searchInput.value = '';
-            currentFilter = '';
-            clearButton.style.display = 'none';
-            
-            // Show all rows with current sort applied
-            filterTable('');
-        }
-        
-        function applySortToRows(rows) {
-            return rows.sort((a, b) => {
-                let aVal, bVal;
-                
-                if (currentSort === 'name') {
-                    aVal = a.dataset.name.toLowerCase();
-                    bVal = b.dataset.name.toLowerCase();
-                    return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                } else if (currentSort === 'session_popularity') {
-                    aVal = parseInt(a.dataset.sessionPopularity);
-                    bVal = parseInt(b.dataset.sessionPopularity);
-                } else if (currentSort === 'thesession_popularity') {
-                    aVal = parseInt(a.dataset.thesessionPopularity);
-                    bVal = parseInt(b.dataset.thesessionPopularity);
-                }
-                
-                if (currentSort !== 'name') {
-                    return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-                }
-            });
-        }
-        
-        function sortTable(sortBy) {
-            // Toggle sort order if clicking the same sort button
-            if (currentSort === sortBy) {
-                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-            } else {
-                // Set default sort order for each column
-                if (sortBy === 'name') {
-                    sortOrder = 'asc';
-                } else {
-                    sortOrder = 'desc';
-                }
-            }
-            
-            currentSort = sortBy;
-            
-            // Update active button
-            document.querySelectorAll('.sort-links a').forEach(link => link.classList.remove('active'));
-            document.getElementById(`sort-${sortBy.replace('_', '-')}`).classList.add('active');
-            
-            // Re-apply filter with new sort
-            filterTable(currentFilter);
-        }
     </script>
 
 <!-- end landing page -->
