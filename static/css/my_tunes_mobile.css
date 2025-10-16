@@ -814,7 +814,9 @@ html, body {
     }
 
     .my-tunes-header-section {
-        padding: 10px;
+        padding-top: 10px;
+        padding-left: 1px;
+        padding-right: 1px;
     }
 
     .page-header {
