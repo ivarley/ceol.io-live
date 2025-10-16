@@ -45,6 +45,21 @@
             color: var(--text-color);
             font-style: italic;
         }
+        
+        /* Force header to stay fixed even when contentEditable is active */
+        .header.fixed-top {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 9999 !important;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            will-change: transform;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+        
         .edit-link {
             color: var(--primary);
             text-decoration: none;
@@ -61,20 +76,407 @@
         .editable-header:hover .edit-link {
             opacity: 1;
         }
-        .delete-link {
-            color: var(--danger, #dc3545);
-            text-decoration: none;
+        
+        /* Beta Editor Styles */
+        .tune-pills-container {
+            min-height: 200px;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            background: var(--bg-color, white);
+            line-height: 1.8;
+            font-size: 16px;
+            cursor: text;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+        
+        .tune-pills-container:hover {
+            border-color: var(--primary);
+        }
+        
+        .tune-pills-container:focus-within {
+            border-color: var(--primary);
+            outline: none;
+        }
+        
+        /* Hide native browser cursor when contentEditable is active */
+        .tune-pills-container[contenteditable="true"] {
+            caret-color: transparent;
+        }
+        
+        .tune-set {
+            margin-top: 0px;
+            margin-bottom: 1px;
+            min-height: 18px;
+            /* Add consistent left padding to match cursor spacing */
+            padding-left: 6px;
+        }
+        
+        .tune-set:last-child {
+            margin-bottom: 0;
+        }
+        
+        .tune-pill {
+            display: inline-block;
+            margin: 2px;
+            padding: 0px 9px;
+            border-radius: 10px;
+            position: relative;
             cursor: pointer;
-            font-size: 14px;
-            display: block;
-            text-align: center;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border-color);
+            user-select: none;
+            vertical-align: middle;
+            line-height: 21px;
         }
-        .delete-link:hover {
-            text-decoration: underline;
+        
+        .tune-pill.unlinked {
+            background-color: #cbcbcb;
+            color: black;
+            border: 1px solid #7a7a7a;
         }
+        
+        .tune-pill.unmatched {
+            background-color: #e88a91;
+            color: black;
+            border: 1px solid #a04e53;
+        }
+        
+        .tune-pill.loading {
+            background-color: #e9ecef;
+            color: #6c757d;
+            border: 1px solid #e9ecef;
+        }
+        
+        .tune-pill.linked {
+            background-color: #cbe6ff;
+            color: black;
+            border: 1px solid #6994bb;
+        }
+        
+        .tune-pill.error {
+            background-color: var(--warning, #ffc107);
+            color: var(--dark, #212529);
+            border: 1px solid var(--warning, #ffc107);
+        }
+        
+        .tune-pill.selected {
+            box-shadow: 0 0 0 3px #ffd500;
+        }
+        
+        .tune-pill.dragging {
+            opacity: 0.5;
+            box-shadow: 0 0 0 2px #007AFF;
+            position: relative;
+            z-index: 1000;
+        }
+        
+        /* Drop indicators - color only, no size changes */
+        .tune-pill.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.1) !important;
+            position: relative;
+        }
+        
+        /* Show drop position indicator on right side of pill */
+        .tune-pill.mobile-drop-target.drop-after::after {
+            content: '';
+            position: absolute;
+            right: -2px;
+            top: 2px;
+            bottom: 2px;
+            width: 3px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 10;
+        }
+        
+        /* Show drop position indicator on left side of pill */
+        .tune-pill.mobile-drop-target.drop-before::before {
+            content: '';
+            position: absolute;
+            left: -2px;
+            top: 2px;
+            bottom: 2px;
+            width: 3px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 10;
+        }
+        
+        .horizontal-drop-zone.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+        }
+        
+        .tune-set.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.05) !important;
+        }
+        
+        /* Tune-set with blank space drop gets brighter highlighting */
+        .tune-set.mobile-drop-target.drop-at-end {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for blank space drops in tune-sets - vertical bar at end of row */
+        .tune-set.mobile-drop-target.drop-at-end::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 30px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        /* Tune-set with gap drop gets brighter highlighting */
+        .tune-set.mobile-drop-target.drop-in-gap {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for gap drops - vertical bar between pills */
+        .tune-set.mobile-drop-target.drop-in-gap::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 30px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            left: var(--gap-indicator-left, 12px);
+            top: var(--gap-indicator-top, 8px);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        #tune-pills-container.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+            position: relative;
+        }
+        
+        /* Position indicator for blank space drops - vertical bar at insertion point */
+        #tune-pills-container.mobile-drop-target.drop-at-end::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 60px;
+            background-color: #007AFF;
+            border-radius: 2px;
+            z-index: 1000;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
+        }
+        
+        /* Ensure dark mode doesn't override */
+        [data-theme="dark"] #tune-pills-container.mobile-drop-target {
+            background-color: rgba(0, 122, 255, 0.3) !important;
+        }
+        
+        .tune-pill.just-landed {
+            background-color: #ffc107 !important;
+            border-color: #ffc107 !important;
+            box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+            animation: landingGlow 3s ease-out forwards;
+        }
+        
+        /* Loading spinner for pills waiting for API response */
+        .tune-pill .loading-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(108, 117, 125, 0.3);
+            border-top: 2px solid #6c757d;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes landingGlow {
+            0% {
+                background-color: #ffc107 !important;
+                border-color: #ffc107 !important;
+                box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+            }
+            100% {
+                background-color: var(--primary, #007bff) !important;
+                border-color: var(--primary, #007bff) !important;
+                box-shadow: none;
+            }
+        }
+        
+        .tune-pill .chevron {
+            position: absolute;
+            left: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            border-left: 5px solid currentColor;
+            opacity: 0.7;
+            transition: transform 0.2s ease;
+        }
+        
+        .tune-pill .chevron.open {
+            transform: translateY(-50%) rotate(90deg);
+        }
+        
+        .tune-pill .text {
+            margin-left: 10px;
+        }
+        
+        /* Legacy drop-indicator - kept for backwards compatibility but hidden */
+        .drop-indicator {
+            display: none;
+        }
+        
+        .horizontal-drop-zone {
+            height: 8px;
+            width: 100%;
+            margin: 0px 0;
+            position: relative;
+            cursor: text;
+            /* Removed transition to prevent flickering */
+        }
+        
+        .horizontal-drop-zone:hover {
+            background-color: rgba(0, 123, 255, 0.08);
+        }
+        
+        .horizontal-drop-zone.drag-over {
+            background-color: rgba(0, 123, 255, 0.15);
+        }
+        
+        .horizontal-drop-zone.drag-over::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 2px;
+            background-color: var(--primary);
+            border-radius: 1px;
+            transform: translateY(-50%);
+        }
+        
+        .text-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 21px;
+            background-color: var(--primary, #007bff);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin: 0 1px;
+            position: relative;
+            top: -5px;
+            z-index: 10;
+            border-radius: 1px;
+            box-shadow: 0 0 2px rgba(0, 123, 255, 0.5);
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .cursor-position {
+            display: inline-block;
+            width: 0;
+            height: 21px;
+            position: relative;
+            vertical-align: middle;
+            background-color: transparent;
+            cursor: text;
+            padding: 0 3px; /* Create hover area without affecting layout */
+            margin: 0;
+            overflow: visible; /* Allow content to extend beyond boundaries */
+        }
+        
+        /* First cursor position in a set should not add extra spacing since set has padding */
+        .cursor-position[data-position-type="before"][data-pill-index="0"] {
+            margin-left: -6px; /* Counteract the set padding for the first cursor */
+        }
+        
+        .cursor-position:hover::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: -5px;
+            width: 2px;
+            height: 21px;
+            background-color: rgba(0, 123, 255, 0.4);
+            border-radius: 1px;
+        }
+        
+        /* Show drop indicator when dragging */
+        .cursor-position.drop-active::before {
+            content: '';
+            position: absolute;
+            left: 3px;
+            top: -2px;
+            width: 3px;
+            height: 21px;
+            background-color: var(--primary, #007AFF);
+            border-radius: 1px;
+            opacity: 1;
+        }
+        
+        /* Special styling for wrap cursors at line breaks */
+        .cursor-position.wrap-cursor {
+            /* No special background needed now that it's working */
+        }
+        
+        /* Wrap cursor at start of new line should ensure left margin matches first line */
+        .cursor-position.wrap-cursor[data-wrap-type="line-start"] {
+            margin-left: 0;
+            padding-left: 6px; /* Match the spacing that would be provided by cursor + spacing */
+            width: 0;
+        }
+        
+        /* Enhanced visibility for cursor positions in wrapped sets */
+        .cursor-position {
+            transition: background-color 0.2s ease;
+        }
+        
+        /* Make cursor positions more visible when hovering in wrapped content */
+        .tune-set .cursor-position:hover {
+            background-color: rgba(0, 123, 255, 0.15) !important;
+        }
+        
+        /* Ensure cursor positions in wrapped content are clickable */
+        .tune-set .cursor-position {
+            min-height: 21px;
+            display: inline-block;
+        }
+        
+        .text-input {
+            display: inline-block;
+            min-width: 200px;
+            border: 2px solid var(--primary);
+            outline: none;
+            background: var(--bg-color, white);
+            font-family: inherit;
+            font-size: inherit;
+            color: var(--text-color);
+            vertical-align: middle;
+            margin: 2px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
         .tune-context-menu {
             position: absolute;
             background: white;
@@ -87,69 +489,81 @@
             color: var(--text-color);
             white-space: nowrap;
             display: none;
-            min-width: 100px;
+            min-width: 120px;
             pointer-events: auto;
             touch-action: manipulation;
         }
+        
         .tune-context-menu a {
             display: block;
-            padding: 6px 12px;
+            padding: 8px 12px;
             text-decoration: none;
             color: var(--text-color);
             cursor: pointer;
             user-select: none;
         }
+        
         .tune-context-menu a:hover {
             background-color: var(--hover-bg);
             color: var(--primary);
         }
-        .tune-context-menu .menu-item-with-submenu {
-            position: relative;
+        
+        .tune-context-menu .menu-section {
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 4px;
+            padding-bottom: 4px;
         }
-        .tune-context-menu .menu-item-with-submenu:hover .submenu {
-            display: block;
+        
+        .tune-context-menu .menu-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
-        .tune-context-menu .submenu {
-            position: absolute;
-            left: 100%;
-            top: 0;
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 4px 0;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            z-index: 1600;
-            font-size: 14px;
+        
+        /* Dark mode adjustments */
+        [data-theme="dark"] .tune-pill.unlinked {
+            background-color: #4a4e52;
+            color: white;
+            border: 1px solid #4a4e52;
+        }
+        
+        [data-theme="dark"] .tune-pill.unmatched {
+            background-color: #8b2c31;
+            color: white;
+            border: 1px solid #8b2c31;
+        }
+        
+        [data-theme="dark"] .tune-pill.linked {
+            background-color: #1e5896;
+            color: white;
+            border: 1px solid #1e5896;
+        }
+
+        [data-theme="dark"] .tune-pill.selected {
+            box-shadow: 0 0 0 2px #ff9500;
+        }
+
+        [data-theme="dark"] .tune-pills-container {
+            background: var(--bg-color);
+            border-color: var(--border-color);
+        }
+        
+        [data-theme="dark"] .tune-context-menu {
+            background: var(--dropdown-bg);
+            border-color: var(--border-color);
             color: var(--text-color);
-            white-space: nowrap;
-            display: none;
-            min-width: 120px;
         }
-        .tune-context-menu .submenu a {
-            display: block;
-            padding: 6px 12px;
-            text-decoration: none;
+        
+        [data-theme="dark"] .tune-context-menu a {
             color: var(--text-color);
-            cursor: pointer;
         }
-        .tune-context-menu .submenu a:hover {
+        
+        [data-theme="dark"] .tune-context-menu a:hover {
             background-color: var(--hover-bg);
             color: var(--primary);
         }
-        .tune-context-menu .submenu a.disabled {
-            color: var(--disabled-text);
-            cursor: not-allowed;
-        }
-        .tune-context-menu .submenu a.disabled:hover {
-            background-color: transparent;
-            color: var(--disabled-text);
-        }
-        .tune-name-wrapper {
-            position: relative;
-            display: inline;
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
-        }
+        
+        /* Modals for linking and editing tunes */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -162,6 +576,7 @@
             align-items: center;
             justify-content: center;
         }
+        
         .modal-content {
             background: var(--bg-color, white);
             border-radius: 8px;
@@ -171,54 +586,42 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             color: var(--text-color);
         }
+        
         .modal-header {
             margin-bottom: 16px;
         }
+        
         .modal-header h3 {
             margin: 0;
             color: var(--text-color);
         }
+        
         .modal-body {
             margin-bottom: 20px;
         }
+        
         .modal-body label {
             display: block;
             margin-bottom: 8px;
             font-weight: bold;
             color: var(--text-color);
         }
-        .modal-body input {
+        
+        .modal-body input, .modal-body textarea, .modal-body select {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
-        }
-        
-        /* Dark mode styles for modal form elements */
-        [data-theme="dark"] .modal-body input,
-        [data-theme="dark"] .modal-body textarea,
-        [data-theme="dark"] .modal-body select {
-            background-color: var(--dropdown-bg);
-            border-color: var(--border-color);
+            background-color: var(--bg-color);
             color: var(--text-color);
         }
         
-        [data-theme="dark"] .modal-body input:focus,
-        [data-theme="dark"] .modal-body textarea:focus,
-        [data-theme="dark"] .modal-body select:focus {
-            background-color: var(--dropdown-bg);
-            border-color: var(--primary);
-            color: var(--text-color);
-        }
-        
-        [data-theme="dark"] .modal-body label {
-            color: var(--text-color);
-        }
         .modal-footer {
             text-align: right;
         }
+        
         .modal-footer button {
             margin-left: 8px;
             padding: 8px 16px;
@@ -227,27 +630,143 @@
             cursor: pointer;
             font-size: 14px;
         }
+        
         .modal-footer .btn-primary {
             background-color: var(--primary);
             color: white;
         }
+        
         .modal-footer .btn-secondary {
             background-color: var(--secondary);
             color: white;
         }
+        
         .modal-footer button:hover {
             opacity: 0.9;
         }
-        .highlighted-tune {
-            background-color: var(--warning-bg, #fff3cd) !important;
-            padding: 2px 4px;
-            border-radius: 3px;
-            border-left: 3px solid var(--warning, #ffc107);
+        
+        /* Save button disabled state */
+        #save-session-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: var(--disabled-bg, #ccc) !important;
         }
-        .tune-types {
-            font-size: 0.8em;
-            color: var(--disabled-text);
-            font-style: italic;
+        
+        #save-session-btn:not(:disabled):hover {
+            opacity: 0.9;
+        }
+        
+        /* Auto-save countdown styling */
+        #auto-save-countdown {
+            color: #c3e6cb; /* Light green, subtle in light mode */
+        }
+        
+        [data-theme="dark"] #auto-save-countdown {
+            color: #3d4f42; /* Dark grey-green, subtle in dark mode */
+        }
+        
+        /* Cancel link inherits color from parent countdown text */
+        #cancel-auto-save {
+            color: inherit;
+            font-style: inherit;
+        }
+        
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .save-controls-container {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 10px !important;
+            }
+            
+            #save-session-btn .desktop-text {
+                display: none;
+            }
+            #save-session-btn .mobile-text {
+                display: inline;
+            }
+            
+            
+            .inactivity-text {
+                display: none;
+            }
+            
+            .countdown-desktop {
+                display: none;
+            }
+            .countdown-mobile {
+                display: inline;
+            }
+            
+            .cancel-desktop {
+                display: none;
+            }
+            .cancel-mobile {
+                display: inline;
+            }
+            
+            #auto-save-countdown {
+                margin-left: 0 !important;
+                margin-top: 5px;
+                width: 100%;
+            }
+            
+            /* Only force block display when countdown should be visible */
+            #auto-save-countdown[style*="display: inline"] {
+                display: block !important;
+            }
+        }
+        
+        /* Desktop default - hide mobile elements */
+        @media (min-width: 769px) {
+            #save-session-btn .mobile-text {
+                display: none;
+            }
+            #save-session-btn .desktop-text {
+                display: inline;
+            }
+            
+            .auto-save-interval-mobile {
+                display: none;
+            }
+            .auto-save-interval-desktop {
+                display: block;
+            }
+            
+            .countdown-mobile {
+                display: none;
+            }
+            .countdown-desktop {
+                display: inline;
+            }
+            
+            .cancel-mobile {
+                display: none;
+            }
+            .cancel-desktop {
+                display: inline;
+            }
+        }
+        
+        /* Dark mode tab navigation fixes */
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: var(--bg-color) !important;
+            color: var(--text-color) !important;
+            border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
+        }
+        
+        [data-theme="dark"] .nav-tabs .nav-link {
+            color: var(--text-color);
+            border-color: transparent;
+        }
+        
+        [data-theme="dark"] .nav-tabs .nav-link:hover {
+            border-color: var(--border-color) var(--border-color) var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        [data-theme="dark"] .nav-tabs {
+            border-bottom: 1px solid var(--border-color);
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
@@ -276,7 +795,7 @@
             {% endif %}
         {% endwith %}
     </div>
-    
+
     <!-- Link Tune Modal -->
     <div id="link-tune-modal" class="modal-overlay">
         <div class="modal-content">
@@ -295,24 +814,6 @@
         </div>
     </div>
     
-    <!-- Add Tune to Set Modal -->
-    <div id="add-tune-to-set-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add Tunes to Set</h3>
-            </div>
-            <div class="modal-body">
-                <p>Enter comma-separated tune names to add to the end of this set:</p>
-                <label for="add-tune-to-set-input">Tune names:</label>
-                <input type="text" id="add-tune-to-set-input" placeholder="e.g. The Humours of Whiskey, Morrison's Jig" style="width: 100%; box-sizing: border-box;">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-secondary" id="add-to-set-cancel-btn">Cancel</button>
-                <button type="button" class="btn-primary" id="add-to-set-confirm-btn">Add</button>
-            </div>
-        </div>
-    </div>
-    
     <!-- Edit Tune Modal -->
     <div id="edit-tune-modal" class="modal-overlay">
         <div class="modal-content">
@@ -321,10 +822,7 @@
             </div>
             <div class="modal-body">
                 <label for="edit-tune-name-input">Tune Name:</label>
-                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name" style="width: 100%; box-sizing: border-box; margin-bottom: 16px;">
-                
-                <label for="edit-tune-url-display">TheSession.org URL:</label>
-                <input type="text" id="edit-tune-url-display" readonly style="width: 100%; box-sizing: border-box; background-color: var(--light); color: var(--disabled-text);">
+                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="edit-tune-cancel-btn">Cancel</button>
@@ -357,7 +855,6 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <a href="#" class="delete-link" id="delete-session-btn">Delete this session instance</a>
                 <button type="button" class="btn-secondary" id="edit-session-cancel-btn">Cancel</button>
                 <button type="button" class="btn-primary" id="edit-session-save-btn">Save</button>
             </div>
@@ -393,45 +890,41 @@
         <!-- Tunes Tab -->
         <div class="tab-pane fade show active" id="tunes-panel" role="tabpanel" aria-labelledby="tunes-tab">
             <div id="tunes-container" style="margin-top: 20px;">
-                <div id="tune-sets">
-                    <!-- Tunes will be rendered immediately from server-side data -->
+                <div id="tune-pills-container" class="tune-pills-container" tabindex="0" role="textbox" aria-label="Tune editor">
+                    <!-- Tune pills will be rendered here -->
                 </div>
-        
-        <div id="add-tune-form" class="hidden" style="margin-top: 20px;">
-            <form id="tune-form" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
-                <label for="tune_name_input">Add tune(s) by name:</label>
-                <textarea id="tune_name_input" placeholder="Enter tune name(s)" required style="flex: 1; min-width: 200px; max-width: 400px; padding: 6px 8px; resize: none; overflow: hidden; min-height: 36px; font-family: inherit; font-size: inherit; line-height: 1.2; box-sizing: border-box; vertical-align: top;"></textarea>
-                <button type="submit" id="add-tune-btn">Add</button>
-                <span id="add-tune-spinner" class="loading-spinner" style="display: none; margin-left: 8px;">
-                    <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                </span>
-            </form>
             </div>
+            
+            <!-- Save Controls -->
+            <div class="save-controls-container" style="display: flex; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+        <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
+            <span class="desktop-text">Save Session</span>
+            <span class="mobile-text">Save</span>
+        </button>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="auto-save-checkbox" style="cursor: pointer;">
+            <label for="auto-save-checkbox" style="margin: 0; cursor: pointer;">Auto-save after</label>
+            <select id="auto-save-interval" style="padding: 5px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-color); color: var(--text-color);">
+                <option value="10">10 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60" selected>60 seconds</option>
+            </select>
+            <span style="margin: 0;" class="inactivity-text">of inactivity</span>
         </div>
-        
-        <div style="margin-top: 30px;">
-            {% if session_instance.log_complete_date and not is_session_admin %}
-        <!-- For completed logs, non-admins see completion message only -->
-        <p style="color: var(--disabled-text); font-style: italic;">
-            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
-        </p>
-        {% elif session_instance.log_complete_date and is_session_admin %}
-        <!-- For completed logs, admins see completion message with edit link -->
-        <p style="color: var(--disabled-text); font-style: italic;">
-            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}. 
-            (<a href="#" id="edit-anyway-link" style="color: var(--primary); text-decoration: none;">Edit anyway?</a>)
-        </p>
-        <a href="#" id="mark-incomplete-link" class="hidden" style="color: var(--warning, #ffc107); text-decoration: none; font-size: 14px; display: inline-block; padding: 10px 0;">Mark this session as not complete</a>
-        {% else %}
-        <!-- For incomplete logs, show normal edit button -->
-        <button id="toggle-edit-btn" style="background-color: var(--success, #28a745); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Edit</button>
-        <a href="#" id="mark-complete-link" class="hidden" style="color: var(--primary); text-decoration: none; margin-left: 20px; font-size: 14px; display: inline-block; padding: 10px 0;">Mark this session log complete</a>
-        {% endif %}
+        <span id="auto-save-countdown" style="font-style: italic; display: none; margin-left: 8px;">
+            <span class="countdown-desktop">Saving in <span id="countdown-seconds" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... </span>
+            <span class="countdown-mobile">Saving in <span id="countdown-seconds-mobile" style="display: inline-block; width: 2ch; text-align: right;">60</span> seconds... </span>
+            <a href="#" id="cancel-auto-save" style="text-decoration: underline; cursor: pointer;">
+                <span class="cancel-desktop">Cancel</span>
+                <span class="cancel-mobile">cancel</span>
+            </a>
+        </span>
+        <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
     </div>
         </div>
         
         {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
-        <!-- Attendance Tab -->
+        <!-- Players Tab -->
         <div class="tab-pane fade" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
             <div style="margin-top: 20px;">
                 {% include 'partials/attendance_tab.html' %}
@@ -440,10 +933,64 @@
         {% endif %}
     </div>
     {% endif %}
+    
+    {% if session_instance.log_complete_date and is_session_admin %}
+    <div style="margin-top: 20px;">
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
+        </p>
+        <a href="#" id="mark-incomplete-link" style="color: var(--warning, #ffc107); text-decoration: none; font-size: 14px;">Mark this session as not complete</a>
+    </div>
+    {% elif not session_instance.log_complete_date and is_session_admin %}
+    <div style="margin-top: 20px;">
+        <a href="#" id="mark-complete-link" style="color: var(--primary); text-decoration: none; font-size: 14px;">Mark this session log complete</a>
+    </div>
+    {% elif session_instance.log_complete_date and not is_session_admin %}
+    <div style="margin-top: 20px;">
+        <p style="color: var(--disabled-text); font-style: italic;">
+            This session was marked complete on {{ session_instance.log_complete_date.strftime('%Y-%m-%d') if session_instance.log_complete_date else '' }}.
+        </p>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script>
+// Pass template variables to JavaScript
+window.sessionConfig = {
+    sessionPath: '{{ session_instance.session_path }}',
+    sessionDate: '{{ session_instance.date }}',
+    isCancelled: {{ 'true' if session_instance.is_cancelled else 'false' }},
+    isSessionAdmin: {{ 'true' if is_session_admin else 'false' }},
+    isLogComplete: {{ 'true' if session_instance.log_complete_date else 'false' }},
+    sessionInstanceData: {
+        date: '{{ session_instance.date }}',
+        location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
+        default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
+        comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
+        is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
+    },
+    initialTuneSets: {{ tune_sets|tojson }},
+    isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
+    userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }},
+    userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }}
+};
+</script>
+<script src="/static/js/dist/autoSave.js"></script>
+<script src="/static/js/dist/stateManager.js"></script>
+<script src="/static/js/dist/cursorManager.js"></script>
+<script src="/static/js/dist/pillRenderer.js"></script>
+<script src="/static/js/dist/pillSelection.js"></script>
+<script src="/static/js/dist/pillInteraction.js"></script>
+<script src="/static/js/dist/dragDrop.js"></script>
+<script src="/static/js/dist/textInput.js"></script>
 <script src="/static/js/dist/modalManager.js"></script>
+<script src="/static/js/dist/keyboardHandler.js"></script>
+<script src="/static/js/dist/undoRedoManager.js"></script>
+<script src="/static/js/dist/clipboardManager.js"></script>
+<script src="/static/js/dist/contextMenu.js"></script>
+<script src="/static/js/pages/session_instance_detail.js"></script>
 <script src="{{ url_for('static', filename='js/dist/attendance.js') }}"></script>
 {% include 'modals/person_edit.html' %}
 <script>
@@ -513,1777 +1060,4 @@ if (document.readyState === 'loading') {
     initializeTabs();
 }
 </script>
-<script>
-        const sessionPath = '{{ session_instance.session_path }}';
-        const sessionDate = '{{ session_instance.date }}';
-        const isCancelled = {{ 'true' if session_instance.is_cancelled else 'false' }};
-        const isSessionAdmin = {{ 'true' if is_session_admin else 'false' }};
-        const isLogComplete = {{ 'true' if session_instance.log_complete_date else 'false' }};
-        const isUserAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
-        
-        // Session instance data for editing
-        const sessionInstanceData = {
-            date: '{{ session_instance.date }}',
-            location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
-            default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
-            comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
-            is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
-        };
-        
-        // Check if we should start in edit mode
-        const urlParams = new URLSearchParams(window.location.search);
-        let editMode;
-        
-        // Default to edit mode if log is incomplete and user is session admin or system admin
-        if (!isCancelled && !isLogComplete && isSessionAdmin) {
-            editMode = true;
-        } else if (!isCancelled && urlParams.get('edit') === 'true') {
-            // Allow explicit edit mode via URL parameter
-            editMode = true;
-        } else {
-            editMode = false;
-        }
-        
-        // Check if a specific tune should be highlighted
-        const highlightTuneId = urlParams.get('highlight_tune');
-        
-        // Load tunes on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            if (!isCancelled) {
-                // Use server-side data instead of API call for initial load
-                const initialTuneSets = {{ tune_sets|tojson }};
-                renderTunes(initialTuneSets);
-                updateUI();
-                setupTextareaAutoExpand();
-            }
-            
-            // Clean up URL by removing the edit or highlight_tune parameters if present
-            if (urlParams.get('edit') === 'true' || urlParams.get('highlight_tune')) {
-                const newUrl = window.location.pathname;
-                window.history.replaceState({}, document.title, newUrl);
-            }
-        });
-        
-        // Toggle edit mode (only if not cancelled and toggle button exists)
-        if (!isCancelled) {
-            const toggleBtn = document.getElementById('toggle-edit-btn');
-            if (toggleBtn) {
-                toggleBtn.addEventListener('click', function() {
-                    editMode = !editMode;
-                    updateUI(true); // Pass true to reload tunes when toggling edit mode
-                });
-            }
-        }
-        
-        // Edit session instance event listeners (always available)
-        document.getElementById('edit-date-btn').addEventListener('click', showEditSessionModal);
-        document.getElementById('edit-session-cancel-btn').addEventListener('click', hideEditSessionModal);
-        document.getElementById('edit-session-save-btn').addEventListener('click', saveSessionInstance);
-        document.getElementById('delete-session-btn').addEventListener('click', confirmDeleteSession);
-        
-        // Mark complete link event listener (if link exists)
-        const markCompleteLink = document.getElementById('mark-complete-link');
-        if (markCompleteLink) {
-            markCompleteLink.addEventListener('click', function(event) {
-                event.preventDefault();
-                markSessionLogComplete();
-            });
-        }
-        
-        // Edit anyway link event listener (for completed logs)
-        const editAnywayLink = document.getElementById('edit-anyway-link');
-        if (editAnywayLink) {
-            editAnywayLink.addEventListener('click', function(event) {
-                event.preventDefault();
-                editMode = true;
-                updateUI(true);
-            });
-        }
-        
-        // Mark incomplete link event listener (if link exists)
-        const markIncompleteLink = document.getElementById('mark-incomplete-link');
-        if (markIncompleteLink) {
-            markIncompleteLink.addEventListener('click', function(event) {
-                event.preventDefault();
-                markSessionLogIncomplete();
-            });
-        }
-        
-        // Close edit modal on escape key
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                hideEditSessionModal();
-            }
-        });
-        
-        // Close edit modal when clicking outside
-        document.getElementById('edit-session-instance-modal').addEventListener('click', (event) => {
-            if (event.target === event.currentTarget) {
-                hideEditSessionModal();
-            }
-        });
-        
-        // Handle enter key in edit session modal inputs
-        document.getElementById('edit-session-date-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                saveSessionInstance();
-            }
-        });
-        
-        document.getElementById('edit-session-location-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                saveSessionInstance();
-            }
-        });
-        
-        document.getElementById('edit-session-comments-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault(); // Prevent new line in textarea
-                saveSessionInstance();
-            }
-            // Shift+Enter allows new lines in the comments textarea
-        });
-        
-        // Handle add tune form submission (only if not cancelled)
-        if (!isCancelled) {
-            document.getElementById('tune-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const tuneName = document.getElementById('tune_name_input').value.trim();
-                if (tuneName) {
-                    addTune(tuneName);
-                }
-            });
-        }
-        
-        function updateUI(reloadTunes = false) {
-            const toggleBtn = document.getElementById('toggle-edit-btn');
-            const addForm = document.getElementById('add-tune-form');
-            const markCompleteLink = document.getElementById('mark-complete-link');
-            const markIncompleteLink = document.getElementById('mark-incomplete-link');
-            const editAnywayLink = document.getElementById('edit-anyway-link');
-            const completionMessage = editAnywayLink ? editAnywayLink.parentElement : null;
-            
-            if (editMode) {
-                // Hide completion message and show form/links
-                if (completionMessage) {
-                    completionMessage.style.display = 'none';
-                }
-                if (addForm) addForm.classList.remove('hidden');
-                
-                // Show appropriate marking link
-                if (isLogComplete && markIncompleteLink) {
-                    markIncompleteLink.classList.remove('hidden');
-                } else if (!isLogComplete && markCompleteLink) {
-                    markCompleteLink.classList.remove('hidden');
-                }
-                
-                // Create and show View button if needed
-                if (!toggleBtn && isLogComplete && isSessionAdmin) {
-                    // Create a View button for completed logs
-                    const viewBtn = document.createElement('button');
-                    viewBtn.id = 'toggle-edit-btn';
-                    viewBtn.textContent = 'View';
-                    viewBtn.style.cssText = 'background-color: var(--primary); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;';
-                    viewBtn.addEventListener('click', function() {
-                        editMode = false;
-                        updateUI(true);
-                    });
-                    
-                    const container = completionMessage ? completionMessage.parentElement : document.querySelector('div[style*="margin-top: 30px"]');
-                    if (container) {
-                        container.insertBefore(viewBtn, container.firstChild);
-                    }
-                } else if (toggleBtn) {
-                    toggleBtn.textContent = 'View';
-                    toggleBtn.style.backgroundColor = 'var(--primary)';
-                }
-            } else {
-                // View mode
-                if (completionMessage) {
-                    completionMessage.style.display = '';
-                }
-                if (addForm) addForm.classList.add('hidden');
-                if (markCompleteLink) markCompleteLink.classList.add('hidden');
-                if (markIncompleteLink) markIncompleteLink.classList.add('hidden');
-                
-                // Remove any dynamically created View button
-                if (toggleBtn && isLogComplete && isSessionAdmin) {
-                    toggleBtn.remove();
-                } else if (toggleBtn) {
-                    toggleBtn.textContent = isLogComplete ? 'Edit this session log' : 'Edit';
-                    toggleBtn.style.backgroundColor = 'var(--success, #28a745)';
-                }
-            }
-            
-            if (reloadTunes) {
-                loadTunes(); // Only reload tunes when explicitly requested
-            }
-        }
-        
-        let adjustTextareaHeight; // Global reference to the adjust function
-        
-        function setupTextareaAutoExpand() {
-            const textarea = document.getElementById('tune_name_input');
-            
-            function adjustHeight() {
-                textarea.style.height = 'auto';
-                textarea.style.height = Math.max(36, textarea.scrollHeight) + 'px';
-            }
-            
-            // Make adjustHeight accessible globally
-            adjustTextareaHeight = adjustHeight;
-            
-            // Auto-expand on input
-            textarea.addEventListener('input', adjustHeight);
-            
-            // Auto-expand on paste
-            textarea.addEventListener('paste', function() {
-                setTimeout(adjustHeight, 0);
-            });
-            
-            // Handle Shift+Enter for new lines, Enter for form submission
-            textarea.addEventListener('keydown', function(event) {
-                if (event.key === 'Enter') {
-                    if (event.shiftKey) {
-                        // Shift+Enter: Allow new line and adjust height
-                        setTimeout(adjustHeight, 0);
-                    } else {
-                        // Regular Enter: Submit form
-                        event.preventDefault();
-                        document.getElementById('tune-form').dispatchEvent(new Event('submit'));
-                    }
-                }
-            });
-            
-            // Initial adjustment in case there's already content
-            adjustHeight();
-        }
-        
-        
-        function loadTunes() {
-            const container = document.getElementById('tune-sets');
-            container.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/tunes`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        renderTunes(data.tune_sets);
-                    } else {
-                        showMessage(data.message, 'error');
-                    }
-                })
-                .catch(error => {
-                    showMessage('Failed to load tunes', 'error');
-                    console.error('Error:', error);
-                })
-                .finally(() => {
-                    container.classList.remove('loading');
-                });
-        }
-        
-        // Global variable to cache tune data for move operations
-        let cachedTuneData = null;
-        
-        function renderTunes(tuneSets) {
-            const container = document.getElementById('tune-sets');
-            
-            // Cache tune data for move operations
-            cachedTuneData = tuneSets;
-            
-            if (!tuneSets || tuneSets.length === 0) {
-                container.innerHTML = '<p>No tunes recorded for this session yet.</p>';
-                cachedTuneData = [];
-                return;
-            }
-            
-            const ul = document.createElement('ul');
-            
-            tuneSets.forEach(tuneSet => {
-                const li = document.createElement('li');
-                
-                tuneSet.forEach((tune, index) => {
-                    const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType] = tune;
-                    
-                    // Create wrapper for tune name with context menu
-                    const wrapper = document.createElement('span');
-                    wrapper.className = 'tune-name-wrapper';
-                    
-                    // Check if this tune should be highlighted
-                    if (highlightTuneId && tuneId && tuneId.toString() === highlightTuneId) {
-                        wrapper.classList.add('highlighted-tune');
-                    }
-                    
-                    if (tuneId) {
-                        let link = `https://thesession.org/tunes/${tuneId}`;
-                        if (setting) {
-                            link += `#setting${setting}`;
-                        }
-                        
-                        const a = document.createElement('a');
-                        a.href = link;
-                        a.target = '_blank';
-                        a.textContent = tuneName;
-                        wrapper.appendChild(a);
-                    } else {
-                        wrapper.appendChild(document.createTextNode(tuneName));
-                    }
-                    
-                    // Add context menu functionality
-                    setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber);
-                    
-                    li.appendChild(wrapper);
-                    
-                    if (index < tuneSet.length - 1) {
-                        li.appendChild(document.createTextNode(', '));
-                    }
-                });
-                
-                // Add tune types display (only in view mode)
-                if (!editMode && tuneSet.some(tune => tune[5] !== null)) {
-                    const tuneTypes = tuneSet.map(tune => tune[5]).filter(type => type !== null);
-                    
-                    if (tuneTypes.length > 0) {
-                        // Function to pluralize tune types
-                        function pluralizeTuneType(type) {
-                            if (!type) return type;
-                            // Handle special cases
-                            if (type === 'Three-Two') return 'Three-Twos';
-                            // For most types, just add 's'
-                            return type + 's';
-                        }
-                        
-                        let typeText;
-                        const uniqueTypes = [...new Set(tuneTypes)];
-                        
-                        if (uniqueTypes.length === 1) {
-                            // Single type: use singular if only one tune, plural if multiple tunes
-                            const type = uniqueTypes[0];
-                            typeText = tuneSet.length === 1 ? type : pluralizeTuneType(type);
-                        } else {
-                            // Multiple types: walk through in order and coalesce consecutive same types
-                            const coalescedTypes = [];
-                            let currentType = null;
-                            let currentCount = 0;
-                            
-                            for (const type of tuneTypes) {
-                                if (type === currentType) {
-                                    currentCount++;
-                                } else {
-                                    // Output previous type if any
-                                    if (currentType !== null) {
-                                        const displayType = currentCount === 1 ? currentType : pluralizeTuneType(currentType);
-                                        coalescedTypes.push(displayType);
-                                    }
-                                    // Start new type
-                                    currentType = type;
-                                    currentCount = 1;
-                                }
-                            }
-                            
-                            // Output final type
-                            if (currentType !== null) {
-                                const displayType = currentCount === 1 ? currentType : pluralizeTuneType(currentType);
-                                coalescedTypes.push(displayType);
-                            }
-                            
-                            typeText = coalescedTypes.join(', ');
-                        }
-                        
-                        const typeSpan = document.createElement('span');
-                        typeSpan.className = 'tune-types';
-                        typeSpan.textContent = ` (${typeText})`;
-                        li.appendChild(typeSpan);
-                    }
-                }
-                
-                ul.appendChild(li);
-            });
-            
-            container.innerHTML = '';
-            container.appendChild(ul);
-        }
-        
-        function addTune(tuneName) {
-            const form = document.getElementById('tune-form');
-            const addButton = document.getElementById('add-tune-btn');
-            const spinner = document.getElementById('add-tune-spinner');
-            
-            // Show spinner and disable button
-            addButton.disabled = true;
-            spinner.style.display = 'inline-block';
-            form.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/add_tune`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ tune_name: tuneName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    const textarea = document.getElementById('tune_name_input');
-                    textarea.value = '';
-                    // Reset textarea height using the existing adjust function
-                    if (adjustTextareaHeight) {
-                        setTimeout(adjustTextareaHeight, 0);
-                    }
-                    loadTunes();
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to add tune', 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                // Hide spinner and re-enable button
-                addButton.disabled = false;
-                spinner.style.display = 'none';
-                form.classList.remove('loading');
-            });
-        }
-        
-        function deleteTune(orderNumber) {
-            const container = document.getElementById('tune-sets');
-            container.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete_tune_by_order/${orderNumber}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    loadTunes();
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to delete tune', 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                container.classList.remove('loading');
-            });
-        }
-        
-        function getCurrentTuneData(orderNumber) {
-            if (!cachedTuneData) {
-                return {
-                    canMoveSetUp: false,
-                    canMoveSetDown: false,
-                    canMoveTuneLeft: false,
-                    canMoveTuneRight: false
-                };
-            }
-            
-            // Find the tune with this order number
-            const allTunes = [];
-            cachedTuneData.forEach(tuneSet => {
-                tuneSet.forEach(tune => {
-                    allTunes.push(tune);
-                });
-            });
-            
-            const currentTuneIndex = allTunes.findIndex(tune => tune[0] === orderNumber);
-            if (currentTuneIndex === -1) {
-                return {
-                    canMoveSetUp: false,
-                    canMoveSetDown: false,
-                    canMoveTuneLeft: false,
-                    canMoveTuneRight: false
-                };
-            }
-            
-            const currentTune = allTunes[currentTuneIndex];
-            const isFirstTuneInSet = !currentTune[1]; // continues_set is False
-            
-            // Find which set this tune belongs to
-            let currentSetIndex = -1;
-            let currentTuneIndexInSet = -1;
-            for (let setIndex = 0; setIndex < cachedTuneData.length; setIndex++) {
-                const tuneSet = cachedTuneData[setIndex];
-                for (let tuneIndex = 0; tuneIndex < tuneSet.length; tuneIndex++) {
-                    if (tuneSet[tuneIndex][0] === orderNumber) {
-                        currentSetIndex = setIndex;
-                        currentTuneIndexInSet = tuneIndex;
-                        break;
-                    }
-                }
-                if (currentSetIndex !== -1) break;
-            }
-            
-            return {
-                canMoveSetUp: currentSetIndex > 0,
-                canMoveSetDown: currentSetIndex < cachedTuneData.length - 1,
-                canMoveTuneLeft: currentTuneIndexInSet > 0,
-                canMoveTuneRight: currentTuneIndexInSet < cachedTuneData[currentSetIndex].length - 1
-            };
-        }
-        
-        function moveSet(orderNumber, direction) {
-            const container = document.getElementById('tune-sets');
-            container.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/move_set`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_number: orderNumber,
-                    direction: direction
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    loadTunes();
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to move set', 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                container.classList.remove('loading');
-            });
-        }
-        
-        function moveTune(orderNumber, direction) {
-            const container = document.getElementById('tune-sets');
-            container.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/move_tune`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_number: orderNumber,
-                    direction: direction
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    loadTunes();
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to move tune', 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                container.classList.remove('loading');
-            });
-        }
-        
-        function setupTuneContextMenu(wrapper, tuneName, tuneId, setting, orderNumber) {
-            let hoverTimeout;
-            let hideTimeout;
-            let autoHideTimeout;
-            let touchStartTime;
-            let contextMenu;
-            let isMouseOverArea = false; // Track if mouse is over wrapper or menu
-            
-            // Create context menu element
-            function createContextMenu() {
-                if (contextMenu) {
-                    contextMenu.remove();
-                }
-                contextMenu = document.createElement('div');
-                contextMenu.className = 'tune-context-menu';
-                
-                // Only show options if we have a tuneId (linked tune)
-                if (tuneId) {
-                    // Dots option - link to thesession.org
-                    const dotsLink = document.createElement('a');
-                    dotsLink.textContent = 'Dots';
-                    const dotsHandler = function(event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        window.open(`https://thesession.org/tunes/${tuneId}${setting ? '#setting' + setting : ''}`, '_blank');
-                        contextMenu.style.display = 'none';
-                    };
-                    dotsLink.addEventListener('click', dotsHandler);
-                    dotsLink.addEventListener('touchend', dotsHandler);
-                    contextMenu.appendChild(dotsLink);
-                    
-                    // Info option - link to our tune info page
-                    const infoLink = document.createElement('a');
-                    infoLink.textContent = 'Info';
-                    const infoHandler = function(event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        window.location.href = `/sessions/${sessionPath}/tunes/${tuneId}?from_date=${sessionDate}`;
-                    };
-                    infoLink.addEventListener('click', infoHandler);
-                    infoLink.addEventListener('touchend', infoHandler);
-                    contextMenu.appendChild(infoLink);
-                    
-                    // Relink option - relink to different URL
-                    const relinkLink = document.createElement('a');
-                    relinkLink.textContent = 'Relink';
-                    relinkLink.style.color = 'var(--warning, #ffc107)';
-                    const relinkHandler = function(event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        showLinkTuneModal(tuneName, orderNumber, tuneId, setting);
-                        contextMenu.style.display = 'none';
-                    };
-                    relinkLink.addEventListener('click', relinkHandler);
-                    relinkLink.addEventListener('touchend', relinkHandler);
-                    contextMenu.appendChild(relinkLink);
-                    
-                    // Add to My Tunes option - only for authenticated users
-                    if (isUserAuthenticated) {
-                        const myTunesLink = document.createElement('a');
-                        myTunesLink.textContent = 'Add to My Tunes';
-                        myTunesLink.style.color = 'var(--success, #28a745)';
-                        myTunesLink.dataset.tuneId = tuneId;
-                        myTunesLink.dataset.tuneName = tuneName;
-                        
-                        // Check if tune is already in collection and update menu item
-                        checkPersonTune(tuneId).then(personTune => {
-                            if (personTune) {
-                                // Tune is already in collection - show status update options
-                                myTunesLink.textContent = `My Tunes: ${personTune.learn_status}`;
-                                myTunesLink.style.color = 'var(--primary)';
-                                
-                                // Create submenu for status updates
-                                const myTunesContainer = document.createElement('div');
-                                myTunesContainer.className = 'menu-item-with-submenu';
-                                
-                                const submenu = document.createElement('div');
-                                submenu.className = 'submenu';
-                                
-                                // Status options
-                                const statuses = ['want to learn', 'learning', 'learned'];
-                                statuses.forEach(status => {
-                                    const statusLink = document.createElement('a');
-                                    statusLink.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-                                    
-                                    if (status === personTune.learn_status) {
-                                        statusLink.style.fontWeight = 'bold';
-                                        statusLink.style.color = 'var(--primary)';
-                                    }
-                                    
-                                    const statusHandler = function(event) {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        updateTuneStatus(personTune.person_tune_id, status, tuneName);
-                                        contextMenu.style.display = 'none';
-                                    };
-                                    statusLink.addEventListener('click', statusHandler);
-                                    statusLink.addEventListener('touchend', statusHandler);
-                                    submenu.appendChild(statusLink);
-                                });
-                                
-                                // Add "Increment Heard" option if status is "want to learn"
-                                if (personTune.learn_status === 'want to learn') {
-                                    const heardLink = document.createElement('a');
-                                    heardLink.textContent = `Heard (${personTune.heard_count || 0})`;
-                                    heardLink.style.borderTop = '1px solid rgba(255,255,255,0.2)';
-                                    heardLink.style.marginTop = '4px';
-                                    heardLink.style.paddingTop = '8px';
-                                    
-                                    const heardHandler = function(event) {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        incrementHeardCount(personTune.person_tune_id, tuneName);
-                                        contextMenu.style.display = 'none';
-                                    };
-                                    heardLink.addEventListener('click', heardHandler);
-                                    heardLink.addEventListener('touchend', heardHandler);
-                                    submenu.appendChild(heardLink);
-                                }
-                                
-                                myTunesContainer.appendChild(myTunesLink);
-                                myTunesContainer.appendChild(submenu);
-                                contextMenu.appendChild(myTunesContainer);
-                            } else {
-                                // Tune not in collection - show add option
-                                const myTunesHandler = function(event) {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    addToMyTunes(tuneId, tuneName);
-                                    contextMenu.style.display = 'none';
-                                };
-                                myTunesLink.addEventListener('click', myTunesHandler);
-                                myTunesLink.addEventListener('touchend', myTunesHandler);
-                                contextMenu.appendChild(myTunesLink);
-                            }
-                        });
-                    }
-                    
-                    // Move options - only in edit mode
-                    if (editMode) {
-                        const moveContainer = document.createElement('div');
-                        moveContainer.className = 'menu-item-with-submenu';
-                        
-                        const moveLink = document.createElement('a');
-                        moveLink.textContent = 'Move ...';
-                        moveLink.style.cursor = 'default'; // Don't show pointer since it's a submenu trigger
-                        
-                        const submenu = document.createElement('div');
-                        submenu.className = 'submenu';
-                        
-                        // Get current tune data for move logic
-                        const tuneData = getCurrentTuneData(orderNumber);
-                        
-                        // Move Set Up
-                        const moveSetUpLink = document.createElement('a');
-                        moveSetUpLink.textContent = 'Move Set Up';
-                        if (tuneData.canMoveSetUp) {
-                            const moveSetUpHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveSet(orderNumber, 'up');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveSetUpLink.addEventListener('click', moveSetUpHandler);
-                            moveSetUpLink.addEventListener('touchend', moveSetUpHandler);
-                        } else {
-                            moveSetUpLink.className = 'disabled';
-                        }
-                        submenu.appendChild(moveSetUpLink);
-                        
-                        // Move Set Down
-                        const moveSetDownLink = document.createElement('a');
-                        moveSetDownLink.textContent = 'Move Set Down';
-                        if (tuneData.canMoveSetDown) {
-                            const moveSetDownHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveSet(orderNumber, 'down');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveSetDownLink.addEventListener('click', moveSetDownHandler);
-                            moveSetDownLink.addEventListener('touchend', moveSetDownHandler);
-                        } else {
-                            moveSetDownLink.className = 'disabled';
-                        }
-                        submenu.appendChild(moveSetDownLink);
-                        
-                        // Move Tune Left
-                        if (tuneData.canMoveTuneLeft) {
-                            const moveTuneLeftLink = document.createElement('a');
-                            moveTuneLeftLink.textContent = 'Move Tune Left';
-                            const moveTuneLeftHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveTune(orderNumber, 'left');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveTuneLeftLink.addEventListener('click', moveTuneLeftHandler);
-                            moveTuneLeftLink.addEventListener('touchend', moveTuneLeftHandler);
-                            submenu.appendChild(moveTuneLeftLink);
-                        }
-                        
-                        // Move Tune Right
-                        if (tuneData.canMoveTuneRight) {
-                            const moveTuneRightLink = document.createElement('a');
-                            moveTuneRightLink.textContent = 'Move Tune Right';
-                            const moveTuneRightHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveTune(orderNumber, 'right');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveTuneRightLink.addEventListener('click', moveTuneRightHandler);
-                            moveTuneRightLink.addEventListener('touchend', moveTuneRightHandler);
-                            submenu.appendChild(moveTuneRightLink);
-                        }
-                        
-                        moveContainer.appendChild(moveLink);
-                        moveContainer.appendChild(submenu);
-                        contextMenu.appendChild(moveContainer);
-                        
-                        // Edit option - only in edit mode
-                        const editLink = document.createElement('a');
-                        editLink.textContent = 'Edit';
-                        editLink.style.color = 'var(--primary)';
-                        const editHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            showEditTuneModal(tuneName, tuneId, setting, orderNumber);
-                            contextMenu.style.display = 'none';
-                        };
-                        editLink.addEventListener('click', editHandler);
-                        editLink.addEventListener('touchend', editHandler);
-                        contextMenu.appendChild(editLink);
-                        
-                        // Add option - only in edit mode
-                        const addLink = document.createElement('a');
-                        addLink.textContent = 'Add';
-                        addLink.style.color = 'var(--success, #28a745)';
-                        const addHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            showAddTuneToSetModal(orderNumber);
-                            contextMenu.style.display = 'none';
-                        };
-                        addLink.addEventListener('click', addHandler);
-                        addLink.addEventListener('touchend', addHandler);
-                        contextMenu.appendChild(addLink);
-                    }
-                    
-                    // Delete option - only in edit mode
-                    if (editMode) {
-                        const deleteLink = document.createElement('a');
-                        deleteLink.textContent = 'Delete';
-                        deleteLink.style.color = 'var(--danger, #dc3545)';
-                        const deleteHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (confirm(`Delete ${tuneName}?`)) {
-                                deleteTune(orderNumber);
-                            }
-                            contextMenu.style.display = 'none';
-                        };
-                        deleteLink.addEventListener('click', deleteHandler);
-                        deleteLink.addEventListener('touchend', deleteHandler);
-                        contextMenu.appendChild(deleteLink);
-                    }
-                } else {
-                    // For tunes without tuneId, show limited options
-                    if (editMode) {
-                        // Link option for name-only tunes in edit mode
-                        const linkLink = document.createElement('a');
-                        linkLink.textContent = 'Link';
-                        linkLink.style.color = 'var(--success, #28a745)';
-                        const linkHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            showLinkTuneModal(tuneName, orderNumber);
-                            contextMenu.style.display = 'none';
-                        };
-                        linkLink.addEventListener('click', linkHandler);
-                        linkLink.addEventListener('touchend', linkHandler);
-                        contextMenu.appendChild(linkLink);
-                        
-                        // Move options for name-only tunes
-                        const moveContainer = document.createElement('div');
-                        moveContainer.className = 'menu-item-with-submenu';
-                        
-                        const moveLink = document.createElement('a');
-                        moveLink.textContent = 'Move ...';
-                        moveLink.style.cursor = 'default'; // Don't show pointer since it's a submenu trigger
-                        
-                        const submenu = document.createElement('div');
-                        submenu.className = 'submenu';
-                        
-                        // Get current tune data for move logic
-                        const tuneData = getCurrentTuneData(orderNumber);
-                        
-                        // Move Set Up
-                        const moveSetUpLink = document.createElement('a');
-                        moveSetUpLink.textContent = 'Move Set Up';
-                        if (tuneData.canMoveSetUp) {
-                            const moveSetUpHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveSet(orderNumber, 'up');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveSetUpLink.addEventListener('click', moveSetUpHandler);
-                            moveSetUpLink.addEventListener('touchend', moveSetUpHandler);
-                        } else {
-                            moveSetUpLink.className = 'disabled';
-                        }
-                        submenu.appendChild(moveSetUpLink);
-                        
-                        // Move Set Down
-                        const moveSetDownLink = document.createElement('a');
-                        moveSetDownLink.textContent = 'Move Set Down';
-                        if (tuneData.canMoveSetDown) {
-                            const moveSetDownHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveSet(orderNumber, 'down');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveSetDownLink.addEventListener('click', moveSetDownHandler);
-                            moveSetDownLink.addEventListener('touchend', moveSetDownHandler);
-                        } else {
-                            moveSetDownLink.className = 'disabled';
-                        }
-                        submenu.appendChild(moveSetDownLink);
-                        
-                        // Move Tune Left
-                        if (tuneData.canMoveTuneLeft) {
-                            const moveTuneLeftLink = document.createElement('a');
-                            moveTuneLeftLink.textContent = 'Move Tune Left';
-                            const moveTuneLeftHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveTune(orderNumber, 'left');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveTuneLeftLink.addEventListener('click', moveTuneLeftHandler);
-                            moveTuneLeftLink.addEventListener('touchend', moveTuneLeftHandler);
-                            submenu.appendChild(moveTuneLeftLink);
-                        }
-                        
-                        // Move Tune Right
-                        if (tuneData.canMoveTuneRight) {
-                            const moveTuneRightLink = document.createElement('a');
-                            moveTuneRightLink.textContent = 'Move Tune Right';
-                            const moveTuneRightHandler = function(event) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                moveTune(orderNumber, 'right');
-                                contextMenu.style.display = 'none';
-                            };
-                            moveTuneRightLink.addEventListener('click', moveTuneRightHandler);
-                            moveTuneRightLink.addEventListener('touchend', moveTuneRightHandler);
-                            submenu.appendChild(moveTuneRightLink);
-                        }
-                        
-                        moveContainer.appendChild(moveLink);
-                        moveContainer.appendChild(submenu);
-                        contextMenu.appendChild(moveContainer);
-                        
-                        // Edit option for name-only tunes
-                        const editLink = document.createElement('a');
-                        editLink.textContent = 'Edit';
-                        editLink.style.color = 'var(--primary)';
-                        const editHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            showEditTuneModal(tuneName, tuneId, setting, orderNumber);
-                            contextMenu.style.display = 'none';
-                        };
-                        editLink.addEventListener('click', editHandler);
-                        editLink.addEventListener('touchend', editHandler);
-                        contextMenu.appendChild(editLink);
-                        
-                        // Add option for name-only tunes
-                        const addLink = document.createElement('a');
-                        addLink.textContent = 'Add';
-                        addLink.style.color = 'var(--success, #28a745)';
-                        const addHandler = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            showAddTuneToSetModal(orderNumber);
-                            contextMenu.style.display = 'none';
-                        };
-                        addLink.addEventListener('click', addHandler);
-                        addLink.addEventListener('touchend', addHandler);
-                        contextMenu.appendChild(addLink);
-                        
-                        // Still allow delete for name-only tunes in edit mode
-                        const deleteLink = document.createElement('a');
-                        deleteLink.textContent = 'Delete';
-                        deleteLink.style.color = 'var(--danger, #dc3545)';
-                        const deleteHandler2 = function(event) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (confirm(`Delete ${tuneName}?`)) {
-                                deleteTune(orderNumber);
-                            }
-                            contextMenu.style.display = 'none';
-                        };
-                        deleteLink.addEventListener('click', deleteHandler2);
-                        deleteLink.addEventListener('touchend', deleteHandler2);
-                        contextMenu.appendChild(deleteLink);
-                    } else {
-                        // For non-edit mode, show info message
-                        const nameDiv = document.createElement('div');
-                        nameDiv.style.cssText = 'padding: 6px 12px; color: var(--disabled-text); font-style: italic;';
-                        nameDiv.textContent = 'No tune data available';
-                        contextMenu.appendChild(nameDiv);
-                    }
-                }
-                
-                // Prevent touch events on the menu from propagating to underlying elements
-                contextMenu.addEventListener('touchstart', function(event) {
-                    event.stopPropagation();
-                });
-                
-                wrapper.appendChild(contextMenu);
-                return contextMenu;
-            }
-            
-            // Show context menu
-            function showContextMenu(event) {
-                const menu = createContextMenu();
-                
-                // Position menu below the tune name
-                const rect = wrapper.getBoundingClientRect();
-                menu.style.top = '100%';
-                menu.style.left = '0';
-                menu.style.display = 'block';
-                
-                // Add mouse event listeners to the menu
-                addContextMenuListeners();
-                
-                // Hide menu after 3 seconds (but can be cancelled by mouse hover)
-                autoHideTimeout = setTimeout(() => {
-                    if (menu && menu.parentNode) {
-                        menu.style.display = 'none';
-                    }
-                }, 3000);
-            }
-            
-            // Hide context menu
-            function hideContextMenu() {
-                if (contextMenu) {
-                    contextMenu.style.display = 'none';
-                }
-            }
-            
-            // Start hide timer - only hides if mouse is still away when timer expires
-            function startHideTimer() {
-                clearTimeout(hideTimeout);
-                hideTimeout = setTimeout(() => {
-                    // Only hide if mouse is not over the area
-                    if (!isMouseOverArea) {
-                        hideContextMenu();
-                    }
-                }, 500);
-            }
-            
-            // Desktop: Hover for 3 seconds
-            wrapper.addEventListener('mouseenter', () => {
-                isMouseOverArea = true;
-                clearTimeout(hideTimeout); // Cancel any pending hide
-                clearTimeout(autoHideTimeout); // Cancel auto-hide when hovering
-                hoverTimeout = setTimeout(() => {
-                    showContextMenu();
-                }, 3000);
-            });
-            
-            wrapper.addEventListener('mouseleave', () => {
-                isMouseOverArea = false;
-                clearTimeout(hoverTimeout);
-                startHideTimer(); // Start the conditional hide timer
-            });
-            
-            // Add mouse events to context menu itself to prevent hiding
-            function addContextMenuListeners() {
-                if (contextMenu) {
-                    contextMenu.addEventListener('mouseenter', () => {
-                        isMouseOverArea = true;
-                        clearTimeout(hideTimeout); // Cancel hide when entering menu
-                        clearTimeout(autoHideTimeout); // Cancel auto-hide when entering menu
-                    });
-                    
-                    contextMenu.addEventListener('mouseleave', () => {
-                        isMouseOverArea = false;
-                        startHideTimer(); // Start the conditional hide timer
-                    });
-                }
-            }
-            
-            // Desktop: Right click - also suppresses mobile context menu
-            wrapper.addEventListener('contextmenu', (event) => {
-                event.preventDefault();
-                showContextMenu(event);
-            });
-            
-            // Mobile: Long press (touch for 1 second)
-            wrapper.addEventListener('touchstart', (event) => {
-                touchStartTime = Date.now();
-                hoverTimeout = setTimeout(() => {
-                    showContextMenu(event);
-                }, 1000);
-            });
-            
-            wrapper.addEventListener('touchend', (event) => {
-                clearTimeout(hoverTimeout);
-                const touchDuration = Date.now() - touchStartTime;
-                if (touchDuration < 1000) {
-                    // Short tap, don't show menu, let normal behavior continue
-                    hideContextMenu();
-                }
-            });
-            
-            wrapper.addEventListener('touchmove', () => {
-                clearTimeout(hoverTimeout);
-                hideContextMenu();
-            });
-        }
-        
-        // Hide context menus when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!event.target.closest('.tune-name-wrapper')) {
-                document.querySelectorAll('.tune-context-menu').forEach(menu => {
-                    menu.style.display = 'none';
-                });
-            }
-        });
-        
-        // Prevent OS context menu on tune wrappers (for mobile long press)
-        document.addEventListener('contextmenu', (event) => {
-            if (event.target.closest('.tune-name-wrapper')) {
-                event.preventDefault();
-            }
-        });
-        
-        // Edit Tune Modal functionality
-        let currentEditingTune = null;
-        let currentEditingOrder = null;
-        let currentEditingTuneId = null;
-        let currentEditingSetting = null;
-        
-        function showEditTuneModal(tuneName, tuneId, setting, orderNumber) {
-            currentEditingTune = tuneName;
-            currentEditingOrder = orderNumber;
-            currentEditingTuneId = tuneId;
-            currentEditingSetting = setting;
-            
-            // Prepare URL value for display
-            let urlValue = '';
-            if (tuneId) {
-                urlValue = `https://thesession.org/tunes/${tuneId}`;
-                if (setting) {
-                    urlValue += `?setting=${setting}`;
-                }
-            }
-            
-            // Set URL field before showing modal
-            const urlInput = document.getElementById('edit-tune-url-display');
-            urlInput.value = urlValue;
-            
-            // Show modal using generic ModalManager
-            ModalManager.showModalWithInput('edit-tune-modal', '#edit-tune-name-input', tuneName, true);
-        }
-        
-        function hideEditTuneModal() {
-            ModalManager.hideModal('edit-tune-modal');
-            currentEditingTune = null;
-            currentEditingOrder = null;
-            currentEditingTuneId = null;
-            currentEditingSetting = null;
-        }
-        
-        function saveEditedTune() {
-            const nameInput = document.getElementById('edit-tune-name-input');
-            const newName = nameInput.value.trim();
-            
-            if (!newName) {
-                showMessage('Please enter a tune name', 'error');
-                return;
-            }
-            
-            // Call API to save the edited tune name
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/edit_tune`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_number: currentEditingOrder,
-                    new_name: newName,
-                    original_name: currentEditingTune,
-                    tune_id: currentEditingTuneId,
-                    setting_id: currentEditingSetting
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    hideEditTuneModal();
-                    loadTunes(); // Reload to show the updated name
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to save tune edit', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        // Add to Set Modal functionality
-        let currentAddToSetOrder = null;
-        
-        function showAddTuneToSetModal(orderNumber) {
-            currentAddToSetOrder = orderNumber;
-            
-            ModalManager.showModalWithInput('add-tune-to-set-modal', '#add-tune-to-set-input', '', false);
-        }
-        
-        function hideAddTuneToSetModal() {
-            ModalManager.hideModal('add-tune-to-set-modal');
-            currentAddToSetOrder = null;
-        }
-        
-        function addTunesToSet() {
-            const input = document.getElementById('add-tune-to-set-input');
-            const tuneNames = input.value.trim();
-            
-            if (!tuneNames) {
-                showMessage('Please enter tune names', 'error');
-                return;
-            }
-            
-            if (!currentAddToSetOrder) {
-                showMessage('Invalid set selection', 'error');
-                return;
-            }
-            
-            // Call API to add tunes to the specific set
-            const container = document.getElementById('tune-sets');
-            container.classList.add('loading');
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/add_tunes_to_set`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    tune_names: tuneNames,
-                    reference_order_number: currentAddToSetOrder
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    hideAddTuneToSetModal();
-                    loadTunes();
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to add tunes to set', 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                container.classList.remove('loading');
-            });
-        }
-        
-        // Modal functionality
-        let currentLinkingTune = null;
-        let currentLinkingOrder = null;
-        
-        function showLinkTuneModal(tuneName, orderNumber, currentTuneId = null, currentSetting = null) {
-            currentLinkingTune = tuneName;
-            currentLinkingOrder = orderNumber;
-            
-            const modal = document.getElementById('link-tune-modal');
-            
-            // Determine input value and modal title
-            let inputValue = '';
-            let modalTitle = 'Link Tune';
-            
-            if (currentTuneId) {
-                inputValue = `https://thesession.org/tunes/${currentTuneId}`;
-                if (currentSetting) {
-                    inputValue += `#setting${currentSetting}`;
-                }
-                modalTitle = 'Relink Tune';
-            }
-            
-            // Update modal title
-            const modalTitleElement = modal.querySelector('h3');
-            modalTitleElement.textContent = modalTitle;
-            
-            // Show modal using generic ModalManager
-            ModalManager.showModalWithInput('link-tune-modal', '#tune-link-input', inputValue, true);
-        }
-        
-        function hideLinkTuneModal() {
-            ModalManager.hideModal('link-tune-modal');
-            currentLinkingTune = null;
-            currentLinkingOrder = null;
-        }
-        
-        function validateTuneInput(input) {
-            // Validate input format - either a number or a thesession.org URL
-            const urlPattern = /thesession\.org\/tunes\/\d+(?:#setting\d+)?/;
-            const numberPattern = /^\d+$/;
-            
-            const trimmed = input.trim();
-            
-            if (urlPattern.test(trimmed) || numberPattern.test(trimmed)) {
-                return trimmed;
-            }
-            
-            return null;
-        }
-        
-        function linkTune() {
-            const input = document.getElementById('tune-link-input');
-            const validatedInput = validateTuneInput(input.value);
-            
-            if (!validatedInput) {
-                showMessage('Please enter a valid tune ID or thesession.org URL', 'error');
-                return;
-            }
-            
-            // Call API to link the tune (pass full input for backend parsing)
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/link_tune`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    tune_id: validatedInput,
-                    tune_name: currentLinkingTune,
-                    order_number: currentLinkingOrder
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    hideLinkTuneModal();
-                    loadTunes(); // Reload the tunes to show the new link
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to link tune', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        // Modal event listeners
-        document.getElementById('link-cancel-btn').addEventListener('click', hideLinkTuneModal);
-        document.getElementById('link-confirm-btn').addEventListener('click', linkTune);
-        
-        // Edit Tune Modal event listeners
-        document.getElementById('edit-tune-cancel-btn').addEventListener('click', hideEditTuneModal);
-        document.getElementById('edit-tune-save-btn').addEventListener('click', saveEditedTune);
-        
-        // Add to Set Modal event listeners
-        document.getElementById('add-to-set-cancel-btn').addEventListener('click', hideAddTuneToSetModal);
-        document.getElementById('add-to-set-confirm-btn').addEventListener('click', addTunesToSet);
-        
-        // Close modal on escape key
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                hideLinkTuneModal();
-                hideAddTuneToSetModal();
-                hideEditTuneModal();
-            }
-        });
-        
-        // Close modal when clicking outside
-        document.getElementById('link-tune-modal').addEventListener('click', (event) => {
-            if (event.target === event.currentTarget) {
-                hideLinkTuneModal();
-            }
-        });
-        
-        document.getElementById('add-tune-to-set-modal').addEventListener('click', (event) => {
-            if (event.target === event.currentTarget) {
-                hideAddTuneToSetModal();
-            }
-        });
-        
-        document.getElementById('edit-tune-modal').addEventListener('click', (event) => {
-            if (event.target === event.currentTarget) {
-                hideEditTuneModal();
-            }
-        });
-        
-        // Handle enter key in input
-        document.getElementById('tune-link-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                linkTune();
-            }
-        });
-        
-        document.getElementById('add-tune-to-set-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                addTunesToSet();
-            }
-        });
-        
-        document.getElementById('edit-tune-name-input').addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                saveEditedTune();
-            }
-        });
-        
-        // Edit Session Instance Modal Functions
-        function showEditSessionModal() {
-            // Populate fields with current values first
-            const dateInput = document.getElementById('edit-session-date-input');
-            const locationInput = document.getElementById('edit-session-location-input');
-            const commentsInput = document.getElementById('edit-session-comments-input');
-            const cancelledInput = document.getElementById('edit-session-cancelled-input');
-            
-            dateInput.value = sessionInstanceData.date;
-            locationInput.value = sessionInstanceData.location_override || '';
-            commentsInput.value = sessionInstanceData.comments || '';
-            cancelledInput.checked = sessionInstanceData.is_cancelled;
-            
-            // Show modal using ModalManager
-            ModalManager.showModal('edit-session-instance-modal', {
-                autoFocus: false // We'll focus manually
-            });
-            
-            dateInput.focus();
-        }
-        
-        function hideEditSessionModal() {
-            ModalManager.hideModal('edit-session-instance-modal');
-        }
-        
-        function saveSessionInstance() {
-            const dateInput = document.getElementById('edit-session-date-input');
-            const locationInput = document.getElementById('edit-session-location-input');
-            const commentsInput = document.getElementById('edit-session-comments-input');
-            const cancelledInput = document.getElementById('edit-session-cancelled-input');
-            
-            const date = dateInput.value.trim();
-            const location = locationInput.value.trim();
-            const comments = commentsInput.value.trim();
-            const cancelled = cancelledInput.checked;
-            
-            if (!date) {
-                showMessage('Please enter a session date', 'error');
-                return;
-            }
-            
-            // Prepare request data
-            const requestData = { 
-                date: date,
-                cancelled: cancelled
-            };
-            
-            // Only include location if it's provided
-            if (location) {
-                requestData.location = location;
-            }
-            
-            // Only include comments if provided
-            if (comments) {
-                requestData.comments = comments;
-            }
-            
-            // Call API to update the session instance
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/update`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    hideEditSessionModal();
-                    // If date changed, redirect to new URL, otherwise reload current page
-                    if (date !== sessionDate) {
-                        window.location.href = `/sessions/${sessionPath}/${date}`;
-                    } else {
-                        window.location.reload();
-                    }
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to update session instance', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        function confirmDeleteSession() {
-            // First get the tune count for this session instance
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/tune_count`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        let confirmMessage = `Delete the ${sessionDate} instance of this session?`;
-                        if (data.tune_count > 0) {
-                            confirmMessage += `\n\nThere are ${data.tune_count} tunes recorded for this session.`;
-                        }
-                        
-                        if (confirm(confirmMessage)) {
-                            deleteSessionInstance();
-                        }
-                    } else {
-                        showMessage('Failed to get session info', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    // Proceed with delete confirmation without tune count
-                    if (confirm(`Delete the ${sessionDate} instance of this session?`)) {
-                        deleteSessionInstance();
-                    }
-                });
-        }
-        
-        function deleteSessionInstance() {
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/delete`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    hideEditSessionModal();
-                    // Redirect back to session detail page after a short delay
-                    setTimeout(() => {
-                        window.location.href = `/sessions/${sessionPath}`;
-                    }, 1500);
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to delete session instance', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        function markSessionLogComplete() {
-            if (!confirm('Mark this session log as complete? This will switch to view mode and hide the edit button from non-admins.')) {
-                return;
-            }
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_complete`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    // Redirect to view mode after a short delay
-                    setTimeout(() => {
-                        window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
-                    }, 1500);
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to mark session log complete', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        function markSessionLogIncomplete() {
-            if (!confirm('Mark this session log as not complete? This will allow all users to edit it again.')) {
-                return;
-            }
-            
-            fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_incomplete`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message);
-                    // Reload the page to show updated status
-                    setTimeout(() => {
-                        window.location.href = `/sessions/${sessionPath}/${sessionDate}?edit=true`;
-                    }, 1500);
-                } else {
-                    showMessage(data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showMessage('Failed to mark session log as not complete', 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        // Personal Tune Management Functions
-        // Cache for person_tune status to avoid repeated API calls
-        const personTuneCache = {};
-        
-        /**
-         * Check if a tune is in the user's personal collection
-         * @param {number} tuneId - The tune ID to check
-         * @returns {Promise<Object|null>} - PersonTune data if exists, null otherwise
-         */
-        async function checkPersonTune(tuneId) {
-            if (!isUserAuthenticated || !tuneId) {
-                return null;
-            }
-            
-            // Check cache first
-            if (personTuneCache[tuneId] !== undefined) {
-                return personTuneCache[tuneId];
-            }
-            
-            try {
-                // Get all tunes and filter for this specific tune_id
-                // This is not optimal but works with current API
-                const response = await fetch(`/api/my-tunes?per_page=200`);
-                const data = await response.json();
-                
-                if (data.success && data.tunes && data.tunes.length > 0) {
-                    // Find the tune with matching tune_id
-                    const personTune = data.tunes.find(t => t.tune_id === tuneId);
-                    personTuneCache[tuneId] = personTune || null;
-                    return personTune;
-                }
-                
-                personTuneCache[tuneId] = null;
-                return null;
-            } catch (error) {
-                console.error('Error checking person tune:', error);
-                return null;
-            }
-        }
-        
-        /**
-         * Add a tune to the user's personal collection
-         * @param {number} tuneId - The tune ID to add
-         * @param {string} tuneName - The tune name for display
-         * @returns {Promise<boolean>} - Success status
-         */
-        async function addToMyTunes(tuneId, tuneName) {
-            if (!isUserAuthenticated) {
-                showMessage('Please log in to add tunes to your collection', 'error');
-                return false;
-            }
-            
-            if (!tuneId) {
-                showMessage('Cannot add unlinked tune to collection', 'error');
-                return false;
-            }
-            
-            try {
-                const response = await fetch('/api/my-tunes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        tune_id: tuneId,
-                        learn_status: 'want to learn'
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showMessage(`Added "${tuneName}" to your tunes!`);
-                    // Update cache
-                    personTuneCache[tuneId] = data.person_tune;
-                    return true;
-                } else {
-                    if (response.status === 409) {
-                        showMessage('This tune is already in your collection', 'error');
-                    } else {
-                        showMessage(data.error || 'Failed to add tune', 'error');
-                    }
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error adding tune:', error);
-                showMessage('Failed to add tune to collection', 'error');
-                return false;
-            }
-        }
-        
-        /**
-         * Update the learning status of a tune in the user's collection
-         * @param {number} personTuneId - The person_tune ID
-         * @param {string} newStatus - The new learning status
-         * @param {string} tuneName - The tune name for display
-         * @returns {Promise<boolean>} - Success status
-         */
-        async function updateTuneStatus(personTuneId, newStatus, tuneName) {
-            if (!isUserAuthenticated) {
-                showMessage('Please log in to update tune status', 'error');
-                return false;
-            }
-            
-            try {
-                const response = await fetch(`/api/my-tunes/${personTuneId}/status`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        learn_status: newStatus
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showMessage(`Updated "${tuneName}" status to "${newStatus}"`);
-                    // Update cache
-                    if (data.person_tune) {
-                        personTuneCache[data.person_tune.tune_id] = data.person_tune;
-                    }
-                    return true;
-                } else {
-                    showMessage(data.error || 'Failed to update status', 'error');
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error updating tune status:', error);
-                showMessage('Failed to update tune status', 'error');
-                return false;
-            }
-        }
-        
-        /**
-         * Increment the heard count for a tune with "want to learn" status
-         * @param {number} personTuneId - The person_tune ID
-         * @param {string} tuneName - The tune name for display
-         * @returns {Promise<boolean>} - Success status
-         */
-        async function incrementHeardCount(personTuneId, tuneName) {
-            if (!isUserAuthenticated) {
-                showMessage('Please log in to track heard count', 'error');
-                return false;
-            }
-            
-            try {
-                const response = await fetch(`/api/my-tunes/${personTuneId}/heard`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showMessage(`Heard count for "${tuneName}" incremented to ${data.heard_count}`);
-                    // Update cache
-                    if (data.person_tune) {
-                        personTuneCache[data.person_tune.tune_id] = data.person_tune;
-                    }
-                    return true;
-                } else {
-                    showMessage(data.error || 'Failed to increment heard count', 'error');
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error incrementing heard count:', error);
-                showMessage('Failed to increment heard count', 'error');
-                return false;
-            }
-        }
-    </script>
 {% endblock %}
