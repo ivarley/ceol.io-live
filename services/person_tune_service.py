@@ -509,8 +509,17 @@ class PersonTuneService:
                 params.append(tune_type_filter)
 
             if search_query:
-                # Search in both name_alias and tune name
-                query += " AND (LOWER(COALESCE(pt.name_alias, t.name)) LIKE LOWER(%s))"
+                # Search in both name_alias and tune name (accent-insensitive)
+                # Using translate() to remove accents for PostgreSQL compatibility
+                query += """ AND (
+                    translate(LOWER(COALESCE(pt.name_alias, t.name)),
+                             'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
+                             'aaaaaaaeeeeeiiiiioooooooouuuuuyycn')
+                    LIKE
+                    translate(LOWER(%s),
+                             'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
+                             'aaaaaaaeeeeeiiiiioooooooouuuuuyycn')
+                )"""
                 params.append(f"%{search_query}%")
 
             # Get total count

@@ -287,6 +287,12 @@ const sortModes = [
 ];
 let currentSortModeIndex = 0;
 
+// Helper function to normalize strings by removing accents
+function normalizeString(str) {
+    if (!str) return '';
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
@@ -816,10 +822,11 @@ function populateTuneTypes() {
 
 function applyFilters() {
     filteredTunes = allTunes.filter(tune => {
-        // Search filter
+        // Search filter (accent-insensitive)
         if (currentFilters.search) {
-            const searchLower = currentFilters.search.toLowerCase();
-            const nameMatch = tune.tune_name && tune.tune_name.toLowerCase().includes(searchLower);
+            const searchNormalized = normalizeString(currentFilters.search.toLowerCase());
+            const nameNormalized = normalizeString(tune.tune_name ? tune.tune_name.toLowerCase() : '');
+            const nameMatch = nameNormalized.includes(searchNormalized);
             if (!nameMatch) return false;
         }
 
