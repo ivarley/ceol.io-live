@@ -4610,9 +4610,10 @@ def save_session_instance_tunes_ajax(session_path, date):
                     # Skip empty pills or provide a default name
                     tune_name = "Unknown tune"
 
-                # If this is a matched tune (has tune_id), we typically don't store the name
-                # But keep it if there's no tune_id
-                if tune_id:
+                # Keep the user-provided name even if there's a tune_id
+                # This allows us to save aliases
+                # Only set tune_name to None if there's a tune_id AND no user-provided name
+                if tune_id and not tune_name:
                     tune_name = None
 
                 new_tunes.append(
@@ -4628,29 +4629,21 @@ def save_session_instance_tunes_ajax(session_path, date):
         # Validate and ensure all linked tunes exist in the tune table
         # This handles the race condition where tunes were linked but may not exist yet
         tunes_to_add_to_session = []  # Track tunes we need to add to session_tune table
-        
+        aliases_to_create = []  # Track aliases we need to add to session_tune_alias table
+
         for new_tune in new_tunes:
             tune_id = new_tune.get("tune_id")
+            user_provided_name = new_tune.get("name")
+
             if tune_id:
-                # Get the original user-provided name for this tune (before it was cleared)
-                original_user_name = None
-                # Find the original user-provided name from the tune_sets data
-                for tune_set in tune_sets:
-                    for tune_data in tune_set:
-                        if tune_data.get("tune_id") == tune_id:
-                            original_user_name = tune_data.get("name") or tune_data.get("tune_name")
-                            break
-                    if original_user_name:
-                        break
-                
                 # Ensure tune exists in tune table, get alias info
-                success, error_message, alias_name = ensure_tune_exists_in_table(cur, tune_id, original_user_name)
-                
+                success, error_message, alias_name = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
+
                 if not success:
                     cur.close()
                     conn.close()
                     return jsonify({"success": False, "message": f"Failed to validate tune #{tune_id}: {error_message}"})
-                
+
                 # Check if tune needs to be added to session_tune table
                 cur.execute(
                     "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
@@ -4658,6 +4651,40 @@ def save_session_instance_tunes_ajax(session_path, date):
                 )
                 if not cur.fetchone():
                     tunes_to_add_to_session.append((tune_id, alias_name))
+
+                # If there's an alias, track it to add to session_tune_alias table
+                if alias_name:
+                    # Check if this alias already exists
+                    cur.execute(
+                        """
+                        SELECT session_tune_alias_id FROM session_tune_alias
+                        WHERE session_id = %s AND alias = %s
+                        """,
+                        (session_id, alias_name)
+                    )
+                    existing_alias = cur.fetchone()
+
+                    if not existing_alias:
+                        # New alias - add it to our list
+                        aliases_to_create.append((session_id, tune_id, alias_name))
+                    else:
+                        # Alias exists - verify it points to the same tune_id
+                        cur.execute(
+                            """
+                            SELECT tune_id FROM session_tune_alias
+                            WHERE session_tune_alias_id = %s
+                            """,
+                            (existing_alias[0],)
+                        )
+                        existing_tune_id = cur.fetchone()
+                        if existing_tune_id and existing_tune_id[0] != tune_id:
+                            # Alias exists but points to a different tune - this is an error
+                            cur.close()
+                            conn.close()
+                            return jsonify({
+                                "success": False,
+                                "message": f"Alias '{alias_name}' already exists for a different tune in this session"
+                            })
 
         # Begin transaction
         cur.execute("BEGIN")
@@ -4676,6 +4703,17 @@ def save_session_instance_tunes_ajax(session_path, date):
                 )
                 # Save the newly inserted record to history
                 save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+                modifications += 1
+
+            # Add any new aliases to session_tune_alias table
+            for session_id_val, tune_id, alias_name in aliases_to_create:
+                cur.execute(
+                    """
+                    INSERT INTO session_tune_alias (session_id, tune_id, alias)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (session_id_val, tune_id, alias_name),
+                )
                 modifications += 1
 
             # Process updates/inserts

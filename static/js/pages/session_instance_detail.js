@@ -1024,28 +1024,33 @@ function hideEditModal() {
 function confirmLink() {
     const input = document.getElementById('tune-link-input').value.trim();
     if (!input || !window.currentLinkingPill) return;
-    
+
     // Extract tune ID from URL or use as is
     let tuneId = input;
     const urlMatch = input.match(/thesession\.org\/tunes\/(\d+)/);
     if (urlMatch) {
         tuneId = urlMatch[1];
     }
-    
+
     if (!/^\d+$/.test(tuneId)) {
         showMessage('Please enter a valid tune ID or thesession.org URL', 'error');
         return;
     }
-    
+
     undoRedoManager.saveToUndo();
-    
+
+    // Store the user-provided name before linking
+    // This will be saved as an alias if it differs from the canonical name
+    const userProvidedName = window.currentLinkingPill.tuneName;
+
     // Update the pill
     window.currentLinkingPill.tuneId = parseInt(tuneId);
+    window.currentLinkingPill.tuneName = userProvidedName; // Keep the user's name
     window.currentLinkingPill.state = 'linked';
-    
+
     PillRenderer.renderTunePills();
     hideLinkModal();
-    
+
     showMessage('Tune linked successfully!', 'success');
 }
 
