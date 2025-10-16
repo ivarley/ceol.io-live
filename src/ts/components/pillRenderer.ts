@@ -134,38 +134,46 @@ export class PillRenderer {
     }
     
     static renderEmptyState(container: HTMLElement): void {
-        container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
-        
-        // Add a cursor position for empty container
-        const emptyPos = document.createElement('span');
-        emptyPos.className = 'cursor-position';
-        emptyPos.dataset.setIndex = '0';
-        emptyPos.dataset.pillIndex = '0';
-        emptyPos.dataset.positionType = 'newset';
-        emptyPos.style.position = 'absolute';
-        emptyPos.style.top = '50%';
-        emptyPos.style.left = '50%';
-        emptyPos.style.transform = 'translate(-50%, -50%)';
-        
-        emptyPos.addEventListener('click', (e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Clear selection and selection anchor when clicking to move cursor
-            if (this.clearSelection) {
-                this.clearSelection();
-            }
-            
+        const isViewMode = (window as any).editorMode === 'view';
+
+        if (isViewMode) {
+            // View mode: Simple message
+            container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes have been logged yet. Click Edit to start.</p>';
+        } else {
+            // Edit mode: Instructions for typing
+            container.innerHTML = '<p style="color: var(--disabled-text); font-style: italic; margin: 0; text-align: center; padding: 40px 20px;">No tunes recorded for this session yet.<br><strong>Click anywhere to position cursor, then start typing...</strong><br><small>Use Enter, Tab, semicolon, or comma to finish entering tunes</small></p>';
+
+            // Add a cursor position for empty container
+            const emptyPos = document.createElement('span');
+            emptyPos.className = 'cursor-position';
+            emptyPos.dataset.setIndex = '0';
+            emptyPos.dataset.pillIndex = '0';
+            emptyPos.dataset.positionType = 'newset';
+            emptyPos.style.position = 'absolute';
+            emptyPos.style.top = '50%';
+            emptyPos.style.left = '50%';
+            emptyPos.style.transform = 'translate(-50%, -50%)';
+
+            emptyPos.addEventListener('click', (e: MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Clear selection and selection anchor when clicking to move cursor
+                if (this.clearSelection) {
+                    this.clearSelection();
+                }
+
+                if (this.setCursorPosition) {
+                    this.setCursorPosition(0, 0, 'newset');
+                }
+            });
+
+            container.appendChild(emptyPos);
+
+            // Set initial cursor position
             if (this.setCursorPosition) {
                 this.setCursorPosition(0, 0, 'newset');
             }
-        });
-        
-        container.appendChild(emptyPos);
-        
-        // Set initial cursor position
-        if (this.setCursorPosition) {
-            this.setCursorPosition(0, 0, 'newset');
         }
     }
     
