@@ -622,6 +622,29 @@ def session_handler(full_path):
 
                 popular_tunes = cur.fetchall()
 
+                # Get session tunes with play counts and popularity data for the tunes tab
+                cur.execute(
+                    """
+                    SELECT
+                        st.tune_id,
+                        COALESCE(st.alias, t.name) AS tune_name,
+                        t.tune_type,
+                        COUNT(sit.session_instance_tune_id) AS play_count,
+                        COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
+                        st.setting_id
+                    FROM session_tune st
+                    LEFT JOIN tune t ON st.tune_id = t.tune_id
+                    LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id
+                    LEFT JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                    WHERE st.session_id = %s AND (si.session_id = %s OR si.session_id IS NULL)
+                    GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached, st.setting_id
+                    ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+                """,
+                    (session[0], session[0]),
+                )
+
+                tunes = cur.fetchall()
+
                 # Check if current user is an admin of this session
                 is_session_admin = False
                 if current_user.is_authenticated:
@@ -642,6 +665,7 @@ def session_handler(full_path):
                     instances_by_year=instances_by_year,
                     sorted_years=sorted_years,
                     popular_tunes=popular_tunes,
+                    tunes=tunes,
                     is_session_admin=is_session_admin,
                 )
             else:

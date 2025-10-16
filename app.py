@@ -191,6 +191,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/<int:tune_id>",
+    "get_session_tune_detail",
+    get_session_tune_detail,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases",
     "get_session_tune_aliases",
     get_session_tune_aliases,

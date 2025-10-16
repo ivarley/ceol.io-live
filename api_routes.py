@@ -288,6 +288,145 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         )
 
 
+def get_session_tune_detail(session_path, tune_id):
+    """Get detailed information about a tune in the context of a session"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"})
+
+        session_id = session_result[0]
+
+        # Get tune basic info
+        cur.execute(
+            """
+            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
+            FROM tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        tune_info = cur.fetchone()
+
+        if not tune_info:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Tune not found"})
+
+        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
+
+        # Get session-specific tune info
+        cur.execute(
+            """
+            SELECT alias, setting_id, key
+            FROM session_tune
+            WHERE session_id = %s AND tune_id = %s
+        """,
+            (session_id, tune_id),
+        )
+        session_tune_info = cur.fetchone()
+
+        alias = None
+        setting_id = None
+        key = None
+
+        if session_tune_info:
+            alias, setting_id, key = session_tune_info
+
+        # Get all aliases from session_tune_alias table
+        cur.execute(
+            """
+            SELECT alias
+            FROM session_tune_alias
+            WHERE session_id = %s AND tune_id = %s
+            ORDER BY created_date ASC
+        """,
+            (session_id, tune_id),
+        )
+        alias_rows = cur.fetchall()
+        aliases = [row[0] for row in alias_rows]
+
+        # Get play count for this session
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+        """,
+            (session_id, tune_id),
+        )
+        play_count_result = cur.fetchone()
+        times_played = play_count_result[0] if play_count_result else 0
+
+        # Get detailed play history
+        cur.execute(
+            """
+            SELECT
+                si.date,
+                sit.order_number,
+                sit.name,
+                sit.key_override,
+                sit.setting_override
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+            ORDER BY si.date DESC
+        """,
+            (session_id, tune_id),
+        )
+        play_instances_raw = cur.fetchall()
+        play_instances = [
+            {
+                "date": row[0].isoformat() if row[0] else None,
+                "order_number": row[1],
+                "name": row[2],
+                "key_override": row[3],
+                "setting_override": row[4],
+            }
+            for row in play_instances_raw
+        ]
+
+        cur.close()
+        conn.close()
+
+        # Build response
+        return jsonify(
+            {
+                "success": True,
+                "session_tune": {
+                    "tune_id": tune_id,
+                    "tune_name": tune_name,
+                    "tune_type": tune_type,
+                    "alias": alias,
+                    "aliases": aliases,
+                    "setting_id": setting_id,
+                    "key": key,
+                    "tunebook_count": tunebook_count,
+                    "tunebook_count_cached_date": (
+                        tunebook_count_cached_date.isoformat()
+                        if tunebook_count_cached_date
+                        else None
+                    ),
+                    "times_played": times_played,
+                    "play_instances": play_instances,
+                },
+            }
+        )
+
+    except Exception as e:
+        return jsonify(
+            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
+        )
+
+
 def get_session_tune_aliases(session_path, tune_id):
     """Get all aliases for a tune in a session"""
     try:

@@ -225,6 +225,34 @@
             white-space: nowrap;
         }
 
+        /* Loading dots animation */
+        .loading-dots {
+            font-weight: bold;
+            display: inline-block;
+            animation: pulse-dots 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dots {
+            0%, 100% {
+                opacity: 0.3;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* TheSession link icon */
+        .thesession-link-icon {
+            font-size: 18px;
+            text-decoration: none;
+            color: var(--primary);
+            opacity: 0.8;
+        }
+
+        .thesession-link-icon:hover {
+            opacity: 1;
+        }
+
         .modal-tune-link {
             display: inline-block;
             color: var(--primary);
@@ -247,12 +275,21 @@
             color: var(--text-color);
             font-size: 22px;
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .modal-info-line {
             color: var(--text-muted, #6c757d);
-            font-size: 14px;
-            margin-bottom: 8px;
+            font-size: 16px;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .modal-info-line strong {
+            color: var(--text-color);
+            font-weight: 600;
         }
 
         .modal-dialog {
@@ -661,8 +698,40 @@
 
         <!-- Tunes Tab Content -->
         <div class="tab-content active" id="tunes-tab">
-            <div id="tunes-loading" style="padding: 20px; text-align: center; color: var(--secondary-text);">Loading tunes...</div>
-            <div id="tunes-content" style="display: none;"></div>
+            <div class="tunes-container">
+                <div class="filters-container">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off">
+                        </div>
+                        <div class="filter-group">
+                            <select id="type-filter" class="filter-select" title="Tune type">
+                                <option value="">All Types</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-count">
+                    <span id="results-count-text"></span>
+                    <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
+                        <span id="sort-icon">👂</span>
+                    </button>
+                </div>
+
+                <div class="tunes-list" id="tunes-list">
+                    <!-- Tune rows will be inserted here by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Tune Detail Modal -->
+            <div id="tune-detail-modal" class="modal-overlay">
+                <div class="modal-dialog">
+                    <div id="tune-detail-content">
+                        <!-- Content will be inserted by JavaScript -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Logs Tab Content -->
@@ -920,9 +989,17 @@
     
 
     
-    // Close modal on escape key
+    // Close modals on escape key
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
+            // Check if tune detail modal is open
+            const tuneModal = document.getElementById('tune-detail-modal');
+            if (tuneModal && tuneModal.style.display === 'flex') {
+                closeTuneDetailModal();
+                return;
+            }
+
+            // Otherwise check for add session modal
             hideAddSessionModal();
         }
     });
@@ -982,56 +1059,461 @@
             content.classList.remove('active');
         });
         document.getElementById(`${tabName}-tab`).classList.add('active');
-
-        // Load tunes content if switching to tunes tab and not already loaded
-        if (tabName === 'tunes' && !window.tunesLoaded) {
-            loadTunesContent();
-        }
     }
 
-    // Load tunes content via AJAX
-    function loadTunesContent() {
-        fetch(`/sessions/${sessionPath}/tunes`)
-            .then(response => response.text())
-            .then(html => {
-                // Parse the HTML and extract just the content we need
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+    // Tunes tab functionality
+    const allTunes = {{ tunes|tojson }};
+    let filteredTunes = [];
+    let currentFilters = {
+        search: '',
+        type: ''
+    };
+    let modalShowTime = 0;
 
-                // Extract the tunes-container element
-                const tunesContainer = doc.querySelector('.tunes-container');
-                const tuneDetailModal = doc.querySelector('#tune-detail-modal');
+    // Sort mode cycle states (with icons)
+    const sortModes = [
+        { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a[1] || '').localeCompare(b[1] || '') },
+        { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b[1] || '').localeCompare(a[1] || '') },
+        { id: 'session-desc', label: 'session high', icon: '👂', sortFn: (a, b) => (b[3] || 0) - (a[3] || 0) },
+        { id: 'session-asc', label: 'session low', icon: '👂↑', sortFn: (a, b) => (a[3] || 0) - (b[3] || 0) },
+        { id: 'tunebooks-desc', label: 'tunebooks high', icon: '#', sortFn: (a, b) => (b[4] || 0) - (a[4] || 0) },
+        { id: 'tunebooks-asc', label: 'tunebooks low', icon: '#↑', sortFn: (a, b) => (a[4] || 0) - (b[4] || 0) }
+    ];
+    let currentSortModeIndex = 2; // Start with session popularity descending
 
-                if (tunesContainer) {
-                    const tunesContent = document.getElementById('tunes-content');
-                    tunesContent.innerHTML = '';
-                    tunesContent.appendChild(tunesContainer.cloneNode(true));
+    // Initialize tunes tab
+    function initializeTunesTab() {
+        console.log('Initializing tunes tab with', allTunes.length, 'tunes');
+        populateTuneTypes();
+        setupTunesEventListeners();
+        applyFilters();
+    }
 
-                    // Also append the modal if it exists
-                    if (tuneDetailModal) {
-                        tunesContent.appendChild(tuneDetailModal.cloneNode(true));
-                    }
+    function populateTuneTypes() {
+        // Extract unique tune types from the data
+        const types = [...new Set(allTunes.map(tune => tune[2]).filter(Boolean))];
+        types.sort();
 
-                    // Copy and execute the scripts from the tunes page
-                    const scripts = doc.querySelectorAll('script');
-                    scripts.forEach(script => {
-                        if (script.textContent && !script.src) {
-                            eval(script.textContent);
-                        }
-                    });
+        const typeFilter = document.getElementById('type-filter');
+        types.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type;
+            option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+            typeFilter.appendChild(option);
+        });
+    }
 
-                    document.getElementById('tunes-loading').style.display = 'none';
-                    tunesContent.style.display = 'block';
-                    window.tunesLoaded = true;
+    function setupTunesEventListeners() {
+        // Search input with debounce
+        let searchTimeout;
+        document.getElementById('tune-search').addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentFilters.search = e.target.value.toLowerCase().trim();
+                applyFilters();
+            }, 300);
+        });
+
+        // Type filter
+        document.getElementById('type-filter').addEventListener('change', function(e) {
+            currentFilters.type = e.target.value;
+            applyFilters();
+        });
+
+        // Sort toggle button
+        document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
+
+        // Modal overlay click handler
+        const modalOverlay = document.getElementById('tune-detail-modal');
+        modalOverlay.addEventListener('click', function(event) {
+            const timeSinceShown = Date.now() - modalShowTime;
+            if (timeSinceShown < 500) {
+                return;
+            }
+
+            if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                closeTuneDetailModal();
+            }
+        });
+    }
+
+    function cycleSortMode() {
+        currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
+        const mode = sortModes[currentSortModeIndex];
+
+        // Update button display
+        const icon = document.getElementById('sort-icon');
+        icon.textContent = mode.icon;
+
+        // Re-apply filters and sorting
+        applyFilters();
+    }
+
+    function applyFilters() {
+        // Filter tunes based on search and type
+        filteredTunes = allTunes.filter(tune => {
+            // Search filter
+            if (currentFilters.search) {
+                const tuneName = (tune[1] || '').toLowerCase();
+                if (!tuneName.includes(currentFilters.search)) {
+                    return false;
+                }
+            }
+
+            // Type filter
+            if (currentFilters.type && tune[2] !== currentFilters.type) {
+                return false;
+            }
+
+            return true;
+        });
+
+        // Apply sorting
+        const sortMode = sortModes[currentSortModeIndex];
+        if (sortMode && sortMode.sortFn) {
+            filteredTunes.sort(sortMode.sortFn);
+        }
+
+        renderTunes();
+    }
+
+    function renderTunes() {
+        const list = document.getElementById('tunes-list');
+        const resultsCountText = document.getElementById('results-count-text');
+
+        // Update results count
+        const total = allTunes.length;
+        const filtered = filteredTunes.length;
+        if (filtered < total) {
+            resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+        } else {
+            resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+        }
+
+        // Render tune rows
+        list.innerHTML = filteredTunes.map(tune => createTuneRow(tune)).join('');
+    }
+
+    function createTuneRow(tune) {
+        // tune is [tune_id, tune_name, tune_type, times_played, tunebook_count, setting_id]
+        const tuneId = tune[0];
+        const tuneName = tune[1] || 'Unknown';
+        const tuneType = tune[2] || '';
+        const timesPlayed = tune[3] || 0;
+        const tunebookCount = tune[4] || 0;
+        const settingId = tune[5];
+
+        // Determine what to show based on sort mode
+        const sortMode = sortModes[currentSortModeIndex];
+        const isSessionMode = sortMode.id.startsWith('session-');
+        const isTunebooksMode = sortMode.id.startsWith('tunebooks-');
+
+        let countBadge = '';
+        let typeBadge = '';
+
+        if (isSessionMode) {
+            countBadge = `<span class="tune-count-badge">${timesPlayed}</span>`;
+            typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+        } else if (isTunebooksMode) {
+            countBadge = `<span class="tune-count-badge">${tunebookCount}</span>`;
+            typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+        } else {
+            // Alphabetical sort - show tune type only
+            typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+        }
+
+        return `
+            <div class="tune-row" onclick="showTuneDetail(${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
+                <div class="tune-row-header">
+                    <h3 class="tune-name">${tuneName}</h3>
+                </div>
+                <div class="tune-meta">
+                    ${typeBadge}
+                    ${countBadge}
+                </div>
+            </div>
+        `;
+    }
+
+    function showTuneDetail(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
+        const modal = document.getElementById('tune-detail-modal');
+        const modalContent = document.getElementById('tune-detail-content');
+
+        // Show modal immediately with basic info
+        displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId);
+
+        // Fetch full details from the API
+        const apiUrl = `/api/sessions/${sessionPath}/tunes/${tuneId}`;
+        console.log('Fetching tune details from:', apiUrl);
+
+        fetch(apiUrl)
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('API response:', data);
+                if (data.success) {
+                    displayTuneDetailModalFull(data.session_tune);
                 } else {
-                    console.error('Could not find tunes-container element');
-                    document.getElementById('tunes-loading').textContent = 'Error loading tunes. Please try again.';
+                    console.error('Failed to load tune details:', data.message || 'Unknown error');
                 }
             })
             .catch(error => {
-                console.error('Error loading tunes:', error);
-                document.getElementById('tunes-loading').textContent = 'Error loading tunes. Please try again.';
+                console.error('Error loading tune details:', error);
             });
+    }
+
+    function displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
+        const modal = document.getElementById('tune-detail-modal');
+        const modalContent = document.getElementById('tune-detail-content');
+
+        // Build thesession.org link
+        const thesessionUrl = settingId
+            ? `https://thesession.org/tunes/${tuneId}#setting${settingId}`
+            : `https://thesession.org/tunes/${tuneId}`;
+        const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
+
+        // Display name - will be updated with alias if available
+        const displayName = tuneName || 'Unknown';
+
+        modalContent.innerHTML = `
+            <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
+            <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
+            <div class="modal-info-line"><strong>Type:</strong> ${tuneType || 'Unknown'}</div>
+            <div class="modal-info-line"><strong>We also call it:</strong> <span class="loading-dots">...</span></div>
+            <div class="modal-info-line"><strong>Our Setting:</strong> <span class="loading-dots">...</span></div>
+            <div class="modal-info-line"><strong>Our Key:</strong> <span class="loading-dots">...</span></div>
+            <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${tunebookCount || 0} tunebooks <span class="loading-dots">...</span></div>
+            <div class="modal-info-line"><strong>Play History:</strong> Total times played in this session: ${timesPlayed}</div>
+        `;
+
+        // Show modal
+        modal.style.display = 'flex';
+
+        // Add 'show' class after a small delay to trigger slide-in animation
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+
+        // Record the time when modal is shown
+        modalShowTime = Date.now();
+    }
+
+    function displayTuneDetailModalFull(sessionTune) {
+        const modalContent = document.getElementById('tune-detail-content');
+
+        // Build display name (alias takes precedence if it exists)
+        const displayName = sessionTune.alias || sessionTune.tune_name || 'Unknown';
+
+        // Build thesession.org link with setting if available
+        const thesessionUrl = sessionTune.setting_id
+            ? `https://thesession.org/tunes/${sessionTune.tune_id}#setting${sessionTune.setting_id}`
+            : `https://thesession.org/tunes/${sessionTune.tune_id}`;
+        const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
+
+        // Build aliases input (comma-delimited)
+        const aliasesValue = sessionTune.aliases && sessionTune.aliases.length > 0
+            ? sessionTune.aliases.join(', ')
+            : '';
+
+        // Build setting ID input value
+        const settingIdValue = sessionTune.setting_id || '';
+
+        // Build key input value
+        const keyValue = sessionTune.key || '';
+
+        // Build popularity display with refresh icon and cached date
+        const tunebookCount = sessionTune.tunebook_count || 0;
+        const cachedDate = sessionTune.tunebook_count_cached_date || '';
+        const cachedDateId = 'cached-date-display';
+        const cachedDateDisplay = cachedDate
+            ? `<span id="${cachedDateId}" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;">Last Updated: ${cachedDate}</span>`
+            : `<span id="${cachedDateId}" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em; display: none;"></span>`;
+        const popularityDisplay = `
+            <span id="tunebook-count">${tunebookCount} tunebook${tunebookCount !== 1 ? 's' : ''}</span>
+            <button id="refresh-tunebook" onclick="refreshTunebookCount(${sessionTune.tune_id})" style="margin-left: 10px; padding: 4px 8px; font-size: 0.9em; cursor: pointer; background-color: var(--light); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 3px; line-height: 1;" title="Refresh popularity count">↻</button>
+            ${cachedDateDisplay}
+        `;
+
+        // Build play history instances list
+        const playCount = sessionTune.times_played || 0;
+        let playInstancesHtml = '';
+        if (sessionTune.play_instances && sessionTune.play_instances.length > 0) {
+            playInstancesHtml = `
+                <ul style="list-style: none; padding: 0; margin-top: 10px;">
+                    ${sessionTune.play_instances.map(instance => {
+                        const dateStr = instance.date || 'Unknown date';
+                        const positionStr = instance.position_in_set ? `#${instance.position_in_set}` : '';
+                        let overridesHtml = '';
+                        const overrides = [];
+                        if (instance.name_override) overrides.push(`Name: "${instance.name_override}"`);
+                        if (instance.key_override) overrides.push(`Key: ${instance.key_override}`);
+                        if (instance.setting_id_override) overrides.push(`Setting: #${instance.setting_id_override}`);
+                        if (overrides.length > 0) {
+                            overridesHtml = `<div style="font-style: italic; color: #856404; font-size: 0.9em; margin-top: 4px;">${overrides.join(' • ')}</div>`;
+                        }
+                        return `
+                            <li style="margin: 8px 0; padding: 10px; background-color: var(--hover-bg, #f8f9fa); border-radius: 4px;">
+                                <div style="font-weight: bold; color: var(--primary, #007bff);">
+                                    <a href="/sessions/${sessionPath}/${dateStr}?highlight_tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
+                                </div>
+                                <div style="font-size: 0.9em; color: var(--disabled-text, #666); margin-top: 4px;">
+                                    Position in set: ${positionStr}
+                                    ${overridesHtml}
+                                </div>
+                            </li>
+                        `;
+                    }).join('')}
+                </ul>
+            `;
+        } else {
+            playInstancesHtml = `<p style="color: var(--disabled-text); font-style: italic; margin-top: 10px;">No instances recorded yet.</p>`;
+        }
+
+        modalContent.innerHTML = `
+            <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
+            <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
+            <div class="modal-info-line">
+                <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
+            </div>
+            <div class="modal-info-line">
+                <strong>We also call it:</strong><br>
+                <input type="text" id="aliases-input" value="${aliasesValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Comma-separated aliases">
+            </div>
+            <div class="modal-info-line">
+                <strong>Our Setting:</strong><br>
+                <input type="text" id="setting-id-input" value="${settingIdValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Setting ID (number)">
+            </div>
+            <div class="modal-info-line">
+                <strong>Our Key:</strong><br>
+                <input type="text" id="key-input" value="${keyValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Key (e.g., D, G, Am)">
+            </div>
+            <div style="margin-top: 12px; margin-bottom: 16px;">
+                <button id="save-tune-details-btn" onclick="saveTuneDetails(${sessionTune.tune_id})" style="padding: 8px 16px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Save</button>
+            </div>
+            <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
+            <div class="modal-info-line">
+                <strong>Play History</strong><br>
+                <div style="margin-top: 6px;">Total times played in this session: ${playCount}</div>
+                ${playInstancesHtml}
+            </div>
+        `;
+    }
+
+    function refreshTunebookCount(tuneId) {
+        const button = document.getElementById('refresh-tunebook');
+        const countSpan = document.getElementById('tunebook-count');
+        const dateSpan = document.getElementById('cached-date-display');
+
+        // Disable button and show loading state
+        button.disabled = true;
+        const originalButtonText = button.textContent;
+        button.textContent = '⟳';
+
+        // Make API call
+        fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}/refresh_tunebook_count`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the display with new count
+                const newCount = data.new_count;
+                const suffix = newCount === 1 ? '' : 's';
+                countSpan.textContent = `${newCount} tunebook${suffix}`;
+
+                // Update the cached date display
+                if (data.cached_date && dateSpan) {
+                    dateSpan.textContent = `Last Updated: ${data.cached_date}`;
+                    dateSpan.style.display = '';
+                } else if (dateSpan) {
+                    dateSpan.style.display = 'none';
+                }
+
+                // Show a temporary success message
+                if (data.old_count !== data.new_count) {
+                    button.textContent = '✓';
+                    button.style.backgroundColor = '#28a745';
+                    button.style.color = 'white';
+                } else {
+                    button.textContent = '−';
+                    button.style.backgroundColor = '#6c757d';
+                    button.style.color = 'white';
+                }
+            } else {
+                // Show error message
+                button.textContent = '✗';
+                button.style.backgroundColor = '#dc3545';
+                button.style.color = 'white';
+                console.error('Error:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            button.textContent = '✗';
+            button.style.backgroundColor = '#dc3545';
+            button.style.color = 'white';
+        })
+        .finally(() => {
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                button.disabled = false;
+                button.textContent = originalButtonText;
+                button.style.backgroundColor = '';
+                button.style.color = '';
+            }, 2000);
+        });
+    }
+
+    function saveTuneDetails(tuneId) {
+        const aliasesInput = document.getElementById('aliases-input');
+        const settingIdInput = document.getElementById('setting-id-input');
+        const keyInput = document.getElementById('key-input');
+        const saveButton = document.getElementById('save-tune-details-btn');
+
+        // Get values
+        const aliases = aliasesInput.value.trim();
+        const settingId = settingIdInput.value.trim();
+        const key = keyInput.value.trim();
+
+        // Disable button and show saving state
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+
+        // TODO: Make API call to save the tune details
+        // For now, just show a success message
+        console.log('Saving tune details:', { tuneId, aliases, settingId, key });
+
+        // Simulate API call
+        setTimeout(() => {
+            saveButton.textContent = 'Saved!';
+            saveButton.style.backgroundColor = '#28a745';
+
+            setTimeout(() => {
+                saveButton.disabled = false;
+                saveButton.textContent = 'Save';
+                saveButton.style.backgroundColor = '';
+            }, 1500);
+        }, 500);
+    }
+
+    function closeTuneDetailModal() {
+        const modal = document.getElementById('tune-detail-modal');
+
+        // Remove 'show' class to trigger slide-out animation
+        modal.classList.remove('show');
+
+        // Wait for animation to complete before hiding
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
     }
 
     // Show initial flash messages and setup event listeners when DOM is ready
@@ -1043,8 +1525,8 @@
             });
         });
 
-        // Load tunes content on page load since it's the default tab
-        loadTunesContent();
+        // Initialize tunes tab on page load since it's the default tab
+        initializeTunesTab();
 
         // Event listeners for buttons and modals
         const addSessionBtn = document.getElementById('add-session-btn');
