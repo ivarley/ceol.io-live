@@ -12,6 +12,14 @@ from models.person_tune import PersonTune
 from database import get_db_connection
 
 
+# Sentinel value to distinguish between "not provided" and "explicitly set to None"
+class _Unset:
+    def __repr__(self):
+        return "<UNSET>"
+
+UNSET = _Unset()
+
+
 class PersonTuneService:
     """
     Service class for managing PersonTune operations.
@@ -197,11 +205,11 @@ class PersonTuneService:
     def update_person_tune(
         self,
         person_tune_id: int,
-        learn_status: Optional[str] = None,
-        notes: Optional[str] = None,
-        setting_id: Optional[int] = None,
-        name_alias: Optional[str] = None,
-        heard_count: Optional[int] = None,
+        learn_status=UNSET,
+        notes=UNSET,
+        setting_id=UNSET,
+        name_alias=UNSET,
+        heard_count=UNSET,
         changed_by: str = 'system'
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
@@ -209,11 +217,11 @@ class PersonTuneService:
 
         Args:
             person_tune_id: ID of the PersonTune to update
-            learn_status: Optional new learning status
-            notes: Optional new notes
-            setting_id: Optional thesession.org setting ID
-            name_alias: Optional custom name/alias for the tune
-            heard_count: Optional heard count (must be >= 0)
+            learn_status: New learning status, or UNSET to skip (can be None to clear)
+            notes: New notes, or UNSET to skip (can be None to clear)
+            setting_id: New thesession.org setting ID, or UNSET to skip (can be None to clear)
+            name_alias: New custom name/alias, or UNSET to skip (can be None to clear)
+            heard_count: New heard count, or UNSET to skip (must be >= 0 if provided)
             changed_by: User who made the change
 
         Returns:
@@ -227,28 +235,28 @@ class PersonTuneService:
             changes_made = []
 
             # Update learn_status if provided
-            if learn_status is not None and learn_status != person_tune.learn_status:
+            if learn_status is not UNSET and learn_status != person_tune.learn_status:
                 status_changed = person_tune.set_learn_status(learn_status, changed_by=changed_by)
                 if status_changed:
                     changes_made.append(f"status to '{learn_status}'")
 
             # Update notes if provided
-            if notes is not None and notes != person_tune.notes:
+            if notes is not UNSET and notes != person_tune.notes:
                 person_tune.notes = notes
                 changes_made.append("notes")
 
             # Update setting_id if provided (can be None to clear it)
-            if setting_id != person_tune.setting_id:
+            if setting_id is not UNSET and setting_id != person_tune.setting_id:
                 person_tune.setting_id = setting_id
                 changes_made.append("setting_id")
 
             # Update name_alias if provided (can be None to clear it)
-            if name_alias != person_tune.name_alias:
+            if name_alias is not UNSET and name_alias != person_tune.name_alias:
                 person_tune.name_alias = name_alias
                 changes_made.append("name_alias")
 
             # Update heard_count if provided (must be >= 0)
-            if heard_count is not None:
+            if heard_count is not UNSET:
                 if heard_count < 0:
                     return False, "heard_count cannot be negative", None
                 if heard_count != person_tune.heard_count:
@@ -511,21 +519,22 @@ class PersonTuneService:
             if search_query:
                 # Search in both name_alias and tune name (accent-insensitive and quote-insensitive)
                 # Using translate() to remove accents and normalize quotes for PostgreSQL compatibility
+                # Normalizes all apostrophe/quote variants: ' ' ‛ ʼ ´ ` " "
                 query += """ AND (
                     translate(
                         translate(LOWER(COALESCE(pt.name_alias, t.name)),
                                  'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
                                  'aaaaaaaeeeeeiiiiioooooooouuuuuyycn'),
-                        '''""',
-                        ''''''
+                        '''‛ʼ´`""',
+                        ''''''''
                     )
                     LIKE
                     translate(
                         translate(LOWER(%s),
                                  'áàâäãåāéèêëēíìîïīóòôöõøōúùûüūýÿçñ',
                                  'aaaaaaaeeeeeiiiiioooooooouuuuuyycn'),
-                        '''""',
-                        ''''''
+                        '''‛ʼ´`""',
+                        ''''''''
                     )
                 )"""
                 params.append(f"%{search_query}%")

@@ -9,7 +9,7 @@ from flask import request, jsonify
 from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
-from services.person_tune_service import PersonTuneService
+from services.person_tune_service import PersonTuneService, UNSET
 from services.thesession_sync_service import ThesessionSyncService
 from database import get_db_connection
 
@@ -455,15 +455,15 @@ def update_person_tune(person_tune_id):
                 "error": "No data provided"
             }), 400
 
-        # Extract fields from request
-        learn_status = data.get('learn_status') if 'learn_status' in data else None
-        notes = data.get('notes') if 'notes' in data else None
-        setting_id = data.get('setting_id') if 'setting_id' in data else None
-        name_alias = data.get('name_alias') if 'name_alias' in data else None
-        heard_count = data.get('heard_count') if 'heard_count' in data else None
+        # Extract fields from request - use UNSET for fields not provided
+        learn_status = data.get('learn_status') if 'learn_status' in data else UNSET
+        notes = data.get('notes') if 'notes' in data else UNSET
+        setting_id = data.get('setting_id') if 'setting_id' in data else UNSET
+        name_alias = data.get('name_alias') if 'name_alias' in data else UNSET
+        heard_count = data.get('heard_count') if 'heard_count' in data else UNSET
 
         # Validate setting_id if provided
-        if setting_id is not None and setting_id != '':
+        if setting_id is not UNSET and setting_id is not None and setting_id != '':
             try:
                 setting_id = int(setting_id)
                 if setting_id <= 0:
@@ -480,7 +480,7 @@ def update_person_tune(person_tune_id):
             setting_id = None
 
         # Validate heard_count if provided
-        if heard_count is not None:
+        if heard_count is not UNSET and heard_count is not None:
             try:
                 heard_count = int(heard_count)
                 if heard_count < 0:
