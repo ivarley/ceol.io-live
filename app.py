@@ -128,6 +128,7 @@ app.add_url_rule(
     session_tune_info,
 )
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
+app.add_url_rule("/sessions/<path:full_path>/players", "session_instance_players", session_instance_players)
 app.add_url_rule("/add-session", "add_session", add_session)
 app.add_url_rule("/help", "help_page", help_page)
 app.add_url_rule("/share", "share_page", share_page)

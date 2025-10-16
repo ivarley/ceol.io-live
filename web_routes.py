@@ -493,7 +493,7 @@ def session_handler(full_path):
                     ) or session_instance[8] in flask_session.get(
                         "admin_session_ids", []
                     )
-                    
+
                     # Check if user is a regular for this session
                     user_person_id = getattr(current_user, 'person_id', None)
                     if user_person_id:
@@ -661,6 +661,86 @@ def session_handler(full_path):
                 return render_error_page(f"Session not found: {session_path}", 404)
         except Exception as e:
             return f"Database connection failed: {str(e)}"
+
+
+def session_instance_players(full_path):
+    """Handle the Players tab for a session instance as a separate page"""
+    # Strip trailing slash and remove /players suffix
+    full_path = full_path.rstrip("/")
+    if full_path.endswith("/players"):
+        full_path = full_path[:-8]  # Remove "/players"
+
+    # Extract session path and date
+    path_parts = full_path.split("/")
+    date = path_parts[-1]
+    session_path = "/".join(path_parts[:-1])
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                   si.location_override, s.location_name, si.log_complete_date, s.session_id
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE s.path = %s AND si.date = %s
+        """,
+            (session_path, date),
+        )
+        session_instance = cur.fetchone()
+
+        if session_instance:
+            session_instance_dict = {
+                "session_name": session_instance[0],
+                "date": session_instance[1],
+                "comments": session_instance[2],
+                "session_instance_id": session_instance[3],
+                "is_cancelled": session_instance[4],
+                "location_override": session_instance[5],
+                "default_location": session_instance[6],
+                "log_complete_date": session_instance[7],
+                "session_path": session_path,
+                "session_id": session_instance[8],
+            }
+
+            # Check if current user is an admin or regular of this session
+            is_session_admin = False
+            is_regular = False
+            if current_user.is_authenticated:
+                from flask import session as flask_session
+                from auth import is_session_regular
+
+                is_session_admin = flask_session.get(
+                    "is_system_admin", False
+                ) or session_instance[8] in flask_session.get(
+                    "admin_session_ids", []
+                )
+
+                # Check if user is a regular for this session
+                user_person_id = getattr(current_user, 'person_id', None)
+                if user_person_id:
+                    is_regular = is_session_regular(user_person_id, session_instance[8])
+
+            cur.close()
+            conn.close()
+
+            return render_template(
+                "session_instance_players.html",
+                session_instance=session_instance_dict,
+                is_session_admin=is_session_admin,
+                is_session_regular=is_regular,
+            )
+        else:
+            cur.close()
+            conn.close()
+            from app import render_error_page
+
+            return render_error_page(
+                f"Session instance not found: {session_path} on {date}", 404
+            )
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
 
 
 def add_session():

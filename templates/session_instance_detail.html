@@ -965,36 +965,33 @@
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
         <li class="nav-item">
-            <a class="nav-link active" id="tunes-tab" data-toggle="tab" href="#tunes-panel" role="tab" aria-controls="tunes-panel" aria-selected="true">Tunes</a>
+            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}">Tunes</a>
         </li>
         {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
         <li class="nav-item">
-            <a class="nav-link" id="attendance-tab" data-toggle="tab" href="#attendance-panel" role="tab" aria-controls="attendance-panel" aria-selected="false">Players</a>
+            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/players">Players</a>
         </li>
         {% endif %}
     </ul>
-    
-    <!-- Tab Content -->
-    <div class="tab-content" id="sessionTabContent">
-        <!-- Tunes Tab -->
-        <div class="tab-pane fade show active" id="tunes-panel" role="tabpanel" aria-labelledby="tunes-tab">
-            <div id="tunes-container" style="margin-top: 20px;">
-                <div id="tune-pills-container" class="tune-pills-container view-mode" tabindex="0" role="textbox" aria-label="Tune editor">
-                    <!-- Tune pills will be rendered here -->
-                </div>
 
-                <!-- Edit Button (shown in view mode for logged-in users, hidden when log is complete) -->
-                {% if current_user.is_authenticated and not session_instance.log_complete_date %}
-                <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
-                    <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
-                        Edit
-                    </button>
-                </div>
-                {% endif %}
-            </div>
+    <!-- Tunes Tab Content -->
+    <div id="tunes-container" style="margin-top: 20px;">
+        <div id="tune-pills-container" class="tune-pills-container view-mode" tabindex="0" role="textbox" aria-label="Tune editor">
+            <!-- Tune pills will be rendered here -->
+        </div>
 
-            <!-- Save Controls (shown in edit mode) -->
-            <div class="save-controls-container" style="display: none; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
+        <!-- Edit Button (shown in view mode for logged-in users, hidden when log is complete) -->
+        {% if current_user.is_authenticated and not session_instance.log_complete_date %}
+        <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
+            <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+                Edit
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Save Controls (shown in edit mode) -->
+    <div class="save-controls-container" style="display: none; align-items: center; gap: 15px; margin: 20px 0; padding: 15px; background-color: var(--light); border-radius: 4px;">
         <div style="display: flex; align-items: center; gap: 10px;">
             <button id="save-session-btn" class="btn-primary" style="padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: opacity 0.2s ease, background-color 0.2s ease;" disabled>
                 <span class="desktop-text">Save Session</span>
@@ -1023,17 +1020,6 @@
             </a>
         </span>
         <span id="save-status" style="color: var(--success, #28a745); font-style: italic; display: none;"></span>
-    </div>
-        </div>
-        
-        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
-        <!-- Players Tab -->
-        <div class="tab-pane fade" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
-            <div style="margin-top: 20px;">
-                {% include 'partials/attendance_tab.html' %}
-            </div>
-        </div>
-        {% endif %}
     </div>
     {% endif %}
     
@@ -1136,8 +1122,6 @@ window.exitEditMode = function() {
 <script src="/static/js/dist/clipboardManager.js"></script>
 <script src="/static/js/dist/contextMenu.js"></script>
 <script src="/static/js/pages/session_instance_detail.js"></script>
-<script src="{{ url_for('static', filename='js/dist/attendance.js') }}"></script>
-{% include 'modals/person_edit.html' %}
 <script>
 // Initialize edit mode button
 document.addEventListener('DOMContentLoaded', function() {
@@ -1190,71 +1174,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
-// Tab switching functionality
-function initializeTabs() {
-    var tabButtons = document.querySelectorAll('#sessionTabs .nav-link');
-    var tabPanes = document.querySelectorAll('#sessionTabContent .tab-pane');
-    
-    tabButtons.forEach(function(button) {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Remove active classes from all tabs and panes
-            tabButtons.forEach(function(btn) {
-                btn.classList.remove('active');
-                btn.setAttribute('aria-selected', 'false');
-            });
-            
-            tabPanes.forEach(function(pane) {
-                pane.classList.remove('show', 'active');
-            });
-            
-            // Add active classes to clicked tab and corresponding pane
-            this.classList.add('active');
-            this.setAttribute('aria-selected', 'true');
-            
-            var targetId = this.getAttribute('href').substring(1);
-            var targetPane = document.getElementById(targetId);
-            if (targetPane) {
-                targetPane.classList.add('show', 'active');
-            }
-            
-            // If switching to attendance tab, refresh attendance data
-            if (targetId === 'attendance-panel' && window.attendanceManagerInstance) {
-                window.attendanceManagerInstance.loadAttendance();
-            }
-        });
-    });
-    
-    // Handle URL hash for direct linking to tabs
-    function handleHashChange() {
-        var hash = window.location.hash;
-        if (hash && hash.startsWith('#')) {
-            var tabId = hash.substring(1);
-            // Handle both #players and #attendance-panel for the Players tab
-            if (tabId === 'players') {
-                tabId = 'attendance-panel';
-            }
-            var tabButton = document.querySelector('[href="#' + tabId + '"]');
-            if (tabButton) {
-                tabButton.click();
-            }
-        }
-    }
-    
-    // Check hash on load
-    handleHashChange();
-    
-    // Listen for hash changes
-    window.addEventListener('hashchange', handleHashChange);
-}
-
-// Initialize tabs when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeTabs);
-} else {
-    initializeTabs();
-}
 </script>
 {% endblock %}

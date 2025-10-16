@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session_instance.session_name }} - {{ session_instance.date }} - Players{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cancelled-date {
+        color: var(--danger, #dc3545);
+        text-decoration: line-through;
+    }
+    .cancelled-message {
+        padding: 20px;
+        background-color: var(--light);
+        border-left: 4px solid var(--danger, #dc3545);
+        margin: 20px 0;
+        color: var(--text-color);
+        font-style: italic;
+    }
+
+    .edit-link {
+        color: var(--primary);
+        text-decoration: none;
+        margin-left: 15px;
+        font-size: 0.7em;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+        cursor: pointer;
+        vertical-align: middle;
+    }
+    .edit-link:hover {
+        text-decoration: underline;
+    }
+    .editable-header:hover .edit-link {
+        opacity: 1;
+    }
+
+    /* Dark mode tab navigation fixes */
+    [data-theme="dark"] .nav-tabs .nav-link.active {
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
+    }
+
+    [data-theme="dark"] .nav-tabs .nav-link {
+        color: var(--text-color);
+        border-color: transparent;
+    }
+
+    [data-theme="dark"] .nav-tabs .nav-link:hover {
+        border-color: var(--border-color) var(--border-color) var(--bg-color);
+        color: var(--text-color);
+    }
+
+    [data-theme="dark"] .nav-tabs {
+        border-bottom: 1px solid var(--border-color);
+    }
+</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="landing-page" style="display: block;">
+
+    <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}/" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
+    <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}</h2>
+
+    {% if session_instance.location_override %}
+    <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
+        <strong>Note</strong> - actual location of this session: {{ session_instance.location_override }}
+    </p>
+    {% endif %}
+
+    <div id="message-container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="message success">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    {% if session_instance.comments %}
+    <div class="session-instance-comments">
+        <h3>Notes from this session:</h3>
+        <p>{{ session_instance.comments }}</p>
+    </div>
+    {% endif %}
+
+    {% if session_instance.is_cancelled %}
+    <div class="cancelled-message">
+        <strong>This session instance was cancelled.</strong>
+    </div>
+    {% else %}
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}">Tunes</a>
+        </li>
+        {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+        <li class="nav-item">
+            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/players">Players</a>
+        </li>
+        {% endif %}
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="sessionTabContent">
+        <!-- Players Tab -->
+        <div class="tab-pane fade show active" id="attendance-panel" role="tabpanel" aria-labelledby="attendance-tab">
+            <div style="margin-top: 20px;">
+                {% include 'partials/attendance_tab.html' %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Pass template variables to JavaScript for attendance module
+window.sessionConfig = {
+    sessionPath: '{{ session_instance.session_path }}',
+    sessionDate: '{{ session_instance.date }}',
+    isCancelled: {{ 'true' if session_instance.is_cancelled else 'false' }},
+    isSessionAdmin: {{ 'true' if is_session_admin else 'false' }},
+    sessionInstanceData: {
+        date: '{{ session_instance.date }}',
+        location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
+        default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
+        comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
+        is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
+    }
+};
+</script>
+<script src="{{ url_for('static', filename='js/dist/attendance.js') }}"></script>
+{% include 'modals/person_edit.html' %}
+{% endblock %}
