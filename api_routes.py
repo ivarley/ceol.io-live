@@ -6594,10 +6594,11 @@ def get_sessions_with_today_status():
     - has_instance_today: Boolean indicating if an instance exists for today
     - instance_id_today: The session_instance_id if one exists for today
     - recurrence: The recurrence pattern for client-side parsing
+
+    NOTE: "Today" is determined based on each session's timezone, not server time.
     """
     try:
-        from datetime import date
-        today = date.today()
+        from timezone_utils import get_today_in_timezone
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -6607,7 +6608,7 @@ def get_sessions_with_today_status():
         if current_user.is_authenticated:
             user_person_id = getattr(current_user, 'person_id', None)
 
-        # Get all sessions with today's instance info
+        # Get all sessions with their timezone and user membership
         cur.execute(
             """
             SELECT
@@ -6619,21 +6620,36 @@ def get_sessions_with_today_status():
                 s.country,
                 s.termination_date,
                 s.recurrence,
-                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member,
-                si.session_instance_id as instance_id_today,
-                si.date as instance_date_today
+                s.timezone,
+                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member
             FROM session s
             LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
-            LEFT JOIN session_instance si ON s.session_id = si.session_id AND si.date = %s
             ORDER BY s.name
             """,
-            (user_person_id, today)
+            (user_person_id,)
         )
 
         sessions = []
         for row in cur.fetchall():
+            session_id = row[0]
+            session_timezone = row[8] or "UTC"
+
+            # Get "today" in this session's timezone
+            today_in_session_tz = get_today_in_timezone(session_timezone)
+
+            # Check if there's an instance for today in this session
+            cur.execute(
+                """
+                SELECT session_instance_id, date
+                FROM session_instance
+                WHERE session_id = %s AND date = %s
+                """,
+                (session_id, today_in_session_tz)
+            )
+            instance_row = cur.fetchone()
+
             sessions.append({
-                'session_id': row[0],
+                'session_id': session_id,
                 'name': row[1],
                 'path': row[2],
                 'city': row[3],
@@ -6641,19 +6657,25 @@ def get_sessions_with_today_status():
                 'country': row[5],
                 'termination_date': row[6].isoformat() if row[6] else None,
                 'recurrence': row[7],
-                'user_is_member': row[8],
-                'has_instance_today': row[9] is not None,
-                'instance_id_today': row[9],
-                'instance_date_today': row[10].isoformat() if row[10] else None
+                'user_is_member': row[9],
+                'has_instance_today': instance_row is not None,
+                'instance_id_today': instance_row[0] if instance_row else None,
+                'instance_date_today': instance_row[1].isoformat() if instance_row else None
             })
 
         cur.close()
         conn.close()
 
+        # Return "today" in user's timezone if logged in, otherwise UTC
+        user_timezone = "UTC"
+        if current_user.is_authenticated and hasattr(current_user, 'timezone'):
+            user_timezone = current_user.timezone or "UTC"
+        today_for_user = get_today_in_timezone(user_timezone)
+
         return jsonify({
             'success': True,
             'sessions': sessions,
-            'today': today.isoformat()
+            'today': today_for_user.isoformat()
         })
 
     except Exception as e:
@@ -6665,21 +6687,22 @@ def create_or_get_today_session_instance(session_path):
     Create a new session instance for today, or return existing one if it already exists.
     This is idempotent - safe to call multiple times.
 
+    NOTE: "Today" is determined based on the session's timezone, not server time.
+
     Returns:
     - session_instance_id: The ID of the instance (new or existing)
     - created: Boolean indicating if a new instance was created
-    - date: The date of the instance (today)
+    - date: The date of the instance (today in session's timezone)
     """
     try:
-        from datetime import date
-        today = date.today()
+        from timezone_utils import get_today_in_timezone
 
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get session_id and name for this session_path
+        # Get session_id, name, and timezone for this session_path
         cur.execute(
-            "SELECT session_id, name FROM session WHERE path = %s",
+            "SELECT session_id, name, timezone FROM session WHERE path = %s",
             (session_path,),
         )
         session_result = cur.fetchone()
@@ -6688,7 +6711,10 @@ def create_or_get_today_session_instance(session_path):
             conn.close()
             return jsonify({"success": False, "message": "Session not found"}), 404
 
-        session_id, session_name = session_result
+        session_id, session_name, session_timezone = session_result
+
+        # Get "today" in the session's timezone
+        today = get_today_in_timezone(session_timezone or "UTC")
 
         # Check if session instance already exists for today (race condition check)
         cur.execute(

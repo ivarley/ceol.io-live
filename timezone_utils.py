@@ -282,3 +282,27 @@ def migrate_legacy_timezone(legacy_tz: str) -> str:
         IANA timezone identifier
     """
     return LEGACY_TIMEZONE_MAP.get(legacy_tz, "UTC")
+
+
+def get_today_in_timezone(timezone_name: str = "UTC"):
+    """
+    Get today's date in a specific timezone.
+
+    Args:
+        timezone_name: IANA timezone identifier (defaults to UTC)
+
+    Returns:
+        date object representing today in the specified timezone
+    """
+    # Handle legacy timezone names
+    if timezone_name in LEGACY_TIMEZONE_MAP:
+        timezone_name = LEGACY_TIMEZONE_MAP[timezone_name]
+
+    try:
+        # Get current time in the target timezone
+        target_tz = ZoneInfo(timezone_name)
+        now_in_tz = datetime.now(target_tz)
+        return now_in_tz.date()
+    except Exception:
+        # Fallback to UTC if timezone is invalid
+        return datetime.now(timezone.utc).date()
