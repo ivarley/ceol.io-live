@@ -558,6 +558,20 @@ def session_handler(full_path):
                     "recurrence": session[15],
                 }
 
+                # Add human-readable recurrence if JSON format
+                recurrence_json = session[15]
+                if recurrence_json:
+                    try:
+                        import json
+                        from recurrence_utils import to_human_readable
+                        json.loads(recurrence_json)  # Validate it's JSON
+                        session_dict["recurrence_readable"] = to_human_readable(recurrence_json)
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        # If it's not valid JSON, treat it as legacy freeform text
+                        session_dict["recurrence_readable"] = recurrence_json
+                else:
+                    session_dict["recurrence_readable"] = None
+
                 # Fetch past session instances in descending date order
                 cur.execute(
                     """

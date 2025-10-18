@@ -28,8 +28,12 @@ from typing import Optional, Dict, List, Tuple
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
 from database import get_db_connection
 from recurrence_utils import validate_recurrence_json
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 # Common time patterns
