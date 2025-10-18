@@ -15,6 +15,7 @@ from flask_login import current_user
 from functools import wraps
 import qrcode
 from io import BytesIO
+from recurrence_utils import validate_recurrence_json, to_human_readable
 
 
 def api_login_required(f):
@@ -84,6 +85,15 @@ def update_session_ajax(session_path):
         if not data:
             return jsonify({"success": False, "error": "No data provided"})
 
+        # Validate recurrence if provided
+        if "recurrence" in data and data["recurrence"]:
+            is_valid, error_msg = validate_recurrence_json(data["recurrence"])
+            if not is_valid:
+                return jsonify({
+                    "success": False,
+                    "error": f"Invalid recurrence pattern: {error_msg}"
+                })
+
         conn = get_db_connection()
         cur = conn.cursor()
 
@@ -95,9 +105,8 @@ def update_session_ajax(session_path):
             conn.close()
             return jsonify({"success": False, "error": "Session not found"})
 
-        session_id = session_result[0]
-
         # Save to history before making changes
+        session_id = session_result[0]
         user_id = session.get("user_id")
         save_to_history(
             cur, "session", "UPDATE", session_id, str(user_id) if user_id else "system"

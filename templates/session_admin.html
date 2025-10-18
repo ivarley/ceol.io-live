@@ -153,8 +153,52 @@
                             </div>
                             
                             <div class="mb-3">
-                                <label for="recurrence" class="form-label">Recurrence Schedule</label>
-                                <textarea class="form-control" id="recurrence" rows="2">{{ session.recurrence or '' }}</textarea>
+                                <label class="form-label">Recurrence Schedule</label>
+
+                                <!-- Read-only view -->
+                                <div id="recurrence-readonly-view">
+                                    {% if session.recurrence_readable %}
+                                    <div class="recurrence-display p-3 border rounded bg-light">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="recurrence-text">{{ session.recurrence_readable }}</div>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="showRecurrenceEditMode()">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="recurrence-display p-3 border rounded bg-light text-muted">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>No recurrence pattern set</div>
+                                            <button type="button" class="btn btn-sm btn-primary" onclick="showRecurrenceEditMode()">
+                                                <i class="fas fa-plus"></i> Add Schedule
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Edit mode (hidden by default) -->
+                                <div id="recurrence-edit-view" style="display: none;">
+                                    <div id="recurrence-schedules-container">
+                                        <!-- Individual schedule forms will be added here dynamically -->
+                                    </div>
+
+                                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addScheduleForm()">
+                                        <i class="fas fa-plus"></i> Add Schedule
+                                    </button>
+
+                                    <!-- Preview section -->
+                                    <div id="recurrence-preview" class="mt-3 p-3 border rounded bg-light" style="display: none;">
+                                        <h6 class="mb-2">Next 5 Occurrences:</h6>
+                                        <ul id="recurrence-preview-list" class="mb-0"></ul>
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-sm btn-secondary" onclick="hideRecurrenceEditMode()">Cancel</button>
+                                        <button type="button" class="btn btn-sm btn-primary" onclick="saveRecurrenceFromForm()">Save</button>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
@@ -446,6 +490,117 @@ body.modal-open {
         border-color: rgba(40, 167, 69, 0.4);
         color: #90e5a8;
     }
+}
+
+/* Recurrence display styling */
+.recurrence-display {
+    background-color: var(--light) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .recurrence-display {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-color: var(--border-color) !important;
+}
+
+.recurrence-text {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+}
+
+/* Recurrence schedule form styling */
+.schedule-form {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: var(--bg-color);
+}
+
+[data-theme="dark"] .schedule-form {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.schedule-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.schedule-form-title {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.weekday-buttons {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.weekday-btn {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.weekday-btn:hover {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.weekday-btn.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .weekday-btn {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .weekday-btn:hover {
+    background-color: var(--primary);
+}
+
+.nth-occurrence-checkboxes {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.nth-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nth-checkbox-label:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+    border-color: var(--primary);
+}
+
+.nth-checkbox-label input:checked + span {
+    font-weight: 600;
+}
+
+[data-theme="dark"] #recurrence-preview {
+    background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 /* Mobile optimizations */
@@ -966,6 +1121,364 @@ function showModal() {
 
 function hideModal() {
     ModalManager.hideModal('terminationDateModal');
+}
+
+// Global counter for unique schedule IDs
+let scheduleIdCounter = 0;
+
+function showRecurrenceEditMode() {
+    document.getElementById('recurrence-readonly-view').style.display = 'none';
+    document.getElementById('recurrence-edit-view').style.display = 'block';
+
+    // Load existing recurrence data if it exists
+    const existingRecurrence = {{ session.recurrence|tojson|safe if session.recurrence else '""' }};
+    if (existingRecurrence) {
+        try {
+            const recurrenceData = typeof existingRecurrence === 'string' ? JSON.parse(existingRecurrence) : existingRecurrence;
+            if (recurrenceData.schedules && Array.isArray(recurrenceData.schedules)) {
+                // Clear container first
+                document.getElementById('recurrence-schedules-container').innerHTML = '';
+                // Add form for each schedule
+                recurrenceData.schedules.forEach(schedule => {
+                    addScheduleForm(schedule);
+                });
+            }
+        } catch (e) {
+            console.error('Error parsing recurrence JSON:', e);
+        }
+    }
+
+    // If no schedules were added, show one empty form
+    if (document.getElementById('recurrence-schedules-container').childElementCount === 0) {
+        addScheduleForm();
+    }
+
+    // Update preview
+    updateRecurrencePreview();
+}
+
+function hideRecurrenceEditMode() {
+    document.getElementById('recurrence-readonly-view').style.display = 'block';
+    document.getElementById('recurrence-edit-view').style.display = 'none';
+    // Clear schedules
+    document.getElementById('recurrence-schedules-container').innerHTML = '';
+    scheduleIdCounter = 0;
+}
+
+function addScheduleForm(scheduleData = null) {
+    const scheduleId = scheduleIdCounter++;
+    const container = document.getElementById('recurrence-schedules-container');
+
+    const scheduleDiv = document.createElement('div');
+    scheduleDiv.className = 'schedule-form';
+    scheduleDiv.id = `schedule-${scheduleId}`;
+
+    const type = scheduleData?.type || 'weekly';
+    const weekday = scheduleData?.weekday || 'monday';
+    const startTime = scheduleData?.start_time || '19:00';
+    const endTime = scheduleData?.end_time || '22:00';
+    const everyNWeeks = scheduleData?.every_n_weeks || 1;
+    const which = scheduleData?.which || [1];
+
+    const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const nthOptions = [
+        {value: 1, label: '1st'},
+        {value: 2, label: '2nd'},
+        {value: 3, label: '3rd'},
+        {value: 4, label: '4th'},
+        {value: -1, label: 'Last'}
+    ];
+
+    scheduleDiv.innerHTML = `
+        <div class="schedule-form-header">
+            <span class="schedule-form-title">Schedule ${scheduleId + 1}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSchedule(${scheduleId})">
+                <i class="fas fa-trash"></i> Remove
+            </button>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Pattern Type</label>
+            <select class="form-select schedule-type" data-schedule-id="${scheduleId}" onchange="updateScheduleTypeUI(${scheduleId})">
+                <option value="weekly" ${type === 'weekly' ? 'selected' : ''}>Weekly</option>
+                <option value="monthly_nth_weekday" ${type === 'monthly_nth_weekday' ? 'selected' : ''}>Monthly (Nth Weekday)</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Weekday</label>
+            <div class="weekday-buttons">
+                ${weekdays.map(day => `
+                    <button type="button" class="weekday-btn ${day === weekday ? 'active' : ''}"
+                            data-schedule-id="${scheduleId}" data-weekday="${day}"
+                            onclick="selectWeekday(${scheduleId}, '${day}')">
+                        ${day.charAt(0).toUpperCase() + day.slice(1, 3)}
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="weekly-options" id="weekly-options-${scheduleId}" style="${type === 'weekly' ? '' : 'display: none;'}">
+            <div class="mb-3">
+                <label class="form-label">Frequency</label>
+                <select class="form-select schedule-frequency" data-schedule-id="${scheduleId}">
+                    <option value="1" ${everyNWeeks === 1 ? 'selected' : ''}>Every week</option>
+                    <option value="2" ${everyNWeeks === 2 ? 'selected' : ''}>Every 2 weeks</option>
+                    <option value="3" ${everyNWeeks === 3 ? 'selected' : ''}>Every 3 weeks</option>
+                    <option value="4" ${everyNWeeks === 4 ? 'selected' : ''}>Every 4 weeks</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="monthly-options" id="monthly-options-${scheduleId}" style="${type === 'monthly_nth_weekday' ? '' : 'display: none;'}">
+            <div class="mb-3">
+                <label class="form-label">Which occurrences?</label>
+                <div class="nth-occurrence-checkboxes">
+                    ${nthOptions.map(opt => `
+                        <label class="nth-checkbox-label">
+                            <input type="checkbox" class="nth-occurrence"
+                                   data-schedule-id="${scheduleId}" value="${opt.value}"
+                                   ${which.includes(opt.value) ? 'checked' : ''}
+                                   onchange="updateRecurrencePreview()">
+                            <span>${opt.label}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Start Time</label>
+                <input type="time" class="form-control schedule-start-time" data-schedule-id="${scheduleId}" value="${startTime}" onchange="updateRecurrencePreview()">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">End Time</label>
+                <input type="time" class="form-control schedule-end-time" data-schedule-id="${scheduleId}" value="${endTime}" onchange="updateRecurrencePreview()">
+            </div>
+        </div>
+    `;
+
+    container.appendChild(scheduleDiv);
+    updateRecurrencePreview();
+}
+
+function removeSchedule(scheduleId) {
+    const scheduleDiv = document.getElementById(`schedule-${scheduleId}`);
+    if (scheduleDiv) {
+        scheduleDiv.remove();
+        updateRecurrencePreview();
+    }
+}
+
+function selectWeekday(scheduleId, weekday) {
+    // Deselect all weekday buttons for this schedule
+    const buttons = document.querySelectorAll(`button.weekday-btn[data-schedule-id="${scheduleId}"]`);
+    buttons.forEach(btn => btn.classList.remove('active'));
+
+    // Select the clicked button
+    const clickedBtn = document.querySelector(`button.weekday-btn[data-schedule-id="${scheduleId}"][data-weekday="${weekday}"]`);
+    if (clickedBtn) {
+        clickedBtn.classList.add('active');
+    }
+
+    updateRecurrencePreview();
+}
+
+function updateScheduleTypeUI(scheduleId) {
+    const typeSelect = document.querySelector(`select.schedule-type[data-schedule-id="${scheduleId}"]`);
+    const type = typeSelect.value;
+
+    const weeklyOptions = document.getElementById(`weekly-options-${scheduleId}`);
+    const monthlyOptions = document.getElementById(`monthly-options-${scheduleId}`);
+
+    if (type === 'weekly') {
+        weeklyOptions.style.display = '';
+        monthlyOptions.style.display = 'none';
+    } else {
+        weeklyOptions.style.display = 'none';
+        monthlyOptions.style.display = '';
+    }
+
+    updateRecurrencePreview();
+}
+
+function collectSchedulesFromForm() {
+    const schedules = [];
+    const scheduleForms = document.querySelectorAll('.schedule-form');
+
+    scheduleForms.forEach(form => {
+        const scheduleId = form.id.split('-')[1];
+
+        const typeSelect = form.querySelector('.schedule-type');
+        const type = typeSelect.value;
+
+        const activeWeekdayBtn = form.querySelector('.weekday-btn.active');
+        const weekday = activeWeekdayBtn?.dataset.weekday || 'monday';
+
+        const startTimeInput = form.querySelector('.schedule-start-time');
+        const endTimeInput = form.querySelector('.schedule-end-time');
+
+        const schedule = {
+            type: type,
+            weekday: weekday,
+            start_time: startTimeInput.value,
+            end_time: endTimeInput.value
+        };
+
+        if (type === 'weekly') {
+            const frequencySelect = form.querySelector('.schedule-frequency');
+            schedule.every_n_weeks = parseInt(frequencySelect.value);
+        } else if (type === 'monthly_nth_weekday') {
+            const nthCheckboxes = form.querySelectorAll('.nth-occurrence:checked');
+            schedule.which = Array.from(nthCheckboxes).map(cb => parseInt(cb.value));
+        }
+
+        schedules.push(schedule);
+    });
+
+    return schedules;
+}
+
+function updateRecurrencePreview() {
+    const schedules = collectSchedulesFromForm();
+    const previewDiv = document.getElementById('recurrence-preview');
+    const previewList = document.getElementById('recurrence-preview-list');
+
+    if (schedules.length === 0) {
+        previewDiv.style.display = 'none';
+        return;
+    }
+
+    // Simple preview - just show a summary for now
+    // In production, you'd call the backend to get actual next occurrences
+    previewDiv.style.display = 'block';
+    previewList.innerHTML = schedules.map((schedule, idx) => {
+        let desc = `Schedule ${idx + 1}: ${schedule.weekday}s`;
+        if (schedule.type === 'weekly') {
+            desc += schedule.every_n_weeks > 1 ? ` (every ${schedule.every_n_weeks} weeks)` : '';
+        } else {
+            const nthLabels = (schedule.which || []).map(n =>
+                n === -1 ? 'last' : ['1st', '2nd', '3rd', '4th'][n - 1]
+            );
+            desc += ` (${nthLabels.join(', ')} of month)`;
+        }
+        desc += ` from ${formatTime(schedule.start_time)} to ${formatTime(schedule.end_time)}`;
+        return `<li>${desc}</li>`;
+    }).join('');
+}
+
+function formatTime(time24) {
+    const [hours, minutes] = time24.split(':');
+    const h = parseInt(hours);
+    const ampm = h >= 12 ? 'pm' : 'am';
+    const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+    return `${h12}:${minutes}${ampm}`;
+}
+
+function saveRecurrenceFromForm() {
+    const schedules = collectSchedulesFromForm();
+
+    if (schedules.length === 0) {
+        // Save empty recurrence
+        saveRecurrenceJSON('');
+        return;
+    }
+
+    // Validate all schedules have required fields
+    for (let schedule of schedules) {
+        if (!schedule.weekday || !schedule.start_time || !schedule.end_time) {
+            showMessage('All schedules must have a weekday, start time, and end time', 'error');
+            return;
+        }
+
+        if (schedule.type === 'monthly_nth_weekday' && (!schedule.which || schedule.which.length === 0)) {
+            showMessage('Monthly patterns must have at least one occurrence selected', 'error');
+            return;
+        }
+    }
+
+    const recurrenceJSON = JSON.stringify({ schedules }, null, 2);
+    saveRecurrenceJSON(recurrenceJSON);
+}
+
+function saveRecurrenceJSON(recurrenceValue) {
+    const sessionPath = '{{ session_path }}';
+
+    // Validate JSON if not empty
+    if (recurrenceValue) {
+        try {
+            JSON.parse(recurrenceValue);
+        } catch (e) {
+            showMessage('Invalid JSON format. Please check your recurrence pattern.', 'error');
+            return;
+        }
+    }
+
+    // Make API call to save just the recurrence field
+    fetch(`/api/sessions/${sessionPath}/admin-update`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            recurrence: recurrenceValue
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('Recurrence schedule updated successfully', 'success');
+            // Reload page to show updated human-readable format
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showMessage(data.error || 'Failed to update recurrence schedule', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving recurrence:', error);
+        showMessage('An error occurred while saving the recurrence schedule', 'error');
+    });
+}
+
+function saveRecurrence() {
+    const recurrenceValue = document.getElementById('recurrence').value.trim();
+    const sessionPath = '{{ session_path }}';
+
+    // Validate JSON if not empty
+    if (recurrenceValue) {
+        try {
+            JSON.parse(recurrenceValue);
+        } catch (e) {
+            showMessage('Invalid JSON format. Please check your recurrence pattern.', 'error');
+            return;
+        }
+    }
+
+    // Make API call to save just the recurrence field
+    fetch(`/api/sessions/${sessionPath}/admin-update`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            recurrence: recurrenceValue
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('Recurrence schedule updated successfully', 'success');
+            // Reload page to show updated human-readable format
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showMessage(data.error || 'Failed to update recurrence schedule', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving recurrence:', error);
+        showMessage('An error occurred while saving the recurrence schedule', 'error');
+    });
 }
 </script>
 {% endblock %}

@@ -28,6 +28,7 @@ from auth import (
     log_login_event,
 )
 from email_utils import send_password_reset_email, send_verification_email
+from recurrence_utils import to_human_readable
 
 
 def home():
@@ -2407,6 +2408,19 @@ def _get_session_data(session_path):
             "timezone": session_row[15],
             "timezone_display": get_timezone_display_name(session_row[15] or "UTC"),
         }
+
+        # Add human-readable recurrence if JSON format
+        recurrence_json = session_row[14]
+        if recurrence_json:
+            try:
+                import json
+                json.loads(recurrence_json)  # Validate it's JSON
+                session_data["recurrence_readable"] = to_human_readable(recurrence_json)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                # If it's not valid JSON, treat it as legacy freeform text
+                session_data["recurrence_readable"] = recurrence_json
+        else:
+            session_data["recurrence_readable"] = None
 
         return session_data
 
