@@ -734,8 +734,8 @@
 
         <p>{% if session.unlisted_address %}(unlisted address), {% else %}{% if session.location_street %}{{ session.location_street }}, {% endif %}{% endif %}{{ session.city }}, {{ session.state }}, {{ session.country }}{% if session.location_phone %} • {{ session.location_phone }}{% endif %}{% if session.location_website %} • <a href="{{ session.location_website }}" target="_blank">Web</a>{% endif %}{% if session.thesession_id %} • <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank">thesession.org</a>{% endif %}</p>
 
-        {% if session.recurrence %}
-        <p><strong>Schedule:</strong> {{ session.recurrence }}</p>
+        {% if session.recurrence_readable %}
+        <p><strong>Schedule:</strong> {{ session.recurrence_readable }}</p>
         {% endif %}
 
         {% if session.comments %}
@@ -908,22 +908,88 @@
         if (recentDates.length === 0) {
             return new Date().toISOString().split('T')[0];
         }
-        
+
         // Parse the date string properly - dates from the template are in 'YYYY-MM-DD' format
         const mostRecentDateStr = recentDates[0];
         const mostRecentDate = new Date(mostRecentDateStr + 'T00:00:00');
-        
+
         if (!sessionRecurrence) {
             // No recurrence info, suggest one week from most recent
             const nextDate = new Date(mostRecentDate);
             nextDate.setDate(nextDate.getDate() + 7);
             return nextDate.toISOString().split('T')[0];
         }
-        
-        // Parse recurrence pattern and suggest next date
-        const recurrence = sessionRecurrence.toLowerCase();
+
+        // Try to parse as JSON first
+        if (typeof sessionRecurrence === 'object' && sessionRecurrence.schedules) {
+            // JSON format - find next occurrence based on schedules
+            const schedules = sessionRecurrence.schedules;
+            if (schedules && schedules.length > 0) {
+                // Start from the day after the most recent session
+                let candidateDate = new Date(mostRecentDate);
+                candidateDate.setDate(candidateDate.getDate() + 1);
+
+                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+                // Find the next date that matches any schedule (within the next 90 days)
+                const maxDaysToCheck = 90;
+                for (let i = 0; i < maxDaysToCheck; i++) {
+                    const dayOfWeek = candidateDate.getDay();
+                    const dayName = dayNames[dayOfWeek];
+
+                    // Check if this day matches any schedule
+                    for (const schedule of schedules) {
+                        if (schedule.weekday === dayName) {
+                            if (schedule.type === 'weekly') {
+                                // For weekly schedules, check if it matches the interval
+                                if (schedule.every_n_weeks === 1) {
+                                    // Every week - always matches
+                                    return candidateDate.toISOString().split('T')[0];
+                                } else {
+                                    // Every N weeks - we can't determine without reference date
+                                    // So we conservatively assume it matches
+                                    return candidateDate.toISOString().split('T')[0];
+                                }
+                            } else if (schedule.type === 'monthly_nth_weekday') {
+                                // Check if this is the correct nth occurrence
+                                const dayOfMonth = candidateDate.getDate();
+                                const firstDayOfMonth = new Date(candidateDate.getFullYear(), candidateDate.getMonth(), 1);
+                                const firstWeekdayOfMonth = firstDayOfMonth.getDay();
+
+                                // Calculate which occurrence this is
+                                let occurrenceNum = Math.floor((dayOfMonth - 1 + firstWeekdayOfMonth) / 7) + 1;
+
+                                // Check for last occurrence
+                                const lastDayOfMonth = new Date(candidateDate.getFullYear(), candidateDate.getMonth() + 1, 0);
+                                const isLastOccurrence = dayOfMonth + 7 > lastDayOfMonth.getDate();
+
+                                if (schedule.which && Array.isArray(schedule.which)) {
+                                    if (schedule.which.includes(occurrenceNum) ||
+                                        (isLastOccurrence && schedule.which.includes(-1))) {
+                                        return candidateDate.toISOString().split('T')[0];
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Move to next day
+                    candidateDate.setDate(candidateDate.getDate() + 1);
+                }
+
+                // If no match found in 90 days, default to 7 days from most recent
+                const nextDate = new Date(mostRecentDate);
+                nextDate.setDate(nextDate.getDate() + 7);
+                return nextDate.toISOString().split('T')[0];
+            }
+        }
+
+        // Legacy text parsing fallback
+        const recurrence = typeof sessionRecurrence === 'string'
+            ? sessionRecurrence.toLowerCase()
+            : '';
         const nextDate = new Date(mostRecentDate);
-        
+
         if (recurrence.includes('weekly') || recurrence.includes('every week')) {
             nextDate.setDate(nextDate.getDate() + 7);
         } else if (recurrence.includes('biweekly') || recurrence.includes('every other week') || recurrence.includes('every 2 weeks')) {
@@ -948,7 +1014,7 @@
             }
         } else if (recurrence.includes('friday') || recurrence.includes('fri')) {
             nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 5) { // 5 = Friday
+            while (nextDate.getDate() !== 5) { // 5 = Friday
                 nextDate.setDate(nextDate.getDate() + 1);
             }
         } else if (recurrence.includes('saturday') || recurrence.includes('sat')) {
@@ -970,7 +1036,7 @@
             // Default: one week from most recent
             nextDate.setDate(nextDate.getDate() + 7);
         }
-        
+
         return nextDate.toISOString().split('T')[0];
     }
     

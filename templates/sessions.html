@@ -257,6 +257,46 @@
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const todayName = dayNames[dayOfWeek];
 
+        // Try to parse as JSON first
+        try {
+            const recurrenceData = JSON.parse(recurrence);
+            if (recurrenceData.schedules && Array.isArray(recurrenceData.schedules)) {
+                // Check if any schedule matches today
+                return recurrenceData.schedules.some(schedule => {
+                    if (schedule.weekday === todayName) {
+                        // For weekly patterns, check if today matches the interval
+                        if (schedule.type === 'weekly') {
+                            // Without knowing the reference date, we can't determine every_n_weeks
+                            // So we assume it's scheduled (conservative approach for UX)
+                            return true;
+                        }
+                        // For monthly patterns, check if today matches the nth occurrence
+                        else if (schedule.type === 'monthly_nth_weekday') {
+                            const dayOfMonth = today.getDate();
+                            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                            const firstWeekdayOfMonth = firstDayOfMonth.getDay();
+
+                            // Calculate which occurrence this is
+                            let occurrenceNum = Math.floor((dayOfMonth - 1 + firstWeekdayOfMonth) / 7) + 1;
+
+                            // Check for last occurrence
+                            const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                            const isLastOccurrence = dayOfMonth + 7 > lastDayOfMonth.getDate();
+
+                            if (schedule.which) {
+                                return schedule.which.includes(occurrenceNum) ||
+                                       (isLastOccurrence && schedule.which.includes(-1));
+                            }
+                        }
+                    }
+                    return false;
+                });
+            }
+        } catch (e) {
+            // Not JSON, fall back to text parsing for legacy data
+        }
+
+        // Legacy text parsing
         const recurrenceLower = recurrence.toLowerCase();
 
         // Check for day of week mentions
