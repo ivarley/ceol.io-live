@@ -1100,6 +1100,7 @@
         type: ''
     };
     let modalShowTime = 0;
+    let isInitializing = true; // Flag to prevent URL updates during initialization
 
     // Sort mode cycle states (with icons and text labels)
     const sortModes = [
@@ -1116,9 +1117,80 @@
     function initializeTunesTab() {
         console.log('Initializing tunes tab with', allTunes.length, 'tunes');
         populateTuneTypes();
+        loadStateFromURL();
         setupTunesEventListeners();
         updateSortDisplay();
         applyFilters();
+        isInitializing = false; // Allow URL updates after initialization
+    }
+
+    // Load filter and sort state from URL query string
+    function loadStateFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // Load search filter
+        const searchParam = urlParams.get('search');
+        if (searchParam) {
+            currentFilters.search = searchParam.toLowerCase().trim();
+            document.getElementById('tune-search').value = searchParam;
+        }
+
+        // Load type filter
+        const typeParam = urlParams.get('type');
+        if (typeParam) {
+            currentFilters.type = typeParam;
+            document.getElementById('type-filter').value = typeParam;
+        }
+
+        // Load sort mode
+        const sortParam = urlParams.get('sort');
+        if (sortParam) {
+            const sortIndex = sortModes.findIndex(mode => mode.id === sortParam);
+            if (sortIndex !== -1) {
+                currentSortModeIndex = sortIndex;
+            }
+        }
+    }
+
+    // Update URL with current filter and sort state
+    function updateURL() {
+        if (isInitializing) return; // Don't update URL during initialization
+
+        const urlParams = new URLSearchParams(window.location.search);
+
+        // Preserve highlight_tune parameter if present
+        const highlightTune = urlParams.get('highlight_tune');
+
+        // Update search parameter
+        if (currentFilters.search) {
+            urlParams.set('search', currentFilters.search);
+        } else {
+            urlParams.delete('search');
+        }
+
+        // Update type parameter
+        if (currentFilters.type) {
+            urlParams.set('type', currentFilters.type);
+        } else {
+            urlParams.delete('type');
+        }
+
+        // Update sort parameter (only if not default)
+        const currentSort = sortModes[currentSortModeIndex].id;
+        if (currentSortModeIndex !== 2) { // 2 is the default (session-desc)
+            urlParams.set('sort', currentSort);
+        } else {
+            urlParams.delete('sort');
+        }
+
+        // Restore highlight_tune if it was present
+        if (highlightTune) {
+            urlParams.set('highlight_tune', highlightTune);
+        }
+
+        // Update the URL without reloading the page
+        const newURL = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newURL);
     }
 
     function updateSortDisplay() {
@@ -1153,6 +1225,7 @@
             searchTimeout = setTimeout(() => {
                 currentFilters.search = e.target.value.toLowerCase().trim();
                 applyFilters();
+                updateURL();
             }, 300);
         });
 
@@ -1160,6 +1233,7 @@
         document.getElementById('type-filter').addEventListener('change', function(e) {
             currentFilters.type = e.target.value;
             applyFilters();
+            updateURL();
         });
 
         // Sort toggle button
@@ -1183,6 +1257,7 @@
         currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
         updateSortDisplay();
         applyFilters();
+        updateURL();
     }
 
     function applyFilters() {
