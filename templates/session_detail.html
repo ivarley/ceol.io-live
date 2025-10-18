@@ -124,6 +124,18 @@
             gap: 10px;
         }
 
+        .sort-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sort-label {
+            color: var(--text-color);
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
         .sort-toggle {
             padding: 4px 8px;
             border: 1px solid var(--border-color);
@@ -142,6 +154,10 @@
 
         .sort-toggle:hover {
             background-color: var(--hover-bg);
+        }
+
+        .sort-toggle-text {
+            display: none;
         }
 
         #sort-icon {
@@ -447,6 +463,16 @@
             }
         }
 
+        @media (min-width: 769px) {
+            .sort-label {
+                display: block;
+            }
+
+            .sort-toggle-text {
+                display: inline;
+            }
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -714,9 +740,14 @@
 
                 <div class="results-count">
                     <span id="results-count-text"></span>
-                    <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
-                        <span id="sort-icon">👂</span>
-                    </button>
+                    <div class="sort-controls">
+                        <span class="sort-label">Sort by:</span>
+                        <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
+                            <span id="sort-icon">👂</span>
+                            <span id="sort-text" class="sort-toggle-text"></span>
+                            <span id="sort-arrow"></span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="tunes-list" id="tunes-list">
@@ -1070,14 +1101,14 @@
     };
     let modalShowTime = 0;
 
-    // Sort mode cycle states (with icons)
+    // Sort mode cycle states (with icons and text labels)
     const sortModes = [
-        { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a[1] || '').localeCompare(b[1] || '') },
-        { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b[1] || '').localeCompare(a[1] || '') },
-        { id: 'session-desc', label: 'session high', icon: '👂', sortFn: (a, b) => (b[3] || 0) - (a[3] || 0) },
-        { id: 'session-asc', label: 'session low', icon: '👂↑', sortFn: (a, b) => (a[3] || 0) - (b[3] || 0) },
-        { id: 'tunebooks-desc', label: 'tunebooks high', icon: '#', sortFn: (a, b) => (b[4] || 0) - (a[4] || 0) },
-        { id: 'tunebooks-asc', label: 'tunebooks low', icon: '#↑', sortFn: (a, b) => (a[4] || 0) - (b[4] || 0) }
+        { id: 'alpha-asc', label: 'Alphabetical', icon: '', arrow: '↓', sortFn: (a, b) => (a[1] || '').localeCompare(b[1] || '') },
+        { id: 'alpha-desc', label: 'Alphabetical', icon: '', arrow: '↑', sortFn: (a, b) => (b[1] || '').localeCompare(a[1] || '') },
+        { id: 'session-desc', label: 'Popularity At This Session', icon: '👂', arrow: '', sortFn: (a, b) => (b[3] || 0) - (a[3] || 0) },
+        { id: 'session-asc', label: 'Popularity At This Session', icon: '👂', arrow: '↑', sortFn: (a, b) => (a[3] || 0) - (b[3] || 0) },
+        { id: 'tunebooks-desc', label: 'Popularity Everywhere', icon: '#', arrow: '', sortFn: (a, b) => (b[4] || 0) - (a[4] || 0) },
+        { id: 'tunebooks-asc', label: 'Popularity Everywhere', icon: '#', arrow: '↑', sortFn: (a, b) => (a[4] || 0) - (b[4] || 0) }
     ];
     let currentSortModeIndex = 2; // Start with session popularity descending
 
@@ -1086,7 +1117,18 @@
         console.log('Initializing tunes tab with', allTunes.length, 'tunes');
         populateTuneTypes();
         setupTunesEventListeners();
+        updateSortDisplay();
         applyFilters();
+    }
+
+    function updateSortDisplay() {
+        const mode = sortModes[currentSortModeIndex];
+        const icon = document.getElementById('sort-icon');
+        const text = document.getElementById('sort-text');
+        const arrow = document.getElementById('sort-arrow');
+        icon.textContent = mode.icon;
+        text.textContent = mode.label;
+        arrow.textContent = mode.arrow;
     }
 
     function populateTuneTypes() {
@@ -1139,13 +1181,7 @@
 
     function cycleSortMode() {
         currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
-        const mode = sortModes[currentSortModeIndex];
-
-        // Update button display
-        const icon = document.getElementById('sort-icon');
-        icon.textContent = mode.icon;
-
-        // Re-apply filters and sorting
+        updateSortDisplay();
         applyFilters();
     }
 
