@@ -1168,9 +1168,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (!pillData || !pillData.tuneId) return;
 
-            // Navigate to session detail page with tune highlight
+            // Navigate to session detail page with tune parameter
             const sessionPath = window.sessionConfig.sessionPath;
-            window.location.href = `/sessions/${sessionPath}?highlight_tune=${pillData.tuneId}#tunes`;
+            window.location.href = `/sessions/${sessionPath}?tune=${pillData.tuneId}#tunes`;
         });
     }
 });

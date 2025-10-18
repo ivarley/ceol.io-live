@@ -314,17 +314,52 @@
             padding: 0;
             max-width: 600px;
             width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
+            height: calc(100vh - 80px);
+            display: flex;
+            flex-direction: column;
             box-shadow: 0 8px 24px rgba(0,0,0,0.3);
             color: var(--text-color);
             position: relative;
             pointer-events: auto;
             z-index: 1;
+            overflow: hidden;
         }
 
         #tune-detail-content {
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .modal-info-section {
+            flex-shrink: 0;
+        }
+
+        .modal-play-history {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 12px;
+            padding-right: 8px;
+        }
+
+        .modal-play-history::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-play-history::-webkit-scrollbar-track {
+            background: var(--hover-bg, #f8f9fa);
+            border-radius: 4px;
+        }
+
+        .modal-play-history::-webkit-scrollbar-thumb {
+            background: var(--border-color, #dee2e6);
+            border-radius: 4px;
+        }
+
+        .modal-play-history::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary-text, #6c757d);
         }
 
         .modal-close-btn {
@@ -416,7 +451,6 @@
                 width: 100%;
                 max-width: 100%;
                 height: calc(100vh - 40px);
-                max-height: calc(100vh - 40px);
                 margin: 0;
                 margin-top: 40px;
                 border-radius: 0;
@@ -425,12 +459,14 @@
                 top: 0;
                 transform: translateX(100%);
                 transition: transform 0.3s ease-out;
-                overflow-y: auto;
                 box-shadow: -4px 0 12px rgba(0,0,0,0.2);
                 pointer-events: auto;
                 padding-left: 16px;
                 padding-right: 16px;
                 box-sizing: border-box;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }
 
             .modal-overlay.show .modal-dialog {
@@ -440,6 +476,10 @@
             #tune-detail-content {
                 padding: 16px 0;
                 box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                overflow: hidden;
             }
 
             .modal-close-btn {
@@ -1158,8 +1198,8 @@
 
         const urlParams = new URLSearchParams(window.location.search);
 
-        // Preserve highlight_tune parameter if present
-        const highlightTune = urlParams.get('highlight_tune');
+        // Preserve tune parameter if present
+        const tuneParam = urlParams.get('tune');
 
         // Update search parameter
         if (currentFilters.search) {
@@ -1183,9 +1223,9 @@
             urlParams.delete('sort');
         }
 
-        // Restore highlight_tune if it was present
-        if (highlightTune) {
-            urlParams.set('highlight_tune', highlightTune);
+        // Restore tune parameter if it was present
+        if (tuneParam) {
+            urlParams.set('tune', tuneParam);
         }
 
         // Update the URL without reloading the page
@@ -1369,6 +1409,12 @@
         const modal = document.getElementById('tune-detail-modal');
         const modalContent = document.getElementById('tune-detail-content');
 
+        // Update URL with tune parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('tune', tuneId);
+        const newURL = window.location.pathname + '?' + urlParams.toString();
+        window.history.replaceState({}, '', newURL);
+
         // Show modal immediately with basic info
         displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId);
 
@@ -1489,7 +1535,7 @@
                         return `
                             <li style="margin: 8px 0; padding: 10px; background-color: var(--hover-bg, #f8f9fa); border-radius: 4px;">
                                 <div style="font-weight: bold; color: var(--primary, #007bff);">
-                                    <a href="/sessions/${sessionPath}/${dateStr}?highlight_tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
+                                    <a href="/sessions/${sessionPath}/${dateStr}?tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
                                 </div>
                                 <div style="font-size: 0.9em; color: var(--disabled-text, #666); margin-top: 4px;">
                                     Position in set: ${positionStr}
@@ -1506,30 +1552,34 @@
 
         modalContent.innerHTML = `
             <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-            <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
-            <div class="modal-info-line">
-                <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
+            <div class="modal-info-section">
+                <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
+                <div class="modal-info-line">
+                    <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
+                </div>
+                <div class="modal-info-line">
+                    <strong>We also call it:</strong><br>
+                    <input type="text" id="aliases-input" value="${aliasesValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Comma-separated aliases">
+                </div>
+                <div class="modal-info-line">
+                    <strong>Our Setting:</strong><br>
+                    <input type="text" id="setting-id-input" value="${settingIdValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Setting ID (number)">
+                </div>
+                <div class="modal-info-line">
+                    <strong>Our Key:</strong><br>
+                    <input type="text" id="key-input" value="${keyValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Key (e.g., D, G, Am)">
+                </div>
+                <div style="margin-top: 12px; margin-bottom: 16px;">
+                    <button id="save-tune-details-btn" onclick="saveTuneDetails(${sessionTune.tune_id})" style="padding: 8px 16px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Save</button>
+                </div>
+                <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
             </div>
-            <div class="modal-info-line">
-                <strong>We also call it:</strong><br>
-                <input type="text" id="aliases-input" value="${aliasesValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Comma-separated aliases">
-            </div>
-            <div class="modal-info-line">
-                <strong>Our Setting:</strong><br>
-                <input type="text" id="setting-id-input" value="${settingIdValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Setting ID (number)">
-            </div>
-            <div class="modal-info-line">
-                <strong>Our Key:</strong><br>
-                <input type="text" id="key-input" value="${keyValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Key (e.g., D, G, Am)">
-            </div>
-            <div style="margin-top: 12px; margin-bottom: 16px;">
-                <button id="save-tune-details-btn" onclick="saveTuneDetails(${sessionTune.tune_id})" style="padding: 8px 16px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Save</button>
-            </div>
-            <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
-            <div class="modal-info-line">
-                <strong>Play History</strong><br>
-                <div style="margin-top: 6px;">Total times played in this session: ${playCount}</div>
-                ${playInstancesHtml}
+            <div class="modal-play-history">
+                <div class="modal-info-line">
+                    <strong>Play History</strong><br>
+                    <div style="margin-top: 6px;">Total times played in this session: ${playCount}</div>
+                    ${playInstancesHtml}
+                </div>
             </div>
         `;
     }
@@ -1674,6 +1724,12 @@
     function closeTuneDetailModal() {
         const modal = document.getElementById('tune-detail-modal');
 
+        // Remove tune parameter from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.delete('tune');
+        const newURL = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newURL);
+
         // Remove 'show' class to trigger slide-out animation
         modal.classList.remove('show');
 
@@ -1695,12 +1751,12 @@
         // Initialize tunes tab on page load since it's the default tab
         initializeTunesTab();
 
-        // Check for highlight_tune parameter and open tune modal if present
+        // Check for tune parameter and open tune modal if present
         const urlParams = new URLSearchParams(window.location.search);
-        const highlightTuneId = urlParams.get('highlight_tune');
-        if (highlightTuneId) {
+        const tuneId = urlParams.get('tune');
+        if (tuneId) {
             // Find the tune in the allTunes array
-            const tuneIdNum = parseInt(highlightTuneId);
+            const tuneIdNum = parseInt(tuneId);
             const tune = allTunes.find(t => t[0] === tuneIdNum);
             if (tune) {
                 // Show the tune detail modal
