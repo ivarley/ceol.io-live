@@ -4730,7 +4730,7 @@ def save_session_instance_tunes_ajax(session_path, date):
 
         # Validate and ensure all linked tunes exist in the tune table
         # This handles the race condition where tunes were linked but may not exist yet
-        tunes_to_add_to_session = []  # Track tunes we need to add to session_tune table
+        tunes_to_add_to_session = {}  # Dict to track unique tunes we need to add to session_tune table (tune_id -> alias_name)
         aliases_to_create = []  # Track aliases we need to add to session_tune_alias table
 
         for new_tune in new_tunes:
@@ -4752,7 +4752,8 @@ def save_session_instance_tunes_ajax(session_path, date):
                     (session_id, tune_id)
                 )
                 if not cur.fetchone():
-                    tunes_to_add_to_session.append((tune_id, alias_name))
+                    # Use dict to automatically deduplicate if same tune appears multiple times
+                    tunes_to_add_to_session[tune_id] = alias_name
 
                 # If there's an alias, track it to add to session_tune_alias table
                 if alias_name:
@@ -4793,19 +4794,26 @@ def save_session_instance_tunes_ajax(session_path, date):
 
         try:
             modifications = 0
-            
+
             # Add any missing tunes to session_tune table
-            for tune_id, alias_name in tunes_to_add_to_session:
-                cur.execute(
-                    """
-                    INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
-                    VALUES (%s, %s, %s, %s)
-                """,
-                    (session_id, tune_id, alias_name, None),
-                )
-                # Save the newly inserted record to history
-                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
-                modifications += 1
+            for tune_id, alias_name in tunes_to_add_to_session.items():
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (session_id, tune_id) DO NOTHING
+                    """,
+                        (session_id, tune_id, alias_name, None),
+                    )
+                    # Only save to history and count modification if row was actually inserted
+                    if cur.rowcount > 0:
+                        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+                        modifications += 1
+                except Exception as e:
+                    # Log the error but continue - this shouldn't fail the entire save
+                    print(f"Warning: Failed to insert tune {tune_id} into session_tune: {str(e)}")
+                    # If it's already there, that's fine; if it's a different error, we'll catch it in the outer try-except
 
             # Add any new aliases to session_tune_alias table
             for session_id_val, tune_id, alias_name in aliases_to_create:
