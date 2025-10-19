@@ -8,7 +8,10 @@ import json
 from datetime import datetime, date, time, timedelta
 from typing import List, Dict, Optional, Tuple
 import calendar
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 
 
 # Valid weekday names
