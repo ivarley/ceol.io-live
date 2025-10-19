@@ -133,12 +133,16 @@ export class ContextMenu {
         menu.style.left = rect.left + 'px';
         menu.style.top = (rect.bottom + 5) + 'px';
         
-        // For unmatched pills with results or unlinked pills, make menu wider to accommodate content
-        if ((pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) || 
-            pillData.state === 'unlinked') {
+        // For unmatched pills with results, make menu wider to accommodate content
+        if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
             menu.style.width = 'auto';
             menu.style.minWidth = Math.max(250, rect.width) + 'px';
             menu.style.maxWidth = Math.min(500, window.innerWidth - rect.left - 20) + 'px';
+        } else if (pillData.state === 'unlinked') {
+            // For unlinked pills, cap menu width at 250px
+            menu.style.width = 'auto';
+            menu.style.minWidth = rect.width + 'px';
+            menu.style.maxWidth = '250px';
         } else {
             // Match pill width for other states
             menu.style.width = rect.width + 'px';
@@ -225,7 +229,21 @@ export class ContextMenu {
                 ContextMenu.showLinkModal(pillData);
             });
         } else {
-            // Unlinked tune options
+            // Unlinked tune options - add informative header
+            const infoHeader = document.createElement('div');
+            infoHeader.style.padding = '8px 12px';
+            infoHeader.style.fontSize = '0.85em';
+            infoHeader.style.fontStyle = 'italic';
+            infoHeader.style.color = 'rgba(255,255,255,0.7)';
+            infoHeader.style.cursor = 'default';
+            infoHeader.style.borderBottom = '1px solid rgba(255,255,255,0.3)';
+            infoHeader.style.marginBottom = '4px';
+            infoHeader.style.whiteSpace = 'normal';
+            infoHeader.style.wordWrap = 'break-word';
+            infoHeader.style.lineHeight = '1.4';
+            infoHeader.textContent = 'This entry has not been matched to a known tune; you can link it manually, edit the text, delete it, or leave it as is.';
+            menu.appendChild(infoHeader);
+
             ContextMenu.addMenuItem(menu, 'Link', () => {
                 ContextMenu.hideContextMenu();
                 ContextMenu.showLinkModal(pillData);
