@@ -857,6 +857,54 @@
         [data-theme="dark"] .nav-tabs {
             border-bottom: 1px solid var(--border-color);
         }
+
+        /* Mobile folder tab styling for tune type labels */
+        @media (max-width: 768px) {
+            /* Wrapper for sets on mobile to position label outside */
+            .tune-set-wrapper {
+                margin-bottom: 16px; /* More space between sets */
+            }
+
+            /* Remove top padding and margin from tune-set so it abuts the tab */
+            .tune-set-wrapper .tune-set {
+                padding-top: 0px;
+                margin-top: -12px; /* Pull up to eliminate gap */
+                position: relative;
+                z-index: 2; /* Set container on top */
+                background-color: var(--bg-color, white); /* Ensure opaque background */
+            }
+
+            .tune-type-label {
+                position: relative;
+                z-index: 1; /* Tab behind the set container */
+                top: -2px; /* Move up 2px */
+                left: 6px; /* Move right 6px */
+                padding-top: 0px; /* Adjust padding for text position */
+            }
+
+            /* Create reverse rounded corners effect using pseudo-elements */
+            .tune-type-label::before,
+            .tune-type-label::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                width: 8px;
+                height: 8px;
+                background: transparent;
+            }
+
+            .tune-type-label::before {
+                left: -8px;
+                border-bottom-right-radius: 8px;
+                box-shadow: 4px 0 0 0 #4a4a4a;
+            }
+
+            .tune-type-label::after {
+                right: -8px;
+                border-bottom-left-radius: 8px;
+                box-shadow: -4px 0 0 0 #4a4a4a;
+            }
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}

@@ -177,8 +177,153 @@ export class PillRenderer {
         }
     }
     
+    static pluralizeTuneType(tuneType: string): string {
+        // Handle special cases for pluralization
+        const pluralMap: { [key: string]: string } = {
+            'Jig': 'Jigs',
+            'Reel': 'Reels',
+            'Hornpipe': 'Hornpipes',
+            'Polka': 'Polkas',
+            'Slide': 'Slides',
+            'Waltz': 'Waltzes',
+            'Barndance': 'Barndances',
+            'Mazurka': 'Mazurkas',
+            'Strathspey': 'Strathspeys',
+            'March': 'Marches',
+            'Air': 'Airs',
+            'Slip Jig': 'Slip Jigs',
+            'Single Jig': 'Single Jigs',
+            'Set Dance': 'Set Dances',
+            'Fling': 'Flings',
+            'Schottische': 'Schottisches'
+        };
+
+        return pluralMap[tuneType] || tuneType + 's';
+    }
+
+    static createTypeLabel(tuneSet: TuneSet): HTMLElement {
+        // Calculate the predominant tune type in the set
+        const typeLabel = document.createElement('span');
+        typeLabel.className = 'tune-type-label';
+
+        // Count tune types, only considering linked tunes
+        const typeCounts: { [key: string]: number } = {};
+        let linkedCount = 0;
+
+        tuneSet.forEach(pill => {
+            if (pill.state === 'linked' && pill.tuneType) {
+                typeCounts[pill.tuneType] = (typeCounts[pill.tuneType] || 0) + 1;
+                linkedCount++;
+            }
+        });
+
+        // Determine the label text
+        let labelText = '';
+        if (linkedCount === 0) {
+            // No linked tunes, show "Unknown"
+            labelText = 'Unknown';
+        } else {
+            const types = Object.keys(typeCounts);
+            if (types.length === 1) {
+                // All linked tunes are the same type
+                const tuneType = types[0]!;
+                // Pluralize if there's more than one tune in the set
+                if (tuneSet.length > 1) {
+                    labelText = this.pluralizeTuneType(tuneType);
+                } else {
+                    labelText = tuneType;
+                }
+            } else if (types.length > 1) {
+                // Multiple types - find the majority
+                let maxCount = 0;
+                let majorityType = '';
+                for (const type in typeCounts) {
+                    if (typeCounts[type]! > maxCount) {
+                        maxCount = typeCounts[type]!;
+                        majorityType = type;
+                    }
+                }
+
+                // Check if there's a clear majority (more than 50%)
+                if (maxCount > linkedCount / 2) {
+                    // Pluralize the majority type if there's more than one tune
+                    if (tuneSet.length > 1) {
+                        labelText = this.pluralizeTuneType(majorityType);
+                    } else {
+                        labelText = majorityType;
+                    }
+                } else {
+                    labelText = 'Mixed';
+                }
+            }
+        }
+
+        typeLabel.textContent = labelText;
+
+        // Detect mobile vs desktop
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            // Mobile: Folder tab style that sits outside and above the set container
+            typeLabel.style.display = 'inline-block';
+            typeLabel.style.minWidth = '78px'; // 2px shorter
+            typeLabel.style.maxWidth = '78px';
+            typeLabel.style.padding = '0px 8px 0px 8px'; // No top or bottom padding (text moved up 2px)
+            typeLabel.style.marginRight = '0px';
+            typeLabel.style.marginLeft = '0px';
+            typeLabel.style.marginTop = '0px';
+            typeLabel.style.marginBottom = '0px';
+            typeLabel.style.backgroundColor = '#4a4a4a'; // Dark grey
+            typeLabel.style.color = 'white';
+            typeLabel.style.borderRadius = '6px 6px 0 0'; // Rounded top corners
+            typeLabel.style.fontSize = '0.7em'; // Smaller font for mobile
+            typeLabel.style.textAlign = 'center';
+            typeLabel.style.fontWeight = '500';
+            typeLabel.style.whiteSpace = 'nowrap';
+            typeLabel.style.overflow = 'hidden';
+            typeLabel.style.textOverflow = 'ellipsis';
+            typeLabel.style.position = 'relative';
+            typeLabel.style.boxSizing = 'border-box';
+        } else {
+            // Desktop: End cap style spanning full set height
+            typeLabel.style.display = 'inline-flex';
+            typeLabel.style.alignItems = 'center';
+            typeLabel.style.justifyContent = 'center';
+            typeLabel.style.minWidth = '100px'; // Enough for "Barndances" and "Hornpipes"
+            typeLabel.style.maxWidth = '100px';
+            typeLabel.style.paddingLeft = '9px';
+            typeLabel.style.paddingRight = '9px';
+            typeLabel.style.paddingTop = '7px'; // Shift text down 3px
+            typeLabel.style.paddingBottom = '6px'; // Reduce bottom to maintain total height
+            typeLabel.style.marginRight = '8px';
+            typeLabel.style.marginLeft = '-6px'; // Offset the set padding to make it flush
+            typeLabel.style.marginTop = '-4px'; // Offset set padding to align with top edge
+            typeLabel.style.marginBottom = '-8px'; // Extend to bottom edge
+            typeLabel.style.backgroundColor = '#4a4a4a'; // Dark grey
+            typeLabel.style.color = 'white';
+            typeLabel.style.borderRadius = '8px 0 0 8px'; // Rounded left, flat right
+            typeLabel.style.fontSize = '0.85em';
+            typeLabel.style.textAlign = 'center';
+            typeLabel.style.verticalAlign = 'top';
+            typeLabel.style.fontWeight = '500';
+            typeLabel.style.whiteSpace = 'nowrap';
+            typeLabel.style.overflow = 'hidden';
+            typeLabel.style.textOverflow = 'ellipsis';
+            typeLabel.style.height = '100%';
+            typeLabel.style.boxSizing = 'border-box';
+        }
+
+        return typeLabel;
+    }
+
     static createTuneSetElement(tuneSet: TuneSet, setIndex: number): HTMLElement {
         const isViewMode = (window as any).editorMode === 'view';
+        const isMobile = window.innerWidth <= 768;
+
+        // Create a wrapper for mobile that includes the label outside the set
+        const wrapper = document.createElement('div');
+        wrapper.className = isMobile ? 'tune-set-wrapper' : '';
+
         const setDiv = document.createElement('div');
         setDiv.className = 'tune-set';
         setDiv.dataset.setIndex = setIndex.toString();
@@ -192,7 +337,24 @@ export class PillRenderer {
 
             // Add some minimal height so the empty set is visible
             setDiv.style.minHeight = '25px';
+
+            if (isMobile) {
+                wrapper.appendChild(setDiv);
+                return wrapper;
+            }
             return setDiv;
+        }
+
+        // Add type label
+        const typeLabel = this.createTypeLabel(tuneSet);
+
+        if (isMobile) {
+            // On mobile, add label to wrapper (outside the set)
+            wrapper.appendChild(typeLabel);
+            wrapper.appendChild(setDiv);
+        } else {
+            // On desktop, add label inside the set
+            setDiv.appendChild(typeLabel);
         }
 
         tuneSet.forEach((pill, pillIndex) => {
@@ -224,6 +386,10 @@ export class PillRenderer {
             }, 10);
         }
 
+        // Return wrapper on mobile, setDiv on desktop
+        if (isMobile) {
+            return wrapper;
+        }
         return setDiv;
     }
     
@@ -441,10 +607,10 @@ export class PillRenderer {
             }
             return;
         }
-        
+
         // Update the CSS class to reflect the new state
         pillElement.className = `tune-pill ${pill.state}`;
-        
+
         // Update the text content in case it changed (e.g., canonical name from API)
         const textElement = pillElement.querySelector('.text') as HTMLElement;
         if (textElement) {
@@ -452,18 +618,45 @@ export class PillRenderer {
         } else {
             console.error('Could not find .text element within pill');
         }
-        
+
         // Remove any existing spinner
         const existingSpinner = pillElement.querySelector('.loading-spinner');
         if (existingSpinner) {
             existingSpinner.remove();
         }
-        
+
         // Add spinner if still loading
         if (pill.state === 'loading') {
             const spinner = document.createElement('span');
             spinner.className = 'loading-spinner';
             pillElement.appendChild(spinner);
+        }
+
+        // Update the type label for the set this pill belongs to
+        this.updateSetTypeLabel(pillElement);
+    }
+
+    // Update the type label for a set
+    static updateSetTypeLabel(pillElement: HTMLElement): void {
+        const setElement = pillElement.closest('.tune-set') as HTMLElement;
+        if (!setElement) {
+            return;
+        }
+
+        const setIndex = parseInt(setElement.dataset.setIndex || '0', 10);
+        const stateManager = this.getStateManager!();
+        const tunePillsData = stateManager.getTunePillsData();
+
+        if (setIndex < 0 || setIndex >= tunePillsData.length) {
+            return;
+        }
+
+        const tuneSet = tunePillsData[setIndex]!;
+        const existingLabel = setElement.querySelector('.tune-type-label') as HTMLElement;
+
+        if (existingLabel) {
+            const newLabel = this.createTypeLabel(tuneSet);
+            existingLabel.replaceWith(newLabel);
         }
     }
     
