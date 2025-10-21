@@ -759,7 +759,7 @@
     <div class="tabs-container">
         <div class="tab-buttons">
             <button class="tab-button active" data-tab="tunes">Tunes</button>
-            <button class="tab-button" data-tab="logs">Logs</button>
+            <button class="tab-button" data-tab="logs">{% if session.session_type == 'festival' %}Sessions{% else %}Logs{% endif %}</button>
         </div>
 
         <!-- Tunes Tab Content -->
@@ -807,44 +807,95 @@
 
         <!-- Logs Tab Content -->
         <div class="tab-content" id="logs-tab">
-            {% if instances_by_year %}
-            <div class="past-instances">
-                <h2 class="session-logs-heading">Session Logs:{% if is_logged_in %}<span class="add-link" id="add-session-btn">Add</span>{% endif %}</h2>
-        {% if sorted_years|length > 1 %}
-            {% for year in sorted_years %}
-            <div class="year-section">
-                <div class="year-header" data-year="{{ year }}">
-                    <div class="year-header-left">
-                        <span class="year-toggle" data-year="{{ year }}">▼</span>
-                        <h3 class="year-title">{{ year }}</h3>
-                        <a href="#" class="year-view-link" data-year="{{ year }}">view {{ instances_by_year[year]|length }} log{{ 's' if instances_by_year[year]|length != 1 else '' }}</a>
+            {% if session.session_type == 'festival' %}
+                {# Festival view: group by day, show location and time #}
+                {% if instances_by_day %}
+                <div class="past-instances">
+                    <h2 class="session-logs-heading">Sessions:{% if is_logged_in %}<span class="add-link" id="add-session-btn">Add</span>{% endif %}</h2>
+                    {% for day in sorted_days %}
+                    <div class="year-section">
+                        <div class="year-header" data-year="{{ day }}">
+                            <div class="year-header-left">
+                                <span class="year-toggle" data-year="{{ day }}">▼</span>
+                                <h3 class="year-title">{{ day.strftime('%A, %B %d, %Y') }}</h3>
+                            </div>
+                        </div>
+                        <div class="year-content" data-year="{{ day }}">
+                            <ul>
+                            {% for instance in instances_by_day[day] %}
+                                {% set location = instance.location_override or session.location_name %}
+                                {% set time_str = '' %}
+                                {% if instance.start_time and instance.end_time %}
+                                    {% set start_hr = instance.start_time.hour %}
+                                    {% set start_min = '%02d'|format(instance.start_time.minute) %}
+                                    {% set start_period = 'pm' if start_hr >= 12 else 'am' %}
+                                    {% set start_12hr = start_hr - 12 if start_hr > 12 else (12 if start_hr == 0 else start_hr) %}
+                                    {% set end_hr = instance.end_time.hour %}
+                                    {% set end_min = '%02d'|format(instance.end_time.minute) %}
+                                    {% set end_period = 'pm' if end_hr >= 12 else 'am' %}
+                                    {% set end_12hr = end_hr - 12 if end_hr > 12 else (12 if end_hr == 0 else end_hr) %}
+                                    {% set time_str = '%d:%s%s-%d:%s%s'|format(start_12hr, start_min, start_period, end_12hr, end_min, end_period) %}
+                                {% elif instance.start_time %}
+                                    {% set start_hr = instance.start_time.hour %}
+                                    {% set start_min = '%02d'|format(instance.start_time.minute) %}
+                                    {% set start_period = 'pm' if start_hr >= 12 else 'am' %}
+                                    {% set start_12hr = start_hr - 12 if start_hr > 12 else (12 if start_hr == 0 else start_hr) %}
+                                    {% set time_str = '%d:%s%s - ?'|format(start_12hr, start_min, start_period) %}
+                                {% endif %}
+                                <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
+                            {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="past-instances">
+                    <h2>Sessions:</h2>
+                    <p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session</a></p>
+                </div>
+                {% endif %}
+            {% else %}
+                {# Regular session view: group by year, show date #}
+                {% if instances_by_year %}
+                <div class="past-instances">
+                    <h2 class="session-logs-heading">Session Logs:{% if is_logged_in %}<span class="add-link" id="add-session-btn">Add</span>{% endif %}</h2>
+            {% if sorted_years|length > 1 %}
+                {% for year in sorted_years %}
+                <div class="year-section">
+                    <div class="year-header" data-year="{{ year }}">
+                        <div class="year-header-left">
+                            <span class="year-toggle" data-year="{{ year }}">▼</span>
+                            <h3 class="year-title">{{ year }}</h3>
+                            <a href="#" class="year-view-link" data-year="{{ year }}">view {{ instances_by_year[year]|length }} log{{ 's' if instances_by_year[year]|length != 1 else '' }}</a>
+                        </div>
+                    </div>
+                    <div class="year-content" data-year="{{ year }}">
+                        <ul>
+                        {% for date in instances_by_year[year] %}
+                            <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                        {% endfor %}
+                        </ul>
                     </div>
                 </div>
-                <div class="year-content" data-year="{{ year }}">
-                    <ul>
-                    {% for date in instances_by_year[year] %}
-                        <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
-                    {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <ul>
-            {% for year in sorted_years %}
-                {% for date in instances_by_year[year] %}
-                <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
                 {% endfor %}
-            {% endfor %}
-            </ul>
+            {% else %}
+                <ul>
+                {% for year in sorted_years %}
+                    {% for date in instances_by_year[year] %}
+                    <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                    {% endfor %}
+                {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="past-instances">
+            <h2>Session Logs:</h2>
+            <p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session log</a></p>
+        </div>
         {% endif %}
-    </div>
-    {% else %}
-    <div class="past-instances">
-        <h2>Session Logs:</h2>
-        <p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session log</a></p>
-    </div>
-    {% endif %}
+            {% endif %}
         </div>
     </div>
 

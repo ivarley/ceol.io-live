@@ -529,7 +529,7 @@ def session_handler(full_path):
                 """
                 SELECT session_id, thesession_id, name, path, location_name, location_website,
                        location_phone, location_street, city, state, country, comments, unlisted_address,
-                       initiation_date, termination_date, recurrence
+                       initiation_date, termination_date, recurrence, session_type
                 FROM session
                 WHERE path = %s
             """,
@@ -556,6 +556,7 @@ def session_handler(full_path):
                     "initiation_date": session[13],
                     "termination_date": session[14],
                     "recurrence": session[15],
+                    "session_type": session[16] if len(session) > 16 else "regular",
                 }
 
                 # Add human-readable recurrence if JSON format
@@ -575,7 +576,7 @@ def session_handler(full_path):
                 # Fetch past session instances in descending date order
                 cur.execute(
                     """
-                    SELECT date
+                    SELECT date, location_override, start_time, end_time
                     FROM session_instance
                     WHERE session_id = %s
                     ORDER BY date DESC
@@ -584,17 +585,38 @@ def session_handler(full_path):
                 )
                 past_instances = cur.fetchall()
 
-                # Group past instances by year
+                # Group past instances by year or by day depending on session type
                 instances_by_year = {}
-                for instance in past_instances:
-                    date = instance[0]
-                    year = date.year
-                    if year not in instances_by_year:
-                        instances_by_year[year] = []
-                    instances_by_year[year].append(date)
+                instances_by_day = {}
+                session_type = session_dict.get("session_type", "regular")
 
-                # Sort years in descending order
-                sorted_years = sorted(instances_by_year.keys(), reverse=True)
+                if session_type == "festival":
+                    # For festivals, group by day and include time/location info
+                    for instance in past_instances:
+                        date = instance[0]
+                        day_key = date  # Use the date itself as the key
+                        if day_key not in instances_by_day:
+                            instances_by_day[day_key] = []
+                        instances_by_day[day_key].append({
+                            'date': date,
+                            'location_override': instance[1],
+                            'start_time': instance[2],
+                            'end_time': instance[3]
+                        })
+                else:
+                    # For regular sessions, group by year as before
+                    for instance in past_instances:
+                        date = instance[0]
+                        year = date.year
+                        if year not in instances_by_year:
+                            instances_by_year[year] = []
+                        instances_by_year[year].append(date)
+
+                # Sort years in descending order (for regular sessions)
+                sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
+
+                # Sort days in descending order (for festivals)
+                sorted_days = sorted(instances_by_day.keys(), reverse=True) if instances_by_day else []
 
                 # Get top 20 most popular tunes for this session
                 cur.execute(
@@ -664,6 +686,8 @@ def session_handler(full_path):
                     session=session_dict,
                     instances_by_year=instances_by_year,
                     sorted_years=sorted_years,
+                    instances_by_day=instances_by_day,
+                    sorted_days=sorted_days,
                     popular_tunes=popular_tunes,
                     tunes=tunes,
                     is_session_admin=is_session_admin,
