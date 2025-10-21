@@ -3,10 +3,11 @@ from flask_login import LoginManager
 import os
 import random
 import logging
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Import our custom modules
-from auth import User
+from auth import User, SESSION_LIFETIME_WEEKS
 from api_routes import *
 from web_routes import *
 from api_person_tune_routes import (
@@ -39,6 +40,10 @@ app = Flask(__name__)
 app.secret_key = os.environ.get(
     "FLASK_SESSION_SECRET_KEY", "dev-secret-key-change-in-production"
 )
+
+# Configure permanent session lifetime to match database session expiration
+# This ensures Flask session cookies persist for the full session duration
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(weeks=SESSION_LIFETIME_WEEKS)
 
 # Configure Flask to handle trailing slashes consistently
 app.url_map.strict_slashes = False

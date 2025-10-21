@@ -1030,6 +1030,10 @@ def login():
                 additional_data={"remember_me": remember_me},
             )
 
+            # Mark Flask session as permanent so it persists across browser/PWA restarts
+            # This ensures the session cookie doesn't expire when the browser/PWA closes
+            session.permanent = True
+
             # Store session_id in Flask session to identify this specific session
             session["db_session_id"] = session_id
             # Cache admin status for menu display
