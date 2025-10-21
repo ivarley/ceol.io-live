@@ -418,8 +418,8 @@
                 if (session.has_instance_today) {
                     // Has an instance today - show "Go to today's session"
                     actionHTML = `<button class="today-action-btn btn-goto-today" onclick="window.location.href='/sessions/${session.path}/${session.instance_date_today}'">Go to today's session</button>`;
-                } else if (isScheduledToday(session.recurrence)) {
-                    // Scheduled today but no instance - show "Start today's session"
+                } else if (isLoggedIn && isScheduledToday(session.recurrence)) {
+                    // Scheduled today but no instance - show "Start today's session" (only if logged in)
                     actionHTML = `<button class="today-action-btn btn-start-today" onclick="startTodaySession('${session.path}')">Start today's session</button>`;
                 }
                 // Otherwise no button - regular link only

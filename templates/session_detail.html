@@ -809,7 +809,7 @@
         <div class="tab-content" id="logs-tab">
             {% if instances_by_year %}
             <div class="past-instances">
-                <h2 class="session-logs-heading">Session Logs:<span class="add-link" id="add-session-btn">Add</span></h2>
+                <h2 class="session-logs-heading">Session Logs:{% if is_logged_in %}<span class="add-link" id="add-session-btn">Add</span>{% endif %}</h2>
         {% if sorted_years|length > 1 %}
             {% for year in sorted_years %}
             <div class="year-section">
@@ -891,6 +891,7 @@
 <script>
     const sessionPath = '{{ session.path }}';
     const sessionRecurrence = {{ session.recurrence|tojson if session.recurrence else 'null' }};
+    const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
     
     // Get most recent session date
     const recentDates = [
@@ -1409,14 +1410,17 @@
 
         // Render tune rows or show "no results" message with add button
         if (filtered === 0 && currentFilters.search) {
-            list.innerHTML = `
-                <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
-                    <p style="margin-bottom: 20px;">No tunes found matching "${escapeHtml(currentFilters.search)}"</p>
-                    <a href="/sessions/${sessionPath}/tunes/add?q=${encodeURIComponent(currentFilters.search)}"
+            const addTuneButton = isLoggedIn
+                ? `<a href="/sessions/${sessionPath}/tunes/add?q=${encodeURIComponent(currentFilters.search)}"
                        class="btn btn-primary"
                        style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
                         Add Tune
-                    </a>
+                    </a>`
+                : '';
+            list.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                    <p style="margin-bottom: 20px;">No tunes found matching "${escapeHtml(currentFilters.search)}"</p>
+                    ${addTuneButton}
                 </div>
             `;
         } else {
@@ -1623,6 +1627,7 @@
                 <div class="modal-info-line">
                     <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
                 </div>
+                ${isLoggedIn ? `
                 <div class="modal-info-line">
                     <strong>We also call it:</strong><br>
                     <input type="text" id="aliases-input" value="${aliasesValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Comma-separated aliases">
@@ -1638,6 +1643,17 @@
                 <div style="margin-top: 12px; margin-bottom: 16px;">
                     <button id="save-tune-details-btn" onclick="saveTuneDetails(${sessionTune.tune_id})" style="padding: 8px 16px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Save</button>
                 </div>
+                ` : `
+                <div class="modal-info-line">
+                    <strong>We also call it:</strong> ${aliasesValue || '(none)'}
+                </div>
+                <div class="modal-info-line">
+                    <strong>Our Setting:</strong> ${settingIdValue ? '#' + settingIdValue : '(none)'}
+                </div>
+                <div class="modal-info-line">
+                    <strong>Our Key:</strong> ${keyValue || '(none)'}
+                </div>
+                `}
                 <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
             </div>
             <div class="modal-play-history">
