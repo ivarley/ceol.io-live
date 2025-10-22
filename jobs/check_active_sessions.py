@@ -14,6 +14,11 @@ import sys
 import os
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for local development)
+# In production on Render, env vars should be set in the dashboard
+load_dotenv()
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
