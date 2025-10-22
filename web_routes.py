@@ -1007,7 +1007,6 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        remember_me = request.form.get("remember_me") == "on"
 
         # Get client info for logging
         ip_address = request.environ.get(
@@ -1047,7 +1046,7 @@ def login():
                 )
                 return render_template("auth/login.html")
 
-            login_user(user, remember=remember_me)
+            login_user(user, remember=True)
 
             # Create session record
             session_id = create_session(user.user_id, ip_address, user_agent)
@@ -1060,7 +1059,6 @@ def login():
                 ip_address,
                 user_agent,
                 session_id=session_id,
-                additional_data={"remember_me": remember_me},
             )
 
             # Mark Flask session as permanent so it persists across browser/PWA restarts
