@@ -8,3 +8,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "18"
+
+  - type: cron
+    name: ceol-io-active-sessions
+    env: python
+    schedule: "14,29,44,59 * * * *"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python3 jobs/check_active_sessions.py"
+    plan: free

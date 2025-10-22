@@ -23,6 +23,8 @@ The database will be a Postgres database. The basic entities in my model will be
     - initiation date - the first session ever
     - termination dates - the last session ever (null if the session is ongoing)
     - recurrence - a standard recurrence schema that is at most daily, but also supports patterns like "every other thursday" and "first and third sundays of the month", and also includes start and end time
+    - active_buffer_minutes_before - integer, minutes before session start time when it becomes active (default 60) - Feature 005
+    - active_buffer_minutes_after - integer, minutes after session end time when it stops being active (default 60) - Feature 005
 
 - **session_instance** - This is one instance of a session that happens on a particular date and time. Session instances can be in the past or future. The same session should not ever have multiple instances  that overlap in time. Attributes:
     - session_id
@@ -30,8 +32,9 @@ The database will be a Postgres database. The basic entities in my model will be
     - start time
     - end time
     - location_override - if null, assume the location is the standard one for the session
-    - bit for “is_cancelled” defaulting to false
-    - a comment text field (eg “We’ll play in the back room this week”, “it's sarah's birthday!”, etc. )
+    - bit for "is_cancelled" defaulting to false
+    - a comment text field (eg "We'll play in the back room this week", "it's sarah's birthday!", etc. )
+    - is_active - boolean, whether this instance is currently active (multiple instances per session can be active simultaneously)
 
 - **tune** - This is a musical composition with a unique id, a name, and a tune_type. Any data that can be synchronized and cached from thesession.org is. Attributes:
     - tune_id - integer, this matches the ids of tunes on thesession.org. As such, it's just an integer primary key but not automatically generated.

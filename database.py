@@ -447,9 +447,22 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
         
         # Commit transaction
         cur.execute("COMMIT")
-        
+
+        # If person checked in as "yes", update their active session instance
+        # Import locally to avoid circular dependency
+        if attendance == 'yes':
+            try:
+                from active_session_manager import update_person_active_instance
+                update_person_active_instance(person_id, session_instance_id, conn)
+                conn.commit()
+            except Exception as e:
+                # Log error but don't fail the check-in
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to update person {person_id} active instance: {e}")
+
         return True, f"Successfully {action} attendance", action
-        
+
     except Exception as e:
         cur.execute("ROLLBACK")
         return False, str(e), None

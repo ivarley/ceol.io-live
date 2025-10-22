@@ -512,6 +512,18 @@ app.add_url_rule(
     get_session_people,
     methods=["GET"],
 )
+app.add_url_rule(
+    "/api/session/<int:session_id>/active_instance",
+    "get_session_active_instance",
+    get_session_active_instance,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/person/<int:person_id>/active_session",
+    "get_person_active_session",
+    get_person_active_session,
+    methods=["GET"],
+)
 
 # Bulk import endpoints
 app.add_url_rule(

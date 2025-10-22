@@ -6844,3 +6844,71 @@ def generate_qr_code(session_id=None):
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def get_session_active_instance(session_id):
+    """
+    Get all currently active instances for a session.
+
+    GET /api/session/<int:session_id>/active_instance
+
+    Returns:
+    {
+        "success": true,
+        "active_instance_ids": [int, ...],
+        "session_id": int
+    }
+    """
+    try:
+        from active_session_manager import get_session_active_instances
+
+        active_instance_ids = get_session_active_instances(session_id)
+
+        return jsonify({
+            "success": True,
+            "active_instance_ids": active_instance_ids,
+            "session_id": session_id
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def get_person_active_session(person_id):
+    """
+    Get the session instance a person is currently at.
+
+    GET /api/person/<int:person_id>/active_session
+
+    Returns:
+    {
+        "success": true,
+        "active_session": {
+            "session_instance_id": int,
+            "session_id": int,
+            "date": "YYYY-MM-DD",
+            "start_time": "HH:MM:SS",
+            "end_time": "HH:MM:SS",
+            "session_name": string,
+            "session_path": string
+        } or null
+    }
+    """
+    try:
+        from active_session_manager import get_person_active_session as get_active
+
+        active_session = get_active(person_id)
+
+        # Convert date/time objects to strings for JSON serialization
+        if active_session:
+            active_session['date'] = active_session['date'].isoformat()
+            active_session['start_time'] = active_session['start_time'].isoformat()
+            active_session['end_time'] = active_session['end_time'].isoformat()
+
+        return jsonify({
+            "success": True,
+            "active_session": active_session
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

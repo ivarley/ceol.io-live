@@ -694,6 +694,7 @@ def session_handler(full_path):
                     popular_tunes=popular_tunes,
                     tunes=tunes,
                     is_session_admin=is_session_admin,
+                    is_logged_in=current_user.is_authenticated,
                 )
             else:
                 cur.close()
