@@ -31,6 +31,46 @@ def api_login_required(f):
     return decorated_function
 
 
+def get_session_instance_id(cur, session_id, date_or_id):
+    """
+    Helper function to get session_instance_id from either date or ID.
+    CRITICAL: Always use this for API endpoints that accept date_or_id parameter.
+
+    Args:
+        cur: Database cursor
+        session_id: The session ID
+        date_or_id: Either a date string (YYYY-MM-DD) or numeric ID
+
+    Returns:
+        session_instance_id (int) or None if not found
+    """
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+    id_pattern = r"^\d+$"
+
+    if re.match(id_pattern, date_or_id) and not re.match(date_pattern, date_or_id):
+        # It's an ID - verify it belongs to this session
+        session_instance_id = int(date_or_id)
+        cur.execute(
+            "SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s AND session_id = %s",
+            (session_instance_id, session_id),
+        )
+        result = cur.fetchone()
+        return result[0] if result else None
+    else:
+        # It's a date - get the first instance on that date
+        cur.execute(
+            """
+            SELECT session_instance_id FROM session_instance
+            WHERE session_id = %s AND date = %s
+            ORDER BY session_instance_id ASC
+            LIMIT 1
+        """,
+            (session_id, date_or_id),
+        )
+        result = cur.fetchone()
+        return result[0] if result else None
+
+
 def get_timezone_for_display(session_path=None, user_timezone=None):
     """
     Get appropriate timezone for display based on context:
@@ -953,6 +993,8 @@ def add_session_instance_ajax(session_path):
             {
                 "success": True,
                 "message": f"Session instance for {date} created successfully!",
+                "session_instance_id": session_instance_id,
+                "date": date,
             }
         )
 
@@ -1111,7 +1153,13 @@ def get_next_session_instance_suggestion_ajax(session_path):
 
 
 @login_required
-def update_session_instance_ajax(session_path, date):
+def update_session_instance_ajax(session_path, date_or_id):
+    """
+    Update session instance. Accepts either date (YYYY-MM-DD) or numeric ID.
+    CRITICAL: Always use ID when multiple instances exist on the same date.
+    """
+    import re
+
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     new_date = request.json.get("date", "").strip()
@@ -1157,15 +1205,34 @@ def update_session_instance_ajax(session_path, date):
 
         session_id, session_location_name = session_result
 
-        # Get the session instance ID
-        cur.execute(
-            """
-            SELECT session_instance_id FROM session_instance
-            WHERE session_id = %s AND date = %s
-        """,
-            (session_id, date),
-        )
-        instance_result = cur.fetchone()
+        # Determine if date_or_id is a date or an ID
+        date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+        id_pattern = r"^\d+$"
+
+        if re.match(id_pattern, date_or_id) and not re.match(date_pattern, date_or_id):
+            # It's an ID
+            session_instance_id = int(date_or_id)
+            # Verify this instance belongs to this session
+            cur.execute(
+                """
+                SELECT session_instance_id FROM session_instance
+                WHERE session_instance_id = %s AND session_id = %s
+            """,
+                (session_instance_id, session_id),
+            )
+            instance_result = cur.fetchone()
+        else:
+            # It's a date - get the first instance on that date
+            cur.execute(
+                """
+                SELECT session_instance_id FROM session_instance
+                WHERE session_id = %s AND date = %s
+                ORDER BY session_instance_id ASC
+                LIMIT 1
+            """,
+                (session_id, date_or_id),
+            )
+            instance_result = cur.fetchone()
 
         if not instance_result:
             cur.close()
@@ -1327,7 +1394,8 @@ def delete_session_instance_ajax(session_path, date):
 
 
 @login_required
-def mark_session_log_complete_ajax(session_path, date):
+def mark_session_log_complete_ajax(session_path, date_or_id):
+    """Mark session log as complete. Accepts either date (YYYY-MM-DD) or numeric ID."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1342,23 +1410,20 @@ def mark_session_log_complete_ajax(session_path, date):
 
         session_id = session_result[0]
 
-        # Check if the session instance exists
-        cur.execute(
-            """
-            SELECT session_instance_id, log_complete_date
-            FROM session_instance
-            WHERE session_id = %s AND date = %s
-        """,
-            (session_id, date),
-        )
-
-        instance_result = cur.fetchone()
-        if not instance_result:
+        # Get session_instance_id (works with both date and ID)
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
 
-        session_instance_id, current_log_complete_date = instance_result
+        # Check current log_complete_date
+        cur.execute(
+            "SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
+        result = cur.fetchone()
+        current_log_complete_date = result[0] if result else None
 
         # Check if already marked complete
         if current_log_complete_date is not None:
@@ -1405,7 +1470,8 @@ def mark_session_log_complete_ajax(session_path, date):
 
 
 @login_required
-def mark_session_log_incomplete_ajax(session_path, date):
+def mark_session_log_incomplete_ajax(session_path, date_or_id):
+    """Mark session log as incomplete. Accepts either date (YYYY-MM-DD) or numeric ID."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1420,23 +1486,20 @@ def mark_session_log_incomplete_ajax(session_path, date):
 
         session_id = session_result[0]
 
-        # Check if the session instance exists
-        cur.execute(
-            """
-            SELECT session_instance_id, log_complete_date
-            FROM session_instance
-            WHERE session_id = %s AND date = %s
-        """,
-            (session_id, date),
-        )
-
-        instance_result = cur.fetchone()
-        if not instance_result:
+        # Get session_instance_id (works with both date and ID)
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
 
-        session_instance_id, current_log_complete_date = instance_result
+        # Check current log_complete_date
+        cur.execute(
+            "SELECT log_complete_date FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
+        result = cur.fetchone()
+        current_log_complete_date = result[0] if result else None
 
         # Check if not marked complete
         if current_log_complete_date is None:
@@ -4512,11 +4575,14 @@ def reactivate_session(session_path):
 
 
 @api_login_required
-def match_tune_ajax(session_path, date):
+def match_tune_ajax(session_path, date_or_id):
     """
     Match a tune name against the database without saving anything.
     Used by the beta tune pill editor for auto-matching typed text.
     Returns either a single exact match or up to 5 possible matches with wildcard search.
+
+    NOTE: date_or_id parameter accepted for API consistency but not currently used
+    (matching is session-scoped, not instance-scoped).
     """
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -4773,10 +4839,11 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
 
 
 @api_login_required
-def save_session_instance_tunes_ajax(session_path, date):
+def save_session_instance_tunes_ajax(session_path, date_or_id):
     """
     Save the complete tune list for a session instance from the beta page.
     Minimizes database modifications by only updating/inserting/deleting where necessary.
+    Accepts either date (YYYY-MM-DD) or numeric ID.
     """
     try:
         data = request.get_json()
@@ -4785,24 +4852,22 @@ def save_session_instance_tunes_ajax(session_path, date):
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get session_id and session_instance_id
-        cur.execute(
-            """
-            SELECT s.session_id, si.session_instance_id
-            FROM session s
-            JOIN session_instance si ON s.session_id = si.session_id
-            WHERE s.path = %s AND si.date = %s
-        """,
-            (session_path, date),
-        )
+        # Get session_id first
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"})
 
-        result = cur.fetchone()
-        if not result:
+        session_id = session_result[0]
+
+        # Get session_instance_id (works with both date and ID)
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
-
-        session_id, session_instance_id = result
 
         # Get all existing tunes for this session instance
         cur.execute(

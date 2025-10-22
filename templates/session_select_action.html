@@ -159,8 +159,9 @@
             const data = await response.json();
 
             if (data.success) {
-                // Redirect to the session instance
-                window.location.href = `/sessions/{{ session.path }}/${data.date}`;
+                // Redirect to the session instance using ID for unambiguous URL
+                const instanceId = data.session_instance_id || data.date;
+                window.location.href = `/sessions/{{ session.path }}/${instanceId}`;
             } else {
                 alert('Failed to create session: ' + (data.message || data.error));
             }

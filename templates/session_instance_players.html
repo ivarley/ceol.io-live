@@ -97,11 +97,11 @@
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
         <li class="nav-item">
-            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}">Tunes</a>
+            <a class="nav-link" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}">Tunes</a>
         </li>
         {% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
         <li class="nav-item">
-            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.date }}/players">Players</a>
+            <a class="nav-link active" href="/sessions/{{ session_instance.session_path }}/{{ session_instance.session_instance_id }}/players">Players</a>
         </li>
         {% endif %}
     </ul>

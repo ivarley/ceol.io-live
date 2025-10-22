@@ -849,7 +849,7 @@
                                     {% set start_12hr = start_hr - 12 if start_hr > 12 else (12 if start_hr == 0 else start_hr) %}
                                     {% set time_str = '%d:%s%s - ?'|format(start_12hr, start_min, start_period) %}
                                 {% endif %}
-                                <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
+                                <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
                             {% endfor %}
                             </ul>
                         </div>
@@ -880,7 +880,7 @@
                     <div class="year-content" data-year="{{ year }}">
                         <ul>
                         {% for instance in instances_by_year[year] %}
-                            <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ instance.date }}</a></li>
+                            <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ instance.date }}</a></li>
                         {% endfor %}
                         </ul>
                     </div>
@@ -890,7 +890,7 @@
                 <ul>
                 {% for year in sorted_years %}
                     {% for instance in instances_by_year[year] %}
-                    <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ instance.date }}</a></li>
+                    <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ instance.date }}</a></li>
                     {% endfor %}
                 {% endfor %}
                 </ul>
@@ -1066,7 +1066,9 @@
                 showMessage(data.message);
                 hideAddSessionModal();
                 // Redirect to the new session instance with edit mode parameter
-                window.location.href = `/sessions/${sessionPath}/${date}?edit=true`;
+                // Use session_instance_id for unambiguous URL
+                const instanceId = data.session_instance_id || date;
+                window.location.href = `/sessions/${sessionPath}/${instanceId}?edit=true`;
             } else {
                 showMessage(data.message, 'error');
             }

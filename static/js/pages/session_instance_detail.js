@@ -5,6 +5,7 @@
 // Get configuration from window.sessionConfig (passed from template)
 const sessionPath = window.sessionConfig.sessionPath;
 const sessionDate = window.sessionConfig.sessionDate;
+const sessionInstanceId = window.sessionConfig.sessionInstanceId;  // CRITICAL: Always use this for API calls
 const isCancelled = window.sessionConfig.isCancelled;
 const isSessionAdmin = window.sessionConfig.isSessionAdmin;
 const isLogComplete = window.sessionConfig.isLogComplete;
@@ -213,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setupEventListeners();
         
         // Initialize AutoSaveManager after tunePillsData is created
-        AutoSaveManager.initialize(sessionPath, sessionDate, () => StateManager.getTunePillsData(), {
+        AutoSaveManager.initialize(sessionPath, sessionInstanceId, () => StateManager.getTunePillsData(), {
             isUserLoggedIn: window.sessionConfig.isUserLoggedIn,
             userAutoSave: window.sessionConfig.userAutoSave,
             userAutoSaveInterval: window.sessionConfig.userAutoSaveInterval
@@ -540,7 +541,7 @@ async function autoMatchTune(pill, stillTyping = false) {
             }
         }
         
-        const response = await fetch(`/api/sessions/${sessionPath}/${sessionDate}/match_tune`, {
+        const response = await fetch(`/api/sessions/${sessionPath}/${sessionInstanceId}/match_tune`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1192,7 +1193,8 @@ function saveSessionInstance() {
     if (location) requestData.location = location;
     if (comments) requestData.comments = comments;
 
-    fetch(`/api/sessions/${sessionPath}/${sessionDate}/update`, {
+    // CRITICAL: Use sessionInstanceId to ensure we update the correct instance
+    fetch(`/api/sessions/${sessionPath}/${sessionInstanceId}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData)
@@ -1203,7 +1205,8 @@ function saveSessionInstance() {
             showMessage(data.message);
             hideSessionEditModal();
             if (date !== sessionDate) {
-                window.location.href = `/sessions/${sessionPath}/${date}/beta`;
+                // Date changed, redirect to new date using ID for unambiguous URL
+                window.location.href = `/sessions/${sessionPath}/${sessionInstanceId}`;
             } else {
                 window.location.reload();
             }
@@ -1245,7 +1248,7 @@ function markSessionLogComplete() {
         return;
     }
     
-    fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_complete`, {
+    fetch(`/api/sessions/${sessionPath}/${sessionInstanceId}/mark_complete`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1257,7 +1260,7 @@ function markSessionLogComplete() {
             showMessage(data.message);
             // Redirect to normal view after a short delay
             setTimeout(() => {
-                window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
+                window.location.href = `/sessions/${sessionPath}/${sessionInstanceId}`;
             }, 1500);
         } else {
             showMessage(data.message, 'error');
@@ -1274,7 +1277,7 @@ function markSessionLogIncomplete() {
         return;
     }
     
-    fetch(`/api/sessions/${sessionPath}/${sessionDate}/mark_incomplete`, {
+    fetch(`/api/sessions/${sessionPath}/${sessionInstanceId}/mark_incomplete`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1286,7 +1289,7 @@ function markSessionLogIncomplete() {
             showMessage(data.message);
             // Reload the page to show updated status
             setTimeout(() => {
-                window.location.href = `/sessions/${sessionPath}/${sessionDate}`;
+                window.location.href = `/sessions/${sessionPath}/${sessionInstanceId}`;
             }, 1500);
         } else {
             showMessage(data.message, 'error');

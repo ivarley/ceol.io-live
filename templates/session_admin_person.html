@@ -11,7 +11,7 @@
                 <section class="docs-intro">
                     <p>Player details for <strong>{{ session.name }}</strong>. 
                     {% if from_attendance and session_instance_date and session_instance_id %}
-                        <a href="/sessions/{{ session_path }}/{{ session_instance_date }}#players">← Back to session on {{ session_instance_date }}</a>
+                        <a href="/sessions/{{ session_path }}/{{ session_instance_id }}#players">← Back to session on {{ session_instance_date }}</a>
                     {% else %}
                         <a href="/admin/sessions/{{ session_path }}/players">← Back to players list</a>
                     {% endif %}
@@ -289,7 +289,7 @@
                                     {% for attendance in attendance_history %}
                                     <tr>
                                         <td>
-                                            <a href="/sessions/{{ session_path }}/{{ attendance.date }}" target="_blank">
+                                            <a href="/sessions/{{ session_path }}/{{ attendance | instance_url_id }}" target="_blank">
                                                 {{ attendance.date }}
                                             </a>
                                         </td>

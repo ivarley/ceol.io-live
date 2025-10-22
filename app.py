@@ -121,6 +121,28 @@ def get_user_timezone():
         pass
     return "UTC"
 
+@app.template_filter("instance_url_id")
+def instance_url_id(instance):
+    """
+    Generate the URL identifier for a session instance.
+    Returns the session_instance_id if there are multiple instances on the same date,
+    otherwise returns the date string for backwards compatibility.
+
+    Args:
+        instance: Dictionary with 'date', 'session_instance_id', and 'multiple_on_date' keys
+
+    Returns:
+        String identifier to use in URL (either date string or numeric ID)
+    """
+    if instance.get('multiple_on_date', False):
+        return str(instance['session_instance_id'])
+    else:
+        # Return date as string in YYYY-MM-DD format
+        date = instance['date']
+        if hasattr(date, 'strftime'):
+            return date.strftime('%Y-%m-%d')
+        return str(date)
+
 # Register web page routes
 app.add_url_rule("/", "home", home)
 app.add_url_rule("/magic", "magic", magic)
@@ -256,7 +278,7 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/update",
+    "/api/sessions/<path:session_path>/<date_or_id>/update",
     "update_session_instance_ajax",
     update_session_instance_ajax,
     methods=["PUT"],
@@ -273,13 +295,13 @@ app.add_url_rule(
     methods=["DELETE"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/mark_complete",
+    "/api/sessions/<path:session_path>/<date_or_id>/mark_complete",
     "mark_session_log_complete_ajax",
     mark_session_log_complete_ajax,
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/mark_incomplete",
+    "/api/sessions/<path:session_path>/<date_or_id>/mark_incomplete",
     "mark_session_log_incomplete_ajax",
     mark_session_log_incomplete_ajax,
     methods=["POST"],
@@ -332,7 +354,7 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/match_tune",
+    "/api/sessions/<path:session_path>/<date_or_id>/match_tune",
     "match_tune_ajax",
     match_tune_ajax,
     methods=["POST"],
@@ -344,7 +366,7 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/save_tunes",
+    "/api/sessions/<path:session_path>/<date_or_id>/save_tunes",
     "save_session_instance_tunes_ajax",
     save_session_instance_tunes_ajax,
     methods=["POST"],

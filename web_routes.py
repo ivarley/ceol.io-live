@@ -401,33 +401,80 @@ def session_handler(full_path):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
 
-    # Check if the last part of the path looks like a date (yyyy-mm-dd)
+    # Check if the last part of the path looks like a date (yyyy-mm-dd) or a numeric ID
     path_parts = full_path.split("/")
     last_part = path_parts[-1]
     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+    id_pattern = r"^\d+$"
 
-    if re.match(date_pattern, last_part):
-        # This is a session instance request
-        session_path = "/".join(path_parts[:-1])
-        date = last_part
+    # CRITICAL: Eagerly match full paths first (e.g., "oflahertys/2025" should be a session path, not "oflahertys" + year 2025)
+    # Determine if this looks like a session instance request
+    looks_like_instance = re.match(date_pattern, last_part) or re.match(id_pattern, last_part)
+
+    # If it looks like an instance, check if the FULL path is actually a session first
+    is_session_overview = False
+    if looks_like_instance:
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (full_path,))
+            full_path_session = cur.fetchone()
+            cur.close()
+            conn.close()
+
+            if full_path_session:
+                # The full path IS a session (e.g., "oflahertys/2025")
+                # Treat as session overview, not instance
+                is_session_overview = True
+        except Exception as e:
+            return f"Database connection failed: {str(e)}"
+
+    # Check if this is a session instance request (by date or ID)
+    if looks_like_instance and not is_session_overview:
+        is_date_based = re.match(date_pattern, last_part)
 
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
-                       si.location_override, s.location_name, si.log_complete_date, s.session_id,
-                       si.start_time, si.end_time
-                FROM session_instance si
-                JOIN session s ON si.session_id = s.session_id
-                WHERE s.path = %s AND si.date = %s
-            """,
-                (session_path, date),
-            )
+
+            if is_date_based:
+                # Date-based URL: /sessions/<path>/<date>
+                session_path = "/".join(path_parts[:-1])
+                date = last_part
+                cur.execute(
+                    """
+                    SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                           si.location_override, s.location_name, si.log_complete_date, s.session_id,
+                           si.start_time, si.end_time, s.path
+                    FROM session_instance si
+                    JOIN session s ON si.session_id = s.session_id
+                    WHERE s.path = %s AND si.date = %s
+                    ORDER BY si.session_instance_id ASC
+                    LIMIT 1
+                """,
+                    (session_path, date),
+                )
+            else:
+                # ID-based URL: /sessions/<path>/<id>
+                session_instance_id = int(last_part)
+                session_path = "/".join(path_parts[:-1])
+                cur.execute(
+                    """
+                    SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                           si.location_override, s.location_name, si.log_complete_date, s.session_id,
+                           si.start_time, si.end_time, s.path
+                    FROM session_instance si
+                    JOIN session s ON si.session_id = s.session_id
+                    WHERE si.session_instance_id = %s AND s.path = %s
+                """,
+                    (session_instance_id, session_path),
+                )
+
             session_instance = cur.fetchone()
 
             if session_instance:
+                # Use s.path from database (index 11) for consistency
+                session_path_from_db = session_instance[11]
                 session_instance_dict = {
                     "session_name": session_instance[0],
                     "date": session_instance[1],
@@ -437,7 +484,7 @@ def session_handler(full_path):
                     "location_override": session_instance[5],
                     "default_location": session_instance[6],
                     "log_complete_date": session_instance[7],
-                    "session_path": session_path,
+                    "session_path": session_path_from_db,
                     "session_id": session_instance[8],
                     "start_time": session_instance[9],
                     "end_time": session_instance[10],
@@ -515,9 +562,11 @@ def session_handler(full_path):
                 conn.close()
                 from app import render_error_page
 
-                return render_error_page(
-                    f"Session instance not found: {session_path} on {date}", 404
-                )
+                if is_date_based:
+                    error_msg = f"Session instance not found: {session_path} on {last_part}"
+                else:
+                    error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
+                return render_error_page(error_msg, 404)
         except Exception as e:
             return f"Database connection failed: {str(e)}"
 
@@ -576,13 +625,15 @@ def session_handler(full_path):
                 else:
                     session_dict["recurrence_readable"] = None
 
-                # Fetch past session instances in descending date order
+                # Fetch past session instances with instance counts per date
                 cur.execute(
                     """
-                    SELECT date, location_override, start_time, end_time
-                    FROM session_instance
-                    WHERE session_id = %s
-                    ORDER BY date DESC
+                    SELECT si.date, si.location_override, si.start_time, si.end_time,
+                           si.session_instance_id,
+                           COUNT(*) OVER (PARTITION BY si.date) as instances_on_date
+                    FROM session_instance si
+                    WHERE si.session_id = %s
+                    ORDER BY si.date DESC, si.session_instance_id ASC
                 """,
                     (session[0],),
                 )
@@ -604,7 +655,9 @@ def session_handler(full_path):
                             'date': date,
                             'location_override': instance[1],
                             'start_time': instance[2],
-                            'end_time': instance[3]
+                            'end_time': instance[3],
+                            'session_instance_id': instance[4],
+                            'multiple_on_date': instance[5] > 1
                         })
                 else:
                     # For regular sessions, group by year and include time info
@@ -617,7 +670,9 @@ def session_handler(full_path):
                             'date': date,
                             'location_override': instance[1],
                             'start_time': instance[2],
-                            'end_time': instance[3]
+                            'end_time': instance[3],
+                            'session_instance_id': instance[4],
+                            'multiple_on_date': instance[5] > 1
                         })
 
                 # Sort years in descending order (for regular sessions)
@@ -718,27 +773,75 @@ def session_instance_players(full_path):
     if full_path.endswith("/players"):
         full_path = full_path[:-8]  # Remove "/players"
 
-    # Extract session path and date
+    # Check if the last part of the path looks like a date (yyyy-mm-dd) or a numeric ID
     path_parts = full_path.split("/")
-    date = path_parts[-1]
-    session_path = "/".join(path_parts[:-1])
+    last_part = path_parts[-1]
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+    id_pattern = r"^\d+$"
+
+    is_date_based = re.match(date_pattern, last_part)
+    is_id_based = re.match(id_pattern, last_part) and not is_date_based
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
-                   si.location_override, s.location_name, si.log_complete_date, s.session_id
-            FROM session_instance si
-            JOIN session s ON si.session_id = s.session_id
-            WHERE s.path = %s AND si.date = %s
-        """,
-            (session_path, date),
-        )
+
+        # CRITICAL: Eagerly match full paths first (e.g., "oflahertys/2025" should be a session path, not "oflahertys" + year 2025)
+        # Only check this if last part could be ambiguous (date or ID pattern)
+        if is_date_based or is_id_based:
+            cur.execute(
+                "SELECT session_id FROM session WHERE path = %s",
+                (full_path,),
+            )
+            full_path_session = cur.fetchone()
+
+            if full_path_session:
+                # The full path is a session, not a session instance!
+                # This shouldn't happen for /players route, but return error
+                cur.close()
+                conn.close()
+                from app import render_error_page
+                return render_error_page(
+                    f"Players tab requires a specific session instance. Please select a date from the session page.",
+                    400
+                )
+
+        if is_date_based:
+            # Date-based URL: /sessions/<path>/<date>/players
+            session_path = "/".join(path_parts[:-1])
+            date = last_part
+            cur.execute(
+                """
+                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                       si.location_override, s.location_name, si.log_complete_date, s.session_id, s.path
+                FROM session_instance si
+                JOIN session s ON si.session_id = s.session_id
+                WHERE s.path = %s AND si.date = %s
+                ORDER BY si.session_instance_id ASC
+                LIMIT 1
+            """,
+                (session_path, date),
+            )
+        else:
+            # ID-based URL: /sessions/<path>/<id>/players
+            session_instance_id = int(last_part)
+            session_path = "/".join(path_parts[:-1])
+            cur.execute(
+                """
+                SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
+                       si.location_override, s.location_name, si.log_complete_date, s.session_id, s.path
+                FROM session_instance si
+                JOIN session s ON si.session_id = s.session_id
+                WHERE si.session_instance_id = %s AND s.path = %s
+            """,
+                (session_instance_id, session_path),
+            )
+
         session_instance = cur.fetchone()
 
         if session_instance:
+            # Use s.path from database (index 9) for consistency
+            session_path_from_db = session_instance[9]
             session_instance_dict = {
                 "session_name": session_instance[0],
                 "date": session_instance[1],
@@ -748,7 +851,7 @@ def session_instance_players(full_path):
                 "location_override": session_instance[5],
                 "default_location": session_instance[6],
                 "log_complete_date": session_instance[7],
-                "session_path": session_path,
+                "session_path": session_path_from_db,
                 "session_id": session_instance[8],
             }
 
@@ -784,9 +887,11 @@ def session_instance_players(full_path):
             conn.close()
             from app import render_error_page
 
-            return render_error_page(
-                f"Session instance not found: {session_path} on {date}", 404
-            )
+            if is_date_based:
+                error_msg = f"Session instance not found: {session_path} on {last_part}"
+            else:
+                error_msg = f"Session instance not found: ID {last_part} for session {session_path}"
+            return render_error_page(error_msg, 404)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
@@ -2725,11 +2830,13 @@ def session_admin_person(session_path, person_id):
                 si.start_time,
                 si.end_time,
                 si.is_cancelled,
-                si.comments
+                si.comments,
+                si.session_instance_id,
+                COUNT(*) OVER (PARTITION BY si.date) as instances_on_date
             FROM session_instance si
             JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
             WHERE si.session_id = %s AND sip.person_id = %s
-            ORDER BY si.date DESC
+            ORDER BY si.date DESC, si.session_instance_id ASC
         """,
             (session_id, person_id),
         )
@@ -2743,6 +2850,8 @@ def session_admin_person(session_path, person_id):
                     "end_time": row[2],
                     "is_cancelled": row[3],
                     "comments": row[4],
+                    "session_instance_id": row[5],
+                    "multiple_on_date": row[6] > 1,
                 }
             )
 
