@@ -758,12 +758,17 @@
     <!-- Tabbed Interface -->
     <div class="tabs-container">
         <div class="tab-buttons">
+            {% if session.session_type == 'festival' %}
+            <button class="tab-button active" data-tab="logs">Sessions</button>
+            <button class="tab-button" data-tab="tunes">Tunes</button>
+            {% else %}
             <button class="tab-button active" data-tab="tunes">Tunes</button>
-            <button class="tab-button" data-tab="logs">{% if session.session_type == 'festival' %}Sessions{% else %}Logs{% endif %}</button>
+            <button class="tab-button" data-tab="logs">Logs</button>
+            {% endif %}
         </div>
 
         <!-- Tunes Tab Content -->
-        <div class="tab-content active" id="tunes-tab">
+        <div class="tab-content {% if session.session_type != 'festival' %}active{% endif %}" id="tunes-tab">
             <div class="tunes-container">
                 <div class="filters-container">
                     <div class="filter-row">
@@ -806,7 +811,7 @@
         </div>
 
         <!-- Logs Tab Content -->
-        <div class="tab-content" id="logs-tab">
+        <div class="tab-content {% if session.session_type == 'festival' %}active{% endif %}" id="logs-tab">
             {% if session.session_type == 'festival' %}
                 {# Festival view: group by day, show location and time #}
                 {% if instances_by_day %}

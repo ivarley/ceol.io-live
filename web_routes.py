@@ -618,8 +618,8 @@ def session_handler(full_path):
                 # Sort years in descending order (for regular sessions)
                 sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
 
-                # Sort days in descending order (for festivals)
-                sorted_days = sorted(instances_by_day.keys(), reverse=True) if instances_by_day else []
+                # Sort days in ascending order for festivals (chronological)
+                sorted_days = sorted(instances_by_day.keys(), reverse=False) if instances_by_day else []
 
                 # Get top 20 most popular tunes for this session
                 cur.execute(
