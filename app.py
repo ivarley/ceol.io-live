@@ -250,6 +250,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/next_instance_suggestion",
+    "get_next_session_instance_suggestion_ajax",
+    get_next_session_instance_suggestion_ajax,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/<date>/update",
     "update_session_instance_ajax",
     update_session_instance_ajax,

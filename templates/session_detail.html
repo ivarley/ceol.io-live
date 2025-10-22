@@ -551,6 +551,7 @@
             color: var(--text-color);
         }
         .modal-body input[type="date"],
+        .modal-body input[type="time"],
         .modal-body input[type="text"],
         .modal-body textarea {
             width: 100%;
@@ -612,6 +613,7 @@
         
         /* Dark mode styles for modal form elements */
         [data-theme="dark"] .modal-body input[type="date"],
+        [data-theme="dark"] .modal-body input[type="time"],
         [data-theme="dark"] .modal-body input[type="text"],
         [data-theme="dark"] .modal-body textarea {
             background-color: var(--dropdown-bg);
@@ -877,8 +879,8 @@
                     </div>
                     <div class="year-content" data-year="{{ year }}">
                         <ul>
-                        {% for date in instances_by_year[year] %}
-                            <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                        {% for instance in instances_by_year[year] %}
+                            <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ instance.date }}</a></li>
                         {% endfor %}
                         </ul>
                     </div>
@@ -887,8 +889,8 @@
             {% else %}
                 <ul>
                 {% for year in sorted_years %}
-                    {% for date in instances_by_year[year] %}
-                    <li><a href="/sessions/{{ session.path }}/{{ date }}">{{ date }}</a></li>
+                    {% for instance in instances_by_year[year] %}
+                    <li><a href="/sessions/{{ session.path }}/{{ instance.date }}">{{ instance.date }}</a></li>
                     {% endfor %}
                 {% endfor %}
                 </ul>
@@ -913,13 +915,24 @@
             <div class="modal-body">
                 <label for="session-date-input">Session Date:</label>
                 <input type="date" id="session-date-input" required>
-                
+
+                <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <label for="session-start-time-input">Start Time:</label>
+                        <input type="time" id="session-start-time-input">
+                    </div>
+                    <div>
+                        <label for="session-end-time-input">End Time:</label>
+                        <input type="time" id="session-end-time-input">
+                    </div>
+                </div>
+
                 <label for="session-location-input" style="margin-top: 16px;">Location:</label>
                 <input type="text" id="session-location-input" placeholder="The usual: {{ session.location_name }}">
-                
+
                 <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
                 <textarea id="session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
-                
+
                 <div style="margin-top: 16px;">
                     <label style="display: flex; align-items: center; font-weight: normal;">
                         <input type="checkbox" id="session-cancelled-input" style="margin-right: 8px; width: auto;">
@@ -946,178 +959,47 @@
 <script src="/static/js/dist/modalManager.js"></script>
 <script>
     const sessionPath = '{{ session.path }}';
-    const sessionRecurrence = {{ session.recurrence|tojson if session.recurrence else 'null' }};
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
-    
-    // Get most recent session date
-    const recentDates = [
-        {% if instances_by_year %}
-            {% for year in sorted_years %}
-                {% for date in instances_by_year[year] %}
-                    '{{ date }}',
-                {% endfor %}
-            {% endfor %}
-        {% endif %}
-    ];
-    
-    
-    function calculateNextSessionDate() {
-        if (recentDates.length === 0) {
-            return new Date().toISOString().split('T')[0];
-        }
 
-        // Parse the date string properly - dates from the template are in 'YYYY-MM-DD' format
-        const mostRecentDateStr = recentDates[0];
-        const mostRecentDate = new Date(mostRecentDateStr + 'T00:00:00');
-
-        if (!sessionRecurrence) {
-            // No recurrence info, suggest one week from most recent
-            const nextDate = new Date(mostRecentDate);
-            nextDate.setDate(nextDate.getDate() + 7);
-            return nextDate.toISOString().split('T')[0];
-        }
-
-        // Try to parse as JSON first
-        if (typeof sessionRecurrence === 'object' && sessionRecurrence.schedules) {
-            // JSON format - find next occurrence based on schedules
-            const schedules = sessionRecurrence.schedules;
-            if (schedules && schedules.length > 0) {
-                // Start from the day after the most recent session
-                let candidateDate = new Date(mostRecentDate);
-                candidateDate.setDate(candidateDate.getDate() + 1);
-
-                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-                // Find the next date that matches any schedule (within the next 90 days)
-                const maxDaysToCheck = 90;
-                for (let i = 0; i < maxDaysToCheck; i++) {
-                    const dayOfWeek = candidateDate.getDay();
-                    const dayName = dayNames[dayOfWeek];
-
-                    // Check if this day matches any schedule
-                    for (const schedule of schedules) {
-                        if (schedule.weekday === dayName) {
-                            if (schedule.type === 'weekly') {
-                                // For weekly schedules, check if it matches the interval
-                                if (schedule.every_n_weeks === 1) {
-                                    // Every week - always matches
-                                    return candidateDate.toISOString().split('T')[0];
-                                } else {
-                                    // Every N weeks - we can't determine without reference date
-                                    // So we conservatively assume it matches
-                                    return candidateDate.toISOString().split('T')[0];
-                                }
-                            } else if (schedule.type === 'monthly_nth_weekday') {
-                                // Check if this is the correct nth occurrence
-                                const dayOfMonth = candidateDate.getDate();
-                                const firstDayOfMonth = new Date(candidateDate.getFullYear(), candidateDate.getMonth(), 1);
-                                const firstWeekdayOfMonth = firstDayOfMonth.getDay();
-
-                                // Calculate which occurrence this is
-                                let occurrenceNum = Math.floor((dayOfMonth - 1 + firstWeekdayOfMonth) / 7) + 1;
-
-                                // Check for last occurrence
-                                const lastDayOfMonth = new Date(candidateDate.getFullYear(), candidateDate.getMonth() + 1, 0);
-                                const isLastOccurrence = dayOfMonth + 7 > lastDayOfMonth.getDate();
-
-                                if (schedule.which && Array.isArray(schedule.which)) {
-                                    if (schedule.which.includes(occurrenceNum) ||
-                                        (isLastOccurrence && schedule.which.includes(-1))) {
-                                        return candidateDate.toISOString().split('T')[0];
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Move to next day
-                    candidateDate.setDate(candidateDate.getDate() + 1);
-                }
-
-                // If no match found in 90 days, default to 7 days from most recent
-                const nextDate = new Date(mostRecentDate);
-                nextDate.setDate(nextDate.getDate() + 7);
-                return nextDate.toISOString().split('T')[0];
-            }
-        }
-
-        // Legacy text parsing fallback
-        const recurrence = typeof sessionRecurrence === 'string'
-            ? sessionRecurrence.toLowerCase()
-            : '';
-        const nextDate = new Date(mostRecentDate);
-
-        if (recurrence.includes('weekly') || recurrence.includes('every week')) {
-            nextDate.setDate(nextDate.getDate() + 7);
-        } else if (recurrence.includes('biweekly') || recurrence.includes('every other week') || recurrence.includes('every 2 weeks')) {
-            nextDate.setDate(nextDate.getDate() + 14);
-        } else if (recurrence.includes('monthly') || recurrence.includes('every month')) {
-            nextDate.setMonth(nextDate.getMonth() + 1);
-        } else if (recurrence.includes('tuesday') || recurrence.includes('tues')) {
-            // Find next Tuesday after the most recent session date
-            nextDate.setDate(nextDate.getDate() + 1); // Start from the day after the last session
-            while (nextDate.getDay() !== 2) { // 2 = Tuesday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('wednesday') || recurrence.includes('wed')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 3) { // 3 = Wednesday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('thursday') || recurrence.includes('thurs')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 4) { // 4 = Thursday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('friday') || recurrence.includes('fri')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDate() !== 5) { // 5 = Friday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('saturday') || recurrence.includes('sat')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 6) { // 6 = Saturday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('sunday') || recurrence.includes('sun')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 0) { // 0 = Sunday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else if (recurrence.includes('monday') || recurrence.includes('mon')) {
-            nextDate.setDate(nextDate.getDate() + 1);
-            while (nextDate.getDay() !== 1) { // 1 = Monday
-                nextDate.setDate(nextDate.getDate() + 1);
-            }
-        } else {
-            // Default: one week from most recent
-            nextDate.setDate(nextDate.getDate() + 7);
-        }
-
-        return nextDate.toISOString().split('T')[0];
-    }
-    
-    function showAddSessionModal() {
+    async function showAddSessionModal() {
         // Prepare form fields (page-specific business logic)
         const dateInput = document.getElementById('session-date-input');
+        const startTimeInput = document.getElementById('session-start-time-input');
+        const endTimeInput = document.getElementById('session-end-time-input');
         const locationInput = document.getElementById('session-location-input');
         const commentsInput = document.getElementById('session-comments-input');
         const cancelledInput = document.getElementById('session-cancelled-input');
-        
-        // Pre-fill the date input with suggested next session date
-        dateInput.value = calculateNextSessionDate();
-        
-        // Clear other fields
+
+        // Set defaults while we fetch the suggestion
+        dateInput.value = new Date().toISOString().split('T')[0];
+        startTimeInput.value = '';
+        endTimeInput.value = '';
         locationInput.value = '';
         commentsInput.value = '';
         cancelledInput.checked = false;
-        
+
         // Show modal using ModalManager
         ModalManager.showModal('add-session-instance-modal', {
             autoFocus: false // We'll focus manually
         });
-        
+
         dateInput.focus();
+
+        // Fetch the next suggested session instance from the API
+        try {
+            const response = await fetch(`/api/sessions/${sessionPath}/next_instance_suggestion`);
+            const data = await response.json();
+
+            if (data.success) {
+                // Update form with suggested values
+                dateInput.value = data.date || dateInput.value;
+                startTimeInput.value = data.start_time || '';
+                endTimeInput.value = data.end_time || '';
+            }
+        } catch (error) {
+            console.error('Failed to get next session suggestion:', error);
+            // Keep the default values if API call fails
+        }
     }
     
     function hideAddSessionModal() {
@@ -1126,31 +1008,45 @@
     
     function addSessionInstance() {
         const dateInput = document.getElementById('session-date-input');
+        const startTimeInput = document.getElementById('session-start-time-input');
+        const endTimeInput = document.getElementById('session-end-time-input');
         const locationInput = document.getElementById('session-location-input');
         const commentsInput = document.getElementById('session-comments-input');
         const cancelledInput = document.getElementById('session-cancelled-input');
-        
+
         const date = dateInput.value.trim();
+        const startTime = startTimeInput.value.trim();
+        const endTime = endTimeInput.value.trim();
         const location = locationInput.value.trim();
         const comments = commentsInput.value.trim();
         const cancelled = cancelledInput.checked;
-        
+
         if (!date) {
             showMessage('Please enter a session date', 'error');
             return;
         }
-        
+
         // Prepare request data
-        const requestData = { 
+        const requestData = {
             date: date,
             cancelled: cancelled
         };
-        
+
+        // Only include start_time if it's provided
+        if (startTime) {
+            requestData.start_time = startTime;
+        }
+
+        // Only include end_time if it's provided
+        if (endTime) {
+            requestData.end_time = endTime;
+        }
+
         // Only include location if it's provided
         if (location) {
             requestData.location = location;
         }
-        
+
         // Only include comments if provided
         if (comments) {
             requestData.comments = comments;

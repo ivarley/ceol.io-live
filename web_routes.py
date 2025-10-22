@@ -607,13 +607,18 @@ def session_handler(full_path):
                             'end_time': instance[3]
                         })
                 else:
-                    # For regular sessions, group by year as before
+                    # For regular sessions, group by year and include time info
                     for instance in past_instances:
                         date = instance[0]
                         year = date.year
                         if year not in instances_by_year:
                             instances_by_year[year] = []
-                        instances_by_year[year].append(date)
+                        instances_by_year[year].append({
+                            'date': date,
+                            'location_override': instance[1],
+                            'start_time': instance[2],
+                            'end_time': instance[3]
+                        })
 
                 # Sort years in descending order (for regular sessions)
                 sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []

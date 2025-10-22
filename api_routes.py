@@ -875,6 +875,16 @@ def add_session_instance_ajax(session_path):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     date = request.json.get("date", "").strip()
+    start_time = (
+        request.json.get("start_time", "").strip()
+        if request.json.get("start_time")
+        else None
+    )
+    end_time = (
+        request.json.get("end_time", "").strip()
+        if request.json.get("end_time")
+        else None
+    )
     location = (
         request.json.get("location", "").strip()
         if request.json.get("location")
@@ -907,26 +917,6 @@ def add_session_instance_ajax(session_path):
 
         session_id, session_location_name = session_result
 
-        # Check if session instance already exists for this date
-        cur.execute(
-            """
-            SELECT session_instance_id FROM session_instance
-            WHERE session_id = %s AND date = %s
-        """,
-            (session_id, date),
-        )
-        existing_instance = cur.fetchone()
-
-        if existing_instance:
-            cur.close()
-            conn.close()
-            return jsonify(
-                {
-                    "success": False,
-                    "message": f"Session instance for {date} already exists",
-                }
-            )
-
         # Determine location_override: only set if location is provided AND different from session's location_name
         location_override = None
         if location and location != session_location_name:
@@ -935,11 +925,11 @@ def add_session_instance_ajax(session_path):
         # Insert new session instance
         cur.execute(
             """
-            INSERT INTO session_instance (session_id, date, location_override, is_cancelled, comments)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO session_instance (session_id, date, start_time, end_time, location_override, is_cancelled, comments)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING session_instance_id
         """,
-            (session_id, date, location_override, cancelled, comments),
+            (session_id, date, start_time, end_time, location_override, cancelled, comments),
         )
 
         session_instance_result = cur.fetchone()
@@ -973,6 +963,151 @@ def add_session_instance_ajax(session_path):
                 "message": f"Failed to create session instance: {str(e)}",
             }
         )
+
+
+@login_required
+def get_next_session_instance_suggestion_ajax(session_path):
+    """
+    Get the next suggested session instance based on recurrence pattern.
+    Returns the next occurrence from the recurrence that doesn't already exist.
+    """
+    try:
+        from datetime import datetime, timedelta
+        from recurrence_utils import SessionRecurrence
+        try:
+            from zoneinfo import ZoneInfo
+        except ImportError:
+            from backports.zoneinfo import ZoneInfo
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session details including recurrence pattern
+        cur.execute(
+            """
+            SELECT session_id, recurrence, timezone
+            FROM session
+            WHERE path = %s
+        """,
+            (session_path,),
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"})
+
+        session_id, recurrence_json, session_timezone = session_result
+
+        # If no recurrence, return today's date with no times
+        if not recurrence_json:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "date": datetime.now().date().isoformat(),
+                "start_time": None,
+                "end_time": None
+            })
+
+        # Parse recurrence pattern
+        try:
+            tz = ZoneInfo(session_timezone or 'UTC')
+            session_recurrence = SessionRecurrence(recurrence_json)
+        except (ValueError, TypeError) as e:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "message": f"Invalid recurrence pattern: {str(e)}"
+            })
+
+        # Get occurrences for the next 90 days
+        today = datetime.now(tz).date()
+        end_date = today + timedelta(days=90)
+
+        occurrences = session_recurrence.get_occurrences_in_range(
+            today, end_date, tz, reference_date=None
+        )
+
+        if not occurrences:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "date": datetime.now().date().isoformat(),
+                "start_time": None,
+                "end_time": None
+            })
+
+        # Check which instances already exist
+        occurrence_dates = [occ[0].date() for occ in occurrences]
+        placeholders = ','.join(['%s'] * len(occurrence_dates))
+
+        cur.execute(f"""
+            SELECT date, start_time, end_time
+            FROM session_instance
+            WHERE session_id = %s AND date IN ({placeholders})
+        """, [session_id] + occurrence_dates)
+
+        existing_instances = {}
+        for row in cur.fetchall():
+            date_val = row[0]
+            start_time_val = row[1]
+            end_time_val = row[2]
+            # Store as key with tuple of (start_time, end_time)
+            if date_val not in existing_instances:
+                existing_instances[date_val] = []
+            existing_instances[date_val].append((start_time_val, end_time_val))
+
+        cur.close()
+        conn.close()
+
+        # Find first occurrence that doesn't exist
+        for start_dt, end_dt in occurrences:
+            occ_date = start_dt.date()
+            occ_start_time = start_dt.time()
+            occ_end_time = end_dt.time()
+
+            # Check if this exact combination exists
+            if occ_date in existing_instances:
+                # Check if this specific time slot exists
+                time_exists = any(
+                    (existing_start == occ_start_time and existing_end == occ_end_time)
+                    for existing_start, existing_end in existing_instances[occ_date]
+                )
+                if not time_exists:
+                    # Date exists but different time - this is the next one
+                    return jsonify({
+                        "success": True,
+                        "date": occ_date.isoformat(),
+                        "start_time": occ_start_time.strftime("%H:%M"),
+                        "end_time": occ_end_time.strftime("%H:%M")
+                    })
+            else:
+                # Date doesn't exist at all - this is the next one
+                return jsonify({
+                    "success": True,
+                    "date": occ_date.isoformat(),
+                    "start_time": occ_start_time.strftime("%H:%M"),
+                    "end_time": occ_end_time.strftime("%H:%M")
+                })
+
+        # No non-existent occurrences found in next 90 days
+        # Return the first occurrence anyway
+        first_start_dt, first_end_dt = occurrences[0]
+        return jsonify({
+            "success": True,
+            "date": first_start_dt.date().isoformat(),
+            "start_time": first_start_dt.time().strftime("%H:%M"),
+            "end_time": first_end_dt.time().strftime("%H:%M")
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Failed to get suggestion: {str(e)}"
+        })
 
 
 @login_required
@@ -1038,27 +1173,6 @@ def update_session_instance_ajax(session_path, date):
             return jsonify({"success": False, "message": "Session instance not found"})
 
         session_instance_id = instance_result[0]
-
-        # If date is changing, check if new date conflicts with existing instance
-        if new_date != date:
-            cur.execute(
-                """
-                SELECT session_instance_id FROM session_instance
-                WHERE session_id = %s AND date = %s
-            """,
-                (session_id, new_date),
-            )
-            existing_instance = cur.fetchone()
-
-            if existing_instance:
-                cur.close()
-                conn.close()
-                return jsonify(
-                    {
-                        "success": False,
-                        "message": f"Session instance for {new_date} already exists",
-                    }
-                )
 
         # Determine location_override: only set if location is provided AND different from session's location_name
         location_override = None
