@@ -16,3 +16,16 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python3 jobs/check_active_sessions.py"
     plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGPORT
+        value: "5432"

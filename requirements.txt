@@ -7,5 +7,5 @@ sendgrid
 bcrypt
 Flask-Login
 email-validator
-backports.zoneinfo
+backports.zoneinfo; python_version < "3.9"
 qrcode[pil]
