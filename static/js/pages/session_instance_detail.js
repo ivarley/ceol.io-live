@@ -1137,20 +1137,24 @@ function setupSaveListeners() {
 function showEditSessionModal() {
     // Populate form data first (page-specific business logic)
     const dateInput = document.getElementById('edit-session-date-input');
+    const startTimeInput = document.getElementById('edit-session-start-time-input');
+    const endTimeInput = document.getElementById('edit-session-end-time-input');
     const locationInput = document.getElementById('edit-session-location-input');
     const commentsInput = document.getElementById('edit-session-comments-input');
     const cancelledInput = document.getElementById('edit-session-cancelled-input');
-    
+
     dateInput.value = sessionInstanceData.date;
+    startTimeInput.value = sessionInstanceData.start_time || '';
+    endTimeInput.value = sessionInstanceData.end_time || '';
     locationInput.value = sessionInstanceData.location_override || '';
     commentsInput.value = sessionInstanceData.comments || '';
     cancelledInput.checked = sessionInstanceData.is_cancelled;
-    
+
     // Show modal with generic ModalManager
     ModalManager.showModal('edit-session-instance-modal', {
         autoFocus: false // We'll focus manually
     });
-    
+
     dateInput.focus();
 }
 
@@ -1160,28 +1164,34 @@ function hideSessionEditModal() {
 
 function saveSessionInstance() {
     const dateInput = document.getElementById('edit-session-date-input');
+    const startTimeInput = document.getElementById('edit-session-start-time-input');
+    const endTimeInput = document.getElementById('edit-session-end-time-input');
     const locationInput = document.getElementById('edit-session-location-input');
     const commentsInput = document.getElementById('edit-session-comments-input');
     const cancelledInput = document.getElementById('edit-session-cancelled-input');
-    
+
     const date = dateInput.value.trim();
+    const startTime = startTimeInput.value.trim();
+    const endTime = endTimeInput.value.trim();
     const location = locationInput.value.trim();
     const comments = commentsInput.value.trim();
     const cancelled = cancelledInput.checked;
-    
+
     if (!date) {
         showMessage('Please enter a session date', 'error');
         return;
     }
-    
-    const requestData = { 
+
+    const requestData = {
         date: date,
         cancelled: cancelled
     };
-    
+
+    if (startTime) requestData.start_time = startTime;
+    if (endTime) requestData.end_time = endTime;
     if (location) requestData.location = location;
     if (comments) requestData.comments = comments;
-    
+
     fetch(`/api/sessions/${sessionPath}/${sessionDate}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

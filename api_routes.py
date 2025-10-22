@@ -980,6 +980,16 @@ def update_session_instance_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     new_date = request.json.get("date", "").strip()
+    start_time = (
+        request.json.get("start_time", "").strip()
+        if request.json.get("start_time")
+        else None
+    )
+    end_time = (
+        request.json.get("end_time", "").strip()
+        if request.json.get("end_time")
+        else None
+    )
     location = (
         request.json.get("location", "").strip()
         if request.json.get("location")
@@ -1062,10 +1072,10 @@ def update_session_instance_ajax(session_path, date):
         cur.execute(
             """
             UPDATE session_instance
-            SET date = %s, location_override = %s, is_cancelled = %s, comments = %s
+            SET date = %s, start_time = %s, end_time = %s, location_override = %s, is_cancelled = %s, comments = %s
             WHERE session_instance_id = %s
         """,
-            (new_date, location_override, cancelled, comments, session_instance_id),
+            (new_date, start_time, end_time, location_override, cancelled, comments, session_instance_id),
         )
 
         conn.commit()

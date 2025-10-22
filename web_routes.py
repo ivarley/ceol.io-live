@@ -417,7 +417,8 @@ def session_handler(full_path):
             cur.execute(
                 """
                 SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
-                       si.location_override, s.location_name, si.log_complete_date, s.session_id
+                       si.location_override, s.location_name, si.log_complete_date, s.session_id,
+                       si.start_time, si.end_time
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE s.path = %s AND si.date = %s
@@ -438,6 +439,8 @@ def session_handler(full_path):
                     "log_complete_date": session_instance[7],
                     "session_path": session_path,
                     "session_id": session_instance[8],
+                    "start_time": session_instance[9],
+                    "end_time": session_instance[10],
                 }
 
                 # Get tunes played in this session instance

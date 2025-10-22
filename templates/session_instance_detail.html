@@ -977,7 +977,13 @@
             <div class="modal-body">
                 <label for="edit-session-date-input">Session Date:</label>
                 <input type="date" id="edit-session-date-input" required>
-                
+
+                <label for="edit-session-start-time-input" style="margin-top: 16px;">Start Time:</label>
+                <input type="time" id="edit-session-start-time-input" placeholder="Start time">
+
+                <label for="edit-session-end-time-input" style="margin-top: 16px;">End Time:</label>
+                <input type="time" id="edit-session-end-time-input" placeholder="End time">
+
                 <label for="edit-session-location-input" style="margin-top: 16px;">Location:</label>
                 <input type="text" id="edit-session-location-input" placeholder="The usual: {{ session_instance.session_name }}">
                 
@@ -1106,6 +1112,8 @@ window.sessionConfig = {
     isLogComplete: {{ 'true' if session_instance.log_complete_date else 'false' }},
     sessionInstanceData: {
         date: '{{ session_instance.date }}',
+        start_time: {{ session_instance.start_time.strftime('%H:%M')|tojson if session_instance.start_time else 'null' }},
+        end_time: {{ session_instance.end_time.strftime('%H:%M')|tojson if session_instance.end_time else 'null' }},
         location_override: {{ session_instance.location_override|tojson if session_instance.location_override else 'null' }},
         default_location: {{ session_instance.default_location|tojson if session_instance.default_location else 'null' }},
         comments: {{ session_instance.comments|tojson if session_instance.comments else 'null' }},
