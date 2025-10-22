@@ -22,8 +22,8 @@ CREATE INDEX idx_session_instance_date ON session_instance(date);
 -- Create index for querying completed/incomplete session instances
 CREATE INDEX idx_session_instance_log_complete_date ON session_instance(log_complete_date);
 
--- Create unique constraint to prevent overlapping instances for the same session
-CREATE UNIQUE INDEX idx_session_instance_no_overlap ON session_instance(session_id, date, start_time);
+-- Note: idx_session_instance_no_overlap was removed to support overlapping sessions (e.g., festivals)
+-- Previously prevented: CREATE UNIQUE INDEX idx_session_instance_no_overlap ON session_instance(session_id, date, start_time);
 
 -- Create trigger function to automatically update last_modified_date
 CREATE OR REPLACE FUNCTION update_session_instance_last_modified_date()
