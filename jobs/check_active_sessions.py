@@ -38,7 +38,7 @@ def main():
     """Run the active session check."""
     logger.info("=" * 80)
     logger.info("Starting active session check")
-    logger.info(f"Current UTC time: {datetime.utcnow().isoformat()}")
+    logger.info(f"Current UTC time: {datetime.now(datetime.UTC).isoformat()}")
     logger.info("=" * 80)
 
     try:

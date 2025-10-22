@@ -66,7 +66,7 @@ def update_active_sessions() -> Dict[str, any]:
                     continue
 
                 # Get current time in session's timezone (look ahead 1 minute)
-                now_utc = datetime.utcnow().replace(tzinfo=ZoneInfo('UTC'))
+                now_utc = datetime.now(ZoneInfo('UTC'))
                 now_local = now_utc.astimezone(tz)
                 lookahead_local = now_local + timedelta(minutes=1)
 
@@ -104,6 +104,10 @@ def update_active_sessions() -> Dict[str, any]:
                     # Track what's currently active
                     if is_active:
                         currently_active_instances.add(inst_id)
+
+                    # Skip instances without defined times (can't determine active window)
+                    if start_time is None or end_time is None:
+                        continue
 
                     # Combine date and time to get full datetimes in session timezone
                     start_dt = datetime.combine(inst_date, start_time).replace(tzinfo=tz)
