@@ -13,7 +13,7 @@ active right at that time (e.g., sessions at 7:00pm become active when this runs
 import sys
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 # Load environment variables from .env file (for local development)
@@ -38,7 +38,7 @@ def main():
     """Run the active session check."""
     logger.info("=" * 80)
     logger.info("Starting active session check")
-    logger.info(f"Current UTC time: {datetime.now(datetime.UTC).isoformat()}")
+    logger.info(f"Current UTC time: {datetime.now(timezone.utc).isoformat()}")
     logger.info("=" * 80)
 
     try:
