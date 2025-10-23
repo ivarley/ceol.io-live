@@ -2324,6 +2324,19 @@ def person_details(person_id=None):
             "thesession_user_id": thesession_user_id,
         }
 
+        # Get person's instruments
+        cur.execute(
+            """
+            SELECT instrument
+            FROM person_instrument
+            WHERE person_id = %s
+            ORDER BY instrument
+            """,
+            (person_id,),
+        )
+        instruments = [row[0] for row in cur.fetchall()]
+        person["instruments"] = instruments
+
         # Get user account details if exists
         cur.execute(
             """

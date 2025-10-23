@@ -64,6 +64,22 @@
                                 </dl>
                             </div>
                         </div>
+
+                        <!-- Instruments Section -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <dl class="row">
+                                    <dt class="col-sm-2">Instruments:</dt>
+                                    <dd class="col-sm-10">
+                                        {% if person.instruments %}
+                                            <span id="instruments-display">{{ person.instruments|join(', ') }}</span>
+                                        {% else %}
+                                            <span id="instruments-display" class="text-muted">No instruments listed</span>
+                                        {% endif %}
+                                    </dd>
+                                </dl>
+                            </div>
+                        </div>
                         
                         <!-- Edit Mode -->
                         <div id="person-edit" class="row" style="display: none;">
@@ -103,6 +119,82 @@
                                         <div class="mb-3">
                                             <label for="thesession_user_id" class="form-label">TheSession User ID</label>
                                             <input type="number" class="form-control" id="thesession_user_id" name="thesession_user_id" value="{{ person.thesession_user_id or '' }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="mb-3">
+                                            <label class="form-label">Instruments</label>
+                                            <div id="instruments-checkboxes" class="row">
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="fiddle" id="edit-inst-fiddle">
+                                                        <label class="form-check-label" for="edit-inst-fiddle">Fiddle</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="flute" id="edit-inst-flute">
+                                                        <label class="form-check-label" for="edit-inst-flute">Flute</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="tin whistle" id="edit-inst-whistle">
+                                                        <label class="form-check-label" for="edit-inst-whistle">Tin Whistle</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="button accordion" id="edit-inst-accordion">
+                                                        <label class="form-check-label" for="edit-inst-accordion">Button Accordion</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="piano accordion" id="edit-inst-piano-accordion">
+                                                        <label class="form-check-label" for="edit-inst-piano-accordion">Piano Accordion</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="concertina" id="edit-inst-concertina">
+                                                        <label class="form-check-label" for="edit-inst-concertina">Concertina</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="banjo" id="edit-inst-banjo">
+                                                        <label class="form-check-label" for="edit-inst-banjo">Banjo</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="guitar" id="edit-inst-guitar">
+                                                        <label class="form-check-label" for="edit-inst-guitar">Guitar</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="bouzouki" id="edit-inst-bouzouki">
+                                                        <label class="form-check-label" for="edit-inst-bouzouki">Bouzouki</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="mandolin" id="edit-inst-mandolin">
+                                                        <label class="form-check-label" for="edit-inst-mandolin">Mandolin</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="bodhrán" id="edit-inst-bodhran">
+                                                        <label class="form-check-label" for="edit-inst-bodhran">Bodhrán</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="uilleann pipes" id="edit-inst-pipes">
+                                                        <label class="form-check-label" for="edit-inst-pipes">Uilleann Pipes</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="harp" id="edit-inst-harp">
+                                                        <label class="form-check-label" for="edit-inst-harp">Harp</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="piano" id="edit-inst-piano">
+                                                        <label class="form-check-label" for="edit-inst-piano">Piano</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mt-2">
+                                                <input type="text" class="form-control" id="other-instrument" placeholder="Other instrument...">
+                                                <button type="button" class="btn btn-sm btn-secondary mt-1" id="add-other-instrument-btn">Add Other</button>
+                                            </div>
+                                            <div id="other-instruments-list" class="mt-2"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -401,7 +493,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Show back link if user came from admin page
     const referer = document.referrer;
     if (referer && (referer.includes('/admin/people') || referer.includes('/admin'))) {
-        document.getElementById('back-link-container').style.display = 'block';
+        const backLinkContainer = document.getElementById('back-link-container');
+        if (backLinkContainer) {
+            backLinkContainer.style.display = 'block';
+        }
     }
 
     // Check for saved flash messages from sessionStorage
@@ -491,14 +586,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Store current instruments from the page
+    const personInstruments = {{ person.instruments|tojson if person.instruments else '[]' }};
+    const otherInstruments = []; // Store instruments added via "Other"
+
     function toggleEditMode(isEdit) {
         editMode = isEdit;
-        
+
         if (isEdit) {
-            editBtn.style.display = 'none';
-            editButtons.style.display = 'block';
-            personDisplay.style.display = 'none';
-            personEdit.style.display = 'block';
+            // Populate instrument checkboxes
+            populateInstrumentCheckboxes();
+
+            if (editBtn) editBtn.style.display = 'none';
+            if (editButtons) editButtons.style.display = 'block';
+            if (personDisplay) personDisplay.style.display = 'none';
+            if (personEdit) personEdit.style.display = 'block';
             if (userDisplay && userEdit) {
                 userDisplay.style.display = 'none';
                 userEdit.style.display = 'block';
@@ -506,12 +608,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (bottomEditButtons) {
                 bottomEditButtons.style.display = 'block';
             }
-            personData.style.display = 'none'; // Hide tabbed interface
+            if (personData) personData.style.display = 'none'; // Hide tabbed interface
         } else {
-            editBtn.style.display = 'block';
-            editButtons.style.display = 'none';
-            personDisplay.style.display = 'block';
-            personEdit.style.display = 'none';
+            if (editBtn) editBtn.style.display = 'block';
+            if (editButtons) editButtons.style.display = 'none';
+            if (personDisplay) personDisplay.style.display = 'block';
+            if (personEdit) personEdit.style.display = 'none';
             if (userDisplay && userEdit) {
                 userDisplay.style.display = 'block';
                 userEdit.style.display = 'none';
@@ -519,9 +621,98 @@ document.addEventListener('DOMContentLoaded', function() {
             if (bottomEditButtons) {
                 bottomEditButtons.style.display = 'none';
             }
-            personData.style.display = 'block'; // Show tabbed interface
+            if (personData) personData.style.display = 'block'; // Show tabbed interface
             hideUsernameWarning();
         }
+    }
+
+    function populateInstrumentCheckboxes() {
+        // Clear other instruments list
+        otherInstruments.length = 0;
+        const otherInstrumentsList = document.getElementById('other-instruments-list');
+        otherInstrumentsList.innerHTML = '';
+
+        // Get all standard instrument checkboxes
+        const checkboxes = document.querySelectorAll('#instruments-checkboxes input[type="checkbox"]');
+        const standardInstruments = Array.from(checkboxes).map(cb => cb.value);
+
+        // First, uncheck all checkboxes
+        checkboxes.forEach(cb => cb.checked = false);
+
+        // Check the appropriate checkboxes
+        personInstruments.forEach(instrument => {
+            const checkbox = Array.from(checkboxes).find(cb => cb.value === instrument);
+            if (checkbox) {
+                checkbox.checked = true;
+            } else {
+                // This is an "other" instrument
+                addOtherInstrumentToList(instrument);
+            }
+        });
+    }
+
+    function addOtherInstrumentToList(instrument) {
+        if (!otherInstruments.includes(instrument)) {
+            otherInstruments.push(instrument);
+            renderOtherInstruments();
+        }
+    }
+
+    function renderOtherInstruments() {
+        const otherInstrumentsList = document.getElementById('other-instruments-list');
+        otherInstrumentsList.innerHTML = '';
+
+        otherInstruments.forEach((inst, index) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary me-1 mb-1';
+            badge.style.display = 'inline-flex';
+            badge.style.alignItems = 'center';
+            badge.style.gap = '0.25rem';
+            badge.innerHTML = `${inst}`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn-close btn-close-white';
+            removeBtn.style.fontSize = '0.6rem';
+            removeBtn.style.padding = '0.1rem';
+            removeBtn.setAttribute('aria-label', 'Remove');
+            removeBtn.addEventListener('click', () => removeOtherInstrument(inst));
+
+            badge.appendChild(removeBtn);
+            otherInstrumentsList.appendChild(badge);
+        });
+    }
+
+    function removeOtherInstrument(instrument) {
+        const index = otherInstruments.indexOf(instrument);
+        if (index > -1) {
+            otherInstruments.splice(index, 1);
+            renderOtherInstruments();
+        }
+    }
+
+    // Add other instrument button handler
+    const addOtherInstrumentBtn = document.getElementById('add-other-instrument-btn');
+    if (addOtherInstrumentBtn) {
+        addOtherInstrumentBtn.addEventListener('click', function() {
+            const otherInstrumentInput = document.getElementById('other-instrument');
+            const instrument = otherInstrumentInput.value.trim();
+            if (instrument) {
+                addOtherInstrumentToList(instrument);
+                otherInstrumentInput.value = '';
+            }
+        });
+    }
+
+    // Allow Enter key to add other instrument
+    const otherInstrumentInput = document.getElementById('other-instrument');
+    if (otherInstrumentInput) {
+        otherInstrumentInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addOtherInstrumentBtn.click();
+            }
+        });
     }
 
     function checkUsernameAvailability(username) {
@@ -551,36 +742,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showUsernameWarning(message) {
-        usernameWarning.textContent = message;
-        usernameWarning.style.display = 'block';
+        if (usernameWarning) {
+            usernameWarning.textContent = message;
+            usernameWarning.style.display = 'block';
+        }
     }
 
     function hideUsernameWarning() {
-        usernameWarning.style.display = 'none';
+        if (usernameWarning) {
+            usernameWarning.style.display = 'none';
+        }
     }
 
     function saveChanges() {
         // Validate username if changed
         const currentUsername = usernameInput ? usernameInput.value.trim() : originalUsername;
-        if (currentUsername !== originalUsername && usernameWarning.style.display === 'block') {
+        if (usernameWarning && currentUsername !== originalUsername && usernameWarning.style.display === 'block') {
             alert('Please fix the username issue before saving.');
             return;
         }
 
         const personForm = document.getElementById('person-form');
         const userForm = document.getElementById('user-form');
-        
+
         const formData = {
             person_id: personId,
             person: {},
             user: {}
         };
 
+        // Collect instruments from checkboxes and "other" list
+        const instruments = [];
+        const checkboxes = document.querySelectorAll('#instruments-checkboxes input[type="checkbox"]:checked');
+        checkboxes.forEach(checkbox => {
+            instruments.push(checkbox.value);
+        });
+        // Add other instruments
+        otherInstruments.forEach(inst => {
+            instruments.push(inst);
+        });
+
         // Collect person data
         if (personForm) {
-            const personInputs = personForm.querySelectorAll('input');
+            const personInputs = personForm.querySelectorAll('input:not([type="checkbox"])');
             personInputs.forEach(input => {
-                formData.person[input.name] = input.value.trim() || null;
+                // Skip instrument-related inputs
+                if (input.id !== 'other-instrument' && input.name) {
+                    formData.person[input.name] = input.value.trim() || null;
+                }
             });
         }
 
@@ -597,7 +806,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.user.user_id = {{ user.user_id if user else 'null' }};
         }
 
-        // Send update request
+        // First, update person and user data
         fetch(`/api/person/${personId}/update`, {
             method: 'PUT',
             headers: {
@@ -607,13 +816,27 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to update person data');
+            }
+            // Then update instruments
+            return fetch(`/api/person/${personId}/instruments`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ instruments: instruments })
+            });
+        })
+        .then(response => response.json())
+        .then(data => {
             if (data.success) {
                 // Store success message for display after reload
-                sessionStorage.setItem('personSavedMessage', data.message);
+                sessionStorage.setItem('personSavedMessage', 'Profile updated successfully');
                 // Reload the page to show updated data
                 window.location.reload();
             } else {
-                showMessage('Error saving changes: ' + data.message, 'error');
+                showMessage('Error saving instruments: ' + data.message, 'error');
             }
         })
         .catch(error => {
@@ -693,7 +916,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/api/person/${personId}/attended`)
             .then(response => response.json())
             .then(data => {
-                document.getElementById('attended-loading').style.display = 'none';
+                const attendedLoading = document.getElementById('attended-loading');
+                if (attendedLoading) attendedLoading.style.display = 'none';
                 
                 if (data.success && data.attendance.length > 0) {
                     let html = `
@@ -730,9 +954,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                document.getElementById('attended-loading').style.display = 'none';
-                document.getElementById('attended-content').innerHTML = 
-                    '<div class="alert alert-danger" role="alert">Error loading players.</div>';
+                const attendedLoading = document.getElementById('attended-loading');
+                if (attendedLoading) attendedLoading.style.display = 'none';
+                const attendedContent = document.getElementById('attended-content');
+                if (attendedContent) {
+                    attendedContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading players.</div>';
+                }
                 console.error('Error:', error);
             });
     }
@@ -743,7 +970,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 console.log('Login data response:', data); // Debug logging
-                document.getElementById('logins-loading').style.display = 'none';
+                const loginsLoading = document.getElementById('logins-loading');
+                if (loginsLoading) loginsLoading.style.display = 'none';
                 
                 if (data.success && data.logins.length > 0) {
                     let html = `
@@ -781,9 +1009,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                document.getElementById('logins-loading').style.display = 'none';
-                document.getElementById('logins-content').innerHTML = 
-                    '<div class="alert alert-danger" role="alert">Error loading login history.</div>';
+                const loginsLoading = document.getElementById('logins-loading');
+                if (loginsLoading) loginsLoading.style.display = 'none';
+                const loginsContent = document.getElementById('logins-content');
+                if (loginsContent) {
+                    loginsContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading login history.</div>';
+                }
                 console.error('Error:', error);
             });
     }
@@ -887,12 +1118,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function displaySessions(sessions) {
         if (sessions.length === 0) {
-            sessionsResults.innerHTML = '<p class="text-muted">No sessions found.</p>';
-            noSessionsMessage.style.display = 'block';
+            if (sessionsResults) sessionsResults.innerHTML = '<p class="text-muted">No sessions found.</p>';
+            if (noSessionsMessage) noSessionsMessage.style.display = 'block';
             return;
         }
 
-        noSessionsMessage.style.display = 'none';
+        if (noSessionsMessage) noSessionsMessage.style.display = 'none';
         
         let html = '<div class="sessions-list">';
         sessions.forEach(session => {
@@ -971,17 +1202,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showLoading(show) {
         if (show) {
-            sessionsLoading.style.display = 'block';
-            sessionsResults.innerHTML = '';
-            noSessionsMessage.style.display = 'none';
+            if (sessionsLoading) sessionsLoading.style.display = 'block';
+            if (sessionsResults) sessionsResults.innerHTML = '';
+            if (noSessionsMessage) noSessionsMessage.style.display = 'none';
         } else {
-            sessionsLoading.style.display = 'none';
+            if (sessionsLoading) sessionsLoading.style.display = 'none';
         }
     }
 
     function showError(message) {
-        sessionsResults.innerHTML = `<div class="alert alert-danger">${message}</div>`;
-        noSessionsMessage.style.display = 'none';
+        if (sessionsResults) sessionsResults.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+        if (noSessionsMessage) noSessionsMessage.style.display = 'none';
     }
 
     // Flash messages are now handled by the global showMessage() function from base.html
@@ -1401,7 +1632,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* Flash message styles now handled globally in base.html */
 
+/* Instrument checkboxes styling */
+#instruments-checkboxes .form-check {
+    margin-bottom: 0.25rem;
+}
+
+#instruments-checkboxes .form-check-label {
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+#other-instruments-list .badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+}
+
+#other-instruments-list .btn-close {
+    width: 0.5em;
+    height: 0.5em;
+    background-size: 0.5em;
+}
+
 @media (max-width: 768px) {
+    #instruments-checkboxes .col-md-4 {
+        width: 100%;
+    }
+
     .modal-content {
         width: 95%;
         margin: 10% auto;
