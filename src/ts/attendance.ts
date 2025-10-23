@@ -8,7 +8,7 @@ interface AttendanceConfig {
     sessionInstanceId: number;
     sessionId: number;
     sessionPath: string;
-    currentUserId?: number;
+    currentPersonId?: number;
     isRegular?: boolean;
     canManage: boolean;
 }
@@ -264,32 +264,68 @@ class AttendanceManager {
         const btn = document.getElementById('quick-checkin-btn') as HTMLButtonElement;
         if (!btn || !this.config) return;
 
-        const currentAttendee = this.attendees.find(a => 
-            a.person_id === this.config!.currentUserId
+        // Get or create the change link
+        let changeLink = document.getElementById('quick-checkin-change-link') as HTMLAnchorElement;
+        if (!changeLink) {
+            changeLink = document.createElement('a');
+            changeLink.id = 'quick-checkin-change-link';
+            changeLink.href = '#';
+            changeLink.className = 'ml-2 text-muted small';
+            changeLink.style.cursor = 'pointer';
+            btn.parentElement?.appendChild(changeLink);
+
+            // Prevent default link behavior
+            changeLink.addEventListener('click', (e) => {
+                e.preventDefault();
+            });
+        }
+
+        const currentAttendee = this.attendees.find(a =>
+            a.person_id === this.config!.currentPersonId
         );
-        
+
         if (currentAttendee) {
-            switch (currentAttendee.attendance_status || currentAttendee.attendance) {
+            const status = currentAttendee.attendance_status || currentAttendee.attendance;
+            btn.disabled = true; // Always disabled when already checked in
+
+            switch (status) {
                 case 'yes':
                     btn.innerHTML = '<i class="fas fa-check-circle"></i> Checked In';
                     btn.className = 'btn btn-success btn-sm';
-                    btn.onclick = () => this.changeMyStatus('maybe');
+                    changeLink.textContent = 'Change To Maybe';
+                    changeLink.style.display = '';
+                    changeLink.onclick = (e) => {
+                        e.preventDefault();
+                        this.changeMyStatus('maybe');
+                    };
                     break;
                 case 'maybe':
                     btn.innerHTML = '<i class="fas fa-question-circle"></i> Maybe';
                     btn.className = 'btn btn-warning btn-sm';
-                    btn.onclick = () => this.changeMyStatus('no');
+                    changeLink.textContent = 'Change To No';
+                    changeLink.style.display = '';
+                    changeLink.onclick = (e) => {
+                        e.preventDefault();
+                        this.changeMyStatus('no');
+                    };
                     break;
                 case 'no':
                     btn.innerHTML = '<i class="fas fa-times-circle"></i> Not Coming';
                     btn.className = 'btn btn-danger btn-sm';
-                    btn.onclick = () => this.changeMyStatus('yes');
+                    changeLink.textContent = 'Change To Yes';
+                    changeLink.style.display = '';
+                    changeLink.onclick = (e) => {
+                        e.preventDefault();
+                        this.changeMyStatus('yes');
+                    };
                     break;
             }
         } else {
             btn.innerHTML = '<i class="fas fa-check"></i> Check In';
             btn.className = 'btn btn-success btn-sm';
+            btn.disabled = false;
             btn.onclick = () => this.quickCheckin();
+            changeLink.style.display = 'none';
         }
     }
 
@@ -469,46 +505,79 @@ class AttendanceManager {
     }
 
     private async quickCheckin(): Promise<void> {
-        if (!this.config) return;
-        
+        if (!this.config || !this.config.currentPersonId) return;
+
+        const btn = document.getElementById('quick-checkin-btn') as HTMLButtonElement;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking In ...';
+        }
+
         try {
             const response = await fetch(`/api/session_instance/${this.config.sessionInstanceId}/attendees/checkin`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ attendance_status: 'yes' })
+                body: JSON.stringify({
+                    person_id: this.config.currentPersonId,
+                    attendance: 'yes'
+                })
             });
-            
+
             if (!response.ok) {
                 const error = await response.json() as APIResponse;
                 throw new Error(error.error || 'Failed to check in');
             }
-            
+
             await this.loadAttendance();
             this.showSuccess('Checked in successfully!');
         } catch (error) {
             this.showError((error as Error).message || 'Error checking in');
+            // Reset button state on error
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Check In';
+            }
         }
     }
 
     private async changeMyStatus(newStatus: AttendanceStatus): Promise<void> {
-        if (!this.config) return;
-        
+        if (!this.config || !this.config.currentPersonId) return;
+
+        const btn = document.getElementById('quick-checkin-btn') as HTMLButtonElement;
+        const changeLink = document.getElementById('quick-checkin-change-link') as HTMLAnchorElement;
+
+        const statusText = newStatus === 'yes' ? 'Yes' : newStatus === 'maybe' ? 'Maybe' : 'No';
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Changing Status To ${statusText} ...`;
+        }
+        if (changeLink) {
+            changeLink.style.display = 'none';
+        }
+
         try {
             const response = await fetch(`/api/session_instance/${this.config.sessionInstanceId}/attendees/checkin`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ attendance_status: newStatus })
+                body: JSON.stringify({
+                    person_id: this.config.currentPersonId,
+                    attendance: newStatus
+                })
             });
-            
+
             if (!response.ok) {
                 const error = await response.json() as APIResponse;
                 throw new Error(error.error || 'Failed to update status');
             }
-            
+
             await this.loadAttendance();
             this.showSuccess('Status updated!');
         } catch (error) {
             this.showError((error as Error).message || 'Error updating status');
+            // Reset will happen via updateQuickCheckinButton called from loadAttendance
+            // But in case of error before that, manually restore
+            this.updateQuickCheckinButton();
         }
     }
 

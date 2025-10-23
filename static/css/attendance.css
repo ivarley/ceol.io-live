@@ -241,9 +241,16 @@
     transition: all 0.3s ease;
 }
 
-#quick-checkin-btn:hover {
-    transform: translateY(-2px);
+#quick-checkin-btn:hover:not(:disabled) {
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+#quick-checkin-change-link {
+    text-decoration: underline;
+    vertical-align: middle;
+    line-height: 1.5;
+    position: relative;
+    top: 7px;
 }
 
 /* Regular Badge */

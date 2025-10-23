@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sessionPath: '{{ session_instance.session_path|default('') }}',
             canManage: {{ (is_session_admin|default(false))|lower }},
             isRegular: {{ (is_session_regular|default(false))|lower }},
-            currentUserId: {{ current_user.user_id if current_user.is_authenticated else 'null' }}
+            currentPersonId: {{ current_user.person_id if current_user.is_authenticated else 'null' }}
         });
     }
 });
