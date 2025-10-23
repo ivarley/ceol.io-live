@@ -475,10 +475,6 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshButton.addEventListener('click', function(e) {
             e.preventDefault();
 
-            // Clear the cache
-            const cacheKey = `active_session_${personId}`;
-            localStorage.removeItem(cacheKey);
-
             // Add animation/feedback
             const svg = this.querySelector('svg');
             svg.style.transition = 'transform 0.5s';
@@ -489,7 +485,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 500);
 
             // Trigger a refresh of the badge in base.html
-            // We dispatch a custom event that the badge listener can catch
             window.dispatchEvent(new CustomEvent('refreshActiveSession'));
 
             showMessage('Active session status refreshed', 'success');

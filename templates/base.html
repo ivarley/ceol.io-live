@@ -222,14 +222,12 @@
 
         .in-session-badge-button {
             background-color: #28a745;
-            color: white;
             border: none;
-            border-radius: 4px;
-            padding: 6px 12px;
-            font-size: 13px;
-            font-weight: 600;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            padding: 0;
             cursor: pointer;
-            white-space: nowrap;
             transition: background-color 0.2s;
         }
 
@@ -295,7 +293,7 @@
                 <!-- In Session Badge -->
                 {% if current_user.is_authenticated %}
                 <div class="in-session-badge" id="inSessionBadge">
-                    <button class="in-session-badge-button" id="inSessionButton">In Session</button>
+                    <button class="in-session-badge-button" id="inSessionButton" aria-label="Active session"></button>
                     <div class="in-session-popup" id="inSessionPopup">
                         <div class="in-session-popup-title" id="inSessionPopupTitle"></div>
                         <div class="in-session-popup-detail" id="inSessionPopupDate"></div>
@@ -543,36 +541,13 @@ window.addEventListener('appinstalled', () => {
     let popupTimeout = null;
     let isPopupVisible = false;
 
-    const CACHE_KEY = `active_session_${personId}`;
-    const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
-
-    // Fetch active session info with caching
-    function fetchActiveSession(forceRefresh = false) {
-        // Check cache first unless force refresh
-        if (!forceRefresh) {
-            const cached = getCachedActiveSession();
-            if (cached) {
-                console.log('Using cached active session data');
-                activeSession = cached;
-                if (activeSession) {
-                    badge.classList.add('active');
-                    updatePopupContent();
-                } else {
-                    badge.classList.remove('active');
-                }
-                return;
-            }
-        }
-
-        // Fetch from server
+    // Fetch active session info from server
+    function fetchActiveSession() {
         fetch(`/api/person/${personId}/active_session`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     activeSession = data.active_session;
-
-                    // Cache the result
-                    cacheActiveSession(activeSession);
 
                     if (activeSession) {
                         badge.classList.add('active');
@@ -587,40 +562,6 @@ window.addEventListener('appinstalled', () => {
             .catch(error => {
                 console.error('Error fetching active session:', error);
             });
-    }
-
-    function getCachedActiveSession() {
-        try {
-            const cached = localStorage.getItem(CACHE_KEY);
-            if (!cached) return null;
-
-            const { data, timestamp } = JSON.parse(cached);
-            const age = Date.now() - timestamp;
-
-            // Return cached data if less than 15 minutes old
-            if (age < CACHE_DURATION) {
-                return data;
-            }
-
-            // Cache expired, remove it
-            localStorage.removeItem(CACHE_KEY);
-            return null;
-        } catch (e) {
-            console.error('Error reading cache:', e);
-            return null;
-        }
-    }
-
-    function cacheActiveSession(data) {
-        try {
-            const cacheEntry = {
-                data: data,
-                timestamp: Date.now()
-            };
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheEntry));
-        } catch (e) {
-            console.error('Error writing cache:', e);
-        }
     }
 
     function updatePopupContent() {
@@ -715,39 +656,13 @@ window.addEventListener('appinstalled', () => {
     button.addEventListener('mouseenter', showPopup);
     button.addEventListener('mouseleave', hidePopup);
 
-    // Mobile: long press to show popup (300ms)
-    let longPressTimer = null;
-    let touchStartTime = 0;
-
-    button.addEventListener('touchstart', (e) => {
-        touchStartTime = Date.now();
-        longPressTimer = setTimeout(() => {
-            showPopup();
-        }, 300);
-    });
-
+    // Mobile: tap to toggle popup
     button.addEventListener('touchend', (e) => {
-        const touchDuration = Date.now() - touchStartTime;
-
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-
-        // If it was a short tap (not a long press), navigate
-        if (touchDuration < 300 && !isPopupVisible) {
-            e.preventDefault();
-            navigateToSession();
-        } else if (isPopupVisible) {
-            // If popup is visible, tapping again hides it
+        e.preventDefault();
+        if (isPopupVisible) {
             hidePopup();
-        }
-    });
-
-    button.addEventListener('touchmove', () => {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
+        } else {
+            showPopup();
         }
     });
 
@@ -759,6 +674,12 @@ window.addEventListener('appinstalled', () => {
         }
     });
 
+    // Mobile: clicking inside popup navigates to session
+    popup.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateToSession();
+    });
+
     // Close popup when clicking outside
     document.addEventListener('click', (e) => {
         if (!badge.contains(e.target)) {
@@ -766,19 +687,12 @@ window.addEventListener('appinstalled', () => {
         }
     });
 
-    // Fetch on page load (will use cache if available)
+    // Fetch on page load
     fetchActiveSession();
-
-    // Force refresh every 15 minutes (matching cache duration)
-    // This ensures we check for status changes periodically
-    setInterval(() => {
-        fetchActiveSession(true); // force refresh
-    }, CACHE_DURATION);
 
     // Listen for manual refresh events from other pages (e.g., /me page)
     window.addEventListener('refreshActiveSession', function() {
-        console.log('Received refresh active session event');
-        fetchActiveSession(true); // force refresh
+        fetchActiveSession();
     });
 })();
 {% endif %}

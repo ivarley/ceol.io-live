@@ -7098,20 +7098,14 @@ def get_person_active_session(person_id):
 
         # Convert date/time objects to strings for JSON serialization
         if active_session:
-            active_session['date'] = active_session['date'].isoformat()
-            active_session['start_time'] = active_session['start_time'].isoformat()
-            active_session['end_time'] = active_session['end_time'].isoformat()
+            active_session['date'] = active_session['date'].isoformat() if active_session['date'] else None
+            active_session['start_time'] = active_session['start_time'].isoformat() if active_session['start_time'] else None
+            active_session['end_time'] = active_session['end_time'].isoformat() if active_session['end_time'] else None
 
-        response = jsonify({
+        return jsonify({
             "success": True,
             "active_session": active_session
         })
-
-        # Cache for 15 minutes (900 seconds)
-        # This is safe to cache because active session status doesn't change frequently
-        response.headers['Cache-Control'] = 'private, max-age=900'
-
-        return response
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
