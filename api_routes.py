@@ -6827,7 +6827,8 @@ def get_sessions_with_today_status():
                 s.termination_date,
                 s.recurrence,
                 s.timezone,
-                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member
+                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member,
+                s.location_name
             FROM session s
             LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
             ORDER BY s.name
@@ -6835,24 +6836,42 @@ def get_sessions_with_today_status():
             (user_person_id,)
         )
 
+        # Fetch all sessions first
+        session_rows = cur.fetchall()
+
+        # Get ALL active instances in one query (much more efficient!)
+        # Active instances are marked with is_active = TRUE
+        cur.execute(
+            """
+            SELECT session_id, session_instance_id, date, start_time, end_time, location_override
+            FROM session_instance
+            WHERE is_active = TRUE
+            ORDER BY session_id, date, start_time
+            """
+        )
+
+        # Group active instances by session_id
+        active_instances_by_session = {}
+        for active_row in cur.fetchall():
+            session_id = active_row[0]
+            if session_id not in active_instances_by_session:
+                active_instances_by_session[session_id] = []
+
+            active_instances_by_session[session_id].append({
+                'session_instance_id': active_row[1],
+                'date': active_row[2].isoformat(),
+                'start_time': active_row[3].isoformat() if active_row[3] else None,
+                'end_time': active_row[4].isoformat() if active_row[4] else None,
+                'location_override': active_row[5]
+            })
+
+        # Now build the sessions list
         sessions = []
-        for row in cur.fetchall():
+        for row in session_rows:
             session_id = row[0]
-            session_timezone = row[8] or "UTC"
 
-            # Get "today" in this session's timezone
-            today_in_session_tz = get_today_in_timezone(session_timezone)
-
-            # Check if there's an instance for today in this session
-            cur.execute(
-                """
-                SELECT session_instance_id, date
-                FROM session_instance
-                WHERE session_id = %s AND date = %s
-                """,
-                (session_id, today_in_session_tz)
-            )
-            instance_row = cur.fetchone()
+            # Get active instances for this session from our pre-fetched dict
+            active_instances = active_instances_by_session.get(session_id, [])
 
             sessions.append({
                 'session_id': session_id,
@@ -6864,9 +6883,8 @@ def get_sessions_with_today_status():
                 'termination_date': row[6].isoformat() if row[6] else None,
                 'recurrence': row[7],
                 'user_is_member': row[9],
-                'has_instance_today': instance_row is not None,
-                'instance_id_today': instance_row[0] if instance_row else None,
-                'instance_date_today': instance_row[1].isoformat() if instance_row else None
+                'location_name': row[10],
+                'active_instances': active_instances
             })
 
         cur.close()
@@ -7084,10 +7102,16 @@ def get_person_active_session(person_id):
             active_session['start_time'] = active_session['start_time'].isoformat()
             active_session['end_time'] = active_session['end_time'].isoformat()
 
-        return jsonify({
+        response = jsonify({
             "success": True,
             "active_session": active_session
         })
+
+        # Cache for 15 minutes (900 seconds)
+        # This is safe to cache because active session status doesn't change frequently
+        response.headers['Cache-Control'] = 'private, max-age=900'
+
+        return response
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

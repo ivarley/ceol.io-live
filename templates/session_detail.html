@@ -721,6 +721,35 @@
         .year-content ul {
             margin-bottom: 0;
         }
+
+        /* Active Session Instance Highlighting */
+        .session-instance-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            margin: -4px -8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .session-instance-link.active-now {
+            background-color: #fffbcc;
+        }
+
+        [data-theme="dark"] .session-instance-link.active-now {
+            background-color: #4a4520;
+        }
+
+        .active-now-badge {
+            background-color: #28a745;
+            color: white;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
     </style>
 {% endblock %}
 
@@ -1775,6 +1804,108 @@
         }, 300);
     }
 
+    // Active Session Instance Highlighting
+    const sessionId = {{ session.session_id }};
+
+    function highlightActiveInstances() {
+        console.log('🔍 [Highlight] Starting to fetch active instances for session:', sessionId);
+        fetch(`/api/session/${sessionId}/active_instance`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('🔍 [Highlight] API response:', data);
+                if (data.success && data.active_instance_ids && data.active_instance_ids.length > 0) {
+                    const activeInstanceIds = data.active_instance_ids;
+                    console.log('🔍 [Highlight] Active instance IDs:', activeInstanceIds);
+
+                    // Find all session instance links
+                    const links = document.querySelectorAll('.year-content a[href*="/sessions/"]');
+                    console.log('🔍 [Highlight] Found', links.length, 'session instance links');
+
+                    links.forEach(link => {
+                        // Extract session instance identifier from href (could be date or ID)
+                        const href = link.getAttribute('href');
+                        console.log('🔍 [Highlight] Processing link:', href);
+
+                        // Try to match date format first (YYYY-MM-DD)
+                        // Pattern handles multi-segment paths like /sessions/austin/mueller/2025-01-22
+                        let match = href.match(/\/sessions\/.*\/(\d{4}-\d{2}-\d{2})$/);
+
+                        if (match) {
+                            const dateOrId = match[1];
+                            console.log('🔍 [Highlight] Matched as date format:', dateOrId);
+                            checkIfInstanceActive(dateOrId, link, activeInstanceIds);
+                        } else {
+                            // Try to match instance ID format (just numbers at the end)
+                            // Pattern handles multi-segment paths like /sessions/austin/mueller/253
+                            match = href.match(/\/sessions\/.*\/(\d+)$/);
+                            if (match) {
+                                const instanceId = parseInt(match[1]);
+                                console.log('🔍 [Highlight] Matched as instance ID:', instanceId);
+                                console.log('🔍 [Highlight] Is in active list?', activeInstanceIds.includes(instanceId));
+                                // Check if this instance ID is in the active list
+                                if (activeInstanceIds.includes(instanceId)) {
+                                    console.log('✅ [Highlight] Highlighting instance:', instanceId);
+                                    highlightLink(link);
+                                }
+                            } else {
+                                console.log('⚠️ [Highlight] Could not parse href:', href);
+                            }
+                        }
+                    });
+                } else {
+                    console.log('ℹ️ [Highlight] No active instances found');
+                }
+            })
+            .catch(error => {
+                console.error('❌ [Highlight] Error fetching active instances:', error);
+            });
+    }
+
+    function checkIfInstanceActive(dateOrId, linkElement, activeInstanceIds) {
+        // Fetch the session instance details to get the instance_id
+        console.log('🔍 [Highlight] Fetching instance details for:', dateOrId);
+        fetch(`/api/sessions/${sessionPath}/instances/${dateOrId}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('🔍 [Highlight] Instance API response for', dateOrId, ':', data);
+                if (data.success && data.session_instance) {
+                    const instanceId = data.session_instance.session_instance_id;
+                    console.log('🔍 [Highlight] Instance ID:', instanceId, 'Active list:', activeInstanceIds);
+
+                    // Check if this instance is active
+                    if (activeInstanceIds.includes(instanceId)) {
+                        console.log('✅ [Highlight] Instance is active, highlighting:', instanceId);
+                        highlightLink(linkElement);
+                    } else {
+                        console.log('ℹ️ [Highlight] Instance is not active:', instanceId);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('❌ [Highlight] Error checking instance:', error);
+            });
+    }
+
+    function highlightLink(linkElement) {
+        // Wrap the link content with the highlighting class
+        const originalText = linkElement.textContent;
+        linkElement.innerHTML = '';
+
+        const wrapper = document.createElement('span');
+        wrapper.className = 'session-instance-link active-now';
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = originalText;
+
+        const badge = document.createElement('span');
+        badge.className = 'active-now-badge';
+        badge.textContent = 'Active Now';
+
+        wrapper.appendChild(textSpan);
+        wrapper.appendChild(badge);
+        linkElement.appendChild(wrapper);
+    }
+
     // Show initial flash messages and setup event listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         // Setup tab switching
@@ -1786,6 +1917,9 @@
 
         // Initialize tunes tab on page load since it's the default tab
         initializeTunesTab();
+
+        // Highlight active session instances
+        highlightActiveInstances();
 
         // Check for tune parameter and open tune modal if present
         const urlParams = new URLSearchParams(window.location.search);

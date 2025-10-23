@@ -109,13 +109,13 @@
         background-color: #218838;
     }
 
-    .btn-start-today {
-        background-color: #007bff;
-        color: white;
-    }
-
-    .btn-start-today:hover {
-        background-color: #0069d9;
+    select.today-action-btn {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        padding-right: 24px;
+        background-image: none;
+        cursor: pointer;
     }
 
     .action-cell {
@@ -249,71 +249,6 @@
         });
     }
 
-    function isScheduledToday(recurrence) {
-        if (!recurrence) return false;
-
-        const today = new Date();
-        const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const todayName = dayNames[dayOfWeek];
-
-        // Try to parse as JSON first
-        try {
-            const recurrenceData = JSON.parse(recurrence);
-            if (recurrenceData.schedules && Array.isArray(recurrenceData.schedules)) {
-                // Check if any schedule matches today
-                return recurrenceData.schedules.some(schedule => {
-                    if (schedule.weekday === todayName) {
-                        // For weekly patterns, check if today matches the interval
-                        if (schedule.type === 'weekly') {
-                            // Without knowing the reference date, we can't determine every_n_weeks
-                            // So we assume it's scheduled (conservative approach for UX)
-                            return true;
-                        }
-                        // For monthly patterns, check if today matches the nth occurrence
-                        else if (schedule.type === 'monthly_nth_weekday') {
-                            const dayOfMonth = today.getDate();
-                            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                            const firstWeekdayOfMonth = firstDayOfMonth.getDay();
-
-                            // Calculate which occurrence this is
-                            let occurrenceNum = Math.floor((dayOfMonth - 1 + firstWeekdayOfMonth) / 7) + 1;
-
-                            // Check for last occurrence
-                            const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                            const isLastOccurrence = dayOfMonth + 7 > lastDayOfMonth.getDate();
-
-                            if (schedule.which) {
-                                return schedule.which.includes(occurrenceNum) ||
-                                       (isLastOccurrence && schedule.which.includes(-1));
-                            }
-                        }
-                    }
-                    return false;
-                });
-            }
-        } catch (e) {
-            // Not JSON, fall back to text parsing for legacy data
-        }
-
-        // Legacy text parsing
-        const recurrenceLower = recurrence.toLowerCase();
-
-        // Check for day of week mentions
-        if (recurrenceLower.includes(todayName)) {
-            return true;
-        }
-
-        // Check for "weekly" or "every week" (assume scheduled every week on same day)
-        if (recurrenceLower.includes('weekly') || recurrenceLower.includes('every week')) {
-            return true;
-        }
-
-        // For "monthly" or "biweekly", we can't determine without more info
-        // For now, return false to be conservative
-        return false;
-    }
-
     function filterSessions() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -358,24 +293,25 @@
         });
     }
 
-    async function startTodaySession(sessionPath) {
-        try {
-            const response = await fetch(`/api/sessions/${sessionPath}/instances/today`, {
-                method: 'POST'
-            });
-            const data = await response.json();
+    function formatTimeRange(startTime, endTime) {
+        if (!startTime) return '';
 
-            if (data.success) {
-                // Redirect to the session instance using ID for unambiguous URL
-                const instanceId = data.session_instance_id || data.date;
-                window.location.href = `/sessions/${sessionPath}/${instanceId}`;
-            } else {
-                alert('Failed to create session: ' + (data.message || data.error));
-            }
-        } catch (error) {
-            console.error('Error creating session:', error);
-            alert('Error creating session. Please try again.');
+        function formatTime(timeStr) {
+            if (!timeStr) return '';
+            const parts = timeStr.split(':');
+            let hour = parseInt(parts[0]);
+            const minute = parts[1];
+            const period = hour >= 12 ? 'pm' : 'am';
+            hour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+            return `${hour}:${minute}${period}`;
         }
+
+        const start = formatTime(startTime);
+        if (endTime) {
+            const end = formatTime(endTime);
+            return `${start}-${end}`;
+        }
+        return start + ' - ?';
     }
 
     function updateDisplay() {
@@ -416,14 +352,31 @@
 
                 // Determine what action to show
                 let actionHTML = '';
-                if (session.has_instance_today) {
-                    // Has an instance today - show "Go to today's session"
-                    actionHTML = `<button class="today-action-btn btn-goto-today" onclick="window.location.href='/sessions/${session.path}/${session.instance_date_today}'">Go to today's session</button>`;
-                } else if (isLoggedIn && isScheduledToday(session.recurrence)) {
-                    // Scheduled today but no instance - show "Start today's session" (only if logged in)
-                    actionHTML = `<button class="today-action-btn btn-start-today" onclick="startTodaySession('${session.path}')">Start today's session</button>`;
+                if (session.active_instances && session.active_instances.length > 0) {
+                    // Has active instances - show "On Now" button
+                    if (session.active_instances.length === 1) {
+                        // Single active instance - jump directly to it
+                        const instance = session.active_instances[0];
+                        actionHTML = `<button class="today-action-btn btn-goto-today" onclick="window.location.href='/sessions/${session.path}/${instance.date}'">On Now</button>`;
+                    } else {
+                        // Multiple active instances - show dropdown
+                        const dropdownId = `dropdown-${session.session_id}`;
+                        let optionsHTML = '';
+                        session.active_instances.forEach(instance => {
+                            const timeStr = formatTimeRange(instance.start_time, instance.end_time);
+                            const locationStr = instance.location_override || session.location_name || '';
+                            const displayText = [timeStr, locationStr].filter(x => x).join(' @ ');
+                            optionsHTML += `<option value="${instance.date}">${displayText}</option>`;
+                        });
+                        actionHTML = `
+                            <select class="today-action-btn btn-goto-today" id="${dropdownId}" onchange="if(this.value) window.location.href='/sessions/${session.path}/' + this.value">
+                                <option value="">On Now ...</option>
+                                ${optionsHTML}
+                            </select>
+                        `;
+                    }
                 }
-                // Otherwise no button - regular link only
+                // Otherwise no button - only show the session name link
 
                 row.innerHTML = `
                     <td><a href="/sessions/${session.path}">${session.name}</a></td>

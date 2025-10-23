@@ -229,7 +229,22 @@
 
             <!-- Tabbed Interface Section -->
             <section class="docs-section" id="person-data">
-                <h2 class="section-heading">Activity Data</h2>
+                <h2 class="section-heading">
+                    Activity Data
+                    {% if is_user_profile %}
+                    <button id="refresh-active-session"
+                            class="btn btn-sm btn-link"
+                            style="vertical-align: middle; padding: 0; margin-left: 8px;"
+                            title="Refresh active session status"
+                            aria-label="Refresh active session status">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </h2>
                 
                 <!-- Tab Navigation -->
                 <ul class="nav nav-tabs" id="personTabs" role="tablist">
@@ -451,6 +466,33 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 hideUsernameWarning();
             }
+        });
+    }
+
+    // Refresh active session button
+    const refreshButton = document.getElementById('refresh-active-session');
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            // Clear the cache
+            const cacheKey = `active_session_${personId}`;
+            localStorage.removeItem(cacheKey);
+
+            // Add animation/feedback
+            const svg = this.querySelector('svg');
+            svg.style.transition = 'transform 0.5s';
+            svg.style.transform = 'rotate(360deg)';
+
+            setTimeout(() => {
+                svg.style.transform = '';
+            }, 500);
+
+            // Trigger a refresh of the badge in base.html
+            // We dispatch a custom event that the badge listener can catch
+            window.dispatchEvent(new CustomEvent('refreshActiveSession'));
+
+            showMessage('Active session status refreshed', 'success');
         });
     }
 
@@ -956,6 +998,22 @@ document.addEventListener('DOMContentLoaded', function() {
 .docs-heading {
     font-size: 2rem !important;
     margin-bottom: 1rem !important;
+}
+
+/* Refresh active session button */
+#refresh-active-session {
+    color: var(--text-color);
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+#refresh-active-session:hover {
+    opacity: 1;
+    text-decoration: none;
+}
+
+#refresh-active-session:active {
+    transform: scale(0.95);
 }
 
 .card {

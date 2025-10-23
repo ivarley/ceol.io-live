@@ -13,3 +13,7 @@ On the session details page, if type is festival, there are a few differences:
 - And instead of listing each session by date, it should show the location_override field and time field (Like "Advanced Session @ Jim Bowie, 8:00pm-11:00pm" or "After-Hours Session @ Hotel, 11:00 - ?")
 
 We'll also need to remove the idx_session_instance_no_overlap index, since session instances for the same session can now overlap.
+
+Now that we allow overlapping session instances for a session, the "Add Session" modal on the session details page (/sessions/{path}) should not give you the error "Session instance for {date} already exists", and the "Edit Session" modal on the session instance details page (/sessions/{path}/date should not give you that error if you attempt to update a session instance to be concurrent with another session instance.
+
+We'll also need to change the link for a session instance to also accept the session_instance_id instead of the date.

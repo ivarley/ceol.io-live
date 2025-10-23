@@ -477,6 +477,7 @@ def get_person_active_session(person_id: int) -> Optional[Dict[str, any]]:
                 si.date,
                 si.start_time,
                 si.end_time,
+                si.location_override,
                 s.name,
                 s.path
             FROM person p
@@ -497,8 +498,9 @@ def get_person_active_session(person_id: int) -> Optional[Dict[str, any]]:
             'date': result[2],
             'start_time': result[3],
             'end_time': result[4],
-            'session_name': result[5],
-            'session_path': result[6]
+            'location_override': result[5],
+            'session_name': result[6],
+            'session_path': result[7]
         }
 
     finally:

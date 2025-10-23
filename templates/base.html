@@ -208,6 +208,71 @@
         .hamburger-item.disabled:hover {
             background-color: transparent;
         }
+
+        /* In Session Badge */
+        .in-session-badge {
+            display: none;
+            position: relative;
+            margin-right: 12px;
+        }
+
+        .in-session-badge.active {
+            display: block;
+        }
+
+        .in-session-badge-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+
+        .in-session-badge-button:hover {
+            background-color: #218838;
+        }
+
+        .in-session-popup {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background-color: var(--dropdown-bg);
+            border: 1px solid var(--dropdown-border);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px var(--dropdown-shadow);
+            padding: 12px 16px;
+            min-width: 250px;
+            z-index: 1001;
+            display: none;
+            color: var(--text-color);
+        }
+
+        .in-session-popup.show {
+            display: block;
+        }
+
+        .in-session-popup-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: var(--text-color);
+        }
+
+        .in-session-popup-detail {
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: var(--secondary-text);
+        }
+
+        .in-session-popup-detail strong {
+            color: var(--text-color);
+        }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -226,7 +291,20 @@
                 <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
                     <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
                 </ul><!--//social-list-->
-                
+
+                <!-- In Session Badge -->
+                {% if current_user.is_authenticated %}
+                <div class="in-session-badge" id="inSessionBadge">
+                    <button class="in-session-badge-button" id="inSessionButton">In Session</button>
+                    <div class="in-session-popup" id="inSessionPopup">
+                        <div class="in-session-popup-title" id="inSessionPopupTitle"></div>
+                        <div class="in-session-popup-detail" id="inSessionPopupDate"></div>
+                        <div class="in-session-popup-detail" id="inSessionPopupTime"></div>
+                        <div class="in-session-popup-detail" id="inSessionPopupLocation"></div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Hamburger Menu -->
                 <div class="hamburger-menu">
                     <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
@@ -448,6 +526,262 @@ window.addEventListener('beforeinstallprompt', (e) => {
 window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
 });
+
+// In Session Badge functionality
+{% if current_user.is_authenticated %}
+(function() {
+    const personId = {{ current_user.person_id }};
+    const badge = document.getElementById('inSessionBadge');
+    const button = document.getElementById('inSessionButton');
+    const popup = document.getElementById('inSessionPopup');
+    const popupTitle = document.getElementById('inSessionPopupTitle');
+    const popupDate = document.getElementById('inSessionPopupDate');
+    const popupTime = document.getElementById('inSessionPopupTime');
+    const popupLocation = document.getElementById('inSessionPopupLocation');
+
+    let activeSession = null;
+    let popupTimeout = null;
+    let isPopupVisible = false;
+
+    const CACHE_KEY = `active_session_${personId}`;
+    const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+    // Fetch active session info with caching
+    function fetchActiveSession(forceRefresh = false) {
+        // Check cache first unless force refresh
+        if (!forceRefresh) {
+            const cached = getCachedActiveSession();
+            if (cached) {
+                console.log('Using cached active session data');
+                activeSession = cached;
+                if (activeSession) {
+                    badge.classList.add('active');
+                    updatePopupContent();
+                } else {
+                    badge.classList.remove('active');
+                }
+                return;
+            }
+        }
+
+        // Fetch from server
+        fetch(`/api/person/${personId}/active_session`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    activeSession = data.active_session;
+
+                    // Cache the result
+                    cacheActiveSession(activeSession);
+
+                    if (activeSession) {
+                        badge.classList.add('active');
+                        updatePopupContent();
+                    } else {
+                        badge.classList.remove('active');
+                    }
+                } else {
+                    badge.classList.remove('active');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching active session:', error);
+            });
+    }
+
+    function getCachedActiveSession() {
+        try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (!cached) return null;
+
+            const { data, timestamp } = JSON.parse(cached);
+            const age = Date.now() - timestamp;
+
+            // Return cached data if less than 15 minutes old
+            if (age < CACHE_DURATION) {
+                return data;
+            }
+
+            // Cache expired, remove it
+            localStorage.removeItem(CACHE_KEY);
+            return null;
+        } catch (e) {
+            console.error('Error reading cache:', e);
+            return null;
+        }
+    }
+
+    function cacheActiveSession(data) {
+        try {
+            const cacheEntry = {
+                data: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheEntry));
+        } catch (e) {
+            console.error('Error writing cache:', e);
+        }
+    }
+
+    function updatePopupContent() {
+        if (!activeSession) return;
+
+        popupTitle.textContent = activeSession.session_name;
+
+        // Format date
+        const dateObj = new Date(activeSession.date + 'T00:00:00');
+        const dateStr = dateObj.toLocaleDateString('en-US', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+        popupDate.innerHTML = `<strong>Date:</strong> ${dateStr}`;
+
+        // Format time range
+        if (activeSession.start_time && activeSession.end_time) {
+            const timeStr = formatTimeRange(activeSession.start_time, activeSession.end_time);
+            popupTime.innerHTML = `<strong>Time:</strong> ${timeStr}`;
+            popupTime.style.display = 'block';
+        } else if (activeSession.start_time) {
+            const timeStr = formatTimeRange(activeSession.start_time, null);
+            popupTime.innerHTML = `<strong>Time:</strong> ${timeStr}`;
+            popupTime.style.display = 'block';
+        } else {
+            popupTime.style.display = 'none';
+        }
+
+        // Show location override if present
+        if (activeSession.location_override) {
+            popupLocation.innerHTML = `<strong>Location:</strong> ${activeSession.location_override}`;
+            popupLocation.style.display = 'block';
+        } else {
+            popupLocation.style.display = 'none';
+        }
+    }
+
+    function formatTimeRange(startTime, endTime) {
+        function formatTime(timeStr) {
+            if (!timeStr) return '';
+            const parts = timeStr.split(':');
+            let hour = parseInt(parts[0]);
+            const minute = parts[1];
+            const period = hour >= 12 ? 'pm' : 'am';
+            hour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+            return `${hour}:${minute}${period}`;
+        }
+
+        const start = formatTime(startTime);
+        if (endTime) {
+            const end = formatTime(endTime);
+            return `${start} - ${end}`;
+        }
+        return start + ' - ?';
+    }
+
+    function showPopup() {
+        if (!activeSession) return;
+
+        isPopupVisible = true;
+        popup.classList.add('show');
+
+        // Clear any existing timeout
+        if (popupTimeout) {
+            clearTimeout(popupTimeout);
+        }
+
+        // Hide after 5 seconds
+        popupTimeout = setTimeout(() => {
+            hidePopup();
+        }, 5000);
+    }
+
+    function hidePopup() {
+        isPopupVisible = false;
+        popup.classList.remove('show');
+        if (popupTimeout) {
+            clearTimeout(popupTimeout);
+            popupTimeout = null;
+        }
+    }
+
+    function navigateToSession() {
+        if (activeSession) {
+            window.location.href = `/sessions/${activeSession.session_path}/${activeSession.date}`;
+        }
+    }
+
+    // Desktop: hover to show popup
+    button.addEventListener('mouseenter', showPopup);
+    button.addEventListener('mouseleave', hidePopup);
+
+    // Mobile: long press to show popup (300ms)
+    let longPressTimer = null;
+    let touchStartTime = 0;
+
+    button.addEventListener('touchstart', (e) => {
+        touchStartTime = Date.now();
+        longPressTimer = setTimeout(() => {
+            showPopup();
+        }, 300);
+    });
+
+    button.addEventListener('touchend', (e) => {
+        const touchDuration = Date.now() - touchStartTime;
+
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+
+        // If it was a short tap (not a long press), navigate
+        if (touchDuration < 300 && !isPopupVisible) {
+            e.preventDefault();
+            navigateToSession();
+        } else if (isPopupVisible) {
+            // If popup is visible, tapping again hides it
+            hidePopup();
+        }
+    });
+
+    button.addEventListener('touchmove', () => {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    });
+
+    // Desktop: click to navigate
+    button.addEventListener('click', (e) => {
+        // Only handle mouse clicks, not touch events
+        if (e.pointerType === 'mouse' || e.type === 'click' && !('ontouchstart' in window)) {
+            navigateToSession();
+        }
+    });
+
+    // Close popup when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!badge.contains(e.target)) {
+            hidePopup();
+        }
+    });
+
+    // Fetch on page load (will use cache if available)
+    fetchActiveSession();
+
+    // Force refresh every 15 minutes (matching cache duration)
+    // This ensures we check for status changes periodically
+    setInterval(() => {
+        fetchActiveSession(true); // force refresh
+    }, CACHE_DURATION);
+
+    // Listen for manual refresh events from other pages (e.g., /me page)
+    window.addEventListener('refreshActiveSession', function() {
+        console.log('Received refresh active session event');
+        fetchActiveSession(true); // force refresh
+    });
+})();
+{% endif %}
 </script>
 
 {% block extra_js %}{% endblock %}
