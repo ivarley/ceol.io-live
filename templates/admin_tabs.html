@@ -2,13 +2,18 @@
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
     <div class="nav nav-tabs" id="admin-tabs" role="tablist">
-        <a class="nav-link {{ 'active' if active_tab == 'sessions_list' else '' }}" 
-           href="{{ url_for('admin_sessions_list') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'sessions_list' else '' }}"
+           href="{{ url_for('admin_sessions_list') }}"
            role="tab">
             Sessions
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}" 
-           href="{{ url_for('admin_people') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'tunes' else '' }}"
+           href="{{ url_for('admin_tunes') }}"
+           role="tab">
+            Tunes
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}"
+           href="{{ url_for('admin_people') }}"
            role="tab">
             People
         </a>
@@ -34,6 +39,9 @@
         <select class="form-select" onchange="location = this.value">
             <option value="{{ url_for('admin_sessions_list') }}" {{ 'selected' if active_tab == 'sessions_list' else '' }}>
                 Sessions
+            </option>
+            <option value="{{ url_for('admin_tunes') }}" {{ 'selected' if active_tab == 'tunes' else '' }}>
+                Tunes
             </option>
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
                 People

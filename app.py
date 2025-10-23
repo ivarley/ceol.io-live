@@ -193,6 +193,7 @@ app.add_url_rule("/admin/sessions", "admin_sessions_list", admin_sessions_list)
 app.add_url_rule("/admin/login-sessions", "admin_login_sessions", admin_login_sessions)
 app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_history)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
+app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
 app.add_url_rule("/admin/test-links", "admin_test_links", admin_test_links)
 app.add_url_rule("/admin/people/<int:person_id>", "person_details", person_details)
 app.add_url_rule("/admin/sessions/<path:session_path>", "session_admin", session_admin)
@@ -650,6 +651,26 @@ app.add_url_rule(
     "generate_qr_code_general",
     lambda: generate_qr_code(0),
     methods=["GET"],
+)
+
+# Admin tunes API endpoints
+app.add_url_rule(
+    "/api/admin/tunes",
+    "get_admin_tunes",
+    get_admin_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/<int:tune_id>",
+    "update_admin_tune",
+    update_admin_tune,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/<int:tune_id>/refresh_tunebook_count",
+    "refresh_admin_tune_tunebook_count",
+    refresh_admin_tune_tunebook_count,
+    methods=["POST"],
 )
 
 # Error handlers

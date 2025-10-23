@@ -2160,6 +2160,17 @@ def admin_people():
 
 
 @login_required
+def admin_tunes():
+    """Admin tunes page - shows all tunes with counts"""
+    # Check if user is system admin
+    if not session.get("is_system_admin"):
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    return render_template("admin_tunes.html", active_tab="tunes")
+
+
+@login_required
 def admin_test_links():
     """Admin test links page with sample URLs for testing"""
     # Check if user is system admin

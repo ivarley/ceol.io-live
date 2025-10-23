@@ -7109,3 +7109,239 @@ def get_person_active_session(person_id):
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def get_admin_tunes():
+    """
+    Get all tunes with counts for admin dashboard.
+
+    GET /api/admin/tunes
+
+    Returns:
+    {
+        "success": true,
+        "tunes": [
+            {
+                "tune_id": int,
+                "name": string,
+                "tune_type": string,
+                "session_count": int (count of distinct sessions),
+                "tunelist_count": int (count of person tune lists),
+                "tunebook_count_cached": int
+            },
+            ...
+        ]
+    }
+    """
+    # Check if user is system admin
+    if not session.get("is_system_admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get all tunes with counts
+        cur.execute("""
+            SELECT
+                t.tune_id,
+                t.name,
+                t.tune_type,
+                COALESCE(session_counts.session_count, 0) as session_count,
+                COALESCE(tunelist_counts.tunelist_count, 0) as tunelist_count,
+                t.tunebook_count_cached
+            FROM tune t
+            LEFT JOIN (
+                -- Count distinct sessions where tune has been played
+                SELECT DISTINCT st.tune_id, COUNT(DISTINCT st.session_id) as session_count
+                FROM session_tune st
+                GROUP BY st.tune_id
+            ) session_counts ON t.tune_id = session_counts.tune_id
+            LEFT JOIN (
+                -- Count person tune lists containing this tune
+                SELECT tune_id, COUNT(DISTINCT person_id) as tunelist_count
+                FROM person_tune
+                GROUP BY tune_id
+            ) tunelist_counts ON t.tune_id = tunelist_counts.tune_id
+            ORDER BY t.name
+        """)
+
+        tunes = []
+        for row in cur.fetchall():
+            tunes.append({
+                "tune_id": row[0],
+                "name": row[1],
+                "tune_type": row[2],
+                "session_count": row[3],
+                "tunelist_count": row[4],
+                "tunebook_count_cached": row[5] or 0
+            })
+
+        return jsonify({
+            "success": True,
+            "tunes": tunes
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def update_admin_tune(tune_id):
+    """
+    Update a tune's name.
+
+    PUT /api/admin/tunes/<int:tune_id>
+
+    Request body:
+    {
+        "name": string (required)
+    }
+
+    Returns:
+    {
+        "success": true,
+        "message": string
+    }
+    """
+    # Check if user is system admin
+    if not session.get("is_system_admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    if not data or "name" not in data:
+        return jsonify({"success": False, "error": "Missing name field"}), 400
+
+    name = data["name"].strip()
+    if not name:
+        return jsonify({"success": False, "error": "Name cannot be empty"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Check if tune exists
+        cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
+        tune_row = cur.fetchone()
+        if not tune_row:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+
+        old_name = tune_row[0]
+
+        # Save to history before update
+        save_to_history(
+            cur,
+            "tune",
+            "UPDATE",
+            tune_id,
+            current_user.username if current_user.is_authenticated else "system"
+        )
+
+        # Update the tune name
+        cur.execute(
+            "UPDATE tune SET name = %s, last_modified_date = CURRENT_TIMESTAMP WHERE tune_id = %s",
+            (name, tune_id)
+        )
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"Updated tune name to '{name}'"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def refresh_admin_tune_tunebook_count(tune_id):
+    """
+    Refresh the tunebook count for a tune from TheSession.org.
+
+    POST /api/admin/tunes/<int:tune_id>/refresh_tunebook_count
+
+    Returns:
+    {
+        "success": true,
+        "old_count": int,
+        "new_count": int,
+        "cached_date": string (YYYY-MM-DD)
+    }
+    """
+    # Check if user is system admin
+    if not session.get("is_system_admin"):
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Check if tune exists and get current count
+        cur.execute(
+            "SELECT tunebook_count_cached FROM tune WHERE tune_id = %s",
+            (tune_id,)
+        )
+        tune_row = cur.fetchone()
+        if not tune_row:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+
+        old_count = tune_row[0] or 0
+
+        # Fetch fresh tunebook count from TheSession.org
+        try:
+            api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+            response = requests.get(api_url, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                new_count = data.get("tunebooks", 0)
+
+                # Update the cached count and date
+                cur.execute(
+                    """
+                    UPDATE tune
+                    SET tunebook_count_cached = %s,
+                        tunebook_count_cached_date = CURRENT_DATE,
+                        last_modified_date = CURRENT_TIMESTAMP
+                    WHERE tune_id = %s
+                    """,
+                    (new_count, tune_id)
+                )
+                conn.commit()
+
+                # Get the cached date for response
+                cur.execute(
+                    "SELECT tunebook_count_cached_date FROM tune WHERE tune_id = %s",
+                    (tune_id,)
+                )
+                cached_date = cur.fetchone()[0].isoformat()
+
+                return jsonify({
+                    "success": True,
+                    "old_count": old_count,
+                    "new_count": new_count,
+                    "cached_date": cached_date
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": f"TheSession.org returned status {response.status_code}"
+                }), 500
+
+        except requests.RequestException as e:
+            return jsonify({
+                "success": False,
+                "error": f"Failed to fetch from TheSession.org: {str(e)}"
+            }), 500
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
