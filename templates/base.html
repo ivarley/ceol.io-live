@@ -511,20 +511,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// PWA Install Prompt
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
-    e.preventDefault();
-    // Stash the event so it can be triggered later
-    deferredPrompt = e;
-    // Optionally, you could show a custom install button here
-});
-
-window.addEventListener('appinstalled', () => {
-    deferredPrompt = null;
-});
-
 // In Session Badge functionality
 {% if current_user.is_authenticated %}
 (function() {
