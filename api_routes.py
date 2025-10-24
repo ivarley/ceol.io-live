@@ -445,7 +445,40 @@ def get_session_tune_detail(session_path, tune_id):
             for row in play_instances_raw
         ]
 
-        cur.close()
+        # Get person_tune status if user is logged in
+        person_tune_status = None
+        if current_user.is_authenticated:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT person_id FROM user_account WHERE user_id = %s",
+                (current_user.user_id,)
+            )
+            person_row = cur.fetchone()
+            if person_row:
+                person_id = person_row[0]
+                cur.execute(
+                    """
+                    SELECT learn_status, heard_count
+                    FROM person_tune
+                    WHERE person_id = %s AND tune_id = %s
+                    """,
+                    (person_id, tune_id)
+                )
+                tune_row = cur.fetchone()
+                if tune_row:
+                    person_tune_status = {
+                        "on_list": True,
+                        "learn_status": tune_row[0],
+                        "heard_count": tune_row[1]
+                    }
+                else:
+                    person_tune_status = {
+                        "on_list": False,
+                        "learn_status": None,
+                        "heard_count": None
+                    }
+            cur.close()
+
         conn.close()
 
         # Build response
@@ -468,6 +501,7 @@ def get_session_tune_detail(session_path, tune_id):
                     ),
                     "times_played": times_played,
                     "play_instances": play_instances,
+                    "person_tune_status": person_tune_status,
                 },
             }
         )
@@ -7341,6 +7375,294 @@ def refresh_admin_tune_tunebook_count(tune_id):
                 "success": False,
                 "error": f"Failed to fetch from TheSession.org: {str(e)}"
             }), 500
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# Person Tune Management API Endpoints
+# ============================================================================
+
+
+@api_login_required
+def get_person_tune_status(tune_id):
+    """
+    Get the status of a tune on the current user's tune list.
+
+    GET /api/person/tunes/<int:tune_id>
+
+    Returns:
+    {
+        "success": true,
+        "on_list": boolean,
+        "tune_status": {
+            "learn_status": "want to learn" | "learning" | "learned",
+            "heard_count": int
+        } or null if not on list
+    }
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        # Check if tune is on user's list
+        cur.execute(
+            """
+            SELECT learn_status, heard_count
+            FROM person_tune
+            WHERE person_id = %s AND tune_id = %s
+            """,
+            (person_id, tune_id)
+        )
+        tune_row = cur.fetchone()
+
+        if tune_row:
+            return jsonify({
+                "success": True,
+                "on_list": True,
+                "tune_status": {
+                    "learn_status": tune_row[0],
+                    "heard_count": tune_row[1]
+                }
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "on_list": False,
+                "tune_status": None
+            })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def add_person_tune():
+    """
+    Add a tune to the current user's tune list.
+
+    POST /api/person/tunes
+
+    Request body:
+    {
+        "tune_id": int,
+        "learn_status": "want to learn" | "learning" | "learned",
+        "heard_count": int (optional, defaults to 1)
+    }
+
+    Returns:
+    {
+        "success": true,
+        "message": string
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+
+    tune_id = data.get("tune_id")
+    learn_status = data.get("learn_status", "want to learn")
+    heard_count = data.get("heard_count", 1)
+
+    if not tune_id:
+        return jsonify({"success": False, "error": "tune_id is required"}), 400
+
+    # Validate learn_status
+    valid_statuses = ["want to learn", "learning", "learned"]
+    if learn_status not in valid_statuses:
+        return jsonify({"success": False, "error": f"learn_status must be one of: {', '.join(valid_statuses)}"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        # Check if tune exists
+        cur.execute("SELECT tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+
+        # Insert into person_tune
+        cur.execute(
+            """
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (person_id, tune_id)
+            DO UPDATE SET
+                learn_status = EXCLUDED.learn_status,
+                heard_count = EXCLUDED.heard_count,
+                last_modified_date = (NOW() AT TIME ZONE 'UTC')
+            """,
+            (person_id, tune_id, learn_status, heard_count)
+        )
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Tune added to your list"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def update_person_tune_status(tune_id):
+    """
+    Update the learn status of a tune on the current user's list.
+
+    PUT /api/person/tunes/<int:tune_id>/status
+
+    Request body:
+    {
+        "learn_status": "want to learn" | "learning" | "learned"
+    }
+
+    Returns:
+    {
+        "success": true,
+        "message": string
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+
+    learn_status = data.get("learn_status")
+    if not learn_status:
+        return jsonify({"success": False, "error": "learn_status is required"}), 400
+
+    # Validate learn_status
+    valid_statuses = ["want to learn", "learning", "learned"]
+    if learn_status not in valid_statuses:
+        return jsonify({"success": False, "error": f"learn_status must be one of: {', '.join(valid_statuses)}"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        # Update the learn_status
+        cur.execute(
+            """
+            UPDATE person_tune
+            SET learn_status = %s,
+                last_modified_date = (NOW() AT TIME ZONE 'UTC')
+            WHERE person_id = %s AND tune_id = %s
+            """,
+            (learn_status, person_id, tune_id)
+        )
+
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "Tune not found on your list"}), 404
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Status updated"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def increment_person_tune_heard_count(tune_id):
+    """
+    Increment the heard count of a tune on the current user's list.
+
+    PUT /api/person/tunes/<int:tune_id>/increment_heard
+
+    Returns:
+    {
+        "success": true,
+        "new_count": int,
+        "message": string
+    }
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        # Increment the heard_count
+        cur.execute(
+            """
+            UPDATE person_tune
+            SET heard_count = heard_count + 1,
+                last_modified_date = (NOW() AT TIME ZONE 'UTC')
+            WHERE person_id = %s AND tune_id = %s
+            RETURNING heard_count
+            """,
+            (person_id, tune_id)
+        )
+
+        result = cur.fetchone()
+        if not result:
+            return jsonify({"success": False, "error": "Tune not found on your list"}), 404
+
+        new_count = result[0]
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "new_count": new_count,
+            "message": "Count updated"
+        })
 
     except Exception as e:
         conn.rollback()

@@ -673,6 +673,32 @@ app.add_url_rule(
     methods=["POST"],
 )
 
+# Person tune management routes
+app.add_url_rule(
+    "/api/person/tunes/<int:tune_id>",
+    "get_person_tune_status",
+    get_person_tune_status,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/person/tunes",
+    "add_person_tune",
+    add_person_tune,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/person/tunes/<int:tune_id>/status",
+    "update_person_tune_status",
+    update_person_tune_status,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/person/tunes/<int:tune_id>/increment_heard",
+    "increment_person_tune_heard_count",
+    increment_person_tune_heard_count,
+    methods=["PUT"],
+)
+
 # Error handlers
 FUNNY_ERROR_TEXTS = ["Stroh Piano Accordion", "Traditional Irish Djembe"]
 

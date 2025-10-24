@@ -750,6 +750,94 @@
             font-weight: 600;
             white-space: nowrap;
         }
+
+        /* Tune list status box styles */
+        .tune-list-box-not-on-list {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        /* Want to Learn - Yellow */
+        .tune-list-box-want-to-learn {
+            background-color: #fef3cd;
+            border: 1px solid #f0ad4e;
+            color: #856404;
+        }
+
+        /* Learning - Blue */
+        .tune-list-box-learning {
+            background-color: #d1ecf1;
+            border: 1px solid #5bc0de;
+            color: #0c5460;
+        }
+
+        /* Learned - Green */
+        .tune-list-box-learned {
+            background-color: #d4edda;
+            border: 1px solid #5cb85c;
+            color: #155724;
+        }
+
+        .tune-list-select {
+            border: 1px solid currentColor;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .tune-list-button {
+            padding: 6px 12px;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-left: 8px;
+        }
+
+        .tune-list-button-add {
+            background-color: #dc3545;
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .tune-list-button-heard {
+            background-color: #5cb85c;
+        }
+
+        .tune-list-button:hover {
+            opacity: 0.9;
+        }
+
+        .heard-count-line {
+            display: flex;
+            align-items: center;
+        }
+
+        /* Dark mode styles for tune list boxes */
+        [data-theme="dark"] .tune-list-box-not-on-list {
+            background-color: #4a1f1f;
+            border-color: #6a2d2d;
+            color: #f8a5a5;
+        }
+
+        [data-theme="dark"] .tune-list-box-want-to-learn {
+            background-color: #4a3f1f;
+            border-color: #f0ad4e;
+            color: #ffd97d;
+        }
+
+        [data-theme="dark"] .tune-list-box-learning {
+            background-color: #1f3a4a;
+            border-color: #5bc0de;
+            color: #7dd3e8;
+        }
+
+        [data-theme="dark"] .tune-list-box-learned {
+            background-color: #1e4620;
+            border-color: #5cb85c;
+            color: #7dda8b;
+        }
     </style>
 {% endblock %}
 
@@ -1610,6 +1698,7 @@
                 <div class="modal-info-line">
                     <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
                 </div>
+                <div id="tune-list-status-container"></div>
                 ${isLoggedIn ? `
                 <div class="modal-info-line">
                     <strong>We also call it:</strong><br>
@@ -1647,6 +1736,207 @@
                 </div>
             </div>
         `;
+
+        // Display tune list status if user is logged in and we have the data
+        if (isLoggedIn && sessionTune.person_tune_status) {
+            renderTuneListStatus(
+                sessionTune.tune_id,
+                sessionTune.person_tune_status.on_list,
+                sessionTune.person_tune_status.on_list ? {
+                    learn_status: sessionTune.person_tune_status.learn_status,
+                    heard_count: sessionTune.person_tune_status.heard_count
+                } : null
+            );
+        }
+    }
+
+    function fetchAndDisplayTuneListStatus(tuneId) {
+        fetch(`/api/person/tunes/${tuneId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderTuneListStatus(tuneId, data.on_list, data.tune_status);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching tune list status:', error);
+            });
+    }
+
+    function renderTuneListStatus(tuneId, onList, tuneStatus) {
+        const container = document.getElementById('tune-list-status-container');
+        if (!container) return;
+
+        if (onList && tuneStatus) {
+            // Tune IS on the list - color by status
+            const learnStatus = tuneStatus.learn_status;
+            const heardCount = tuneStatus.heard_count;
+            const showHeardSection = learnStatus !== 'learned';
+            const pluralS = heardCount !== 1 ? 's' : '';
+            const statusClass = learnStatus.replace(' ', '-'); // "want to learn" -> "want-to-learn"
+
+            container.innerHTML = `
+                <div class="modal-info-line tune-list-box tune-list-box-${statusClass}" style="padding: 10px 12px; border-radius: 4px; margin-bottom: 12px;">
+                    <div style="margin-bottom: ${showHeardSection ? '8px' : '0'};">
+                        This tune is on your list, as
+                        <select id="tune-status-select" onchange="updateTuneStatus(${tuneId})" class="tune-list-select" style="padding: 4px 8px; border-radius: 3px; margin: 0 2px;">
+                            <option value="want to learn" ${learnStatus === 'want to learn' ? 'selected' : ''}>Want To Learn</option>
+                            <option value="learning" ${learnStatus === 'learning' ? 'selected' : ''}>Learning</option>
+                            <option value="learned" ${learnStatus === 'learned' ? 'selected' : ''}>Learned</option>
+                        </select>
+                    </div>
+                    ${showHeardSection ? `
+                    <div class="heard-count-line">
+                        You've heard it&nbsp;<span id="heard-count">${heardCount}</span>&nbsp;time${pluralS}
+                        <button onclick="incrementHeardCount(${tuneId})" class="tune-list-button tune-list-button-heard">
+                            I heard it again!
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            // Tune is NOT on the list - show red state
+            container.innerHTML = `
+                <div class="modal-info-line tune-list-box tune-list-box-not-on-list" style="padding: 10px 12px; border-radius: 4px; margin-bottom: 12px;">
+                    <div style="margin-bottom: 8px;">
+                        This tune isn't on your list!
+                    </div>
+                    <div>
+                        <button onclick="addTuneToList(${tuneId})" class="tune-list-button tune-list-button-add">
+                            Add It
+                        </button>
+                        <span style="margin: 0 4px;">to</span>
+                        <select id="add-status-select" class="tune-list-select" style="padding: 4px 8px; border-radius: 3px;">
+                            <option value="want to learn" selected>Want To Learn</option>
+                            <option value="learning">Learning</option>
+                            <option value="learned">Learned</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    function addTuneToList(tuneId) {
+        const statusSelect = document.getElementById('add-status-select');
+        const learnStatus = statusSelect ? statusSelect.value : 'want to learn';
+
+        fetch('/api/person/tunes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                tune_id: tuneId,
+                learn_status: learnStatus,
+                heard_count: 1
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Re-fetch and render the updated status
+                fetchAndDisplayTuneListStatus(tuneId);
+            } else {
+                console.error('Failed to add tune:', data.error);
+                alert('Failed to add tune to list');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding tune:', error);
+            alert('Error adding tune to list');
+        });
+    }
+
+    function updateTuneStatus(tuneId) {
+        const statusSelect = document.getElementById('tune-status-select');
+        const learnStatus = statusSelect ? statusSelect.value : 'want to learn';
+
+        fetch(`/api/person/tunes/${tuneId}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                learn_status: learnStatus
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show toast message
+                showToast('Status updated');
+                // Re-fetch and render to update the heard count visibility
+                fetchAndDisplayTuneListStatus(tuneId);
+            } else {
+                console.error('Failed to update status:', data.error);
+                alert('Failed to update status');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating status:', error);
+            alert('Error updating status');
+        });
+    }
+
+    function incrementHeardCount(tuneId) {
+        fetch(`/api/person/tunes/${tuneId}/increment_heard`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show toast message
+                showToast(data.message);
+
+                // Update the heard count display
+                const heardCountSpan = document.getElementById('heard-count');
+                if (heardCountSpan) {
+                    heardCountSpan.textContent = data.new_count;
+                }
+
+                // Close modal after 1 second
+                setTimeout(() => {
+                    closeTuneDetailModal();
+                }, 1000);
+            } else {
+                console.error('Failed to increment count:', data.error);
+                alert('Failed to increment heard count');
+            }
+        })
+        .catch(error => {
+            console.error('Error incrementing count:', error);
+            alert('Error incrementing heard count');
+        });
+    }
+
+    function showToast(message) {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            z-index: 10002;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(toast);
+
+        // Remove toast after 2 seconds
+        setTimeout(() => {
+            toast.remove();
+        }, 2000);
     }
 
     function refreshTunebookCount(tuneId) {
