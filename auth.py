@@ -25,6 +25,7 @@ class User(UserMixin):
         email_verified=False,
         auto_save_tunes=False,
         auto_save_interval=60,
+        active_session=None,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -39,6 +40,7 @@ class User(UserMixin):
         self.email_verified = email_verified
         self.auto_save_tunes = auto_save_tunes
         self.auto_save_interval = auto_save_interval
+        self.active_session = active_session  # Dict with session instance data or None
         self.hashed_password = None  # Will be set when loading from database
 
     @property
@@ -57,15 +59,32 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
-                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval,
+                       p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
+                LEFT JOIN session_instance si ON p.at_active_session_instance_id = si.session_instance_id
+                LEFT JOIN session s ON si.session_id = s.session_id
                 WHERE ua.user_id = %s AND ua.is_active = TRUE
             """,
                 (user_id,),
             )
             user_data = cur.fetchone()
             if user_data:
+                # Build active session dict if data exists
+                active_session = None
+                if user_data[12]:  # at_active_session_instance_id
+                    active_session = {
+                        'session_instance_id': user_data[12],
+                        'session_id': user_data[13],
+                        'date': user_data[14],
+                        'start_time': user_data[15],
+                        'end_time': user_data[16],
+                        'location_override': user_data[17],
+                        'session_name': user_data[18],
+                        'session_path': user_data[19]
+                    }
+
                 return User(
                     user_id=user_data[0],
                     person_id=user_data[1],
@@ -79,6 +98,7 @@ class User(UserMixin):
                     email=user_data[9],
                     auto_save_tunes=user_data[10],
                     auto_save_interval=user_data[11],
+                    active_session=active_session,
                 )
             return None
         finally:

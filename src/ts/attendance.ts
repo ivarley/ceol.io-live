@@ -57,6 +57,7 @@ declare global {
             showModal: (modalId: string) => HTMLElement | null;
             showMessage: (message: string, type: string) => void;
         };
+        showMessage: (message: string, type?: string) => void;
     }
 }
 
@@ -530,6 +531,9 @@ class AttendanceManager {
 
             await this.loadAttendance();
             this.showSuccess('Checked in successfully!');
+
+            // Refresh the active session badge in the header
+            window.dispatchEvent(new Event('refreshActiveSession'));
         } catch (error) {
             this.showError((error as Error).message || 'Error checking in');
             // Reset button state on error
@@ -573,6 +577,9 @@ class AttendanceManager {
 
             await this.loadAttendance();
             this.showSuccess('Status updated!');
+
+            // Refresh the active session badge in the header
+            window.dispatchEvent(new Event('refreshActiveSession'));
         } catch (error) {
             this.showError((error as Error).message || 'Error updating status');
             // Reset will happen via updateQuickCheckinButton called from loadAttendance
@@ -605,6 +612,11 @@ class AttendanceManager {
             
             // Success - optimistic update was correct
             this.showSuccess('Attendance updated');
+
+            // If the current user's attendance was updated, refresh the active session badge
+            if (personId == this.config.currentPersonId) {
+                window.dispatchEvent(new Event('refreshActiveSession'));
+            }
         } catch (error) {
             // Revert optimistic update on error by reloading from server
             await this.loadAttendance();
@@ -715,6 +727,11 @@ class AttendanceManager {
         .then(() => {
             // Success - optimistic update was correct
             this.showSuccess('Person added to attendance');
+
+            // If the current user was added, refresh the active session badge
+            if (personId == this.config!.currentPersonId) {
+                window.dispatchEvent(new Event('refreshActiveSession'));
+            }
         })
         .catch(async (error) => {
             // Revert optimistic update on error by reloading from server
@@ -965,8 +982,13 @@ class AttendanceManager {
             const searchResults = document.getElementById('search-results');
             if (searchInput) searchInput.value = '';
             if (searchResults) searchResults.style.display = 'none';
-            
+
             this.showSuccess(tempPerson.display_name + ' added successfully');
+
+            // If the current user was added, refresh the active session badge
+            if (personId == this.config!.currentPersonId) {
+                window.dispatchEvent(new Event('refreshActiveSession'));
+            }
         } catch (error) {
             // Remove optimistic update on error
             this.removePersonFromUIOptimistic(tempPerson.person_id);
@@ -1045,6 +1067,11 @@ class AttendanceManager {
             }
 
             this.showSuccess('Person removed from session instance');
+
+            // If the current user was removed, refresh the active session badge
+            if (personId == this.config.currentPersonId) {
+                window.dispatchEvent(new Event('refreshActiveSession'));
+            }
         } catch (error) {
             // Reload attendance on error to restore accurate state
             await this.loadAttendance();
@@ -1367,9 +1394,9 @@ class AttendanceManager {
         // Use ModalManager if available (beta page)
         if (window.ModalManager?.showMessage) {
             window.ModalManager.showMessage(message, 'success');
-        } else {
-            // Fallback to basic message display
-            this.showBasicMessage(message, 'success');
+        } else if (window.showMessage) {
+            // Use global showMessage function (common UX)
+            window.showMessage(message, 'success');
         }
     }
 
@@ -1377,49 +1404,10 @@ class AttendanceManager {
         // Use ModalManager if available (beta page)
         if (window.ModalManager?.showMessage) {
             window.ModalManager.showMessage(message, 'error');
-        } else {
-            // Fallback to basic message display
-            this.showBasicMessage(message, 'error');
+        } else if (window.showMessage) {
+            // Use global showMessage function (common UX)
+            window.showMessage(message, 'error');
         }
-    }
-
-    private showBasicMessage(message: string, type: 'success' | 'error'): void {
-        // Create a simple toast-style message
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `attendance-message attendance-message-${type}`;
-        messageDiv.textContent = message;
-        messageDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; ' +
-            'padding: 12px 20px; border-radius: 4px; font-weight: 500; ' +
-            'color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); ' +
-            'max-width: 300px; word-wrap: break-word;';
-        
-        if (type === 'success') {
-            messageDiv.style.backgroundColor = '#28a745';
-        } else if (type === 'error') {
-            messageDiv.style.backgroundColor = '#dc3545';
-        }
-        
-        document.body.appendChild(messageDiv);
-        
-        // Fade in
-        messageDiv.style.opacity = '0';
-        messageDiv.style.transform = 'translateY(-20px)';
-        setTimeout(() => {
-            messageDiv.style.transition = 'all 0.3s ease';
-            messageDiv.style.opacity = '1';
-            messageDiv.style.transform = 'translateY(0)';
-        }, 10);
-        
-        // Fade out and remove
-        setTimeout(() => {
-            messageDiv.style.opacity = '0';
-            messageDiv.style.transform = 'translateY(-20px)';
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.parentNode.removeChild(messageDiv);
-                }
-            }, 300);
-        }, type === 'error' ? 5000 : 3000);
     }
 }
 

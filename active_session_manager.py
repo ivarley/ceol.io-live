@@ -506,3 +506,116 @@ def get_person_active_session(person_id: int) -> Optional[Dict[str, any]]:
     finally:
         cur.close()
         conn.close()
+
+
+def update_session_instance_active_status(session_instance_id: int, conn=None) -> bool:
+    """
+    Update the active status of a single session instance based on current time.
+
+    This runs the same logic as the cron job but for a single instance,
+    checking if it should be active or inactive right now based on its
+    time window, timezone, and buffer settings.
+
+    Called during check-in to ensure the instance's active status is current
+    before updating person locations.
+
+    Args:
+        session_instance_id: The session instance ID to check
+        conn: Database connection (creates new one if not provided)
+
+    Returns:
+        True if successful, False if error occurred
+    """
+    should_close = conn is None
+    if conn is None:
+        conn = get_db_connection()
+
+    cur = conn.cursor()
+
+    try:
+        # Get session instance and parent session details
+        cur.execute("""
+            SELECT
+                si.session_instance_id,
+                si.session_id,
+                si.date,
+                si.start_time,
+                si.end_time,
+                si.is_active,
+                si.is_cancelled,
+                s.name,
+                s.recurrence,
+                s.timezone,
+                s.active_buffer_minutes_before,
+                s.active_buffer_minutes_after
+            FROM session_instance si
+            JOIN session s ON si.session_id = s.session_id
+            WHERE si.session_instance_id = %s
+        """, (session_instance_id,))
+
+        result = cur.fetchone()
+
+        if not result:
+            logger.warning(f"Session instance {session_instance_id} not found")
+            return False
+
+        (inst_id, session_id, inst_date, start_time, end_time, is_active,
+         is_cancelled, name, recurrence_json, timezone_str, buffer_before, buffer_after) = result
+
+        # Skip cancelled instances
+        if is_cancelled:
+            logger.debug(f"Instance {inst_id} is cancelled, skipping active status check")
+            return True
+
+        # Skip instances without defined times (can't determine active window)
+        if start_time is None or end_time is None:
+            logger.debug(f"Instance {inst_id} has no start/end times, skipping active status check")
+            return True
+
+        # Parse timezone
+        try:
+            tz = ZoneInfo(timezone_str)
+        except Exception as e:
+            logger.error(f"Invalid timezone '{timezone_str}' for session {session_id}: {e}")
+            return False
+
+        # Get current time in session's timezone (with 1-minute lookahead)
+        now_utc = datetime.now(ZoneInfo('UTC'))
+        now_local = now_utc.astimezone(tz)
+        lookahead_local = now_local + timedelta(minutes=1)
+
+        # Combine date and time to get full datetimes in session timezone
+        start_dt = datetime.combine(inst_date, start_time).replace(tzinfo=tz)
+        end_dt = datetime.combine(inst_date, end_time).replace(tzinfo=tz)
+
+        # Calculate active window (with buffer)
+        active_start = start_dt - timedelta(minutes=buffer_before)
+        active_end = end_dt + timedelta(minutes=buffer_after)
+
+        # Determine if instance should be active
+        should_be_active = active_start <= lookahead_local <= active_end
+
+        # Update status if needed
+        if should_be_active and not is_active:
+            activate_session_instance(session_id, inst_id, conn)
+            logger.info(f"Activated instance {inst_id} for session '{name}' during check-in")
+        elif not should_be_active and is_active:
+            deactivate_session_instance(session_id, inst_id, conn)
+            logger.info(f"Deactivated instance {inst_id} for session '{name}' during check-in")
+        else:
+            logger.debug(f"Instance {inst_id} active status unchanged (is_active={is_active})")
+
+        if should_close:
+            conn.commit()
+
+        return True
+
+    except Exception as e:
+        if should_close:
+            conn.rollback()
+        logger.error(f"Error updating session instance {session_instance_id} active status: {e}", exc_info=True)
+        return False
+    finally:
+        cur.close()
+        if should_close:
+            conn.close()

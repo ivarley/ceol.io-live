@@ -448,18 +448,36 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
         # Commit transaction
         cur.execute("COMMIT")
 
-        # If person checked in as "yes", update their active session instance
+        # Update the session instance's active status based on current time
+        # This ensures the instance is correctly marked active/inactive before
+        # we update the person's location
+        try:
+            from active_session_manager import update_session_instance_active_status
+            update_session_instance_active_status(session_instance_id, conn)
+        except Exception as e:
+            # Log error but don't fail the check-in
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to update session instance {session_instance_id} active status: {e}")
+
+        # Update person's active session based on their attendance status
         # Import locally to avoid circular dependency
-        if attendance == 'yes':
-            try:
+        try:
+            if attendance == 'yes':
+                # If they checked in as "yes", update their active session instance
                 from active_session_manager import update_person_active_instance
                 update_person_active_instance(person_id, session_instance_id, conn)
-                conn.commit()
-            except Exception as e:
-                # Log error but don't fail the check-in
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to update person {person_id} active instance: {e}")
+            else:
+                # If they checked in as "maybe" or "no", recalculate their active session
+                # (they should not be at this session, but may be at another overlapping one)
+                from active_session_manager import recalculate_person_active_instance
+                recalculate_person_active_instance(person_id, conn)
+            conn.commit()
+        except Exception as e:
+            # Log error but don't fail the check-in
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to update person {person_id} active instance: {e}")
 
         return True, f"Successfully {action} attendance", action
 
@@ -698,13 +716,25 @@ def remove_person_attendance(session_instance_id, person_id, changed_by='system'
         
         # Commit transaction
         cur.execute("COMMIT")
-        
+
+        # Recalculate person's active session after removal
+        # They should no longer be at this session, but may be at another overlapping one
+        try:
+            from active_session_manager import recalculate_person_active_instance
+            recalculate_person_active_instance(person_id, conn)
+            conn.commit()
+        except Exception as e:
+            # Log error but don't fail the removal
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to recalculate person {person_id} active instance after removal: {e}")
+
         previous_data = {
             'attendance': existing_record[0],
             'comment': existing_record[1],
             'created_date': existing_record[2]
         }
-        
+
         return True, "Successfully removed person from attendance", previous_data
         
     except Exception as e:

@@ -527,7 +527,21 @@ if ('serviceWorker' in navigator) {
     let popupTimeout = null;
     let isPopupVisible = false;
 
-    // Fetch active session info from server
+    // Initialize with server-rendered data (instant - no API call!)
+    {% if current_user.active_session %}
+    activeSession = {
+        session_instance_id: {{ current_user.active_session.session_instance_id }},
+        session_id: {{ current_user.active_session.session_id }},
+        date: {{ (current_user.active_session.date.isoformat() if current_user.active_session.date else '') | tojson }},
+        start_time: {{ (current_user.active_session.start_time.isoformat() if current_user.active_session.start_time else '') | tojson }},
+        end_time: {{ (current_user.active_session.end_time.isoformat() if current_user.active_session.end_time else '') | tojson }},
+        location_override: {{ current_user.active_session.location_override | tojson }},
+        session_name: {{ current_user.active_session.session_name | tojson }},
+        session_path: {{ current_user.active_session.session_path | tojson }}
+    };
+    {% endif %}
+
+    // Fetch active session info from server (used for dynamic updates)
     function fetchActiveSession() {
         fetch(`/api/person/${personId}/active_session`)
             .then(response => response.json())
@@ -673,10 +687,13 @@ if ('serviceWorker' in navigator) {
         }
     });
 
-    // Fetch on page load
-    fetchActiveSession();
+    // Update UI on page load (no API call needed - we already have server data!)
+    if (activeSession) {
+        badge.classList.add('active');
+        updatePopupContent();
+    }
 
-    // Listen for manual refresh events from other pages (e.g., /me page)
+    // Listen for manual refresh events from other pages (e.g., /me page, check-in)
     window.addEventListener('refreshActiveSession', function() {
         fetchActiveSession();
     });
