@@ -143,6 +143,19 @@
             opacity: 1;
         }
     }
+
+    /* Mobile responsive fixes */
+    @media (max-width: 576px) {
+        .search-bar {
+            min-width: 0;
+            flex-shrink: 1;
+        }
+
+        .filter-toggle-button {
+            flex-shrink: 0;
+            padding: 0.75rem 1rem;
+        }
+    }
 </style>
 {% endblock %}
 
