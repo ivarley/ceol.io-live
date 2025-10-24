@@ -271,6 +271,31 @@
         .in-session-popup-detail strong {
             color: var(--text-color);
         }
+
+        /* Pull-to-Refresh Indicator (PWA only) */
+        #pullToRefreshIndicator {
+            position: fixed;
+            top: 40px; /* Just below the header */
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--dropdown-bg);
+            color: var(--text-color);
+            font-size: 16px;
+            font-weight: 500;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #pullToRefreshIndicator.show {
+            opacity: 1;
+        }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -339,7 +364,11 @@
             </div><!--//docs-top-utilities-->
         </div><!--//container-->
     </div><!--//branding-->
-</header><!--//header-->    
+</header><!--//header-->
+
+    <!-- Pull-to-Refresh Indicator (only visible in PWA mode) -->
+    <div id="pullToRefreshIndicator">Refresh ...</div>
+
     <div class="docs-wrapper">
 	    <div class="docs-content">
             {% block content %}{% endblock %}
@@ -510,6 +539,93 @@ if ('serviceWorker' in navigator) {
         });
     });
 }
+
+// Pull-to-Refresh functionality (PWA mode only)
+(function() {
+    // Detect if running in PWA/standalone mode
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches
+               || window.navigator.standalone  // iOS-specific
+               || document.referrer.includes('android-app://');  // Android TWA
+
+    if (!isPWA) {
+        return; // Only enable pull-to-refresh in PWA mode
+    }
+
+    const indicator = document.getElementById('pullToRefreshIndicator');
+    const PULL_THRESHOLD = 50; // pixels
+    const TIMER_DELAY = 1000; // 1 second
+
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let pullDistance = 0;
+    let refreshTimer = null;
+    let isRefreshArmed = false;
+    let isAtTop = false;
+
+    document.addEventListener('touchstart', function(e) {
+        // Only track if we're at the top of the page
+        isAtTop = window.scrollY === 0;
+        if (isAtTop) {
+            touchStartY = e.touches[0].clientY;
+            touchCurrentY = touchStartY;
+            pullDistance = 0;
+            isRefreshArmed = false;
+            clearRefreshTimer();
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isAtTop) return;
+
+        touchCurrentY = e.touches[0].clientY;
+        pullDistance = touchCurrentY - touchStartY;
+
+        // Only consider downward pulls
+        if (pullDistance > 0) {
+            // If we've exceeded the threshold
+            if (pullDistance > PULL_THRESHOLD) {
+                // Start timer if not already started
+                if (!refreshTimer && !isRefreshArmed) {
+                    refreshTimer = setTimeout(() => {
+                        // Show "Refresh ..." text after 1 second
+                        isRefreshArmed = true;
+                        indicator.classList.add('show');
+                        refreshTimer = null;
+                    }, TIMER_DELAY);
+                }
+            } else {
+                // Pulled back above threshold - cancel everything
+                clearRefreshTimer();
+                isRefreshArmed = false;
+                indicator.classList.remove('show');
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+        if (!isAtTop) return;
+
+        // If refresh is armed (text is showing), trigger page reload
+        if (isRefreshArmed) {
+            window.location.reload();
+        }
+
+        // Clean up
+        clearRefreshTimer();
+        isRefreshArmed = false;
+        indicator.classList.remove('show');
+        touchStartY = 0;
+        touchCurrentY = 0;
+        pullDistance = 0;
+    }, { passive: true });
+
+    function clearRefreshTimer() {
+        if (refreshTimer) {
+            clearTimeout(refreshTimer);
+            refreshTimer = null;
+        }
+    }
+})();
 
 // In Session Badge functionality
 {% if current_user.is_authenticated %}
