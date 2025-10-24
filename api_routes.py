@@ -654,8 +654,8 @@ def add_session_tune(session_path):
                 new_tune_data = data.get("new_tune")
                 cur.execute(
                     """
-                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, last_modified_date)
-                    VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
+                    VALUES (%s, %s, %s, %s, CURRENT_DATE)
                     ON CONFLICT (tune_id) DO NOTHING
                 """,
                     (

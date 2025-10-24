@@ -226,7 +226,7 @@ class ThesessionSyncService:
                     'tune_id': tune_id,
                     'name': tune_data['name'],
                     'tune_type': tune_data['type'].title(),
-                    'tunebook_count': 0  # Will be updated later if needed
+                    'tunebook_count': tune_data.get('tunebooks', 0)
                 }
             else:
                 # Fetch tune metadata from thesession.org (with retry if enabled)
