@@ -878,7 +878,7 @@
                                     {% set start_12hr = start_hr - 12 if start_hr > 12 else (12 if start_hr == 0 else start_hr) %}
                                     {% set time_str = '%d:%s%s - ?'|format(start_12hr, start_min, start_period) %}
                                 {% endif %}
-                                <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
+                                <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
                             {% endfor %}
                             </ul>
                         </div>
@@ -909,7 +909,7 @@
                     <div class="year-content" data-year="{{ year }}">
                         <ul>
                         {% for instance in instances_by_year[year] %}
-                            <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ instance.date }}</a></li>
+                            <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a></li>
                         {% endfor %}
                         </ul>
                     </div>
@@ -919,7 +919,7 @@
                 <ul>
                 {% for year in sorted_years %}
                     {% for instance in instances_by_year[year] %}
-                    <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}">{{ instance.date }}</a></li>
+                    <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a></li>
                     {% endfor %}
                 {% endfor %}
                 </ul>
@@ -1808,81 +1808,27 @@
     const sessionId = {{ session.session_id }};
 
     function highlightActiveInstances() {
-        console.log('🔍 [Highlight] Starting to fetch active instances for session:', sessionId);
         fetch(`/api/session/${sessionId}/active_instance`)
             .then(response => response.json())
             .then(data => {
-                console.log('🔍 [Highlight] API response:', data);
                 if (data.success && data.active_instance_ids && data.active_instance_ids.length > 0) {
                     const activeInstanceIds = data.active_instance_ids;
-                    console.log('🔍 [Highlight] Active instance IDs:', activeInstanceIds);
 
-                    // Find all session instance links
-                    const links = document.querySelectorAll('.year-content a[href*="/sessions/"]');
-                    console.log('🔍 [Highlight] Found', links.length, 'session instance links');
+                    // Find all session instance links with data-instance-id attribute
+                    const links = document.querySelectorAll('.year-content a[data-instance-id]');
 
                     links.forEach(link => {
-                        // Extract session instance identifier from href (could be date or ID)
-                        const href = link.getAttribute('href');
-                        console.log('🔍 [Highlight] Processing link:', href);
+                        const instanceId = parseInt(link.getAttribute('data-instance-id'));
 
-                        // Try to match date format first (YYYY-MM-DD)
-                        // Pattern handles multi-segment paths like /sessions/austin/mueller/2025-01-22
-                        let match = href.match(/\/sessions\/.*\/(\d{4}-\d{2}-\d{2})$/);
-
-                        if (match) {
-                            const dateOrId = match[1];
-                            console.log('🔍 [Highlight] Matched as date format:', dateOrId);
-                            checkIfInstanceActive(dateOrId, link, activeInstanceIds);
-                        } else {
-                            // Try to match instance ID format (just numbers at the end)
-                            // Pattern handles multi-segment paths like /sessions/austin/mueller/253
-                            match = href.match(/\/sessions\/.*\/(\d+)$/);
-                            if (match) {
-                                const instanceId = parseInt(match[1]);
-                                console.log('🔍 [Highlight] Matched as instance ID:', instanceId);
-                                console.log('🔍 [Highlight] Is in active list?', activeInstanceIds.includes(instanceId));
-                                // Check if this instance ID is in the active list
-                                if (activeInstanceIds.includes(instanceId)) {
-                                    console.log('✅ [Highlight] Highlighting instance:', instanceId);
-                                    highlightLink(link);
-                                }
-                            } else {
-                                console.log('⚠️ [Highlight] Could not parse href:', href);
-                            }
+                        // Check if this instance ID is in the active list
+                        if (activeInstanceIds.includes(instanceId)) {
+                            highlightLink(link);
                         }
                     });
-                } else {
-                    console.log('ℹ️ [Highlight] No active instances found');
                 }
             })
             .catch(error => {
-                console.error('❌ [Highlight] Error fetching active instances:', error);
-            });
-    }
-
-    function checkIfInstanceActive(dateOrId, linkElement, activeInstanceIds) {
-        // Fetch the session instance details to get the instance_id
-        console.log('🔍 [Highlight] Fetching instance details for:', dateOrId);
-        fetch(`/api/sessions/${sessionPath}/instances/${dateOrId}`)
-            .then(response => response.json())
-            .then(data => {
-                console.log('🔍 [Highlight] Instance API response for', dateOrId, ':', data);
-                if (data.success && data.session_instance) {
-                    const instanceId = data.session_instance.session_instance_id;
-                    console.log('🔍 [Highlight] Instance ID:', instanceId, 'Active list:', activeInstanceIds);
-
-                    // Check if this instance is active
-                    if (activeInstanceIds.includes(instanceId)) {
-                        console.log('✅ [Highlight] Instance is active, highlighting:', instanceId);
-                        highlightLink(linkElement);
-                    } else {
-                        console.log('ℹ️ [Highlight] Instance is not active:', instanceId);
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('❌ [Highlight] Error checking instance:', error);
+                console.error('Error fetching active instances:', error);
             });
     }
 
