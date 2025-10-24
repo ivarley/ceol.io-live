@@ -1172,8 +1172,6 @@ def login():
 
             # Store session_id in Flask session to identify this specific session
             session["db_session_id"] = session_id
-            # Cache admin status for menu display
-            session["is_system_admin"] = user.is_system_admin
 
             # Cache list of sessions this user is an admin of
             conn_admin = get_db_connection()
@@ -1664,7 +1662,7 @@ def resend_verification():
 @login_required
 def admin():
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -1675,7 +1673,7 @@ def admin():
 @login_required
 def admin_sessions_list():
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -1818,7 +1816,7 @@ def admin_sessions_list():
 @login_required
 def admin_login_sessions():
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -1889,7 +1887,7 @@ def admin_login_sessions():
 @login_required
 def admin_login_history():
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2028,7 +2026,7 @@ def admin_login_history():
 @login_required
 def admin_people():
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2163,7 +2161,7 @@ def admin_people():
 def admin_tunes():
     """Admin tunes page - shows all tunes with counts"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2174,7 +2172,7 @@ def admin_tunes():
 def admin_test_links():
     """Admin test links page with sample URLs for testing"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2275,7 +2273,7 @@ def person_details(person_id=None):
         person_id = current_user.person_id
     else:
         # Admin view - check if user is system admin
-        if not session.get("is_system_admin"):
+        if not current_user.is_system_admin:
             flash("You must be authorized to view this page.", "error")
             return redirect(url_for("home"))
 
@@ -2610,7 +2608,7 @@ def _get_session_data(session_path):
 def session_admin(session_path):
     """Session admin details page"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2700,7 +2698,7 @@ def session_admin(session_path):
 def session_admin_players(session_path):
     """Session admin players page"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2722,7 +2720,7 @@ def session_admin_players(session_path):
 def session_admin_logs(session_path):
     """Session admin logs page"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2744,9 +2742,9 @@ def session_admin_logs(session_path):
 def session_admin_person(session_path, person_id):
     """Session admin person details page"""
     # Check if user is system admin or session admin
-    is_system_admin = session.get("is_system_admin", False)
+    is_system_admin = current_user.is_system_admin
     is_session_admin = False
-    
+
     if not is_system_admin:
         # Check if user is an admin for this specific session
         conn = get_db_connection()
@@ -2912,7 +2910,7 @@ def session_admin_person(session_path, person_id):
 def session_admin_bulk_import(session_path):
     """Session admin bulk import page - supports both CSV input and preview steps"""
     # Check if user is system admin only (per API design)
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 

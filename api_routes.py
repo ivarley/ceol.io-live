@@ -4471,7 +4471,7 @@ def delete_session_player(session_path, person_id):
 def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     try:
@@ -4531,7 +4531,7 @@ def terminate_session(session_path):
 def reactivate_session(session_path):
     """Clear the termination date for a session to reactivate it"""
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     try:
@@ -7135,7 +7135,7 @@ def get_admin_tunes():
     }
     """
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     conn = get_db_connection()
@@ -7208,7 +7208,7 @@ def update_admin_tune(tune_id):
     }
     """
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     data = request.get_json()
@@ -7275,7 +7275,7 @@ def refresh_admin_tune_tunebook_count(tune_id):
     }
     """
     # Check if user is system admin
-    if not session.get("is_system_admin"):
+    if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
     conn = get_db_connection()

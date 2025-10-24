@@ -273,7 +273,8 @@ def authenticated_non_admin_user(client, sample_user_data):
             # Set attributes that tests expect to be available outside context
             self.person_id = user_data["person_id"]
             self.user_id = user_data["user_id"]
-            
+            self.is_system_admin = user_data.get("is_system_admin", False)
+
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
@@ -322,7 +323,8 @@ def authenticated_user(client, sample_user_data):
             # Set attributes that tests expect to be available outside context
             self.person_id = user_data["person_id"]
             self.user_id = user_data["user_id"]
-            
+            self.is_system_admin = user_data.get("is_system_admin", False)
+
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
@@ -365,7 +367,8 @@ def admin_user(client, sample_user_data):
             # Set attributes that tests expect to be available outside context
             self.person_id = user_data["person_id"]
             self.user_id = user_data["user_id"]
-            
+            self.is_system_admin = user_data.get("is_system_admin", False)
+
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
@@ -409,7 +412,8 @@ def authenticated_admin_user(client, sample_user_data):
             # Set attributes that tests expect to be available outside context
             self.person_id = user_data["person_id"]
             self.user_id = user_data["user_id"]
-            
+            self.is_system_admin = user_data.get("is_system_admin", False)
+
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
@@ -456,7 +460,8 @@ def authenticated_regular_user(client, sample_user_data, sample_regular_attendee
             # Set attributes that tests expect to be available outside context
             self.person_id = user_data["person_id"]
             self.user_id = user_data["user_id"]
-            
+            self.is_system_admin = user_data.get("is_system_admin", False)
+
         def __enter__(self):
             self.mock_get_user = patch("auth.User.get_by_id")
             mock_get_user = self.mock_get_user.start()
