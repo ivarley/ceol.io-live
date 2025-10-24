@@ -165,9 +165,16 @@ export class ContextMenu {
             });
             
             ContextMenu.addMenuItem(menu, 'Info', () => {
-                const sessionPath = (window as any).sessionConfig?.sessionPath;
-                const sessionDate = (window as any).sessionConfig?.sessionDate;
-                window.location.href = `/sessions/${sessionPath}/tunes/${pillData.tuneId}?from_date=${sessionDate}`;
+                ContextMenu.hideContextMenu();
+                // Show the tune detail modal instead of navigating
+                if (typeof (window as any).showTuneDetail === 'function') {
+                    (window as any).showTuneDetail(pillData.tuneId, pillData.tuneName, pillData.tuneType);
+                } else {
+                    // Fallback to old behavior if showTuneDetail is not available
+                    const sessionPath = (window as any).sessionConfig?.sessionPath;
+                    const sessionDate = (window as any).sessionConfig?.sessionDate;
+                    window.location.href = `/sessions/${sessionPath}/tunes/${pillData.tuneId}?from_date=${sessionDate}`;
+                }
             });
             
             ContextMenu.addMenuItem(menu, 'Relink', () => {

@@ -423,7 +423,8 @@ def get_session_tune_detail(session_path, tune_id):
                 sit.order_number,
                 sit.name,
                 sit.key_override,
-                sit.setting_override
+                sit.setting_override,
+                si.session_instance_id
             FROM session_instance_tune sit
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
             WHERE si.session_id = %s AND sit.tune_id = %s
@@ -435,10 +436,11 @@ def get_session_tune_detail(session_path, tune_id):
         play_instances = [
             {
                 "date": row[0].isoformat() if row[0] else None,
-                "order_number": row[1],
-                "name": row[2],
+                "position_in_set": row[1],
+                "name_override": row[2],
                 "key_override": row[3],
-                "setting_override": row[4],
+                "setting_id_override": row[4],
+                "session_instance_id": row[5],
             }
             for row in play_instances_raw
         ]
