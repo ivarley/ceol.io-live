@@ -1048,7 +1048,7 @@
 
     <!-- Tunes Tab Content -->
     <div id="tunes-container" style="margin-top: 20px;">
-        <div id="tune-pills-container" class="tune-pills-container view-mode" tabindex="0" role="textbox" aria-label="Tune editor">
+        <div id="tune-pills-container" class="tune-pills-container view-mode" role="textbox" aria-label="Tune editor">
             <!-- Tune pills will be rendered here -->
         </div>
 
@@ -1152,6 +1152,7 @@ window.enterEditMode = function() {
 
     container.classList.remove('view-mode');
     container.setAttribute('contenteditable', 'true');
+    container.setAttribute('tabindex', '0');
 
     if (editButton) editButton.style.display = 'none';
     if (saveControls) saveControls.style.display = 'flex';
@@ -1173,6 +1174,7 @@ window.exitEditMode = function() {
 
     container.classList.add('view-mode');
     container.setAttribute('contenteditable', 'false');
+    container.removeAttribute('tabindex');
 
     if (editButton) editButton.style.display = 'block';
     if (saveControls) saveControls.style.display = 'none';

@@ -154,6 +154,11 @@ export class KeyboardHandler {
     }
     
     private static handleMainKeydown(e: KeyboardEvent): void {
+        // Don't handle keyboard events in view mode
+        if ((window as any).editorMode === 'view') {
+            return;
+        }
+
         const cursorManager = this.getCursorManager?.();
         const pillSelection = this.getPillSelection?.();
 
