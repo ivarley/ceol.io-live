@@ -695,9 +695,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileSelect = document.getElementById('session-admin-mobile-select');
     if (mobileSelect) {
         mobileSelect.addEventListener('change', function() {
-            const sessionPath = '{{ session.path }}';
+            const sessionPath = {{ session_path|tojson|safe }};
             let url;
-            
+
             if (this.value === 'details') {
                 url = `/admin/sessions/${sessionPath}`;
             } else if (this.value === 'players') {
@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (this.value === 'logs') {
                 url = `/admin/sessions/${sessionPath}/logs`;
             }
-            
+
             if (url) {
                 window.location.href = url;
             }
@@ -744,8 +744,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadPlayersContent() {
-    const sessionPath = '{{ session_path }}';
-    
+    const sessionPath = {{ session_path|tojson|safe }};
+
     fetch(`/api/admin/sessions/${sessionPath}/players`)
         .then(response => response.json())
         .then(data => {
@@ -862,6 +862,8 @@ function filterPlayers() {
         return window.sortDirection === 'asc' ? ' ↑' : ' ↓';
     }
     
+    const sessionPath = {{ session_path|tojson|safe }};
+
     let html = `
         <div class="table-responsive">
             <table class="table table-striped">
@@ -877,20 +879,20 @@ function filterPlayers() {
                 </thead>
                 <tbody>
     `;
-    
+
     filteredPlayers.forEach(player => {
         const statusBadges = [];
         if (player.is_regular) statusBadges.push('<span class="badge bg-success">Regular</span>');
         if (player.username) statusBadges.push('<span class="badge bg-info">User</span>');
-        
+
         const adminBadges = [];
         if (player.is_admin) adminBadges.push('<span class="badge bg-primary">Session</span>');
         if (player.is_system_admin) adminBadges.push('<span class="badge bg-warning">System</span>');
-        
+
         html += `
             <tr>
                 <td class="player-name">
-                    <a href="/admin/sessions/{{ session_path }}/players/${player.person_id}" class="player-link">
+                    <a href="/admin/sessions/${sessionPath}/players/${player.person_id}" class="player-link">
                         ${player.name}
                     </a>
                 </td>
@@ -917,8 +919,8 @@ function filterPlayers() {
 }
 
 function loadLogsContent() {
-    const sessionPath = '{{ session_path }}';
-    
+    const sessionPath = {{ session_path|tojson|safe }};
+
     fetch(`/api/admin/sessions/${sessionPath}/logs`)
         .then(response => response.json())
         .then(data => {
@@ -962,7 +964,7 @@ function displayLogs(logs) {
     
     logs.forEach(log => {
         const date = new Date(log.date);
-        const sessionPath = '{{ session_path }}';
+        const sessionPath = {{ session_path|tojson|safe }};
         const dateUrl = `/sessions/${sessionPath}/${log.date}`;
         
         const timeRange = log.start_time && log.end_time ? 
@@ -997,8 +999,8 @@ function displayLogs(logs) {
 }
 
 function saveSessionDetails() {
-    const sessionPath = '{{ session_path }}';
-    
+    const sessionPath = {{ session_path|tojson|safe }};
+
     // Collect form data
     const formData = {
         name: document.getElementById('session-name').value.trim(),
@@ -1013,7 +1015,6 @@ function saveSessionDetails() {
         location_phone: document.getElementById('location-phone').value.trim(),
         initiation_date: document.getElementById('initiation-date').value,
         unlisted_address: document.getElementById('unlisted-address').checked,
-        recurrence: document.getElementById('recurrence').value.trim(),
         comments: document.getElementById('comments').value.trim()
     };
     
@@ -1057,8 +1058,8 @@ function saveSessionDetails() {
 }
 
 function setTerminationDate(terminationDate) {
-    const sessionPath = '{{ session_path }}';
-    
+    const sessionPath = {{ session_path|tojson|safe }};
+
     fetch(`/api/admin/sessions/${sessionPath}/terminate`, {
         method: 'PUT',
         headers: {
@@ -1086,8 +1087,8 @@ function setTerminationDate(terminationDate) {
 }
 
 function reactivateSession() {
-    const sessionPath = '{{ session_path }}';
-    
+    const sessionPath = {{ session_path|tojson|safe }};
+
     fetch(`/api/admin/sessions/${sessionPath}/reactivate`, {
         method: 'PUT',
         headers: {
@@ -1131,7 +1132,7 @@ function showRecurrenceEditMode() {
     document.getElementById('recurrence-edit-view').style.display = 'block';
 
     // Load existing recurrence data if it exists
-    const existingRecurrence = {{ session.recurrence|tojson|safe if session.recurrence else '""' }};
+    const existingRecurrence = {{ (session.recurrence if session.recurrence else "")|tojson|safe }};
     if (existingRecurrence) {
         try {
             const recurrenceData = typeof existingRecurrence === 'string' ? JSON.parse(existingRecurrence) : existingRecurrence;
@@ -1403,7 +1404,7 @@ function saveRecurrenceFromForm() {
 }
 
 function saveRecurrenceJSON(recurrenceValue) {
-    const sessionPath = '{{ session_path }}';
+    const sessionPath = {{ session_path|tojson|safe }};
 
     // Validate JSON if not empty
     if (recurrenceValue) {
@@ -1443,7 +1444,7 @@ function saveRecurrenceJSON(recurrenceValue) {
 
 function saveRecurrence() {
     const recurrenceValue = document.getElementById('recurrence').value.trim();
-    const sessionPath = '{{ session_path }}';
+    const sessionPath = {{ session_path|tojson|safe }};
 
     // Validate JSON if not empty
     if (recurrenceValue) {
