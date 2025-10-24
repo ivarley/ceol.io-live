@@ -905,6 +905,24 @@
                 box-shadow: -4px 0 0 0 #4a4a4a;
             }
         }
+
+        /* On Now badge styling */
+        .on-now-badge {
+            background-color: #28a745;
+            color: white;
+            padding: 0.35em 0.65em;
+            font-size: 0.5em;
+            font-weight: 600;
+            border-radius: 0.25rem;
+            vertical-align: middle;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+
+        [data-theme="dark"] .on-now-badge {
+            background-color: #28a745;
+            color: white;
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
@@ -913,7 +931,7 @@
 <div class="landing-page" style="display: block;">
 
     <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}/" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
-    <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
+    <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}{% if session_instance.is_active %}<span class="badge on-now-badge">On Now</span>{% endif %}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
 
     {% if session_instance.location_override %}
     <p style="margin: 10px 0; color: var(--disabled-text); font-style: italic;">
