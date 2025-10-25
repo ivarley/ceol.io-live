@@ -3871,7 +3871,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 1rem;
+    padding: 14px 1rem;
   }
   .navbar .container,
   .navbar .container-fluid,
@@ -3889,7 +3889,7 @@
     padding-top: 0.3125rem;
     padding-bottom: 0.3125rem;
     margin-right: 1rem;
-    font-size: 1.25rem;
+    font-size: 1.625rem;
     line-height: inherit;
     white-space: nowrap;
   }
@@ -3936,8 +3936,8 @@
   }
   .navbar-toggler-icon {
     display: inline-block;
-    width: 1.5em;
-    height: 1.5em;
+    width: 1.6em;
+    height: 1.6em;
     vertical-align: middle;
     content: "";
     background: no-repeat center center;
@@ -9247,7 +9247,7 @@
   }
   .site-logo .logo-text {
     color: #252930;
-    font-size: 1.25rem;
+    font-size: 1.625rem;
     font-weight: bold;
     white-space: nowrap;
   }
@@ -9255,7 +9255,7 @@
     font-weight: 300;
   }
   .site-logo .navbar-brand {
-    font-size: 2rem;
+    font-size: 2.375rem;
     font-weight: 600;
     padding-top: 0;
     white-space: nowrap;
