@@ -3,6 +3,7 @@
 {% block title %}{{ session.name }} - Irish Music Session Details{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <style>
         .session-details {
             background-color: #f5f5f5;
@@ -923,6 +924,315 @@
         [data-theme="dark"] .modal-save-btn:disabled {
             background-color: #555;
         }
+
+        /* People tab styles */
+        .people-container {
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* Mobile: zero padding for people container */
+        @media (max-width: 768px) {
+            .people-container {
+                padding: 0 !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+        }
+
+        .people-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 0 8px;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .people-controls {
+                padding: 8px;
+            }
+        }
+
+        .people-search-box {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .people-search-box:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .people-filter-btn {
+            padding: 8px 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+            min-width: 100px;
+        }
+
+        .people-filter-btn:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .people-filter-btn.showing-regulars {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .people-list {
+            display: block;
+            margin-bottom: 30px;
+        }
+
+        .person-row {
+            background-color: var(--bg-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 8px;
+            transition: background-color 0.1s;
+            cursor: pointer;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .person-row:first-child {
+            border-top: 1px solid var(--border-color);
+        }
+
+        .person-row:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .person-icon {
+            font-size: 24px;
+            width: 32px;
+            text-align: center;
+        }
+
+        .person-icon.has-account {
+            color: var(--primary);
+        }
+
+        .person-icon.no-account {
+            color: #999;
+        }
+
+        .person-info {
+            display: flex;
+            flex-direction: row;
+            align-items: baseline;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .person-name {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-color);
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .person-instruments {
+            font-size: 13px;
+            color: var(--secondary-text, #6c757d);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 1;
+        }
+
+        .person-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 11px;
+        }
+
+        .person-attendance-badge {
+            padding: 3px 6px;
+            background-color: var(--secondary-text, #6c757d);
+            color: white;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .person-row {
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+                border-top: none;
+                padding: 12px 8px;
+                margin: 0;
+            }
+
+            .person-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .person-name {
+                font-size: 18px;
+            }
+
+            .person-instruments {
+                font-size: 12px;
+                white-space: normal;
+            }
+
+            .person-icon {
+                font-size: 28px;
+                width: 36px;
+            }
+        }
+
+        /* Person detail modal styles (reuse tune detail modal patterns) */
+        #person-detail-modal .modal-dialog {
+            /* Same as tune detail modal */
+        }
+
+        #person-detail-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: auto;
+        }
+
+        .person-detail-title {
+            margin: 0 32px 12px 0;
+            color: var(--text-color);
+            font-size: 22px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .person-detail-location {
+            color: var(--text-muted, #6c757d);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .person-detail-section {
+            margin-bottom: 20px;
+        }
+
+        .person-detail-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-color);
+        }
+
+        .person-detail-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .person-detail-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .person-detail-list li:last-child {
+            border-bottom: none;
+        }
+
+        .person-detail-link {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .person-detail-link:hover {
+            text-decoration: underline;
+        }
+
+        .person-instruments-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .person-instrument-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            background-color: var(--hover-bg, #f8f9fa);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+
+        .attendance-table {
+            width: 100%;
+            margin-top: 12px;
+        }
+
+        .attendance-table th {
+            text-align: left;
+            padding: 8px;
+            background-color: var(--hover-bg, #f8f9fa);
+            border-bottom: 2px solid var(--border-color);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .attendance-table td {
+            padding: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .attendance-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            #person-detail-modal .modal-dialog {
+                width: 100%;
+                max-width: 100%;
+                height: calc(100vh - 40px);
+                margin: 0;
+                margin-top: 40px;
+                border-radius: 0;
+                position: fixed;
+                right: 0;
+                top: 0;
+                transform: translateX(100%);
+                transition: transform 0.3s ease-out;
+                box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+                padding-left: 16px;
+                padding-right: 16px;
+                box-sizing: border-box;
+            }
+
+            #person-detail-modal.show .modal-dialog {
+                transform: translateX(0);
+            }
+
+            #person-detail-content {
+                padding: 16px 0;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -970,6 +1280,9 @@
             {% else %}
             <button class="tab-button active" data-tab="tunes">Tunes</button>
             <button class="tab-button" data-tab="logs">Logs</button>
+            {% endif %}
+            {% if is_logged_in and is_session_member %}
+            <button class="tab-button" data-tab="people">People</button>
             {% endif %}
         </div>
 
@@ -1107,6 +1420,32 @@
         {% endif %}
             {% endif %}
         </div>
+
+        <!-- People Tab Content -->
+        {% if is_logged_in and is_session_member %}
+        <div class="tab-content" id="people-tab">
+            <div class="people-container">
+                <div class="people-controls">
+                    <input type="text" id="people-search-box" class="people-search-box" placeholder="Search people...">
+                    <button id="people-filter-btn" class="people-filter-btn showing-regulars" onclick="togglePeopleFilter()">Regulars</button>
+                </div>
+                <div class="people-list" id="people-list">
+                    <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                        <i class="loading-dots">Loading people...</i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Person Detail Modal -->
+            <div id="person-detail-modal" class="modal-overlay">
+                <div class="modal-dialog">
+                    <div id="person-detail-content">
+                        <!-- Content will be inserted by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Add Session Instance Modal -->
@@ -2345,6 +2684,308 @@
                 existingMessage.classList.add('show');
             }, 10);
         }
+
+        // Initialize people tab if user is a session member
+        {% if is_logged_in and is_session_member %}
+        initializePeopleTab();
+        {% endif %}
     });
+
+    // People tab functionality
+    let peopleData = [];
+    let personModalShowTime = 0;
+    let currentPeopleFilter = 'regulars';  // Default to regulars
+    const currentUserId = {{ current_user.person_id if current_user.is_authenticated else 'null' }};
+
+    function initializePeopleTab() {
+        // Add click listener to people tab button
+        const peopleTabButton = document.querySelector('.tab-button[data-tab="people"]');
+        if (peopleTabButton) {
+            peopleTabButton.addEventListener('click', function() {
+                // Load people data if not already loaded
+                if (peopleData.length === 0) {
+                    fetchPeople();
+                }
+            });
+        }
+
+        // Add search box listener
+        const searchBox = document.getElementById('people-search-box');
+        if (searchBox) {
+            searchBox.addEventListener('input', function() {
+                renderPeople();
+            });
+        }
+
+        // Check if people tab is already active on page load (e.g., from querystring)
+        const peopleTab = document.getElementById('people-tab');
+        if (peopleTab && peopleTab.classList.contains('active')) {
+            // Tab is already active, fetch data immediately
+            fetchPeople();
+        }
+    }
+
+    function togglePeopleFilter() {
+        // Toggle between 'regulars' and 'all'
+        currentPeopleFilter = currentPeopleFilter === 'regulars' ? 'all' : 'regulars';
+
+        // Update button appearance and text
+        const filterBtn = document.getElementById('people-filter-btn');
+        if (filterBtn) {
+            if (currentPeopleFilter === 'regulars') {
+                filterBtn.classList.add('showing-regulars');
+                filterBtn.textContent = 'Regulars';
+            } else {
+                filterBtn.classList.remove('showing-regulars');
+                filterBtn.textContent = 'All';
+            }
+        }
+
+        renderPeople();
+    }
+
+    function fetchPeople() {
+        const peopleList = document.getElementById('people-list');
+        if (!peopleList) return;
+
+        fetch(`/api/sessions/${sessionPath}/people`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    peopleData = data.people;
+                    renderPeople();
+                } else {
+                    peopleList.innerHTML = `
+                        <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                            <p>Failed to load people: ${data.message || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading people:', error);
+                peopleList.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                        <p>Error loading people</p>
+                    </div>
+                `;
+            });
+    }
+
+    function renderPeople() {
+        const peopleList = document.getElementById('people-list');
+        if (!peopleList) return;
+
+        // Get search query
+        const searchBox = document.getElementById('people-search-box');
+        const searchQuery = searchBox ? searchBox.value.toLowerCase().trim() : '';
+
+        // Filter people
+        let filteredPeople = peopleData;
+
+        // Filter by regulars/all
+        if (currentPeopleFilter === 'regulars') {
+            filteredPeople = filteredPeople.filter(person => person.is_regular);
+        }
+
+        // Filter by search query
+        if (searchQuery) {
+            filteredPeople = filteredPeople.filter(person => {
+                const fullName = `${person.first_name} ${person.last_name}`.toLowerCase();
+                const instruments = person.instruments ? person.instruments.join(' ').toLowerCase() : '';
+                return fullName.includes(searchQuery) || instruments.includes(searchQuery);
+            });
+        }
+
+        if (filteredPeople.length === 0) {
+            const message = searchQuery
+                ? 'No people found matching your search'
+                : (currentPeopleFilter === 'regulars' ? 'No regulars in this session yet' : 'No people in this session yet');
+            peopleList.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
+                    <p>${message}</p>
+                </div>
+            `;
+            return;
+        }
+
+        peopleList.innerHTML = filteredPeople.map(person => createPersonRow(person)).join('');
+    }
+
+    function createPersonRow(person) {
+        const displayName = `${person.first_name} ${person.last_name}`;
+        const iconClass = person.has_user_account ? 'has-account' : 'no-account';
+        const instrumentsText = person.instruments && person.instruments.length > 0
+            ? person.instruments.join(', ')
+            : 'No instruments listed';
+        const attendanceCount = person.attendance_count || 0;
+
+        return `
+            <div class="person-row" onclick="showPersonDetail(${person.person_id})">
+                <div class="person-icon ${iconClass}">
+                    <i class="fa fa-user-circle"></i>
+                </div>
+                <div class="person-info">
+                    <div class="person-name">${escapeHtml(displayName)}</div>
+                    <div class="person-instruments">${escapeHtml(instrumentsText)}</div>
+                </div>
+                <div class="person-meta">
+                    <span class="person-attendance-badge">${attendanceCount}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function showPersonDetail(personId) {
+        const modal = document.getElementById('person-detail-modal');
+        const modalContent = document.getElementById('person-detail-content');
+
+        if (!modal || !modalContent) return;
+
+        // Show modal immediately with loading state
+        modalContent.innerHTML = `
+            <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
+            <div style="padding: 40px 20px; text-align: center;">
+                <i class="loading-dots">Loading...</i>
+            </div>
+        `;
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('show'), 10);
+        personModalShowTime = Date.now();
+
+        // Fetch person details
+        fetch(`/api/sessions/${sessionPath}/people/${personId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayPersonDetail(data.person);
+                } else {
+                    modalContent.innerHTML = `
+                        <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
+                        <div style="padding: 40px 20px; text-align: center; color: var(--text-muted);">
+                            <p>Failed to load person details</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading person details:', error);
+                modalContent.innerHTML = `
+                    <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
+                    <div style="padding: 40px 20px; text-align: center; color: var(--text-muted);">
+                        <p>Error loading person details</p>
+                    </div>
+                `;
+            });
+    }
+
+    function displayPersonDetail(person) {
+        const modalContent = document.getElementById('person-detail-content');
+        if (!modalContent) return;
+
+        const displayName = `${person.first_name} ${person.last_name}`;
+
+        // Build location string (combine intelligently)
+        const locationParts = [];
+        if (person.city) locationParts.push(person.city);
+        if (person.state) locationParts.push(person.state);
+        if (person.country) locationParts.push(person.country);
+        const locationString = locationParts.length > 0 ? locationParts.join(', ') : 'No location specified';
+
+        // Build TheSession.org link
+        const thesessionLink = person.thesession_user_id
+            ? `<a href="https://thesession.org/members/${person.thesession_user_id}" target="_blank" class="person-detail-link">View on TheSession.org</a>`
+            : '<span style="color: var(--text-muted);">Not linked</span>';
+
+        // Build instruments list
+        const instrumentsHtml = person.instruments && person.instruments.length > 0
+            ? `<div class="person-instruments-list">${person.instruments.map(inst =>
+                `<span class="person-instrument-badge">${escapeHtml(inst)}</span>`
+              ).join('')}</div>`
+            : '<span style="color: var(--text-muted);">No instruments listed</span>';
+
+        // Build "View my profile" link if it's the current user
+        const profileLink = person.person_id === currentUserId
+            ? '<div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>'
+            : '';
+
+        // Build attendance table
+        const attendanceTableHtml = person.attended_instances && person.attended_instances.length > 0
+            ? `
+                <table class="attendance-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${person.attended_instances.map(instance => `
+                            <tr>
+                                <td>
+                                    <a href="/sessions/${sessionPath}/${instance.date}" class="person-detail-link">
+                                        ${instance.date}
+                                    </a>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `
+            : '<p style="color: var(--text-muted); margin-top: 12px;">No sessions attended yet</p>';
+
+        modalContent.innerHTML = `
+            <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
+            <h2 class="person-detail-title">${escapeHtml(displayName)}</h2>
+            ${profileLink}
+            <div class="person-detail-location">${escapeHtml(locationString)}</div>
+            <div class="person-detail-section">
+                <h3>TheSession.org</h3>
+                ${thesessionLink}
+            </div>
+            <div class="person-detail-section">
+                <h3>Instruments</h3>
+                ${instrumentsHtml}
+            </div>
+            <div class="person-detail-section">
+                <h3>Sessions Attended</h3>
+                ${attendanceTableHtml}
+            </div>
+        `;
+    }
+
+    function closePersonDetailModal() {
+        const modal = document.getElementById('person-detail-modal');
+        if (!modal) return;
+
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            // Check if person detail modal is open
+            const personModal = document.getElementById('person-detail-modal');
+            if (personModal && personModal.style.display === 'flex') {
+                closePersonDetailModal();
+                return;
+            }
+        }
+    });
+
+    // Close modal when clicking outside
+    const personModal = document.getElementById('person-detail-modal');
+    if (personModal) {
+        personModal.addEventListener('click', function(event) {
+            const timeSinceShown = Date.now() - personModalShowTime;
+            if (timeSinceShown < 500) return;
+
+            if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                closePersonDetailModal();
+            }
+        });
+    }
 </script>
 {% endblock %}

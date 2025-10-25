@@ -2487,6 +2487,222 @@ def get_session_tunes_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to get tunes: {str(e)}"})
 
 
+def get_session_people_list(session_path):
+    """
+    Get list of people in a session.
+
+    GET /api/sessions/<session_path>/people
+
+    Returns:
+    {
+        "success": true,
+        "people": [
+            {
+                "person_id": int,
+                "first_name": str,
+                "last_name": str,
+                "city": str or null,
+                "state": str or null,
+                "country": str or null,
+                "thesession_user_id": int or null,
+                "has_user_account": bool,
+                "instruments": [str],
+                "attendance_count": int
+            }
+        ]
+    }
+    """
+    # Check authentication
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Verify current user is a member of this session
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+
+        # Fetch people list
+        cur.execute(
+            """
+            SELECT p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id,
+                   CASE WHEN u.user_id IS NOT NULL THEN true ELSE false END as has_user_account,
+                   COALESCE(
+                       array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                       '{}'::text[]
+                   ) as instruments,
+                   COUNT(DISTINCT sip.session_instance_person_id) FILTER (WHERE sip.attendance = 'yes') as attendance_count,
+                   sp.is_regular
+            FROM session_person sp
+            JOIN person p ON sp.person_id = p.person_id
+            LEFT JOIN user_account u ON p.person_id = u.person_id
+            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
+            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id AND si.session_id = %s
+            WHERE sp.session_id = %s
+            GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id, sp.is_regular
+            ORDER BY p.first_name, p.last_name
+            """,
+            (session_id, session_id)
+        )
+
+        people_data = cur.fetchall()
+        people = []
+
+        for row in people_data:
+            people.append({
+                'person_id': row[0],
+                'first_name': row[1],
+                'last_name': row[2],
+                'city': row[3],
+                'state': row[4],
+                'country': row[5],
+                'thesession_user_id': row[6],
+                'has_user_account': row[7],
+                'instruments': row[8] if row[8] else [],
+                'attendance_count': row[9] or 0,
+                'is_regular': row[10] or False
+            })
+
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "people": people})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to get people: {str(e)}"}), 500
+
+
+def get_session_person_detail(session_path, person_id):
+    """
+    Get detailed information about a person in a session, including attendance history.
+
+    GET /api/sessions/<session_path>/people/<person_id>
+
+    Returns:
+    {
+        "success": true,
+        "person": {
+            "person_id": int,
+            "first_name": str,
+            "last_name": str,
+            "city": str or null,
+            "state": str or null,
+            "country": str or null,
+            "thesession_user_id": int or null,
+            "has_user_account": bool,
+            "instruments": [str],
+            "attended_instances": [
+                {
+                    "date": "YYYY-MM-DD",
+                    "session_instance_id": int
+                }
+            ]
+        }
+    }
+    """
+    # Check authentication
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Verify current user is a member of this session
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+
+        # Fetch person details with attendance
+        cur.execute(
+            """
+            SELECT p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id,
+                   CASE WHEN u.user_id IS NOT NULL THEN true ELSE false END as has_user_account,
+                   COALESCE(
+                       array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                       '{}'::text[]
+                   ) as instruments,
+                   COALESCE(
+                       json_agg(
+                           json_build_object('date', si.date, 'session_instance_id', si.session_instance_id)
+                           ORDER BY si.date DESC
+                       ) FILTER (WHERE sip.attendance = 'yes' AND si.session_instance_id IS NOT NULL),
+                       '[]'::json
+                   ) as attended_instances
+            FROM person p
+            LEFT JOIN user_account u ON p.person_id = u.person_id
+            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
+            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id AND si.session_id = %s
+            WHERE p.person_id = %s
+            GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id
+            """,
+            (session_id, person_id)
+        )
+
+        person_row = cur.fetchone()
+
+        if not person_row:
+            return jsonify({"success": False, "message": "Person not found"}), 404
+
+        person = {
+            'person_id': person_row[0],
+            'first_name': person_row[1],
+            'last_name': person_row[2],
+            'city': person_row[3],
+            'state': person_row[4],
+            'country': person_row[5],
+            'thesession_user_id': person_row[6],
+            'has_user_account': person_row[7],
+            'instruments': person_row[8] if person_row[8] else [],
+            'attended_instances': person_row[9] if person_row[9] else []
+        }
+
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "person": person})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to get person details: {str(e)}"}), 500
+
+
 @login_required
 def move_set_ajax(session_path, date):
     data = request.get_json()

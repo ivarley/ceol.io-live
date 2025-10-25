@@ -486,6 +486,18 @@ app.add_url_rule(
 )
 app.add_url_rule("/api/sessions/list", "get_available_sessions", get_available_sessions)
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/people",
+    "get_session_people_list",
+    get_session_people_list,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/people/<int:person_id>",
+    "get_session_person_detail",
+    get_session_person_detail,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/user/auto-save-preference",
     "update_auto_save_preference",
     update_auto_save_preference,

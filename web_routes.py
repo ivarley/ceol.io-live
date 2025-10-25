@@ -733,6 +733,7 @@ def session_handler(full_path):
 
                 # Check if current user is an admin of this session
                 is_session_admin = False
+                is_session_member = False
                 if current_user.is_authenticated:
                     # session is the database tuple, session[0] is the session_id
                     # Use request.session to access Flask session data
@@ -741,6 +742,15 @@ def session_handler(full_path):
                     is_session_admin = flask_session.get(
                         "is_system_admin", False
                     ) or session[0] in flask_session.get("admin_session_ids", [])
+
+                    # Check if user is a member of this session (in session_person table)
+                    user_person_id = getattr(current_user, 'person_id', None)
+                    if user_person_id:
+                        cur.execute(
+                            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+                            (session[0], user_person_id)
+                        )
+                        is_session_member = cur.fetchone() is not None
 
                 cur.close()
                 conn.close()
@@ -756,6 +766,7 @@ def session_handler(full_path):
                     tunes=tunes,
                     is_session_admin=is_session_admin,
                     is_logged_in=current_user.is_authenticated,
+                    is_session_member=is_session_member,
                 )
             else:
                 cur.close()
