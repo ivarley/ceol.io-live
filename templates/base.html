@@ -378,6 +378,16 @@
 <script>
 function toggleHamburgerMenu() {
     const dropdown = document.getElementById('hamburgerDropdown');
+
+    // Close any open modals before toggling the hamburger menu
+    const modal = document.getElementById('tune-detail-modal');
+    if (modal && modal.style.display === 'flex') {
+        // Check if closeTuneDetailModal function exists (from my_tunes.html)
+        if (typeof closeTuneDetailModal === 'function') {
+            closeTuneDetailModal();
+        }
+    }
+
     dropdown.classList.toggle('show');
 }
 
