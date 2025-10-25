@@ -212,10 +212,32 @@ export class ContextMenu {
                     pillData.tuneType = result.tune_type;
                     pillData.state = 'linked';
                     pillData.matchResults = null;
-                    
-                    // Update the pill appearance
+
+                    // Find the pill in StateManager's data and update it there too
+                    const pillPosition = window.StateManager.findTuneById(pillData.id);
+                    if (pillPosition) {
+                        const tunePillsData = window.StateManager.getTunePillsData();
+                        const tuneSet = tunePillsData[pillPosition.setIndex];
+
+                        if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
+                            const actualPill = tuneSet[pillPosition.pillIndex];
+                            if (actualPill) {
+                                // Update the actual pill in StateManager
+                                actualPill.tuneId = result.tune_id;
+                                actualPill.tuneName = result.tune_name;
+                                actualPill.tuneType = result.tune_type;
+                                actualPill.state = 'linked';
+                                actualPill.matchResults = null;
+
+                                // Update StateManager to ensure the changes are tracked
+                                window.StateManager.setTunePillsData(tunePillsData);
+                            }
+                        }
+                    }
+
+                    // Update the pill appearance (this will also update the set type label)
                     window.PillRenderer.updatePillAppearance(pillData);
-                    
+
                     // Force check for changes (includes timer reset and dirty state)
                     window.AutoSaveManager.forceCheckChanges();
                     ContextMenu.hideContextMenu();

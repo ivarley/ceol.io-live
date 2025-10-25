@@ -594,10 +594,29 @@ async function autoMatchTune(pill, stillTyping = false) {
                 pill.state = 'linked';
                 pill.matchResults = null; // Clear stored results
                 console.log(`Successfully matched "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
-                
+
+                // Update StateManager's data to trigger type label update
+                const pillPosition = StateManager.findTuneById(pill.id);
+                if (pillPosition) {
+                    const tunePillsData = StateManager.getTunePillsData();
+                    const tuneSet = tunePillsData[pillPosition.setIndex];
+                    if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
+                        const actualPill = tuneSet[pillPosition.pillIndex];
+                        if (actualPill) {
+                            actualPill.tuneId = match.tune_id;
+                            actualPill.tuneName = match.tune_name;
+                            actualPill.tuneType = match.tune_type;
+                            actualPill.state = 'linked';
+                            actualPill.matchResults = null;
+                        }
+                    }
+                    // Notify StateManager - create new array reference to ensure change detection
+                    StateManager.setTunePillsData([...tunePillsData]);
+                }
+
                 // Mark as dirty since we changed the pill
                 AutoSaveManager.forceCheckChanges();
-                
+
             } else if (result.results.length > 1) {
                 // Multiple matches - mark as unmatched and store results
                 pill.state = 'unmatched';
@@ -630,7 +649,26 @@ async function autoMatchTune(pill, stillTyping = false) {
                     pill.state = 'linked';
                     pill.matchResults = null;
                     console.log(`Auto-applied single wildcard match: "${pill.tuneName}" -> "${match.tune_name}" (ID: ${match.tune_id})`);
-                    
+
+                    // Find and update the pill in StateManager's data
+                    const pillPosition = StateManager.findTuneById(pill.id);
+                    if (pillPosition) {
+                        const tunePillsData = StateManager.getTunePillsData();
+                        const tuneSet = tunePillsData[pillPosition.setIndex];
+                        if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
+                            const actualPill = tuneSet[pillPosition.pillIndex];
+                            if (actualPill) {
+                                actualPill.tuneId = match.tune_id;
+                                actualPill.tuneName = match.tune_name;
+                                actualPill.tuneType = match.tune_type;
+                                actualPill.state = 'linked';
+                                actualPill.matchResults = null;
+                                // Notify StateManager of the changes
+                                StateManager.setTunePillsData(tunePillsData);
+                            }
+                        }
+                    }
+
                     // Mark as dirty since we changed the pill
                     AutoSaveManager.forceCheckChanges();
                 }

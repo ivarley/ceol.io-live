@@ -652,7 +652,21 @@ export class PillRenderer {
         }
 
         const tuneSet = tunePillsData[setIndex]!;
-        const existingLabel = setElement.querySelector('.tune-type-label') as HTMLElement;
+
+        // On mobile, the label is in a wrapper outside the set; on desktop it's inside
+        const isMobile = window.innerWidth <= 768;
+        let existingLabel: HTMLElement | null = null;
+
+        if (isMobile) {
+            // Look for label in the wrapper (parent of set element)
+            const wrapper = setElement.parentElement;
+            if (wrapper && wrapper.classList.contains('tune-set-wrapper')) {
+                existingLabel = wrapper.querySelector('.tune-type-label') as HTMLElement;
+            }
+        } else {
+            // Look for label inside the set element
+            existingLabel = setElement.querySelector('.tune-type-label') as HTMLElement;
+        }
 
         if (existingLabel) {
             const newLabel = this.createTypeLabel(tuneSet);
