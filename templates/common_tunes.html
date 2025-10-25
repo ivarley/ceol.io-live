@@ -1,0 +1,694 @@
+{% extends "base.html" %}
+
+{% block title %}Tunes In Common{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Base container styles */
+.tunes-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-subtitle {
+    color: var(--text-muted, #6c757d);
+    font-size: 16px;
+    margin-bottom: 20px;
+}
+
+/* Filters section */
+.filters-container {
+    margin-bottom: 20px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.filter-group:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-input {
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    width: 100%;
+    min-width: 0;
+    max-width: 200px;
+}
+
+.filter-select {
+    padding: 8px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    width: 110px;
+    flex-shrink: 0;
+}
+
+/* Results count and sort toggle */
+.results-count {
+    margin-bottom: 15px;
+    color: var(--text-muted, #6c757d);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sort-toggle {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.sort-toggle:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Tune list styles */
+.tunes-list {
+    display: block;
+    margin-bottom: 30px;
+}
+
+.tune-row {
+    background-color: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 8px;
+    transition: background-color 0.1s;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.tune-row:first-child {
+    border-top: 1px solid var(--border-color);
+}
+
+.tune-row:hover {
+    background-color: var(--hover-bg);
+}
+
+.tune-row-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+    grid-column: 1;
+}
+
+.tune-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-color);
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.tune-type {
+    font-size: 11px;
+    padding: 3px 6px;
+    background-color: var(--primary);
+    color: white;
+    border-radius: 3px;
+    text-transform: capitalize;
+    white-space: nowrap;
+    margin-left: 0;
+}
+
+.tune-meta {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    margin-bottom: 0;
+    font-size: 13px;
+    color: var(--text-muted, #6c757d);
+    align-items: center;
+    grid-column: 2;
+}
+
+.tune-count-badge {
+    font-size: 12px;
+    color: var(--text-muted, #6c757d);
+}
+
+/* No results message */
+.no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted, #6c757d);
+}
+
+/* Tune detail modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+.modal-dialog {
+    background: var(--bg-color, white);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    color: var(--text-color);
+    position: relative;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+#tune-detail-content {
+    padding: 20px;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--text-muted, #999);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.modal-close-btn:hover {
+    color: var(--text-color);
+}
+
+.modal-tune-title {
+    margin: 0 32px 12px 0;
+    color: var(--text-color);
+    font-size: 22px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-info-line {
+    color: var(--text-muted, #6c757d);
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.modal-tune-link {
+    display: inline-block;
+    color: var(--primary);
+    text-decoration: none;
+    margin-top: 12px;
+    padding: 6px 12px;
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.modal-tune-link:hover {
+    background-color: var(--primary);
+    color: white;
+    text-decoration: none;
+}
+
+/* TheSession link icon */
+.thesession-link-icon {
+    font-size: 18px;
+    text-decoration: none;
+    color: var(--primary);
+    opacity: 0.8;
+}
+
+.thesession-link-icon:hover {
+    opacity: 1;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .tunes-container {
+        padding: 0;
+        max-width: 100%;
+        margin: 0;
+    }
+
+    .filters-container {
+        padding: 8px;
+    }
+
+    .filter-input {
+        font-size: 16px;
+        padding: 8px 6px;
+        max-width: none;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    .filter-select {
+        font-size: 13px;
+        padding: 8px 4px;
+        width: 85px;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    .results-count {
+        margin-bottom: 4px;
+        padding: 0 8px;
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .sort-toggle {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+
+    .tune-row {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        padding: 8px 8px;
+        margin: 0;
+    }
+
+    .tune-name {
+        font-size: 18px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+        max-width: calc(100vw - 100px);
+    }
+
+    .tune-type {
+        font-size: 12px;
+        padding: 2px 6px;
+    }
+
+    /* Modal slides in from right on mobile */
+    .modal-overlay {
+        background-color: transparent;
+        align-items: flex-start;
+        justify-content: flex-end;
+        pointer-events: none;
+    }
+
+    .modal-dialog {
+        width: 100%;
+        max-width: 100%;
+        height: calc(100vh - 40px);
+        max-height: calc(100vh - 40px);
+        margin: 0;
+        margin-top: 40px;
+        border-radius: 0;
+        position: fixed;
+        right: 0;
+        top: 0;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        overflow-y: auto;
+        box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+        pointer-events: auto;
+        padding-left: 16px;
+        padding-right: 16px;
+        box-sizing: border-box;
+    }
+
+    .modal-overlay.show .modal-dialog {
+        transform: translateX(0);
+    }
+
+    #tune-detail-content {
+        padding: 16px 0;
+        box-sizing: border-box;
+    }
+
+    .modal-close-btn {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        font-size: 0;
+        width: 40px;
+        height: 40px;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        z-index: 10001;
+    }
+
+    .modal-close-btn::before {
+        content: '>';
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--text-color);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-page" style="display: block;">
+    <h1>Tunes In Common</h1>
+    <p class="page-subtitle">{{ current_person_name }} and {{ other_person_name }} have these tunes in common:</p>
+    <p><a href="javascript:history.back()">← Back</a></p>
+
+    <div class="tunes-container">
+        <div class="filters-container">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <select id="type-filter" class="filter-select" title="Tune type">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-count">
+            <span id="results-count-text"></span>
+            <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
+                <span id="sort-icon">↓</span>
+            </button>
+        </div>
+
+        <div class="tunes-list" id="tunes-list">
+            <!-- Tune rows will be inserted here by JavaScript -->
+        </div>
+
+        <div id="no-results" class="no-results" style="display: none;">
+            <h3>No tunes in common yet</h3>
+            <p>You and {{ other_person_name }} don't have any tunes marked as "learned" or "learning" in common.</p>
+        </div>
+    </div>
+
+    <!-- Tune Detail Modal -->
+    <div id="tune-detail-modal" class="modal-overlay">
+        <div class="modal-dialog">
+            <div id="tune-detail-content">
+                <!-- Content will be inserted by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const otherPersonId = {{ other_person_id }};
+        const otherPersonName = "{{ other_person_name }}";
+
+        let allTunes = [];
+        let filteredTunes = [];
+        let currentFilters = {
+            search: '',
+            type: ''
+        };
+        let modalShowTime = 0;
+
+        // Sort mode cycle states
+        const sortModes = [
+            { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
+            { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
+            { id: 'popularity-desc', label: 'popularity high', icon: '#', sortFn: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0) }
+        ];
+        let currentSortModeIndex = 0;
+
+        // Initialize on page load
+        function initializeCommonTunesPage() {
+            loadTunes();
+            setupEventListeners();
+        }
+
+        // Run on DOM load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeCommonTunesPage);
+        } else {
+            initializeCommonTunesPage();
+        }
+
+        function loadTunes() {
+            fetch(`/api/my-tunes/common/${otherPersonId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        allTunes = data.tunes || [];
+                        populateTuneTypes();
+                        applyFilters();
+                    } else {
+                        console.error('Error loading common tunes:', data.error);
+                        document.getElementById('no-results').style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('no-results').style.display = 'block';
+                });
+        }
+
+        function populateTuneTypes() {
+            // Extract unique tune types from the data
+            const types = [...new Set(allTunes.map(tune => tune.tune_type).filter(Boolean))];
+            types.sort();
+
+            const typeFilter = document.getElementById('type-filter');
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                typeFilter.appendChild(option);
+            });
+        }
+
+        function setupEventListeners() {
+            // Search input with debounce
+            let searchTimeout;
+            document.getElementById('tune-search').addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentFilters.search = e.target.value.toLowerCase().trim();
+                    applyFilters();
+                }, 300);
+            });
+
+            // Type filter
+            document.getElementById('type-filter').addEventListener('change', function(e) {
+                currentFilters.type = e.target.value;
+                applyFilters();
+            });
+
+            // Sort toggle button
+            document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
+
+            // Modal overlay click handler
+            const modalOverlay = document.getElementById('tune-detail-modal');
+            modalOverlay.addEventListener('click', function(event) {
+                const timeSinceShown = Date.now() - modalShowTime;
+                if (timeSinceShown < 500) {
+                    return;
+                }
+
+                if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                    closeTuneDetailModal();
+                }
+            });
+
+            // Close modal on escape key
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    const modal = document.getElementById('tune-detail-modal');
+                    if (modal.style.display === 'flex') {
+                        closeTuneDetailModal();
+                    }
+                }
+            });
+        }
+
+        function cycleSortMode() {
+            currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
+            const mode = sortModes[currentSortModeIndex];
+
+            // Update button display
+            const icon = document.getElementById('sort-icon');
+            icon.textContent = mode.icon;
+
+            // Re-apply filters and sorting
+            applyFilters();
+        }
+
+        function applyFilters() {
+            // Filter tunes based on search and type
+            filteredTunes = allTunes.filter(tune => {
+                // Search filter
+                if (currentFilters.search) {
+                    const tuneName = (tune.tune_name || '').toLowerCase();
+                    if (!tuneName.includes(currentFilters.search)) {
+                        return false;
+                    }
+                }
+
+                // Type filter
+                if (currentFilters.type && tune.tune_type !== currentFilters.type) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Apply sorting
+            const sortMode = sortModes[currentSortModeIndex];
+            if (sortMode && sortMode.sortFn) {
+                filteredTunes.sort(sortMode.sortFn);
+            }
+
+            renderTunes();
+        }
+
+        function renderTunes() {
+            const list = document.getElementById('tunes-list');
+            const resultsCountText = document.getElementById('results-count-text');
+            const noResults = document.getElementById('no-results');
+
+            if (filteredTunes.length === 0) {
+                list.style.display = 'none';
+                noResults.style.display = 'block';
+                resultsCountText.textContent = '';
+                return;
+            }
+
+            list.style.display = 'block';
+            noResults.style.display = 'none';
+
+            // Update results count
+            const total = allTunes.length;
+            const filtered = filteredTunes.length;
+            if (filtered < total) {
+                resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
+            } else {
+                resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
+            }
+
+            // Render tune rows
+            list.innerHTML = filteredTunes.map(tune => createTuneRow(tune)).join('');
+        }
+
+        function createTuneRow(tune) {
+            const tuneName = tune.tune_name || 'Unknown';
+            const tuneType = tune.tune_type || '';
+            const tunebookCount = tune.tunebook_count || 0;
+
+            // Determine what to show based on sort mode
+            const sortMode = sortModes[currentSortModeIndex];
+            const isPopularityMode = sortMode.id === 'popularity-desc';
+
+            let countBadge = '';
+            let typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
+
+            if (isPopularityMode) {
+                countBadge = `<span class="tune-count-badge">${tunebookCount}</span>`;
+            }
+
+            return `
+                <div class="tune-row" onclick="showTuneDetail(${tune.tune_id}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${tunebookCount})">
+                    <div class="tune-row-header">
+                        <h3 class="tune-name">${tuneName}</h3>
+                    </div>
+                    <div class="tune-meta">
+                        ${typeBadge}
+                        ${countBadge}
+                    </div>
+                </div>
+            `;
+        }
+
+        function showTuneDetail(tuneId, tuneName, tuneType, tunebookCount) {
+            const modal = document.getElementById('tune-detail-modal');
+            const modalContent = document.getElementById('tune-detail-content');
+
+            // Build thesession.org link
+            const thesessionUrl = `https://thesession.org/tunes/${tuneId}`;
+            const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
+
+            modalContent.innerHTML = `
+                <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
+                <h2 class="modal-tune-title">${tuneName} ${thesessionLinkIcon}</h2>
+                <div class="modal-info-line"><strong>Type:</strong> ${tuneType || 'Unknown'}</div>
+                <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${tunebookCount} tunebook${tunebookCount !== 1 ? 's' : ''}</div>
+                <a href="${thesessionUrl}" target="_blank" class="modal-tune-link">View on TheSession.org</a>
+            `;
+
+            // Show modal
+            modal.style.display = 'flex';
+
+            // Add 'show' class after a small delay to trigger slide-in animation
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+
+            // Record the time when modal is shown
+            modalShowTime = Date.now();
+        }
+
+        function closeTuneDetailModal() {
+            const modal = document.getElementById('tune-detail-modal');
+
+            // Remove 'show' class to trigger slide-out animation
+            modal.classList.remove('show');
+
+            // Wait for animation to complete before hiding
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+    </script>
+</div>
+{% endblock %}

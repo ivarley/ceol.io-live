@@ -19,7 +19,8 @@ from api_person_tune_routes import (
     increment_tune_heard_count,
     sync_my_tunes,
     search_tunes,
-    update_my_profile
+    update_my_profile,
+    get_common_tunes
 )
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
@@ -176,6 +177,7 @@ app.add_url_rule("/me", "user_profile", person_details)
 app.add_url_rule("/my-tunes", "my_tunes", my_tunes)
 app.add_url_rule("/my-tunes/add", "add_my_tune_page", add_my_tune_page)
 app.add_url_rule("/my-tunes/sync", "sync_my_tunes_page", sync_my_tunes_page)
+app.add_url_rule("/me/and/<int:person_id>", "common_tunes", common_tunes)
 app.add_url_rule(
     "/sessions/<path:session_path>/tunes/add",
     "add_session_tune_page",
@@ -641,6 +643,12 @@ app.add_url_rule(
     "sync_my_tunes",
     sync_my_tunes,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/my-tunes/common/<int:other_person_id>",
+    "get_common_tunes",
+    get_common_tunes,
+    methods=["GET"],
 )
 app.add_url_rule(
     "/api/tunes/search",

@@ -3562,6 +3562,11 @@
             ? '<div style="margin-bottom: 16px;"><a href="/me" class="person-detail-link">View my profile</a></div>'
             : '';
 
+        // Build "Common Tunes?" link if viewing another user with an account
+        const commonTunesLink = person.has_user_account && person.person_id !== currentUserId
+            ? '<div style="margin-bottom: 16px;"><a href="/me/and/' + person.person_id + '" class="person-detail-link">Common Tunes?</a></div>'
+            : '';
+
         // Build attendance table
         const attendanceTableHtml = person.attended_instances && person.attended_instances.length > 0
             ? `
@@ -3590,6 +3595,7 @@
             <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
             <h2 class="person-detail-title">${escapeHtml(displayName)}</h2>
             ${profileLink}
+            ${commonTunesLink}
             <div class="person-detail-location">${escapeHtml(locationString)}</div>
             <div class="person-detail-section">
                 <h3>TheSession.org</h3>

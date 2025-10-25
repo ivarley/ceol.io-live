@@ -2980,6 +2980,64 @@ def sync_my_tunes_page():
     return render_template("my_tunes_sync.html", thesession_user_id=thesession_user_id)
 
 
+@login_required
+def common_tunes(person_id):
+    """Common tunes page - shows tunes that both users have learned/learning"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get the other person's details
+        cur.execute("""
+            SELECT p.person_id, p.first_name, p.last_name,
+                   EXISTS(SELECT 1 FROM user_account WHERE person_id = p.person_id) as has_account
+            FROM person p
+            WHERE p.person_id = %s
+        """, (person_id,))
+
+        other_person = cur.fetchone()
+
+        if not other_person:
+            cur.close()
+            conn.close()
+            from app import render_error_page
+            return render_error_page("Person not found", 404)
+
+        # Check if the other person has a user account
+        if not other_person[3]:  # has_account
+            cur.close()
+            conn.close()
+            from app import render_error_page
+            return render_error_page("This person does not have a user account", 404)
+
+        other_person_name = f"{other_person[1]} {other_person[2]}"
+
+        # Get current user's name
+        cur.execute("""
+            SELECT first_name, last_name
+            FROM person
+            WHERE person_id = %s
+        """, (current_user.person_id,))
+
+        current_person = cur.fetchone()
+        current_person_name = f"{current_person[0]} {current_person[1]}" if current_person else "You"
+
+        cur.close()
+        conn.close()
+
+        return render_template(
+            "common_tunes.html",
+            current_person_name=current_person_name,
+            other_person_name=other_person_name,
+            other_person_id=person_id
+        )
+
+    except Exception as e:
+        print(f"Error in common_tunes: {e}")
+        from app import render_error_page
+        return render_error_page("Error loading page", 500)
+
+
 def add_session_tune_page(session_path):
     """Add tune to session page"""
     try:

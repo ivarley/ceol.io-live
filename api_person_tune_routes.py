@@ -929,3 +929,110 @@ def sync_my_tunes():
                 "errors": [str(e)]
             }
         }), 500
+
+
+@person_tune_login_required
+def get_common_tunes(other_person_id):
+    """
+    GET /api/my-tunes/common/<int:other_person_id>
+
+    Get tunes that both the current user and another person have in their collections
+    with "learned" or "learning" status.
+
+    Route Parameters:
+        - other_person_id (int): ID of the other person to compare with
+
+    Query Parameters:
+        - search (str, optional): Search query for tune names
+        - tune_type (str, optional): Filter by tune type
+        - sort (str, optional): Sort order (alpha-asc, alpha-desc, popularity-desc)
+
+    Returns:
+        JSON response with list of common tunes (basic info only)
+    """
+    try:
+        person_id = get_user_person_id()
+
+        # Get query parameters
+        search_query = request.args.get('search', '').strip()
+        tune_type_filter = request.args.get('tune_type', '').strip()
+        sort_by = request.args.get('sort', 'alpha-asc')
+
+        # Validate sort parameter
+        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc']
+        if sort_by not in valid_sorts:
+            sort_by = 'alpha-asc'
+
+        # Build the SQL query
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+
+            # Base query to find common tunes where both users have learned/learning status
+            query = """
+                SELECT DISTINCT
+                    t.tune_id,
+                    t.name AS tune_name,
+                    t.tune_type,
+                    t.tunebook_count_cached
+                FROM person_tune pt1
+                INNER JOIN person_tune pt2 ON pt1.tune_id = pt2.tune_id
+                INNER JOIN tune t ON pt1.tune_id = t.tune_id
+                WHERE pt1.person_id = %s
+                  AND pt2.person_id = %s
+                  AND pt1.learn_status IN ('learned', 'learning')
+                  AND pt2.learn_status IN ('learned', 'learning')
+            """
+
+            params = [person_id, other_person_id]
+
+            # Add search filter if provided
+            if search_query:
+                query += " AND LOWER(t.name) LIKE LOWER(%s)"
+                params.append(f"%{search_query}%")
+
+            # Add tune type filter if provided
+            if tune_type_filter:
+                query += " AND t.tune_type = %s"
+                params.append(tune_type_filter)
+
+            # Add sorting
+            if sort_by == 'alpha-asc':
+                query += " ORDER BY t.name ASC"
+            elif sort_by == 'alpha-desc':
+                query += " ORDER BY t.name DESC"
+            elif sort_by == 'popularity-desc':
+                query += " ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC"
+
+            cur.execute(query, params)
+            rows = cur.fetchall()
+
+            # Build response
+            tunes = []
+            for row in rows:
+                tunes.append({
+                    'tune_id': row[0],
+                    'tune_name': row[1],
+                    'tune_type': row[2],
+                    'tunebook_count': row[3] or 0
+                })
+
+            return jsonify({
+                "success": True,
+                "tunes": tunes,
+                "count": len(tunes)
+            }), 200
+
+        finally:
+            conn.close()
+
+    except AttributeError:
+        return jsonify({
+            "success": False,
+            "error": "User authentication error"
+        }), 401
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error retrieving common tunes: {str(e)}"
+        }), 500
