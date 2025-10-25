@@ -877,16 +877,19 @@ function applyFilters() {
         if (currentFilters.search) {
             // Check if the search query is a tune ID or URL
             const tuneId = extractTuneId(currentFilters.search);
-            if (tuneId) {
-                // Search by tune_id
-                if (tune.tune_id !== tuneId) return false;
-            } else {
-                // Regular text search on tune name
-                const searchNormalized = normalizeString(currentFilters.search.toLowerCase());
-                const nameNormalized = normalizeString(tune.tune_name ? tune.tune_name.toLowerCase() : '');
-                const nameMatch = nameNormalized.includes(searchNormalized);
-                if (!nameMatch) return false;
-            }
+
+            // Always do text search on tune name and notes
+            const searchNormalized = normalizeString(currentFilters.search.toLowerCase());
+            const nameNormalized = normalizeString(tune.tune_name ? tune.tune_name.toLowerCase() : '');
+            const notesNormalized = normalizeString(tune.notes ? tune.notes.toLowerCase() : '');
+            const nameMatch = nameNormalized.includes(searchNormalized);
+            const notesMatch = notesNormalized.includes(searchNormalized);
+
+            // If search looks like a tune ID, also check tune_id
+            const tuneIdMatch = tuneId && tune.tune_id === tuneId;
+
+            // Match if ANY of these are true: tune ID match, name match, or notes match
+            if (!tuneIdMatch && !nameMatch && !notesMatch) return false;
         }
 
         // Type filter
@@ -1474,13 +1477,13 @@ function displayTuneDetailModalBasic(tune) {
         ? `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`
         : '';
 
-    // Show basic info with inline loading dots for numbers and disabled notes field
+    // Show basic info with notes populated from local data
     modalContent.innerHTML = `
         <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
         <h2 class="modal-tune-title modal-tune-title-editable" id="modal-tune-title" onclick="toggleNameAliasEdit()" title="Click to set custom name">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
         <div class="modal-field-section" id="name-alias-section" style="display: none;">
             <label class="modal-field-label">I call this:</label>
-            <input type="text" id="modal-name-alias-input" class="modal-field-input" placeholder="Enter your custom name for this tune" oninput="onModalFieldChange()">
+            <input type="text" id="modal-name-alias-input" class="modal-field-input" placeholder="Enter your custom name for this tune" value="${tune.name_alias || ''}" oninput="onModalFieldChange()">
             <div class="name-alias-hint">Click title again to hide this field</div>
         </div>
         <div class="modal-header-row">
@@ -1491,11 +1494,11 @@ function displayTuneDetailModalBasic(tune) {
         </div>
         <div class="modal-notes-section">
             <div class="modal-notes-label">Notes:</div>
-            <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Loading..." disabled oninput="onModalFieldChange()"></textarea>
+            <textarea id="modal-notes-textarea" class="modal-notes-textarea" placeholder="Add notes about this tune..." oninput="onModalFieldChange()">${tune.notes || ''}</textarea>
         </div>
         <div class="modal-field-section">
             <label class="modal-field-label">If you play a specific setting of the tune, enter the URL or setting ID here:</label>
-            <input type="text" id="modal-setting-id-input" class="modal-field-input" placeholder="e.g., 123 or paste URL" disabled oninput="onSettingIdInput()">
+            <input type="text" id="modal-setting-id-input" class="modal-field-input" placeholder="e.g., 123 or paste URL" value="${tune.setting_id || ''}" oninput="onSettingIdInput()">
             <div id="modal-setting-id-error" class="modal-field-error" style="display: none;"></div>
         </div>
         <div class="heard-count-row">
@@ -1518,11 +1521,12 @@ function displayTuneDetailModalBasic(tune) {
         </div>
     `;
 
-    // Store current tune ID and original status for updates
+    // Store current tune ID and original values for updates (from local data)
     modal.dataset.personTuneId = tune.person_tune_id;
     modal.dataset.originalStatus = tune.learn_status;
-    modal.dataset.originalSettingId = '';
-    modal.dataset.originalNameAlias = '';
+    modal.dataset.originalNotes = tune.notes || '';
+    modal.dataset.originalSettingId = tune.setting_id || '';
+    modal.dataset.originalNameAlias = tune.name_alias || '';
     modal.dataset.currentHeardCount = tune.heard_count || 0;
 
     // Show modal
@@ -1560,13 +1564,8 @@ function displayTuneDetailModalFull(tune) {
         ? `<div class="modal-info-line">Play count at your sessions: ${tune.session_play_count}</div>`
         : '';
 
-    // Populate notes field
-    const notesTextarea = document.getElementById('modal-notes-textarea');
-    if (notesTextarea) {
-        notesTextarea.value = tune.notes || '';
-        notesTextarea.disabled = false;
-        notesTextarea.placeholder = 'Add notes about this tune...';
-    }
+    // Don't update any editable fields (notes, setting_id, name_alias) - they're already populated
+    // from local data and the user may have started editing them
 
     // Build full additional info (just the read-only stats)
     const additionalInfo = `
@@ -1580,30 +1579,15 @@ function displayTuneDetailModalFull(tune) {
         additionalInfoDiv.innerHTML = additionalInfo;
     }
 
-    // Populate the setting ID input field (it's in the main modal HTML now)
-    const settingIdInput = document.getElementById('modal-setting-id-input');
-    if (settingIdInput) {
-        settingIdInput.value = tune.setting_id || '';
-        settingIdInput.disabled = false;
-    }
-
-    // Populate name alias field if it exists
-    const nameAliasInput = document.getElementById('modal-name-alias-input');
-    if (nameAliasInput) {
-        nameAliasInput.value = tune.name_alias || '';
-    }
-
     // Update heard count display
     updateHeardCountDisplay(tune.heard_count || 0);
 
     // Update button states
     updateHeardCountButtonStates();
 
-    // Store original values for comparison
+    // Update heard count in dataset (this can change via the API)
+    // Don't update other original values - they're already set from local data
     const modal = document.getElementById('tune-detail-modal');
-    modal.dataset.originalNotes = tune.notes || '';
-    modal.dataset.originalSettingId = tune.setting_id || '';
-    modal.dataset.originalNameAlias = tune.name_alias || '';
     modal.dataset.currentHeardCount = tune.heard_count || 0;
 }
 
