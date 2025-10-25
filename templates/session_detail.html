@@ -987,10 +987,20 @@
             background-color: var(--hover-bg);
         }
 
-        .people-filter-btn.showing-regulars {
+        .people-add-btn {
+            padding: 8px 16px;
             background-color: var(--primary);
             color: white;
-            border-color: var(--primary);
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s, opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .people-add-btn:hover {
+            opacity: 0.9;
         }
 
         .people-list {
@@ -1233,6 +1243,212 @@
                 padding: 16px 0;
             }
         }
+
+        /* Add person modal styles */
+        #add-person-modal .modal-dialog {
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .add-person-form-group {
+            margin-bottom: 16px;
+        }
+
+        .add-person-form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        .add-person-form-group input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        .add-person-form-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .instruments-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--bg-color);
+        }
+
+        .instrument-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .instrument-checkbox-item input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .instrument-checkbox-item label {
+            cursor: pointer;
+            font-size: 13px;
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .add-person-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .add-person-btn-cancel {
+            padding: 8px 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .add-person-btn-cancel:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .add-person-btn-save {
+            padding: 8px 16px;
+            background-color: var(--primary);
+            color: white;
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .add-person-btn-save:hover {
+            opacity: 0.9;
+        }
+
+        .add-person-btn-save:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .instruments-checkboxes {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Search person modal styles */
+        #search-person-modal .modal-dialog {
+            max-width: 600px;
+            width: 90%;
+        }
+
+        .search-person-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+            margin-bottom: 16px;
+        }
+
+        .search-person-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .search-results-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .search-result-row {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .search-result-row:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-row:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .search-result-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .search-result-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .search-result-name {
+            font-weight: 500;
+            font-size: 16px;
+            color: var(--text-color);
+            margin-bottom: 4px;
+        }
+
+        .search-result-details {
+            font-size: 13px;
+            color: var(--secondary-text, #6c757d);
+        }
+
+        .search-result-instruments {
+            font-size: 12px;
+            color: var(--secondary-text, #6c757d);
+            margin-top: 4px;
+        }
+
+        .search-no-results {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted, #6c757d);
+        }
+
+        .search-person-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
     </style>
 {% endblock %}
 
@@ -1427,7 +1643,10 @@
             <div class="people-container">
                 <div class="people-controls">
                     <input type="text" id="people-search-box" class="people-search-box" placeholder="Search people...">
-                    <button id="people-filter-btn" class="people-filter-btn showing-regulars" onclick="togglePeopleFilter()">Regulars</button>
+                    {% if session.session_type != 'festival' %}
+                    <button id="people-filter-btn" class="people-filter-btn" onclick="togglePeopleFilter()">Regulars</button>
+                    {% endif %}
+                    <button class="people-add-btn" onclick="openAddPersonModal()">Add</button>
                 </div>
                 <div class="people-list" id="people-list">
                     <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
@@ -1441,6 +1660,126 @@
                 <div class="modal-dialog">
                     <div id="person-detail-content">
                         <!-- Content will be inserted by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Person Modal -->
+            <div id="search-person-modal" class="modal-overlay">
+                <div class="modal-dialog">
+                    <div style="padding: 20px;">
+                        <button class="modal-close-btn" onclick="closeSearchPersonModal()" title="Close">&times;</button>
+                        <h2 style="margin: 0 32px 20px 0; color: var(--text-color); font-size: 20px; font-weight: 600;">Add Person to Session</h2>
+
+                        <input type="text" id="search-person-input" class="search-person-input" placeholder="Search by name..." autocomplete="off">
+
+                        <div class="search-results-container" id="search-results-container">
+                            <div class="search-no-results">
+                                Type to search for existing people
+                            </div>
+                        </div>
+
+                        <div class="search-person-actions">
+                            <button class="add-person-btn-cancel" onclick="closeSearchPersonModal()">Cancel</button>
+                            <button class="add-person-btn-save" onclick="openCreatePersonModal()">None Of These</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Person Modal -->
+            <div id="add-person-modal" class="modal-overlay">
+                <div class="modal-dialog">
+                    <div style="padding: 20px;">
+                        <button class="modal-close-btn" onclick="closeAddPersonModal()" title="Close">&times;</button>
+                        <h2 style="margin: 0 32px 20px 0; color: var(--text-color); font-size: 20px; font-weight: 600;">Add Person to Session</h2>
+
+                        <div class="add-person-form-group">
+                            <label for="add-person-first-name">First Name *</label>
+                            <input type="text" id="add-person-first-name" required>
+                        </div>
+
+                        <div class="add-person-form-group">
+                            <label for="add-person-last-name">Last Name *</label>
+                            <input type="text" id="add-person-last-name" required>
+                        </div>
+
+                        <div class="add-person-form-group">
+                            <label>Instruments</label>
+                            <div class="instruments-checkboxes" id="add-person-instruments">
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-banjo" value="banjo">
+                                    <label for="inst-banjo">Banjo</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-bodhran" value="bodhrán">
+                                    <label for="inst-bodhran">Bodhrán</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-bouzouki" value="bouzouki">
+                                    <label for="inst-bouzouki">Bouzouki</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-accordion" value="button accordion">
+                                    <label for="inst-accordion">Button Accordion</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-concertina" value="concertina">
+                                    <label for="inst-concertina">Concertina</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-fiddle" value="fiddle">
+                                    <label for="inst-fiddle">Fiddle</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-flute" value="flute">
+                                    <label for="inst-flute">Flute</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-guitar" value="guitar">
+                                    <label for="inst-guitar">Guitar</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-harp" value="harp">
+                                    <label for="inst-harp">Harp</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-mandolin" value="mandolin">
+                                    <label for="inst-mandolin">Mandolin</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-piano" value="piano">
+                                    <label for="inst-piano">Piano</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-whistle" value="tin whistle">
+                                    <label for="inst-whistle">Tin Whistle</label>
+                                </div>
+                                <div class="instrument-checkbox-item">
+                                    <input type="checkbox" id="inst-pipes" value="uilleann pipes">
+                                    <label for="inst-pipes">Uilleann Pipes</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="add-person-form-group">
+                            <label for="add-person-thesession">TheSession.org ID or URL (optional)</label>
+                            <input type="text" id="add-person-thesession" placeholder="e.g. 12345 or https://thesession.org/members/12345">
+                        </div>
+
+                        {% if session.session_type != 'festival' %}
+                        <div class="add-person-form-group">
+                            <div class="instrument-checkbox-item">
+                                <input type="checkbox" id="add-person-is-regular">
+                                <label for="add-person-is-regular">Regular?</label>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="add-person-actions">
+                            <button class="add-person-btn-cancel" onclick="closeAddPersonModal()">Cancel</button>
+                            <button class="add-person-btn-save" onclick="saveNewPerson()">Add Person</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2694,7 +3033,9 @@
     // People tab functionality
     let peopleData = [];
     let personModalShowTime = 0;
-    let currentPeopleFilter = 'regulars';  // Default to regulars
+    const sessionType = "{{ session.session_type }}";
+    // Default to 'all' for festivals, 'regulars' for regular sessions
+    let currentPeopleFilter = sessionType === 'festival' ? 'all' : 'regulars';
     const currentUserId = {{ current_user.person_id if current_user.is_authenticated else 'null' }};
 
     function initializePeopleTab() {
@@ -2729,19 +3070,331 @@
         // Toggle between 'regulars' and 'all'
         currentPeopleFilter = currentPeopleFilter === 'regulars' ? 'all' : 'regulars';
 
-        // Update button appearance and text
+        // Update button text
         const filterBtn = document.getElementById('people-filter-btn');
         if (filterBtn) {
-            if (currentPeopleFilter === 'regulars') {
-                filterBtn.classList.add('showing-regulars');
-                filterBtn.textContent = 'Regulars';
-            } else {
-                filterBtn.classList.remove('showing-regulars');
-                filterBtn.textContent = 'All';
-            }
+            filterBtn.textContent = currentPeopleFilter === 'regulars' ? 'Regulars' : 'All';
         }
 
         renderPeople();
+    }
+
+    let searchTimeout = null;
+
+    function openAddPersonModal() {
+        // Open search modal first
+        const modal = document.getElementById('search-person-modal');
+        if (!modal) return;
+
+        // Clear search input and results
+        const searchInput = document.getElementById('search-person-input');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+
+        const resultsContainer = document.getElementById('search-results-container');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '<div class="search-no-results">Type to search for existing people</div>';
+        }
+
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+            if (searchInput) {
+                searchInput.focus();
+            }
+        }, 10);
+
+        // Set up search input listeners
+        if (searchInput && !searchInput.dataset.listenerAttached) {
+            searchInput.dataset.listenerAttached = 'true';
+
+            // Search on Enter key
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    performPersonSearch();
+                }
+            });
+
+            // Search on input with 1 second debounce
+            searchInput.addEventListener('input', () => {
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                searchTimeout = setTimeout(() => {
+                    performPersonSearch();
+                }, 1000);
+            });
+        }
+    }
+
+    function closeSearchPersonModal() {
+        const modal = document.getElementById('search-person-modal');
+        if (!modal) return;
+
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+
+    function openCreatePersonModal() {
+        // Close search modal and open create modal
+        closeSearchPersonModal();
+
+        setTimeout(() => {
+            const modal = document.getElementById('add-person-modal');
+            if (!modal) return;
+
+            // Clear form
+            document.getElementById('add-person-first-name').value = '';
+            document.getElementById('add-person-last-name').value = '';
+            document.getElementById('add-person-thesession').value = '';
+            document.querySelectorAll('#add-person-instruments input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+            // Clear is-regular checkbox if it exists (non-festival mode)
+            const isRegularCheckbox = document.getElementById('add-person-is-regular');
+            if (isRegularCheckbox) {
+                isRegularCheckbox.checked = false;
+            }
+
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('show'), 10);
+        }, 350);
+    }
+
+    function performPersonSearch() {
+        const searchInput = document.getElementById('search-person-input');
+        const resultsContainer = document.getElementById('search-results-container');
+
+        if (!searchInput || !resultsContainer) return;
+
+        const query = searchInput.value.trim();
+
+        if (query.length === 0) {
+            resultsContainer.innerHTML = '<div class="search-no-results">Type to search for existing people</div>';
+            return;
+        }
+
+        if (query.length < 2) {
+            resultsContainer.innerHTML = '<div class="search-no-results">Type at least 2 characters to search</div>';
+            return;
+        }
+
+        // Show loading state
+        resultsContainer.innerHTML = '<div class="search-no-results">Searching...</div>';
+
+        // Call API to search people
+        fetch(`/api/sessions/${sessionPath}/people/search?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displaySearchResults(data.people);
+                } else {
+                    resultsContainer.innerHTML = `<div class="search-no-results">Error: ${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                resultsContainer.innerHTML = '<div class="search-no-results">Error searching people</div>';
+            });
+    }
+
+    function displaySearchResults(people) {
+        const resultsContainer = document.getElementById('search-results-container');
+        if (!resultsContainer) return;
+
+        if (people.length === 0) {
+            resultsContainer.innerHTML = '<div class="search-no-results">No matching people found</div>';
+            return;
+        }
+
+        resultsContainer.innerHTML = people.map(person => {
+            const locationParts = [];
+            if (person.city) locationParts.push(person.city);
+            if (person.state) locationParts.push(person.state);
+            if (person.country) locationParts.push(person.country);
+            const location = locationParts.length > 0 ? locationParts.join(', ') : '';
+
+            const instruments = person.instruments && person.instruments.length > 0
+                ? person.instruments.join(', ')
+                : '';
+
+            return `
+                <div class="search-result-row" data-person-id="${person.person_id}" onclick="addExistingPersonToSession(${person.person_id}, '${escapeHtml(person.first_name)}', '${escapeHtml(person.last_name)}')">
+                    <div class="search-result-content">
+                        <div class="search-result-name">${escapeHtml(person.first_name)} ${escapeHtml(person.last_name)}</div>
+                        ${location ? `<div class="search-result-details">${escapeHtml(location)}</div>` : ''}
+                        ${instruments ? `<div class="search-result-instruments">${escapeHtml(instruments)}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function addExistingPersonToSession(personId, firstName, lastName) {
+        // Find the clicked row
+        const row = document.querySelector(`.search-result-row[data-person-id="${personId}"]`);
+
+        // Add spinner to row
+        if (row && !row.querySelector('.search-result-spinner')) {
+            const spinner = document.createElement('div');
+            spinner.className = 'search-result-spinner';
+            row.appendChild(spinner);
+        }
+
+        // Determine is_regular value
+        let isRegular = sessionType === 'festival' ? true : false;
+
+        // Call API to add existing person to session
+        fetch(`/api/sessions/${sessionPath}/people/add-existing`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                person_id: personId,
+                is_regular: isRegular
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                // Close search modal (spinner will be removed when modal is destroyed)
+                closeSearchPersonModal();
+
+                // Reload people data
+                peopleData = [];
+                fetchPeople();
+            } else {
+                // Remove spinner on error
+                if (row) {
+                    const spinner = row.querySelector('.search-result-spinner');
+                    if (spinner) spinner.remove();
+                }
+                alert('Failed to add person: ' + (result.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error adding person:', error);
+            // Remove spinner on error
+            if (row) {
+                const spinner = row.querySelector('.search-result-spinner');
+                if (spinner) spinner.remove();
+            }
+            alert('Error adding person');
+        });
+    }
+
+    function closeAddPersonModal() {
+        const modal = document.getElementById('add-person-modal');
+        if (!modal) return;
+
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+
+    function parseTheSessionId(input) {
+        if (!input || input.trim() === '') return null;
+
+        input = input.trim();
+
+        // If it's just a number, return it
+        if (/^\d+$/.test(input)) {
+            return parseInt(input);
+        }
+
+        // Try to extract from URL
+        const urlMatch = input.match(/thesession\.org\/members\/(\d+)/);
+        if (urlMatch) {
+            return parseInt(urlMatch[1]);
+        }
+
+        return null;
+    }
+
+    function saveNewPerson() {
+        const firstName = document.getElementById('add-person-first-name').value.trim();
+        const lastName = document.getElementById('add-person-last-name').value.trim();
+        const thesessionInput = document.getElementById('add-person-thesession').value.trim();
+
+        // Validate required fields
+        if (!firstName || !lastName) {
+            alert('First name and last name are required');
+            return;
+        }
+
+        // Get selected instruments
+        const instruments = [];
+        document.querySelectorAll('#add-person-instruments input[type="checkbox"]:checked').forEach(cb => {
+            instruments.push(cb.value);
+        });
+
+        // Parse TheSession.org ID
+        const thesessionId = parseTheSessionId(thesessionInput);
+
+        // Determine is_regular value
+        let isRegular;
+        if (sessionType === 'festival') {
+            // In festival mode, always set as regular
+            isRegular = true;
+        } else {
+            // In non-festival mode, use checkbox value
+            const isRegularCheckbox = document.getElementById('add-person-is-regular');
+            isRegular = isRegularCheckbox ? isRegularCheckbox.checked : false;
+        }
+
+        // Disable save button
+        const saveBtn = document.querySelector('.add-person-btn-save');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Adding...';
+        }
+
+        // Prepare request data
+        const data = {
+            first_name: firstName,
+            last_name: lastName,
+            instruments: instruments,
+            thesession_user_id: thesessionId,
+            is_regular: isRegular
+        };
+
+        // Call API to add person
+        fetch(`/api/sessions/${sessionPath}/people/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                // Close modal
+                closeAddPersonModal();
+
+                // Reload people data
+                peopleData = [];
+                fetchPeople();
+            } else {
+                alert('Failed to add person: ' + (result.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error adding person:', error);
+            alert('Error adding person');
+        })
+        .finally(() => {
+            // Re-enable save button
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Add Person';
+            }
+        });
     }
 
     function fetchPeople() {
@@ -2963,9 +3616,23 @@
         }, 300);
     }
 
-    // Close modal on escape key
+    // Close modals on escape key
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
+            // Check if add person modal is open first
+            const addPersonModal = document.getElementById('add-person-modal');
+            if (addPersonModal && addPersonModal.style.display === 'flex') {
+                closeAddPersonModal();
+                return;
+            }
+
+            // Check if search person modal is open
+            const searchPersonModal = document.getElementById('search-person-modal');
+            if (searchPersonModal && searchPersonModal.style.display === 'flex') {
+                closeSearchPersonModal();
+                return;
+            }
+
             // Check if person detail modal is open
             const personModal = document.getElementById('person-detail-modal');
             if (personModal && personModal.style.display === 'flex') {
@@ -2975,7 +3642,7 @@
         }
     });
 
-    // Close modal when clicking outside
+    // Close modals when clicking outside
     const personModal = document.getElementById('person-detail-modal');
     if (personModal) {
         personModal.addEventListener('click', function(event) {
@@ -2984,6 +3651,24 @@
 
             if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
                 closePersonDetailModal();
+            }
+        });
+    }
+
+    const addPersonModal = document.getElementById('add-person-modal');
+    if (addPersonModal) {
+        addPersonModal.addEventListener('click', function(event) {
+            if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                closeAddPersonModal();
+            }
+        });
+    }
+
+    const searchPersonModal = document.getElementById('search-person-modal');
+    if (searchPersonModal) {
+        searchPersonModal.addEventListener('click', function(event) {
+            if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
+                closeSearchPersonModal();
             }
         });
     }

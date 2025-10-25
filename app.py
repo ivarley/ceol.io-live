@@ -498,6 +498,24 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/people/add",
+    "add_person_to_session_people_tab",
+    add_person_to_session_people_tab,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/people/search",
+    "search_people_for_session",
+    search_people_for_session,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/people/add-existing",
+    "add_existing_person_to_session",
+    add_existing_person_to_session,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/api/user/auto-save-preference",
     "update_auto_save_preference",
     update_auto_save_preference,

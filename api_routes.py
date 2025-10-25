@@ -2703,6 +2703,339 @@ def get_session_person_detail(session_path, person_id):
         return jsonify({"success": False, "message": f"Failed to get person details: {str(e)}"}), 500
 
 
+def add_person_to_session_people_tab(session_path):
+    """
+    Add a new person to a session from the People tab.
+
+    POST /api/sessions/<session_path>/people/add
+
+    Request body:
+    {
+        "first_name": str,
+        "last_name": str,
+        "instruments": [str],
+        "thesession_user_id": int or null
+    }
+
+    Returns:
+    {
+        "success": true,
+        "person_id": int,
+        "message": str
+    }
+    """
+    # Check authentication
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        first_name = data.get('first_name', '').strip()
+        last_name = data.get('last_name', '').strip()
+        instruments = data.get('instruments', [])
+        thesession_user_id = data.get('thesession_user_id')
+        is_regular = data.get('is_regular', False)
+
+        # Validate required fields
+        if not first_name or not last_name:
+            return jsonify({"success": False, "message": "First name and last name are required"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Verify current user is a member of this session (only members can add people)
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+
+        # Check if person already exists (by name)
+        cur.execute(
+            "SELECT person_id FROM person WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)",
+            (first_name, last_name)
+        )
+        existing_person = cur.fetchone()
+
+        if existing_person:
+            person_id = existing_person[0]
+
+            # Check if already in this session
+            cur.execute(
+                "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+                (session_id, person_id)
+            )
+            if cur.fetchone():
+                return jsonify({"success": False, "message": f"{first_name} {last_name} is already in this session"}), 400
+
+        else:
+            # Create new person
+            cur.execute(
+                """
+                INSERT INTO person (first_name, last_name, thesession_user_id)
+                VALUES (%s, %s, %s)
+                RETURNING person_id
+                """,
+                (first_name, last_name, thesession_user_id)
+            )
+            person_id = cur.fetchone()[0]
+
+            # Add instruments
+            if instruments:
+                for instrument in instruments:
+                    cur.execute(
+                        """
+                        INSERT INTO person_instrument (person_id, instrument)
+                        VALUES (%s, %s)
+                        ON CONFLICT (person_id, instrument) DO NOTHING
+                        """,
+                        (person_id, instrument)
+                    )
+
+        # Add person to session with specified is_regular value
+        cur.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+            VALUES (%s, %s, %s, false)
+            """,
+            (session_id, person_id, is_regular)
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "person_id": person_id,
+            "message": f"{first_name} {last_name} added to session"
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to add person: {str(e)}"}), 500
+
+
+def search_people_for_session(session_path):
+    """
+    Search for people to add to a session.
+    Excludes people already in this session.
+
+    GET /api/sessions/<session_path>/people/search?q=<query>
+
+    Returns:
+    {
+        "success": true,
+        "people": [
+            {
+                "person_id": int,
+                "first_name": str,
+                "last_name": str,
+                "email": str or null,
+                "city": str or null,
+                "state": str or null,
+                "country": str or null,
+                "instruments": [str]
+            }
+        ]
+    }
+    """
+    # Check authentication
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    try:
+        query = request.args.get('q', '').strip()
+
+        if not query or len(query) < 2:
+            return jsonify({"success": True, "people": []})
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Verify current user is a member of this session
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+
+        # Search for people not already in this session
+        search_pattern = f"%{query}%"
+        cur.execute(
+            """
+            SELECT p.person_id, p.first_name, p.last_name, p.email, p.city, p.state, p.country,
+                   COALESCE(
+                       array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
+                       '{}'::text[]
+                   ) as instruments
+            FROM person p
+            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
+            WHERE (
+                LOWER(p.first_name) LIKE LOWER(%s)
+                OR LOWER(p.last_name) LIKE LOWER(%s)
+                OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE LOWER(%s)
+            )
+            AND p.person_id NOT IN (
+                SELECT person_id FROM session_person WHERE session_id = %s
+            )
+            GROUP BY p.person_id, p.first_name, p.last_name, p.email, p.city, p.state, p.country
+            ORDER BY p.first_name, p.last_name
+            LIMIT 20
+            """,
+            (search_pattern, search_pattern, search_pattern, session_id)
+        )
+
+        people_data = cur.fetchall()
+        people = []
+
+        for row in people_data:
+            people.append({
+                'person_id': row[0],
+                'first_name': row[1],
+                'last_name': row[2],
+                'email': row[3],
+                'city': row[4],
+                'state': row[5],
+                'country': row[6],
+                'instruments': row[7] if row[7] else []
+            })
+
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "people": people})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to search people: {str(e)}"}), 500
+
+
+def add_existing_person_to_session(session_path):
+    """
+    Add an existing person to a session.
+
+    POST /api/sessions/<session_path>/people/add-existing
+
+    Request body:
+    {
+        "person_id": int,
+        "is_regular": bool
+    }
+
+    Returns:
+    {
+        "success": true,
+        "message": str
+    }
+    """
+    # Check authentication
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        person_id = data.get('person_id')
+        is_regular = data.get('is_regular', False)
+
+        if not person_id:
+            return jsonify({"success": False, "message": "person_id is required"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Verify current user is a member of this session
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+
+        # Verify person exists
+        cur.execute("SELECT first_name, last_name FROM person WHERE person_id = %s", (person_id,))
+        person_result = cur.fetchone()
+
+        if not person_result:
+            return jsonify({"success": False, "message": "Person not found"}), 404
+
+        first_name, last_name = person_result
+
+        # Check if person is already in this session
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id)
+        )
+        if cur.fetchone():
+            return jsonify({"success": False, "message": f"{first_name} {last_name} is already in this session"}), 400
+
+        # Add person to session
+        cur.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+            VALUES (%s, %s, %s, false)
+            """,
+            (session_id, person_id, is_regular)
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"{first_name} {last_name} added to session"
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to add person: {str(e)}"}), 500
+
+
 @login_required
 def move_set_ajax(session_path, date):
     data = request.get_json()
