@@ -3779,7 +3779,7 @@ def get_session_logs_ajax(session_path):
             FROM session_instance si
             LEFT JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
             LEFT JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
-                AND sip.attended = true
+                AND sip.attendance = 'yes'
             WHERE si.session_id = %s
             GROUP BY si.session_instance_id, si.date, si.start_time, si.end_time,
                      si.is_cancelled, si.comments
