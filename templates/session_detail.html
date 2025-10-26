@@ -736,22 +736,56 @@
         .year-view-link:hover {
             text-decoration: underline;
         }
-        
-        .year-content {
-            overflow: hidden;
+
+        /* Instances Table Styles */
+        .instances-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .year-header-row {
+            border: none;
+        }
+
+        .year-header-cell {
+            border: none;
+            padding: 0;
+            background: transparent;
+        }
+
+        .year-content-row {
             transition: max-height 0.3s ease, opacity 0.3s ease;
-            max-height: 1000px;
-            opacity: 1;
+            border-bottom: 1px solid var(--border-color);
         }
-        
-        .year-content.collapsed {
-            max-height: 0;
-            opacity: 0;
-            margin-bottom: 0;
+
+        .year-content-row.collapsed {
+            display: none;
         }
-        
-        .year-content ul {
-            margin-bottom: 0;
+
+        .instance-date-cell,
+        .instance-location-cell {
+            padding: 8px 12px;
+            vertical-align: middle;
+        }
+
+        .instance-date-cell a,
+        .instance-location-cell a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .instance-date-cell a:hover,
+        .instance-location-cell a:hover {
+            text-decoration: underline;
+        }
+
+        .instance-time-cell {
+            padding: 8px 12px;
+            vertical-align: middle;
+            text-align: right;
+            white-space: nowrap;
+            color: var(--text-color);
         }
 
         /* Active Session Instance Highlighting */
@@ -1551,17 +1585,20 @@
                 {# Festival view: group by day, show location and time #}
                 {% if instances_by_day %}
                 <div class="past-instances">
+                    <table class="instances-table">
                     {% for day in sorted_days %}
-                    <div class="year-section">
-                        <div class="year-header" data-year="{{ day }}">
-                            <div class="year-header-left">
-                                <span class="year-toggle" data-year="{{ day }}">▼</span>
-                                <h3 class="year-title">{{ day.strftime('%A, %B %d, %Y') }}</h3>
-                                {% if loop.first and is_logged_in %}<span class="year-add-link" id="add-session-btn" data-year="{{ day }}">Add</span>{% endif %}
-                            </div>
-                        </div>
-                        <div class="year-content" data-year="{{ day }}">
-                            <ul>
+                        <tbody class="year-section">
+                            <tr class="year-header-row">
+                                <td colspan="2" class="year-header-cell">
+                                    <div class="year-header" data-year="{{ day }}">
+                                        <div class="year-header-left">
+                                            <span class="year-toggle" data-year="{{ day }}">▼</span>
+                                            <h3 class="year-title">{{ day.strftime('%A, %B %d, %Y') }}</h3>
+                                            {% if loop.first and is_logged_in %}<span class="year-add-link" id="add-session-btn" data-year="{{ day }}">Add</span>{% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
                             {% for instance in instances_by_day[day] %}
                                 {% set location = instance.location_override or session.location_name %}
                                 {% set time_str = '' %}
@@ -1582,12 +1619,16 @@
                                     {% set start_12hr = start_hr - 12 if start_hr > 12 else (12 if start_hr == 0 else start_hr) %}
                                     {% set time_str = '%d:%s%s - ?'|format(start_12hr, start_min, start_period) %}
                                 {% endif %}
-                                <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ location }}{% if time_str %}, {{ time_str }}{% endif %}</a></li>
+                                <tr class="year-content-row" data-year="{{ day }}">
+                                    <td class="instance-location-cell">
+                                        <a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ location }}</a>
+                                    </td>
+                                    <td class="instance-time-cell">{{ time_str }}</td>
+                                </tr>
                             {% endfor %}
-                            </ul>
-                        </div>
-                    </div>
+                        </tbody>
                     {% endfor %}
+                    </table>
                 </div>
                 {% else %}
                 <div class="past-instances">
@@ -1599,34 +1640,46 @@
                 {% if instances_by_year %}
                 <div class="past-instances">
             {% if sorted_years|length > 1 %}
+                <table class="instances-table">
                 {% for year in sorted_years %}
-                <div class="year-section">
-                    <div class="year-header" data-year="{{ year }}">
-                        <div class="year-header-left">
-                            <span class="year-toggle" data-year="{{ year }}">▼</span>
-                            <h3 class="year-title">{{ year }}</h3>
-                            {% if loop.first and is_logged_in %}<span class="year-add-link" id="add-session-btn" data-year="{{ year }}">Add</span>{% endif %}
-                            <a href="#" class="year-view-link" data-year="{{ year }}">view {{ instances_by_year[year]|length }} log{{ 's' if instances_by_year[year]|length != 1 else '' }}</a>
-                        </div>
-                    </div>
-                    <div class="year-content" data-year="{{ year }}">
-                        <ul>
+                    <tbody class="year-section">
+                        <tr class="year-header-row">
+                            <td class="year-header-cell">
+                                <div class="year-header" data-year="{{ year }}">
+                                    <div class="year-header-left">
+                                        <span class="year-toggle" data-year="{{ year }}">▼</span>
+                                        <h3 class="year-title">{{ year }}</h3>
+                                        {% if loop.first and is_logged_in %}<span class="year-add-link" id="add-session-btn" data-year="{{ year }}">Add</span>{% endif %}
+                                        <a href="#" class="year-view-link" data-year="{{ year }}">view {{ instances_by_year[year]|length }} log{{ 's' if instances_by_year[year]|length != 1 else '' }}</a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
                         {% for instance in instances_by_year[year] %}
-                            <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a></li>
+                            <tr class="year-content-row" data-year="{{ year }}">
+                                <td class="instance-date-cell">
+                                    <a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a>
+                                </td>
+                            </tr>
                         {% endfor %}
-                        </ul>
-                    </div>
-                </div>
+                    </tbody>
                 {% endfor %}
+                </table>
             {% else %}
                 {% if is_logged_in %}<div style="text-align: right; margin-bottom: 10px;"><span class="add-link" id="add-session-btn" style="opacity: 1; cursor: pointer;">Add</span></div>{% endif %}
-                <ul>
-                {% for year in sorted_years %}
-                    {% for instance in instances_by_year[year] %}
-                    <li><a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a></li>
+                <table class="instances-table">
+                    <tbody>
+                    {% for year in sorted_years %}
+                        {% for instance in instances_by_year[year] %}
+                            <tr>
+                                <td class="instance-date-cell">
+                                    <a href="/sessions/{{ session.path }}/{{ instance | instance_url_id }}" data-instance-id="{{ instance.session_instance_id }}">{{ instance.date }}</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
                     {% endfor %}
-                {% endfor %}
-                </ul>
+                    </tbody>
+                </table>
             {% endif %}
         </div>
         {% else %}
@@ -1973,40 +2026,40 @@
     // Year section toggle functionality
     function toggleYearSection(year) {
         const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
-        const content = document.querySelector(`.year-content[data-year="${year}"]`);
+        const contentRows = document.querySelectorAll(`.year-content-row[data-year="${year}"]`);
         const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
         const addLink = document.querySelector(`.year-add-link[data-year="${year}"]`);
 
-        if (!toggle || !content || !viewLink) return;
+        if (!toggle || contentRows.length === 0) return;
 
-        const isCollapsed = content.classList.contains('collapsed');
+        const isCollapsed = contentRows[0].classList.contains('collapsed');
 
         if (isCollapsed) {
             // Expand
-            content.classList.remove('collapsed');
+            contentRows.forEach(row => row.classList.remove('collapsed'));
             toggle.classList.remove('collapsed');
-            viewLink.classList.remove('visible');
+            if (viewLink) viewLink.classList.remove('visible');
             if (addLink) addLink.classList.remove('hidden');
         } else {
             // Collapse
-            content.classList.add('collapsed');
+            contentRows.forEach(row => row.classList.add('collapsed'));
             toggle.classList.add('collapsed');
-            viewLink.classList.add('visible');
+            if (viewLink) viewLink.classList.add('visible');
             if (addLink) addLink.classList.add('hidden');
         }
     }
     
     function expandYearSection(year) {
         const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
-        const content = document.querySelector(`.year-content[data-year="${year}"]`);
+        const contentRows = document.querySelectorAll(`.year-content-row[data-year="${year}"]`);
         const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
         const addLink = document.querySelector(`.year-add-link[data-year="${year}"]`);
 
-        if (!toggle || !content || !viewLink) return;
+        if (!toggle || contentRows.length === 0) return;
 
-        content.classList.remove('collapsed');
+        contentRows.forEach(row => row.classList.remove('collapsed'));
         toggle.classList.remove('collapsed');
-        viewLink.classList.remove('visible');
+        if (viewLink) viewLink.classList.remove('visible');
         if (addLink) addLink.classList.remove('hidden');
     }
 
@@ -2869,7 +2922,7 @@
                     const activeInstanceIds = data.active_instance_ids;
 
                     // Find all session instance links with data-instance-id attribute
-                    const links = document.querySelectorAll('.year-content a[data-instance-id]');
+                    const links = document.querySelectorAll('.year-content-row a[data-instance-id], .instances-table a[data-instance-id]');
 
                     links.forEach(link => {
                         const instanceId = parseInt(link.getAttribute('data-instance-id'));
@@ -3001,15 +3054,15 @@
             // Collapse all years except the latest
             years.forEach(year => {
                 if (year !== latestYear) {
-                    const content = document.querySelector(`.year-content[data-year="${year}"]`);
+                    const contentRows = document.querySelectorAll(`.year-content-row[data-year="${year}"]`);
                     const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
                     const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
                     const addLink = document.querySelector(`.year-add-link[data-year="${year}"]`);
 
-                    if (content && toggle && viewLink) {
-                        content.classList.add('collapsed');
+                    if (contentRows.length > 0 && toggle) {
+                        contentRows.forEach(row => row.classList.add('collapsed'));
                         toggle.classList.add('collapsed');
-                        viewLink.classList.add('visible');
+                        if (viewLink) viewLink.classList.add('visible');
                         if (addLink) addLink.classList.add('hidden');
                     }
                 }

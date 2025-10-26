@@ -9,6 +9,7 @@ from flask import (
 import random
 import bcrypt
 from flask_login import login_user, logout_user, login_required, current_user
+import datetime
 from datetime import timedelta
 import re
 
@@ -675,6 +676,13 @@ def session_handler(full_path):
                             'session_instance_id': instance[4],
                             'multiple_on_date': instance[5] > 1
                         })
+
+                # Sort instances within each group by start_time
+                for day_key in instances_by_day:
+                    instances_by_day[day_key].sort(key=lambda x: (x['start_time'] or datetime.time.min))
+
+                for year in instances_by_year:
+                    instances_by_year[year].sort(key=lambda x: (x['date'], x['start_time'] or datetime.time.min))
 
                 # Sort years in descending order (for regular sessions)
                 sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
