@@ -815,11 +815,11 @@
             color: #721c24;
         }
 
-        /* Want to Learn - Yellow */
+        /* Want to Learn - Dark Yellow (matching Learned style) */
         .tune-list-box-want-to-learn {
-            background-color: #fef3cd;
-            border: 1px solid #f0ad4e;
-            color: #856404;
+            background-color: #e6d85c;
+            border: 1px solid #daa520;
+            color: #6b5d0d;
         }
 
         /* Learning - Blue */
@@ -860,6 +860,9 @@
 
         .tune-list-button-heard {
             background-color: #5cb85c;
+            font-size: 14px;
+            margin-left: 0;
+            width: 100%;
         }
 
         .tune-list-button:hover {
@@ -880,8 +883,8 @@
 
         [data-theme="dark"] .tune-list-box-want-to-learn {
             background-color: #4a3f1f;
-            border-color: #f0ad4e;
-            color: #ffd97d;
+            border-color: #daa520;
+            color: #f0d060;
         }
 
         [data-theme="dark"] .tune-list-box-learning {
@@ -2584,7 +2587,7 @@
             const heardCount = tuneStatus.heard_count;
             const showHeardSection = learnStatus !== 'learned';
             const pluralS = heardCount !== 1 ? 's' : '';
-            const statusClass = learnStatus.replace(' ', '-'); // "want to learn" -> "want-to-learn"
+            const statusClass = learnStatus.replace(/ /g, '-'); // "want to learn" -> "want-to-learn"
 
             container.innerHTML = `
                 <div class="modal-info-line tune-list-box tune-list-box-${statusClass}" style="padding: 10px 12px; border-radius: 4px; margin-bottom: 12px;">
@@ -2598,7 +2601,6 @@
                     </div>
                     ${showHeardSection ? `
                     <div class="heard-count-line">
-                        You've heard it&nbsp;<span id="heard-count">${heardCount}</span>&nbsp;time${pluralS}
                         <button onclick="incrementHeardCount(${tuneId})" class="tune-list-button tune-list-button-heard">
                             I heard it again!
                         </button>
