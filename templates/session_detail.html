@@ -799,22 +799,13 @@
             transition: background-color 0.2s;
         }
 
-        .session-instance-link.active-now {
-            background-color: #fffbcc;
-        }
-
-        [data-theme="dark"] .session-instance-link.active-now {
-            background-color: #4a4520;
-        }
-
         .active-now-badge {
+            width: 8px;
+            height: 8px;
             background-color: #28a745;
-            color: white;
-            border-radius: 3px;
-            padding: 2px 6px;
-            font-size: 11px;
-            font-weight: 600;
-            white-space: nowrap;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 6px;
         }
 
         /* Tune list status box styles */
@@ -2942,22 +2933,21 @@
     }
 
     function highlightLink(linkElement) {
-        // Wrap the link content with the highlighting class
+        // Wrap the link content with a green dot indicator
         const originalText = linkElement.textContent;
         linkElement.innerHTML = '';
 
         const wrapper = document.createElement('span');
-        wrapper.className = 'session-instance-link active-now';
+        wrapper.className = 'session-instance-link';
 
         const textSpan = document.createElement('span');
         textSpan.textContent = originalText;
 
-        const badge = document.createElement('span');
-        badge.className = 'active-now-badge';
-        badge.textContent = 'Active Now';
+        const dot = document.createElement('span');
+        dot.className = 'active-now-badge';
 
         wrapper.appendChild(textSpan);
-        wrapper.appendChild(badge);
+        wrapper.appendChild(dot);
         linkElement.appendChild(wrapper);
     }
 
