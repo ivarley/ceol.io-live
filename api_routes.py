@@ -3824,7 +3824,7 @@ def get_person_attendance_ajax(person_id):
             SELECT
                 s.name as session_name,
                 si.date as instance_date,
-                sip.attended
+                sip.attendance
             FROM session_instance_person sip
             JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
             JOIN session s ON si.session_id = s.session_id
@@ -3834,21 +3834,21 @@ def get_person_attendance_ajax(person_id):
             (person_id,),
         )
 
-        attendance = []
+        attendance_records = []
         for row in cur.fetchall():
-            session_name, instance_date, attended = row
-            attendance.append(
+            session_name, instance_date, attendance_status = row
+            attendance_records.append(
                 {
                     "session_name": session_name,
                     "instance_date": instance_date.strftime("%Y-%m-%d"),
-                    "attended": attended,
+                    "attendance": attendance_status,
                 }
             )
 
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "attendance": attendance})
+        return jsonify({"success": True, "attendance": attendance_records})
 
     except Exception as e:
         return (

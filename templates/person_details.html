@@ -933,24 +933,30 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <tbody>`;
                     
                     data.attendance.forEach(record => {
+                        let statusHtml = '';
+                        if (record.attendance === 'yes') {
+                            statusHtml = '<span class="text-success">✓ Yes</span>';
+                        } else if (record.attendance === 'maybe') {
+                            statusHtml = '<span class="text-warning">? Maybe</span>';
+                        } else if (record.attendance === 'no') {
+                            statusHtml = '<span class="text-danger">✗ No</span>';
+                        } else {
+                            statusHtml = '<span class="text-muted">- Unknown</span>';
+                        }
+
                         html += `
                             <tr>
                                 <td>${record.session_name}</td>
                                 <td>${record.instance_date}</td>
-                                <td>
-                                    ${record.attended ? 
-                                        '<span class="text-success">✓ Yes</span>' : 
-                                        '<span class="text-muted">✗ No</span>'
-                                    }
-                                </td>
+                                <td>${statusHtml}</td>
                             </tr>`;
                     });
                     
                     html += '</tbody></table></div>';
                     document.getElementById('attended-content').innerHTML = html;
                 } else {
-                    document.getElementById('attended-content').innerHTML = 
-                        '<div class="alert alert-info" role="alert">No players found.</div>';
+                    document.getElementById('attended-content').innerHTML =
+                        '<div class="alert alert-info" role="alert">This person hasn\'t been marked as attending any sessions yet.</div>';
                 }
             })
             .catch(error => {
