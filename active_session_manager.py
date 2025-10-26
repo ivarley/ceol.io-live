@@ -1,7 +1,7 @@
 """
 Active Session Manager
 
-Manages the lifecycle of active session instances based on recurrence patterns,
+Manages the lifecycle of active session instances based on their scheduled times,
 time zones, and buffer windows. Handles activation/deactivation of sessions and
 updates which people are currently at active sessions.
 """
@@ -12,7 +12,6 @@ from typing import Optional, List, Tuple, Dict
 from zoneinfo import ZoneInfo
 
 from database import get_db_connection
-from recurrence_utils import SessionRecurrence
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +37,13 @@ def update_active_sessions() -> Dict[str, any]:
     }
 
     try:
-        # Get all active sessions (non-terminated, with recurrence patterns)
+        # Get all active sessions (non-terminated)
         cur.execute("""
             SELECT session_id, name, recurrence, timezone,
                    active_buffer_minutes_before, active_buffer_minutes_after,
                    initiation_date
             FROM session
             WHERE (termination_date IS NULL OR termination_date >= CURRENT_DATE)
-              AND recurrence IS NOT NULL
-              AND recurrence != ''
             ORDER BY session_id
         """)
 
@@ -69,14 +66,6 @@ def update_active_sessions() -> Dict[str, any]:
                 now_utc = datetime.now(ZoneInfo('UTC'))
                 now_local = now_utc.astimezone(tz)
                 lookahead_local = now_local + timedelta(minutes=1)
-
-                # Parse recurrence pattern
-                try:
-                    recurrence = SessionRecurrence(recurrence_json)
-                except Exception as e:
-                    logger.error(f"Invalid recurrence for session {session_id}: {e}")
-                    stats['errors'].append({'session_id': session_id, 'error': f'Invalid recurrence: {e}'})
-                    continue
 
                 # Get all session instances for this session (within reasonable time range)
                 # We check past instances (in case they should still be active) and future ones
