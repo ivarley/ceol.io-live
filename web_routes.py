@@ -762,7 +762,10 @@ def session_handler(full_path):
                         is_session_member = cur.fetchone() is not None
 
                 # Calculate today's date in the session's timezone
-                from zoneinfo import ZoneInfo
+                try:
+                    from zoneinfo import ZoneInfo
+                except ImportError:
+                    from backports.zoneinfo import ZoneInfo
                 session_tz = session_dict.get("timezone", "UTC")
                 try:
                     tz = ZoneInfo(session_tz)
