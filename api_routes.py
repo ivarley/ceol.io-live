@@ -7589,20 +7589,33 @@ def create_or_get_today_session_instance(session_path):
 
 def generate_qr_code(session_id=None):
     """
-    Generate a QR code for session registration.
-    Returns a PNG image that when scanned directs to the registration page with session_id.
-    If session_id is 0 or not provided, generates QR code for general registration.
+    Generate a QR code for sharing pages with optional referral tracking.
+    Returns a PNG image that when scanned directs to the specified URL.
+
+    Query parameters:
+    - url: The target URL to encode (if not provided, uses session_id logic for backwards compatibility)
+    - referrer: Person ID of the user sharing the link
+    - session_id: (Deprecated but still supported) Session ID for registration URLs
     """
     try:
-        # Build the registration URL with session_id query parameter
-        # In production this would be https://ceol.io/register?session_id=X
-        base_url = request.host_url.rstrip('/')
+        # Check if URL parameter is provided (new behavior)
+        target_url = request.args.get('url')
+        referrer = request.args.get('referrer')
 
-        if session_id and session_id != 0:
-            registration_url = f"{base_url}/register?session_id={session_id}"
+        if target_url:
+            # New behavior: use provided URL with optional referrer
+            qr_url = target_url
+            if referrer:
+                # Add referrer parameter to URL
+                separator = '&' if '?' in qr_url else '?'
+                qr_url = f"{qr_url}{separator}referrer={referrer}"
         else:
-            # General registration without a specific session
-            registration_url = f"{base_url}/register"
+            # Backwards compatibility: use session_id logic
+            base_url = request.host_url.rstrip('/')
+            if session_id and session_id != 0:
+                qr_url = f"{base_url}/register?session_id={session_id}"
+            else:
+                qr_url = f"{base_url}/register"
 
         # Generate QR code
         qr = qrcode.QRCode(
@@ -7611,7 +7624,7 @@ def generate_qr_code(session_id=None):
             box_size=10,
             border=4,
         )
-        qr.add_data(registration_url)
+        qr.add_data(qr_url)
         qr.make(fit=True)
 
         # Create image

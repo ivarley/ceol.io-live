@@ -112,11 +112,11 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
             (user_id, operation, changed_by, person_id, username, user_email, hashed_password,
              timezone, is_active, is_system_admin, email_verified, verification_token,
              verification_token_expires, password_reset_token, password_reset_expires,
-             created_date, last_modified_date)
+             created_date, last_modified_date, referred_by_person_id)
             SELECT user_id, %s, %s, person_id, username, user_email, hashed_password,
                    timezone, is_active, is_system_admin, email_verified, verification_token,
                    verification_token_expires, password_reset_token, password_reset_expires,
-                   created_date, last_modified_date
+                   created_date, last_modified_date, referred_by_person_id
             FROM user_account WHERE user_id = %s
         """,
             (operation, changed_by, record_id),

@@ -940,7 +940,15 @@ def help_page():
 
 
 def share_page():
-    return render_template("share.html")
+    # Get the target URL from query parameter (the page to share)
+    target_url = request.args.get("url", request.host_url.rstrip('/'))
+
+    # Get current user's person_id if authenticated
+    person_id = None
+    if current_user.is_authenticated:
+        person_id = current_user.person_id
+
+    return render_template("share.html", target_url=target_url, person_id=person_id)
 
 
 def help_my_tunes():
@@ -1071,11 +1079,14 @@ def register():
             verification_token = generate_verification_token()
             verification_expires = now_utc() + timedelta(hours=24)
 
+            # Get referrer from session if present
+            referred_by_person_id = session.get('referred_by_person_id')
+
             cur.execute(
                 """
                 INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone,
-                                        email_verified, verification_token, verification_token_expires)
-                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s)
+                                        email_verified, verification_token, verification_token_expires, referred_by_person_id)
+                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s)
                 RETURNING user_id
             """,
                 (
@@ -1086,6 +1097,7 @@ def register():
                     timezone,
                     verification_token,
                     verification_expires,
+                    referred_by_person_id,
                 ),
             )
             result = cur.fetchone()

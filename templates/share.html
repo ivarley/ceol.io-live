@@ -39,10 +39,14 @@
     <p>This app is free to use for anyone; just visit <a href="/">ceol.io</a> to get started!</p>
 
     <div style="margin: 30px 0; padding: 10px; background-color: var(--hover-bg); border-radius: 8px; border: 1px solid var(--border-color);">
-        <h3 style="margin-top: 0; padding: 0 10px;">Registration QR Code</h3>
-        <p style="padding: 0 10px;">Scan this QR code to register for ceol.io:</p>
-        <img src="/api/qr" alt="QR Code for Registration" style="max-width: 90%; width: 400px; display: block; margin: 15px auto; background: white; padding: 10px; border-radius: 4px;">
-        <p style="font-size: 0.9em; color: var(--secondary-text); margin-bottom: 0; text-align: center; padding: 0 10px;">Share this QR code to help new users discover and register for Ceol!</p>
+        <h3 style="margin-top: 0; padding: 0 10px;">Share QR Code</h3>
+        <p style="padding: 0 10px;">Scan this QR code to visit this page:</p>
+        <img src="/api/qr?url={{ target_url | urlencode }}{% if person_id %}&referrer={{ person_id }}{% endif %}"
+             alt="QR Code"
+             style="max-width: 90%; width: 400px; display: block; margin: 15px auto; background: white; padding: 10px; border-radius: 4px;">
+        <p style="font-size: 0.7em; color: var(--secondary-text); opacity: 0.4; margin: 10px 0 0 0; text-align: center; padding: 0 10px; word-break: break-all;">
+            {{ target_url }}{% if person_id %}?referrer={{ person_id }}{% endif %}
+        </p>
     </div>
 </div>
 {% endblock %}

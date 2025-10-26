@@ -149,7 +149,7 @@ class User(UserMixin):
         )
 
     @staticmethod
-    def create_user(username, password, person_id, timezone="UTC", user_email=None):
+    def create_user(username, password, person_id, timezone="UTC", user_email=None, referred_by_person_id=None):
         hashed_password = bcrypt.hashpw(
             password.encode("utf-8"), bcrypt.gensalt()
         ).decode("utf-8")
@@ -158,11 +158,11 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING user_id
             """,
-                (person_id, username, user_email, hashed_password, timezone),
+                (person_id, username, user_email, hashed_password, timezone, referred_by_person_id),
             )
             result = cur.fetchone()
             if not result:

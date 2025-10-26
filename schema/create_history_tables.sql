@@ -232,7 +232,8 @@ CREATE TABLE user_account_history (
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMPTZ,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    referred_by_person_id INTEGER
 );
 
 CREATE INDEX idx_person_history_person_id ON person_history(person_id);

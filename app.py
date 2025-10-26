@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, session
 from flask_login import LoginManager
 import os
 import random
@@ -58,6 +58,18 @@ login_manager.login_message = "Please log in to access this page."
 @login_manager.user_loader
 def load_user(user_id):
     return User.get_by_id(int(user_id))
+
+# Before request handler to capture referrer parameter
+@app.before_request
+def capture_referrer():
+    """
+    Capture the referrer parameter from URLs and store it in the session.
+    This allows tracking which person referred a new user to the site.
+    """
+    referrer = request.args.get('referrer')
+    if referrer:
+        # Store in session for later use during registration
+        session['referred_by_person_id'] = referrer
 
 # Template filters for timezone handling
 @app.template_filter("format_datetime_tz")
