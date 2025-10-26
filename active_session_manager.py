@@ -9,7 +9,11 @@ updates which people are currently at active sessions.
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple, Dict
-from zoneinfo import ZoneInfo
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 
 from database import get_db_connection
 
