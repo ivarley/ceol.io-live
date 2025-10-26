@@ -583,7 +583,7 @@ def session_handler(full_path):
                 """
                 SELECT session_id, thesession_id, name, path, location_name, location_website,
                        location_phone, location_street, city, state, country, comments, unlisted_address,
-                       initiation_date, termination_date, recurrence, session_type
+                       initiation_date, termination_date, recurrence, session_type, timezone
                 FROM session
                 WHERE path = %s
             """,
@@ -611,6 +611,7 @@ def session_handler(full_path):
                     "termination_date": session[14],
                     "recurrence": session[15],
                     "session_type": session[16] if len(session) > 16 else "regular",
+                    "timezone": session[17] if len(session) > 17 else "UTC",
                 }
 
                 # Add human-readable recurrence if JSON format
@@ -760,6 +761,16 @@ def session_handler(full_path):
                         )
                         is_session_member = cur.fetchone() is not None
 
+                # Calculate today's date in the session's timezone
+                from zoneinfo import ZoneInfo
+                session_tz = session_dict.get("timezone", "UTC")
+                try:
+                    tz = ZoneInfo(session_tz)
+                    today_in_session_tz = datetime.datetime.now(tz).date()
+                except Exception:
+                    # Fallback to UTC if timezone is invalid
+                    today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
+
                 cur.close()
                 conn.close()
 
@@ -775,6 +786,7 @@ def session_handler(full_path):
                     is_session_admin=is_session_admin,
                     is_logged_in=current_user.is_authenticated,
                     is_session_member=is_session_member,
+                    today_in_session_tz=today_in_session_tz,
                 )
             else:
                 cur.close()

@@ -1887,6 +1887,8 @@
 <script>
     const sessionPath = '{{ session.path }}';
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
+    const sessionType = "{{ session.session_type }}";
+    const todayInSessionTz = '{{ today_in_session_tz }}';
 
     async function showAddSessionModal() {
         // Prepare form fields (page-specific business logic)
@@ -3044,16 +3046,25 @@
             });
         });
         
-        // Collapse all years except the latest one by default
+        // Collapse all years/days except the one to show by default
         const yearHeaders = document.querySelectorAll('.year-header');
         if (yearHeaders.length > 1) {
-            // Get all years and find the latest (first in the list since they're sorted newest first)
+            // Get all years/days
             const years = Array.from(yearHeaders).map(header => header.getAttribute('data-year'));
-            const latestYear = years[0];
-            
-            // Collapse all years except the latest
+
+            // For festivals, check if today is one of the days
+            let defaultOpen = years[0]; // Default to latest/first
+            if (sessionType === 'festival' && todayInSessionTz) {
+                // Check if today matches any of the festival days
+                const todayMatches = years.find(day => day === todayInSessionTz);
+                if (todayMatches) {
+                    defaultOpen = todayMatches;
+                }
+            }
+
+            // Collapse all except the defaultOpen
             years.forEach(year => {
-                if (year !== latestYear) {
+                if (year !== defaultOpen) {
                     const contentRows = document.querySelectorAll(`.year-content-row[data-year="${year}"]`);
                     const toggle = document.querySelector(`.year-toggle[data-year="${year}"]`);
                     const viewLink = document.querySelector(`.year-view-link[data-year="${year}"]`);
@@ -3086,7 +3097,6 @@
     // People tab functionality
     let peopleData = [];
     let personModalShowTime = 0;
-    const sessionType = "{{ session.session_type }}";
     // Default to 'all' for festivals, 'regulars' for regular sessions
     let currentPeopleFilter = sessionType === 'festival' ? 'all' : 'regulars';
     const currentUserId = {{ current_user.person_id if current_user.is_authenticated else 'null' }};
