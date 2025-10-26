@@ -2473,6 +2473,7 @@
                 <ul style="list-style: none; padding: 0; margin-top: 10px;">
                     ${sessionTune.play_instances.map(instance => {
                         const dateStr = instance.date || 'Unknown date';
+                        const instanceId = instance.session_instance_id || dateStr;
                         const positionStr = instance.position_in_set ? `#${instance.position_in_set}` : '';
                         let overridesHtml = '';
                         const overrides = [];
@@ -2485,7 +2486,7 @@
                         return `
                             <li style="margin: 8px 0; padding: 10px; background-color: var(--hover-bg, #f8f9fa); border-radius: 4px;">
                                 <div style="font-weight: bold; color: var(--primary, #007bff);">
-                                    <a href="/sessions/${sessionPath}/${dateStr}?tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
+                                    <a href="/sessions/${sessionPath}/${instanceId}?tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
                                 </div>
                                 <div style="font-size: 0.9em; color: var(--disabled-text, #666); margin-top: 4px;">
                                     Position in set: ${positionStr}
