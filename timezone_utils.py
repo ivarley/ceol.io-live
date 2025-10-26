@@ -3,20 +3,18 @@ Timezone utilities for handling UTC storage and display conversion.
 Uses Python's built-in zoneinfo (Python 3.9+) for maximum compatibility.
 """
 
-import sys
 from datetime import datetime, timezone
 from typing import Optional
 
-# For Python < 3.9, we'd use backports.zoneinfo, but we'll assume modern Python
-if sys.version_info >= (3, 9):
+# Try to import zoneinfo, fall back to backports.zoneinfo if not available
+try:
     from zoneinfo import ZoneInfo
-else:
-    # Fallback for older Python versions
+except ImportError:
     try:
         from backports.zoneinfo import ZoneInfo
     except ImportError:
         raise ImportError(
-            "This application requires Python 3.9+ or backports.zoneinfo package"
+            "This application requires Python 3.9+ with zoneinfo or backports.zoneinfo package"
         )
 
 
