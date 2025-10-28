@@ -436,10 +436,26 @@
 
         // Run immediately if already loaded, otherwise wait for DOMContentLoaded
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeTunesPage);
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeTunesPage();
+                checkUrlForTune();
+            });
         } else {
             // DOM is already loaded (this happens when loaded via AJAX)
             initializeTunesPage();
+            checkUrlForTune();
+        }
+
+        function checkUrlForTune() {
+            const tuneId = TuneDetailModal.getTuneIdFromUrl();
+            if (tuneId) {
+                // Find tune in the data to get its details
+                const tune = allTunes.find(t => t[0] === tuneId);
+                if (tune) {
+                    const [id, name, type, timesPlayed, tunebookCount, settingId] = tune;
+                    showTuneDetail(id, name, type, timesPlayed, tunebookCount, settingId);
+                }
+            }
         }
 
         function populateTuneTypes() {

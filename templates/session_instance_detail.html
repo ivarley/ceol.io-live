@@ -1561,13 +1561,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Handle tune parameter in URL - highlight and scroll to specific tune
-    const urlParams = new URLSearchParams(window.location.search);
-    const tuneIdFromUrl = urlParams.get('tune');
+    // Handle tune parameter in URL - open modal for specific tune
+    const tuneIdFromUrl = TuneDetailModal.getTuneIdFromUrl();
     if (tuneIdFromUrl) {
         // Wait for pills to be rendered
         setTimeout(() => {
-            highlightAndScrollToTune(parseInt(tuneIdFromUrl));
+            // Find the first pill with this tune ID to get display name and type
+            const tunePillsData = window.StateManager ? window.StateManager.getTunePillsData() : [];
+            let foundPill = null;
+
+            for (const set of tunePillsData) {
+                for (const pill of set) {
+                    if (pill.tuneId === tuneIdFromUrl) {
+                        foundPill = pill;
+                        break;
+                    }
+                }
+                if (foundPill) break;
+            }
+
+            if (foundPill) {
+                const displayName = foundPill.tuneName || foundPill.text || 'Unknown';
+                window.showTuneDetail(foundPill.tuneId, displayName, foundPill.tuneType);
+            }
         }, 100);
     }
 });

@@ -357,6 +357,13 @@ let currentSort = {
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
     setupEventListeners();
+
+    // Check for tune parameter in URL and open modal if present
+    const tuneId = TuneDetailModal.getTuneIdFromUrl();
+    if (tuneId) {
+        // Wait for tunes to load before opening modal
+        waitForTuneAndOpen(tuneId);
+    }
 });
 
 function loadTunes() {
@@ -551,6 +558,27 @@ function createTuneRow(tune) {
             <td class="text-center">${tunebookCount}</td>
         </tr>
     `;
+}
+
+// Wait for tunes to load, then open modal for specific tune
+function waitForTuneAndOpen(tuneId, attempts = 0) {
+    const maxAttempts = 20; // 20 attempts * 250ms = 5 seconds max
+
+    // Check if tune exists in allTunes
+    const tune = allTunes.find(t => t.tune_id === tuneId);
+
+    if (tune) {
+        // Tune found, open modal
+        showTuneDetail(tune.tune_id, tune.tune_name, tune.tune_type, tune.session_count, tune.tunelist_count, tune.tunebook_count);
+    } else if (attempts < maxAttempts) {
+        // Keep waiting
+        setTimeout(() => {
+            waitForTuneAndOpen(tuneId, attempts + 1);
+        }, 250);
+    } else {
+        // Timeout - tune not found after 5 seconds
+        console.error('Tune not found:', tuneId);
+    }
 }
 
 function showTuneDetail(tuneId, tuneName, tuneType, sessionCount, tunelistCount, tunebookCount) {

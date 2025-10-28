@@ -2400,10 +2400,9 @@
         highlightActiveInstances();
 
         // Check for tune parameter and open tune modal if present
-        const tuneId = urlParams.get('tune');
-        if (tuneId) {
+        const tuneIdNum = TuneDetailModal.getTuneIdFromUrl();
+        if (tuneIdNum) {
             // Find the tune in the allTunes array
-            const tuneIdNum = parseInt(tuneId);
             const tune = allTunes.find(t => t[0] === tuneIdNum);
             if (tune) {
                 // Show the tune detail modal

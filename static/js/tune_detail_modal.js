@@ -70,6 +70,9 @@
         const modal = document.getElementById('tune-detail-modal');
         const modalContent = document.getElementById('tune-detail-content');
 
+        // Update URL with tune parameter
+        updateUrlWithTune(config.tuneId);
+
         // Show modal with loading state
         displayLoadingState(modalContent, config);
         modal.style.display = 'flex';
@@ -872,9 +875,30 @@
         const modal = document.getElementById('tune-detail-modal');
         modal.classList.remove('show');
 
+        // Remove tune parameter from URL
+        removeUrlTuneParam();
+
         setTimeout(() => {
             modal.style.display = 'none';
         }, 300);
+    }
+
+    /**
+     * Update URL with tune parameter
+     */
+    function updateUrlWithTune(tuneId) {
+        const url = new URL(window.location);
+        url.searchParams.set('tune', tuneId);
+        window.history.replaceState({}, '', url);
+    }
+
+    /**
+     * Remove tune parameter from URL
+     */
+    function removeUrlTuneParam() {
+        const url = new URL(window.location);
+        url.searchParams.delete('tune');
+        window.history.replaceState({}, '', url);
     }
 
     /**
@@ -1315,6 +1339,16 @@
         });
     }
 
+    /**
+     * Get tune ID from URL parameter
+     * @returns {number|null} Tune ID if present in URL, null otherwise
+     */
+    function getTuneIdFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tuneParam = urlParams.get('tune');
+        return tuneParam ? parseInt(tuneParam, 10) : null;
+    }
+
     // Public API
     window.TuneDetailModal = {
         init: init,
@@ -1330,7 +1364,8 @@
         addToTunebook: addToTunebook,
         updateTunebookStatus: updateTunebookStatus,
         removeFromMyTunes: removeFromMyTunes,
-        refreshTunebookCount: refreshTunebookCount
+        refreshTunebookCount: refreshTunebookCount,
+        getTuneIdFromUrl: getTuneIdFromUrl
     };
 
     // Auto-initialize when DOM is ready

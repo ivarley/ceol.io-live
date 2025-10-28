@@ -326,6 +326,13 @@ document.addEventListener('DOMContentLoaded', function() {
     loadFiltersFromURL();
     checkForSuccessMessage();
     setupScrollDetection();
+
+    // Check for tune parameter in URL and open modal if present
+    const tuneId = TuneDetailModal.getTuneIdFromUrl();
+    if (tuneId) {
+        // Wait for tunes to load before opening modal
+        waitForTuneAndOpen(tuneId);
+    }
 });
 
 function setupScrollDetection() {
@@ -1297,6 +1304,27 @@ function incrementHeardCountWithToast(personTuneId, oldCount) {
         const errorInfo = handleApiError(error);
         showMessage(errorInfo.message, 'error');
     });
+}
+
+// Wait for tunes to load, then open modal for specific tune
+function waitForTuneAndOpen(personTuneId, attempts = 0) {
+    const maxAttempts = 20; // 20 attempts * 250ms = 5 seconds max
+
+    // Check if tune exists in allTunes
+    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+
+    if (tune) {
+        // Tune found, open modal
+        showTuneDetail(personTuneId, null);
+    } else if (attempts < maxAttempts) {
+        // Keep waiting
+        setTimeout(() => {
+            waitForTuneAndOpen(personTuneId, attempts + 1);
+        }, 250);
+    } else {
+        // Timeout - tune not found after 5 seconds
+        showMessage('Tune not found', 'error');
+    }
 }
 
 function showTuneDetail(personTuneId, event) {
