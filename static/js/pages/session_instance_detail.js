@@ -1060,7 +1060,7 @@ function hideEditModal() {
     window.currentEditingPill = null;
 }
 
-function confirmLink() {
+async function confirmLink() {
     const input = document.getElementById('tune-link-input').value.trim();
     if (!input || !window.currentLinkingPill) return;
 
@@ -1082,15 +1082,61 @@ function confirmLink() {
     // This will be saved as an alias if it differs from the canonical name
     const userProvidedName = window.currentLinkingPill.tuneName;
 
-    // Update the pill
-    window.currentLinkingPill.tuneId = parseInt(tuneId);
-    window.currentLinkingPill.tuneName = userProvidedName; // Keep the user's name
-    window.currentLinkingPill.state = 'linked';
+    // Update the pill to loading state while fetching metadata
+    window.currentLinkingPill.state = 'loading';
+    PillRenderer.updatePillAppearance(window.currentLinkingPill);
 
-    PillRenderer.renderTunePills();
-    hideLinkModal();
+    try {
+        // Fetch tune metadata from thesession.org API
+        const response = await fetch(`https://thesession.org/tunes/${tuneId}?format=json`);
 
-    showMessage('Tune linked successfully!', 'success');
+        if (!response.ok) {
+            if (response.status === 404) {
+                showMessage('Tune not found on thesession.org', 'error');
+            } else {
+                showMessage('Failed to fetch tune data', 'error');
+            }
+            window.currentLinkingPill.state = 'unlinked';
+            PillRenderer.updatePillAppearance(window.currentLinkingPill);
+            return;
+        }
+
+        const tuneData = await response.json();
+
+        // Update the pill with fetched metadata
+        window.currentLinkingPill.tuneId = parseInt(tuneId);
+        window.currentLinkingPill.tuneName = userProvidedName; // Keep the user's name
+        window.currentLinkingPill.tuneType = tuneData.type ? tuneData.type.charAt(0).toUpperCase() + tuneData.type.slice(1) : null;
+        window.currentLinkingPill.state = 'linked';
+
+        // Update StateManager's data to trigger type label update
+        const pillPosition = StateManager.findTuneById(window.currentLinkingPill.id);
+        if (pillPosition) {
+            const tunePillsData = StateManager.getTunePillsData();
+            const tuneSet = tunePillsData[pillPosition.setIndex];
+            if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
+                const actualPill = tuneSet[pillPosition.pillIndex];
+                if (actualPill) {
+                    actualPill.tuneId = parseInt(tuneId);
+                    actualPill.tuneName = userProvidedName;
+                    actualPill.tuneType = window.currentLinkingPill.tuneType;
+                    actualPill.state = 'linked';
+                }
+            }
+            // Notify StateManager - create new array reference to ensure change detection
+            StateManager.setTunePillsData([...tunePillsData]);
+        }
+
+        PillRenderer.renderTunePills();
+        hideLinkModal();
+
+        showMessage('Tune linked successfully!', 'success');
+    } catch (error) {
+        console.error('Error fetching tune metadata:', error);
+        showMessage('Failed to fetch tune metadata', 'error');
+        window.currentLinkingPill.state = 'unlinked';
+        PillRenderer.updatePillAppearance(window.currentLinkingPill);
+    }
 }
 
 function confirmEdit() {

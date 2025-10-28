@@ -96,6 +96,8 @@ export class ModalManager {
 
         // FOURTH: Show the modal
         modal.style.display = config.display || 'flex';
+        // Add 'show' class for CSS animations (opacity transition)
+        modal.classList.add('show');
 
         // Track active modal
         this.currentModals.add(modalId);
@@ -131,6 +133,8 @@ export class ModalManager {
         this.stopFocusKeeper();
 
         modal.style.display = 'none';
+        // Remove 'show' class
+        modal.classList.remove('show');
         this.currentModals.delete(modalId);
 
         // Remove modal-open class from body if no more modals are open
