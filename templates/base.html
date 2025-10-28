@@ -78,6 +78,11 @@
             padding-top: 40px !important;
         }
 
+        /* Ensure header is above modal overlay so hamburger menu remains clickable and not dimmed */
+        .header.fixed-top {
+            z-index: 10001 !important;
+        }
+
         .docs-branding {
             min-height: auto !important;
         }
@@ -173,7 +178,7 @@
             border-radius: 4px;
             box-shadow: 0 4px 12px var(--dropdown-shadow);
             min-width: 160px;
-            z-index: 1000;
+            z-index: 10001;
             display: none;
         }
 
@@ -378,16 +383,6 @@
 <script>
 function toggleHamburgerMenu() {
     const dropdown = document.getElementById('hamburgerDropdown');
-
-    // Close any open modals before toggling the hamburger menu
-    const modal = document.getElementById('tune-detail-modal');
-    if (modal && modal.style.display === 'flex') {
-        // Check if closeTuneDetailModal function exists (from my_tunes.html)
-        if (typeof closeTuneDetailModal === 'function') {
-            closeTuneDetailModal();
-        }
-    }
-
     dropdown.classList.toggle('show');
 }
 

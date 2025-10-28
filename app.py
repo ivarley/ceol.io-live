@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, session
 from flask_login import LoginManager
+from werkzeug.routing import BaseConverter
 import os
 import random
 import logging
@@ -36,7 +37,16 @@ logging.basicConfig(
     ]
 )
 
+# Custom URL converter that ONLY matches dates in YYYY-MM-DD format
+# This prevents ambiguity with session paths ending in numbers (like "oflahertys/2025")
+# Session instances should always be accessed by date, not by integer ID
+class DateOrIdConverter(BaseConverter):
+    """Matches dates in YYYY-MM-DD format only"""
+    regex = r'\d{4}-\d{2}-\d{2}'
+
 app = Flask(__name__)
+app.url_map.converters['date_or_id'] = DateOrIdConverter
+
 # Secret key required for Flask sessions (used by flash messages to store temporary messages in signed cookies)
 app.secret_key = os.environ.get(
     "FLASK_SESSION_SECRET_KEY", "dev-secret-key-change-in-production"
@@ -232,6 +242,9 @@ app.add_url_rule(
 
 # Register API routes
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
+
+# SESSION routes - MUST come BEFORE session_instance routes!
+# These have fewer segments, so <path:session_path> will greedily match the full path
 app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>/refresh_tunebook_count",
     "refresh_tunebook_count_ajax",
@@ -292,31 +305,46 @@ app.add_url_rule(
     get_next_session_instance_suggestion_ajax,
     methods=["GET"],
 )
+
+# SESSION INSTANCE routes - MUST come AFTER session routes!
+# These use custom date_or_id converter to only match dates/IDs, not arbitrary path segments
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id>/update",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/tunes/<int:tune_id>",
+    "get_session_instance_tune_detail",
+    get_session_instance_tune_detail,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/tunes/<int:tune_id>",
+    "update_session_instance_tune_details",
+    update_session_instance_tune_details,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/update",
     "update_session_instance_ajax",
     update_session_instance_ajax,
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/tune_count",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/tune_count",
     "get_session_tune_count_ajax",
     get_session_tune_count_ajax,
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/delete",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/delete",
     "delete_session_instance_ajax",
     delete_session_instance_ajax,
     methods=["DELETE"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id>/mark_complete",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/mark_complete",
     "mark_session_log_complete_ajax",
     mark_session_log_complete_ajax,
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id>/mark_incomplete",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/mark_incomplete",
     "mark_session_log_incomplete_ajax",
     mark_session_log_incomplete_ajax,
     methods=["POST"],
@@ -369,7 +397,7 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id>/match_tune",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/match_tune",
     "match_tune_ajax",
     match_tune_ajax,
     methods=["POST"],
@@ -381,7 +409,7 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id>/save_tunes",
+    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/save_tunes",
     "save_session_instance_tunes_ajax",
     save_session_instance_tunes_ajax,
     methods=["POST"],
@@ -708,6 +736,12 @@ app.add_url_rule(
     "/api/admin/tunes",
     "get_admin_tunes",
     get_admin_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/<int:tune_id>",
+    "get_admin_tune_detail",
+    get_admin_tune_detail,
     methods=["GET"],
 )
 app.add_url_rule(

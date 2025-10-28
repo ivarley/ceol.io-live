@@ -1,0 +1,24 @@
+{#
+  Unified Tune Detail Modal Template
+
+  This template provides the container for the tune detail modal that is used across
+  all contexts (my_tunes, session, session_instance, admin).
+
+  The modal content is dynamically rendered by JavaScript using the tune_detail_modal.js module.
+
+  Include this template in any page that needs to display tune details:
+  {% include 'tune_detail_modal.html' %}
+
+  Also include the required CSS and JS files in the page:
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+  <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
+#}
+
+<!-- Tune Detail Modal -->
+<div id="tune-detail-modal" class="modal-overlay">
+    <div class="modal-dialog">
+        <div id="tune-detail-content">
+            <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+    </div>
+</div>

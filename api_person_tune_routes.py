@@ -261,21 +261,82 @@ def get_person_tune_detail(person_tune_id):
         # Build response with tune details
         response_data = _build_person_tune_response(person_tune, include_tune_details=True)
         
-        # Add session popularity count
+        # Add session popularity count and play history
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            # Get count of distinct session instances where this person is a member and the tune has been played
+            # Get count of distinct session instances where this person attended and the tune was played
             cur.execute("""
                 SELECT COUNT(DISTINCT SIT.session_instance_id)
                 FROM session_instance_tune SIT
                 INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
-                INNER JOIN session_person SIP ON SI.session_id = SIP.session_id
+                INNER JOIN session_instance_person SIP ON SI.session_instance_id = SIP.session_instance_id
                 WHERE SIP.person_id = %s AND SIT.tune_id = %s
             """, (person_id, person_tune.tune_id))
             row = cur.fetchone()
             session_play_count = row[0] if row else 0
             response_data['session_play_count'] = session_play_count
+
+            # Get detailed play history for sessions where person attended
+            cur.execute("""
+                SELECT
+                    S.name,
+                    S.path,
+                    SI.date,
+                    SIT.order_number,
+                    SIT.name,
+                    SIT.key_override,
+                    SIT.setting_override,
+                    SI.session_instance_id
+                FROM session_instance_tune SIT
+                INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
+                INNER JOIN session S ON SI.session_id = S.session_id
+                INNER JOIN session_instance_person SIP ON SI.session_instance_id = SIP.session_instance_id
+                WHERE SIP.person_id = %s AND SIT.tune_id = %s
+                ORDER BY SI.date DESC
+            """, (person_id, person_tune.tune_id))
+
+            play_instances_raw = cur.fetchall()
+            play_instances = []
+            for row in play_instances_raw:
+                session_name = row[0]
+                session_path = row[1]
+                date = row[2]
+                order_number = row[3]
+                name_override = row[4]
+                key_override = row[5]
+                setting_override = row[6]
+                session_instance_id = row[7]
+
+                # Build full name for display: "Session Name - YYYY-MM-DD"
+                full_name = f"{session_name} - {date.strftime('%Y-%m-%d')}" if date else session_name
+                # Build link to session instance
+                link = f"/sessions/{session_path}/{session_instance_id}"
+
+                play_instances.append({
+                    "full_name": full_name,
+                    "session_name": session_name,
+                    "session_path": session_path,
+                    "date": date.isoformat() if date else None,
+                    "position_in_set": order_number,
+                    "name_override": name_override,
+                    "key_override": key_override,
+                    "setting_id_override": setting_override,
+                    "session_instance_id": session_instance_id,
+                    "link": link
+                })
+
+            response_data['play_instances'] = play_instances
+
+            # Also get global play count (all sessions, not just where person attended)
+            cur.execute("""
+                SELECT COUNT(DISTINCT SIT.session_instance_id)
+                FROM session_instance_tune SIT
+                WHERE SIT.tune_id = %s
+            """, (person_tune.tune_id,))
+            row = cur.fetchone()
+            global_play_count = row[0] if row else 0
+            response_data['global_play_count'] = global_play_count
         finally:
             conn.close()
         

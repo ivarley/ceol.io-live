@@ -2,6 +2,10 @@
 
 {% block title %}Admin - Tunes{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="docs-content-inner">
     <div class="container">
@@ -63,14 +67,8 @@
                     </div>
                 </div>
 
-                <!-- Tune Detail Modal -->
-                <div id="tune-detail-modal" class="modal-overlay">
-                    <div class="modal-dialog">
-                        <div id="tune-detail-content">
-                            <!-- Content will be inserted by JavaScript -->
-                        </div>
-                    </div>
-                </div>
+                <!-- Unified Tune Detail Modal -->
+                {% include 'tune_detail_modal.html' %}
             </section>
         </article>
     </div>
@@ -209,24 +207,6 @@
     text-transform: capitalize;
 }
 
-/* Modal styles */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-overlay.show {
-    display: flex;
-}
-
 .modal-dialog {
     background: var(--bg-color, white);
     border-radius: 8px;
@@ -242,13 +222,6 @@
     pointer-events: auto;
     z-index: 1;
     overflow: hidden;
-}
-
-#tune-detail-content {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
 }
 
 .modal-close-btn {
@@ -379,7 +352,6 @@ let currentSort = {
     column: 'name',
     order: 'asc'
 };
-let modalShowTime = 0;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -444,26 +416,6 @@ function setupEventListeners() {
             const column = this.getAttribute('data-column');
             sortByColumn(column);
         });
-    });
-
-    // Modal overlay click handler
-    const modalOverlay = document.getElementById('tune-detail-modal');
-    modalOverlay.addEventListener('click', function(event) {
-        const timeSinceShown = Date.now() - modalShowTime;
-        if (timeSinceShown < 500) {
-            return;
-        }
-
-        if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
-            closeTuneDetailModal();
-        }
-    });
-
-    // Escape key to close modal
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            closeTuneDetailModal();
-        }
     });
 }
 
@@ -602,175 +554,24 @@ function createTuneRow(tune) {
 }
 
 function showTuneDetail(tuneId, tuneName, tuneType, sessionCount, tunelistCount, tunebookCount) {
-    const modal = document.getElementById('tune-detail-modal');
-    const modalContent = document.getElementById('tune-detail-content');
-
-    // Build thesession.org link
-    const thesessionUrl = `https://thesession.org/tunes/${tuneId}`;
-    const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
-
-    modalContent.innerHTML = `
-        <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-        <h2 class="modal-tune-title">${tuneName} ${thesessionLinkIcon}</h2>
-        <div class="modal-info-line">
-            <strong>Name:</strong><br>
-            <input type="text" id="tune-name-input" value="${tuneName}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;">
-        </div>
-        <div class="modal-info-line"><strong>Type:</strong> ${tuneType || 'Unknown'}</div>
-        <div class="modal-info-line"><strong>Sessions:</strong> ${sessionCount}</div>
-        <div class="modal-info-line"><strong>Tune Lists:</strong> ${tunelistCount}</div>
-        <div class="modal-info-line">
-            <strong>TheSession.org Popularity:</strong>
-            <span id="tunebook-count">${tunebookCount} tunebook${tunebookCount !== 1 ? 's' : ''}</span>
-            <button id="refresh-tunebook" onclick="refreshTunebookCount(${tuneId})" style="margin-left: 10px; padding: 4px 8px; font-size: 0.9em; cursor: pointer; background-color: var(--light); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 3px; line-height: 1;" title="Refresh popularity count">↻</button>
-            <span id="cached-date-display" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;"></span>
-        </div>
-        <div style="margin-top: 12px;">
-            <button id="save-tune-btn" onclick="saveTuneName(${tuneId})" style="padding: 8px 16px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Save</button>
-            <button onclick="closeTuneDetailModal()" style="padding: 8px 16px; background-color: var(--secondary-text); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-left: 8px;">Cancel</button>
-        </div>
-    `;
-
-    // Show modal
-    modal.classList.add('show');
-    modalShowTime = Date.now();
-}
-
-function saveTuneName(tuneId) {
-    const nameInput = document.getElementById('tune-name-input');
-    const saveButton = document.getElementById('save-tune-btn');
-    const name = nameInput.value.trim();
-
-    if (!name) {
-        alert('Name cannot be empty');
-        return;
-    }
-
-    // Disable button and show saving state
-    saveButton.disabled = true;
-    saveButton.textContent = 'Saving...';
-
-    fetch(`/api/admin/tunes/${tuneId}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
+    // Use the unified tune detail modal
+    TuneDetailModal.show({
+        context: 'admin',
+        tuneId: tuneId,
+        apiEndpoint: `/api/admin/tunes/${tuneId}`,
+        onSave: function() {
+            // Refresh the tunes list
+            applyFilters();
         },
-        body: JSON.stringify({ name: name })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            saveButton.textContent = 'Saved!';
-            saveButton.style.backgroundColor = '#28a745';
-
-            // Update the tune in the list
-            const tuneIndex = allTunes.findIndex(t => t.tune_id === tuneId);
-            if (tuneIndex !== -1) {
-                allTunes[tuneIndex].name = name;
-            }
-
-            setTimeout(() => {
-                closeTuneDetailModal();
-                applyFilters(); // Re-render the list
-            }, 1000);
-        } else {
-            saveButton.textContent = 'Error';
-            saveButton.style.backgroundColor = '#dc3545';
-            console.error('Error saving tune name:', data.error);
-
-            setTimeout(() => {
-                saveButton.disabled = false;
-                saveButton.textContent = 'Save';
-                saveButton.style.backgroundColor = '';
-            }, 2000);
+        additionalData: {
+            tuneName: tuneName,
+            tuneType: tuneType,
+            isUserLoggedIn: true // Admin is always logged in
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        saveButton.textContent = 'Error';
-        saveButton.style.backgroundColor = '#dc3545';
-
-        setTimeout(() => {
-            saveButton.disabled = false;
-            saveButton.textContent = 'Save';
-            saveButton.style.backgroundColor = '';
-        }, 2000);
     });
-}
-
-function refreshTunebookCount(tuneId) {
-    const button = document.getElementById('refresh-tunebook');
-    const countSpan = document.getElementById('tunebook-count');
-    const dateSpan = document.getElementById('cached-date-display');
-
-    // Disable button and show loading state
-    button.disabled = true;
-    const originalButtonText = button.textContent;
-    button.textContent = '⟳';
-
-    fetch(`/api/admin/tunes/${tuneId}/refresh_tunebook_count`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Update the display with new count
-            const newCount = data.new_count;
-            const suffix = newCount === 1 ? '' : 's';
-            countSpan.textContent = `${newCount} tunebook${suffix}`;
-
-            // Update the cached date display
-            if (data.cached_date && dateSpan) {
-                dateSpan.textContent = `Last Updated: ${data.cached_date}`;
-                dateSpan.style.display = '';
-            }
-
-            // Update the tune in the list
-            const tuneIndex = allTunes.findIndex(t => t.tune_id === tuneId);
-            if (tuneIndex !== -1) {
-                allTunes[tuneIndex].tunebook_count_cached = newCount;
-            }
-
-            // Show success message
-            if (data.old_count !== data.new_count) {
-                button.textContent = '✓';
-                button.style.backgroundColor = '#28a745';
-                button.style.color = 'white';
-            } else {
-                button.textContent = '−';
-                button.style.backgroundColor = '#6c757d';
-                button.style.color = 'white';
-            }
-        } else {
-            button.textContent = '✗';
-            button.style.backgroundColor = '#dc3545';
-            button.style.color = 'white';
-            console.error('Error:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        button.textContent = '✗';
-        button.style.backgroundColor = '#dc3545';
-        button.style.color = 'white';
-    })
-    .finally(() => {
-        // Reset button after 2 seconds
-        setTimeout(() => {
-            button.disabled = false;
-            button.textContent = originalButtonText;
-            button.style.backgroundColor = '';
-            button.style.color = '';
-        }, 2000);
-    });
-}
-
-function closeTuneDetailModal() {
-    const modal = document.getElementById('tune-detail-modal');
-    modal.classList.remove('show');
 }
 </script>
+
+<!-- Unified Tune Detail Modal JavaScript -->
+<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 {% endblock %}

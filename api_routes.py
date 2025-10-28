@@ -479,6 +479,20 @@ def get_session_tune_detail(session_path, tune_id):
                     }
             cur.close()
 
+        # Get global play count (all sessions)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT session_instance_id)
+            FROM session_instance_tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        global_play_result = cur.fetchone()
+        global_play_count = global_play_result[0] if global_play_result else 0
+        cur.close()
+
         conn.close()
 
         # Build response
@@ -500,6 +514,7 @@ def get_session_tune_detail(session_path, tune_id):
                         else None
                     ),
                     "times_played": times_played,
+                    "global_play_count": global_play_count,
                     "play_instances": play_instances,
                     "person_tune_status": person_tune_status,
                 },
@@ -8231,3 +8246,457 @@ def increment_person_tune_heard_count(tune_id):
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         conn.close()
+
+
+# ============================================================================
+# Session Instance Tune Detail Endpoints
+# ============================================================================
+
+def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
+    """
+    Get detailed information about a tune in the context of a specific session instance.
+
+    GET /api/sessions/<session_path>/<date_or_id>/tunes/<tune_id>
+
+    Returns tune details with session_instance_tune overrides and history.
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Get session_instance_id
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+
+        # Get tune basic info
+        cur.execute(
+            """
+            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
+            FROM tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        tune_info = cur.fetchone()
+
+        if not tune_info:
+            return jsonify({"success": False, "message": "Tune not found"}), 404
+
+        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
+
+        # Get session-level defaults from session_tune
+        cur.execute(
+            """
+            SELECT alias, setting_id, key
+            FROM session_tune
+            WHERE session_id = %s AND tune_id = %s
+        """,
+            (session_id, tune_id),
+        )
+        session_tune_info = cur.fetchone()
+
+        session_alias = None
+        session_setting_id = None
+        session_key = None
+
+        if session_tune_info:
+            session_alias, session_setting_id, session_key = session_tune_info
+
+        # Get instance-specific overrides from session_instance_tune
+        cur.execute(
+            """
+            SELECT name, key_override, setting_override, order_number
+            FROM session_instance_tune
+            WHERE session_instance_id = %s AND tune_id = %s
+        """,
+            (session_instance_id, tune_id),
+        )
+        instance_tune_info = cur.fetchone()
+
+        name_override = None
+        key_override = None
+        setting_override = None
+        order_number = None
+
+        if instance_tune_info:
+            name_override, key_override, setting_override, order_number = instance_tune_info
+
+        # Get play count for this session (all instances)
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+        """,
+            (session_id, tune_id),
+        )
+        play_count_result = cur.fetchone()
+        times_played = play_count_result[0] if play_count_result else 0
+
+        # Get detailed play history for this session
+        cur.execute(
+            """
+            SELECT
+                si.date,
+                sit.order_number,
+                sit.name,
+                sit.key_override,
+                sit.setting_override,
+                si.session_instance_id
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s
+            ORDER BY si.date DESC
+        """,
+            (session_id, tune_id),
+        )
+        play_instances_raw = cur.fetchall()
+        play_instances = [
+            {
+                "date": row[0].isoformat() if row[0] else None,
+                "position_in_set": row[1],
+                "name_override": row[2],
+                "key_override": row[3],
+                "setting_id_override": row[4],
+                "session_instance_id": row[5],
+            }
+            for row in play_instances_raw
+        ]
+
+        # Get person_tune status if user is logged in
+        person_tune_status = None
+        if current_user.is_authenticated:
+            cur.execute(
+                "SELECT person_id FROM user_account WHERE user_id = %s",
+                (current_user.user_id,)
+            )
+            person_row = cur.fetchone()
+            if person_row:
+                person_id = person_row[0]
+                cur.execute(
+                    """
+                    SELECT learn_status, heard_count
+                    FROM person_tune
+                    WHERE person_id = %s AND tune_id = %s
+                    """,
+                    (person_id, tune_id)
+                )
+                tune_row = cur.fetchone()
+                if tune_row:
+                    person_tune_status = {
+                        "on_list": True,
+                        "learn_status": tune_row[0],
+                        "heard_count": tune_row[1]
+                    }
+                else:
+                    person_tune_status = {
+                        "on_list": False,
+                        "learn_status": None,
+                        "heard_count": None
+                    }
+
+        # Get global play count (all sessions)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT session_instance_id)
+            FROM session_instance_tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        global_play_result = cur.fetchone()
+        global_play_count = global_play_result[0] if global_play_result else 0
+        cur.close()
+
+        conn.close()
+
+        # Build response - includes both session defaults and instance overrides
+        return jsonify(
+            {
+                "success": True,
+                "session_tune": {
+                    "tune_id": tune_id,
+                    "tune_name": tune_name,
+                    "tune_type": tune_type,
+                    # Session-level defaults
+                    "alias": session_alias,
+                    "setting_id": session_setting_id,
+                    "key": session_key,
+                    # Instance-specific overrides
+                    "name": name_override,
+                    "key_override": key_override,
+                    "setting_override": setting_override,
+                    "order_number": order_number,
+                    # Stats
+                    "tunebook_count": tunebook_count,
+                    "tunebook_count_cached_date": (
+                        tunebook_count_cached_date.isoformat()
+                        if tunebook_count_cached_date
+                        else None
+                    ),
+                    "times_played": times_played,
+                    "global_play_count": global_play_count,
+                    "play_instances": play_instances,
+                    "person_tune_status": person_tune_status,
+                },
+            }
+        )
+
+    except Exception as e:
+        return jsonify(
+            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
+        ), 500
+
+
+@login_required
+def update_session_instance_tune_details(session_path, date_or_id, tune_id):
+    """
+    Update session_instance_tune details (name, key_override, setting_override).
+
+    PUT /api/sessions/<session_path>/<date_or_id>/tunes/<tune_id>
+
+    Request body:
+    {
+        "name": string or null,
+        "key_override": string or null,
+        "setting_override": int or null
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Get session_instance_id
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+
+        # Check if user has permission to edit this session
+        if not current_user.is_system_admin:
+            cur.execute(
+                """
+                SELECT is_admin FROM session_person
+                WHERE session_id = %s AND person_id = %s
+            """,
+                (session_id, current_user.person_id),
+            )
+            permission = cur.fetchone()
+            if not permission or not permission[0]:
+                return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+        # Check if this tune exists in this session instance
+        cur.execute(
+            """
+            SELECT session_instance_tune_id
+            FROM session_instance_tune
+            WHERE session_instance_id = %s AND tune_id = %s
+        """,
+            (session_instance_id, tune_id),
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "Tune not found in this session instance"}), 404
+
+        # Extract fields from request
+        name = data.get("name", "").strip() or None
+        key_override = data.get("key_override", "").strip() or None
+        setting_override = data.get("setting_override")
+
+        # Convert setting_override to int or None
+        if setting_override is not None:
+            if setting_override == "" or setting_override == "null":
+                setting_override = None
+            else:
+                try:
+                    setting_override = int(setting_override)
+                except (ValueError, TypeError):
+                    return jsonify({"success": False, "message": "Invalid setting_override value"}), 400
+
+        # Update the session_instance_tune record
+        cur.execute(
+            """
+            UPDATE session_instance_tune
+            SET name = %s,
+                key_override = %s,
+                setting_override = %s
+            WHERE session_instance_id = %s AND tune_id = %s
+        """,
+            (name, key_override, setting_override, session_instance_id, tune_id),
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Tune details updated successfully"
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify(
+            {"success": False, "message": f"Error updating tune details: {str(e)}"}
+        ), 500
+
+
+@api_login_required
+def get_admin_tune_detail(tune_id):
+    """
+    Get detailed information about a tune for admin view.
+
+    GET /api/admin/tunes/<tune_id>
+
+    Returns tune details with global play history across all sessions.
+    """
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get tune basic info
+        cur.execute(
+            """
+            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
+            FROM tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        tune_info = cur.fetchone()
+
+        if not tune_info:
+            return jsonify({"success": False, "message": "Tune not found"}), 404
+
+        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
+
+        # Get count of distinct sessions playing this tune
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT session_id)
+            FROM session_tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        session_count_result = cur.fetchone()
+        session_count = session_count_result[0] if session_count_result else 0
+
+        # Get global play count
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT session_instance_id)
+            FROM session_instance_tune
+            WHERE tune_id = %s
+        """,
+            (tune_id,),
+        )
+        play_count_result = cur.fetchone()
+        global_play_count = play_count_result[0] if play_count_result else 0
+
+        # Get detailed play history across all sessions
+        cur.execute(
+            """
+            SELECT
+                S.name,
+                S.path,
+                SI.date,
+                SIT.order_number,
+                SIT.name,
+                SIT.key_override,
+                SIT.setting_override,
+                SI.session_instance_id
+            FROM session_instance_tune SIT
+            INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
+            INNER JOIN session S ON SI.session_id = S.session_id
+            WHERE SIT.tune_id = %s
+            ORDER BY SI.date DESC
+            LIMIT 100
+        """,
+            (tune_id,),
+        )
+        play_instances_raw = cur.fetchall()
+        play_instances = []
+        for row in play_instances_raw:
+            session_name = row[0]
+            session_path = row[1]
+            date = row[2]
+            order_number = row[3]
+            name_override = row[4]
+            key_override = row[5]
+            setting_override = row[6]
+            session_instance_id = row[7]
+
+            # Build full name for display: "Session Name - YYYY-MM-DD"
+            full_name = f"{session_name} - {date.strftime('%Y-%m-%d')}" if date else session_name
+            # Build link to session instance
+            link = f"/sessions/{session_path}/{session_instance_id}"
+
+            play_instances.append({
+                "full_name": full_name,
+                "session_name": session_name,
+                "session_path": session_path,
+                "date": date.isoformat() if date else None,
+                "position_in_set": order_number,
+                "name_override": name_override,
+                "key_override": key_override,
+                "setting_id_override": setting_override,
+                "session_instance_id": session_instance_id,
+                "link": link
+            })
+
+        conn.close()
+
+        # Build response
+        return jsonify(
+            {
+                "success": True,
+                "tune": {
+                    "tune_id": tune_id,
+                    "name": tune_name,
+                    "tune_name": tune_name,
+                    "tune_type": tune_type,
+                    "tunebook_count": tunebook_count,
+                    "tunebook_count_cached": tunebook_count,
+                    "tunebook_count_cached_date": (
+                        tunebook_count_cached_date.isoformat()
+                        if tunebook_count_cached_date
+                        else None
+                    ),
+                    "session_count": session_count,
+                    "global_play_count": global_play_count,
+                    "play_instances": play_instances,
+                },
+            }
+        )
+
+    except Exception as e:
+        return jsonify(
+            {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
+        ), 500

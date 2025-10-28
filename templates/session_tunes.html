@@ -3,6 +3,7 @@
 {% block title %}{{ session_name }} - Tunes - Irish Music Session Details{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 <style>
 /* Base container styles */
 .tunes-container {
@@ -154,20 +155,6 @@
 }
 
 /* Tune detail modal */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 10000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    pointer-events: auto;
-}
-
 .modal-dialog {
     background: var(--bg-color, white);
     border-radius: 8px;
@@ -181,10 +168,6 @@
     position: relative;
     pointer-events: auto;
     z-index: 1;
-}
-
-#tune-detail-content {
-    padding: 20px;
 }
 
 .modal-close-btn {
@@ -338,13 +321,6 @@
     }
 
     /* Modal slides in from right on mobile */
-    .modal-overlay {
-        background-color: transparent;
-        align-items: flex-start;
-        justify-content: flex-end;
-        pointer-events: none;
-    }
-
     .modal-dialog {
         width: 100%;
         max-width: 100%;
@@ -361,18 +337,11 @@
         overflow-y: auto;
         box-shadow: -4px 0 12px rgba(0,0,0,0.2);
         pointer-events: auto;
-        padding-left: 16px;
-        padding-right: 16px;
         box-sizing: border-box;
     }
 
     .modal-overlay.show .modal-dialog {
         transform: translateX(0);
-    }
-
-    #tune-detail-content {
-        padding: 16px 0;
-        box-sizing: border-box;
     }
 
     .modal-close-btn {
@@ -432,13 +401,7 @@
     </div>
 
     <!-- Tune Detail Modal -->
-    <div id="tune-detail-modal" class="modal-overlay">
-        <div class="modal-dialog">
-            <div id="tune-detail-content">
-                <!-- Content will be inserted by JavaScript -->
-            </div>
-        </div>
-    </div>
+    {% include 'tune_detail_modal.html' %}
 
     <script>
         // Initial tune data from server
@@ -451,7 +414,6 @@
             search: '',
             type: ''
         };
-        let modalShowTime = 0;
 
         // Sort mode cycle states (with icons)
         const sortModes = [
@@ -513,19 +475,6 @@
 
             // Sort toggle button
             document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
-
-            // Modal overlay click handler
-            const modalOverlay = document.getElementById('tune-detail-modal');
-            modalOverlay.addEventListener('click', function(event) {
-                const timeSinceShown = Date.now() - modalShowTime;
-                if (timeSinceShown < 500) {
-                    return;
-                }
-
-                if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
-                    closeTuneDetailModal();
-                }
-            });
         }
 
         function cycleSortMode() {
@@ -626,214 +575,25 @@
             `;
         }
 
-        // Make functions globally available
+        // Tune Detail Modal - using unified modal
         window.showTuneDetail = function(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
-            const modal = document.getElementById('tune-detail-modal');
-            const modalContent = document.getElementById('tune-detail-content');
-
-            // Show modal immediately with basic info
-            displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId);
-
-            // Fetch full details from the API
-            fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        displayTuneDetailModalFull(data.session_tune);
-                    } else {
-                        console.error('Failed to load tune details:', data.error);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading tune details:', error);
-                });
-        }
-
-        function displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
-            const modal = document.getElementById('tune-detail-modal');
-            const modalContent = document.getElementById('tune-detail-content');
-
-            // Build thesession.org link
-            const thesessionUrl = settingId
-                ? `https://thesession.org/tunes/${tuneId}#setting${settingId}`
-                : `https://thesession.org/tunes/${tuneId}`;
-            const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
-
-            // Display name - will be updated with alias if available
-            const displayName = tuneName || 'Unknown';
-
-            modalContent.innerHTML = `
-                <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-                <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
-                <div class="modal-info-line"><strong>Type:</strong> ${tuneType || 'Unknown'}</div>
-                <div class="modal-info-line"><strong>We also call it:</strong> <span class="loading-dots">...</span></div>
-                <div class="modal-info-line"><strong>Our Setting:</strong> <span class="loading-dots">...</span></div>
-                <div class="modal-info-line"><strong>Our Key:</strong> <span class="loading-dots">...</span></div>
-                <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${tunebookCount || 0} tunebooks <span class="loading-dots">...</span></div>
-                <div class="modal-info-line"><strong>Play History:</strong> Total times played in this session: ${timesPlayed}</div>
-            `;
-
-            // Show modal
-            modal.style.display = 'flex';
-
-            // Add 'show' class after a small delay to trigger slide-in animation
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-
-            // Record the time when modal is shown
-            modalShowTime = Date.now();
-        }
-
-        function displayTuneDetailModalFull(sessionTune) {
-            const modalContent = document.getElementById('tune-detail-content');
-
-            // Build display name (alias takes precedence if it exists)
-            const displayName = sessionTune.alias || sessionTune.tune_name || 'Unknown';
-
-            // Build thesession.org link with setting if available
-            const thesessionUrl = sessionTune.setting_id
-                ? `https://thesession.org/tunes/${sessionTune.tune_id}#setting${sessionTune.setting_id}`
-                : `https://thesession.org/tunes/${sessionTune.tune_id}`;
-            const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
-
-            // Build aliases list (comma-delimited)
-            const aliasesList = sessionTune.aliases && sessionTune.aliases.length > 0
-                ? sessionTune.aliases.join(', ')
-                : 'None';
-
-            // Build setting display
-            const settingDisplay = sessionTune.setting_id
-                ? `<a href="${thesessionUrl}" target="_blank">Setting #${sessionTune.setting_id}</a>`
-                : 'Not specified';
-
-            // Build key display
-            const keyDisplay = sessionTune.overridden_key || 'Not specified';
-
-            // Build popularity display with refresh button
-            const tunebookCount = sessionTune.tunebook_count || 0;
-            const cachedDate = sessionTune.tunebook_count_cached_date || '';
-            const cachedDateDisplay = cachedDate
-                ? `<span style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;">Last Updated: ${cachedDate}</span>`
-                : '';
-            const popularityDisplay = `
-                <span id="tunebook-count">${tunebookCount} tunebook${tunebookCount !== 1 ? 's' : ''}</span>
-                <button id="refresh-tunebook" onclick="refreshTunebookCount(${sessionTune.tune_id})" style="margin-left: 10px; padding: 2px 6px; font-size: 0.8em; cursor: pointer; background-color: var(--light); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 3px;">refresh</button>
-                ${cachedDateDisplay}
-            `;
-
-            // Build play history display
-            const playCount = sessionTune.times_played || 0;
-
-            modalContent.innerHTML = `
-                <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-                <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
-                <div class="modal-info-line"><strong>Name:</strong> ${sessionTune.tune_name || 'Unknown'}</div>
-                <div class="modal-info-line"><strong>Type:</strong> ${sessionTune.tune_type || 'Unknown'} (immutable)</div>
-                <div class="modal-info-line"><strong>We also call it:</strong> ${aliasesList}</div>
-                <div class="modal-info-line"><strong>Our Setting:</strong> ${settingDisplay}</div>
-                <div class="modal-info-line"><strong>Our Key:</strong> ${keyDisplay}</div>
-                <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
-                <div class="modal-info-line"><strong>Play History:</strong> Total times played in this session: ${playCount}</div>
-            `;
-        }
-
-        function refreshTunebookCount(tuneId) {
-            const button = document.getElementById('refresh-tunebook');
-            const countSpan = document.getElementById('tunebook-count');
-
-            // Disable button and show loading state
-            button.disabled = true;
-            button.textContent = 'refreshing...';
-
-            // Make API call
-            fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}/refresh_tunebook_count`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+            TuneDetailModal.show({
+                context: 'session',
+                tuneId: tuneId,
+                apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tuneId}`,
+                onSave: function() {
+                    // Reload to refresh the tune list
+                    window.location.reload();
+                },
+                additionalData: {
+                    tuneName: tuneName,
+                    tuneType: tuneType,
+                    isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }}
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update the display with new count
-                    const newCount = data.new_count;
-                    const suffix = newCount === 1 ? '' : 's';
-                    countSpan.textContent = `${newCount} tunebook${suffix}`;
-
-                    // Update the cached date display
-                    let dateSpan = document.querySelector('.cached-date-display');
-                    if (data.cached_date) {
-                        if (!dateSpan) {
-                            // Create the date span if it doesn't exist
-                            dateSpan = document.createElement('span');
-                            dateSpan.className = 'cached-date-display';
-                            dateSpan.style.cssText = 'margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;';
-                            button.parentNode.appendChild(dateSpan);
-                        }
-                        dateSpan.textContent = `Last Updated: ${data.cached_date}`;
-                    } else if (dateSpan) {
-                        // Remove the date span if no date
-                        dateSpan.remove();
-                    }
-
-                    // Show a temporary success message
-                    if (data.old_count !== data.new_count) {
-                        button.textContent = 'updated!';
-                        button.style.backgroundColor = '#28a745';
-                        button.style.color = 'white';
-                    } else {
-                        button.textContent = 'unchanged';
-                        button.style.backgroundColor = '#6c757d';
-                        button.style.color = 'white';
-                    }
-                } else {
-                    // Show error message
-                    button.textContent = 'error';
-                    button.style.backgroundColor = '#dc3545';
-                    button.style.color = 'white';
-                    console.error('Error:', data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                button.textContent = 'error';
-                button.style.backgroundColor = '#dc3545';
-                button.style.color = 'white';
-            })
-            .finally(() => {
-                // Reset button after 2 seconds
-                setTimeout(() => {
-                    button.disabled = false;
-                    button.textContent = 'refresh';
-                    button.style.backgroundColor = '';
-                    button.style.color = '';
-                }, 2000);
             });
-        }
-
-        function closeTuneDetailModal() {
-            const modal = document.getElementById('tune-detail-modal');
-
-            // Remove 'show' class to trigger slide-out animation
-            modal.classList.remove('show');
-
-            // Wait for animation to complete before hiding
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
-        }
-
-        // Close modal on escape key
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                const modal = document.getElementById('tune-detail-modal');
-                if (modal.style.display === 'flex') {
-                    closeTuneDetailModal();
-                }
-            }
-        });
+        };
     </script>
+    <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 
 <!-- end landing page -->
 </div>

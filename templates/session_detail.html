@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 <style>
         .session-details {
             background-color: #f5f5f5;
@@ -342,14 +343,6 @@
             overflow: hidden;
         }
 
-        #tune-detail-content {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            overflow: hidden;
-        }
-
         .modal-info-section {
             flex-shrink: 0;
         }
@@ -478,8 +471,6 @@
                 transition: transform 0.3s ease-out;
                 box-shadow: -4px 0 12px rgba(0,0,0,0.2);
                 pointer-events: auto;
-                padding-left: 16px;
-                padding-right: 16px;
                 box-sizing: border-box;
                 overflow: hidden;
                 display: flex;
@@ -488,15 +479,6 @@
 
             .modal-overlay.show .modal-dialog {
                 transform: translateX(0);
-            }
-
-            #tune-detail-content {
-                padding: 16px 0;
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
-                height: 100%;
-                overflow: hidden;
             }
 
             .modal-close-btn {
@@ -530,18 +512,6 @@
             }
         }
 
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--dropdown-shadow);
-            z-index: 10000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-        }
         .modal-content {
             background: var(--bg-color, white);
             border-radius: 8px;
@@ -1564,13 +1534,7 @@
             </div>
 
             <!-- Tune Detail Modal -->
-            <div id="tune-detail-modal" class="modal-overlay">
-                <div class="modal-dialog">
-                    <div id="tune-detail-content">
-                        <!-- Content will be inserted by JavaScript -->
-                    </div>
-                </div>
-            </div>
+            {% include 'tune_detail_modal.html' %}
         </div>
 
         <!-- Logs Tab Content -->
@@ -2089,7 +2053,6 @@
         search: '',
         type: ''
     };
-    let modalShowTime = 0;
     let isInitializing = true; // Flag to prevent URL updates during initialization
 
     // Sort mode cycle states (with icons and text labels)
@@ -2228,19 +2191,6 @@
 
         // Sort toggle button
         document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
-
-        // Modal overlay click handler
-        const modalOverlay = document.getElementById('tune-detail-modal');
-        modalOverlay.addEventListener('click', function(event) {
-            const timeSinceShown = Date.now() - modalShowTime;
-            if (timeSinceShown < 500) {
-                return;
-            }
-
-            if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
-                closeTuneDetailModal();
-            }
-        });
     }
 
     function cycleSortMode() {
@@ -2359,552 +2309,20 @@
     }
 
     function showTuneDetail(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
-        const modal = document.getElementById('tune-detail-modal');
-        const modalContent = document.getElementById('tune-detail-content');
-
-        // Update URL with tune parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        urlParams.set('tune', tuneId);
-        const newURL = window.location.pathname + '?' + urlParams.toString();
-        window.history.replaceState({}, '', newURL);
-
-        // Show modal immediately with basic info
-        displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId);
-
-        // Fetch full details from the API
-        const apiUrl = `/api/sessions/${sessionPath}/tunes/${tuneId}`;
-        console.log('Fetching tune details from:', apiUrl);
-
-        fetch(apiUrl)
-            .then(response => {
-                console.log('Response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('API response:', data);
-                if (data.success) {
-                    displayTuneDetailModalFull(data.session_tune);
-                } else {
-                    console.error('Failed to load tune details:', data.message || 'Unknown error');
-                }
-            })
-            .catch(error => {
-                console.error('Error loading tune details:', error);
-            });
-    }
-
-    function displayTuneDetailModalBasic(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
-        const modal = document.getElementById('tune-detail-modal');
-        const modalContent = document.getElementById('tune-detail-content');
-
-        // Build thesession.org link
-        const thesessionUrl = settingId
-            ? `https://thesession.org/tunes/${tuneId}#setting${settingId}`
-            : `https://thesession.org/tunes/${tuneId}`;
-        const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
-
-        // Display name - will be updated with alias if available
-        const displayName = tuneName || 'Unknown';
-
-        modalContent.innerHTML = `
-            <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-            <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
-            <div class="modal-info-line"><strong>Type:</strong> ${tuneType || 'Unknown'}</div>
-            <div class="modal-info-line"><strong>We also call it:</strong> <span class="loading-dots">...</span></div>
-            <div class="modal-info-line"><strong>Our Setting:</strong> <span class="loading-dots">...</span></div>
-            <div class="modal-info-line"><strong>Our Key:</strong> <span class="loading-dots">...</span></div>
-            <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${tunebookCount || 0} tunebooks <span class="loading-dots">...</span></div>
-            <div class="modal-info-line"><strong>Play History:</strong> Total times played in this session: ${timesPlayed}</div>
-        `;
-
-        // Show modal
-        modal.style.display = 'flex';
-
-        // Add 'show' class after a small delay to trigger slide-in animation
-        setTimeout(() => {
-            modal.classList.add('show');
-        }, 10);
-
-        // Record the time when modal is shown
-        modalShowTime = Date.now();
-    }
-
-    function displayTuneDetailModalFull(sessionTune) {
-        const modalContent = document.getElementById('tune-detail-content');
-
-        // Build display name (alias takes precedence if it exists)
-        const displayName = sessionTune.alias || sessionTune.tune_name || 'Unknown';
-
-        // Build thesession.org link with setting if available
-        const thesessionUrl = sessionTune.setting_id
-            ? `https://thesession.org/tunes/${sessionTune.tune_id}#setting${sessionTune.setting_id}`
-            : `https://thesession.org/tunes/${sessionTune.tune_id}`;
-        const thesessionLinkIcon = `<a href="${thesessionUrl}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
-
-        // Build aliases input (comma-delimited)
-        const aliasesValue = sessionTune.aliases && sessionTune.aliases.length > 0
-            ? sessionTune.aliases.join(', ')
-            : '';
-
-        // Build setting ID input value
-        const settingIdValue = sessionTune.setting_id || '';
-
-        // Build key input value
-        const keyValue = sessionTune.key || '';
-
-        // Build popularity display with refresh icon and cached date
-        const tunebookCount = sessionTune.tunebook_count || 0;
-        const cachedDate = sessionTune.tunebook_count_cached_date || '';
-        const cachedDateId = 'cached-date-display';
-        const cachedDateDisplay = cachedDate
-            ? `<span id="${cachedDateId}" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em;">Last Updated: ${cachedDate}</span>`
-            : `<span id="${cachedDateId}" style="margin-left: 10px; color: var(--disabled-text); font-style: italic; font-size: 0.8em; display: none;"></span>`;
-        const popularityDisplay = `
-            <span id="tunebook-count">${tunebookCount} tunebook${tunebookCount !== 1 ? 's' : ''}</span>
-            <button id="refresh-tunebook" onclick="refreshTunebookCount(${sessionTune.tune_id})" style="margin-left: 10px; padding: 4px 8px; font-size: 0.9em; cursor: pointer; background-color: var(--light); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 3px; line-height: 1;" title="Refresh popularity count">↻</button>
-            ${cachedDateDisplay}
-        `;
-
-        // Build play history instances list
-        const playCount = sessionTune.times_played || 0;
-        let playInstancesHtml = '';
-        if (sessionTune.play_instances && sessionTune.play_instances.length > 0) {
-            playInstancesHtml = `
-                <ul style="list-style: none; padding: 0; margin-top: 10px;">
-                    ${sessionTune.play_instances.map(instance => {
-                        const dateStr = instance.date || 'Unknown date';
-                        const instanceId = instance.session_instance_id || dateStr;
-                        const positionStr = instance.position_in_set ? `#${instance.position_in_set}` : '';
-                        let overridesHtml = '';
-                        const overrides = [];
-                        if (instance.name_override) overrides.push(`Name: "${instance.name_override}"`);
-                        if (instance.key_override) overrides.push(`Key: ${instance.key_override}`);
-                        if (instance.setting_id_override) overrides.push(`Setting: #${instance.setting_id_override}`);
-                        if (overrides.length > 0) {
-                            overridesHtml = `<div style="font-style: italic; color: #856404; font-size: 0.9em; margin-top: 4px;">${overrides.join(' • ')}</div>`;
-                        }
-                        return `
-                            <li style="margin: 8px 0; padding: 10px; background-color: var(--hover-bg, #f8f9fa); border-radius: 4px;">
-                                <div style="font-weight: bold; color: var(--primary, #007bff);">
-                                    <a href="/sessions/${sessionPath}/${instanceId}?tune=${sessionTune.tune_id}" style="color: var(--primary);">${dateStr}</a>
-                                </div>
-                                <div style="font-size: 0.9em; color: var(--disabled-text, #666); margin-top: 4px;">
-                                    Position in set: ${positionStr}
-                                    ${overridesHtml}
-                                </div>
-                            </li>
-                        `;
-                    }).join('')}
-                </ul>
-            `;
-        } else {
-            playInstancesHtml = `<p style="color: var(--disabled-text); font-style: italic; margin-top: 10px;">No instances recorded yet.</p>`;
-        }
-
-        modalContent.innerHTML = `
-            <button class="modal-close-btn" onclick="closeTuneDetailModal()" title="Close">&times;</button>
-            <div class="modal-info-section">
-                <h2 class="modal-tune-title">${displayName} ${thesessionLinkIcon}</h2>
-                <div class="modal-info-line">
-                    <strong>Type:</strong> <span class="tune-type">${sessionTune.tune_type || 'Unknown'}</span>
-                </div>
-                <div id="tune-list-status-container"></div>
-                ${isLoggedIn ? `
-                <div class="modal-info-line">
-                    <strong>We also call it:</strong><br>
-                    <input type="text" id="aliases-input" value="${aliasesValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Comma-separated aliases">
-                </div>
-                <div class="modal-info-line">
-                    <strong>Our Setting:</strong><br>
-                    <input type="text" id="setting-id-input" value="${settingIdValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Setting ID (number)">
-                </div>
-                <div class="modal-info-line">
-                    <strong>Our Key:</strong><br>
-                    <input type="text" id="key-input" value="${keyValue}" style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; background-color: var(--bg-color); color: var(--text-color); margin-top: 6px;" placeholder="Key (e.g., D, G, Am)">
-                </div>
-                <div class="modal-button-group" style="margin-top: 12px;">
-                    <button class="modal-cancel-btn" onclick="closeTuneDetailModal()">Cancel</button>
-                    <button id="save-tune-details-btn" class="modal-save-btn" onclick="saveTuneDetails(${sessionTune.tune_id})">Save</button>
-                </div>
-                ` : `
-                <div class="modal-info-line">
-                    <strong>We also call it:</strong> ${aliasesValue || '(none)'}
-                </div>
-                <div class="modal-info-line">
-                    <strong>Our Setting:</strong> ${settingIdValue ? '#' + settingIdValue : '(none)'}
-                </div>
-                <div class="modal-info-line">
-                    <strong>Our Key:</strong> ${keyValue || '(none)'}
-                </div>
-                `}
-                <div class="modal-info-line"><strong>TheSession.org Popularity:</strong> ${popularityDisplay}</div>
-            </div>
-            <div class="modal-play-history">
-                <div class="modal-info-line">
-                    <strong>Play History</strong><br>
-                    <div style="margin-top: 6px;">Total times played in this session: ${playCount}</div>
-                    ${playInstancesHtml}
-                </div>
-            </div>
-        `;
-
-        // Display tune list status if user is logged in and we have the data
-        if (isLoggedIn && sessionTune.person_tune_status) {
-            renderTuneListStatus(
-                sessionTune.tune_id,
-                sessionTune.person_tune_status.on_list,
-                sessionTune.person_tune_status.on_list ? {
-                    learn_status: sessionTune.person_tune_status.learn_status,
-                    heard_count: sessionTune.person_tune_status.heard_count
-                } : null
-            );
-        }
-    }
-
-    function fetchAndDisplayTuneListStatus(tuneId) {
-        fetch(`/api/person/tunes/${tuneId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    renderTuneListStatus(tuneId, data.on_list, data.tune_status);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching tune list status:', error);
-            });
-    }
-
-    function renderTuneListStatus(tuneId, onList, tuneStatus) {
-        const container = document.getElementById('tune-list-status-container');
-        if (!container) return;
-
-        if (onList && tuneStatus) {
-            // Tune IS on the list - color by status
-            const learnStatus = tuneStatus.learn_status;
-            const heardCount = tuneStatus.heard_count;
-            const showHeardSection = learnStatus !== 'learned';
-            const pluralS = heardCount !== 1 ? 's' : '';
-            const statusClass = learnStatus.replace(/ /g, '-'); // "want to learn" -> "want-to-learn"
-
-            container.innerHTML = `
-                <div class="modal-info-line tune-list-box tune-list-box-${statusClass}" style="padding: 10px 12px; border-radius: 4px; margin-bottom: 12px;">
-                    <div style="margin-bottom: ${showHeardSection ? '8px' : '0'};">
-                        This tune is on your list, as
-                        <select id="tune-status-select" onchange="updateTuneStatus(${tuneId})" class="tune-list-select" style="padding: 4px 8px; border-radius: 3px; margin: 0 2px;">
-                            <option value="want to learn" ${learnStatus === 'want to learn' ? 'selected' : ''}>Want To Learn</option>
-                            <option value="learning" ${learnStatus === 'learning' ? 'selected' : ''}>Learning</option>
-                            <option value="learned" ${learnStatus === 'learned' ? 'selected' : ''}>Learned</option>
-                        </select>
-                    </div>
-                    ${showHeardSection ? `
-                    <div class="heard-count-line">
-                        <button onclick="incrementHeardCount(${tuneId})" class="tune-list-button tune-list-button-heard">
-                            I heard it again!
-                        </button>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-        } else {
-            // Tune is NOT on the list - show red state
-            container.innerHTML = `
-                <div class="modal-info-line tune-list-box tune-list-box-not-on-list" style="padding: 10px 12px; border-radius: 4px; margin-bottom: 12px;">
-                    <div style="margin-bottom: 8px;">
-                        This tune isn't on your list!
-                    </div>
-                    <div>
-                        <button onclick="addTuneToList(${tuneId})" class="tune-list-button tune-list-button-add">
-                            Add It
-                        </button>
-                        <span style="margin: 0 4px;">to</span>
-                        <select id="add-status-select" class="tune-list-select" style="padding: 4px 8px; border-radius: 3px;">
-                            <option value="want to learn" selected>Want To Learn</option>
-                            <option value="learning">Learning</option>
-                            <option value="learned">Learned</option>
-                        </select>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    function addTuneToList(tuneId) {
-        const statusSelect = document.getElementById('add-status-select');
-        const learnStatus = statusSelect ? statusSelect.value : 'want to learn';
-
-        fetch('/api/person/tunes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
+        TuneDetailModal.show({
+            context: 'session',
+            tuneId: tuneId,
+            apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tuneId}`,
+            onSave: function() {
+                // Reload to refresh the tune list
+                window.location.reload();
             },
-            body: JSON.stringify({
-                tune_id: tuneId,
-                learn_status: learnStatus,
-                heard_count: 1
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Re-fetch and render the updated status
-                fetchAndDisplayTuneListStatus(tuneId);
-            } else {
-                console.error('Failed to add tune:', data.error);
-                alert('Failed to add tune to list');
+            additionalData: {
+                tuneName: tuneName,
+                tuneType: tuneType,
+                isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }}
             }
-        })
-        .catch(error => {
-            console.error('Error adding tune:', error);
-            alert('Error adding tune to list');
         });
-    }
-
-    function updateTuneStatus(tuneId) {
-        const statusSelect = document.getElementById('tune-status-select');
-        const learnStatus = statusSelect ? statusSelect.value : 'want to learn';
-
-        fetch(`/api/person/tunes/${tuneId}/status`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                learn_status: learnStatus
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Show toast message
-                showToast('Status updated');
-                // Re-fetch and render to update the heard count visibility
-                fetchAndDisplayTuneListStatus(tuneId);
-            } else {
-                console.error('Failed to update status:', data.error);
-                alert('Failed to update status');
-            }
-        })
-        .catch(error => {
-            console.error('Error updating status:', error);
-            alert('Error updating status');
-        });
-    }
-
-    function incrementHeardCount(tuneId) {
-        fetch(`/api/person/tunes/${tuneId}/increment_heard`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Show toast message
-                showToast(data.message);
-
-                // Update the heard count display
-                const heardCountSpan = document.getElementById('heard-count');
-                if (heardCountSpan) {
-                    heardCountSpan.textContent = data.new_count;
-                }
-
-                // Close modal after 1 second
-                setTimeout(() => {
-                    closeTuneDetailModal();
-                }, 1000);
-            } else {
-                console.error('Failed to increment count:', data.error);
-                alert('Failed to increment heard count');
-            }
-        })
-        .catch(error => {
-            console.error('Error incrementing count:', error);
-            alert('Error incrementing heard count');
-        });
-    }
-
-    function showToast(message) {
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #28a745;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 4px;
-            font-size: 14px;
-            z-index: 10002;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        `;
-        document.body.appendChild(toast);
-
-        // Remove toast after 2 seconds
-        setTimeout(() => {
-            toast.remove();
-        }, 2000);
-    }
-
-    function refreshTunebookCount(tuneId) {
-        const button = document.getElementById('refresh-tunebook');
-        const countSpan = document.getElementById('tunebook-count');
-        const dateSpan = document.getElementById('cached-date-display');
-
-        // Disable button and show loading state
-        button.disabled = true;
-        const originalButtonText = button.textContent;
-        button.textContent = '⟳';
-
-        // Make API call
-        fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}/refresh_tunebook_count`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Update the display with new count
-                const newCount = data.new_count;
-                const suffix = newCount === 1 ? '' : 's';
-                countSpan.textContent = `${newCount} tunebook${suffix}`;
-
-                // Update the cached date display
-                if (data.cached_date && dateSpan) {
-                    dateSpan.textContent = `Last Updated: ${data.cached_date}`;
-                    dateSpan.style.display = '';
-                } else if (dateSpan) {
-                    dateSpan.style.display = 'none';
-                }
-
-                // Show a temporary success message
-                if (data.old_count !== data.new_count) {
-                    button.textContent = '✓';
-                    button.style.backgroundColor = '#28a745';
-                    button.style.color = 'white';
-                } else {
-                    button.textContent = '−';
-                    button.style.backgroundColor = '#6c757d';
-                    button.style.color = 'white';
-                }
-            } else {
-                // Show error message
-                button.textContent = '✗';
-                button.style.backgroundColor = '#dc3545';
-                button.style.color = 'white';
-                console.error('Error:', data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            button.textContent = '✗';
-            button.style.backgroundColor = '#dc3545';
-            button.style.color = 'white';
-        })
-        .finally(() => {
-            // Reset button after 2 seconds
-            setTimeout(() => {
-                button.disabled = false;
-                button.textContent = originalButtonText;
-                button.style.backgroundColor = '';
-                button.style.color = '';
-            }, 2000);
-        });
-    }
-
-    function saveTuneDetails(tuneId) {
-        const aliasesInput = document.getElementById('aliases-input');
-        const settingIdInput = document.getElementById('setting-id-input');
-        const keyInput = document.getElementById('key-input');
-        const saveButton = document.getElementById('save-tune-details-btn');
-
-        // Get values
-        const aliases = aliasesInput.value.trim();
-        const settingId = settingIdInput.value.trim();
-        const key = keyInput.value.trim();
-
-        // Disable button and show saving state
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
-
-        // Make API call to save the tune details
-        fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                aliases: aliases,
-                setting_id: settingId,
-                key: key
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                saveButton.textContent = 'Saved!';
-                saveButton.style.backgroundColor = '#28a745';
-
-                // Update the tune list if needed (refresh setting_id in memory)
-                const tuneIndex = allTunes.findIndex(t => t[0] === tuneId);
-                if (tuneIndex !== -1) {
-                    allTunes[tuneIndex][5] = settingId ? parseInt(settingId) : null;
-                }
-
-                setTimeout(() => {
-                    saveButton.disabled = false;
-                    saveButton.textContent = 'Save';
-                    saveButton.style.backgroundColor = '';
-                }, 1500);
-            } else {
-                saveButton.textContent = 'Error';
-                saveButton.style.backgroundColor = '#dc3545';
-                console.error('Error saving tune details:', data.message);
-
-                setTimeout(() => {
-                    saveButton.disabled = false;
-                    saveButton.textContent = 'Save';
-                    saveButton.style.backgroundColor = '';
-                }, 2000);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            saveButton.textContent = 'Error';
-            saveButton.style.backgroundColor = '#dc3545';
-
-            setTimeout(() => {
-                saveButton.disabled = false;
-                saveButton.textContent = 'Save';
-                saveButton.style.backgroundColor = '';
-            }, 2000);
-        });
-    }
-
-    function closeTuneDetailModal() {
-        const modal = document.getElementById('tune-detail-modal');
-
-        // Remove tune parameter from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        urlParams.delete('tune');
-        const newURL = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
-        window.history.replaceState({}, '', newURL);
-
-        // Remove 'show' class to trigger slide-out animation
-        modal.classList.remove('show');
-
-        // Wait for animation to complete before hiding
-        setTimeout(() => {
-            modal.style.display = 'none';
-        }, 300);
     }
 
     // Active Session Instance Highlighting
@@ -3735,4 +3153,5 @@
         });
     }
 </script>
+<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 {% endblock %}

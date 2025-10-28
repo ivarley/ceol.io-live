@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -85,14 +86,8 @@
     </div>
 </div>
 
-<!-- Tune Detail Modal -->
-<div id="tune-detail-modal" class="modal-overlay">
-    <div class="modal-dialog">
-        <div id="tune-detail-content">
-            <!-- Content will be inserted by JavaScript -->
-        </div>
-    </div>
-</div>
+<!-- Unified Tune Detail Modal -->
+{% include 'tune_detail_modal.html' %}
 
 <script>
 // Helper functions for API calls
@@ -398,78 +393,6 @@ function setupEventListeners() {
             applyFilters();
         });
     }
-
-    // Modal overlay click handler - close when clicking outside
-    const modalOverlay = document.getElementById('tune-detail-modal');
-
-    // Add click handler to modal dialog to stop propagation
-    const setupModalDialogHandler = () => {
-        const modalDialog = modalOverlay.querySelector('.modal-dialog');
-        if (modalDialog) {
-            modalDialog.addEventListener('click', function(event) {
-                console.log('Click inside modal-dialog, stopping propagation');
-                console.log('Clicked element:', event.target.tagName, event.target.className);
-                event.stopPropagation();
-            });
-            console.log('Modal dialog click handler attached');
-        } else {
-            console.log('Modal dialog not found yet, will retry');
-            // Try again after a short delay (in case modal hasn't been rendered yet)
-            setTimeout(setupModalDialogHandler, 100);
-        }
-    };
-
-    // Initial setup
-    setupModalDialogHandler();
-
-    modalOverlay.addEventListener('click', function(event) {
-        console.log('=== MODAL OVERLAY CLICK EVENT ===');
-        console.log('event.target:', event.target);
-        console.log('event.target.tagName:', event.target.tagName);
-        console.log('event.target.className:', event.target.className);
-        console.log('event.target.id:', event.target.id);
-        console.log('event.target.classList:', event.target.classList);
-        console.log('Has modal-overlay class:', event.target.classList.contains('modal-overlay'));
-        console.log('event.currentTarget:', event.currentTarget);
-        console.log('event.currentTarget.id:', event.currentTarget.id);
-        console.log('Time since modal shown:', Date.now() - modalShowTime, 'ms');
-        console.log('Event detail (click count):', event.detail);
-        console.log('Event isTrusted:', event.isTrusted);
-        console.log('Event type:', event.type);
-        console.log('Event bubbles:', event.bubbles);
-        console.log('Event cancelable:', event.cancelable);
-        console.log('Event defaultPrevented:', event.defaultPrevented);
-
-        // Log parent elements to understand the hierarchy
-        let parent = event.target.parentElement;
-        let depth = 0;
-        console.log('Parent chain:');
-        while (parent && depth < 5) {
-            console.log(`  ${depth}: ${parent.tagName}.${parent.className} #${parent.id}`);
-            parent = parent.parentElement;
-            depth++;
-        }
-
-        // Ignore clicks that happen too soon after modal opens (within 500ms)
-        // This prevents the synthesized click from touch events from closing the modal
-        const timeSinceShown = Date.now() - modalShowTime;
-        if (timeSinceShown < 500) {
-            console.log('RESULT: Ignoring click - modal just opened', timeSinceShown, 'ms ago');
-            return;
-        }
-
-        // Only close if clicking directly on the overlay (not on the modal dialog or its children)
-        // event.target is the overlay AND event.currentTarget is the overlay means we clicked
-        // directly on the overlay background, not on any child elements
-        if (event.target === event.currentTarget && event.target.classList.contains('modal-overlay')) {
-            console.log('RESULT: Closing modal - clicked directly on overlay background');
-            closeTuneDetailModal();
-        } else {
-            console.log('RESULT: NOT closing modal - clicked inside modal dialog');
-            console.log('  Clicked element:', event.target.tagName, event.target.className);
-        }
-        console.log('=== END MODAL CLICK EVENT ===');
-    });
 
     // Setup swipe-to-close for mobile
     setupSwipeToClose();
@@ -1377,79 +1300,34 @@ function incrementHeardCountWithToast(personTuneId, oldCount) {
 }
 
 function showTuneDetail(personTuneId, event) {
-    console.log('=== showTuneDetail called ===');
-    console.log('personTuneId:', personTuneId);
-    console.log('Event passed to showTuneDetail:', event);
+    // Stop the click from propagating
     if (event) {
-        console.log('Event type:', event.type);
-        console.log('Event target:', event.target);
-        console.log('Event currentTarget:', event.currentTarget);
-        console.log('Event bubbles:', event.bubbles);
-        console.log('Event isTrusted:', event.isTrusted);
-    }
-
-    // Stop the click from propagating to prevent it from immediately closing the modal
-    if (event) {
-        console.log('Calling event.stopPropagation()');
         event.stopPropagation();
-        console.log('After stopPropagation');
-    } else {
-        console.log('WARNING: No event passed to showTuneDetail');
     }
 
-    // Find the tune in our local data to get basic info
+    // Find the tune in our local data to get basic info for loading state
     const tune = allTunes.find(t => t.person_tune_id === personTuneId);
     if (!tune) {
         showMessage('Tune not found', 'error');
         return;
     }
 
-    // Cancel any in-progress modal fetch
-    if (modalFetchController) {
-        console.log('Aborting previous modal fetch request');
-        modalFetchController.abort();
-    }
-
-    // Create new AbortController for this fetch
-    modalFetchController = new AbortController();
-    console.log('Created new AbortController for modal fetch');
-
-    // Show modal immediately with basic info
-    displayTuneDetailModalBasic(tune);
-
-    // Fetch full details in the background with abort signal
-    fetchWithRetry(`/api/my-tunes/${personTuneId}`, {
-        signal: modalFetchController.signal
-    })
-        .then(response => {
-            if (!response.ok) {
-                const errorInfo = handleApiError(null, response);
-                if (errorInfo.action) {
-                    errorInfo.action();
-                    return Promise.reject(new Error(errorInfo.message));
-                }
-                throw new Error(errorInfo.message);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Update modal with full details
-                displayTuneDetailModalFull(data.person_tune);
-            } else {
-                showMessage(data.error || 'Failed to load tune details', 'error');
-            }
-        })
-        .catch(error => {
-            // Don't show error if request was aborted
-            if (error.name === 'AbortError') {
-                console.log('Modal fetch request was aborted');
-                return;
-            }
-            console.error('Error loading tune details:', error);
-            const errorInfo = handleApiError(error);
-            showMessage(errorInfo.message, 'error');
-        });
+    // Use the unified tune detail modal
+    TuneDetailModal.show({
+        context: 'my_tunes',
+        tuneId: tune.tune_id,
+        apiEndpoint: `/api/my-tunes/${personTuneId}`,
+        onSave: function() {
+            // Refresh the tunes list
+            fetchAndRenderTunes();
+        },
+        additionalData: {
+            personTuneId: personTuneId,
+            tuneName: tune.tune_name,
+            tuneType: tune.tune_type,
+            isUserLoggedIn: true
+        }
+    });
 }
 
 function displayTuneDetailModalBasic(tune) {
@@ -2204,4 +2082,5 @@ function handleAddTuneClick(event) {
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/swipe-listener.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 {% endblock %}
