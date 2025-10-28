@@ -683,7 +683,7 @@ def session_handler(full_path):
                     instances_by_day[day_key].sort(key=lambda x: (x['start_time'] or datetime.time.min))
 
                 for year in instances_by_year:
-                    instances_by_year[year].sort(key=lambda x: (x['date'], x['start_time'] or datetime.time.min))
+                    instances_by_year[year].sort(key=lambda x: (x['date'], x['start_time'] or datetime.time.min), reverse=True)
 
                 # Sort years in descending order (for regular sessions)
                 sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
