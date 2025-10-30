@@ -1182,9 +1182,13 @@
         // Find the person_tune_id from current config if available
         let personTuneId = currentConfig.additionalData?.personTuneId;
 
-        // If we don't have it, we need to look it up
-        // For now, we'll use the tune_id based update endpoint
-        fetch(`/api/person/tunes/${tuneId}`, {
+        // If we have person_tune_id, use the my-tunes endpoint (preferred)
+        // Otherwise fall back to the tune_id based status endpoint
+        const endpoint = personTuneId
+            ? `/api/my-tunes/${personTuneId}`
+            : `/api/person/tunes/${tuneId}/status`;
+
+        fetch(endpoint, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
