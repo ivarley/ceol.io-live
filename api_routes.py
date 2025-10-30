@@ -1359,7 +1359,7 @@ def get_session_tune_count_ajax(session_path, date):
 
 
 @login_required
-def delete_session_instance_ajax(session_path, date):
+def delete_session_instance_ajax(session_path, date_or_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1380,7 +1380,7 @@ def delete_session_instance_ajax(session_path, date):
             SELECT session_instance_id FROM session_instance
             WHERE session_id = %s AND date = %s
         """,
-            (session_id, date),
+            (session_id, date_or_id),
         )
         instance_result = cur.fetchone()
 
@@ -1408,7 +1408,30 @@ def delete_session_instance_ajax(session_path, date):
         for tune_record in tune_records:
             save_to_history(cur, "session_instance_tune", "DELETE", tune_record[0])
 
-        # Explicitly delete session_instance_tune records first
+        # Get all session_instance_person records to save to history before deletion
+        cur.execute(
+            """
+            SELECT session_instance_id, person_id FROM session_instance_person
+            WHERE session_instance_id = %s
+        """,
+            (session_instance_id,),
+        )
+        person_records = cur.fetchall()
+
+        # Save each person record to history before deletion
+        # record_id should be a tuple (session_instance_id, person_id)
+        for person_record in person_records:
+            save_to_history(cur, "session_instance_person", "DELETE", person_record)
+
+        # Delete session_instance_person records first (attendance)
+        cur.execute(
+            """
+            DELETE FROM session_instance_person WHERE session_instance_id = %s
+        """,
+            (session_instance_id,),
+        )
+
+        # Delete session_instance_tune records
         cur.execute(
             """
             DELETE FROM session_instance_tune WHERE session_instance_id = %s
@@ -1416,7 +1439,7 @@ def delete_session_instance_ajax(session_path, date):
             (session_instance_id,),
         )
 
-        # Then delete the session instance
+        # Finally delete the session instance
         cur.execute(
             """
             DELETE FROM session_instance WHERE session_instance_id = %s
@@ -1431,17 +1454,29 @@ def delete_session_instance_ajax(session_path, date):
         return jsonify(
             {
                 "success": True,
-                "message": f"Session instance for {date} deleted successfully!",
+                "message": f"Session instance for {date_or_id} deleted successfully!",
             }
         )
 
     except Exception as e:
+        # Rollback on error
+        if 'conn' in locals():
+            conn.rollback()
+            if 'cur' in locals():
+                cur.close()
+            conn.close()
+
+        # Log the full error for debugging
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error deleting session instance: {error_details}")
+
         return jsonify(
             {
                 "success": False,
                 "message": f"Failed to delete session instance: {str(e)}",
             }
-        )
+        ), 500
 
 
 @login_required
@@ -8265,12 +8300,27 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         cur = conn.cursor()
 
         # Get session_id
+        # First try the session_path as-is
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
-        if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
 
-        session_id = session_result[0]
+        # If not found, check if session_path + date_or_id forms a valid session path
+        # This handles cases like "oflahertys/2025" where routing splits it incorrectly
+        if not session_result:
+            combined_path = f"{session_path}/{date_or_id}"
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (combined_path,))
+            combined_result = cur.fetchone()
+
+            if combined_result:
+                # The date_or_id was actually part of the session path
+                # Close this connection and redirect to session-level tune detail logic
+                cur.close()
+                conn.close()
+                return get_session_tune_detail(combined_path, tune_id)
+            else:
+                return jsonify({"success": False, "message": "Session not found"}), 404
+        else:
+            session_id = session_result[0]
 
         # Get session_instance_id
         session_instance_id = get_session_instance_id(cur, session_id, date_or_id)

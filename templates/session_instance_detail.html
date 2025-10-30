@@ -1514,6 +1514,14 @@ document.addEventListener('DOMContentLoaded', function() {
         container.setAttribute('contenteditable', 'false');
     }
 
+    // Check if mode=edit query parameter is present
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    if (mode === 'edit' && !window.sessionInstanceConfig.isLogComplete) {
+        // Automatically enter edit mode if mode=edit is in URL
+        window.enterEditMode();
+    }
+
     // Prevent mobile keyboard from appearing in view mode
     if (container) {
         // Prevent focus events in view mode - this is the key fix for mobile

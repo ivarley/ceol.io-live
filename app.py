@@ -37,9 +37,7 @@ logging.basicConfig(
     ]
 )
 
-# Custom URL converter that ONLY matches dates in YYYY-MM-DD format
-# This prevents ambiguity with session paths ending in numbers (like "oflahertys/2025")
-# Session instances should always be accessed by date, not by integer ID
+# Custom URL converter for date or ID
 class DateOrIdConverter(BaseConverter):
     """Matches dates in YYYY-MM-DD format or numeric IDs"""
     regex = r'\d{4}-\d{2}-\d{2}|\d+'

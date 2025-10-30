@@ -1806,14 +1806,14 @@ def admin_sessions_list():
                 latest_instance_date,
             ) = row
 
-            # Format location for display
+            # Format location for display (city/state/country only, not venue name)
             location_parts = []
-            if location_name:
-                location_parts.append(location_name)
             if city:
                 location_parts.append(city)
             if state:
                 location_parts.append(state)
+            if country:
+                location_parts.append(country)
             location_display = ", ".join(location_parts) if location_parts else "Unknown"
 
             # Format player count display like "65 (12 regulars)"

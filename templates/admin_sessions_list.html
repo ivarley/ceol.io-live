@@ -29,7 +29,8 @@
                 
                 <div id="sessions-content">
                     {% if sessions %}
-                    <div class="table-responsive">
+                    <!-- Desktop Table View -->
+                    <div class="table-responsive desktop-view">
                         <table class="table table-striped">
                             <thead>
                                 <tr>
@@ -92,6 +93,78 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- Mobile Card View -->
+                    <div class="mobile-view" id="sessions-cards">
+                        {% for session in sessions %}
+                        <div class="session-card" data-session-name="{{ session.name|lower }}" data-session-location="{{ session.location_display|lower }}">
+                            <div class="session-card-header">
+                                <a href="/admin/sessions/{{ session.path }}" class="session-card-title">{{ session.name }}</a>
+                                <span class="session-card-status">
+                                    {% if session.termination_date %}
+                                        <span class="badge badge-danger">Terminated</span>
+                                    {% else %}
+                                        <span class="badge badge-success">Active</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="session-card-body">
+                                <div class="session-card-row">
+                                    <span class="session-card-label">Venue:</span>
+                                    <span class="session-card-value">{{ session.location_name or '-' }}</span>
+                                </div>
+                                <div class="session-card-row">
+                                    <span class="session-card-label">Location:</span>
+                                    <span class="session-card-value">{{ session.location_display }}</span>
+                                </div>
+                                <div class="session-card-row">
+                                    <span class="session-card-label">TheSession.org:</span>
+                                    <span class="session-card-value">
+                                        {% if session.thesession_id %}
+                                            <a href="https://thesession.org/sessions/{{ session.thesession_id }}" target="_blank" rel="noopener noreferrer">
+                                                {{ session.thesession_id }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="session-card-stats">
+                                    <div class="session-card-stat">
+                                        <div class="session-card-stat-label">Players</div>
+                                        <div class="session-card-stat-value">
+                                            {% if session.total_players > 0 %}
+                                                <span class="badge bg-primary">{{ session.player_count_display }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="session-card-stat">
+                                        <div class="session-card-stat-label">Instances</div>
+                                        <div class="session-card-stat-value">
+                                            {% if session.instance_count > 0 %}
+                                                <span class="badge bg-success">{{ session.instance_count }}</span>
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="session-card-stat">
+                                        <div class="session-card-stat-label">Latest</div>
+                                        <div class="session-card-stat-value">
+                                            {% if session.latest_instance_display %}
+                                                {{ session.latest_instance_display }}
+                                            {% else %}
+                                                <span class="text-muted">None</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                     {% else %}
                     <div class="alert alert-info" role="alert">
@@ -487,43 +560,152 @@ body.modal-open {
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
+/* Mobile Card View Styles */
+.mobile-view {
+    display: none;
+}
+
+.session-card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 4px var(--dropdown-shadow);
+}
+
+.session-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.session-card-title {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.1rem;
+    flex: 1;
+    margin-right: 12px;
+}
+
+.session-card-title:hover {
+    text-decoration: underline;
+}
+
+.session-card-status {
+    flex-shrink: 0;
+}
+
+.badge-danger {
+    background-color: #dc3545;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.badge-success {
+    background-color: #28a745;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.session-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.session-card-row {
+    display: flex;
+    font-size: 0.9rem;
+}
+
+.session-card-label {
+    font-weight: 500;
+    color: var(--text-color);
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.session-card-value {
+    color: var(--secondary-text);
+    flex: 1;
+}
+
+.session-card-value a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.session-card-value a:hover {
+    text-decoration: underline;
+}
+
+.session-card-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.session-card-stat {
+    text-align: center;
+}
+
+.session-card-stat-label {
+    font-size: 0.75rem;
+    color: var(--secondary-text);
+    margin-bottom: 4px;
+}
+
+.session-card-stat-value {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
-    .table-responsive {
-        font-size: 0.85rem;
+    /* Hide desktop table, show mobile cards */
+    .desktop-view {
+        display: none !important;
     }
-    
-    .session-venue,
-    .session-location,
-    .session-thesession,
-    .session-latest-instance {
-        font-size: 0.8rem;
+
+    .mobile-view {
+        display: block;
     }
-    
-    .session-player-count,
-    .session-instance-count {
-        font-size: 0.8rem;
-    }
-    
-    .badge {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.4rem;
-    }
-    
+
     /* Ensure mobile margin reduction matches other admin pages */
     body .docs-content {
         padding: 0.5rem !important;
     }
-    
+
     body .docs-article {
         padding: 0.5rem !important;
     }
-    
+
     body .docs-content-inner .container {
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
         padding-top: 0 !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
+    }
+
+    .session-card {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .session-card-title {
+        font-size: 1rem;
     }
 }
 </style>
@@ -552,21 +734,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Make functions available globally for onclick handlers
+    window.hideAddSessionModal = hideAddSessionModal;
+    window.showAddSessionModal = showAddSessionModal;
+
     function filterSessions() {
         const searchTerm = document.getElementById('sessions-search').value.toLowerCase();
         const tbody = document.getElementById('sessions-tbody');
         const rows = tbody.getElementsByTagName('tr');
+        const cardsContainer = document.getElementById('sessions-cards');
+        const cards = cardsContainer ? cardsContainer.getElementsByClassName('session-card') : [];
         let visibleCount = 0;
-        
+
+        // Filter table rows (desktop view)
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const name = row.getAttribute('data-session-name') || '';
             const location = row.getAttribute('data-session-location') || '';
-            
+
             // Check if search term matches any of the fields
-            const matches = name.includes(searchTerm) || 
+            const matches = name.includes(searchTerm) ||
                           location.includes(searchTerm);
-            
+
             if (matches) {
                 row.style.display = '';
                 visibleCount++;
@@ -574,11 +763,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 row.style.display = 'none';
             }
         }
-        
+
+        // Filter cards (mobile view)
+        for (let i = 0; i < cards.length; i++) {
+            const card = cards[i];
+            const name = card.getAttribute('data-session-name') || '';
+            const location = card.getAttribute('data-session-location') || '';
+
+            // Check if search term matches any of the fields
+            const matches = name.includes(searchTerm) ||
+                          location.includes(searchTerm);
+
+            if (matches) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        }
+
         // Show "no results" message if no sessions match
         const sessionsContent = document.getElementById('sessions-content');
         const existingNoResults = document.getElementById('no-search-results');
-        
+
         if (visibleCount === 0 && searchTerm) {
             if (!existingNoResults) {
                 const noResultsDiv = document.createElement('div');
