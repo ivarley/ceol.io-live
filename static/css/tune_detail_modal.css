@@ -168,6 +168,13 @@
     gap: 6px;
 }
 
+.configure-field-group-inline {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: baseline;
+}
+
 .configure-label {
     font-size: 14px;
     font-weight: 500;
