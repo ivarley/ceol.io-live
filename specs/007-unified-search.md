@@ -2,6 +2,8 @@
 
 We're going to create a unified tune search experience from all the places that look up tunes by name in the system (not including the javascript search-to-filter-current-list functionality, which is a pure text search over the contents of the current view, shown in several places).
 
+## Complete
+
 To start with, do an analysis of the 3 key places that tune search happens now:
 - On my_tunes, when you click "Add", it brings up a modal to search by name in the tune table and, if that has no results, directly against thesession.org
 - On session_detail, when your on-screen filter turns up no results, it works the same way as my-tunes
@@ -14,3 +16,11 @@ First, let's extract the shared modal from the first two cases and make it reusa
   1. Extract shared autocomplete component from my_tunes_add.html and session_tune_add.html
   2. Create single template/partial for the search UI (they're ~90% identical)
   3. Share JavaScript search logic - currently duplicated across both pages
+
+## To Do
+
+We're going to add a third place to use this shared search modal: the session instance detail page.
+
+In "unlinked" (gray) state, there's a menu item that says "Link"; change it to "Manually Link".
+
+In both "unlinked" (gray) and "multiple match" (red) states, add a new item at the top of the list that says "Search By Name", which opens a new modal version of the same consolidated search we use on my-tunes/add and session tune / add. It's important for it to be a modal (not a redirect) because we don't want to lose any in-progress edits on the log. In this case, the modal only shows the name search and results, not the setting or notes fields, and when you choose a result from the list it immediately closes the modal and inserts that as a linked (blue) tune pill with that ID.
