@@ -2420,6 +2420,15 @@
             }
         }
 
+        // Check for server-provided person_id (from path-based URLs)
+        const personIdFromServer = {{ person_id if person_id else 'null' }};
+        if (personIdFromServer) {
+            // Show the person detail modal
+            setTimeout(() => {
+                showPersonDetail(personIdFromServer);
+            }, 100);
+        }
+
         // Event listeners for buttons and modals
         const addSessionBtn = document.getElementById('add-session-btn');
         if (addSessionBtn) {
@@ -2976,6 +2985,13 @@
 
         if (!modal || !modalContent) return;
 
+        // Update URL to include person ID
+        let basePath = window.location.pathname;
+        // Remove existing person ID, or any tab suffix
+        basePath = basePath.replace(/\/people\/\d+$/, '').replace(/\/(tunes|logs|people)$/, '');
+        const newPath = `${basePath}/people/${personId}`;
+        window.history.pushState({}, '', newPath);
+
         // Show modal immediately with loading state
         modalContent.innerHTML = `
             <button class="modal-close-btn" onclick="closePersonDetailModal()" title="Close">&times;</button>
@@ -3096,6 +3112,10 @@
     function closePersonDetailModal() {
         const modal = document.getElementById('person-detail-modal');
         if (!modal) return;
+
+        // Remove person ID from URL
+        let newPath = window.location.pathname.replace(/\/people\/\d+$/, '/people');
+        window.history.pushState({}, '', newPath);
 
         modal.classList.remove('show');
         setTimeout(() => {

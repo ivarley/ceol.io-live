@@ -219,12 +219,17 @@ def session_people(session_path):
     return session_handler(session_path, active_tab='people')
 
 
+def session_person_detail(session_path, person_id):
+    """Show session detail page with people tab active and person modal open."""
+    return session_handler(session_path, active_tab='people', person_id=person_id)
+
+
 def session_logs(session_path):
     """Show session detail page with logs tab active."""
     return session_handler(session_path, active_tab='logs')
 
 
-def session_handler(full_path, active_tab=None, tune_id=None):
+def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
 
@@ -621,6 +626,7 @@ def session_handler(full_path, active_tab=None, tune_id=None):
                     today_in_session_tz=today_in_session_tz,
                     active_tab=active_tab,
                     tune_id=tune_id,
+                    person_id=person_id,
                     default_tab=default_tab,
                 )
             else:
