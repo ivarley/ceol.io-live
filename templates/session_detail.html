@@ -1525,6 +1525,11 @@
                                 <option value="">All Types</option>
                             </select>
                         </div>
+                        {% if is_logged_in %}
+                        <div class="filter-group">
+                            <a href="/sessions/{{ session.path }}/tunes/add" class="btn btn-primary" style="padding: 8px 16px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; white-space: nowrap;">Add</a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -2407,9 +2412,10 @@
         const params = new URLSearchParams(window.location.search);
         const hasShow = params.has('show');
         const hasAdded = params.has('added');
+        const hasAlready = params.has('already');
 
         // Only proceed if we have at least one of these parameters
-        if (hasShow || hasAdded) {
+        if (hasShow || hasAdded || hasAlready) {
             hasScrolledToTune = true; // Mark as handled
             const tuneId = hasShow ? params.get('show') : null;
 
@@ -2460,6 +2466,7 @@
                         const currentParams = new URLSearchParams(window.location.search);
                         currentParams.delete('show');
                         currentParams.delete('added');
+                        currentParams.delete('already');
                         const newURL = currentParams.toString() ? `${window.location.pathname}?${currentParams.toString()}` : window.location.pathname;
                         window.history.replaceState({}, '', newURL);
                         return; // Stop polling
@@ -2474,6 +2481,7 @@
                     const currentParams = new URLSearchParams(window.location.search);
                     currentParams.delete('show');
                     currentParams.delete('added');
+                    currentParams.delete('already');
                     const newURL = currentParams.toString() ? `${window.location.pathname}?${currentParams.toString()}` : window.location.pathname;
                     window.history.replaceState({}, '', newURL);
                 }
@@ -2484,11 +2492,60 @@
         }
     }
 
+    function showMessage(message, type) {
+        // Create a temporary message element
+        const messageDiv = document.createElement('div');
+        messageDiv.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateZ(0);
+            padding: 15px 25px;
+            border-radius: 4px;
+            z-index: 9999;
+            max-width: 500px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideDown 0.3s ease-out;
+            will-change: transform;
+        `;
+
+        if (type === 'success') {
+            messageDiv.style.backgroundColor = '#d4edda';
+            messageDiv.style.color = '#155724';
+            messageDiv.style.border = '1px solid #c3e6cb';
+        } else if (type === 'error') {
+            messageDiv.style.backgroundColor = '#f8d7da';
+            messageDiv.style.color = '#721c24';
+            messageDiv.style.border = '1px solid #f5c6cb';
+        } else {
+            // Default to info style (blue)
+            messageDiv.style.backgroundColor = '#d1ecf1';
+            messageDiv.style.color = '#0c5460';
+            messageDiv.style.border = '1px solid #bee5eb';
+        }
+
+        messageDiv.textContent = message;
+        document.body.appendChild(messageDiv);
+
+        // Remove after 5 seconds
+        setTimeout(() => {
+            messageDiv.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    document.body.removeChild(messageDiv);
+                }
+            }, 300);
+        }, 5000);
+    }
+
     function checkForSuccessMessage() {
         const params = new URLSearchParams(window.location.search);
         if (params.has('added')) {
             const tuneName = params.get('added');
             showMessage(`Successfully added "${tuneName}" to the session!`, 'success');
+            // Note: URL cleanup is handled by scrollToAndHighlightTune()
+        } else if (params.has('already')) {
+            showMessage('This tune is already on the session list', 'info');
             // Note: URL cleanup is handled by scrollToAndHighlightTune()
         }
     }

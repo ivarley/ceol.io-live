@@ -2937,7 +2937,8 @@ def add_session_tune_page(session_path):
         return render_template(
             "session_tune_add.html",
             session_path=session_path,
-            session_name=session_name
+            session_name=session_name,
+            session_id=session_id
         )
 
     except Exception as e:

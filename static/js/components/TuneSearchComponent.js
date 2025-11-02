@@ -31,6 +31,9 @@ class TuneSearchComponent {
             onTuneSelected: null, // Callback: function(tuneData)
             onSearchStart: null, // Callback: function(query)
             onSearchComplete: null, // Callback: function(results, query)
+            onTuneAlreadyAdded: null, // Callback: function(tuneData) - called when clicking already-added tune
+            personId: null, // Optional: person ID for person_tune context
+            sessionId: null, // Optional: session ID for session_tune context
             ...config
         };
 
@@ -172,8 +175,16 @@ class TuneSearchComponent {
             }
         }
 
-        // Regular text search
-        fetch(`/api/tunes/search?q=${encodeURIComponent(query)}`)
+        // Regular text search - build URL with context parameters
+        let searchUrl = `/api/tunes/search?q=${encodeURIComponent(query)}`;
+        if (this.config.personId) {
+            searchUrl += `&person_id=${this.config.personId}`;
+        }
+        if (this.config.sessionId) {
+            searchUrl += `&session_id=${this.config.sessionId}`;
+        }
+
+        fetch(searchUrl)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Failed to search local database');
@@ -371,16 +382,44 @@ class TuneSearchComponent {
         }
 
         const html = tunes.map((tune, index) => {
+            // Check if tune is already added to person_tune or session_tune
+            const isAlreadyAdded = tune.in_person_tune || tune.in_session_tune;
+            const rowClass = isAlreadyAdded ? 'autocomplete-item already-added' : 'autocomplete-item';
+
+            // Build learn status icon if present
+            let learnStatusIcon = '';
+            if (tune.in_person_tune && tune.learn_status) {
+                const iconMap = {
+                    'learned': '<span class="learn-status-icon learned" title="Learned">✓</span>',
+                    'learning': '<span class="learn-status-icon learning" title="Learning">⋯</span>',
+                    'want to learn': '<span class="learn-status-icon want-to-learn" title="Want to Learn">●</span>'
+                };
+                learnStatusIcon = iconMap[tune.learn_status] || '';
+            }
+
+            // Build "already added" text based on context
+            // Prioritize session context over person context
+            let alreadyAddedText = '';
+            if (isAlreadyAdded) {
+                if (tune.in_session_tune && this.config.sessionId) {
+                    alreadyAddedText = ' <span class="already-added-text">• already on this session list</span>';
+                } else if (tune.in_person_tune && this.config.personId) {
+                    alreadyAddedText = ' <span class="already-added-text">• already on your list</span>';
+                }
+            }
+
             const tunebookDisplay = this.getTunebookDisplay(tune);
             return `
-                <div class="autocomplete-item" data-index="${index}" onclick="tuneSearch.selectTuneByIndex(${index})">
+                <div class="${rowClass}" data-index="${index}" data-tune-id="${tune.tune_id}" onclick="tuneSearch.selectTuneByIndex(${index})">
                     <span class="tune-name">
                         ${tune.isFromTheSession || this.isSearchingTheSession ? '<span class="thesession-badge">TheSession</span>' : ''}
                         ${this.escapeHtml(tune.name)}
+                        <span class="tune-loading-spinner" style="display: none;"></span>
                     </span>
                     <div class="tune-meta">
                         ${tune.tune_type ? `<span class="tune-type">${this.escapeHtml(tune.tune_type)}</span>` : ''}
-                        ${tunebookDisplay}
+                        ${tunebookDisplay}${alreadyAddedText}
+                        ${learnStatusIcon}
                     </div>
                 </div>
             `;
@@ -410,6 +449,27 @@ class TuneSearchComponent {
     }
 
     selectTune(tune) {
+        // Check if tune is already added - if so, call alternative callback
+        const isAlreadyAdded = tune.in_person_tune || tune.in_session_tune;
+
+        if (isAlreadyAdded && this.config.onTuneAlreadyAdded) {
+            // Show loading spinner in the clicked row
+            const clickedRow = this.autocompleteResults.querySelector(`[data-tune-id="${tune.tune_id}"]`);
+            if (clickedRow) {
+                const spinner = clickedRow.querySelector('.tune-loading-spinner');
+                if (spinner) {
+                    spinner.style.display = 'inline-block';
+                }
+                // Disable further clicks on this row
+                clickedRow.style.pointerEvents = 'none';
+                clickedRow.style.opacity = '0.6';
+            }
+
+            // Don't hide autocomplete - leave it open with spinner showing
+            this.config.onTuneAlreadyAdded(tune);
+            return;
+        }
+
         this.selectedTuneId = tune.tune_id;
 
         if (this.hiddenInput) {

@@ -124,3 +124,61 @@
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Styles for tunes already added to collection */
+.autocomplete-item.already-added {
+    background-color: var(--already-added-bg, #f5f5f5);
+}
+
+[data-theme="dark"] .autocomplete-item.already-added {
+    background-color: var(--already-added-bg, #3a3a3a);
+}
+
+.autocomplete-item.already-added:hover {
+    background-color: var(--already-added-hover-bg, #e8e8e8);
+}
+
+[data-theme="dark"] .autocomplete-item.already-added:hover {
+    background-color: var(--already-added-hover-bg, #454545);
+}
+
+/* Learn status icons */
+.learn-status-icon {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.learn-status-icon.learned {
+    color: #5cb85c; /* green */
+}
+
+.learn-status-icon.learning {
+    color: #5bc0de; /* blue */
+}
+
+.learn-status-icon.want-to-learn {
+    color: #f0ad4e; /* yellow */
+}
+
+/* Already added text */
+.already-added-text {
+    color: var(--text-muted, #6c757d);
+    font-style: italic;
+    font-size: 11px;
+}
+
+/* Loading spinner for tune rows */
+.tune-loading-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border-color, #ddd);
+    border-top-color: var(--primary, #007bff);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+}

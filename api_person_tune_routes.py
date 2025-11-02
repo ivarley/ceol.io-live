@@ -847,78 +847,143 @@ def update_my_profile():
 def search_tunes():
     """
     GET /api/tunes/search
-    
+
     Search for tunes in the tune table by name.
-    
+
     Query Parameters:
         - q (str, required): Search query
         - limit (int, optional): Maximum number of results (default: 20, max: 50)
-        
+        - person_id (int, optional): Person ID for checking person_tune membership
+        - session_id (int, optional): Session ID for checking session_tune membership
+
     Returns:
-        JSON response with matching tunes
-        
+        JSON response with matching tunes, including:
+        - in_person_tune (bool): Whether tune is in user's person_tune (if person_id provided)
+        - learn_status (str): User's learning status for tune (if person_id provided and in person_tune)
+        - in_session_tune (bool): Whether tune is in session's tune list (if session_id provided)
+
     Requirements: 5.1
     """
     try:
         query = request.args.get('q', '').strip()
-        
+
         if not query:
             return jsonify({
                 "success": False,
                 "error": "Search query is required"
             }), 400
-        
+
         if len(query) < 2:
             return jsonify({
                 "success": False,
                 "error": "Search query must be at least 2 characters"
             }), 400
-        
+
         # Get limit parameter
         try:
             limit = min(50, max(1, int(request.args.get('limit', 20))))
         except (ValueError, TypeError):
             limit = 20
-        
+
+        # Get optional context parameters
+        person_id = request.args.get('person_id', type=int)
+        session_id = request.args.get('session_id', type=int)
+
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            
-            # Search tunes by name (case-insensitive, partial match)
-            # Prioritize exact matches, then starts-with, then contains
-            cur.execute("""
-                SELECT tune_id, name, tune_type, tunebook_count_cached,
-                       CASE
-                           WHEN LOWER(name) = LOWER(%s) THEN 1
-                           WHEN LOWER(name) LIKE LOWER(%s) THEN 2
+
+            # Build query with optional LEFT JOINs based on context
+            select_fields = ["t.tune_id", "t.name", "t.tune_type", "t.tunebook_count_cached"]
+            joins = []
+            order_by_fields = []
+            query_params = []
+
+            # Add person_tune join if person_id provided
+            if person_id:
+                select_fields.extend([
+                    "pt.person_tune_id IS NOT NULL AS in_person_tune",
+                    "pt.learn_status"
+                ])
+                joins.append("LEFT OUTER JOIN person_tune pt ON t.tune_id = pt.tune_id AND pt.person_id = %s")
+                query_params.append(person_id)
+                # Rank tunes already in person_tune below others
+                order_by_fields.append("CASE WHEN pt.person_tune_id IS NOT NULL THEN 1 ELSE 0 END")
+
+            # Add session_tune join if session_id provided
+            if session_id:
+                select_fields.append("st.session_id IS NOT NULL AS in_session_tune")
+                joins.append("LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s")
+                query_params.append(session_id)
+                # Rank tunes already in session_tune below others
+                if not person_id:  # Only add if not already prioritizing by person_tune
+                    order_by_fields.append("CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END")
+
+            # Build match priority case
+            select_fields.append("""CASE
+                           WHEN LOWER(t.name) = LOWER(%s) THEN 1
+                           WHEN LOWER(t.name) LIKE LOWER(%s) THEN 2
                            ELSE 3
-                       END AS match_priority
-                FROM tune
-                WHERE LOWER(name) LIKE LOWER(%s)
-                ORDER BY match_priority, tunebook_count_cached DESC NULLS LAST, name
+                       END AS match_priority""")
+
+            # Build final query
+            join_clause = " ".join(joins) if joins else ""
+            select_clause = ", ".join(select_fields)
+
+            # Construct ORDER BY: existing priority first, then match priority, then tunebook count, then name
+            order_by_parts = order_by_fields + ["match_priority", "t.tunebook_count_cached DESC NULLS LAST", "t.name"]
+            order_by_clause = ", ".join(order_by_parts)
+
+            sql = f"""
+                SELECT {select_clause}
+                FROM tune t
+                {join_clause}
+                WHERE LOWER(t.name) LIKE LOWER(%s)
+                ORDER BY {order_by_clause}
                 LIMIT %s
-            """, (query, f"{query}%", f"%{query}%", limit))
-            
+            """
+
+            # Build final parameter list in order of appearance in SQL:
+            # 1. query params for CASE statement (in SELECT)
+            # 2. query_params for JOINs (person_id, session_id)
+            # 3. query param for WHERE clause
+            # 4. limit param
+            final_params = [query, f"{query}%"] + query_params + [f"%{query}%", limit]
+            cur.execute(sql, final_params)
+
             rows = cur.fetchall()
-            
+
             tunes = []
             for row in rows:
-                tunes.append({
+                tune_data = {
                     'tune_id': row[0],
                     'name': row[1],
                     'tune_type': row[2],
                     'tunebook_count': row[3]
-                })
-            
+                }
+
+                # Add person_tune fields if requested
+                if person_id:
+                    tune_data['in_person_tune'] = bool(row[4])
+                    tune_data['learn_status'] = row[5] if row[4] else None
+
+                # Add session_tune field if requested
+                if session_id:
+                    # Index depends on whether person_id was included
+                    session_idx = 6 if person_id else 4
+                    tune_data['in_session_tune'] = bool(row[session_idx])
+
+                tunes.append(tune_data)
+
             return jsonify({
                 "success": True,
                 "tunes": tunes,
                 "count": len(tunes)
             }), 200
-            
+
         finally:
             conn.close()
-            
+
     except Exception as e:
         return jsonify({
             "success": False,

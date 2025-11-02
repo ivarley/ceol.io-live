@@ -397,9 +397,16 @@ document.addEventListener('DOMContentLoaded', function() {
         hiddenInputId: 'selected-tune-id',
         noResultsMessage: 'No tunes found from existing sessions',
         tunebookCountStyle: 'text', // Show "X tunebooks" format
+        {% if current_user and current_user.person_id %}
+        personId: {{ current_user.person_id }}, // Pass person_id for context
+        {% endif %}
         onTuneSelected: (tune) => {
             // Enable submit button when tune is selected
             submitBtn.disabled = false;
+        },
+        onTuneAlreadyAdded: (tune) => {
+            // Tune already in person_tune - navigate with already parameter
+            window.location.href = `/my-tunes?show=${tune.tune_id}&already=1`;
         }
     });
 
