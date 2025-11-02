@@ -375,7 +375,7 @@ export class DragDrop {
             this.globalDragGhost.style.cssText = `
                 position: fixed;
                 pointer-events: none;
-                z-index: 10000;
+                z-index: 1930;
                 background: #007AFF;
                 color: white;
                 padding: 4px 8px;

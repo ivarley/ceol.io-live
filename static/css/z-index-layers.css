@@ -1,0 +1,97 @@
+/* ============================================
+   Z-INDEX LAYER SYSTEM
+   ============================================
+
+   Centralized z-index values for consistent layering across the application.
+
+   ALWAYS use these documented values instead of arbitrary numbers.
+   This prevents z-index conflicts and makes the stacking order predictable.
+
+   ============================================ */
+
+/* ============================================
+   TIER 1: COMPONENT LAYERING (1-10)
+   ============================================
+   For internal component z-ordering where elements overlap within a component.
+   Examples: tabs, cards, form validation indicators
+   ============================================ */
+
+:root {
+    --z-background: -1;           /* Backgrounds that should be behind everything */
+    --z-base: 0;                  /* Default/reset layer */
+    --z-component-1: 1;           /* First component layer */
+    --z-component-2: 2;           /* Second component layer */
+    --z-component-3: 3;           /* Third component layer */
+    --z-component-elevated: 10;   /* Elevated component elements */
+}
+
+/* ============================================
+   TIER 2: BOOTSTRAP STANDARD (1000-1099)
+   ============================================
+   Reserved for Bootstrap framework elements.
+   DO NOT use these values for custom elements.
+   ============================================ */
+
+:root {
+    --z-bootstrap-dropdown: 1000;      /* Bootstrap dropdowns */
+    --z-bootstrap-sticky: 1020;        /* Bootstrap sticky elements */
+    --z-bootstrap-fixed: 1030;         /* Bootstrap fixed elements */
+    --z-bootstrap-modal-backdrop: 1040;/* Bootstrap modal backdrops */
+    --z-bootstrap-modal: 1050;         /* Bootstrap modals */
+    --z-bootstrap-popover: 1060;       /* Bootstrap popovers */
+    --z-bootstrap-tooltip: 1070;       /* Bootstrap tooltips */
+}
+
+/* ============================================
+   TIER 3: APPLICATION UI (1900-2999)
+   ============================================
+   Main application UI components.
+   This is where most custom z-index values should live.
+   ============================================ */
+
+:root {
+    /* Modals (1900-1999) - BELOW header so hamburger menu stays accessible */
+    --z-modal-overlay: 1900;           /* Custom modal background overlays */
+    --z-modal-content: 1910;           /* Custom modal content */
+    --z-modal-sidebar: 1920;           /* Mobile modal sidebars */
+    --z-drag-ghost: 1930;              /* Drag and drop ghost elements */
+
+    /* Headers and Navigation (2000-2099) */
+    --z-header: 2000;                  /* Main site header - ALWAYS use this value */
+    --z-hamburger-dropdown: 2010;      /* Hamburger menu dropdown */
+    --z-in-session-popup: 2020;        /* Active session indicator popup */
+
+    /* Dropdowns and Menus (2100-2499) */
+    --z-search-dropdown: 2100;         /* Search results dropdowns */
+    --z-context-menu: 2500;            /* Right-click context menus */
+
+    /* Loading and Blocking (2800-2899) - Above everything to block interaction */
+    --z-loading-overlay: 2800;         /* Loading spinners and overlays */
+    --z-pull-to-refresh: 2850;         /* Pull-to-refresh indicator */
+}
+
+/* ============================================
+   TIER 4: TOP LAYER (9999)
+   ============================================
+   Reserved for elements that must ALWAYS appear on top.
+   Use sparingly - should only be toast/flash messages.
+   ============================================ */
+
+:root {
+    --z-toast: 9999;                   /* Toast and flash messages - ALWAYS ON TOP */
+}
+
+/* ============================================
+   USAGE EXAMPLES
+   ============================================
+
+   Instead of:
+       .my-header { z-index: 10001; }
+
+   Use:
+       .my-header { z-index: var(--z-header); }
+
+   Or directly in the CSS:
+       .my-header { z-index: 2000; }  ✓ (with comment referring to this file)
+
+   ============================================ */
