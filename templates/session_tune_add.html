@@ -1,9 +1,18 @@
 {% extends "base.html" %}
+{% from 'components/tune_search_input.html' import tune_search_input %}
 
 {% block title %}Add Tune - {{ session_name }}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune-search.css') }}">
 <style>
+    /* Override parent container padding */
+    .docs-content {
+        padding: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
     .add-tune-container {
         max-width: 600px;
         margin: 40px auto;
@@ -11,7 +20,7 @@
     }
 
     .page-header {
-        margin-bottom: 30px;
+        margin-bottom: 5px;
     }
 
     .page-header h1 {
@@ -65,111 +74,6 @@
         font-size: 13px;
         color: var(--text-muted, #6c757d);
         margin-top: 5px;
-    }
-
-    .autocomplete-container {
-        position: relative;
-    }
-
-    .autocomplete-results {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background-color: var(--dropdown-bg, white);
-        border: 1px solid var(--border-color);
-        border-top: none;
-        border-radius: 0 0 4px 4px;
-        max-height: 300px;
-        overflow-y: auto;
-        z-index: 1000;
-        display: none;
-        box-shadow: 0 4px 8px var(--dropdown-shadow);
-    }
-
-    .autocomplete-results.show {
-        display: block;
-    }
-
-    .autocomplete-item {
-        padding: 12px;
-        cursor: pointer;
-        border-bottom: 1px solid var(--border-color);
-        transition: background-color 0.2s;
-    }
-
-    .autocomplete-item:last-child {
-        border-bottom: none;
-    }
-
-    .autocomplete-item:hover,
-    .autocomplete-item.selected {
-        background-color: var(--hover-bg);
-    }
-
-    .autocomplete-item .tune-name {
-        font-weight: 600;
-        color: var(--text-color);
-        display: block;
-        margin-bottom: 4px;
-    }
-
-    .autocomplete-item .tune-meta {
-        font-size: 12px;
-        color: var(--text-muted, #6c757d);
-    }
-
-    .autocomplete-item .tune-type {
-        display: inline-block;
-        padding: 2px 6px;
-        background-color: var(--primary);
-        color: white;
-        border-radius: 3px;
-        font-size: 11px;
-        text-transform: capitalize;
-        margin-right: 8px;
-    }
-
-    .autocomplete-item .tune-count-badge {
-        font-size: 11px;
-        padding: 3px 6px;
-        background-color: var(--secondary-text, #6c757d);
-        color: white;
-        border-radius: 3px;
-        white-space: nowrap;
-    }
-
-    .no-results {
-        padding: 12px;
-        color: var(--text-muted, #6c757d);
-        font-style: italic;
-        text-align: center;
-    }
-
-    .no-results.clickable {
-        cursor: pointer;
-        color: var(--primary);
-        text-decoration: underline;
-    }
-
-    .no-results.clickable:hover {
-        color: var(--primary-dark, #0056b3);
-    }
-
-    .thesession-badge {
-        display: inline-block;
-        padding: 2px 6px;
-        background-color: #ff9800;
-        color: white;
-        border-radius: 3px;
-        font-size: 11px;
-        margin-right: 8px;
-    }
-
-    .loading-indicator {
-        padding: 12px;
-        color: var(--text-muted, #6c757d);
-        text-align: center;
     }
 
     .form-actions {
@@ -282,25 +186,12 @@
 
     <div class="form-container">
         <form id="add-tune-form">
-            <div class="form-group">
-                <label for="tune-search">Search for Tune *</label>
-                <div class="autocomplete-container">
-                    <input
-                        type="text"
-                        id="tune-search"
-                        name="tune-search"
-                        placeholder="Start typing a tune name, or paste tune ID/URL..."
-                        autocomplete="off"
-                        required
-                    >
-                    <div id="autocomplete-results" class="autocomplete-results"></div>
-                </div>
-                <div class="help-text">
-                    Type to search for tunes. You can also paste a TheSession.org URL or tune ID.
-                </div>
-            </div>
-
-            <input type="hidden" id="selected-tune-id" name="tune_id">
+            {{ tune_search_input(
+                placeholder="Start typing a tune name, or paste tune ID/URL...",
+                help_text="Type to search for tunes. You can also paste a TheSession.org URL or tune ID.",
+                label="Search for Tune",
+                required=True
+            ) }}
 
             <div class="form-group">
                 <label for="alias">We call this:</label>
@@ -331,12 +222,32 @@
 
             <div class="form-group">
                 <label for="key">We play it in this key:</label>
-                <input
-                    type="text"
-                    id="key"
-                    name="key"
-                    placeholder="e.g., D, G, Am (optional)"
-                >
+                <select id="key" name="key">
+                    <option value="">(not specified)</option>
+                    <option value="Amajor">Amajor</option>
+                    <option value="Aminor">Aminor</option>
+                    <option value="Adorian">Adorian</option>
+                    <option value="Amixolydian">Amixolydian</option>
+                    <option value="Bminor">Bminor</option>
+                    <option value="Cmajor">Cmajor</option>
+                    <option value="Dmajor">Dmajor</option>
+                    <option value="Dminor">Dminor</option>
+                    <option value="Eminor">Eminor</option>
+                    <option value="Fmajor">Fmajor</option>
+                    <option value="Gmajor">Gmajor</option>
+                    <option value="Dmixolydian">Dmixolydian</option>
+                    <option value="Bmixolydian">Bmixolydian</option>
+                    <option value="Edorian">Edorian</option>
+                    <option value="Gdorian">Gdorian</option>
+                    <option value="Gminor">Gminor</option>
+                    <option value="Ddorian">Ddorian</option>
+                    <option value="Cdorian">Cdorian</option>
+                    <option value="Fdorian">Fdorian</option>
+                    <option value="Gmixolydian">Gmixolydian</option>
+                    <option value="Emajor">Emajor</option>
+                    <option value="Bdorian">Bdorian</option>
+                    <option value="Emixolydian">Emixolydian</option>
+                </select>
                 <div class="help-text">
                     The key your session typically plays this tune in
                 </div>
@@ -484,379 +395,64 @@ function onSettingIdInput() {
     }
 }
 
-let searchTimeout;
-let selectedTuneId = null;
-let selectedIndex = -1;
-let searchResults = [];
-let lastSearchQuery = '';
-let isSearchingTheSession = false;
-
-const tuneSearchInput = document.getElementById('tune-search');
-const autocompleteResults = document.getElementById('autocomplete-results');
-const selectedTuneIdInput = document.getElementById('selected-tune-id');
+// DOM elements
 const submitBtn = document.getElementById('submit-btn');
 const addTuneForm = document.getElementById('add-tune-form');
 const settingIdInput = document.getElementById('setting-id');
 
-// Setup event listeners
-tuneSearchInput.addEventListener('input', handleSearchInput);
-tuneSearchInput.addEventListener('keydown', handleKeyDown);
-tuneSearchInput.addEventListener('blur', handleBlur);
+// Initialize tune search component
+let tuneSearch;
+document.addEventListener('DOMContentLoaded', function() {
+    tuneSearch = new TuneSearchComponent({
+        searchInputId: 'tune-search',
+        autocompleteResultsId: 'autocomplete-results',
+        hiddenInputId: 'selected-tune-id',
+        noResultsMessage: 'No tunes found',
+        tunebookCountStyle: 'badge', // Show badge format
+        onTuneSelected: (tune) => {
+            // Enable submit button when tune is selected
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Check for query parameter and extract setting ID if present
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('q')) {
+        const query = params.get('q').trim();
+        if (query) {
+            // Check if the query contains a setting ID (URL format)
+            const settingId = extractSettingId(query);
+            if (settingId && settingIdInput) {
+                settingIdInput.value = settingId.toString();
+            }
+        }
+    }
+});
+
+// Setup form event listeners
 addTuneForm.addEventListener('submit', handleSubmit);
 if (settingIdInput) {
     settingIdInput.addEventListener('input', onSettingIdInput);
 }
 
-// Close autocomplete when clicking outside
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.autocomplete-container')) {
-        hideAutocomplete();
-    }
-});
+/*
+REMOVED: All search-related variables, functions, and event listeners
+have been moved to TuneSearchComponent.js for reusability.
 
-// Check for query parameter and auto-search
-document.addEventListener('DOMContentLoaded', function() {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('q')) {
-        const query = params.get('q').trim();
-        if (query) {
-            const settingId = extractSettingId(query);
-            if (settingId) {
-                const settingIdInput = document.getElementById('setting-id');
-                if (settingIdInput) {
-                    settingIdInput.value = settingId.toString();
-                }
-            }
+Removed code includes:
+- State variables (searchTimeout, selectedTuneId, selectedIndex, etc.)
+- Search functions (searchTunes, fetchTuneFromTheSession, searchTheSession, etc.)
+- Autocomplete display functions (displayResults, showAutocompleteLoading, etc.)
+- Selection functions (selectTune, selectTuneByIndex, hideAutocomplete, etc.)
+- Helper functions (extractTuneId, normalizeTuneType)
+- Event handlers (handleSearchInput, handleKeyDown, handleBlur, updateSelection)
+*/
 
-            tuneSearchInput.value = query;
-            searchTunes(query);
-        }
-    }
-});
-
-function handleSearchInput(e) {
-    const query = e.target.value.trim();
-
-    // Clear selection when user types
-    if (selectedTuneId) {
-        selectedTuneId = null;
-        selectedTuneIdInput.value = '';
-        submitBtn.disabled = true;
-    }
-
-    clearTimeout(searchTimeout);
-
-    if (query.length < 2) {
-        hideAutocomplete();
-        return;
-    }
-
-    // Debounce search
-    searchTimeout = setTimeout(() => {
-        searchTunes(query);
-    }, 300);
-}
-
-function handleKeyDown(e) {
-    if (!autocompleteResults.classList.contains('show')) {
-        return;
-    }
-
-    const items = autocompleteResults.querySelectorAll('.autocomplete-item');
-
-    if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-        updateSelection(items);
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, -1);
-        updateSelection(items);
-    } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
-            selectTune(searchResults[selectedIndex]);
-        }
-    } else if (e.key === 'Escape') {
-        hideAutocomplete();
-    }
-}
-
-function handleBlur(e) {
-    setTimeout(() => {
-        if (!document.activeElement.closest('.autocomplete-container')) {
-            hideAutocomplete();
-        }
-    }, 200);
-}
-
-function updateSelection(items) {
-    items.forEach((item, index) => {
-        if (index === selectedIndex) {
-            item.classList.add('selected');
-            item.scrollIntoView({ block: 'nearest' });
-        } else {
-            item.classList.remove('selected');
-        }
-    });
-}
-
-// Extract tune ID from TheSession.org URL or plain number
-function extractTuneId(input) {
-    if (!input) return null;
-
-    const trimmed = input.trim();
-
-    // If it's already just a number, return it
-    if (/^\d+$/.test(trimmed)) {
-        return parseInt(trimmed);
-    }
-
-    // Try to extract from URL: https://thesession.org/tunes/123
-    const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i);
-    if (urlMatch) {
-        return parseInt(urlMatch[1]);
-    }
-
-    return null;
-}
-
-function searchTunes(query) {
-    showAutocompleteLoading();
-    lastSearchQuery = query;
-    isSearchingTheSession = false;
-
-    // Check if the query is a tune ID or URL
-    const tuneId = extractTuneId(query);
-    if (tuneId) {
-        // Search for this specific tune ID in local database first
-        fetchWithRetry(`/api/tunes/search?q=${tuneId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to search local database');
-                }
-                return response.json();
-            })
-            .then(data => {
-                // Check if we found the exact tune ID
-                const exactMatch = (data.tunes || []).find(t => t.tune_id === tuneId);
-                if (exactMatch) {
-                    searchResults = [exactMatch];
-                    displayResults(searchResults, query);
-                } else {
-                    // Not found locally - fetch from TheSession.org API directly
-                    fetchTuneFromTheSession(tuneId);
-                }
-            })
-            .catch(error => {
-                console.error('Local search error:', error);
-                fetchTuneFromTheSession(tuneId);
-            });
-        return;
-    }
-
-    // Regular text search
-    fetchWithRetry(`/api/tunes/search?q=${encodeURIComponent(query)}`)
-        .then(response => {
-            if (!response.ok) {
-                const errorInfo = handleApiError(null, response);
-                throw new Error(errorInfo.message);
-            }
-            return response.json();
-        })
-        .then(data => {
-            searchResults = data.tunes || [];
-            displayResults(searchResults, query);
-        })
-        .catch(error => {
-            console.error('Search error:', error);
-            const errorInfo = handleApiError(error);
-            autocompleteResults.innerHTML = `
-                <div class="no-results">
-                    ${errorInfo.message}
-                    ${errorInfo.retryable ? '<br><small>Please try again.</small>' : ''}
-                </div>
-            `;
-            autocompleteResults.classList.add('show');
-        });
-}
-
-// Fetch a specific tune by ID from TheSession.org API
-function fetchTuneFromTheSession(tuneId) {
-    showAutocompleteLoading();
-    isSearchingTheSession = true;
-
-    const url = `https://thesession.org/tunes/${tuneId}?format=json`;
-
-    fetchWithRetry(url)
-        .then(response => {
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('Tune not found on TheSession.org');
-                }
-                throw new Error('Failed to fetch from TheSession.org');
-            }
-            return response.json();
-        })
-        .then(data => {
-            const tune = {
-                tune_id: data.id,
-                name: data.name,
-                tune_type: normalizeTuneType(data.type),
-                tunebook_count: data.tunebooks || 0
-            };
-            searchResults = [tune];
-            displayResults(searchResults, lastSearchQuery);
-            selectTune(tune);
-        })
-        .catch(error => {
-            console.error('TheSession.org API error:', error);
-            autocompleteResults.innerHTML = `
-                <div class="no-results">
-                    ${escapeHtml(error.message)}
-                    <br><small>Please check the tune ID and try again.</small>
-                </div>
-            `;
-            autocompleteResults.classList.add('show');
-        });
-}
-
-function normalizeTuneType(type) {
-    if (!type) return null;
-
-    const typeMap = {
-        'jig': 'Jig',
-        'reel': 'Reel',
-        'slip jig': 'Slip Jig',
-        'hop jig': 'Hop Jig',
-        'hornpipe': 'Hornpipe',
-        'polka': 'Polka',
-        'set dance': 'Set Dance',
-        'slide': 'Slide',
-        'waltz': 'Waltz',
-        'barndance': 'Barndance',
-        'strathspey': 'Strathspey',
-        'three-two': 'Three-Two',
-        'mazurka': 'Mazurka',
-        'march': 'March',
-        'air': 'Air'
-    };
-
-    return typeMap[type.toLowerCase()] || null;
-}
-
-function searchTheSession(query) {
-    showAutocompleteLoading();
-    isSearchingTheSession = true;
-    lastSearchQuery = query;
-
-    const url = `https://thesession.org/tunes/search?q=${encodeURIComponent(query)}&format=json`;
-
-    fetchWithRetry(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to fetch from TheSession.org');
-            }
-            return response.json();
-        })
-        .then(data => {
-            const tunes = (data.tunes || []).map(tune => ({
-                tune_id: tune.id,
-                name: tune.name,
-                tune_type: normalizeTuneType(tune.type),
-                tunebook_count: tune.tunebooks || 0
-            }));
-            searchResults = tunes;
-            displayResults(searchResults, query);
-        })
-        .catch(error => {
-            console.error('TheSession.org search error:', error);
-            autocompleteResults.innerHTML = `
-                <div class="no-results">
-                    Error searching TheSession.org: ${escapeHtml(error.message)}
-                    <br><small>Please try again.</small>
-                </div>
-            `;
-            autocompleteResults.classList.add('show');
-        });
-}
-
-function showAutocompleteLoading() {
-    autocompleteResults.innerHTML = '<div class="loading-indicator">Searching...</div>';
-    autocompleteResults.classList.add('show');
-    selectedIndex = -1;
-}
-
-function displayResults(tunes, query) {
-    if (tunes.length === 0 && !isSearchingTheSession) {
-        autocompleteResults.innerHTML = `
-            <div class="no-results clickable" onclick="searchTheSession('${escapeHtml(query || lastSearchQuery)}')">
-                No tunes found; click to search TheSession.org
-            </div>
-        `;
-        autocompleteResults.classList.add('show');
-        return;
-    }
-
-    if (tunes.length === 0 && isSearchingTheSession) {
-        autocompleteResults.innerHTML = '<div class="no-results">No tunes found on TheSession.org either. Try a different search term.</div>';
-        autocompleteResults.classList.add('show');
-        return;
-    }
-
-    const html = tunes.map((tune, index) => `
-        <div class="autocomplete-item" data-index="${index}" onclick="selectTuneByIndex(${index})">
-            <span class="tune-name">
-                ${isSearchingTheSession ? '<span class="thesession-badge">TheSession</span>' : ''}
-                ${escapeHtml(tune.name)}
-            </span>
-            <div class="tune-meta">
-                ${tune.tune_type ? `<span class="tune-type">${escapeHtml(tune.tune_type)}</span>` : ''}
-                ${tune.tunebook_count ? `<span class="tune-count-badge">${tune.tunebook_count}</span>` : ''}
-            </div>
-        </div>
-    `).join('');
-
-    autocompleteResults.innerHTML = html;
-    autocompleteResults.classList.add('show');
-    selectedIndex = -1;
-}
-
-function selectTuneByIndex(index) {
-    if (index >= 0 && index < searchResults.length) {
-        selectTune(searchResults[index]);
-    }
-}
-
-function selectTune(tune) {
-    selectedTuneId = tune.tune_id;
-    selectedTuneIdInput.value = tune.tune_id;
-    tuneSearchInput.value = tune.name;
-
-    // Store tune details if from TheSession.org for later insertion
-    if (isSearchingTheSession) {
-        tuneSearchInput.dataset.theSessionTune = JSON.stringify({
-            tune_id: tune.tune_id,
-            name: tune.name,
-            tune_type: tune.tune_type,
-            tunebook_count: tune.tunebook_count
-        });
-    } else {
-        delete tuneSearchInput.dataset.theSessionTune;
-    }
-
-    submitBtn.disabled = false;
-    hideAutocomplete();
-}
-
-function hideAutocomplete() {
-    autocompleteResults.classList.remove('show');
-    selectedIndex = -1;
-}
 
 function handleSubmit(e) {
     e.preventDefault();
 
+    const selectedTuneId = tuneSearch.getSelectedTuneId();
     if (!selectedTuneId) {
         showMessage('Please select a tune from the search results', 'error');
         return;
@@ -883,13 +479,13 @@ function handleSubmit(e) {
     };
 
     // If this is a tune from TheSession.org, include the tune details for insertion
-    if (tuneSearchInput.dataset.theSessionTune) {
-        const tuneDetails = JSON.parse(tuneSearchInput.dataset.theSessionTune);
+    const theSessionTune = tuneSearch.getTheSessionTuneData();
+    if (theSessionTune) {
         formData.new_tune = {
-            tune_id: tuneDetails.tune_id,
-            name: tuneDetails.name,
-            tune_type: tuneDetails.tune_type,
-            tunebook_count: tuneDetails.tunebook_count
+            tune_id: theSessionTune.tune_id,
+            name: theSessionTune.name,
+            tune_type: theSessionTune.tune_type,
+            tunebook_count: theSessionTune.tunebook_count
         };
     }
 
@@ -917,7 +513,7 @@ function handleSubmit(e) {
     })
     .then(data => {
         if (data.success) {
-            window.location.href = `/sessions/${sessionPath}?added=` + encodeURIComponent(tuneSearchInput.value);
+            window.location.href = `/sessions/${sessionPath}?added=` + encodeURIComponent(tuneSearch.getValue());
         } else {
             loading.hide();
             throw new Error(data.error || 'Failed to add tune');
@@ -946,4 +542,5 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 </script>
+<script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,44 @@
+{#
+  Tune Search Input Component
+
+  A reusable Jinja2 macro for rendering tune search autocomplete inputs.
+  Works with TuneSearchComponent.js for full functionality.
+
+  Usage:
+    {% from 'components/tune_search_input.html' import tune_search_input %}
+    {{ tune_search_input(
+        placeholder="Start typing a tune name...",
+        help_text="Type to search for tunes in our database.",
+        required=True
+    ) }}
+#}
+
+{% macro tune_search_input(
+    search_id='tune-search',
+    results_id='autocomplete-results',
+    hidden_id='selected-tune-id',
+    placeholder='Start typing a tune name...',
+    help_text='',
+    label='Search for Tune',
+    required=False
+) %}
+<div class="form-group">
+    {% if label %}
+    <label for="{{ search_id }}">{{ label }}{% if required %} *{% endif %}</label>
+    {% endif %}
+    <div class="autocomplete-container">
+        <input
+            type="text"
+            id="{{ search_id }}"
+            name="{{ search_id }}"
+            placeholder="{{ placeholder }}"
+            autocomplete="off"
+            {% if required %}required{% endif %}>
+        <div id="{{ results_id }}" class="autocomplete-results"></div>
+    </div>
+    {% if help_text %}
+    <div class="help-text">{{ help_text }}</div>
+    {% endif %}
+</div>
+<input type="hidden" id="{{ hidden_id }}" name="tune_id">
+{% endmacro %}
