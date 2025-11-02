@@ -1488,20 +1488,22 @@
     <!-- Tabbed Interface -->
     <div class="tabs-container">
         <div class="tab-buttons">
+            {% set default_tab = 'logs' if session.session_type == 'festival' else 'tunes' %}
+            {% set current_tab = active_tab if active_tab else default_tab %}
             {% if session.session_type == 'festival' %}
-            <button class="tab-button active" data-tab="logs">Sessions</button>
-            <button class="tab-button" data-tab="tunes">Tunes</button>
+            <button class="tab-button{{ ' active' if current_tab == 'logs' else '' }}" data-tab="logs">Sessions</button>
+            <button class="tab-button{{ ' active' if current_tab == 'tunes' else '' }}" data-tab="tunes">Tunes</button>
             {% else %}
-            <button class="tab-button active" data-tab="tunes">Tunes</button>
-            <button class="tab-button" data-tab="logs">Logs</button>
+            <button class="tab-button{{ ' active' if current_tab == 'tunes' else '' }}" data-tab="tunes">Tunes</button>
+            <button class="tab-button{{ ' active' if current_tab == 'logs' else '' }}" data-tab="logs">Logs</button>
             {% endif %}
             {% if is_logged_in and is_session_member %}
-            <button class="tab-button" data-tab="people">People</button>
+            <button class="tab-button{{ ' active' if current_tab == 'people' else '' }}" data-tab="people">People</button>
             {% endif %}
         </div>
 
         <!-- Tunes Tab Content -->
-        <div class="tab-content {% if session.session_type != 'festival' %}active{% endif %}" id="tunes-tab">
+        <div class="tab-content{{ ' active' if current_tab == 'tunes' else '' }}" id="tunes-tab">
             <div class="tunes-container">
                 <div class="filters-container">
                     <div class="filter-row">
@@ -1538,7 +1540,7 @@
         </div>
 
         <!-- Logs Tab Content -->
-        <div class="tab-content {% if session.session_type == 'festival' %}active{% endif %}" id="logs-tab" style="padding-left: 10px;">
+        <div class="tab-content{{ ' active' if current_tab == 'logs' else '' }}" id="logs-tab" style="padding-left: 10px;">
             {% if session.session_type == 'festival' %}
                 {# Festival view: group by day, show location and time #}
                 {% if instances_by_day %}
@@ -1650,7 +1652,7 @@
 
         <!-- People Tab Content -->
         {% if is_logged_in and is_session_member %}
-        <div class="tab-content" id="people-tab">
+        <div class="tab-content{{ ' active' if current_tab == 'people' else '' }}" id="people-tab">
             <div class="people-container">
                 <div class="people-controls">
                     <input type="text" id="people-search-box" class="people-search-box" placeholder="Search people...">
@@ -2037,12 +2039,17 @@
         });
         document.getElementById(`${tabName}-tab`).classList.add('active');
 
-        // Update URL query string
+        // Update URL to use path-based navigation
         if (updateURL) {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('tab', tabName);
-            const newURL = window.location.pathname + '?' + urlParams.toString();
-            window.history.replaceState({}, '', newURL);
+            // Get the base session path (remove any existing tab suffix and trailing slash)
+            let basePath = window.location.pathname;
+            basePath = basePath.replace(/\/(tunes|people|logs)$/, '').replace(/\/$/, '');
+
+            // All tabs get their own path
+            const newPath = `${basePath}/${tabName}`;
+
+            // Update URL without reloading the page
+            window.history.pushState({}, '', newPath);
         }
     }
 
@@ -2382,29 +2389,29 @@
             });
         });
 
-        // Check URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
+        // Check for server-provided active tab (from path-based URLs)
+        const activeTab = {{ active_tab|tojson if active_tab else 'null' }};
+        const defaultTab = {{ default_tab|tojson }};
+        const currentTab = activeTab || defaultTab;
 
-        // Check for tab parameter and switch to it if present
-        const tabParam = urlParams.get('tab');
-        if (tabParam) {
-            const tabButton = document.querySelector(`.tab-button[data-tab="${tabParam}"]`);
-            if (tabButton) {
-                switchTab(tabParam, false); // Don't update URL since we're reading from it
-            }
+        // If no active tab was specified in URL but we have a default tab, update the URL
+        if (!activeTab && defaultTab) {
+            let basePath = window.location.pathname;
+            basePath = basePath.replace(/\/(tunes|people|logs)$/, '').replace(/\/$/, ''); // Remove tab suffix and trailing slash
+            window.history.replaceState({}, '', `${basePath}/${defaultTab}`);
         }
 
-        // Initialize tunes tab on page load since it's the default tab
+        // Always initialize tunes tab so it's ready when user switches to it
         initializeTunesTab();
 
         // Highlight active session instances
         highlightActiveInstances();
 
-        // Check for tune parameter and open tune modal if present
-        const tuneIdNum = TuneDetailModal.getTuneIdFromUrl();
-        if (tuneIdNum) {
+        // Check for server-provided tune_id (from path-based URLs)
+        const tuneIdFromServer = {{ tune_id if tune_id else 'null' }};
+        if (tuneIdFromServer) {
             // Find the tune in the allTunes array
-            const tune = allTunes.find(t => t[0] === tuneIdNum);
+            const tune = allTunes.find(t => t[0] === tuneIdFromServer);
             if (tune) {
                 // Show the tune detail modal
                 setTimeout(() => {

@@ -205,16 +205,26 @@ def sessions():
 
 
 def session_tunes(session_path):
-    """Redirect to session detail page with tunes tab active."""
-    return redirect(f"/sessions/{session_path}?tab=tunes")
+    """Show session detail page with tunes tab active."""
+    return session_handler(session_path, active_tab='tunes')
 
 
 def session_tune_info(session_path, tune_id):
-    """Redirect to session detail page with tunes tab active and tune modal open."""
-    return redirect(f"/sessions/{session_path}?tab=tunes&tune={tune_id}")
+    """Show session detail page with tunes tab active and tune modal open."""
+    return session_handler(session_path, active_tab='tunes', tune_id=tune_id)
 
 
-def session_handler(full_path):
+def session_people(session_path):
+    """Show session detail page with people tab active."""
+    return session_handler(session_path, active_tab='people')
+
+
+def session_logs(session_path):
+    """Show session detail page with logs tab active."""
+    return session_handler(session_path, active_tab='logs')
+
+
+def session_handler(full_path, active_tab=None, tune_id=None):
     # Strip trailing slash to normalize the path
     full_path = full_path.rstrip("/")
 
@@ -593,6 +603,9 @@ def session_handler(full_path):
                 cur.close()
                 conn.close()
 
+                # Determine default tab based on session type
+                default_tab = 'logs' if session_dict.get('session_type') == 'festival' else 'tunes'
+
                 return render_template(
                     "session_detail.html",
                     session=session_dict,
@@ -606,6 +619,9 @@ def session_handler(full_path):
                     is_logged_in=current_user.is_authenticated,
                     is_session_member=is_session_member,
                     today_in_session_tz=today_in_session_tz,
+                    active_tab=active_tab,
+                    tune_id=tune_id,
+                    default_tab=default_tab,
                 )
             else:
                 cur.close()

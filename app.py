@@ -176,6 +176,8 @@ app.add_url_rule(
     "session_tune_info",
     session_tune_info,
 )
+app.add_url_rule("/sessions/<path:session_path>/people", "session_people", session_people)
+app.add_url_rule("/sessions/<path:session_path>/logs", "session_logs", session_logs)
 app.add_url_rule("/sessions/<path:full_path>", "session_handler", session_handler)
 app.add_url_rule("/sessions/<path:full_path>/players", "session_instance_players", session_instance_players)
 app.add_url_rule("/add-session", "add_session", add_session)
