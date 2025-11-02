@@ -29,9 +29,9 @@
                         <h3>Session Pages ({{ sample_session[2] }})</h3>
                         <ul class="test-links-list">
                             <li><a href="/sessions/{{ sample_session[1] }}" target="_blank">Session Home</a></li>
-                            <li><a href="/sessions/{{ sample_session[1] }}/tunes" target="_blank">Session Tunes</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}?tab=tunes" target="_blank">Session Tunes</a></li>
                             {% if sample_tune_id %}
-                            <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}?tab=tunes&tune={{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
                             {% endif %}
                             {% if latest_instance_date %}
                             <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}" target="_blank">Session Instance ({{ latest_instance_date }})</a></li>
