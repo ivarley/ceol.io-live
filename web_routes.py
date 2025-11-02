@@ -560,8 +560,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                         st.setting_id
                     FROM session_tune st
                     LEFT JOIN tune t ON st.tune_id = t.tune_id
-                    LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id
-                    LEFT JOIN session_instance si ON sit.session_instance_id = si.session_instance_id AND si.session_id = %s
+                    LEFT JOIN session_instance si ON si.session_id = %s
+                    LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id AND sit.session_instance_id = si.session_instance_id
                     WHERE st.session_id = %s
                     GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached, st.setting_id
                     ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
