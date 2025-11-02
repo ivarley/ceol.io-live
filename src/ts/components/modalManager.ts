@@ -394,47 +394,24 @@ export class ModalManager {
     
     /**
      * Show a toast message
+     * Delegates to the global showMessage function from base.html for consistency
      * @param message - The message to display
      * @param type - Message type: 'success', 'error', 'warning', 'info'
-     * @param options - Display options
+     * @param options - Display options (ignored - uses base.html defaults)
      */
     public static showMessage(message: string, type: MessageType = 'success', options: MessageOptions = {}): HTMLElement {
-        // Remove any existing messages first
-        const existingMessages = document.querySelectorAll('.message');
-        existingMessages.forEach(msg => msg.remove());
-        
-        // Clear existing timeout
-        if (this.messageTimeout) {
-            clearTimeout(this.messageTimeout);
+        // Use the global showMessage function from base.html for consistency
+        // This ensures all toast messages across the site use the same implementation
+        if (typeof (window as any).showMessage === 'function') {
+            (window as any).showMessage(message, type);
+        } else {
+            console.error('Global showMessage function not found. Ensure base.html is loaded.');
         }
-        
-        // Create message element using the base template's existing styles
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
-        
-        // Apply custom positioning if specified
-        if (options.position) {
-            Object.assign(messageDiv.style, options.position);
-        }
-        
-        // Add to body (the base template styles handle positioning)
-        document.body.appendChild(messageDiv);
-        
-        // Trigger the slide-in animation using the base template's .show class
-        setTimeout(() => {
-            messageDiv.classList.add('show');
-        }, 50);
-        
-        // Auto-hide after specified duration (default 4 seconds)
-        const duration = options.duration !== undefined ? options.duration : 4000;
-        if (duration > 0) {
-            this.messageTimeout = window.setTimeout(() => {
-                this.hideMessage(messageDiv);
-            }, duration);
-        }
-        
-        return messageDiv;
+
+        // Return a reference to the message element if it exists
+        // The base.html implementation creates the message element
+        const messageDiv = document.querySelector('.message.show') as HTMLElement;
+        return messageDiv || document.createElement('div');
     }
     
     /**

@@ -1304,11 +1304,6 @@ function saveSessionInstance() {
     });
 }
 
-// Message display function - uses the existing base template flash message system
-function showMessage(message, type = 'success') {
-    return ModalManager.showMessage(message, type);
-}
-
 // Mark complete link event listener (if link exists)
 const markCompleteLink = document.getElementById('mark-complete-link');
 if (markCompleteLink) {

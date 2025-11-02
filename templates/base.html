@@ -469,7 +469,7 @@ function showMessage(message, type = 'success') {
         messageDiv.classList.add('show');
     }, 10);
     
-    // Auto-hide message after 3 seconds
+    // Auto-hide message after 4 seconds
     setTimeout(() => {
         messageDiv.classList.remove('show');
         // Remove from DOM after animation completes
@@ -478,7 +478,7 @@ function showMessage(message, type = 'success') {
                 container.removeChild(messageDiv);
             }
         }, 300);
-    }, 3000);
+    }, 4000);
 }
 
 function getOrCreateMessageContainer() {

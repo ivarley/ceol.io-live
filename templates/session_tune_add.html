@@ -187,8 +187,6 @@
         <p>Search for a tune to add to {{ session_name }}</p>
     </div>
 
-    <div id="message-container"></div>
-
     <div class="form-container">
         <form id="add-tune-form">
             {{ tune_search_input(
@@ -543,13 +541,6 @@ function handleSubmit(e) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Tune';
     });
-}
-
-function showMessage(message, type) {
-    const container = document.getElementById('message-container');
-    const className = type === 'error' ? 'error-message' : 'success-message';
-    container.innerHTML = `<div class="${className}">${escapeHtml(message)}</div>`;
-    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function escapeHtml(text) {
