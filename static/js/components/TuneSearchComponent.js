@@ -425,9 +425,33 @@ class TuneSearchComponent {
             `;
         }).join('');
 
-        this.autocompleteResults.innerHTML = html;
+        // Add "None of these match" option if we have local results but haven't searched TheSession.org yet
+        let searchTheSessionOption = '';
+        if (!this.isSearchingTheSession && this.config.enableTheSessionSearch) {
+            const searchQuery = query || this.lastSearchQuery;
+            searchTheSessionOption = `
+                <div class="no-match-option clickable" data-search-query="${this.escapeHtml(searchQuery)}">
+                    None of these match; search TheSession.org
+                </div>
+            `;
+        }
+
+        this.autocompleteResults.innerHTML = html + searchTheSessionOption;
         this.autocompleteResults.classList.add('show');
         this.selectedIndex = -1;
+
+        // Add click event listener to the "None of these match" option
+        if (!this.isSearchingTheSession && this.config.enableTheSessionSearch) {
+            const noMatchDiv = this.autocompleteResults.querySelector('.no-match-option.clickable');
+            if (noMatchDiv) {
+                noMatchDiv.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const queryToSearch = noMatchDiv.dataset.searchQuery;
+                    this.searchTheSession(queryToSearch);
+                });
+            }
+        }
     }
 
     getTunebookDisplay(tune) {

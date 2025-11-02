@@ -92,6 +92,26 @@
     color: var(--primary-dark, #0056b3);
 }
 
+.no-match-option {
+    padding: 12px;
+    color: var(--text-muted, #6c757d);
+    font-style: italic;
+    text-align: center;
+    border-top: 1px solid var(--border-color, #dee2e6);
+    margin-top: 4px;
+}
+
+.no-match-option.clickable {
+    cursor: pointer;
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.no-match-option.clickable:hover {
+    color: var(--primary-dark, #0056b3);
+    background-color: var(--hover-bg, #f8f9fa);
+}
+
 .thesession-badge {
     display: inline-block;
     padding: 2px 6px;

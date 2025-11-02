@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune-search.css') }}">
 <style>
         .hidden {
             display: none;
@@ -1287,10 +1288,10 @@
 
                 <label for="edit-session-location-input" style="margin-top: 16px;">Location:</label>
                 <input type="text" id="edit-session-location-input" placeholder="The usual: {{ session_instance.session_name }}">
-                
+
                 <label for="edit-session-comments-input" style="margin-top: 16px;">Comments:</label>
                 <textarea id="edit-session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
-                
+
                 <div style="margin-top: 16px;">
                     <label style="display: flex; align-items: center; font-weight: normal;">
                         <input type="checkbox" id="edit-session-cancelled-input" style="margin-right: 8px; width: auto;">
@@ -1301,6 +1302,30 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="edit-session-cancel-btn">Cancel</button>
                 <button type="button" class="btn-primary" id="edit-session-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tune Search Modal -->
+    <div id="tune-search-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Search for Tune</h3>
+            </div>
+            <div class="modal-body">
+                <label for="tune-search-modal-input">Tune Name:</label>
+                <div class="autocomplete-container">
+                    <input
+                        type="text"
+                        id="tune-search-modal-input"
+                        placeholder="Start typing a tune name..."
+                        autocomplete="off">
+                    <div id="tune-search-modal-results" class="autocomplete-results"></div>
+                </div>
+                <input type="hidden" id="tune-search-modal-selected-id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="tune-search-modal-cancel-btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -1509,6 +1534,7 @@ window.showTuneDetail = function(tuneId, tuneName, tuneType) {
 <script src="/static/js/dist/contextMenu.js"></script>
 <script src="/static/js/pages/session_instance_detail.js"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
 <script>
 // Initialize edit mode button
 document.addEventListener('DOMContentLoaded', function() {
@@ -1654,6 +1680,116 @@ function highlightAndScrollToTune(tuneId) {
             }
         });
     }, 5000);
+}
+
+// Initialize Tune Search Modal
+let tuneSearch;
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize the tune search component for the modal
+    tuneSearch = new TuneSearchComponent({
+        searchInputId: 'tune-search-modal-input',
+        autocompleteResultsId: 'tune-search-modal-results',
+        hiddenInputId: 'tune-search-modal-selected-id',
+        noResultsMessage: 'No tunes found',
+        tunebookCountStyle: 'badge',
+        onTuneSelected: (tune) => {
+            // When a tune is selected, link it to the current pill
+            if (window.currentLinkingPill) {
+                const pill = window.currentLinkingPill;
+
+                // Update the pill with the selected tune
+                pill.tuneId = tune.tune_id;
+                pill.tuneName = tune.name;
+                pill.tuneType = tune.tune_type;
+                pill.state = 'linked';
+                pill.matchResults = null;
+
+                // Find the pill in StateManager's data and update it there too
+                const pillPosition = window.StateManager.findTuneById(pill.id);
+                if (pillPosition) {
+                    const tunePillsData = window.StateManager.getTunePillsData();
+                    const tuneSet = tunePillsData[pillPosition.setIndex];
+
+                    if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
+                        const actualPill = tuneSet[pillPosition.pillIndex];
+                        if (actualPill) {
+                            // Update the actual pill in StateManager
+                            actualPill.tuneId = tune.tune_id;
+                            actualPill.tuneName = tune.name;
+                            actualPill.tuneType = tune.tune_type;
+                            actualPill.state = 'linked';
+                            actualPill.matchResults = null;
+
+                            // Update StateManager to ensure the changes are tracked
+                            window.StateManager.setTunePillsData(tunePillsData);
+                        }
+                    }
+                }
+
+                // Update the pill appearance
+                if (window.PillRenderer) {
+                    window.PillRenderer.updatePillAppearance(pill);
+                }
+
+                // Force check for changes
+                if (window.AutoSaveManager) {
+                    window.AutoSaveManager.forceCheckChanges();
+                }
+
+                // Close the modal
+                hideTuneSearchModal();
+            }
+        }
+    });
+
+    // Handle cancel button
+    const cancelBtn = document.getElementById('tune-search-modal-cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', hideTuneSearchModal);
+    }
+
+    // Handle clicking outside the modal
+    const modal = document.getElementById('tune-search-modal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                hideTuneSearchModal();
+            }
+        });
+    }
+
+    // Handle escape key
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('tune-search-modal');
+        if (modal && modal.style.display !== 'none' && e.key === 'Escape') {
+            hideTuneSearchModal();
+        }
+    });
+});
+
+function hideTuneSearchModal() {
+    const modal = document.getElementById('tune-search-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+
+    // Clear the search input
+    const searchInput = document.getElementById('tune-search-modal-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    // Clear the autocomplete results
+    const autocompleteResults = document.getElementById('tune-search-modal-results');
+    if (autocompleteResults) {
+        autocompleteResults.innerHTML = '';
+    }
+
+    // Remove modal-open class
+    document.body.classList.remove('modal-open');
+
+    // Clear the current linking pill
+    window.currentLinkingPill = null;
 }
 </script>
 {% endblock %}

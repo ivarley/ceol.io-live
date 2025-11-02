@@ -182,7 +182,7 @@ export class ContextMenu {
                 ContextMenu.showLinkModal(pillData);
             });
         } else if (pillData.state === 'unmatched' && pillData.matchResults && pillData.matchResults.length > 0) {
-            // Show match results first if available
+            // Show match results first
             pillData.matchResults.forEach(result => {
                 const item = document.createElement('a');
                 item.style.display = 'block';
@@ -251,14 +251,20 @@ export class ContextMenu {
             separator.style.borderTop = '1px solid rgba(255,255,255,0.3)';
             separator.style.margin = '4px 0';
             menu.appendChild(separator);
-            
+
+            // Add Search By Name option
+            ContextMenu.addMenuItem(menu, 'Search By Name', () => {
+                ContextMenu.hideContextMenu();
+                ContextMenu.showTuneSearchModal(pillData);
+            });
+
             // Add manual link option
             ContextMenu.addMenuItem(menu, 'Manual Link...', () => {
                 ContextMenu.hideContextMenu();
                 ContextMenu.showLinkModal(pillData);
             });
         } else {
-            // Unlinked tune options - add informative header
+            // Unlinked tune options - add informative header first
             const infoHeader = document.createElement('div');
             infoHeader.style.padding = '8px 12px';
             infoHeader.style.fontSize = '0.85em';
@@ -273,7 +279,13 @@ export class ContextMenu {
             infoHeader.textContent = 'This entry has not been matched to a known tune; you can link it manually, edit the text, delete it, or leave it as is.';
             menu.appendChild(infoHeader);
 
-            ContextMenu.addMenuItem(menu, 'Link', () => {
+            // Add Search By Name option below description
+            ContextMenu.addMenuItem(menu, 'Search By Name', () => {
+                ContextMenu.hideContextMenu();
+                ContextMenu.showTuneSearchModal(pillData);
+            });
+
+            ContextMenu.addMenuItem(menu, 'Manually Link', () => {
                 ContextMenu.hideContextMenu();
                 ContextMenu.showLinkModal(pillData);
             });
@@ -523,7 +535,44 @@ export class ContextMenu {
         // Store current pill for editing (backward compatibility)
         window.currentEditingPill = pillData;
     }
-    
+
+    /**
+     * Show tune search modal for a pill
+     * @param pillData - The pill data object
+     */
+    static showTuneSearchModal(pillData: TunePill): void {
+        // Store current pill for linking
+        window.currentLinkingPill = pillData;
+
+        // Show the tune search modal
+        const modal = document.getElementById('tune-search-modal');
+
+        if (modal) {
+            // Add modal-open class to prevent body scrolling
+            document.body.classList.add('modal-open');
+
+            // Add show class to make modal visible (handles opacity transition)
+            modal.classList.add('show');
+
+            // Pre-populate the search input with the pill's current text
+            const searchInput = document.getElementById('tune-search-modal-input') as HTMLInputElement;
+            if (searchInput) {
+                // Set the value to the pill's text
+                searchInput.value = pillData.tuneName || '';
+
+                setTimeout(() => {
+                    searchInput.focus();
+                    // Select all text so user can immediately start typing to replace
+                    searchInput.select();
+
+                    // Trigger search with the pre-populated text
+                    const event = new Event('input', { bubbles: true });
+                    searchInput.dispatchEvent(event);
+                }, 100);
+            }
+        }
+    }
+
     /**
      * Delete a pill by ID
      * @param pillId - The ID of the pill to delete
