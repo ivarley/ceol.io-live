@@ -7,6 +7,11 @@
     position: relative;
 }
 
+/* Prevent mobile zoom on focus - input must be at least 16px */
+.autocomplete-container input[type="text"] {
+    font-size: 16px;
+}
+
 .autocomplete-results {
     position: absolute;
     top: 100%;
