@@ -513,7 +513,7 @@ function handleSubmit(e) {
     })
     .then(data => {
         if (data.success) {
-            window.location.href = `/sessions/${sessionPath}?added=` + encodeURIComponent(tuneSearch.getValue());
+            window.location.href = `/sessions/${sessionPath}?show=${selectedTuneId}&added=` + encodeURIComponent(tuneSearch.getValue());
         } else {
             loading.hide();
             throw new Error(data.error || 'Failed to add tune');

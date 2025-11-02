@@ -489,7 +489,8 @@ function handleSubmit(e) {
     .then(data => {
         if (data.success) {
             // Redirect immediately without hiding loading overlay
-            window.location.href = '/my-tunes?added=' + encodeURIComponent(tuneSearch.getValue());
+            const tuneId = data.person_tune.tune_id;
+            window.location.href = `/my-tunes?show=${tuneId}&added=` + encodeURIComponent(tuneSearch.getValue());
         } else {
             loading.hide();
             throw new Error(data.error || 'Failed to add tune');

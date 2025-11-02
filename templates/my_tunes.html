@@ -5,6 +5,17 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+<style>
+    /* Highlight animation for newly added tunes */
+    @keyframes highlight-fade {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    .highlight-tune {
+        animation: highlight-fade 3s ease-out;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -325,6 +336,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     loadFiltersFromURL();
     checkForSuccessMessage();
+    scrollToAndHighlightTune();
     setupScrollDetection();
 
     // Check for tune parameter in URL and open modal if present
@@ -368,10 +380,91 @@ function checkForSuccessMessage() {
     if (params.has('added')) {
         const tuneName = params.get('added');
         showMessage(`Successfully added "${tuneName}" to your collection!`, 'success');
-        // Clean up URL
-        params.delete('added');
-        const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
-        window.history.replaceState({}, '', newURL);
+        // Note: URL cleanup is handled by scrollToAndHighlightTune()
+    }
+}
+
+function scrollToAndHighlightTune() {
+    const params = new URLSearchParams(window.location.search);
+    const hasShow = params.has('show');
+    const hasAdded = params.has('added');
+
+    // Only proceed if we have at least one of these parameters
+    if (hasShow || hasAdded) {
+        const tuneId = hasShow ? params.get('show') : null;
+        console.log('[ScrollHighlight] Will wait for tune:', tuneId);
+
+        // Poll for the element to appear (wait for full tune list to render)
+        let attempts = 0;
+        const maxAttempts = 30; // 3 seconds max (30 * 100ms)
+
+        const pollForElement = () => {
+            attempts++;
+
+            if (tuneId) {
+                const tuneElement = document.querySelector(`[data-tune-id="${tuneId}"]`);
+
+                if (tuneElement) {
+                    // Jump instantly - position element about 1/3 down the viewport (2/3 up from bottom)
+                    // This handles cases where the element is near the end of the list
+                    tuneElement.scrollIntoView({behavior: 'instant', block: 'start'});
+
+                    // Calculate scroll offset: aim for element at ~1/3 of viewport height from top (2/3 up from bottom)
+                    // Scroll back by 1/3 of viewport to position element 1/3 down from top
+                    const targetOffset = Math.max(120, window.innerHeight * 0.33);
+                    window.scrollBy({top: -targetOffset, behavior: 'instant'});
+
+                    // Find the visible card element to highlight (either .tune-card or .tune-card-swipe-container)
+                    const cardToHighlight = tuneElement.querySelector('.tune-card') || tuneElement;
+
+                    // Animate highlight using JavaScript for reliable cross-browser behavior
+                    setTimeout(() => {
+                        const startTime = Date.now();
+                        const duration = 3000;
+
+                        const animate = () => {
+                            const elapsed = Date.now() - startTime;
+                            const progress = Math.min(elapsed / duration, 1);
+
+                            // Fade from yellow to original background
+                            const alpha = 0.8 * (1 - progress);
+                            cardToHighlight.style.backgroundColor = `rgba(255, 243, 205, ${alpha})`;
+
+                            if (progress < 1) {
+                                requestAnimationFrame(animate);
+                            } else {
+                                cardToHighlight.style.backgroundColor = '';
+                            }
+                        };
+
+                        requestAnimationFrame(animate);
+                    }, 100);
+
+                    // Clean up URL after successful scroll
+                    const currentParams = new URLSearchParams(window.location.search);
+                    currentParams.delete('show');
+                    currentParams.delete('added');
+                    const newURL = currentParams.toString() ? `${window.location.pathname}?${currentParams.toString()}` : window.location.pathname;
+                    window.history.replaceState({}, '', newURL);
+                    return; // Stop polling
+                }
+            }
+
+            // If not found and haven't exceeded max attempts, try again
+            if (attempts < maxAttempts) {
+                setTimeout(pollForElement, 100);
+            } else {
+                // Clean up URL even if we didn't find the element
+                const currentParams = new URLSearchParams(window.location.search);
+                currentParams.delete('show');
+                currentParams.delete('added');
+                const newURL = currentParams.toString() ? `${window.location.pathname}?${currentParams.toString()}` : window.location.pathname;
+                window.history.replaceState({}, '', newURL);
+            }
+        };
+
+        // Start polling after a brief initial delay
+        setTimeout(pollForElement, 100);
     }
 }
 
@@ -669,6 +762,7 @@ function updateURL() {
     }
 
     const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    console.log('[UpdateURL] Changing URL from', window.location.href, 'to', newURL);
     window.history.replaceState({}, '', newURL);
 }
 
@@ -1171,8 +1265,8 @@ function createTuneCard(tune) {
         ? (tune.heard_count || 0).toString()
         : tune.tune_type || '';
 
-    // Add data attribute for swipe functionality on mobile
-    const swipeAttr = `data-person-tune-id="${tune.person_tune_id}"`;
+    // Add data attributes for swipe functionality and highlighting
+    const swipeAttr = `data-person-tune-id="${tune.person_tune_id}" data-tune-id="${tune.tune_id}"`;
 
     // Show increment button for all tunes on mobile
     const canIncrement = true;
