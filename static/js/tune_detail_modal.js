@@ -283,11 +283,11 @@
 
         // Official tune name and ID (always shown in configure section)
         fields.push(`
-            <div class="configure-field-group">
+            <div class="configure-field-group-inline">
                 <div class="configure-label">Official Name:</div>
                 <div class="configure-value">${tuneData.tune_name || tuneData.name || 'Unknown'}</div>
             </div>
-            <div class="configure-field-group">
+            <div class="configure-field-group-inline">
                 <div class="configure-label">Tune ID:</div>
                 <div class="configure-value">${tuneData.tune_id || 'Unknown'}</div>
             </div>
