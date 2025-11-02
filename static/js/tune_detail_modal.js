@@ -18,6 +18,7 @@
     let currentConfig = null;
     let originalValues = {};
     let isConfigSectionVisible = false;
+    let pendingHeardCountRequests = 0;
 
     // Musical keys list
     const MUSICAL_KEYS = [
@@ -67,11 +68,16 @@
     function showModal(config) {
         currentContext = config.context;
         currentConfig = config;
+        pendingHeardCountRequests = 0; // Reset pending requests counter
         const modal = document.getElementById('tune-detail-modal');
         const modalContent = document.getElementById('tune-detail-content');
 
         // Update URL with tune parameter
-        updateUrlWithTune(config.tuneId);
+        // For my_tunes context, use person_tune_id; otherwise use tune_id
+        const urlParam = (config.context === 'my_tunes' && config.additionalData?.personTuneId)
+            ? config.additionalData.personTuneId
+            : config.tuneId;
+        updateUrlWithTune(urlParam);
 
         // Show modal with loading state
         displayLoadingState(modalContent, config);
@@ -185,8 +191,8 @@
             sections.push(buildTunebookStatusSection(tuneData, config));
         }
 
-        // Heard count section (only on my_tunes if Want To Learn or Learning)
-        if (config.context === 'my_tunes') {
+        // Heard count section (all contexts except admin, if Want To Learn or Learning)
+        if (config.context !== 'admin') {
             sections.push(buildHeardCountSection(tuneData, config));
         }
 
@@ -423,7 +429,7 @@
         return `
             <div class="tunebook-status-section ${statusClass}">
                 This tune is on your list as
-                <select id="tunebook-status-select" class="tunebook-status-select" onchange="TuneDetailModal.updateTunebookStatus()">
+                <select id="tunebook-status-select" class="tunebook-status-select" onchange="TuneDetailModal.onFieldChange()">
                     <option value="want to learn" ${learnStatus === 'want to learn' ? 'selected' : ''}>Want To Learn</option>
                     <option value="learning" ${learnStatus === 'learning' ? 'selected' : ''}>Learning</option>
                     <option value="learned" ${learnStatus === 'learned' ? 'selected' : ''}>Learned</option>
@@ -433,7 +439,7 @@
     }
 
     /**
-     * Build heard count section (my_tunes only, for Want To Learn or Learning status)
+     * Build heard count section (all contexts except admin, for Want To Learn or Learning status)
      */
     function buildHeardCountSection(tuneData, config) {
         const status = tuneData.person_tune_status?.learn_status || tuneData.learn_status;
@@ -441,7 +447,23 @@
             return '';
         }
 
-        const heardCount = tuneData.heard_count || 0;
+        // Check if we have a person_tune_id to work with
+        let hasPersonTuneId = false;
+        if (config.context === 'my_tunes') {
+            hasPersonTuneId = !!(tuneData.person_tune_id || config.additionalData?.personTuneId);
+        } else {
+            hasPersonTuneId = !!tuneData.person_tune_status?.person_tune_id;
+        }
+
+        // Don't show the section if we don't have a person_tune_id
+        if (!hasPersonTuneId) {
+            return '';
+        }
+
+        // Get heard_count from the appropriate location based on context
+        const heardCount = config.context === 'my_tunes'
+            ? (tuneData.heard_count || 0)
+            : (tuneData.person_tune_status?.heard_count || 0);
         const plural = heardCount !== 1 ? 's' : '';
 
         return `
@@ -450,6 +472,11 @@
                     You've heard this <span id="heard-count-value">${heardCount}</span> time${plural}
                 </div>
                 <div class="heard-count-controls">
+                    <span class="heard-count-spinner" style="display: none;">
+                        <svg class="spinner-icon" viewBox="0 0 50 50">
+                            <circle class="spinner-path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                        </svg>
+                    </span>
                     <button class="heard-count-btn heard-count-btn-minus"
                             onclick="TuneDetailModal.decrementHeardCount()"
                             ${heardCount === 0 ? 'disabled' : ''}>−</button>
@@ -660,16 +687,19 @@
                 originalValues.name_alias = tuneData.name_alias || '';
                 originalValues.setting_id = tuneData.setting_id || '';
                 originalValues.notes = tuneData.notes || '';
+                originalValues.learn_status = tuneData.learn_status || 'want to learn';
                 break;
             case 'session':
                 originalValues.alias = tuneData.alias || '';
                 originalValues.setting_id = tuneData.setting_id || '';
                 originalValues.key = tuneData.key || '';
+                originalValues.learn_status = tuneData.person_tune_status?.learn_status || '';
                 break;
             case 'session_instance':
                 originalValues.name = tuneData.name || '';
                 originalValues.setting_override = tuneData.setting_override || '';
                 originalValues.key_override = tuneData.key_override || '';
+                originalValues.learn_status = tuneData.person_tune_status?.learn_status || '';
                 break;
             case 'admin':
                 originalValues.name = tuneData.name || '';
@@ -720,13 +750,18 @@
      * Check if any field has been modified
      */
     function checkIfDirty() {
+        // Check tunebook status for all contexts (except admin)
+        const statusSelect = document.getElementById('tunebook-status-select');
+        const statusChanged = statusSelect && statusSelect.value !== originalValues.learn_status;
+
         switch(currentContext) {
             case 'my_tunes':
                 const nameAliasInput = document.getElementById('name-alias-input');
                 const settingInput = document.getElementById('setting-input');
                 const notesTextarea = document.getElementById('notes-textarea');
 
-                return (nameAliasInput && nameAliasInput.value !== originalValues.name_alias) ||
+                return statusChanged ||
+                       (nameAliasInput && nameAliasInput.value !== originalValues.name_alias) ||
                        (settingInput && extractSettingId(settingInput.value) !== (originalValues.setting_id || null)) ||
                        (notesTextarea && notesTextarea.value !== originalValues.notes);
 
@@ -735,7 +770,8 @@
                 const sessionSettingInput = document.getElementById('setting-input');
                 const keySelect = document.getElementById('key-select');
 
-                return (aliasInput && aliasInput.value !== originalValues.alias) ||
+                return statusChanged ||
+                       (aliasInput && aliasInput.value !== originalValues.alias) ||
                        (sessionSettingInput && extractSettingId(sessionSettingInput.value) !== (originalValues.setting_id || null)) ||
                        (keySelect && keySelect.value !== originalValues.key);
 
@@ -744,7 +780,8 @@
                 const instanceSettingInput = document.getElementById('setting-input');
                 const instanceKeySelect = document.getElementById('key-select');
 
-                return (instanceAliasInput && instanceAliasInput.value !== originalValues.name) ||
+                return statusChanged ||
+                       (instanceAliasInput && instanceAliasInput.value !== originalValues.name) ||
                        (instanceSettingInput && extractSettingId(instanceSettingInput.value) !== (originalValues.setting_override || null)) ||
                        (instanceKeySelect && instanceKeySelect.value !== originalValues.key_override);
 
@@ -874,6 +911,7 @@
     function closeModal() {
         const modal = document.getElementById('tune-detail-modal');
         modal.classList.remove('show');
+        pendingHeardCountRequests = 0; // Reset pending requests counter
 
         // Remove tune parameter from URL
         removeUrlTuneParam();
@@ -931,15 +969,33 @@
         let apiEndpoint = '';
         let httpMethod = 'PUT';
 
+        // Collect learn_status separately for session/session_instance contexts
+        const statusSelect = document.getElementById('tunebook-status-select');
+        const learnStatusChanged = statusSelect && statusSelect.value !== originalValues.learn_status;
+        let separateLearnStatusUpdate = null;
+
         switch(currentContext) {
             case 'my_tunes':
                 const nameAliasInput = document.getElementById('name-alias-input');
                 const settingInput = document.getElementById('setting-input');
                 const notesTextarea = document.getElementById('notes-textarea');
 
-                if (nameAliasInput) updates.name_alias = nameAliasInput.value.trim() || null;
-                if (settingInput) updates.setting_id = extractSettingId(settingInput.value);
-                if (notesTextarea) updates.notes = notesTextarea.value.trim() || null;
+                // Only include fields that have changed
+                if (nameAliasInput && nameAliasInput.value !== originalValues.name_alias) {
+                    updates.name_alias = nameAliasInput.value.trim() || null;
+                }
+                if (settingInput) {
+                    const newSettingId = extractSettingId(settingInput.value);
+                    if (newSettingId !== (originalValues.setting_id || null)) {
+                        updates.setting_id = newSettingId;
+                    }
+                }
+                if (notesTextarea && notesTextarea.value !== originalValues.notes) {
+                    updates.notes = notesTextarea.value.trim() || null;
+                }
+                if (statusSelect && statusSelect.value !== originalValues.learn_status) {
+                    updates.learn_status = statusSelect.value;
+                }
 
                 apiEndpoint = `/api/my-tunes/${currentConfig.additionalData.personTuneId}`;
                 break;
@@ -949,9 +1005,27 @@
                 const sessionSettingInput = document.getElementById('setting-input');
                 const keySelect = document.getElementById('key-select');
 
-                if (aliasInput) updates.alias = aliasInput.value.trim() || null;
-                if (sessionSettingInput) updates.setting_id = extractSettingId(sessionSettingInput.value);
-                if (keySelect) updates.key = keySelect.value || null;
+                // Only include fields that have changed
+                if (aliasInput && aliasInput.value !== originalValues.alias) {
+                    updates.alias = aliasInput.value.trim() || null;
+                }
+                if (sessionSettingInput) {
+                    const newSettingId = extractSettingId(sessionSettingInput.value);
+                    if (newSettingId !== (originalValues.setting_id || null)) {
+                        updates.setting_id = newSettingId;
+                    }
+                }
+                if (keySelect && keySelect.value !== originalValues.key) {
+                    updates.key = keySelect.value || null;
+                }
+
+                // learn_status must be updated via separate endpoint for session context
+                if (learnStatusChanged) {
+                    separateLearnStatusUpdate = {
+                        endpoint: `/api/person/tunes/${currentTuneData.tune_id}/status`,
+                        data: { learn_status: statusSelect.value }
+                    };
+                }
 
                 apiEndpoint = `/api/sessions/${currentConfig.additionalData.sessionPath}/tunes/${currentTuneData.tune_id}`;
                 break;
@@ -961,9 +1035,27 @@
                 const instanceSettingInput = document.getElementById('setting-input');
                 const instanceKeySelect = document.getElementById('key-select');
 
-                if (instanceNameInput) updates.name = instanceNameInput.value.trim() || null;
-                if (instanceSettingInput) updates.setting_override = extractSettingId(instanceSettingInput.value);
-                if (instanceKeySelect) updates.key_override = instanceKeySelect.value || null;
+                // Only include fields that have changed
+                if (instanceNameInput && instanceNameInput.value !== originalValues.name) {
+                    updates.name = instanceNameInput.value.trim() || null;
+                }
+                if (instanceSettingInput) {
+                    const newSettingId = extractSettingId(instanceSettingInput.value);
+                    if (newSettingId !== (originalValues.setting_override || null)) {
+                        updates.setting_override = newSettingId;
+                    }
+                }
+                if (instanceKeySelect && instanceKeySelect.value !== originalValues.key_override) {
+                    updates.key_override = instanceKeySelect.value || null;
+                }
+
+                // learn_status must be updated via separate endpoint for session_instance context
+                if (learnStatusChanged) {
+                    separateLearnStatusUpdate = {
+                        endpoint: `/api/person/tunes/${currentTuneData.tune_id}/status`,
+                        data: { learn_status: statusSelect.value }
+                    };
+                }
 
                 const dateOrId = currentConfig.additionalData.dateOrId;
                 apiEndpoint = `/api/sessions/${currentConfig.additionalData.sessionPath}/${dateOrId}/tunes/${currentTuneData.tune_id}`;
@@ -984,22 +1076,92 @@
                 break;
         }
 
-        // Make the API call
-        fetch(apiEndpoint, {
-            method: httpMethod,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(updates)
-        })
-        .then(response => response.json())
-        .then(data => {
+        // Build promise chain - main update first, then learn_status if needed
+        let savePromise;
+
+        // Check if there are any updates to send to the main endpoint
+        const hasMainUpdates = Object.keys(updates).length > 0;
+
+        if (hasMainUpdates) {
+            // Make the main update request
+            savePromise = fetch(apiEndpoint, {
+                method: httpMethod,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updates)
+            })
+            .then(response => response.json());
+        } else {
+            // No main updates, just return success
+            savePromise = Promise.resolve({ success: true, message: 'No changes to save' });
+        }
+
+        // If we need to make a separate learn_status update, chain it
+        if (separateLearnStatusUpdate) {
+            savePromise = savePromise.then(data => {
+                if (!data.success) return data; // Don't continue if first update failed
+
+                // Make the learn_status update
+                return fetch(separateLearnStatusUpdate.endpoint, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(separateLearnStatusUpdate.data)
+                })
+                .then(statusResponse => statusResponse.json())
+                .then(statusData => {
+                    // Return combined success
+                    return {
+                        success: data.success && statusData.success,
+                        error: statusData.error || data.error,
+                        message: statusData.message || data.message
+                    };
+                });
+            });
+        }
+
+        // Handle the response
+        savePromise.then(data => {
             if (data.success) {
                 saveBtn.textContent = 'Saved!';
                 saveBtn.style.backgroundColor = '#28a745';
 
+                // Update the status section color if status was changed
+                const statusSelect = document.getElementById('tunebook-status-select');
+                if (statusSelect && updates.learn_status) {
+                    const statusSection = document.querySelector('.tunebook-status-section');
+                    if (statusSection) {
+                        // Remove old status classes
+                        statusSection.classList.remove('tunebook-status-want-to-learn', 'tunebook-status-learning', 'tunebook-status-learned');
+                        // Add new status class
+                        statusSection.classList.add(`tunebook-status-${updates.learn_status.replace(/ /g, '-')}`);
+                    }
+
+                    // Update local data
+                    if (currentContext === 'my_tunes') {
+                        currentTuneData.learn_status = updates.learn_status;
+                    } else if (currentTuneData.person_tune_status) {
+                        currentTuneData.person_tune_status.learn_status = updates.learn_status;
+                    }
+
+                    // Update heard count section visibility if status changed to/from learned
+                    const heardCountSection = document.querySelector('.heard-count-section');
+                    if (heardCountSection) {
+                        if (updates.learn_status === 'learned') {
+                            heardCountSection.style.display = 'none';
+                        } else {
+                            heardCountSection.style.display = 'flex';
+                        }
+                    }
+                }
+
                 // Update original values to reflect saved state
                 storeOriginalValues(Object.assign({}, currentTuneData, updates), currentConfig);
+
+                // Remove tune parameter from URL first (before onSave which might reload)
+                removeUrlTuneParam();
 
                 // Call onSave callback if provided
                 if (currentConfig.onSave && typeof currentConfig.onSave === 'function') {
@@ -1035,19 +1197,100 @@
     }
 
     /**
-     * Increment heard count (my_tunes only)
+     * Update heard count spinner visibility based on pending requests
+     */
+    function updateHeardCountSpinner() {
+        const spinner = document.querySelector('.heard-count-spinner');
+        if (spinner) {
+            spinner.style.display = pendingHeardCountRequests > 0 ? 'inline-block' : 'none';
+        }
+    }
+
+    /**
+     * Start a heard count API request (increment pending counter and show spinner)
+     */
+    function startHeardCountRequest() {
+        pendingHeardCountRequests++;
+        updateHeardCountSpinner();
+    }
+
+    /**
+     * End a heard count API request (decrement pending counter and update spinner)
+     */
+    function endHeardCountRequest() {
+        pendingHeardCountRequests = Math.max(0, pendingHeardCountRequests - 1);
+        updateHeardCountSpinner();
+    }
+
+    /**
+     * Increment heard count (all contexts except admin)
      */
     function incrementHeardCount() {
-        if (currentContext !== 'my_tunes') return;
+        if (currentContext === 'admin') return;
 
-        const tuneId = currentTuneData.tune_id;
         const countValueSpan = document.getElementById('heard-count-value');
         const plusBtn = document.querySelector('.heard-count-btn-plus');
         const minusBtn = document.querySelector('.heard-count-btn-minus');
 
-        if (plusBtn) plusBtn.disabled = true;
+        // Get current count from appropriate location based on context
+        let currentCount;
+        if (currentContext === 'my_tunes') {
+            currentCount = currentTuneData.heard_count || 0;
+        } else if (currentTuneData.person_tune_status) {
+            currentCount = currentTuneData.person_tune_status.heard_count || 0;
+        } else {
+            currentCount = 0;
+        }
 
-        fetch(`/api/person/tunes/${tuneId}/increment_heard_count`, {
+        const newCount = currentCount + 1;
+
+        // Optimistically update UI immediately
+        if (countValueSpan) {
+            countValueSpan.textContent = newCount;
+        }
+
+        // Update local data
+        if (currentContext === 'my_tunes') {
+            currentTuneData.heard_count = newCount;
+        } else if (currentTuneData.person_tune_status) {
+            currentTuneData.person_tune_status.heard_count = newCount;
+        }
+
+        // Enable minus button since count is now > 0
+        if (minusBtn) minusBtn.disabled = false;
+
+        // Update plural text
+        const labelDiv = countValueSpan?.parentElement;
+        if (labelDiv) {
+            const plural = newCount !== 1 ? 's' : '';
+            labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${newCount}</span> time${plural}`;
+        }
+
+        // Get person_tune_id for API call
+        let personTuneId = null;
+        if (currentContext === 'my_tunes') {
+            personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
+        } else if (currentTuneData.person_tune_status?.person_tune_id) {
+            personTuneId = currentTuneData.person_tune_status.person_tune_id;
+        }
+
+        if (!personTuneId) {
+            console.error('Cannot increment: person_tune_id not available');
+            // Revert optimistic update
+            if (countValueSpan) countValueSpan.textContent = currentCount;
+            if (currentContext === 'my_tunes') {
+                currentTuneData.heard_count = currentCount;
+            } else if (currentTuneData.person_tune_status) {
+                currentTuneData.person_tune_status.heard_count = currentCount;
+            }
+            return;
+        }
+
+        // Start tracking API request and show spinner
+        startHeardCountRequest();
+
+        // Make async API call
+        fetch(`/api/my-tunes/${personTuneId}/heard`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1055,73 +1298,161 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                const newCount = data.new_count;
-                if (countValueSpan) {
-                    countValueSpan.textContent = newCount;
-                }
-                currentTuneData.heard_count = newCount;
-
-                // Enable minus button if count > 0
-                if (minusBtn) minusBtn.disabled = newCount === 0;
-            } else {
+            if (!data.success) {
                 console.error('Error incrementing heard count:', data.error);
+                // Revert optimistic update on error
+                if (countValueSpan) countValueSpan.textContent = currentCount;
+                if (currentContext === 'my_tunes') {
+                    currentTuneData.heard_count = currentCount;
+                } else if (currentTuneData.person_tune_status) {
+                    currentTuneData.person_tune_status.heard_count = currentCount;
+                }
+                if (minusBtn) minusBtn.disabled = currentCount === 0;
+                // Update plural text back
+                if (labelDiv) {
+                    const plural = currentCount !== 1 ? 's' : '';
+                    labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
+                }
             }
+            // End tracking API request and hide spinner if no more pending
+            endHeardCountRequest();
         })
         .catch(error => {
             console.error('Error:', error);
-        })
-        .finally(() => {
-            if (plusBtn) plusBtn.disabled = false;
+            // Revert optimistic update on error
+            if (countValueSpan) countValueSpan.textContent = currentCount;
+            if (currentContext === 'my_tunes') {
+                currentTuneData.heard_count = currentCount;
+            } else if (currentTuneData.person_tune_status) {
+                currentTuneData.person_tune_status.heard_count = currentCount;
+            }
+            if (minusBtn) minusBtn.disabled = currentCount === 0;
+            // Update plural text back
+            if (labelDiv) {
+                const plural = currentCount !== 1 ? 's' : '';
+                labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
+            }
+            // End tracking API request and hide spinner if no more pending
+            endHeardCountRequest();
         });
     }
 
     /**
-     * Decrement heard count (my_tunes only)
+     * Decrement heard count (all contexts except admin)
+     * Uses PUT with PATCH-like semantics - server will decrement from current DB value
      */
     function decrementHeardCount() {
-        if (currentContext !== 'my_tunes') return;
+        if (currentContext === 'admin') return;
 
-        const currentCount = currentTuneData.heard_count || 0;
+        // Get current count from appropriate location based on context
+        let currentCount;
+        if (currentContext === 'my_tunes') {
+            currentCount = currentTuneData.heard_count || 0;
+        } else if (currentTuneData.person_tune_status) {
+            currentCount = currentTuneData.person_tune_status.heard_count || 0;
+        } else {
+            currentCount = 0;
+        }
+
         if (currentCount === 0) return;
 
-        const tuneId = currentTuneData.tune_id;
         const countValueSpan = document.getElementById('heard-count-value');
         const minusBtn = document.querySelector('.heard-count-btn-minus');
         const plusBtn = document.querySelector('.heard-count-btn-plus');
 
-        if (minusBtn) minusBtn.disabled = true;
+        const newCount = Math.max(0, currentCount - 1);
 
-        // There's no decrement API endpoint, so we'll use the update endpoint
-        fetch(`/api/my-tunes/${currentConfig.additionalData.personTuneId}`, {
-            method: 'PUT',
+        // Optimistically update UI immediately
+        if (countValueSpan) {
+            countValueSpan.textContent = newCount;
+        }
+
+        // Update local data
+        if (currentContext === 'my_tunes') {
+            currentTuneData.heard_count = newCount;
+        } else if (currentTuneData.person_tune_status) {
+            currentTuneData.person_tune_status.heard_count = newCount;
+        }
+
+        // Disable minus button if count is now 0
+        if (minusBtn) minusBtn.disabled = newCount === 0;
+
+        // Update plural text
+        const labelDiv = countValueSpan?.parentElement;
+        if (labelDiv) {
+            const plural = newCount !== 1 ? 's' : '';
+            labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${newCount}</span> time${plural}`;
+        }
+
+        // Get person_tune_id for API call
+        let personTuneId = null;
+        if (currentContext === 'my_tunes') {
+            personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
+        } else if (currentTuneData.person_tune_status?.person_tune_id) {
+            personTuneId = currentTuneData.person_tune_status.person_tune_id;
+        }
+
+        if (!personTuneId) {
+            console.error('Cannot decrement: person_tune_id not available');
+            // Revert optimistic update
+            if (countValueSpan) countValueSpan.textContent = currentCount;
+            if (currentContext === 'my_tunes') {
+                currentTuneData.heard_count = currentCount;
+            } else if (currentTuneData.person_tune_status) {
+                currentTuneData.person_tune_status.heard_count = currentCount;
+            }
+            if (minusBtn) minusBtn.disabled = currentCount === 0;
+            return;
+        }
+
+        // Start tracking API request and show spinner
+        startHeardCountRequest();
+
+        // Make async API call to atomically decrement on server
+        fetch(`/api/my-tunes/${personTuneId}/heard`, {
+            method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                heard_count: Math.max(0, currentCount - 1)
-            })
+            }
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                const newCount = Math.max(0, currentCount - 1);
-                if (countValueSpan) {
-                    countValueSpan.textContent = newCount;
-                }
-                currentTuneData.heard_count = newCount;
-
-                // Disable minus button if count is now 0
-                if (minusBtn) minusBtn.disabled = newCount === 0;
-            } else {
+            if (!data.success) {
                 console.error('Error decrementing heard count:', data.error);
+                // Revert optimistic update on error
+                if (countValueSpan) countValueSpan.textContent = currentCount;
+                if (currentContext === 'my_tunes') {
+                    currentTuneData.heard_count = currentCount;
+                } else if (currentTuneData.person_tune_status) {
+                    currentTuneData.person_tune_status.heard_count = currentCount;
+                }
+                if (minusBtn) minusBtn.disabled = currentCount === 0;
+                // Update plural text back
+                if (labelDiv) {
+                    const plural = currentCount !== 1 ? 's' : '';
+                    labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
+                }
             }
+            // End tracking API request and hide spinner if no more pending
+            endHeardCountRequest();
         })
         .catch(error => {
             console.error('Error:', error);
-        })
-        .finally(() => {
-            if (minusBtn) minusBtn.disabled = currentTuneData.heard_count === 0;
+            // Revert optimistic update on error
+            if (countValueSpan) countValueSpan.textContent = currentCount;
+            if (currentContext === 'my_tunes') {
+                currentTuneData.heard_count = currentCount;
+            } else if (currentTuneData.person_tune_status) {
+                currentTuneData.person_tune_status.heard_count = currentCount;
+            }
+            if (minusBtn) minusBtn.disabled = currentCount === 0;
+            // Update plural text back
+            if (labelDiv) {
+                const plural = currentCount !== 1 ? 's' : '';
+                labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
+            }
+            // End tracking API request and hide spinner if no more pending
+            endHeardCountRequest();
         });
     }
 
@@ -1170,68 +1501,13 @@
     }
 
     /**
-     * Update tunebook status
+     * Update tunebook status (DEPRECATED - now uses save button)
+     * This function is no longer used but kept for reference.
+     * Status changes now go through the save() function via dirty tracking.
      */
     function updateTunebookStatus() {
-        const select = document.getElementById('tunebook-status-select');
-        if (!select) return;
-
-        const newStatus = select.value;
-        const tuneId = currentTuneData.tune_id;
-
-        // Find the person_tune_id from current config if available
-        let personTuneId = currentConfig.additionalData?.personTuneId;
-
-        // If we have person_tune_id, use the my-tunes endpoint (preferred)
-        // Otherwise fall back to the tune_id based status endpoint
-        const endpoint = personTuneId
-            ? `/api/my-tunes/${personTuneId}`
-            : `/api/person/tunes/${tuneId}/status`;
-
-        fetch(endpoint, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                learn_status: newStatus
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Update the status color
-                const statusSection = document.querySelector('.tunebook-status-section');
-                if (statusSection) {
-                    // Remove old status classes
-                    statusSection.classList.remove('tunebook-status-want-to-learn', 'tunebook-status-learning', 'tunebook-status-learned');
-                    // Add new status class
-                    statusSection.classList.add(`tunebook-status-${newStatus.replace(/ /g, '-')}`);
-                }
-
-                // Update local data
-                if (currentTuneData.person_tune_status) {
-                    currentTuneData.person_tune_status.learn_status = newStatus;
-                }
-
-                // Refresh heard count section if status changed to/from learned
-                const heardCountSection = document.querySelector('.heard-count-section');
-                if (heardCountSection) {
-                    if (newStatus === 'learned') {
-                        heardCountSection.style.display = 'none';
-                    } else {
-                        heardCountSection.style.display = 'flex';
-                    }
-                }
-            } else {
-                console.error('Error updating tunebook status:', data.error);
-                alert('Failed to update status');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to update status');
-        });
+        // This function is deprecated - status changes now use the Save button
+        console.log('updateTunebookStatus called but is deprecated - use Save button instead');
     }
 
     /**
@@ -1254,6 +1530,9 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Remove tune parameter from URL first (before onSave which might reload)
+                removeUrlTuneParam();
+
                 // Call onSave callback if provided (to refresh the list)
                 if (currentConfig.onSave && typeof currentConfig.onSave === 'function') {
                     currentConfig.onSave();

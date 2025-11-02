@@ -458,7 +458,7 @@ def get_session_tune_detail(session_path, tune_id):
                 person_id = person_row[0]
                 cur.execute(
                     """
-                    SELECT learn_status, heard_count
+                    SELECT person_tune_id, learn_status, heard_count
                     FROM person_tune
                     WHERE person_id = %s AND tune_id = %s
                     """,
@@ -468,12 +468,14 @@ def get_session_tune_detail(session_path, tune_id):
                 if tune_row:
                     person_tune_status = {
                         "on_list": True,
-                        "learn_status": tune_row[0],
-                        "heard_count": tune_row[1]
+                        "person_tune_id": tune_row[0],
+                        "learn_status": tune_row[1],
+                        "heard_count": tune_row[2]
                     }
                 else:
                     person_tune_status = {
                         "on_list": False,
+                        "person_tune_id": None,
                         "learn_status": None,
                         "heard_count": None
                     }
@@ -8035,7 +8037,7 @@ def get_person_tune_status(tune_id):
         # Check if tune is on user's list
         cur.execute(
             """
-            SELECT learn_status, heard_count
+            SELECT person_tune_id, learn_status, heard_count
             FROM person_tune
             WHERE person_id = %s AND tune_id = %s
             """,
@@ -8048,8 +8050,9 @@ def get_person_tune_status(tune_id):
                 "success": True,
                 "on_list": True,
                 "tune_status": {
-                    "learn_status": tune_row[0],
-                    "heard_count": tune_row[1]
+                    "person_tune_id": tune_row[0],
+                    "learn_status": tune_row[1],
+                    "heard_count": tune_row[2]
                 }
             })
         else:
@@ -8435,7 +8438,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                 person_id = person_row[0]
                 cur.execute(
                     """
-                    SELECT learn_status, heard_count
+                    SELECT person_tune_id, learn_status, heard_count
                     FROM person_tune
                     WHERE person_id = %s AND tune_id = %s
                     """,
@@ -8445,12 +8448,14 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                 if tune_row:
                     person_tune_status = {
                         "on_list": True,
-                        "learn_status": tune_row[0],
-                        "heard_count": tune_row[1]
+                        "person_tune_id": tune_row[0],
+                        "learn_status": tune_row[1],
+                        "heard_count": tune_row[2]
                     }
                 else:
                     person_tune_status = {
                         "on_list": False,
+                        "person_tune_id": None,
                         "learn_status": None,
                         "heard_count": None
                     }

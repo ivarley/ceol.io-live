@@ -1469,6 +1469,8 @@ window.showTuneDetail = function(tuneId, tuneName, tuneType) {
             window.location.reload();
         },
         additionalData: {
+            sessionPath: window.sessionConfig.sessionPath,
+            dateOrId: window.sessionConfig.sessionDate,
             tuneName: tuneName,
             tuneType: tuneType,
             isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }}

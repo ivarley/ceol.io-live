@@ -268,13 +268,52 @@
 }
 
 .tunebook-status-select {
-    padding: 4px 8px;
-    border: 1px solid currentColor;
-    border-radius: 4px;
-    background: transparent;
+    padding: 6px 28px 6px 10px;
+    border: 1.5px solid currentColor;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.5);
     color: inherit;
     font-size: 13px;
     cursor: pointer;
+    font-weight: 600;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23000' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .tunebook-status-select {
+    background-color: rgba(0, 0, 0, 0.3);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+}
+
+.tunebook-status-select:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-width: 2px;
+}
+
+[data-theme="dark"] .tunebook-status-select:hover {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.tunebook-status-select:focus {
+    outline: none;
+    border-width: 2px;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .tunebook-status-select:focus {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+/* Style the dropdown options */
+.tunebook-status-select option {
+    background-color: var(--modal-bg);
+    color: var(--text-color);
+    padding: 8px 12px;
     font-weight: 500;
 }
 
@@ -325,6 +364,56 @@
 
 .heard-count-btn-plus {
     font-weight: bold;
+    background-color: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.heard-count-btn-plus:hover:not(:disabled) {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Heard count spinner */
+.heard-count-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    opacity: 0.4;
+}
+
+.spinner-icon {
+    animation: spinner-rotate 1s linear infinite;
+    width: 100%;
+    height: 100%;
+}
+
+.spinner-path {
+    stroke: var(--text-color, #333);
+    stroke-linecap: round;
+    animation: spinner-dash 1.5s ease-in-out infinite;
+}
+
+@keyframes spinner-rotate {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes spinner-dash {
+    0% {
+        stroke-dasharray: 1, 150;
+        stroke-dashoffset: 0;
+    }
+    50% {
+        stroke-dasharray: 90, 150;
+        stroke-dashoffset: -35;
+    }
+    100% {
+        stroke-dasharray: 90, 150;
+        stroke-dashoffset: -124;
+    }
 }
 
 /* Notes section */

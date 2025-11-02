@@ -201,7 +201,37 @@ class PersonTuneService:
             return False, f"Validation error: {str(e)}", None
         except Exception as e:
             return False, f"Error incrementing heard count: {str(e)}", None
-    
+
+    def decrement_heard_count(
+        self,
+        person_tune_id: int,
+        changed_by: str = 'system'
+    ) -> Tuple[bool, str, Optional[int]]:
+        """
+        Decrement the heard_count for a PersonTune (minimum 0).
+
+        Args:
+            person_tune_id: ID of the PersonTune to update
+            changed_by: User who made the change
+
+        Returns:
+            Tuple of (success, message, new_heard_count)
+        """
+        try:
+            person_tune = PersonTune.get_by_id(person_tune_id)
+            if not person_tune:
+                return False, f"PersonTune with ID {person_tune_id} not found", None
+
+            # Decrement the heard count
+            new_count = person_tune.decrement_heard_count(changed_by=changed_by)
+
+            return True, f"Heard count decremented to {new_count}", new_count
+
+        except ValueError as e:
+            return False, f"Validation error: {str(e)}", None
+        except Exception as e:
+            return False, f"Error decrementing heard count: {str(e)}", None
+
     def update_person_tune(
         self,
         person_tune_id: int,

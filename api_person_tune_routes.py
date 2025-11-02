@@ -654,6 +654,7 @@ def increment_tune_heard_count(person_tune_id):
             "success": True,
             "message": message,
             "heard_count": new_count,
+            "new_count": new_count,  # Alias for consistency
             "person_tune": response_data
         }), 200
 
@@ -661,6 +662,66 @@ def increment_tune_heard_count(person_tune_id):
         return jsonify({
             "success": False,
             "error": f"Error incrementing heard count: {str(e)}"
+        }), 500
+
+
+@person_tune_login_required
+@require_person_tune_ownership
+def decrement_tune_heard_count(person_tune_id):
+    """
+    DELETE /api/my-tunes/<person_tune_id>/heard
+
+    Atomically decrement the heard count for a tune (minimum 0).
+
+    Route Parameters:
+        - person_tune_id (int): ID of the person_tune record
+
+    Returns:
+        JSON response with updated heard count
+    """
+    try:
+        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+
+        # Decrement the heard count
+        success, message, new_count = person_tune_service.decrement_heard_count(
+            person_tune_id=person_tune_id,
+            changed_by=changed_by
+        )
+
+        if not success:
+            # Check if it's a validation error or not found error
+            if "not found" in message.lower():
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 404
+            elif "validation" in message.lower():
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 422  # Unprocessable Entity
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": message
+                }), 400
+
+        # Get updated person_tune for full response
+        person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
+        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "heard_count": new_count,
+            "new_count": new_count,  # Alias for consistency
+            "person_tune": response_data
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error decrementing heard count: {str(e)}"
         }), 500
 
 

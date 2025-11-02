@@ -1322,8 +1322,9 @@ function waitForTuneAndOpen(personTuneId, attempts = 0) {
             waitForTuneAndOpen(personTuneId, attempts + 1);
         }, 250);
     } else {
-        // Timeout - tune not found after 5 seconds
-        showMessage('Tune not found', 'error');
+        // Timeout - tune not found in local array after 5 seconds
+        // Just open the modal anyway - it will fetch its own data from API
+        showTuneDetail(personTuneId, null);
     }
 }
 
@@ -1334,25 +1335,23 @@ function showTuneDetail(personTuneId, event) {
     }
 
     // Find the tune in our local data to get basic info for loading state
+    // This is just for the initial display - the modal will fetch full data from API
     const tune = allTunes.find(t => t.person_tune_id === personTuneId);
-    if (!tune) {
-        showMessage('Tune not found', 'error');
-        return;
-    }
 
     // Use the unified tune detail modal
+    // The modal will fetch its own data, so we don't need to fail if tune isn't in local array
     TuneDetailModal.show({
         context: 'my_tunes',
-        tuneId: tune.tune_id,
+        tuneId: tune ? tune.tune_id : null,
         apiEndpoint: `/api/my-tunes/${personTuneId}`,
         onSave: function() {
             // Refresh the tunes list
-            fetchAndRenderTunes();
+            loadTunes();
         },
         additionalData: {
             personTuneId: personTuneId,
-            tuneName: tune.tune_name,
-            tuneType: tune.tune_type,
+            tuneName: tune ? tune.tune_name : 'Loading...',
+            tuneType: tune ? tune.tune_type : '',
             isUserLoggedIn: true
         }
     });

@@ -2318,6 +2318,7 @@
                 window.location.reload();
             },
             additionalData: {
+                sessionPath: sessionPath,
                 tuneName: tuneName,
                 tuneType: tuneType,
                 isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }}

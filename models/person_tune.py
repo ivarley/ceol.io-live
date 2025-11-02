@@ -144,7 +144,7 @@ class PersonTune:
     
     def increment_heard_count(self, changed_by: str = 'system') -> int:
         """
-        Increment the heard_count by 1.
+        Atomically increment the heard_count by 1.
 
         Args:
             changed_by: User who made the change
@@ -152,14 +152,114 @@ class PersonTune:
         Returns:
             int: New heard count value
         """
-        self.heard_count += 1
-
         # Update in database if this is a persisted record
         if self.person_tune_id is not None:
-            self._update_in_database(changed_by)
+            self._increment_heard_count_in_database(changed_by)
+        else:
+            self.heard_count += 1
 
         return self.heard_count
-    
+
+    def decrement_heard_count(self, changed_by: str = 'system') -> int:
+        """
+        Atomically decrement the heard_count by 1 (minimum 0).
+
+        Args:
+            changed_by: User who made the change
+
+        Returns:
+            int: New heard count value
+        """
+        # Update in database if this is a persisted record
+        if self.person_tune_id is not None:
+            self._decrement_heard_count_in_database(changed_by)
+        else:
+            self.heard_count = max(0, self.heard_count - 1)
+
+        return self.heard_count
+
+    def _increment_heard_count_in_database(self, changed_by: str = 'system') -> None:
+        """
+        Atomically increment heard_count in the database using SQL.
+
+        Args:
+            changed_by: User who made the change
+        """
+        if self.person_tune_id is None:
+            raise ValueError("Cannot update record without person_tune_id")
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("BEGIN")
+
+            # Save to history before update
+            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, changed_by)
+
+            # Atomically increment in database
+            cur.execute("""
+                UPDATE person_tune
+                SET heard_count = heard_count + 1,
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                WHERE person_tune_id = %s
+                RETURNING heard_count
+            """, (self.person_tune_id,))
+
+            # Update local object with new value from database
+            result = cur.fetchone()
+            if result:
+                self.heard_count = result[0]
+
+            cur.execute("COMMIT")
+            self.last_modified_date = now_utc()
+
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+        finally:
+            conn.close()
+
+    def _decrement_heard_count_in_database(self, changed_by: str = 'system') -> None:
+        """
+        Atomically decrement heard_count in the database using SQL (minimum 0).
+
+        Args:
+            changed_by: User who made the change
+        """
+        if self.person_tune_id is None:
+            raise ValueError("Cannot update record without person_tune_id")
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("BEGIN")
+
+            # Save to history before update
+            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, changed_by)
+
+            # Atomically decrement in database (minimum 0)
+            cur.execute("""
+                UPDATE person_tune
+                SET heard_count = GREATEST(0, heard_count - 1),
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                WHERE person_tune_id = %s
+                RETURNING heard_count
+            """, (self.person_tune_id,))
+
+            # Update local object with new value from database
+            result = cur.fetchone()
+            if result:
+                self.heard_count = result[0]
+
+            cur.execute("COMMIT")
+            self.last_modified_date = now_utc()
+
+        except Exception as e:
+            cur.execute("ROLLBACK")
+            raise e
+        finally:
+            conn.close()
+
     def _update_in_database(self, changed_by: str = 'system') -> None:
         """
         Update the record in the database.
