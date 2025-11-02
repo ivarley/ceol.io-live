@@ -925,18 +925,44 @@
      * Update URL with tune parameter
      */
     function updateUrlWithTune(tuneId) {
-        const url = new URL(window.location);
-        url.searchParams.set('tune', tuneId);
-        window.history.replaceState({}, '', url);
+        // For session context, use path-based URLs; otherwise use query params
+        const pathname = window.location.pathname;
+
+        if (pathname.includes('/sessions/') && !pathname.includes('/my-tunes')) {
+            // Session context: use path-based URL
+            let basePath = pathname;
+            // Remove existing tune ID from path if present
+            basePath = basePath.replace(/\/tunes\/\d+$/, '');
+            // Ensure we're on the tunes tab
+            if (!basePath.endsWith('/tunes')) {
+                basePath = basePath.replace(/\/(logs|people)$/, '') + '/tunes';
+            }
+            const newPath = `${basePath}/${tuneId}`;
+            window.history.replaceState({}, '', newPath);
+        } else {
+            // Other contexts: use query params
+            const url = new URL(window.location);
+            url.searchParams.set('tune', tuneId);
+            window.history.replaceState({}, '', url);
+        }
     }
 
     /**
      * Remove tune parameter from URL
      */
     function removeUrlTuneParam() {
-        const url = new URL(window.location);
-        url.searchParams.delete('tune');
-        window.history.replaceState({}, '', url);
+        const pathname = window.location.pathname;
+
+        if (pathname.includes('/sessions/') && !pathname.includes('/my-tunes')) {
+            // Session context: remove tune ID from path
+            let newPath = pathname.replace(/\/tunes\/\d+$/, '/tunes');
+            window.history.replaceState({}, '', newPath);
+        } else {
+            // Other contexts: remove query param
+            const url = new URL(window.location);
+            url.searchParams.delete('tune');
+            window.history.replaceState({}, '', url);
+        }
     }
 
     /**
@@ -1627,6 +1653,17 @@
      * @returns {number|null} Tune ID if present in URL, null otherwise
      */
     function getTuneIdFromUrl() {
+        const pathname = window.location.pathname;
+
+        // For session context, check path-based URL first
+        if (pathname.includes('/sessions/') && !pathname.includes('/my-tunes')) {
+            const match = pathname.match(/\/tunes\/(\d+)$/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+        }
+
+        // Fall back to query param for other contexts
         const urlParams = new URLSearchParams(window.location.search);
         const tuneParam = urlParams.get('tune');
         return tuneParam ? parseInt(tuneParam, 10) : null;
