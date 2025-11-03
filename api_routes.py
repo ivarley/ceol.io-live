@@ -485,7 +485,7 @@ def get_session_tune_detail(session_path, tune_id):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT COUNT(DISTINCT session_instance_id)
+            SELECT COUNT(*)
             FROM session_instance_tune
             WHERE tune_id = %s
         """,
@@ -8464,7 +8464,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT COUNT(DISTINCT session_instance_id)
+            SELECT COUNT(*)
             FROM session_instance_tune
             WHERE tune_id = %s
         """,
