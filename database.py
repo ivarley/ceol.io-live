@@ -163,12 +163,12 @@ def find_matching_tune(
     """
     # Normalize the search string the same way we normalize input
     normalized_tune_name = normalize_apostrophes(tune_name.strip())
-    # First, search session_tune table for alias match (case insensitive)
+    # First, search session_tune table for alias match (case and accent insensitive)
     cur.execute(
         """
         SELECT tune_id
         FROM session_tune
-        WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+        WHERE session_id = %s AND LOWER(unaccent(alias)) = LOWER(unaccent(%s))
     """,
         (session_id, normalized_tune_name),
     )
@@ -184,12 +184,12 @@ def find_matching_tune(
     elif len(session_tune_matches) == 1:
         return session_tune_matches[0][0], tune_name, None
     elif len(session_tune_matches) == 0:
-        # No session_tune alias match, search session_tune_alias table
+        # No session_tune alias match, search session_tune_alias table (accent insensitive)
         cur.execute(
             """
             SELECT tune_id
             FROM session_tune_alias
-            WHERE session_id = %s AND LOWER(alias) = LOWER(%s)
+            WHERE session_id = %s AND LOWER(unaccent(alias)) = LOWER(unaccent(%s))
         """,
             (session_id, normalized_tune_name),
         )
@@ -205,14 +205,14 @@ def find_matching_tune(
         elif len(alias_matches) == 1:
             return alias_matches[0][0], tune_name, None
         elif len(alias_matches) == 0:
-            # No alias match in either table, search tune table by name with flexible "The " matching
+            # No alias match in either table, search tune table by name with flexible "The " matching (accent insensitive)
             cur.execute(
                 """
                 SELECT tune_id, name
                 FROM tune
-                WHERE (LOWER(name) = LOWER(%s)
-                OR LOWER(name) = LOWER('The ' || %s)
-                OR LOWER('The ' || name) = LOWER(%s))
+                WHERE (LOWER(unaccent(name)) = LOWER(unaccent(%s))
+                OR LOWER(unaccent(name)) = LOWER(unaccent('The ' || %s))
+                OR LOWER(unaccent('The ' || name)) = LOWER(unaccent(%s)))
             """,
                 (normalized_tune_name, normalized_tune_name, normalized_tune_name),
             )

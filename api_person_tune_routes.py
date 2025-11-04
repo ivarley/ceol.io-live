@@ -919,10 +919,10 @@ def search_tunes():
                 if not person_id:  # Only add if not already prioritizing by person_tune
                     order_by_fields.append("CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END")
 
-            # Build match priority case
+            # Build match priority case (accent insensitive)
             select_fields.append("""CASE
-                           WHEN LOWER(t.name) = LOWER(%s) THEN 1
-                           WHEN LOWER(t.name) LIKE LOWER(%s) THEN 2
+                           WHEN LOWER(unaccent(t.name)) = LOWER(unaccent(%s)) THEN 1
+                           WHEN LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s)) THEN 2
                            ELSE 3
                        END AS match_priority""")
 
@@ -938,7 +938,7 @@ def search_tunes():
                 SELECT {select_clause}
                 FROM tune t
                 {join_clause}
-                WHERE LOWER(t.name) LIKE LOWER(%s)
+                WHERE LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s))
                 ORDER BY {order_by_clause}
                 LIMIT %s
             """

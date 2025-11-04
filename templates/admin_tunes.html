@@ -455,10 +455,10 @@ function sortByColumn(column) {
 function applyFilters() {
     // Filter tunes based on search and type
     filteredTunes = allTunes.filter(tune => {
-        // Search filter
+        // Search filter (accent-insensitive)
         if (currentFilters.search) {
-            const tuneName = (tune.name || '').toLowerCase();
-            if (!tuneName.includes(currentFilters.search)) {
+            const tuneName = tune.name || '';
+            if (!AccentUtils.includes(tuneName, currentFilters.search)) {
                 return false;
             }
         }

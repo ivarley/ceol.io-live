@@ -5287,7 +5287,7 @@ def match_tune_ajax(session_path, date_or_id):
             f"Wildcard search for '{tune_name}' with previous_tune_type='{previous_tune_type}'"
         )
 
-        # Query with all the ordering criteria
+        # Query with all the ordering criteria (accent insensitive)
         query = """
             SELECT
                 t.tune_id,
@@ -5307,12 +5307,12 @@ def match_tune_ajax(session_path, date_or_id):
                 GROUP BY sit.tune_id
             ) playcounts
                 ON t.tune_id = playcounts.tune_id
-            WHERE LOWER(COALESCE(st.alias, t.name)) LIKE %s
+            WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
             ORDER BY
                 preferred_tune_type ASC,
                 playcounts.plays DESC NULLS LAST,
                 t.tunebook_count_cached DESC NULLS LAST,
-                LOWER(COALESCE(st.alias, t.name)) ASC
+                LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
             LIMIT 5
         """
 

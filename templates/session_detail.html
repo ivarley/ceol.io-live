@@ -2225,10 +2225,10 @@
     function applyFilters() {
         // Filter tunes based on search and type
         filteredTunes = allTunes.filter(tune => {
-            // Search filter
+            // Search filter (accent-insensitive)
             if (currentFilters.search) {
-                const tuneName = (tune[1] || '').toLowerCase();
-                if (!tuneName.includes(currentFilters.search)) {
+                const tuneName = tune[1] || '';
+                if (!AccentUtils.includes(tuneName, currentFilters.search)) {
                     return false;
                 }
             }

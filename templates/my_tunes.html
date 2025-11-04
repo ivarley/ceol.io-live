@@ -908,12 +908,9 @@ function applyFilters() {
             // Check if the search query is a tune ID or URL
             const tuneId = extractTuneId(currentFilters.search);
 
-            // Always do text search on tune name and notes
-            const searchNormalized = normalizeString(currentFilters.search.toLowerCase());
-            const nameNormalized = normalizeString(tune.tune_name ? tune.tune_name.toLowerCase() : '');
-            const notesNormalized = normalizeString(tune.notes ? tune.notes.toLowerCase() : '');
-            const nameMatch = nameNormalized.includes(searchNormalized);
-            const notesMatch = notesNormalized.includes(searchNormalized);
+            // Always do text search on tune name and notes (accent-insensitive)
+            const nameMatch = AccentUtils.includes(tune.tune_name || '', currentFilters.search);
+            const notesMatch = AccentUtils.includes(tune.notes || '', currentFilters.search);
 
             // If search looks like a tune ID, also check tune_id
             const tuneIdMatch = tuneId && tune.tune_id === tuneId;

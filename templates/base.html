@@ -831,6 +831,9 @@ if ('serviceWorker' in navigator) {
 {% endif %}
 </script>
 
+<!-- Accent-insensitive string utilities -->
+<script src="{{ url_for('static', filename='js/utils/unaccent.js') }}"></script>
+
 {% block extra_js %}{% endblock %}
 
 </body>
