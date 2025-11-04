@@ -531,7 +531,7 @@ def get_session_tune_detail(session_path, tune_id):
 
 @login_required
 def update_session_tune_details(session_path, tune_id):
-    """Update session-specific tune details (setting_id, key, and aliases)"""
+    """Update session-specific tune details (setting_id, key, alias, and aliases)"""
     try:
         data = request.get_json()
         if not data:
@@ -539,7 +539,8 @@ def update_session_tune_details(session_path, tune_id):
 
         setting_id = data.get("setting_id", "").strip()
         key = data.get("key", "").strip()
-        aliases_str = data.get("aliases", "").strip()
+        alias = data.get("alias")  # Single alias for session_tune table
+        aliases_str = data.get("aliases", "").strip()  # Multiple aliases for session_tune_alias table
 
         # Parse setting_id - convert to int or None
         parsed_setting_id = None
@@ -553,6 +554,9 @@ def update_session_tune_details(session_path, tune_id):
                         "message": "Setting ID must be a number",
                     }
                 )
+
+        # Parse alias - convert empty string to None
+        parsed_alias = alias.strip() if alias and alias.strip() else None
 
         # Parse aliases - split by comma and clean up
         new_aliases = []
@@ -593,14 +597,14 @@ def update_session_tune_details(session_path, tune_id):
         # Save to history before making changes
         save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id))
 
-        # Update session_tune with setting_id and key
+        # Update session_tune with setting_id, key, and alias
         cur.execute(
             """
             UPDATE session_tune
-            SET setting_id = %s, key = %s
+            SET setting_id = %s, key = %s, alias = %s
             WHERE session_id = %s AND tune_id = %s
         """,
-            (parsed_setting_id, parsed_key, session_id, tune_id),
+            (parsed_setting_id, parsed_key, parsed_alias, session_id, tune_id),
         )
 
         # Now handle aliases in session_tune_alias table
