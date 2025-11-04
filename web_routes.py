@@ -1920,7 +1920,7 @@ def admin_people():
         cur = conn.cursor()
 
         # Get all people with outer join to user_account and their most recent login
-        # Also get session counts and latest session instance info
+        # Also get session counts, latest session instance info, and person_tune counts
         cur.execute(
             """
             SELECT
@@ -1938,7 +1938,8 @@ def admin_people():
                 COALESCE(sp.session_count, 0) as session_count,
                 COALESCE(sip.session_instance_count, 0) as session_instance_count,
                 latest_si.latest_date,
-                latest_si.session_name
+                latest_si.session_name,
+                COALESCE(pt.tune_count, 0) as tune_count
             FROM person p
             LEFT JOIN user_account ua ON p.person_id = ua.person_id
             LEFT JOIN (
@@ -1972,6 +1973,13 @@ def admin_people():
                 JOIN session s ON si.session_id = s.session_id
                 ORDER BY sip.person_id, si.date DESC
             ) latest_si ON p.person_id = latest_si.person_id
+            LEFT JOIN (
+                SELECT
+                    person_id,
+                    COUNT(*) as tune_count
+                FROM person_tune
+                GROUP BY person_id
+            ) pt ON p.person_id = pt.person_id
             ORDER BY p.last_name, p.first_name
         """
         )
@@ -1994,6 +2002,7 @@ def admin_people():
                 session_instance_count,
                 latest_date,
                 session_name,
+                tune_count,
             ) = row
 
             # Format full location for tooltip
@@ -2033,6 +2042,7 @@ def admin_people():
                     "session_count": session_count,
                     "session_instance_count": session_instance_count,
                     "latest_session_info": latest_session_info,
+                    "tune_count": tune_count,
                 }
             )
 
