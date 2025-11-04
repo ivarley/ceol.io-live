@@ -3982,6 +3982,83 @@ def get_person_logins_ajax(person_id):
         )
 
 
+def get_person_tunes_ajax(person_id):
+    """Get person_tune list for a person"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get person_tune records with tune details
+        cur.execute(
+            """
+            SELECT
+                pt.person_tune_id,
+                pt.tune_id,
+                COALESCE(pt.name_alias, t.name) as tune_name,
+                t.tune_type,
+                pt.learn_status,
+                pt.heard_count,
+                pt.learned_date,
+                pt.setting_id,
+                pt.created_date,
+                pt.last_modified_date
+            FROM person_tune pt
+            JOIN tune t ON pt.tune_id = t.tune_id
+            WHERE pt.person_id = %s
+            ORDER BY pt.last_modified_date DESC
+        """,
+            (person_id,),
+        )
+
+        tunes = []
+        for row in cur.fetchall():
+            (
+                person_tune_id,
+                tune_id,
+                tune_name,
+                tune_type,
+                learn_status,
+                heard_count,
+                learned_date,
+                setting_id,
+                created_date,
+                last_modified_date,
+            ) = row
+
+            tunes.append(
+                {
+                    "person_tune_id": person_tune_id,
+                    "tune_id": tune_id,
+                    "tune_name": tune_name,
+                    "tune_type": tune_type or "Unknown",
+                    "learn_status": learn_status,
+                    "heard_count": heard_count or 0,
+                    "learned_date": learned_date.strftime("%Y-%m-%d") if learned_date else None,
+                    "setting_id": setting_id,
+                    "created_date": created_date.strftime("%Y-%m-%d") if created_date else None,
+                    "last_modified_date": last_modified_date.strftime("%Y-%m-%d") if last_modified_date else None,
+                }
+            )
+
+        cur.close()
+        conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "tunes": tunes,
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {"success": False, "error": f"Failed to get person tunes: {str(e)}"}
+            ),
+            500,
+        )
+
+
 def check_username_availability():
     """Check if a username is available"""
     try:

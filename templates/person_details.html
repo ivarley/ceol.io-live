@@ -346,6 +346,9 @@
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">{% if is_user_profile %}I've Attended{% else %}Attended{% endif %}</button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tunes-tab" data-bs-toggle="tab" data-bs-target="#tunes" type="button" role="tab" aria-controls="tunes" aria-selected="false">Tunes</button>
+                    </li>
                     {% if user %}
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="logins-tab" data-bs-toggle="tab" data-bs-target="#logins" type="button" role="tab" aria-controls="logins" aria-selected="false">Logins</button>
@@ -424,6 +427,17 @@
                         </div>
                     </div>
 
+                    <!-- Tunes Tab -->
+                    <div class="tab-pane fade" id="tunes" role="tabpanel" aria-labelledby="tunes-tab">
+                        <div class="mt-3">
+                            <div id="tunes-loading" class="text-center">
+                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                <span style="margin-left: 8px;">Loading tunes...</span>
+                            </div>
+                            <div id="tunes-content"></div>
+                        </div>
+                    </div>
+
                     <!-- Logins Tab -->
                     {% if user %}
                     <div class="tab-pane fade" id="logins" role="tabpanel" aria-labelledby="logins-tab">
@@ -486,6 +500,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const personId = {{ person.id }};
     let attendedLoaded = false;
+    let tunesLoaded = false;
     let loginsLoaded = false;
     let editMode = false;
     let originalUsername = '';
@@ -873,6 +888,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (targetId === 'attended' && !attendedLoaded) {
                         loadAttendanceData();
                         attendedLoaded = true;
+                    } else if (targetId === 'tunes' && !tunesLoaded) {
+                        loadTunesData();
+                        tunesLoaded = true;
                     } else if (targetId === 'logins' && !loginsLoaded) {
                         loadLoginData();
                         loginsLoaded = true;
@@ -965,6 +983,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 const attendedContent = document.getElementById('attended-content');
                 if (attendedContent) {
                     attendedContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading players.</div>';
+                }
+                console.error('Error:', error);
+            });
+    }
+
+    function loadTunesData() {
+        fetch(`/api/person/${personId}/tunes`)
+            .then(response => response.json())
+            .then(data => {
+                const tunesLoading = document.getElementById('tunes-loading');
+                if (tunesLoading) tunesLoading.style.display = 'none';
+
+                if (data.success && data.tunes.length > 0) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Tune Name</th>
+                                        <th>Type</th>
+                                        <th>Learn Status</th>
+                                        <th>Heard Count</th>
+                                        <th>Learned Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+                    data.tunes.forEach(tune => {
+                        let statusClass = '';
+                        if (tune.learn_status === 'learned') {
+                            statusClass = 'text-success';
+                        } else if (tune.learn_status === 'learning') {
+                            statusClass = 'text-primary';
+                        } else {
+                            statusClass = 'text-muted';
+                        }
+
+                        html += `
+                            <tr>
+                                <td><a href="/tunes/${tune.tune_id}">${tune.tune_name}</a></td>
+                                <td>${tune.tune_type}</td>
+                                <td><span class="${statusClass}">${tune.learn_status}</span></td>
+                                <td>${tune.heard_count}</td>
+                                <td>${tune.learned_date || '-'}</td>
+                            </tr>`;
+                    });
+
+                    html += '</tbody></table></div>';
+                    document.getElementById('tunes-content').innerHTML = html;
+                } else {
+                    document.getElementById('tunes-content').innerHTML =
+                        '<div class="alert alert-info" role="alert">This person has no tunes in their collection yet.</div>';
+                }
+            })
+            .catch(error => {
+                const tunesLoading = document.getElementById('tunes-loading');
+                if (tunesLoading) tunesLoading.style.display = 'none';
+                const tunesContent = document.getElementById('tunes-content');
+                if (tunesContent) {
+                    tunesContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading tunes.</div>';
                 }
                 console.error('Error:', error);
             });
