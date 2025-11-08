@@ -65,4 +65,37 @@ Next, we need to create an incipit, which is the first two bars of the abc notat
 
 Next, we need to add a new microservice to our Render deployment that takes abc notation as an input and renders a png of the music notation as an output, using the best available JavaScript implementation. It will be called directly over Render’s private network. In addition to the web api, add a testing web endpoint with a form field that takes ABC notation and renders and displays the png.
 
-Next, now that we have a service that renders abc notation from text, in the setting insert / refresh action, also attempt to call this service to generate image files for both full and incipit and store them in the database table. Then, display the incipit abc by default on the tune details page; clicking cycles through incipit png -> incipit abc -> full png -> full abc.
+Next, now that we have a service that renders abc notation from text, in the setting insert / refresh action, also attempt to call this service to generate image files for both full and incipit and store them in the database table.
+
+## Display Interaction Design
+
+The tune setting display on the tune details page uses a two-mode system with a mode switch button:
+
+### Mode Switch Button
+- **Location**: Top right corner of the display box
+- **Dots mode button**: Music note icon (🎵) in a rounded rectangle with white background
+- **ABC mode button**: The letters "abc" in a rounded rectangle with white background
+- **Size**: Both buttons should be the same size
+- **Behavior**: Clicking the button toggles between the two modes
+
+### Display Modes
+
+**Dots Mode (sheet music images):**
+- Default state when first loaded: Shows incipit_image
+- Clicking anywhere on the displayed image toggles between:
+  - incipit_image (default)
+  - image (full notation)
+- Mode indicator shows the music note icon (🎵)
+
+**ABC Mode (text notation):**
+- Default state when entering this mode: Shows incipit_abc
+- Clicking anywhere on the displayed ABC text toggles between:
+  - incipit_abc (default)
+  - abc (full notation)
+- Mode indicator shows "abc" text
+
+### State Persistence
+When switching between modes, each mode independently remembers whether it's displaying incipit or full. For example:
+- User views full image in dots mode
+- User switches to ABC mode → sees incipit ABC (ABC mode's default)
+- User switches back to dots mode → returns to full image (dots mode's previous state)

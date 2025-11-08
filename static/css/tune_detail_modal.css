@@ -751,9 +751,43 @@
 .abc-notation-section {
     margin: 5px 0;
     padding: 6px;
+    padding-bottom: 0;
     background-color: var(--modal-bg-secondary);
     border-radius: 4px;
     border: 1px solid var(--border-color);
+    position: relative;
+}
+
+/* Mode Tabs - hanging off bottom */
+.notation-mode-tabs {
+    display: flex;
+    gap: 0;
+    margin-top: 4px;
+    padding: 0 6px 6px 6px;
+}
+
+.notation-mode-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--secondary-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: lowercase;
+}
+
+.notation-mode-tab:hover {
+    color: var(--text-color);
+    border-bottom-color: var(--border-color);
+}
+
+.notation-mode-tab.active {
+    color: var(--text-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: 600;
 }
 
 .abc-notation-display {
@@ -765,6 +799,9 @@
     white-space: pre-wrap;
     word-wrap: break-word;
     overflow-x: auto;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
 }
 
 /* ABC Notation - Incipit (larger font) */
@@ -793,6 +830,8 @@
     white-space: pre-wrap;
     word-wrap: break-word;
     overflow-x: auto;
+    flex: 1;
+    width: 100%;
 }
 
 .abc-notation-text.abc-notation-incipit {
@@ -812,6 +851,7 @@
     box-sizing: border-box;
     vertical-align: top;
     max-width: 100%;
+    flex: 1;
 }
 
 .abc-notation-image.abc-notation-incipit {

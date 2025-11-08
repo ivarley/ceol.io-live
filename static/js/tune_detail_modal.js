@@ -286,7 +286,8 @@
     /**
      * Build ABC notation section
      * Displays cached ABC notation or images if available
-     * Cycles through: incipit png -> incipit abc -> full png -> full abc
+     * Two modes: dots (images) and abc (text), with mode switch button
+     * Each mode toggles between incipit and full independently
      */
     function buildAbcNotationSection(tuneData, config) {
         // Get ABC notation and images from tuneData
@@ -308,48 +309,65 @@
             return '';
         }
 
-        // Determine what to show and build the list of available states
-        // Priority: incipit image > incipit text > full image > full text
-        const states = [];
-        if (incipitImage) states.push('incipit-image');
-        if (incipitAbc) states.push('incipit-text');
-        if (image) states.push('full-image');
-        if (abc) states.push('full-text');
+        // Determine available modes and content
+        const hasDotsMode = !!(incipitImage || image);
+        const hasAbcMode = !!(incipitAbc || abc);
 
-        if (states.length === 0) {
+        if (!hasDotsMode && !hasAbcMode) {
             return '';
         }
 
-        const currentState = states[0];
-        const hasToggle = states.length > 1;
-        const clickHandler = hasToggle ? ' onclick="TuneDetailModal.toggleAbcDisplay()"' : '';
-        const clickableClass = hasToggle ? ' abc-notation-clickable' : '';
-        const titleAttr = hasToggle ? ' title="Click to cycle through notation views"' : '';
+        // Default to dots mode if available, otherwise abc mode
+        const initialMode = hasDotsMode ? 'dots' : 'abc';
 
-        // Build the initial display
+        // Build initial display content (start with incipit in chosen mode)
         let displayContent = '';
-        if (currentState === 'incipit-image' && incipitImage) {
+        if (initialMode === 'dots' && incipitImage) {
             displayContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
-        } else if (currentState === 'incipit-text' && incipitAbc) {
+        } else if (initialMode === 'dots' && image) {
+            displayContent = `<img src="data:image/png;base64,${image}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+        } else if (initialMode === 'abc' && incipitAbc) {
             const formattedText = incipitAbc.replace(/!/g, '\n');
             displayContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
-        } else if (currentState === 'full-image' && image) {
-            displayContent = `<img src="data:image/png;base64,${image}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
-        } else if (currentState === 'full-text' && abc) {
+        } else if (initialMode === 'abc' && abc) {
             const formattedText = abc.replace(/!/g, '\n');
             displayContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
         }
 
+        // Determine if we can toggle size (need both incipit and full in at least one mode)
+        const canToggleSize = (incipitImage && image) || (incipitAbc && abc);
+        const clickHandler = canToggleSize ? ' onclick="TuneDetailModal.toggleNotationSize()"' : '';
+        const clickableClass = canToggleSize ? ' abc-notation-clickable' : '';
+        const titleAttr = canToggleSize ? ' title="Click to toggle between incipit and full notation"' : '';
+
+        // Build mode tabs (only if both modes available)
+        const modeTabs = (hasDotsMode && hasAbcMode) ? `
+            <div class="notation-mode-tabs">
+                <button class="notation-mode-tab ${initialMode === 'dots' ? 'active' : ''}"
+                        data-mode="dots"
+                        onclick="TuneDetailModal.switchNotationMode('dots'); event.stopPropagation();">
+                    notes
+                </button>
+                <button class="notation-mode-tab ${initialMode === 'abc' ? 'active' : ''}"
+                        data-mode="abc"
+                        onclick="TuneDetailModal.switchNotationMode('abc'); event.stopPropagation();">
+                    abc
+                </button>
+            </div>
+        ` : '';
+
         return `
             <div class="abc-notation-section">
                 <div class="abc-notation-display${clickableClass}"${clickHandler}${titleAttr}
-                     data-current-state="${currentState}"
+                     data-current-mode="${initialMode}"
+                     data-current-size="incipit"
                      data-full-abc="${escapeHtml(abc || '')}"
                      data-incipit-abc="${escapeHtml(incipitAbc || '')}"
                      data-full-image="${image || ''}"
                      data-incipit-image="${incipitImage || ''}">
                     ${displayContent}
                 </div>
+                ${modeTabs}
             </div>
         `;
     }
@@ -999,51 +1017,129 @@
     }
 
     /**
-     * Toggle between notation display modes
-     * Cycles through: incipit-image -> incipit-text -> full-image -> full-text
+     * Switch between notation modes (dots vs abc)
+     * Maintains the same size state (incipit/full) across both modes
+     * @param {string} newMode - The mode to switch to ('dots' or 'abc')
      */
-    function toggleAbcDisplay() {
+    function switchNotationMode(newMode) {
         const displayElement = document.querySelector('.abc-notation-display');
         if (!displayElement) return;
+
+        // Get current mode
+        const currentMode = displayElement.dataset.currentMode;
+
+        // Don't do anything if already in this mode
+        if (currentMode === newMode) return;
 
         // Get available data
         const fullAbc = displayElement.dataset.fullAbc;
         const incipitAbc = displayElement.dataset.incipitAbc;
         const fullImage = displayElement.dataset.fullImage;
         const incipitImage = displayElement.dataset.incipitImage;
-        const currentState = displayElement.dataset.currentState;
 
-        // Build list of available states in order
-        const states = [];
-        if (incipitImage) states.push('incipit-image');
-        if (incipitAbc) states.push('incipit-text');
-        if (fullImage) states.push('full-image');
-        if (fullAbc) states.push('full-text');
+        // Get the current size (shared across both modes)
+        const currentSize = displayElement.dataset.currentSize || 'incipit';
 
-        if (states.length <= 1) return; // Nothing to toggle
-
-        // Find next state
-        const currentIndex = states.indexOf(currentState);
-        const nextIndex = (currentIndex + 1) % states.length;
-        const nextState = states[nextIndex];
-
-        // Build content for next state
+        // Build content based on new mode and current size
         let newContent = '';
-        if (nextState === 'incipit-image' && incipitImage) {
-            newContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
-        } else if (nextState === 'incipit-text' && incipitAbc) {
-            const formattedText = incipitAbc.replace(/!/g, '\n');
-            newContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
-        } else if (nextState === 'full-image' && fullImage) {
-            newContent = `<img src="data:image/png;base64,${fullImage}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
-        } else if (nextState === 'full-text' && fullAbc) {
-            const formattedText = fullAbc.replace(/!/g, '\n');
-            newContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+        if (newMode === 'dots') {
+            if (currentSize === 'incipit' && incipitImage) {
+                newContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
+            } else if (currentSize === 'full' && fullImage) {
+                newContent = `<img src="data:image/png;base64,${fullImage}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+            } else if (incipitImage) {
+                // Fallback to incipit if current size not available
+                newContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
+                displayElement.dataset.currentSize = 'incipit';
+            } else if (fullImage) {
+                // Fallback to full if incipit not available
+                newContent = `<img src="data:image/png;base64,${fullImage}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+                displayElement.dataset.currentSize = 'full';
+            }
+        } else { // abc mode
+            if (currentSize === 'incipit' && incipitAbc) {
+                const formattedText = incipitAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
+            } else if (currentSize === 'full' && fullAbc) {
+                const formattedText = fullAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+            } else if (incipitAbc) {
+                // Fallback to incipit if current size not available
+                const formattedText = incipitAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
+                displayElement.dataset.currentSize = 'incipit';
+            } else if (fullAbc) {
+                // Fallback to full if incipit not available
+                const formattedText = fullAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+                displayElement.dataset.currentSize = 'full';
+            }
         }
 
         // Update the display
         displayElement.innerHTML = newContent;
-        displayElement.dataset.currentState = nextState;
+        displayElement.dataset.currentMode = newMode;
+
+        // Update tab active states
+        const tabs = document.querySelectorAll('.notation-mode-tab');
+        tabs.forEach(tab => {
+            const tabMode = tab.dataset.mode;
+            if (tabMode === newMode) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+    }
+
+    /**
+     * Toggle between incipit and full notation
+     * Size state is shared across both dots and abc modes
+     */
+    function toggleNotationSize() {
+        const displayElement = document.querySelector('.abc-notation-display');
+        if (!displayElement) return;
+
+        // Get current mode and size
+        const currentMode = displayElement.dataset.currentMode;
+        const currentSize = displayElement.dataset.currentSize || 'incipit';
+
+        // Toggle size
+        const newSize = currentSize === 'incipit' ? 'full' : 'incipit';
+
+        // Get available data
+        const fullAbc = displayElement.dataset.fullAbc;
+        const incipitAbc = displayElement.dataset.incipitAbc;
+        const fullImage = displayElement.dataset.fullImage;
+        const incipitImage = displayElement.dataset.incipitImage;
+
+        // Build content based on mode and new size
+        let newContent = '';
+        if (currentMode === 'dots') {
+            if (newSize === 'incipit' && incipitImage) {
+                newContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
+            } else if (newSize === 'full' && fullImage) {
+                newContent = `<img src="data:image/png;base64,${fullImage}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+            } else {
+                // Can't toggle - content not available
+                return;
+            }
+        } else { // abc mode
+            if (newSize === 'incipit' && incipitAbc) {
+                const formattedText = incipitAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
+            } else if (newSize === 'full' && fullAbc) {
+                const formattedText = fullAbc.replace(/!/g, '\n');
+                newContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+            } else {
+                // Can't toggle - content not available
+                return;
+            }
+        }
+
+        // Update the display and size state
+        displayElement.innerHTML = newContent;
+        displayElement.dataset.currentSize = newSize;
     }
 
     /**
@@ -1908,7 +2004,8 @@
         show: showModal,
         close: closeModal,
         toggleConfigSection: toggleConfigSection,
-        toggleAbcDisplay: toggleAbcDisplay,
+        switchNotationMode: switchNotationMode,
+        toggleNotationSize: toggleNotationSize,
         onFieldChange: onFieldChange,
         onSettingInput: onSettingInput,
         switchTab: switchTab,
