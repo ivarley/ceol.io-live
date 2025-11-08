@@ -455,6 +455,10 @@ def cache_tune_setting_ajax(tune_id):
         key = setting_to_cache.get("key", "")
         abc = setting_to_cache.get("abc", "")
 
+        # Replace "!" with newline for proper staff line breaks
+        # thesession.org uses "!" as a line break marker
+        abc = abc.replace("!", "\n")
+
         # Extract incipit from ABC notation
         from database import extract_abc_incipit
         incipit_abc = extract_abc_incipit(abc)
