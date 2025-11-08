@@ -12,6 +12,29 @@ from functools import wraps
 from services.person_tune_service import PersonTuneService, UNSET
 from services.thesession_sync_service import ThesessionSyncService
 from database import get_db_connection
+import base64
+
+
+def bytea_to_base64(data):
+    """
+    Convert PostgreSQL bytea data to base64 string.
+    Handles different return formats: bytes, memoryview, hex string.
+    """
+    if not data:
+        return None
+
+    if isinstance(data, memoryview):
+        data = data.tobytes()
+    elif isinstance(data, str):
+        # PostgreSQL returns bytea as hex string starting with \x
+        if data.startswith('\\x'):
+            data = bytes.fromhex(data[2:])
+        else:
+            data = data.encode('latin1')
+    elif not isinstance(data, bytes):
+        data = bytes(data)
+
+    return base64.b64encode(data).decode('utf-8')
 
 
 # Initialize services
@@ -120,20 +143,22 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
             else:
                 response['thesession_url'] = base_url
 
-        # Get ABC notation from tune_setting if setting_id exists
+        # Get ABC notation and images from tune_setting if setting_id exists
         abc_notation = None
         if person_tune.setting_id:
             conn = get_db_connection()
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
+                    "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                     (person_tune.setting_id,)
                 )
                 abc_result = cur.fetchone()
                 if abc_result:
                     abc_notation = abc_result[0]
                     response['incipit_abc'] = abc_result[1]
+                    response['image'] = bytea_to_base64(abc_result[2])
+                    response['incipit_image'] = bytea_to_base64(abc_result[3])
             finally:
                 conn.close()
         response['abc'] = abc_notation

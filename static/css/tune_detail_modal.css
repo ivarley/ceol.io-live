@@ -783,6 +783,40 @@
     background-color: var(--hover-bg);
 }
 
+/* ABC Notation - Text Display */
+.abc-notation-text {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text-color);
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-x: auto;
+}
+
+.abc-notation-text.abc-notation-incipit {
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+/* ABC Notation - Image Display */
+.abc-notation-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 4px;
+    background: white;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.abc-notation-image.abc-notation-incipit {
+    /* Incipit images fit full width */
+    width: 100%;
+}
+
 /* Input with Button Layout */
 .input-with-button {
     display: flex;

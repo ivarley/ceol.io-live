@@ -1,6 +1,9 @@
 from flask import request, jsonify, session, send_file
 import requests
 import re
+import os
+import base64
+import psycopg2
 from flask_login import login_required
 from database import (
     get_db_connection,
@@ -29,6 +32,70 @@ def api_login_required(f):
             return jsonify({"success": False, "error": "Authentication required"}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+
+def bytea_to_base64(data):
+    """
+    Convert PostgreSQL bytea data to base64 string.
+    Handles different return formats: bytes, memoryview, hex string.
+    """
+    if not data:
+        return None
+
+    if isinstance(data, memoryview):
+        data = data.tobytes()
+    elif isinstance(data, str):
+        # PostgreSQL returns bytea as hex string starting with \x
+        if data.startswith('\\x'):
+            data = bytes.fromhex(data[2:])
+        else:
+            data = data.encode('latin1')
+    elif not isinstance(data, bytes):
+        data = bytes(data)
+
+    return base64.b64encode(data).decode('utf-8')
+
+
+def render_abc_to_png(abc_notation):
+    """
+    Call the ABC renderer microservice to convert ABC notation to PNG image.
+    Returns the PNG image as bytes, or None if rendering fails.
+    """
+    try:
+        abc_renderer_url = os.getenv('ABC_RENDERER_URL')
+        if not abc_renderer_url:
+            print("Warning: ABC_RENDERER_URL not configured")
+            return None
+
+        print(f"Calling ABC renderer with {len(abc_notation)} chars of ABC notation")
+        response = requests.post(
+            f'{abc_renderer_url}/api/render',
+            json={'abc': abc_notation},
+            timeout=15
+        )
+
+        print(f"ABC renderer response: status={response.status_code}, content-type={response.headers.get('content-type')}")
+
+        if response.status_code == 200:
+            if response.headers.get('content-type') == 'image/png':
+                print(f"Successfully got PNG image ({len(response.content)} bytes)")
+                return response.content
+            else:
+                print(f"Unexpected content type: {response.headers.get('content-type')}")
+                print(f"Response body: {response.text[:200]}")
+                return None
+        else:
+            print(f"ABC renderer returned status {response.status_code}: {response.text[:200]}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling ABC renderer: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error in render_abc_to_png: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def get_session_instance_id(cur, session_id, date_or_id):
@@ -437,9 +504,45 @@ def cache_tune_setting_ajax(tune_id):
 
         conn.commit()
 
+        # Generate PNG images for both full ABC and incipit
+        full_image = None
+        incipit_image = None
+
+        # We need to construct full ABC notation with headers for rendering
+        # ABC notation needs headers (X, T, M, L, K) to render properly
+        abc_with_headers = abc
+        if not abc.startswith('X:'):
+            # Construct minimal headers if not present (T: title omitted to avoid text in image)
+            abc_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{abc}"
+
+        # Render full ABC image
+        full_image = render_abc_to_png(abc_with_headers)
+
+        # Render incipit image
+        if incipit_abc:
+            incipit_with_headers = incipit_abc
+            if not incipit_abc.startswith('X:'):
+                incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+            incipit_image = render_abc_to_png(incipit_with_headers)
+
+        # Update database with images if they were generated
+        if full_image or incipit_image:
+            print(f"Updating database with images: full_image={len(full_image) if full_image else 0} bytes, incipit_image={len(incipit_image) if incipit_image else 0} bytes")
+            cur.execute("""
+                UPDATE tune_setting
+                SET image = %s, incipit_image = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                WHERE setting_id = %s
+            """, (
+                psycopg2.Binary(full_image) if full_image else None,
+                psycopg2.Binary(incipit_image) if incipit_image else None,
+                setting_id
+            ))
+            conn.commit()
+            print("Database updated successfully")
+
         # Get the cached setting data
         cur.execute("""
-            SELECT setting_id, tune_id, key, abc, incipit_abc, cache_updated_date
+            SELECT setting_id, tune_id, key, abc, incipit_abc, cache_updated_date, image, incipit_image
             FROM tune_setting
             WHERE setting_id = %s
         """, (setting_id,))
@@ -448,6 +551,10 @@ def cache_tune_setting_ajax(tune_id):
 
         cur.close()
         conn.close()
+
+        # Encode images as base64 for JSON transport
+        image_base64 = bytea_to_base64(cached_setting[6])
+        incipit_image_base64 = bytea_to_base64(cached_setting[7])
 
         return jsonify({
             "success": True,
@@ -459,7 +566,9 @@ def cache_tune_setting_ajax(tune_id):
                 "key": cached_setting[2],
                 "abc": cached_setting[3],
                 "incipit_abc": cached_setting[4],
-                "cache_updated_date": cached_setting[5].isoformat() if cached_setting[5] else None
+                "cache_updated_date": cached_setting[5].isoformat() if cached_setting[5] else None,
+                "image": image_base64,
+                "incipit_image": incipit_image_base64
             }
         })
 
@@ -469,6 +578,15 @@ def cache_tune_setting_ajax(tune_id):
             "message": f"Error connecting to thesession.org: {str(e)}",
         })
     except Exception as e:
+        import traceback
+        print("=" * 80)
+        print("ERROR in cache_tune_setting_ajax:")
+        print(f"Exception type: {type(e).__name__}")
+        print(f"Exception message: {str(e)}")
+        print("Full traceback:")
+        traceback.print_exc()
+        print("=" * 80)
+
         if 'conn' in locals():
             try:
                 conn.rollback()
@@ -536,15 +654,19 @@ def get_session_tune_detail(session_path, tune_id):
         # Get ABC notation from tune_setting if setting_id exists
         abc_notation = None
         incipit_abc = None
+        abc_image = None
+        incipit_image = None
         if setting_id:
             cur.execute(
-                "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                 (setting_id,)
             )
             abc_result = cur.fetchone()
             if abc_result:
                 abc_notation = abc_result[0]
                 incipit_abc = abc_result[1]
+                abc_image = abc_result[2]
+                incipit_image = abc_result[3]
 
         # Get all aliases from session_tune_alias table
         cur.execute(
@@ -668,6 +790,8 @@ def get_session_tune_detail(session_path, tune_id):
                     "key": key,
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
+                    "image": bytea_to_base64(abc_image),
+                    "incipit_image": bytea_to_base64(incipit_image),
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached_date": (
                         tunebook_count_cached_date.isoformat()
@@ -8627,16 +8751,20 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         # Prefer setting_override if available, otherwise use session_setting_id
         abc_notation = None
         incipit_abc = None
+        abc_image = None
+        incipit_image = None
         effective_setting_id = setting_override if setting_override else session_setting_id
         if effective_setting_id:
             cur.execute(
-                "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                 (effective_setting_id,)
             )
             abc_result = cur.fetchone()
             if abc_result:
                 abc_notation = abc_result[0]
                 incipit_abc = abc_result[1]
+                abc_image = abc_result[2]
+                incipit_image = abc_result[3]
 
         # Get play count for this session (all instances)
         cur.execute(
@@ -8751,6 +8879,8 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     # ABC notation
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
+                    "image": bytea_to_base64(abc_image),
+                    "incipit_image": bytea_to_base64(incipit_image),
                     # Stats
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached_date": (
@@ -8912,10 +9042,12 @@ def get_admin_tune_detail(tune_id):
         # Get ABC notation from the first setting (ordered by setting_id ASC)
         abc_notation = None
         incipit_abc = None
+        abc_image = None
+        incipit_image = None
         first_setting_id = None
         cur.execute(
             """
-            SELECT setting_id, abc, incipit_abc
+            SELECT setting_id, abc, incipit_abc, image, incipit_image
             FROM tune_setting
             WHERE tune_id = %s
             ORDER BY setting_id ASC
@@ -8928,6 +9060,8 @@ def get_admin_tune_detail(tune_id):
             first_setting_id = setting_result[0]
             abc_notation = setting_result[1]
             incipit_abc = setting_result[2]
+            abc_image = setting_result[3]
+            incipit_image = setting_result[4]
 
         # Get count of distinct sessions playing this tune
         cur.execute(
@@ -9018,6 +9152,8 @@ def get_admin_tune_detail(tune_id):
                     "setting_id": first_setting_id,
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
+                    "image": bytea_to_base64(abc_image),
+                    "incipit_image": bytea_to_base64(incipit_image),
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached": tunebook_count,
                     "tunebook_count_cached_date": (

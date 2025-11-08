@@ -285,34 +285,71 @@
 
     /**
      * Build ABC notation section
-     * Displays cached ABC notation if available
+     * Displays cached ABC notation or images if available
+     * Cycles through: incipit png -> incipit abc -> full png -> full abc
      */
     function buildAbcNotationSection(tuneData, config) {
-        // Get ABC notation from tuneData
+        // Get ABC notation and images from tuneData
         const abc = tuneData.abc;
         const incipitAbc = tuneData.incipit_abc;
+        const image = tuneData.image;
+        const incipitImage = tuneData.incipit_image;
 
-        if (!abc && !incipitAbc) {
+        console.log('buildAbcNotationSection called with:', {
+            hasAbc: !!abc,
+            hasIncipitAbc: !!incipitAbc,
+            hasImage: !!image,
+            hasIncipitImage: !!incipitImage,
+            imageLength: image ? image.length : 0,
+            incipitImageLength: incipitImage ? incipitImage.length : 0
+        });
+
+        if (!abc && !incipitAbc && !image && !incipitImage) {
             return '';
         }
 
-        // Default to showing incipit if available, otherwise full ABC
-        const showIncipit = !!incipitAbc;
-        const displayText = showIncipit ? incipitAbc : abc;
+        // Determine what to show and build the list of available states
+        // Priority: incipit image > incipit text > full image > full text
+        const states = [];
+        if (incipitImage) states.push('incipit-image');
+        if (incipitAbc) states.push('incipit-text');
+        if (image) states.push('full-image');
+        if (abc) states.push('full-text');
 
-        // Replace "!" with newlines for display
-        const formattedDisplayText = displayText.replace(/!/g, '\n');
+        if (states.length === 0) {
+            return '';
+        }
 
-        // Only make it clickable if we have both incipit and full ABC
-        const hasToggle = !!(incipitAbc && abc && incipitAbc !== abc);
+        const currentState = states[0];
+        const hasToggle = states.length > 1;
         const clickHandler = hasToggle ? ' onclick="TuneDetailModal.toggleAbcDisplay()"' : '';
         const clickableClass = hasToggle ? ' abc-notation-clickable' : '';
-        const displayClass = showIncipit ? ' abc-notation-incipit' : ' abc-notation-full';
-        const titleAttr = hasToggle ? ' title="Click to toggle between incipit and full notation"' : '';
+        const titleAttr = hasToggle ? ' title="Click to cycle through notation views"' : '';
+
+        // Build the initial display
+        let displayContent = '';
+        if (currentState === 'incipit-image' && incipitImage) {
+            displayContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
+        } else if (currentState === 'incipit-text' && incipitAbc) {
+            const formattedText = incipitAbc.replace(/!/g, '\n');
+            displayContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
+        } else if (currentState === 'full-image' && image) {
+            displayContent = `<img src="data:image/png;base64,${image}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+        } else if (currentState === 'full-text' && abc) {
+            const formattedText = abc.replace(/!/g, '\n');
+            displayContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+        }
 
         return `
             <div class="abc-notation-section">
-                <pre class="abc-notation-display${clickableClass}${displayClass}"${clickHandler}${titleAttr} data-full-abc="${escapeHtml(abc || '')}" data-incipit-abc="${escapeHtml(incipitAbc || '')}" data-showing-incipit="${showIncipit}">${formattedDisplayText}</pre>
+                <div class="abc-notation-display${clickableClass}"${clickHandler}${titleAttr}
+                     data-current-state="${currentState}"
+                     data-full-abc="${escapeHtml(abc || '')}"
+                     data-incipit-abc="${escapeHtml(incipitAbc || '')}"
+                     data-full-image="${image || ''}"
+                     data-incipit-image="${incipitImage || ''}">
+                    ${displayContent}
+                </div>
             </div>
         `;
     }
@@ -962,35 +999,51 @@
     }
 
     /**
-     * Toggle between incipit and full ABC notation display
+     * Toggle between notation display modes
+     * Cycles through: incipit-image -> incipit-text -> full-image -> full-text
      */
     function toggleAbcDisplay() {
         const displayElement = document.querySelector('.abc-notation-display');
         if (!displayElement) return;
 
+        // Get available data
         const fullAbc = displayElement.dataset.fullAbc;
         const incipitAbc = displayElement.dataset.incipitAbc;
-        const showingIncipit = displayElement.dataset.showingIncipit === 'true';
+        const fullImage = displayElement.dataset.fullImage;
+        const incipitImage = displayElement.dataset.incipitImage;
+        const currentState = displayElement.dataset.currentState;
 
-        // Toggle between incipit and full
-        const newShowingIncipit = !showingIncipit;
-        const newText = newShowingIncipit ? incipitAbc : fullAbc;
+        // Build list of available states in order
+        const states = [];
+        if (incipitImage) states.push('incipit-image');
+        if (incipitAbc) states.push('incipit-text');
+        if (fullImage) states.push('full-image');
+        if (fullAbc) states.push('full-text');
 
-        // Replace "!" with newlines for display
-        const formattedText = newText.replace(/!/g, '\n');
+        if (states.length <= 1) return; // Nothing to toggle
+
+        // Find next state
+        const currentIndex = states.indexOf(currentState);
+        const nextIndex = (currentIndex + 1) % states.length;
+        const nextState = states[nextIndex];
+
+        // Build content for next state
+        let newContent = '';
+        if (nextState === 'incipit-image' && incipitImage) {
+            newContent = `<img src="data:image/png;base64,${incipitImage}" alt="Incipit notation" class="abc-notation-image abc-notation-incipit">`;
+        } else if (nextState === 'incipit-text' && incipitAbc) {
+            const formattedText = incipitAbc.replace(/!/g, '\n');
+            newContent = `<pre class="abc-notation-text abc-notation-incipit">${escapeHtml(formattedText)}</pre>`;
+        } else if (nextState === 'full-image' && fullImage) {
+            newContent = `<img src="data:image/png;base64,${fullImage}" alt="Full notation" class="abc-notation-image abc-notation-full">`;
+        } else if (nextState === 'full-text' && fullAbc) {
+            const formattedText = fullAbc.replace(/!/g, '\n');
+            newContent = `<pre class="abc-notation-text abc-notation-full">${escapeHtml(formattedText)}</pre>`;
+        }
 
         // Update the display
-        displayElement.textContent = formattedText;
-        displayElement.dataset.showingIncipit = newShowingIncipit.toString();
-
-        // Update classes
-        if (newShowingIncipit) {
-            displayElement.classList.add('abc-notation-incipit');
-            displayElement.classList.remove('abc-notation-full');
-        } else {
-            displayElement.classList.remove('abc-notation-incipit');
-            displayElement.classList.add('abc-notation-full');
-        }
+        displayElement.innerHTML = newContent;
+        displayElement.dataset.currentState = nextState;
     }
 
     /**
@@ -1775,11 +1828,13 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Update current tune data with the ABC notation and incipit
+                // Update current tune data with the ABC notation, incipit, and images
                 currentTuneData.abc = data.setting.abc;
                 currentTuneData.incipit_abc = data.setting.incipit_abc;
+                currentTuneData.image = data.setting.image;
+                currentTuneData.incipit_image = data.setting.incipit_image;
 
-                // Re-render the modal to show the ABC notation
+                // Re-render the modal to show the ABC notation and images
                 const modalContent = document.getElementById('tune-detail-content');
                 renderModalContent(modalContent, currentTuneData, currentConfig);
 
