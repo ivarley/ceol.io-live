@@ -120,6 +120,23 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
             else:
                 response['thesession_url'] = base_url
 
+        # Get ABC notation from tune_setting if setting_id exists
+        abc_notation = None
+        if person_tune.setting_id:
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT abc FROM tune_setting WHERE setting_id = %s",
+                    (person_tune.setting_id,)
+                )
+                abc_result = cur.fetchone()
+                if abc_result:
+                    abc_notation = abc_result[0]
+            finally:
+                conn.close()
+        response['abc'] = abc_notation
+
     return response
 
 

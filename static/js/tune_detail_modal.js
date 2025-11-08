@@ -196,6 +196,9 @@
             sections.push(buildHeardCountSection(tuneData, config));
         }
 
+        // ABC notation section (below heard count, above notes)
+        sections.push(buildAbcNotationSection(tuneData, config));
+
         // Notes section (only on my_tunes)
         if (config.context === 'my_tunes') {
             sections.push(buildNotesSection(tuneData, config));
@@ -271,6 +274,27 @@
     }
 
     /**
+     * Build ABC notation section
+     * Displays cached ABC notation if available
+     */
+    function buildAbcNotationSection(tuneData, config) {
+        // Get ABC notation from tuneData
+        const abc = tuneData.abc;
+        if (!abc) {
+            return '';
+        }
+
+        // Replace "!" with newlines for display
+        const formattedAbc = abc.replace(/!/g, '\n');
+
+        return `
+            <div class="abc-notation-section">
+                <pre class="abc-notation-display">${formattedAbc}</pre>
+            </div>
+        `;
+    }
+
+    /**
      * Build configure section
      */
     function buildConfigureSection(tuneData, config) {
@@ -305,10 +329,13 @@
                 </div>
                 <div class="configure-field-group">
                     <label class="configure-label" for="setting-input">My setting:</label>
-                    <input type="text" id="setting-input" class="configure-input"
-                           value="${tuneData.setting_id || ''}"
-                           placeholder="e.g., 123 or paste URL"
-                           oninput="TuneDetailModal.onSettingInput()">
+                    <div class="input-with-button">
+                        <input type="text" id="setting-input" class="configure-input"
+                               value="${tuneData.setting_id || ''}"
+                               placeholder="e.g., 123 or paste URL"
+                               oninput="TuneDetailModal.onSettingInput()">
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                    </div>
                     <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
             `);
@@ -323,10 +350,13 @@
                 </div>
                 <div class="configure-field-group">
                     <label class="configure-label" for="setting-input">Our setting:</label>
-                    <input type="text" id="setting-input" class="configure-input"
-                           value="${tuneData.setting_id || ''}"
-                           placeholder="e.g., 123 or paste URL"
-                           oninput="TuneDetailModal.onSettingInput()">
+                    <div class="input-with-button">
+                        <input type="text" id="setting-input" class="configure-input"
+                               value="${tuneData.setting_id || ''}"
+                               placeholder="e.g., 123 or paste URL"
+                               oninput="TuneDetailModal.onSettingInput()">
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                    </div>
                     <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
                 <div class="configure-field-group">
@@ -351,10 +381,13 @@
                 </div>
                 <div class="configure-field-group">
                     <label class="configure-label" for="setting-input">This time, we played setting:</label>
-                    <input type="text" id="setting-input" class="configure-input"
-                           value="${tuneData.setting_override || ''}"
-                           placeholder="e.g., 123 or paste URL"
-                           oninput="TuneDetailModal.onSettingInput()">
+                    <div class="input-with-button">
+                        <input type="text" id="setting-input" class="configure-input"
+                               value="${tuneData.setting_override || ''}"
+                               placeholder="e.g., 123 or paste URL"
+                               oninput="TuneDetailModal.onSettingInput()">
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                    </div>
                     <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
                 <div class="configure-field-group">
@@ -1649,6 +1682,95 @@
     }
 
     /**
+     * Fetch and cache setting from TheSession.org
+     */
+    function fetchSetting() {
+        const settingInput = document.getElementById('setting-input');
+        const tuneId = currentTuneData.tune_id;
+
+        if (!settingInput) return;
+
+        // Get setting_id from input (if specified)
+        const settingIdValue = settingInput.value.trim();
+
+        // Find the button (it's a sibling of the input)
+        const button = event?.target || document.querySelector('.fetch-setting-btn');
+        if (!button) return;
+
+        // Disable button and show loading state
+        button.disabled = true;
+        const originalButtonText = button.textContent;
+        button.textContent = '⟳';
+
+        // Build API URL with optional setting_id parameter
+        let apiUrl = `/api/tunes/${tuneId}/settings/cache`;
+        if (settingIdValue) {
+            // Extract setting ID from URL if needed
+            const validation = validateSettingInput(settingIdValue, tuneId);
+            const settingId = validation.settingId || settingIdValue;
+            apiUrl += `?setting_id=${settingId}`;
+        }
+
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update current tune data with the ABC notation
+                currentTuneData.abc = data.setting.abc;
+
+                // Re-render the modal to show the ABC notation
+                const modalContent = document.getElementById('tune-detail-content');
+                renderModalContent(modalContent, currentTuneData, currentConfig);
+
+                // Show success feedback on button
+                const newButton = document.querySelector('.fetch-setting-btn');
+                if (newButton) {
+                    newButton.textContent = '✓';
+                    newButton.style.backgroundColor = '#28a745';
+                    newButton.style.color = 'white';
+
+                    setTimeout(() => {
+                        newButton.disabled = false;
+                        newButton.textContent = originalButtonText;
+                        newButton.style.backgroundColor = '';
+                        newButton.style.color = '';
+                    }, 2000);
+                }
+            } else {
+                button.textContent = '✗';
+                button.style.backgroundColor = '#dc3545';
+                button.style.color = 'white';
+                console.error('Error fetching setting:', data.message);
+
+                setTimeout(() => {
+                    button.disabled = false;
+                    button.textContent = originalButtonText;
+                    button.style.backgroundColor = '';
+                    button.style.color = '';
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            button.textContent = '✗';
+            button.style.backgroundColor = '#dc3545';
+            button.style.color = 'white';
+
+            setTimeout(() => {
+                button.disabled = false;
+                button.textContent = originalButtonText;
+                button.style.backgroundColor = '';
+                button.style.color = '';
+            }, 2000);
+        });
+    }
+
+    /**
      * Get tune ID from URL parameter
      * @returns {number|null} Tune ID if present in URL, null otherwise
      */
@@ -1685,6 +1807,7 @@
         updateTunebookStatus: updateTunebookStatus,
         removeFromMyTunes: removeFromMyTunes,
         refreshTunebookCount: refreshTunebookCount,
+        fetchSetting: fetchSetting,
         getTuneIdFromUrl: getTuneIdFromUrl
     };
 

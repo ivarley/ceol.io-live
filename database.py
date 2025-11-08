@@ -64,6 +64,17 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
             (operation, changed_by, record_id),
         )
 
+    elif table_name == "tune_setting":
+        cur.execute(
+            """
+            INSERT INTO tune_setting_history
+            (setting_id, operation, changed_by, tune_id, key, abc, image, incipit_abc, incipit_image, cache_updated_date, created_date, last_modified_date)
+            SELECT setting_id, %s, %s, tune_id, key, abc, image, incipit_abc, incipit_image, cache_updated_date, created_date, last_modified_date
+            FROM tune_setting WHERE setting_id = %s
+        """,
+            (operation, changed_by, record_id),
+        )
+
     elif table_name == "session_tune":
         # For session_tune, record_id should be a tuple (session_id, tune_id)
         session_id, tune_id = record_id
