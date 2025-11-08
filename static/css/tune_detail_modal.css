@@ -767,6 +767,22 @@
     overflow-x: auto;
 }
 
+/* ABC Notation - Incipit (larger font) */
+.abc-notation-display.abc-notation-incipit {
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+/* ABC Notation - Clickable (for toggle) */
+.abc-notation-display.abc-notation-clickable {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.abc-notation-display.abc-notation-clickable:hover {
+    background-color: var(--hover-bg);
+}
+
 /* Input with Button Layout */
 .input-with-button {
     display: flex;

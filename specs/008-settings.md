@@ -60,3 +60,5 @@ In all these cases, you're looking for a row in the tune_setting table correspon
 When showing the abc notation, show it in fixed width font, replacing the "!" character with a newline.
 
 Add a button on the tune details panel just to the right of the text input box for the setting id which calls this API, using the setting ID if present. After the API returns and the database row has been inserted, re-render the modal with the ABC notation present.
+
+Next, we need to create an incipit, which is the first two bars of the abc notation (plus any pickup notes). Bars are delineated by vertical bar characters. Write a function that extracts this from the abc field and saves it in incipit_abc, and call this whenever a setting is created or refreshed. Make the incipit the thing that is shown by default on the tune details modal, but clicking it cycles through incipit / full abc. The font size of the incipit should be larger. 

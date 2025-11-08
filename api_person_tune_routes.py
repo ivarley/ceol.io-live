@@ -127,12 +127,13 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT abc FROM tune_setting WHERE setting_id = %s",
+                    "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
                     (person_tune.setting_id,)
                 )
                 abc_result = cur.fetchone()
                 if abc_result:
                     abc_notation = abc_result[0]
+                    response['incipit_abc'] = abc_result[1]
             finally:
                 conn.close()
         response['abc'] = abc_notation

@@ -388,6 +388,10 @@ def cache_tune_setting_ajax(tune_id):
         key = setting_to_cache.get("key", "")
         abc = setting_to_cache.get("abc", "")
 
+        # Extract incipit from ABC notation
+        from database import extract_abc_incipit
+        incipit_abc = extract_abc_incipit(abc)
+
         # Update the database
         conn = get_db_connection()
         cur = conn.cursor()
@@ -408,17 +412,17 @@ def cache_tune_setting_ajax(tune_id):
             # Update existing setting
             cur.execute("""
                 UPDATE tune_setting
-                SET key = %s, abc = %s, cache_updated_date = (NOW() AT TIME ZONE 'UTC'),
+                SET key = %s, abc = %s, incipit_abc = %s, cache_updated_date = (NOW() AT TIME ZONE 'UTC'),
                     last_modified_date = (NOW() AT TIME ZONE 'UTC')
                 WHERE setting_id = %s
-            """, (key, abc, setting_id))
+            """, (key, abc, incipit_abc, setting_id))
             action = "updated"
         else:
             # Insert new setting
             cur.execute("""
-                INSERT INTO tune_setting (setting_id, tune_id, key, abc, cache_updated_date)
-                VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
-            """, (setting_id, tune_id, key, abc))
+                INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date)
+                VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+            """, (setting_id, tune_id, key, abc, incipit_abc))
 
             # Log INSERT to history (manually since record was just created)
             cur.execute("""
@@ -435,7 +439,7 @@ def cache_tune_setting_ajax(tune_id):
 
         # Get the cached setting data
         cur.execute("""
-            SELECT setting_id, tune_id, key, abc, cache_updated_date
+            SELECT setting_id, tune_id, key, abc, incipit_abc, cache_updated_date
             FROM tune_setting
             WHERE setting_id = %s
         """, (setting_id,))
@@ -454,7 +458,8 @@ def cache_tune_setting_ajax(tune_id):
                 "tune_id": cached_setting[1],
                 "key": cached_setting[2],
                 "abc": cached_setting[3],
-                "cache_updated_date": cached_setting[4].isoformat() if cached_setting[4] else None
+                "incipit_abc": cached_setting[4],
+                "cache_updated_date": cached_setting[5].isoformat() if cached_setting[5] else None
             }
         })
 
@@ -530,14 +535,16 @@ def get_session_tune_detail(session_path, tune_id):
 
         # Get ABC notation from tune_setting if setting_id exists
         abc_notation = None
+        incipit_abc = None
         if setting_id:
             cur.execute(
-                "SELECT abc FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
                 (setting_id,)
             )
             abc_result = cur.fetchone()
             if abc_result:
                 abc_notation = abc_result[0]
+                incipit_abc = abc_result[1]
 
         # Get all aliases from session_tune_alias table
         cur.execute(
@@ -660,6 +667,7 @@ def get_session_tune_detail(session_path, tune_id):
                     "setting_id": setting_id,
                     "key": key,
                     "abc": abc_notation,
+                    "incipit_abc": incipit_abc,
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached_date": (
                         tunebook_count_cached_date.isoformat()
@@ -8618,15 +8626,17 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         # Get ABC notation from tune_setting
         # Prefer setting_override if available, otherwise use session_setting_id
         abc_notation = None
+        incipit_abc = None
         effective_setting_id = setting_override if setting_override else session_setting_id
         if effective_setting_id:
             cur.execute(
-                "SELECT abc FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc FROM tune_setting WHERE setting_id = %s",
                 (effective_setting_id,)
             )
             abc_result = cur.fetchone()
             if abc_result:
                 abc_notation = abc_result[0]
+                incipit_abc = abc_result[1]
 
         # Get play count for this session (all instances)
         cur.execute(
@@ -8740,6 +8750,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     "order_number": order_number,
                     # ABC notation
                     "abc": abc_notation,
+                    "incipit_abc": incipit_abc,
                     # Stats
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached_date": (
@@ -8900,10 +8911,11 @@ def get_admin_tune_detail(tune_id):
 
         # Get ABC notation from the first setting (ordered by setting_id ASC)
         abc_notation = None
+        incipit_abc = None
         first_setting_id = None
         cur.execute(
             """
-            SELECT setting_id, abc
+            SELECT setting_id, abc, incipit_abc
             FROM tune_setting
             WHERE tune_id = %s
             ORDER BY setting_id ASC
@@ -8915,6 +8927,7 @@ def get_admin_tune_detail(tune_id):
         if setting_result:
             first_setting_id = setting_result[0]
             abc_notation = setting_result[1]
+            incipit_abc = setting_result[2]
 
         # Get count of distinct sessions playing this tune
         cur.execute(
@@ -9004,6 +9017,7 @@ def get_admin_tune_detail(tune_id):
                     "tune_type": tune_type,
                     "setting_id": first_setting_id,
                     "abc": abc_notation,
+                    "incipit_abc": incipit_abc,
                     "tunebook_count": tunebook_count,
                     "tunebook_count_cached": tunebook_count,
                     "tunebook_count_cached_date": (

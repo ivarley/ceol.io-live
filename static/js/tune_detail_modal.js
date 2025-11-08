@@ -256,6 +256,16 @@
     }
 
     /**
+     * Escape HTML for safe use in attributes
+     */
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
      * Build TheSession.org link icon (blue hue)
      */
     function buildTheSessionLink(tuneData) {
@@ -280,16 +290,29 @@
     function buildAbcNotationSection(tuneData, config) {
         // Get ABC notation from tuneData
         const abc = tuneData.abc;
-        if (!abc) {
+        const incipitAbc = tuneData.incipit_abc;
+
+        if (!abc && !incipitAbc) {
             return '';
         }
 
+        // Default to showing incipit if available, otherwise full ABC
+        const showIncipit = !!incipitAbc;
+        const displayText = showIncipit ? incipitAbc : abc;
+
         // Replace "!" with newlines for display
-        const formattedAbc = abc.replace(/!/g, '\n');
+        const formattedDisplayText = displayText.replace(/!/g, '\n');
+
+        // Only make it clickable if we have both incipit and full ABC
+        const hasToggle = !!(incipitAbc && abc && incipitAbc !== abc);
+        const clickHandler = hasToggle ? ' onclick="TuneDetailModal.toggleAbcDisplay()"' : '';
+        const clickableClass = hasToggle ? ' abc-notation-clickable' : '';
+        const displayClass = showIncipit ? ' abc-notation-incipit' : ' abc-notation-full';
+        const titleAttr = hasToggle ? ' title="Click to toggle between incipit and full notation"' : '';
 
         return `
             <div class="abc-notation-section">
-                <pre class="abc-notation-display">${formattedAbc}</pre>
+                <pre class="abc-notation-display${clickableClass}${displayClass}"${clickHandler}${titleAttr} data-full-abc="${escapeHtml(abc || '')}" data-incipit-abc="${escapeHtml(incipitAbc || '')}" data-showing-incipit="${showIncipit}">${formattedDisplayText}</pre>
             </div>
         `;
     }
@@ -936,6 +959,38 @@
         document.querySelectorAll('.modal-tab-pane').forEach(pane => {
             pane.classList.toggle('active', pane.id === `${tabName}-tab`);
         });
+    }
+
+    /**
+     * Toggle between incipit and full ABC notation display
+     */
+    function toggleAbcDisplay() {
+        const displayElement = document.querySelector('.abc-notation-display');
+        if (!displayElement) return;
+
+        const fullAbc = displayElement.dataset.fullAbc;
+        const incipitAbc = displayElement.dataset.incipitAbc;
+        const showingIncipit = displayElement.dataset.showingIncipit === 'true';
+
+        // Toggle between incipit and full
+        const newShowingIncipit = !showingIncipit;
+        const newText = newShowingIncipit ? incipitAbc : fullAbc;
+
+        // Replace "!" with newlines for display
+        const formattedText = newText.replace(/!/g, '\n');
+
+        // Update the display
+        displayElement.textContent = formattedText;
+        displayElement.dataset.showingIncipit = newShowingIncipit.toString();
+
+        // Update classes
+        if (newShowingIncipit) {
+            displayElement.classList.add('abc-notation-incipit');
+            displayElement.classList.remove('abc-notation-full');
+        } else {
+            displayElement.classList.remove('abc-notation-incipit');
+            displayElement.classList.add('abc-notation-full');
+        }
     }
 
     /**
@@ -1720,8 +1775,9 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Update current tune data with the ABC notation
+                // Update current tune data with the ABC notation and incipit
                 currentTuneData.abc = data.setting.abc;
+                currentTuneData.incipit_abc = data.setting.incipit_abc;
 
                 // Re-render the modal to show the ABC notation
                 const modalContent = document.getElementById('tune-detail-content');
@@ -1797,6 +1853,7 @@
         show: showModal,
         close: closeModal,
         toggleConfigSection: toggleConfigSection,
+        toggleAbcDisplay: toggleAbcDisplay,
         onFieldChange: onFieldChange,
         onSettingInput: onSettingInput,
         switchTab: switchTab,

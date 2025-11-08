@@ -7,7 +7,54 @@ def normalize_apostrophes(text):
     if not text:
         return text
     # Replace various smart apostrophes and quotes with standard apostrophe
-    return text.replace("‘", "'").replace("’", "'").replace("“", '"').replace("”", '"')
+    return text.replace("'", "'").replace("'", "'").replace(""", '"').replace(""", '"')
+
+
+def extract_abc_incipit(abc_notation):
+    """
+    Extract the first two bars of ABC notation plus any pickup notes.
+    Bars are delineated by vertical bar characters (|).
+
+    Args:
+        abc_notation: The full ABC notation string
+
+    Returns:
+        The incipit (first two bars plus pickup notes), or empty string if invalid
+    """
+    if not abc_notation:
+        return ""
+
+    # Find all bar line positions
+    # Bar lines are | characters (including variants like |:, :|, ||, etc.)
+    bar_positions = []
+    i = 0
+    while i < len(abc_notation):
+        if abc_notation[i] == '|':
+            bar_positions.append(i)
+            # Skip any immediately following bar-related characters (:, |, etc.)
+            while i + 1 < len(abc_notation) and abc_notation[i + 1] in ':|]':
+                i += 1
+        i += 1
+
+    # We need at least 2 bar lines to extract 2 bars
+    if len(bar_positions) < 2:
+        # If there are fewer than 2 bars, return the whole thing
+        return abc_notation
+
+    # To get 2 bars of music, we need the third bar line position
+    # (pickup/bar1 content | bar1 content | bar2 content |)
+    # But if we only have 2 bar lines total, use the second one
+    target_bar_index = min(2, len(bar_positions) - 1)
+    incipit_end = bar_positions[target_bar_index]
+
+    # Include the bar line character itself
+    incipit_end += 1
+
+    # Also include any bar modifiers immediately after (like : or |)
+    while incipit_end < len(abc_notation) and abc_notation[incipit_end] in ':|]':
+        incipit_end += 1
+
+    return abc_notation[:incipit_end]
 
 
 def get_db_connection():
