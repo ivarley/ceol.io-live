@@ -247,7 +247,12 @@
                 <!-- Logs Tab -->
                 <div class="tab-pane fade {{ 'show active' if active_tab == 'logs' else '' }}" id="logs" role="tabpanel">
                     <section class="docs-section">
-                        <h2 class="section-heading">Session Instance History</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h2 class="section-heading" style="margin-bottom: 0;">Session Instance History</h2>
+                            <button type="button" class="btn btn-primary" id="add-session-instance-btn">
+                                Add Session Instance
+                            </button>
+                        </div>
                         <div id="logs-content">
                             <p class="text-muted">Loading session history...</p>
                         </div>
@@ -287,6 +292,40 @@
     <div class="instance-modal-dialog">
         <div id="instance-modal-content" class="instance-modal-content">
             <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Add Session Instance Modal -->
+<div id="add-session-instance-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Session Instance</h3>
+        </div>
+        <div class="modal-body">
+            <label for="session-date-input">Session Date:</label>
+            <input type="date" id="session-date-input" required>
+
+            <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label for="session-start-time-input">Start Time:</label>
+                    <input type="time" id="session-start-time-input">
+                </div>
+                <div>
+                    <label for="session-end-time-input">End Time:</label>
+                    <input type="time" id="session-end-time-input">
+                </div>
+            </div>
+
+            <label for="session-location-input" style="margin-top: 16px;">Location:</label>
+            <input type="text" id="session-location-input" placeholder="The usual: {{ session.location_name }}">
+
+            <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
+            <textarea id="session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" id="add-session-cancel-btn">Cancel</button>
+            <button type="button" class="btn-primary" id="add-session-confirm-btn">Add Session</button>
         </div>
     </div>
 </div>
@@ -755,6 +794,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         setTerminationDate(terminationDate);
     });
+
+    // Add Session Instance button handler
+    const addSessionInstanceBtn = document.getElementById('add-session-instance-btn');
+    if (addSessionInstanceBtn) {
+        addSessionInstanceBtn.addEventListener('click', showAddSessionModal);
+    }
+
+    // Add Session Instance modal button handlers
+    const addSessionCancelBtn = document.getElementById('add-session-cancel-btn');
+    if (addSessionCancelBtn) {
+        addSessionCancelBtn.addEventListener('click', hideAddSessionModal);
+    }
+
+    const addSessionConfirmBtn = document.getElementById('add-session-confirm-btn');
+    if (addSessionConfirmBtn) {
+        addSessionConfirmBtn.addEventListener('click', addSessionInstance);
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            hideAddSessionModal();
+        }
+    });
+
+    // Close modal when clicking outside
+    const addSessionModal = document.getElementById('add-session-instance-modal');
+    if (addSessionModal) {
+        addSessionModal.addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) {
+                hideAddSessionModal();
+            }
+        });
+    }
 });
 
 function loadPlayersContent() {
@@ -1039,6 +1112,118 @@ function displayLogs(logs) {
     `;
 
     logsContainer.innerHTML = html;
+}
+
+async function showAddSessionModal() {
+    // Prepare form fields
+    const dateInput = document.getElementById('session-date-input');
+    const startTimeInput = document.getElementById('session-start-time-input');
+    const endTimeInput = document.getElementById('session-end-time-input');
+    const locationInput = document.getElementById('session-location-input');
+    const commentsInput = document.getElementById('session-comments-input');
+
+    // Set defaults while we fetch the suggestion
+    dateInput.value = new Date().toISOString().split('T')[0];
+    startTimeInput.value = '';
+    endTimeInput.value = '';
+    locationInput.value = '';
+    commentsInput.value = '';
+
+    // Show modal using ModalManager
+    ModalManager.showModal('add-session-instance-modal', {
+        autoFocus: false
+    });
+
+    // Fetch the next suggested session instance from the API
+    const sessionPath = {{ session_path|tojson|safe }};
+    try {
+        const response = await fetch(`/api/sessions/${sessionPath}/next_instance_suggestion`);
+        const data = await response.json();
+
+        if (data.success) {
+            // Update form with suggested values
+            dateInput.value = data.date || dateInput.value;
+            startTimeInput.value = data.start_time || '';
+            endTimeInput.value = data.end_time || '';
+        }
+    } catch (error) {
+        console.error('Failed to get next session suggestion:', error);
+        // Keep the default values if API call fails
+    }
+}
+
+function hideAddSessionModal() {
+    ModalManager.hideModal('add-session-instance-modal');
+}
+
+function addSessionInstance() {
+    const dateInput = document.getElementById('session-date-input');
+    const startTimeInput = document.getElementById('session-start-time-input');
+    const endTimeInput = document.getElementById('session-end-time-input');
+    const locationInput = document.getElementById('session-location-input');
+    const commentsInput = document.getElementById('session-comments-input');
+
+    const date = dateInput.value.trim();
+    const startTime = startTimeInput.value.trim();
+    const endTime = endTimeInput.value.trim();
+    const location = locationInput.value.trim();
+    const comments = commentsInput.value.trim();
+
+    if (!date) {
+        showMessage('Please enter a session date', 'error');
+        return;
+    }
+
+    // Prepare request data
+    const requestData = {
+        date: date
+    };
+
+    // Only include start_time if it's provided
+    if (startTime) {
+        requestData.start_time = startTime;
+    }
+
+    // Only include end_time if it's provided
+    if (endTime) {
+        requestData.end_time = endTime;
+    }
+
+    // Only include location if it's provided
+    if (location) {
+        requestData.location = location;
+    }
+
+    // Only include comments if provided
+    if (comments) {
+        requestData.comments = comments;
+    }
+
+    const sessionPath = {{ session_path|tojson|safe }};
+
+    // Call API to create the session instance
+    fetch(`/api/sessions/${sessionPath}/add_instance`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(data.message);
+            hideAddSessionModal();
+            // Reload the logs content to show the new instance
+            loadLogsContent();
+        } else {
+            showMessage(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        showMessage('Failed to add session instance', 'error');
+        console.error('Error:', error);
+    });
 }
 
 function saveSessionDetails() {
