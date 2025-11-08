@@ -29,3 +29,16 @@ services:
         sync: false
       - key: PGPORT
         value: "5432"
+
+  - type: web
+    name: abc-renderer
+    runtime: node
+    rootDir: abc-renderer
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    plan: free
+    envVars:
+      - key: NODE_VERSION
+        value: "18"
+      - key: PORT
+        value: "10000"
