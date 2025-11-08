@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/session_instance_modal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -732,7 +733,6 @@ body.modal-open {
 }
 </style>
 
-<script src="/static/js/dist/modalManager.js"></script>
 <script src="{{ url_for('static', filename='js/session_instance_modal.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -1129,10 +1129,12 @@ async function showAddSessionModal() {
     locationInput.value = '';
     commentsInput.value = '';
 
-    // Show modal using ModalManager
-    ModalManager.showModal('add-session-instance-modal', {
-        autoFocus: false
-    });
+    // Show modal
+    const modal = document.getElementById('add-session-instance-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => {
+        modal.classList.add('show');
+    }, 10);
 
     // Fetch the next suggested session instance from the API
     const sessionPath = {{ session_path|tojson|safe }};
@@ -1153,7 +1155,11 @@ async function showAddSessionModal() {
 }
 
 function hideAddSessionModal() {
-    ModalManager.hideModal('add-session-instance-modal');
+    const modal = document.getElementById('add-session-instance-modal');
+    modal.classList.remove('show');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 200); // Wait for animation to complete
 }
 
 function addSessionInstance() {
