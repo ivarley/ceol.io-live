@@ -141,11 +141,18 @@
         const tuneType = config.additionalData?.tuneType || '';
 
         container.innerHTML = `
-            <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
-            <div class="modal-header-section">
-                ${tuneType ? `<span class="tune-type-pill">${tuneType}</span>` : ''}
-                <h2 class="modal-tune-title">${tuneName}</h2>
-            </div>
+            <table class="modal-header-section">
+                <tr>
+                    ${tuneType ? `<td class="modal-header-pill-cell"><span class="tune-type-pill">${tuneType}</span></td>` : ''}
+                    <td class="modal-header-title-cell">
+                        <h2 class="modal-tune-title">${tuneName}</h2>
+                    </td>
+                    <td class="modal-header-spacer-cell"></td>
+                    <td class="modal-header-close-cell">
+                        <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
+                    </td>
+                </tr>
+            </table>
             <div class="modal-loading">
                 <div class="loading-spinner"></div>
                 <p>Loading tune details...</p>
@@ -177,10 +184,7 @@
     function buildModalHTML(tuneData, config) {
         const sections = [];
 
-        // Close button
-        sections.push(`<button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>`);
-
-        // Header section with tune type and title
+        // Header section with tune type, title, logo, and close button
         sections.push(buildHeaderSection(tuneData, config));
 
         // Configure section (collapsible except on admin)
@@ -228,13 +232,22 @@
         const clickableClass = isClickable ? ' modal-tune-title-clickable' : '';
 
         return `
-            <div class="modal-header-section">
-                ${tuneType ? `<span class="tune-type-pill">${tuneType}</span>` : ''}
-                <h2 class="modal-tune-title${clickableClass}"${clickHandler} ${isClickable ? 'title="Click to configure"' : ''}>
-                    ${displayName}
-                    ${thesessionLink}
-                </h2>
-            </div>
+            <table class="modal-header-section">
+                <tr>
+                    ${tuneType ? `<td class="modal-header-pill-cell"><span class="tune-type-pill">${tuneType}</span></td>` : ''}
+                    <td class="modal-header-title-cell">
+                        <h2 class="modal-tune-title${clickableClass}"${clickHandler} ${isClickable ? 'title="Click to configure"' : ''}>
+                            ${displayName}
+                        </h2>
+                    </td>
+                    <td class="modal-header-spacer-cell">
+                        ${thesessionLink}
+                    </td>
+                    <td class="modal-header-close-cell">
+                        <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
+                    </td>
+                </tr>
+            </table>
         `;
     }
 
@@ -266,7 +279,7 @@
     }
 
     /**
-     * Build TheSession.org link icon (blue hue)
+     * Build TheSession.org link icon (thesession logo)
      */
     function buildTheSessionLink(tuneData) {
         if (!tuneData.tune_id) return '';
@@ -280,7 +293,7 @@
             url = `${baseUrl}?setting=${settingId}#setting${settingId}`;
         }
 
-        return `<a href="${url}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();">🔗</a>`;
+        return `<a href="${url}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();"><img src="/static/images/thesession-logo-1.png" alt="TheSession.org" class="thesession-logo-img"></a>`;
     }
 
     /**
@@ -1258,9 +1271,18 @@
      */
     function showError(container, message) {
         container.innerHTML = `
-            <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
+            <table class="modal-header-section">
+                <tr>
+                    <td class="modal-header-title-cell">
+                        <h2 class="modal-tune-title">Error</h2>
+                    </td>
+                    <td class="modal-header-spacer-cell"></td>
+                    <td class="modal-header-close-cell">
+                        <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
+                    </td>
+                </tr>
+            </table>
             <div class="modal-error">
-                <h3>Error</h3>
                 <p>${message}</p>
             </div>
         `;
