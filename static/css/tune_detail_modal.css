@@ -177,10 +177,24 @@
     align-items: baseline;
 }
 
+/* Make inputs and selects in inline groups flex to fill remaining space */
+.configure-field-group-inline .configure-input,
+.configure-field-group-inline .configure-select,
+.configure-field-group-inline .input-with-button {
+    flex: 1;
+    min-width: 0; /* Allow flex items to shrink below their content size */
+}
+
 .configure-label {
     font-size: 14px;
     font-weight: 500;
     color: var(--text-color);
+}
+
+/* In inline groups, labels should not wrap */
+.configure-field-group-inline .configure-label {
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .configure-value {
@@ -890,4 +904,23 @@
 .fetch-setting-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* Spinner for fetch setting button */
+.fetch-setting-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: fetch-setting-spin 0.8s linear infinite;
+}
+
+@keyframes fetch-setting-spin {
+    to { transform: rotate(360deg); }
+}
+
+.fetch-setting-btn-loading {
+    min-width: 70px; /* Prevent button from shrinking during loading */
 }

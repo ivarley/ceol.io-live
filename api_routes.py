@@ -458,6 +458,7 @@ def cache_tune_setting_ajax(tune_id):
         # Extract the data we need
         key = setting_to_cache.get("key", "")
         abc = setting_to_cache.get("abc", "")
+        tune_type = data.get("type", "").title()  # Convert to title case (jig -> Jig)
 
         # Replace "!" with newline for proper staff line breaks
         # thesession.org uses "!" as a line break marker
@@ -465,7 +466,7 @@ def cache_tune_setting_ajax(tune_id):
 
         # Extract incipit from ABC notation
         from database import extract_abc_incipit
-        incipit_abc = extract_abc_incipit(abc)
+        incipit_abc = extract_abc_incipit(abc, tune_type)
 
         # Update the database
         conn = get_db_connection()

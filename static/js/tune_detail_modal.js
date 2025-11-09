@@ -397,47 +397,55 @@
 
         // Editable fields based on context
         if (isMyTunes) {
+            // Show "Refresh" if we have cached data (abc, images, etc.), regardless of whether there's a setting_id
+            // (default settings have cached data but no setting_id)
+            const hasCachedData = tuneData.abc || tuneData.incipit_abc || tuneData.image || tuneData.incipit_image;
+            const buttonText = hasCachedData ? 'Refresh' : 'Fetch';
             fields.push(`
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="name-alias-input">I call this:</label>
                     <input type="text" id="name-alias-input" class="configure-input"
                            value="${tuneData.name_alias || ''}"
                            placeholder="Enter your name for this tune"
                            oninput="TuneDetailModal.onFieldChange()">
                 </div>
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="setting-input">My setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
                                value="${tuneData.setting_id || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
-                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">${buttonText}</button>
                     </div>
-                    <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
+                <div id="setting-error" class="field-error" style="display: none;"></div>
             `);
         } else if (isSession) {
+            // Show "Refresh" if we have cached data (abc, images, etc.), regardless of whether there's a setting_id
+            // (default settings have cached data but no setting_id)
+            const hasCachedData = tuneData.abc || tuneData.incipit_abc || tuneData.image || tuneData.incipit_image;
+            const buttonText = hasCachedData ? 'Refresh' : 'Fetch';
             fields.push(`
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="alias-input">We call this:</label>
                     <input type="text" id="alias-input" class="configure-input"
                            value="${tuneData.alias || ''}"
                            placeholder="Enter session name for this tune"
                            oninput="TuneDetailModal.onFieldChange()">
                 </div>
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="setting-input">Our setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
                                value="${tuneData.setting_id || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
-                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">${buttonText}</button>
                     </div>
-                    <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
-                <div class="configure-field-group">
+                <div id="setting-error" class="field-error" style="display: none;"></div>
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="key-select">We play this in:</label>
                     <select id="key-select" class="configure-select" onchange="TuneDetailModal.onFieldChange()">
                         ${MUSICAL_KEYS.map(key => `
@@ -449,26 +457,30 @@
                 </div>
             `);
         } else if (isSessionInstance) {
+            // Show "Refresh" if we have cached data (abc, images, etc.), regardless of whether there's a setting_override
+            // (default settings have cached data but no setting_override)
+            const hasCachedData = tuneData.abc || tuneData.incipit_abc || tuneData.image || tuneData.incipit_image;
+            const buttonText = hasCachedData ? 'Refresh' : 'Fetch';
             fields.push(`
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="alias-input">In this case, we called it:</label>
                     <input type="text" id="alias-input" class="configure-input"
                            value="${tuneData.name || ''}"
                            placeholder="Enter name for this instance"
                            oninput="TuneDetailModal.onFieldChange()">
                 </div>
-                <div class="configure-field-group">
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="setting-input">This time, we played setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
                                value="${tuneData.setting_override || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
-                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">Fetch</button>
+                        <button type="button" class="fetch-setting-btn" onclick="TuneDetailModal.fetchSetting()" title="Fetch setting from TheSession.org">${buttonText}</button>
                     </div>
-                    <div id="setting-error" class="field-error" style="display: none;"></div>
                 </div>
-                <div class="configure-field-group">
+                <div id="setting-error" class="field-error" style="display: none;"></div>
+                <div class="configure-field-group-inline">
                     <label class="configure-label" for="key-select">This time, we played in:</label>
                     <select id="key-select" class="configure-select" onchange="TuneDetailModal.onFieldChange()">
                         ${MUSICAL_KEYS.map(key => `
@@ -912,10 +924,45 @@
         const input = document.getElementById('setting-input');
         const errorDiv = document.getElementById('setting-error');
         const saveBtn = document.getElementById('save-btn');
+        const fetchBtn = document.querySelector('.fetch-setting-btn');
 
         if (!input || !errorDiv) return;
 
         const value = input.value.trim();
+
+        // Determine original setting ID based on context
+        let originalSettingId;
+        if (currentContext === 'my_tunes') {
+            originalSettingId = originalValues.setting_id || null;
+        } else if (currentContext === 'session') {
+            originalSettingId = originalValues.setting_id || null;
+        } else if (currentContext === 'session_instance') {
+            originalSettingId = originalValues.setting_override || null;
+        }
+
+        // Check if we have cached data (abc, images, etc.)
+        const hasCachedData = currentTuneData && (
+            currentTuneData.abc ||
+            currentTuneData.incipit_abc ||
+            currentTuneData.image ||
+            currentTuneData.incipit_image
+        );
+
+        // Update button text based on whether we have cached data and if setting ID matches original
+        if (fetchBtn) {
+            const currentSettingId = extractSettingId(value);
+            // Show "Refresh" if:
+            // 1. We have cached data, AND
+            // 2. The current input matches the original (both empty, or both the same ID)
+            const settingIdsMatch = (!value && !originalSettingId) || (currentSettingId === originalSettingId);
+
+            if (hasCachedData && settingIdsMatch) {
+                fetchBtn.textContent = 'Refresh';
+            } else {
+                fetchBtn.textContent = 'Fetch';
+            }
+        }
+
         if (!value) {
             errorDiv.style.display = 'none';
             input.style.borderColor = '';
@@ -1905,10 +1952,11 @@
         const button = event?.target || document.querySelector('.fetch-setting-btn');
         if (!button) return;
 
-        // Disable button and show loading state
+        // Disable button and show loading state with spinner
         button.disabled = true;
         const originalButtonText = button.textContent;
-        button.textContent = '⟳';
+        button.classList.add('fetch-setting-btn-loading');
+        button.innerHTML = '<span class="fetch-setting-spinner"></span>';
 
         // Build API URL with optional setting_id parameter
         let apiUrl = `/api/tunes/${tuneId}/settings/cache`;
@@ -1986,16 +2034,18 @@
                             const modalContent = document.getElementById('tune-detail-content');
                             renderModalContent(modalContent, currentTuneData, currentConfig);
 
-                            // Show success feedback on button
+                            // Show success feedback on button (after re-render, button text will be "Refresh")
                             const newButton = document.querySelector('.fetch-setting-btn');
                             if (newButton) {
+                                const correctButtonText = newButton.textContent; // This will be "Refresh" now
                                 newButton.textContent = '✓';
                                 newButton.style.backgroundColor = '#28a745';
                                 newButton.style.color = 'white';
+                                newButton.classList.remove('fetch-setting-btn-loading');
 
                                 setTimeout(() => {
                                     newButton.disabled = false;
-                                    newButton.textContent = originalButtonText;
+                                    newButton.textContent = correctButtonText;
                                     newButton.style.backgroundColor = '';
                                     newButton.style.color = '';
                                 }, 2000);
@@ -2008,13 +2058,15 @@
 
                             const newButton = document.querySelector('.fetch-setting-btn');
                             if (newButton) {
+                                const correctButtonText = newButton.textContent;
                                 newButton.textContent = '⚠';
                                 newButton.style.backgroundColor = '#f0ad4e';
                                 newButton.style.color = 'white';
+                                newButton.classList.remove('fetch-setting-btn-loading');
 
                                 setTimeout(() => {
                                     newButton.disabled = false;
-                                    newButton.textContent = originalButtonText;
+                                    newButton.textContent = correctButtonText;
                                     newButton.style.backgroundColor = '';
                                     newButton.style.color = '';
                                 }, 2000);
@@ -2034,27 +2086,30 @@
 
                     const newButton = document.querySelector('.fetch-setting-btn');
                     if (newButton) {
+                        const correctButtonText = newButton.textContent;
                         newButton.textContent = '✓';
                         newButton.style.backgroundColor = '#28a745';
                         newButton.style.color = 'white';
+                        newButton.classList.remove('fetch-setting-btn-loading');
 
                         setTimeout(() => {
                             newButton.disabled = false;
-                            newButton.textContent = originalButtonText;
+                            newButton.textContent = correctButtonText;
                             newButton.style.backgroundColor = '';
                             newButton.style.color = '';
                         }, 2000);
                     }
                 }
             } else {
-                button.textContent = '✗';
+                button.classList.remove('fetch-setting-btn-loading');
+                button.innerHTML = '✗';
                 button.style.backgroundColor = '#dc3545';
                 button.style.color = 'white';
                 console.error('Error fetching setting:', data.message);
 
                 setTimeout(() => {
                     button.disabled = false;
-                    button.textContent = originalButtonText;
+                    button.innerHTML = originalButtonText;
                     button.style.backgroundColor = '';
                     button.style.color = '';
                 }, 2000);
@@ -2062,13 +2117,14 @@
         })
         .catch(error => {
             console.error('Error:', error);
-            button.textContent = '✗';
+            button.classList.remove('fetch-setting-btn-loading');
+            button.innerHTML = '✗';
             button.style.backgroundColor = '#dc3545';
             button.style.color = 'white';
 
             setTimeout(() => {
                 button.disabled = false;
-                button.textContent = originalButtonText;
+                button.innerHTML = originalButtonText;
                 button.style.backgroundColor = '';
                 button.style.color = '';
             }, 2000);

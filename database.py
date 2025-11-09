@@ -10,13 +10,135 @@ def normalize_apostrophes(text):
     return text.replace("'", "'").replace("'", "'").replace(""", '"').replace(""", '"')
 
 
-def extract_abc_incipit(abc_notation):
+# Mapping of tune types to expected eighth notes per bar
+# Used for detecting pickup notes (anacrusis) in ABC notation
+TUNE_TYPE_BEATS = {
+    'Jig': 6,           # 6/8 time
+    'Reel': 8,          # 4/4 time
+    'Slip Jig': 9,      # 9/8 time
+    'Hop Jig': 9,       # 9/8 time
+    'Hornpipe': 8,      # 4/4 time
+    'Polka': 4,         # 2/4 time
+    'Set Dance': 8,     # 4/4 time
+    'Slide': 12,        # 12/8 time
+    'Waltz': 6,         # 3/4 time
+    'Barndance': 8,     # 4/4 time
+    'Strathspey': 8,    # 4/4 time
+    'Three-Two': 12,    # 3/2 time
+    'Mazurka': 6,       # 3/4 time
+    'March': 8,         # 4/4 time (most common)
+    'Air': 8,           # Variable, defaulting to 4/4
+}
+
+
+def count_eighth_notes_in_bar(bar_content):
+    """
+    Count the number of eighth notes worth of duration in an ABC notation bar.
+
+    This is used to detect pickup bars (anacrusis) which have fewer notes than
+    a complete bar.
+
+    Args:
+        bar_content: String of ABC notation representing one bar
+
+    Returns:
+        Number of eighth notes worth of duration (e.g., "A" = 1, "A2" = 2, "A/" = 0.5)
+    """
+    if not bar_content:
+        return 0
+
+    total_eighths = 0
+    i = 0
+
+    while i < len(bar_content):
+        char = bar_content[i]
+
+        # Skip decorations and grace notes
+        if char == '!':
+            # Skip until next !
+            i += 1
+            while i < len(bar_content) and bar_content[i] != '!':
+                i += 1
+            i += 1
+            continue
+
+        if char == '{':
+            # Skip grace notes until }
+            while i < len(bar_content) and bar_content[i] != '}':
+                i += 1
+            i += 1
+            continue
+
+        # Handle chords [...]
+        if char == '[':
+            # Chords count as one note, get the duration after the ]
+            while i < len(bar_content) and bar_content[i] != ']':
+                i += 1
+            i += 1
+            # Now get the duration modifier if any
+            duration = 1  # Default eighth note
+            if i < len(bar_content):
+                if bar_content[i:i+2] == '/2':
+                    duration = 0.5
+                    i += 2
+                elif bar_content[i] == '/':
+                    duration = 0.5
+                    i += 1
+                elif bar_content[i].isdigit():
+                    num = ''
+                    while i < len(bar_content) and bar_content[i].isdigit():
+                        num += bar_content[i]
+                        i += 1
+                    duration = int(num)
+            total_eighths += duration
+            continue
+
+        # Note letters (A-G, a-g) and rest (z, x)
+        if char in 'ABCDEFGabcdefgzxZ':
+            duration = 1  # Default is one eighth note
+            i += 1
+
+            # Check for accidentals (^, =, _) - already skipped if before note
+            # Check for octave modifiers (', ,)
+            while i < len(bar_content) and bar_content[i] in "',":
+                i += 1
+
+            # Check for duration modifiers
+            if i < len(bar_content):
+                if bar_content[i:i+2] == '/2':
+                    duration = 0.5
+                    i += 2
+                elif bar_content[i:i+2] == '/4':
+                    duration = 0.25
+                    i += 2
+                elif bar_content[i] == '/':
+                    duration = 0.5
+                    i += 1
+                elif bar_content[i].isdigit():
+                    num = ''
+                    while i < len(bar_content) and bar_content[i].isdigit():
+                        num += bar_content[i]
+                        i += 1
+                    duration = int(num)
+
+            total_eighths += duration
+        else:
+            i += 1
+
+    return total_eighths
+
+
+def extract_abc_incipit(abc_notation, tune_type=None):
     """
     Extract the first two bars of ABC notation plus any pickup notes.
     Bars are delineated by vertical bar characters (|).
 
+    If tune_type is provided, this function will detect pickup bars (anacrusis)
+    and include an extra bar to ensure two full bars are included.
+
     Args:
-        abc_notation: The full ABC notation string
+        abc_notation: The full ABC notation string (music only, no headers)
+        tune_type: Optional tune type (e.g., 'Jig', 'Reel') for pickup detection
 
     Returns:
         The incipit (first two bars plus pickup notes), or empty string if invalid
@@ -41,10 +163,33 @@ def extract_abc_incipit(abc_notation):
         # If there are fewer than 2 bars, return the whole thing
         return abc_notation
 
-    # To get 2 bars of music, we need the third bar line position
-    # (pickup/bar1 content | bar1 content | bar2 content |)
-    # But if we only have 2 bar lines total, use the second one
+    # Default: assume no pickup, so get 2 bars (bar index 2)
     target_bar_index = min(2, len(bar_positions) - 1)
+
+    # If tune_type is provided, detect pickup notes
+    if tune_type and tune_type in TUNE_TYPE_BEATS:
+        expected_beats = TUNE_TYPE_BEATS[tune_type]
+
+        # Check if there's a pickup bar between first and second bar lines
+        # Common pattern: |: pickup | bar1 | bar2 |
+        if len(bar_positions) >= 2:
+            # Extract content between first and second bar line
+            first_bar_start = bar_positions[0]
+            # Skip past the bar line and any modifiers (:, |, etc.)
+            while first_bar_start < len(abc_notation) and abc_notation[first_bar_start] in ':|[]':
+                first_bar_start += 1
+
+            first_bar_content = abc_notation[first_bar_start:bar_positions[1]]
+
+            # Count beats in first bar
+            first_bar_beats = count_eighth_notes_in_bar(first_bar_content)
+
+            # If first bar has less than half the expected beats, it's likely a pickup
+            if first_bar_beats > 0 and first_bar_beats < (expected_beats * 0.5):
+                # This is a pickup bar - we need 3 bars total to get 2 full bars + pickup
+                # (|: pickup | full bar 1 | full bar 2 |)
+                target_bar_index = min(3, len(bar_positions) - 1)
+
     incipit_end = bar_positions[target_bar_index]
 
     # Include the bar line character itself
