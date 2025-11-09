@@ -847,7 +847,7 @@
     margin: 0 auto;
     border-radius: 4px;
     background: white;
-    padding: 10px;
+    padding: 5px;
     box-sizing: border-box;
     vertical-align: top;
     max-width: 100%;
@@ -855,8 +855,9 @@
 }
 
 .abc-notation-image.abc-notation-incipit {
-    /* Incipit images fit full width */
+    /* Incipit images fit full width with minimal padding */
     width: 100%;
+    padding: 2px;
 }
 
 /* Input with Button Layout */

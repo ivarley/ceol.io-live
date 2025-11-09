@@ -56,10 +56,14 @@ def bytea_to_base64(data):
     return base64.b64encode(data).decode('utf-8')
 
 
-def render_abc_to_png(abc_notation):
+def render_abc_to_png(abc_notation, is_incipit=False):
     """
     Call the ABC renderer microservice to convert ABC notation to PNG image.
     Returns the PNG image as bytes, or None if rendering fails.
+
+    Args:
+        abc_notation: ABC notation string to render
+        is_incipit: If True, uses minimal padding for compact rendering (default: False)
     """
     try:
         abc_renderer_url = os.getenv('ABC_RENDERER_URL')
@@ -67,10 +71,10 @@ def render_abc_to_png(abc_notation):
             print("Warning: ABC_RENDERER_URL not configured")
             return None
 
-        print(f"Calling ABC renderer with {len(abc_notation)} chars of ABC notation")
+        print(f"Calling ABC renderer with {len(abc_notation)} chars of ABC notation (isIncipit={is_incipit})")
         response = requests.post(
             f'{abc_renderer_url}/api/render',
-            json={'abc': abc_notation},
+            json={'abc': abc_notation, 'isIncipit': is_incipit},
             timeout=15
         )
 
@@ -527,7 +531,7 @@ def cache_tune_setting_ajax(tune_id):
             incipit_with_headers = incipit_abc
             if not incipit_abc.startswith('X:'):
                 incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
-            incipit_image = render_abc_to_png(incipit_with_headers)
+            incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
 
         # Update database with images if they were generated
         if full_image or incipit_image:
