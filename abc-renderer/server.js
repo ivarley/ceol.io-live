@@ -56,7 +56,10 @@ app.post('/api/render', async (req, res) => {
     const dom = new JSDOM('<!DOCTYPE html><html><body><div id="abc"></div></body></html>');
     global.window = dom.window;
     global.document = dom.window.document;
-    // Don't override navigator - JSDOM provides its own
+    global.navigator = {
+      userAgent: 'node.js',
+      platform: 'node'
+    };
 
     const container = document.getElementById('abc');
 
@@ -89,6 +92,7 @@ app.post('/api/render', async (req, res) => {
     // Clean up global DOM
     delete global.window;
     delete global.document;
+    delete global.navigator;
 
     console.log(`Generated SVG (${svgString.length} characters)`);
 
@@ -107,6 +111,7 @@ app.post('/api/render', async (req, res) => {
     // Clean up global DOM in case of error
     delete global.window;
     delete global.document;
+    delete global.navigator;
 
     console.error('Error rendering ABC notation:', error);
     res.status(500).json({
