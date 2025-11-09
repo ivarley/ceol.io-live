@@ -1179,7 +1179,9 @@
         } else {
             // Other contexts: use query params
             const url = new URL(window.location);
-            url.searchParams.set('tune', tuneId);
+            // For my-tunes context, use 'ptid' (person_tune_id) instead of 'tune'
+            const paramName = currentContext === 'my_tunes' ? 'ptid' : 'tune';
+            url.searchParams.set(paramName, tuneId);
             window.history.replaceState({}, '', url);
         }
     }
@@ -1197,7 +1199,9 @@
         } else {
             // Other contexts: remove query param
             const url = new URL(window.location);
-            url.searchParams.delete('tune');
+            // For my-tunes context, remove 'ptid' parameter; otherwise remove 'tune'
+            const paramName = currentContext === 'my_tunes' ? 'ptid' : 'tune';
+            url.searchParams.delete(paramName);
             window.history.replaceState({}, '', url);
         }
     }
@@ -1994,7 +1998,9 @@
 
         // Fall back to query param for other contexts
         const urlParams = new URLSearchParams(window.location.search);
-        const tuneParam = urlParams.get('tune');
+        // For my-tunes, check 'ptid' parameter; otherwise check 'tune'
+        const paramName = pathname.includes('/my-tunes') ? 'ptid' : 'tune';
+        const tuneParam = urlParams.get(paramName);
         return tuneParam ? parseInt(tuneParam, 10) : null;
     }
 
