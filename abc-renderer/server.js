@@ -74,9 +74,15 @@ app.post('/api/render', async (req, res) => {
 
       processedAbc = lines.join('\n');
 
-      // Remove opening repeat signs (|: or [:) at the start of the tune
-      // Replace with a regular barline
+      // For incipits: ensure there's a single barline at the start
+      // Remove opening repeat signs (|: or [:) and replace with single barline
       processedAbc = processedAbc.replace(/(\n[^:\n]*)([\|\[][:])/, '$1|');
+
+      // If there's no barline at all at the start, add one
+      if (!processedAbc.match(/\n[^\n]*\|/)) {
+        // Add | before the first note
+        processedAbc = processedAbc.replace(/(\nK:[^\n]*\n)([^\n|])/, '$1|$2');
+      }
 
       console.log('Modified ABC for incipit:', processedAbc);
     }
@@ -135,74 +141,92 @@ app.post('/api/render', async (req, res) => {
     // Extract SVG from the container
     const svgElement = container.querySelector('svg');
 
-    // For incipits: crop top whitespace by finding minimum Y coordinate
+    // For incipits: crop top and left whitespace by finding minimum coordinates
     if (isIncipit && svgElement) {
       try {
-        // Find all elements that might contain Y coordinates
+        // Find all elements that might contain coordinates
         const contentElements = svgElement.querySelectorAll('path, text, rect, circle, ellipse, line');
         let minY = Infinity;
+        let minX = Infinity;
 
         contentElements.forEach(element => {
-          // Extract Y coordinates from different element types
+          // Extract X and Y coordinates from different element types
           if (element.tagName === 'path') {
             const d = element.getAttribute('d');
             if (d) {
-              // Parse path data for Y coordinates
-              const yMatches = d.match(/[ML]\s*[\d.-]+\s+([\d.-]+)|[Vv]\s*([\d.-]+)/g);
-              if (yMatches) {
-                yMatches.forEach(match => {
-                  const yMatch = match.match(/([\d.-]+)$/);
-                  if (yMatch) {
-                    const y = parseFloat(yMatch[1]);
-                    if (!isNaN(y) && y < minY) {
-                      minY = y;
-                    }
+              // Parse path data for coordinates
+              const coordMatches = d.match(/[ML]\s*([\d.-]+)\s+([\d.-]+)|[Hh]\s*([\d.-]+)|[Vv]\s*([\d.-]+)/g);
+              if (coordMatches) {
+                coordMatches.forEach(match => {
+                  const xyMatch = match.match(/[ML]\s*([\d.-]+)\s+([\d.-]+)/);
+                  if (xyMatch) {
+                    const x = parseFloat(xyMatch[1]);
+                    const y = parseFloat(xyMatch[2]);
+                    if (!isNaN(x) && x < minX) minX = x;
+                    if (!isNaN(y) && y < minY) minY = y;
                   }
                 });
               }
             }
           } else if (element.tagName === 'text') {
+            const x = parseFloat(element.getAttribute('x'));
             const y = parseFloat(element.getAttribute('y'));
-            if (!isNaN(y) && y < minY) {
-              minY = y;
-            }
+            if (!isNaN(x) && x < minX) minX = x;
+            if (!isNaN(y) && y < minY) minY = y;
           } else if (element.tagName === 'rect') {
+            const x = parseFloat(element.getAttribute('x'));
             const y = parseFloat(element.getAttribute('y'));
-            if (!isNaN(y) && y < minY) {
-              minY = y;
-            }
+            if (!isNaN(x) && x < minX) minX = x;
+            if (!isNaN(y) && y < minY) minY = y;
           } else if (element.tagName === 'circle') {
+            const cx = parseFloat(element.getAttribute('cx'));
             const cy = parseFloat(element.getAttribute('cy'));
             const r = parseFloat(element.getAttribute('r') || 0);
+            const x = cx - r;
             const y = cy - r;
-            if (!isNaN(y) && y < minY) {
-              minY = y;
-            }
+            if (!isNaN(x) && x < minX) minX = x;
+            if (!isNaN(y) && y < minY) minY = y;
           } else if (element.tagName === 'line') {
+            const x1 = parseFloat(element.getAttribute('x1'));
+            const x2 = parseFloat(element.getAttribute('x2'));
             const y1 = parseFloat(element.getAttribute('y1'));
             const y2 = parseFloat(element.getAttribute('y2'));
+            const x = Math.min(x1, x2);
             const y = Math.min(y1, y2);
-            if (!isNaN(y) && y < minY) {
-              minY = y;
-            }
+            if (!isNaN(x) && x < minX) minX = x;
+            if (!isNaN(y) && y < minY) minY = y;
           }
         });
 
-        console.log(`Found ${contentElements.length} content elements, minY=${minY}`);
+        console.log(`Found ${contentElements.length} content elements, minX=${minX}, minY=${minY}`);
 
-        // If we found actual content, adjust viewBox to start just above it
-        if (minY !== Infinity && minY > 5) {
-          const viewBox = svgElement.getAttribute('viewBox');
-          if (viewBox) {
-            const [x, y, width, height] = viewBox.split(' ').map(Number);
+        // If we found actual content, adjust viewBox to crop top and left
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const [x, y, width, height] = viewBox.split(' ').map(Number);
+
+          // Crop top if there's whitespace
+          let newY = y;
+          let newHeight = height;
+          if (minY !== Infinity && minY > 5) {
             // Leave a small margin (3px) above the content
-            const newY = Math.max(0, minY - 3);
-            const cropAmount = newY - y;
-            svgElement.setAttribute('viewBox', `${x} ${newY} ${width} ${height - cropAmount}`);
-            console.log(`Cropped incipit: original Y=${y}, content starts at Y=${minY}, new Y=${newY}, cropped ${cropAmount}px`);
+            newY = Math.max(0, minY - 3);
+            const cropTop = newY - y;
+            newHeight = height - cropTop;
           }
-        } else {
-          console.log(`No cropping needed: minY=${minY}`);
+
+          // Crop left if there's whitespace
+          let newX = x;
+          let newWidth = width;
+          if (minX !== Infinity && minX > 2) {
+            // Leave minimal margin (1px) to the left
+            newX = Math.max(0, minX - 1);
+            const cropLeft = newX - x;
+            newWidth = width - cropLeft;
+          }
+
+          svgElement.setAttribute('viewBox', `${newX} ${newY} ${newWidth} ${newHeight}`);
+          console.log(`Cropped incipit: X ${x}->${newX} (content at ${minX}), Y ${y}->${newY} (content at ${minY})`);
         }
       } catch (error) {
         console.error('Error cropping incipit:', error);
