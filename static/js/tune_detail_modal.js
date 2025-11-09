@@ -1928,29 +1928,123 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                const fetchedSettingId = data.setting.setting_id;
+
                 // Update current tune data with the ABC notation, incipit, and images
                 currentTuneData.abc = data.setting.abc;
                 currentTuneData.incipit_abc = data.setting.incipit_abc;
                 currentTuneData.image = data.setting.image;
                 currentTuneData.incipit_image = data.setting.incipit_image;
 
-                // Re-render the modal to show the ABC notation and images
-                const modalContent = document.getElementById('tune-detail-content');
-                renderModalContent(modalContent, currentTuneData, currentConfig);
+                // Save the setting_id to the database based on context
+                let saveEndpoint = '';
+                let savePayload = {};
 
-                // Show success feedback on button
-                const newButton = document.querySelector('.fetch-setting-btn');
-                if (newButton) {
-                    newButton.textContent = '✓';
-                    newButton.style.backgroundColor = '#28a745';
-                    newButton.style.color = 'white';
+                if (currentContext === 'my_tunes') {
+                    saveEndpoint = `/api/my-tunes/${currentConfig.additionalData.personTuneId}`;
+                    savePayload = { setting_id: fetchedSettingId };
+                } else if (currentContext === 'session') {
+                    saveEndpoint = `/api/sessions/${currentConfig.additionalData.sessionPath}/tunes/${currentTuneData.tune_id}`;
+                    savePayload = { setting_id: fetchedSettingId };
+                } else if (currentContext === 'session_instance') {
+                    const dateOrId = currentConfig.additionalData.dateOrId;
+                    saveEndpoint = `/api/sessions/${currentConfig.additionalData.sessionPath}/${dateOrId}/tunes/${currentTuneData.tune_id}`;
+                    savePayload = { setting_override: fetchedSettingId };
+                }
 
-                    setTimeout(() => {
-                        newButton.disabled = false;
-                        newButton.textContent = originalButtonText;
-                        newButton.style.backgroundColor = '';
-                        newButton.style.color = '';
-                    }, 2000);
+                // If we have a save endpoint, save the setting_id
+                if (saveEndpoint) {
+                    fetch(saveEndpoint, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(savePayload)
+                    })
+                    .then(response => response.json())
+                    .then(saveData => {
+                        if (saveData.success) {
+                            // Update currentTuneData with the new setting_id
+                            if (currentContext === 'my_tunes') {
+                                currentTuneData.setting_id = fetchedSettingId;
+                            } else if (currentContext === 'session') {
+                                currentTuneData.setting_id = fetchedSettingId;
+                            } else if (currentContext === 'session_instance') {
+                                currentTuneData.setting_override = fetchedSettingId;
+                            }
+
+                            // Update original values to reflect saved state
+                            if (currentContext === 'my_tunes') {
+                                originalValues.setting_id = fetchedSettingId;
+                            } else if (currentContext === 'session') {
+                                originalValues.setting_id = fetchedSettingId;
+                            } else if (currentContext === 'session_instance') {
+                                originalValues.setting_override = fetchedSettingId;
+                            }
+
+                            // Re-render the modal to show the ABC notation and images
+                            const modalContent = document.getElementById('tune-detail-content');
+                            renderModalContent(modalContent, currentTuneData, currentConfig);
+
+                            // Show success feedback on button
+                            const newButton = document.querySelector('.fetch-setting-btn');
+                            if (newButton) {
+                                newButton.textContent = '✓';
+                                newButton.style.backgroundColor = '#28a745';
+                                newButton.style.color = 'white';
+
+                                setTimeout(() => {
+                                    newButton.disabled = false;
+                                    newButton.textContent = originalButtonText;
+                                    newButton.style.backgroundColor = '';
+                                    newButton.style.color = '';
+                                }, 2000);
+                            }
+                        } else {
+                            console.error('Error saving setting_id:', saveData.error);
+                            // Still re-render with the fetched data, just log the save error
+                            const modalContent = document.getElementById('tune-detail-content');
+                            renderModalContent(modalContent, currentTuneData, currentConfig);
+
+                            const newButton = document.querySelector('.fetch-setting-btn');
+                            if (newButton) {
+                                newButton.textContent = '⚠';
+                                newButton.style.backgroundColor = '#f0ad4e';
+                                newButton.style.color = 'white';
+
+                                setTimeout(() => {
+                                    newButton.disabled = false;
+                                    newButton.textContent = originalButtonText;
+                                    newButton.style.backgroundColor = '';
+                                    newButton.style.color = '';
+                                }, 2000);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error saving setting_id:', error);
+                        // Still re-render with the fetched data
+                        const modalContent = document.getElementById('tune-detail-content');
+                        renderModalContent(modalContent, currentTuneData, currentConfig);
+                    });
+                } else {
+                    // No save endpoint (admin context), just re-render
+                    const modalContent = document.getElementById('tune-detail-content');
+                    renderModalContent(modalContent, currentTuneData, currentConfig);
+
+                    const newButton = document.querySelector('.fetch-setting-btn');
+                    if (newButton) {
+                        newButton.textContent = '✓';
+                        newButton.style.backgroundColor = '#28a745';
+                        newButton.style.color = 'white';
+
+                        setTimeout(() => {
+                            newButton.disabled = false;
+                            newButton.textContent = originalButtonText;
+                            newButton.style.backgroundColor = '';
+                            newButton.style.color = '';
+                        }, 2000);
+                    }
                 }
             } else {
                 button.textContent = '✗';

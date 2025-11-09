@@ -655,7 +655,8 @@ def get_session_tune_detail(session_path, tune_id):
         if session_tune_info:
             alias, setting_id, key = session_tune_info
 
-        # Get ABC notation from tune_setting if setting_id exists
+        # Get ABC notation from tune_setting
+        # If setting_id is specified, use that; otherwise, use the first setting for this tune
         abc_notation = None
         incipit_abc = None
         abc_image = None
@@ -665,12 +666,22 @@ def get_session_tune_detail(session_path, tune_id):
                 "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                 (setting_id,)
             )
-            abc_result = cur.fetchone()
-            if abc_result:
-                abc_notation = abc_result[0]
-                incipit_abc = abc_result[1]
-                abc_image = abc_result[2]
-                incipit_image = abc_result[3]
+        else:
+            # Fall back to the first setting for this tune (ordered by setting_id)
+            cur.execute(
+                """SELECT abc, incipit_abc, image, incipit_image
+                   FROM tune_setting
+                   WHERE tune_id = %s
+                   ORDER BY setting_id ASC
+                   LIMIT 1""",
+                (tune_id,)
+            )
+        abc_result = cur.fetchone()
+        if abc_result:
+            abc_notation = abc_result[0]
+            incipit_abc = abc_result[1]
+            abc_image = abc_result[2]
+            incipit_image = abc_result[3]
 
         # Get all aliases from session_tune_alias table
         cur.execute(
@@ -8752,7 +8763,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
             name_override, key_override, setting_override, order_number = instance_tune_info
 
         # Get ABC notation from tune_setting
-        # Prefer setting_override if available, otherwise use session_setting_id
+        # Prefer setting_override if available, otherwise use session_setting_id, or fall back to first setting
         abc_notation = None
         incipit_abc = None
         abc_image = None
@@ -8763,12 +8774,22 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                 "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                 (effective_setting_id,)
             )
-            abc_result = cur.fetchone()
-            if abc_result:
-                abc_notation = abc_result[0]
-                incipit_abc = abc_result[1]
-                abc_image = abc_result[2]
-                incipit_image = abc_result[3]
+        else:
+            # Fall back to the first setting for this tune (ordered by setting_id)
+            cur.execute(
+                """SELECT abc, incipit_abc, image, incipit_image
+                   FROM tune_setting
+                   WHERE tune_id = %s
+                   ORDER BY setting_id ASC
+                   LIMIT 1""",
+                (tune_id,)
+            )
+        abc_result = cur.fetchone()
+        if abc_result:
+            abc_notation = abc_result[0]
+            incipit_abc = abc_result[1]
+            abc_image = abc_result[2]
+            incipit_image = abc_result[3]
 
         # Get play count for this session (all instances)
         cur.execute(

@@ -143,24 +143,36 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
             else:
                 response['thesession_url'] = base_url
 
-        # Get ABC notation and images from tune_setting if setting_id exists
+        # Get ABC notation and images from tune_setting
+        # If setting_id is specified, use that; otherwise, use the first setting for this tune
         abc_notation = None
-        if person_tune.setting_id:
-            conn = get_db_connection()
-            try:
-                cur = conn.cursor()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            if person_tune.setting_id:
+                # Use the specific setting_id if saved
                 cur.execute(
                     "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
                     (person_tune.setting_id,)
                 )
-                abc_result = cur.fetchone()
-                if abc_result:
-                    abc_notation = abc_result[0]
-                    response['incipit_abc'] = abc_result[1]
-                    response['image'] = bytea_to_base64(abc_result[2])
-                    response['incipit_image'] = bytea_to_base64(abc_result[3])
-            finally:
-                conn.close()
+            else:
+                # Fall back to the first setting for this tune (ordered by setting_id)
+                cur.execute(
+                    """SELECT abc, incipit_abc, image, incipit_image
+                       FROM tune_setting
+                       WHERE tune_id = %s
+                       ORDER BY setting_id ASC
+                       LIMIT 1""",
+                    (person_tune.tune_id,)
+                )
+            abc_result = cur.fetchone()
+            if abc_result:
+                abc_notation = abc_result[0]
+                response['incipit_abc'] = abc_result[1]
+                response['image'] = bytea_to_base64(abc_result[2])
+                response['incipit_image'] = bytea_to_base64(abc_result[3])
+        finally:
+            conn.close()
         response['abc'] = abc_notation
 
     return response
