@@ -773,7 +773,7 @@
             return `
                 <div class="history-item">
                     <div class="history-instance-name"><a href="${link}">${instanceName}</a></div>
-                    <div class="history-position">Position in set: #${position}</div>
+                    <div class="history-position">Position in session log: #${position}</div>
                     ${settingId ? `<div class="history-setting">Setting: #${settingId}</div>` : ''}
                 </div>
             `;
