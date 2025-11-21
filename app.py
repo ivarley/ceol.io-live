@@ -511,6 +511,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/admin/user/<int:user_id>/verify-email",
+    "admin_verify_email",
+    admin_verify_email,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/api/person/<int:person_id>/available-sessions",
     "get_available_sessions_for_person",
     get_available_sessions_for_person,

@@ -4504,6 +4504,73 @@ def update_person_details(person_id):
         )
 
 
+@login_required
+def admin_verify_email(user_id):
+    """Admin endpoint to manually verify a user's email"""
+    # Check if current user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "message": "Unauthorized. Admin access required."}), 403
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Check if user exists and email is not already verified
+        cur.execute(
+            """
+            SELECT user_id, username, email_verified
+            FROM user_account
+            WHERE user_id = %s
+            """,
+            (user_id,),
+        )
+        user_data = cur.fetchone()
+
+        if not user_data:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        user_id_db, username, email_verified = user_data
+
+        if email_verified:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Email is already verified"}), 400
+
+        # Mark email as verified and clear token
+        save_to_history(
+            cur, "user_account", "UPDATE", user_id_db, "admin_email_verification"
+        )
+        cur.execute(
+            """
+            UPDATE user_account
+            SET email_verified = TRUE,
+                verification_token = NULL,
+                verification_token_expires = NULL,
+                last_modified_date = %s
+            WHERE user_id = %s
+            """,
+            (now_utc(), user_id_db),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"Email verified successfully for user '{username}'"
+        })
+
+    except Exception as e:
+        return (
+            jsonify(
+                {"success": False, "message": f"Failed to verify email: {str(e)}"}
+            ),
+            500,
+        )
+
+
 def get_available_sessions_for_person(person_id):
     """Get sessions available for a person to join, prioritizing same location sessions"""
     try:
