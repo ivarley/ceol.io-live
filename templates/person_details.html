@@ -231,6 +231,9 @@
                                                 <span class="text-success">✓ Verified</span>
                                             {% else %}
                                                 <span class="text-warning">✗ Not verified</span>
+                                                {% if not is_user_profile %}
+                                                    <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" data-user-id="{{ user.user_id }}">Verify Email</button>
+                                                {% endif %}
                                             {% endif %}
                                         </dd>
                                     </dl>
@@ -598,6 +601,50 @@ document.addEventListener('DOMContentLoaded', function() {
             window.dispatchEvent(new CustomEvent('refreshActiveSession'));
 
             showMessage('Active session status refreshed', 'success');
+        });
+    }
+
+    // Verify email button functionality
+    const verifyEmailBtn = document.getElementById('verify-email-btn');
+    if (verifyEmailBtn) {
+        verifyEmailBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const userId = this.dataset.userId;
+
+            if (!confirm('Are you sure you want to manually verify this email address?')) {
+                return;
+            }
+
+            // Disable button during request
+            this.disabled = true;
+            const originalText = this.textContent;
+            this.textContent = 'Verifying...';
+
+            fetch(`/api/admin/user/${userId}/verify-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    // Reload page to show updated verification status
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMessage('Error: ' + data.message, 'error');
+                    this.disabled = false;
+                    this.textContent = originalText;
+                }
+            })
+            .catch(error => {
+                showMessage('Error verifying email: ' + error.message, 'error');
+                this.disabled = false;
+                this.textContent = originalText;
+            });
         });
     }
 
@@ -1576,6 +1623,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .mb-3 {
     margin-bottom: 1rem;
+}
+
+.ms-2 {
+    margin-left: 0.5rem;
 }
 
 .mt-4 {
