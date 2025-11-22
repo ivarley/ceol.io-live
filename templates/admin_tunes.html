@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -19,14 +20,41 @@
             <section class="docs-section" id="tunes">
                 <div class="tunes-container">
                     <div class="filters-container">
-                        <div class="filter-row">
-                            <div class="filter-group">
-                                <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off">
-                            </div>
-                            <div class="filter-group">
-                                <select id="type-filter" class="filter-select" title="Tune type">
-                                    <option value="">All Types</option>
+                        <div class="filter-top-row">
+                            <input type="text" id="tune-search" class="filter-search-input" placeholder="Search" autocomplete="off">
+                            <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div id="filter-panel" class="filter-panel" style="display: none;">
+                            <div class="filter-panel-row">
+                                <select id="type-filter" class="filter-panel-select" title="Tune type">
+                                    <option value="">All Tune Types</option>
                                 </select>
+                            </div>
+                            <div class="filter-panel-row">
+                                <div class="filter-button-group">
+                                    <button class="filter-sort-btn active" data-sort="name" onclick="setSortMode('name')">a-z</button>
+                                    <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">popularity</button>
+                                    <button class="filter-sort-btn" data-sort="sessions" onclick="setSortMode('sessions')">sessions</button>
+                                </div>
+                                <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
+                                    <span id="sort-direction-icon">↑</span>
+                                </button>
+                            </div>
+                            <div class="filter-panel-actions">
+                                <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
                             </div>
                         </div>
                     </div>
@@ -43,21 +71,11 @@
                         <table class="table table-hover" id="tunes-table">
                             <thead>
                                 <tr>
-                                    <th class="sortable" data-column="name" data-order="asc">
-                                        Name <span class="sort-indicator">↓</span>
-                                    </th>
-                                    <th class="sortable" data-column="tune_type" data-order="asc">
-                                        Type <span class="sort-indicator"></span>
-                                    </th>
-                                    <th class="sortable text-center" data-column="session_count" data-order="asc">
-                                        Sessions <span class="sort-indicator"></span>
-                                    </th>
-                                    <th class="sortable text-center" data-column="tunelist_count" data-order="asc">
-                                        Tune Lists <span class="sort-indicator"></span>
-                                    </th>
-                                    <th class="sortable text-center" data-column="tunebook_count_cached" data-order="asc">
-                                        Popularity <span class="sort-indicator"></span>
-                                    </th>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th class="text-center">Sessions</th>
+                                    <th class="text-center">Tune Lists</th>
+                                    <th class="text-center">Popularity</th>
                                 </tr>
                             </thead>
                             <tbody id="tunes-tbody">
@@ -79,53 +97,6 @@
     width: 100%;
     margin: 0;
     padding: 20px 0;
-}
-
-.filters-container {
-    padding: 6px;
-    margin-bottom: 10px;
-}
-
-.filter-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: nowrap;
-}
-
-.filter-group {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-}
-
-.filter-group:first-child {
-    flex: 1;
-    min-width: 0;
-}
-
-.filter-input {
-    padding: 8px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 14px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    width: 100%;
-    min-width: 0;
-    max-width: 300px;
-}
-
-.filter-select {
-    padding: 8px 8px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 14px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    cursor: pointer;
-    width: 120px;
-    flex-shrink: 0;
 }
 
 .results-count {
@@ -170,27 +141,6 @@
 
 .table-hover tbody tr:hover {
     background-color: var(--hover-bg);
-}
-
-.sortable {
-    cursor: pointer;
-    user-select: none;
-    position: relative;
-}
-
-.sortable:hover {
-    background-color: var(--hover-bg) !important;
-}
-
-.sort-indicator {
-    margin-left: 4px;
-    color: var(--text-muted, #6c757d);
-    font-size: 12px;
-}
-
-.sortable.active .sort-indicator {
-    color: var(--primary);
-    font-weight: bold;
 }
 
 .text-center {
@@ -348,9 +298,25 @@ let currentFilters = {
     search: '',
     type: ''
 };
-let currentSort = {
-    column: 'name',
-    order: 'asc'
+
+// Sort state: type (name, popularity, sessions) and direction (asc, desc)
+let currentSortType = 'name'; // 'name', 'popularity', 'sessions'
+let currentSortDirection = 'asc'; // 'asc', 'desc'
+
+// Sort functions based on type and direction
+const sortFunctions = {
+    name: {
+        asc: (a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()),
+        desc: (a, b) => (b.name || '').toLowerCase().localeCompare((a.name || '').toLowerCase())
+    },
+    popularity: {
+        asc: (a, b) => (a.tunebook_count_cached || 0) - (b.tunebook_count_cached || 0),
+        desc: (a, b) => (b.tunebook_count_cached || 0) - (a.tunebook_count_cached || 0)
+    },
+    sessions: {
+        asc: (a, b) => (a.session_count || 0) - (b.session_count || 0),
+        desc: (a, b) => (b.session_count || 0) - (a.session_count || 0)
+    }
 };
 
 // Initialize on page load
@@ -416,38 +382,90 @@ function setupEventListeners() {
         currentFilters.type = e.target.value;
         applyFilters();
     });
-
-    // Column header click handlers for sorting
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', function() {
-            const column = this.getAttribute('data-column');
-            sortByColumn(column);
-        });
-    });
 }
 
-function sortByColumn(column) {
-    // Toggle order if clicking same column, otherwise default to ascending
-    if (currentSort.column === column) {
-        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+function toggleFilterPanel() {
+    const panel = document.getElementById('filter-panel');
+    const toggle = document.getElementById('filter-panel-toggle');
+
+    if (panel.style.display === 'none') {
+        // Open panel
+        panel.style.display = 'block';
+        panel.classList.add('opening');
+        toggle.classList.add('active');
+
+        // Remove animation class after animation completes
+        setTimeout(() => {
+            panel.classList.remove('opening');
+        }, 300);
     } else {
-        currentSort.column = column;
-        currentSort.order = 'asc';
+        // Close panel
+        panel.classList.add('closing');
+
+        setTimeout(() => {
+            panel.style.display = 'none';
+            panel.classList.remove('closing');
+            toggle.classList.remove('active');
+        }, 300);
+    }
+}
+
+function setSortMode(sortType) {
+    // If clicking the already-active sort type, toggle direction
+    if (currentSortType === sortType) {
+        toggleSortDirection();
+        return;
     }
 
-    // Update header indicators
-    document.querySelectorAll('.sortable').forEach(header => {
-        const headerColumn = header.getAttribute('data-column');
-        const indicator = header.querySelector('.sort-indicator');
+    currentSortType = sortType;
 
-        if (headerColumn === column) {
-            header.classList.add('active');
-            indicator.textContent = currentSort.order === 'asc' ? '↓' : '↑';
+    // Set default direction based on sort type
+    // Name defaults to ascending (a-z, up arrow), but popularity and sessions default to descending (highest first, down arrow)
+    if (sortType === 'popularity' || sortType === 'sessions') {
+        currentSortDirection = 'desc';
+    } else {
+        currentSortDirection = 'asc';
+    }
+
+    // Update direction icon
+    const icon = document.getElementById('sort-direction-icon');
+    if (icon) {
+        icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+    }
+
+    // Update button active states
+    document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+        if (btn.dataset.sort === sortType) {
+            btn.classList.add('active');
         } else {
-            header.classList.remove('active');
-            indicator.textContent = '';
+            btn.classList.remove('active');
         }
     });
+
+    applyFilters();
+}
+
+function toggleSortDirection() {
+    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+
+    // Update icon
+    const icon = document.getElementById('sort-direction-icon');
+    icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+
+    applyFilters();
+}
+
+function clearFilters() {
+    // Preserve the current search query
+    const currentSearch = currentFilters.search;
+
+    currentFilters = {
+        search: currentSearch,
+        type: ''
+    };
+
+    // Reset type filter
+    document.getElementById('type-filter').value = '';
 
     applyFilters();
 }
@@ -472,43 +490,31 @@ function applyFilters() {
     });
 
     // Apply sorting
-    filteredTunes.sort((a, b) => {
-        let aVal, bVal;
+    const sortFn = sortFunctions[currentSortType]?.[currentSortDirection];
+    if (sortFn) {
+        filteredTunes.sort(sortFn);
+    }
 
-        switch(currentSort.column) {
-            case 'name':
-                aVal = (a.name || '').toLowerCase();
-                bVal = (b.name || '').toLowerCase();
-                return currentSort.order === 'asc'
-                    ? aVal.localeCompare(bVal)
-                    : bVal.localeCompare(aVal);
+    // Show/hide "Clear Filters" button based on active filters
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+    const hasActiveFilters = currentFilters.type;
+    if (clearFiltersBtn) {
+        clearFiltersBtn.style.display = hasActiveFilters ? 'block' : 'none';
+    }
 
-            case 'tune_type':
-                aVal = (a.tune_type || '').toLowerCase();
-                bVal = (b.tune_type || '').toLowerCase();
-                return currentSort.order === 'asc'
-                    ? aVal.localeCompare(bVal)
-                    : bVal.localeCompare(aVal);
-
-            case 'session_count':
-                aVal = a.session_count || 0;
-                bVal = b.session_count || 0;
-                return currentSort.order === 'asc' ? aVal - bVal : bVal - aVal;
-
-            case 'tunelist_count':
-                aVal = a.tunelist_count || 0;
-                bVal = b.tunelist_count || 0;
-                return currentSort.order === 'asc' ? aVal - bVal : bVal - aVal;
-
-            case 'tunebook_count_cached':
-                aVal = a.tunebook_count_cached || 0;
-                bVal = b.tunebook_count_cached || 0;
-                return currentSort.order === 'asc' ? aVal - bVal : bVal - aVal;
-
-            default:
-                return 0;
+    // Update filter panel toggle to show active state
+    const toggleBtn = document.getElementById('filter-panel-toggle');
+    if (toggleBtn && hasActiveFilters) {
+        const panel = document.getElementById('filter-panel');
+        if (panel && panel.style.display === 'none') {
+            toggleBtn.classList.add('active');
         }
-    });
+    } else if (toggleBtn) {
+        const panel = document.getElementById('filter-panel');
+        if (panel && panel.style.display === 'none') {
+            toggleBtn.classList.remove('active');
+        }
+    }
 
     renderTunes();
 }

@@ -5,6 +5,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <style>
         .session-details {
             background-color: #f5f5f5;
@@ -90,48 +91,6 @@
             margin-bottom: 10px;
         }
 
-        .filter-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: nowrap;
-        }
-
-        .filter-group {
-            display: flex;
-            align-items: center;
-            min-width: 0;
-        }
-
-        .filter-group:first-child {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .filter-input {
-            padding: 8px 10px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 14px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            width: 100%;
-            min-width: 0;
-            max-width: 200px;
-        }
-
-        .filter-select {
-            padding: 8px 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            font-size: 14px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            cursor: pointer;
-            width: 110px;
-            flex-shrink: 0;
-        }
-
         .results-count {
             margin-bottom: 15px;
             color: var(--text-muted, #6c757d);
@@ -140,46 +99,6 @@
             align-items: center;
             justify-content: space-between;
             gap: 10px;
-        }
-
-        .sort-controls {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .sort-label {
-            color: var(--text-color);
-            font-size: 14px;
-            white-space: nowrap;
-        }
-
-        .sort-toggle {
-            padding: 4px 8px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            white-space: nowrap;
-            user-select: none;
-        }
-
-        .sort-toggle:hover {
-            background-color: var(--hover-bg);
-        }
-
-        .sort-toggle-text {
-            display: none;
-        }
-
-        #sort-icon {
-            filter: grayscale(100%);
         }
 
         .tunes-list {
@@ -406,32 +325,11 @@
                 padding: 8px;
             }
 
-            .filter-input {
-                font-size: 16px;
-                padding: 8px 6px;
-                max-width: none;
-                height: 40px;
-                box-sizing: border-box;
-            }
-
-            .filter-select {
-                font-size: 13px;
-                padding: 8px 4px;
-                width: 85px;
-                height: 40px;
-                box-sizing: border-box;
-            }
-
             .results-count {
                 margin-bottom: 4px;
                 padding: 0 8px;
                 font-size: 12px;
                 gap: 6px;
-            }
-
-            .sort-toggle {
-                font-size: 11px;
-                padding: 3px 6px;
             }
 
             .tune-row {
@@ -503,13 +401,6 @@
         }
 
         @media (min-width: 769px) {
-            .sort-label {
-                display: block;
-            }
-
-            .sort-toggle-text {
-                display: inline;
-            }
         }
 
         .modal-content {
@@ -1516,33 +1407,50 @@
         <div class="tab-content{{ ' active' if current_tab == 'tunes' else '' }}" id="tunes-tab">
             <div class="tunes-container">
                 <div class="filters-container">
-                    <div class="filter-row">
-                        <div class="filter-group">
-                            <input type="text" id="tune-search" class="filter-input" placeholder="Search" autocomplete="off">
-                        </div>
-                        <div class="filter-group">
-                            <select id="type-filter" class="filter-select" title="Tune type">
-                                <option value="">All Types</option>
+                    <div class="filter-top-row">
+                        <input type="text" id="tune-search" class="filter-search-input" placeholder="Search" autocomplete="off">
+                        {% if is_logged_in %}
+                        <a href="/sessions/{{ session.path }}/tunes/add" class="filter-panel-toggle" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
+                        {% endif %}
+                        <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="4" y1="21" x2="4" y2="14"></line>
+                                <line x1="4" y1="10" x2="4" y2="3"></line>
+                                <line x1="12" y1="21" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12" y2="3"></line>
+                                <line x1="20" y1="21" x2="20" y2="16"></line>
+                                <line x1="20" y1="12" x2="20" y2="3"></line>
+                                <line x1="1" y1="14" x2="7" y2="14"></line>
+                                <line x1="9" y1="8" x2="15" y2="8"></line>
+                                <line x1="17" y1="16" x2="23" y2="16"></line>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div id="filter-panel" class="filter-panel" style="display: none;">
+                        <div class="filter-panel-row">
+                            <select id="type-filter" class="filter-panel-select" title="Tune type">
+                                <option value="">All Tune Types</option>
                             </select>
                         </div>
-                        {% if is_logged_in %}
-                        <div class="filter-group">
-                            <a href="/sessions/{{ session.path }}/tunes/add" class="btn btn-primary" style="padding: 8px 16px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; white-space: nowrap;">Add</a>
+                        <div class="filter-panel-row">
+                            <div class="filter-button-group">
+                                <button class="filter-sort-btn" data-sort="alpha" onclick="setSortMode('alpha')">a-z</button>
+                                <button class="filter-sort-btn active" data-sort="session" onclick="setSortMode('session')">session</button>
+                                <button class="filter-sort-btn" data-sort="everywhere" onclick="setSortMode('everywhere')">everywhere</button>
+                            </div>
+                            <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
+                                <span id="sort-direction-icon">↓</span>
+                            </button>
                         </div>
-                        {% endif %}
+                        <div class="filter-panel-actions">
+                            <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="results-count">
                     <span id="results-count-text"></span>
-                    <div class="sort-controls">
-                        <span class="sort-label">Sort by:</span>
-                        <button id="sort-toggle" class="sort-toggle" title="Toggle sort order">
-                            <span id="sort-icon">👂</span>
-                            <span id="sort-text" class="sort-toggle-text"></span>
-                            <span id="sort-arrow"></span>
-                        </button>
-                    </div>
                 </div>
 
                 <div class="tunes-list" id="tunes-list">
@@ -2077,16 +1985,25 @@
     };
     let isInitializing = true; // Flag to prevent URL updates during initialization
 
-    // Sort mode cycle states (with icons and text labels)
-    const sortModes = [
-        { id: 'alpha-asc', label: 'Alphabetical', icon: '', arrow: '↓', sortFn: (a, b) => (a[1] || '').localeCompare(b[1] || '') },
-        { id: 'alpha-desc', label: 'Alphabetical', icon: '', arrow: '↑', sortFn: (a, b) => (b[1] || '').localeCompare(a[1] || '') },
-        { id: 'session-desc', label: 'Popularity At This Session', icon: '👂', arrow: '', sortFn: (a, b) => (b[3] || 0) - (a[3] || 0) },
-        { id: 'session-asc', label: 'Popularity At This Session', icon: '👂', arrow: '↑', sortFn: (a, b) => (a[3] || 0) - (b[3] || 0) },
-        { id: 'tunebooks-desc', label: 'Popularity Everywhere', icon: '#', arrow: '', sortFn: (a, b) => (b[4] || 0) - (a[4] || 0) },
-        { id: 'tunebooks-asc', label: 'Popularity Everywhere', icon: '#', arrow: '↑', sortFn: (a, b) => (a[4] || 0) - (b[4] || 0) }
-    ];
-    let currentSortModeIndex = 2; // Start with session popularity descending
+    // Sort state: type (alpha, session, everywhere) and direction (asc, desc)
+    let currentSortType = 'session'; // 'alpha', 'session', 'everywhere' (default to session)
+    let currentSortDirection = 'desc'; // 'asc', 'desc' (default to descending for session)
+
+    // Sort functions based on type and direction
+    const sortFunctions = {
+        alpha: {
+            asc: (a, b) => (a[1] || '').localeCompare(b[1] || ''),
+            desc: (a, b) => (b[1] || '').localeCompare(a[1] || '')
+        },
+        session: {
+            asc: (a, b) => (a[3] || 0) - (b[3] || 0),
+            desc: (a, b) => (b[3] || 0) - (a[3] || 0)
+        },
+        everywhere: {
+            asc: (a, b) => (a[4] || 0) - (b[4] || 0),
+            desc: (a, b) => (b[4] || 0) - (a[4] || 0)
+        }
+    };
 
     // Initialize tunes tab
     function initializeTunesTab() {
@@ -2094,9 +2011,94 @@
         populateTuneTypes();
         loadStateFromURL();
         setupTunesEventListeners();
-        updateSortDisplay();
         applyFilters();
         isInitializing = false; // Allow URL updates after initialization
+    }
+
+    function toggleFilterPanel() {
+        const panel = document.getElementById('filter-panel');
+        const toggle = document.getElementById('filter-panel-toggle');
+
+        if (panel.style.display === 'none') {
+            // Open panel
+            panel.style.display = 'block';
+            panel.classList.add('opening');
+            toggle.classList.add('active');
+
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                panel.classList.remove('opening');
+            }, 300);
+        } else {
+            // Close panel
+            panel.classList.add('closing');
+
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.classList.remove('closing');
+                toggle.classList.remove('active');
+            }, 300);
+        }
+    }
+
+    function setSortMode(sortType) {
+        // If clicking the already-active sort type, toggle direction
+        if (currentSortType === sortType) {
+            toggleSortDirection();
+            return;
+        }
+
+        currentSortType = sortType;
+
+        // Set default direction based on sort type
+        // Alpha defaults to ascending (a-z, up arrow), but session and everywhere default to descending (highest first, down arrow)
+        if (sortType === 'session' || sortType === 'everywhere') {
+            currentSortDirection = 'desc';
+        } else {
+            currentSortDirection = 'asc';
+        }
+
+        // Update direction icon
+        const icon = document.getElementById('sort-direction-icon');
+        if (icon) {
+            icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+        }
+
+        // Update button active states
+        document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+            if (btn.dataset.sort === sortType) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        applyFilters();
+    }
+
+    function toggleSortDirection() {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+
+        // Update icon
+        const icon = document.getElementById('sort-direction-icon');
+        icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+
+        applyFilters();
+    }
+
+    function clearFilters() {
+        // Preserve the current search query
+        const currentSearch = currentFilters.search;
+
+        currentFilters = {
+            search: currentSearch,
+            type: ''
+        };
+
+        // Reset type filter
+        document.getElementById('type-filter').value = '';
+
+        applyFilters();
     }
 
     // Load filter and sort state from URL query string
@@ -2117,12 +2119,27 @@
             document.getElementById('type-filter').value = typeParam;
         }
 
-        // Load sort mode
-        const sortParam = urlParams.get('sort');
-        if (sortParam) {
-            const sortIndex = sortModes.findIndex(mode => mode.id === sortParam);
-            if (sortIndex !== -1) {
-                currentSortModeIndex = sortIndex;
+        // Load sort state
+        if (urlParams.has('sortType')) {
+            currentSortType = urlParams.get('sortType');
+
+            // Update sort button states
+            document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+                if (btn.dataset.sort === currentSortType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        if (urlParams.has('sortDir')) {
+            currentSortDirection = urlParams.get('sortDir');
+
+            // Update direction icon
+            const icon = document.getElementById('sort-direction-icon');
+            if (icon) {
+                icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
             }
         }
     }
@@ -2150,12 +2167,13 @@
             urlParams.delete('type');
         }
 
-        // Update sort parameter (only if not default)
-        const currentSort = sortModes[currentSortModeIndex].id;
-        if (currentSortModeIndex !== 2) { // 2 is the default (session-desc)
-            urlParams.set('sort', currentSort);
+        // Update sort parameters (only if not default: session-desc)
+        if (currentSortType !== 'session' || currentSortDirection !== 'desc') {
+            urlParams.set('sortType', currentSortType);
+            urlParams.set('sortDir', currentSortDirection);
         } else {
-            urlParams.delete('sort');
+            urlParams.delete('sortType');
+            urlParams.delete('sortDir');
         }
 
         // Restore tune parameter if it was present
@@ -2166,16 +2184,6 @@
         // Update the URL without reloading the page
         const newURL = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newURL);
-    }
-
-    function updateSortDisplay() {
-        const mode = sortModes[currentSortModeIndex];
-        const icon = document.getElementById('sort-icon');
-        const text = document.getElementById('sort-text');
-        const arrow = document.getElementById('sort-arrow');
-        icon.textContent = mode.icon;
-        text.textContent = mode.label;
-        arrow.textContent = mode.arrow;
     }
 
     function populateTuneTypes() {
@@ -2208,18 +2216,7 @@
         document.getElementById('type-filter').addEventListener('change', function(e) {
             currentFilters.type = e.target.value;
             applyFilters();
-            updateURL();
         });
-
-        // Sort toggle button
-        document.getElementById('sort-toggle').addEventListener('click', cycleSortMode);
-    }
-
-    function cycleSortMode() {
-        currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
-        updateSortDisplay();
-        applyFilters();
-        updateURL();
     }
 
     function applyFilters() {
@@ -2242,12 +2239,36 @@
         });
 
         // Apply sorting
-        const sortMode = sortModes[currentSortModeIndex];
-        if (sortMode && sortMode.sortFn) {
-            filteredTunes.sort(sortMode.sortFn);
+        const sortFn = sortFunctions[currentSortType]?.[currentSortDirection];
+        if (sortFn) {
+            filteredTunes.sort(sortFn);
+        }
+
+        // Show/hide "Clear Filters" button based on active filters
+        const clearFiltersBtn = document.getElementById('clear-filters-btn');
+        const hasActiveFilters = currentFilters.type;
+        if (clearFiltersBtn) {
+            clearFiltersBtn.style.display = hasActiveFilters ? 'block' : 'none';
+        }
+
+        // Update filter panel toggle to show active state
+        const toggleBtn = document.getElementById('filter-panel-toggle');
+        if (toggleBtn && hasActiveFilters) {
+            // Only add active class if panel is closed
+            const panel = document.getElementById('filter-panel');
+            if (panel && panel.style.display === 'none') {
+                toggleBtn.classList.add('active');
+            }
+        } else if (toggleBtn) {
+            // Remove active class if panel is closed and no filters
+            const panel = document.getElementById('filter-panel');
+            if (panel && panel.style.display === 'none') {
+                toggleBtn.classList.remove('active');
+            }
         }
 
         renderTunes();
+        updateURL();
     }
 
     function renderTunes() {
@@ -2305,17 +2326,13 @@
         const settingId = tune[5];
 
         // Determine what to show based on sort mode
-        const sortMode = sortModes[currentSortModeIndex];
-        const isSessionMode = sortMode.id.startsWith('session-');
-        const isTunebooksMode = sortMode.id.startsWith('tunebooks-');
-
         let countBadge = '';
         let typeBadge = '';
 
-        if (isSessionMode) {
+        if (currentSortType === 'session') {
             countBadge = `<span class="tune-count-badge">${timesPlayed}</span>`;
             typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
-        } else if (isTunebooksMode) {
+        } else if (currentSortType === 'everywhere') {
             countBadge = `<span class="tune-count-badge">${tunebookCount}</span>`;
             typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
         } else {

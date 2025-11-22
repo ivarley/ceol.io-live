@@ -106,82 +106,189 @@ html, body {
     margin-bottom: 20px;
 }
 
-.filter-row {
+/* New top row layout: search + filter icon */
+.filter-top-row {
     display: flex;
     gap: 8px;
     align-items: center;
-    flex-wrap: nowrap;
+    margin-bottom: 0;
 }
 
-.filter-group {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-}
-
-.filter-group:first-child {
+.filter-search-input {
     flex: 1;
-    min-width: 0;
-}
-
-.filter-group label {
-    display: none;
-}
-
-.filter-input {
     padding: 8px 10px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 14px;
     background-color: var(--bg-color);
     color: var(--text-color);
-    width: 100%;
     min-width: 0;
-    max-width: 200px;
 }
 
-.filter-select {
-    padding: 8px 8px;
+.filter-panel-toggle {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+}
+
+.filter-panel-toggle:hover {
+    background-color: var(--hover-bg);
+}
+
+.filter-panel-toggle.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.filter-panel-toggle svg {
+    display: block;
+}
+
+/* Filter panel - slides down when opened */
+.filter-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    overflow: hidden;
+    transition: all 0.3s ease-out;
+}
+
+.filter-panel.opening {
+    animation: slideDown 0.3s ease-out;
+}
+
+.filter-panel.closing {
+    animation: slideUp 0.3s ease-out;
+}
+
+.filter-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.filter-panel-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.filter-panel-select {
+    flex: 1;
+    padding: 8px 10px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 14px;
     background-color: var(--bg-color);
     color: var(--text-color);
     cursor: pointer;
-    width: 110px;
-    flex-shrink: 0;
 }
 
-.status-filter-select {
-    display: block;
-    width: 140px;
+/* Button groups for status and sort filters */
+.filter-button-group {
+    display: flex;
+    gap: 0;
+    flex: 1;
 }
 
-.status-filter-btn {
+.filter-status-btn,
+.filter-sort-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.filter-status-btn:first-child,
+.filter-sort-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.filter-status-btn:last-child,
+.filter-sort-btn:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.filter-status-btn:not(:first-child),
+.filter-sort-btn:not(:first-child) {
+    border-left: none;
+}
+
+.filter-status-btn:hover,
+.filter-sort-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.filter-status-btn.active,
+.filter-sort-btn.active {
+    background-color: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.filter-status-btn.active + .filter-status-btn,
+.filter-sort-btn.active + .filter-sort-btn {
+    border-left: 1px solid var(--primary);
+}
+
+.filter-sort-direction-btn {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background-color: var(--bg-color);
     color: var(--text-color);
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     transition: all 0.2s;
-    display: none;
+    display: flex;
     align-items: center;
-    gap: 6px;
-    min-width: 60px;
     justify-content: center;
+    min-width: 40px;
     flex-shrink: 0;
 }
 
-.status-filter-btn:hover {
+.filter-sort-direction-btn:hover {
     background-color: var(--hover-bg);
 }
 
-.status-filter-btn.active {
-    background-color: #000000;
-    color: white;
-    border-color: #000000;
+.filter-panel-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+}
+
+.filter-panel-clear-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.filter-panel-clear-btn:hover {
+    background-color: var(--hover-bg);
 }
 
 .tunes-grid {
@@ -860,54 +967,63 @@ html, body {
         padding: 0;
     }
 
-    .filter-row {
-        flex-direction: row;
-        gap: 5px;
-        flex-wrap: nowrap;
+    .filter-top-row {
+        gap: 6px;
     }
 
-    .filter-group {
-        min-width: 0;
-    }
-
-    .filter-group:first-child {
-        flex: 1;
-    }
-
-    .filter-input {
+    .filter-search-input {
         font-size: 16px; /* Prevents zoom on iOS */
+        padding: 8px 10px;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    .filter-panel-toggle {
+        width: 40px;
+        height: 40px;
+        padding: 8px;
+    }
+
+    .filter-panel {
+        margin-top: 8px;
+        padding: 10px;
+    }
+
+    .filter-panel-row {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .filter-panel-select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        width: 100%;
+    }
+
+    .filter-button-group {
+        width: 100%;
+    }
+
+    .filter-status-btn,
+    .filter-sort-btn {
+        font-size: 12px;
         padding: 8px 6px;
-        max-width: none;
-        height: 40px;
-        box-sizing: border-box;
     }
 
-    .filter-select {
-        font-size: 13px;
-        padding: 8px 4px;
-        width: 85px;
-        height: 40px;
-        box-sizing: border-box;
+    .filter-sort-direction-btn {
+        font-size: 18px;
+        min-width: 44px;
+        padding: 8px;
     }
 
-    .status-filter-select {
-        display: none;
+    .filter-panel-actions {
+        margin-top: 8px;
+        padding-top: 8px;
     }
 
-    .status-filter-btn {
-        display: flex;
-        font-size: 13px;
-        padding: 8px 6px;
-        min-width: 45px;
-        gap: 4px;
-        height: 40px;
-        box-sizing: border-box;
-    }
-
-    /* Mobile status filter button with colored icons */
-    .status-filter-btn.active {
-        background-color: #000000 !important;
-        border-color: #000000 !important;
+    .filter-panel-clear-btn {
+        font-size: 14px;
+        width: 100%;
     }
 
     .results-count {
@@ -1353,22 +1469,26 @@ html, body {
 @keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateX(-50%) translateY(-20px);
+        max-height: 0;
+        margin-top: 0;
     }
     to {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        max-height: 500px;
+        margin-top: 12px;
     }
 }
 
 @keyframes slideUp {
     from {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        max-height: 500px;
+        margin-top: 12px;
     }
     to {
         opacity: 0;
-        transform: translateX(-50%) translateY(-20px);
+        max-height: 0;
+        margin-top: 0;
     }
 }
 

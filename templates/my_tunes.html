@@ -33,47 +33,68 @@
                 </a>
             </h1>
             <div class="page-actions">
-                <a href="/my-tunes/add" class="btn" id="add-tune-btn" onclick="handleAddTuneClick(event)">Add</a>
                 <a href="/my-tunes/sync" class="btn btn-secondary">Sync</a>
             </div>
         </div>
 
         <div class="filters-container">
-            <div class="filter-row">
-                <div class="filter-group">
-                    <input
-                        type="text"
-                        id="search-input"
-                        class="filter-input"
-                        placeholder="Search"
-                        title="Search tunes"
-                        autocomplete="off"
-                    >
-                </div>
-                <div class="filter-group">
-                    <select id="type-filter" class="filter-select" title="Tune type">
-                        <option value="">All Types</option>
+            <div class="filter-top-row">
+                <input
+                    type="text"
+                    id="search-input"
+                    class="filter-search-input"
+                    placeholder="Search"
+                    title="Search tunes"
+                    autocomplete="off"
+                >
+                <a href="/my-tunes/add" class="filter-panel-toggle" id="add-tune-btn" onclick="handleAddTuneClick(event)" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
+                <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div id="filter-panel" class="filter-panel" style="display: none;">
+                <div class="filter-panel-row">
+                    <select id="type-filter" class="filter-panel-select" title="Tune type">
+                        <option value="">All Tune Types</option>
                     </select>
                 </div>
-                <div class="filter-group">
-                    <select id="status-filter-select" class="filter-select status-filter-select" title="Filter by learning status">
-                        <option value="">All Tunes</option>
-                        <option value="learned">Learned</option>
-                        <option value="learning">Learning</option>
-                        <option value="want to learn">Want To Learn</option>
-                    </select>
-                    <button id="status-filter-btn" class="status-filter-btn" onclick="cycleStatusFilter()" title="Filter by learning status">
-                        <span id="status-filter-icon">All</span>
+                <div class="filter-panel-row">
+                    <div class="filter-button-group">
+                        <button class="filter-status-btn active" data-status="" onclick="setStatusFilter('')">All</button>
+                        <button class="filter-status-btn" data-status="learned" onclick="setStatusFilter('learned')">Learned</button>
+                        <button class="filter-status-btn" data-status="learning" onclick="setStatusFilter('learning')">Learning</button>
+                        <button class="filter-status-btn" data-status="want to learn" onclick="setStatusFilter('want to learn')">Want To Learn</button>
+                    </div>
+                </div>
+                <div class="filter-panel-row">
+                    <div class="filter-button-group">
+                        <button class="filter-sort-btn active" data-sort="alpha" onclick="setSortMode('alpha')">a-z</button>
+                        <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">popularity</button>
+                        <button class="filter-sort-btn" data-sort="heard" onclick="setSortMode('heard')">heard</button>
+                    </div>
+                    <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
+                        <span id="sort-direction-icon">↑</span>
                     </button>
+                </div>
+                <div class="filter-panel-actions">
+                    <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
                 </div>
             </div>
         </div>
 
         <div class="results-count">
             <span id="results-count-text"></span>
-            <button id="sort-toggle" class="sort-toggle" onclick="cycleSortMode()" title="Toggle sort order">
-                <span id="sort-icon">↓</span>
-            </button>
         </div>
     </div>
 
@@ -280,18 +301,33 @@ const statusFilterStates = [
 ];
 let currentStatusFilterIndex = 0;
 
-// Sort mode cycle states
-const sortModes = [
-    { id: 'alpha-asc', label: 'a-z', icon: '↓', sortFn: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || '') },
-    { id: 'alpha-desc', label: 'z-a', icon: '↑', sortFn: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '') },
-    { id: 'popularity-desc', label: 'popularity high', icon: '#', sortFn: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0) },
-    { id: 'heard-desc', label: 'heard high', icon: '👂', sortFn: (a, b) => {
-        const heardDiff = (b.heard_count || 0) - (a.heard_count || 0);
-        if (heardDiff !== 0) return heardDiff;
-        return (b.tunebook_count || 0) - (a.tunebook_count || 0);
-    }}
-];
-let currentSortModeIndex = 0;
+// Sort state: type (alpha, popularity, heard) and direction (asc, desc)
+let currentSortType = 'alpha'; // 'alpha', 'popularity', 'heard'
+let currentSortDirection = 'asc'; // 'asc', 'desc' (alpha defaults to asc, others to desc)
+
+// Sort functions based on type and direction
+const sortFunctions = {
+    alpha: {
+        asc: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || ''),
+        desc: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '')
+    },
+    popularity: {
+        asc: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0),
+        desc: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0)
+    },
+    heard: {
+        asc: (a, b) => {
+            const heardDiff = (a.heard_count || 0) - (b.heard_count || 0);
+            if (heardDiff !== 0) return heardDiff;
+            return (a.tunebook_count || 0) - (b.tunebook_count || 0);
+        },
+        desc: (a, b) => {
+            const heardDiff = (b.heard_count || 0) - (a.heard_count || 0);
+            if (heardDiff !== 0) return heardDiff;
+            return (b.tunebook_count || 0) - (a.tunebook_count || 0);
+        }
+    }
+};
 
 // Helper function to normalize strings by removing accents and normalizing quotes
 function normalizeString(str) {
@@ -655,6 +691,92 @@ function setupSwipeToClose() {
     }, { passive: true });
 }
 
+function toggleFilterPanel() {
+    const panel = document.getElementById('filter-panel');
+    const toggle = document.getElementById('filter-panel-toggle');
+
+    if (panel.style.display === 'none') {
+        // Open panel
+        panel.style.display = 'block';
+        panel.classList.add('opening');
+        toggle.classList.add('active');
+
+        // Remove animation class after animation completes
+        setTimeout(() => {
+            panel.classList.remove('opening');
+        }, 300);
+    } else {
+        // Close panel
+        panel.classList.add('closing');
+
+        setTimeout(() => {
+            panel.style.display = 'none';
+            panel.classList.remove('closing');
+            toggle.classList.remove('active');
+        }, 300);
+    }
+}
+
+function setStatusFilter(status) {
+    currentFilters.status = status;
+
+    // Update button active states
+    document.querySelectorAll('.filter-status-btn').forEach(btn => {
+        if (btn.dataset.status === status) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    applyFilters();
+}
+
+function setSortMode(sortType) {
+    // If clicking the already-active sort type, toggle direction
+    if (currentSortType === sortType) {
+        toggleSortDirection();
+        return;
+    }
+
+    currentSortType = sortType;
+
+    // Set default direction based on sort type
+    // Alpha defaults to ascending (a-z, up arrow), but popularity and heard default to descending (highest first, down arrow)
+    if (sortType === 'popularity' || sortType === 'heard') {
+        currentSortDirection = 'desc';
+    } else {
+        currentSortDirection = 'asc';
+    }
+
+    // Update direction icon
+    const icon = document.getElementById('sort-direction-icon');
+    if (icon) {
+        icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+    }
+
+    // Update button active states
+    document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+        if (btn.dataset.sort === sortType) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    applyFilters();
+}
+
+function toggleSortDirection() {
+    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+
+    // Update icon
+    const icon = document.getElementById('sort-direction-icon');
+    icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
+
+    applyFilters();
+}
+
 function cycleStatusFilter() {
     currentStatusFilterIndex = (currentStatusFilterIndex + 1) % statusFilterStates.length;
     const state = statusFilterStates[currentStatusFilterIndex];
@@ -685,17 +807,6 @@ function cycleStatusFilter() {
     applyFilters();
 }
 
-function cycleSortMode() {
-    currentSortModeIndex = (currentSortModeIndex + 1) % sortModes.length;
-    const mode = sortModes[currentSortModeIndex];
-
-    // Update button display
-    const icon = document.getElementById('sort-icon');
-    icon.textContent = mode.icon;
-
-    // Re-apply filters and sorting (no DB reload needed)
-    applyFilters();
-}
 
 function loadFiltersFromURL() {
     const params = new URLSearchParams(window.location.search);
@@ -714,42 +825,36 @@ function loadFiltersFromURL() {
         const status = params.get('status');
         currentFilters.status = status;
 
-        // Set desktop dropdown
-        const statusFilterSelect = document.getElementById('status-filter-select');
-        if (statusFilterSelect) {
-            statusFilterSelect.value = status;
-        }
-
-        // Set mobile button (find the matching status filter state)
-        const index = statusFilterStates.findIndex(s => s.value === status);
-        if (index >= 0) {
-            currentStatusFilterIndex = index;
-            const state = statusFilterStates[index];
-            const icon = document.getElementById('status-filter-icon');
-            icon.textContent = state.icon;
-
-            if (state.value) {
-                document.getElementById('status-filter-btn').classList.add('active');
-
-                // Set icon color based on status
-                if (state.value === 'learned') {
-                    icon.style.color = '#5cb85c'; // green
-                } else if (state.value === 'learning') {
-                    icon.style.color = '#5bc0de'; // blue
-                } else if (state.value === 'want to learn') {
-                    icon.style.color = '#f0ad4e'; // yellow
-                }
+        // Update status button states
+        document.querySelectorAll('.filter-status-btn').forEach(btn => {
+            if (btn.dataset.status === status) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
             }
-        }
+        });
     }
 
-    if (params.has('sort')) {
-        const sortId = params.get('sort');
-        const index = sortModes.findIndex(s => s.id === sortId);
-        if (index >= 0) {
-            currentSortModeIndex = index;
-            const mode = sortModes[index];
-            document.getElementById('sort-icon').textContent = mode.icon;
+    if (params.has('sortType')) {
+        currentSortType = params.get('sortType');
+
+        // Update sort button states
+        document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+            if (btn.dataset.sort === currentSortType) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    if (params.has('sortDir')) {
+        currentSortDirection = params.get('sortDir');
+
+        // Update direction icon
+        const icon = document.getElementById('sort-direction-icon');
+        if (icon) {
+            icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
         }
     }
 }
@@ -761,10 +866,10 @@ function updateURL() {
     if (currentFilters.type) params.set('type', currentFilters.type);
     if (currentFilters.status) params.set('status', currentFilters.status);
 
-    // Only add sort param if not default (alpha-asc)
-    const sortMode = sortModes[currentSortModeIndex];
-    if (sortMode && sortMode.id !== 'alpha-asc') {
-        params.set('sort', sortMode.id);
+    // Add sort params if not default (alpha-asc)
+    if (currentSortType !== 'alpha' || currentSortDirection !== 'asc') {
+        params.set('sortType', currentSortType);
+        params.set('sortDir', currentSortDirection);
     }
 
     const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
@@ -782,9 +887,8 @@ function loadTunes() {
     fullTunesLoaded = false;
     isLoadingFullTunes = true;
 
-    // Get current sort mode for API query
-    const sortMode = sortModes[currentSortModeIndex];
-    const sortParam = sortMode ? sortMode.id : 'alpha-asc';
+    // Get current sort parameters for API query
+    const sortParam = `${currentSortType}-${currentSortDirection === 'asc' ? 'asc' : 'desc'}`;
 
     // First, fetch initial 20 tunes for fast display
     fetchWithRetry(`/api/my-tunes?per_page=20&sort=${sortParam}`)
@@ -933,9 +1037,32 @@ function applyFilters() {
     });
 
     // Apply client-side sorting
-    const sortMode = sortModes[currentSortModeIndex];
-    if (sortMode && sortMode.sortFn) {
-        filteredTunes.sort(sortMode.sortFn);
+    const sortFn = sortFunctions[currentSortType]?.[currentSortDirection];
+    if (sortFn) {
+        filteredTunes.sort(sortFn);
+    }
+
+    // Show/hide "Clear Filters" button based on active filters
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+    const hasActiveFilters = currentFilters.type || currentFilters.status;
+    if (clearFiltersBtn) {
+        clearFiltersBtn.style.display = hasActiveFilters ? 'block' : 'none';
+    }
+
+    // Update filter panel toggle to show active state
+    const toggleBtn = document.getElementById('filter-panel-toggle');
+    if (toggleBtn && hasActiveFilters) {
+        // Only add active class if panel is closed
+        const panel = document.getElementById('filter-panel');
+        if (panel && panel.style.display === 'none') {
+            toggleBtn.classList.add('active');
+        }
+    } else if (toggleBtn) {
+        // Remove active class if panel is closed and no filters
+        const panel = document.getElementById('filter-panel');
+        if (panel && panel.style.display === 'none') {
+            toggleBtn.classList.remove('active');
+        }
     }
 
     updateURL();
@@ -1259,9 +1386,8 @@ function createTuneCard(tune) {
         : '';
 
     // Determine what to show in the tune type badge based on sort mode
-    const sortMode = sortModes[currentSortModeIndex];
-    const isPopularityMode = sortMode.id === 'popularity-desc' || sortMode.id === 'popularity-asc';
-    const isHeardMode = sortMode.id === 'heard-desc';
+    const isPopularityMode = currentSortType === 'popularity';
+    const isHeardMode = currentSortType === 'heard';
     const typeLabel = isPopularityMode
         ? (tune.tunebook_count || 0).toString()
         : isHeardMode
@@ -1335,19 +1461,17 @@ function clearFilters() {
     };
 
     // Don't clear the search input - keep it as is
-    // document.getElementById('search-input').value = '';
+    // Reset type filter
     document.getElementById('type-filter').value = '';
 
-    // Reset desktop dropdown
-    const statusFilterSelect = document.getElementById('status-filter-select');
-    if (statusFilterSelect) {
-        statusFilterSelect.value = '';
-    }
-
-    // Reset mobile button to "All"
-    currentStatusFilterIndex = 0;
-    document.getElementById('status-filter-icon').textContent = 'All';
-    document.getElementById('status-filter-btn').classList.remove('active');
+    // Reset status buttons to "All"
+    document.querySelectorAll('.filter-status-btn').forEach(btn => {
+        if (btn.dataset.status === '') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
 
     applyFilters();
 }
