@@ -408,7 +408,17 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
         session_path = full_path
 
         try:
+            import time
+            import logging
+            logger = logging.getLogger(__name__)
+
+            start_time = time.time()
+            logger.info(f"[TIMING] Session detail load started for: {session_path}")
+
             conn = get_db_connection()
+            db_connect_time = time.time()
+            logger.info(f"[TIMING] DB connection: {(db_connect_time - start_time)*1000:.2f}ms")
+
             cur = conn.cursor()
             cur.execute(
                 """
@@ -421,6 +431,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 (session_path,),
             )
             session = cur.fetchone()
+            session_query_time = time.time()
+            logger.info(f"[TIMING] Session query: {(session_query_time - db_connect_time)*1000:.2f}ms")
 
             if session:
                 # Convert tuple to dictionary with column names
@@ -467,6 +479,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 sorted_days = []
 
                 # Get top 20 most popular tunes for this session
+                before_popular_query = time.time()
                 cur.execute(
                     """
                     WITH tune_counts AS (
@@ -491,29 +504,56 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 )
 
                 popular_tunes = cur.fetchall()
+                after_popular_query = time.time()
+                logger.info(f"[TIMING] Popular tunes query: {(after_popular_query - before_popular_query)*1000:.2f}ms")
 
-                # Get session tunes with play counts and popularity data for the tunes tab
+                # Get total count of session tunes
+                before_count_query = time.time()
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT st.tune_id)
+                    FROM session_tune st
+                    WHERE st.session_id = %s
+                """,
+                    (session[0],),
+                )
+                total_tunes_count = cur.fetchone()[0]
+                after_count_query = time.time()
+                logger.info(f"[TIMING] Tune count query: {(after_count_query - before_count_query)*1000:.2f}ms")
+
+                # Get first 20 session tunes with play counts and popularity data for the tunes tab
+                # Rest will be loaded asynchronously
+                # Optimized: Use subquery to calculate play counts more efficiently
+                before_tunes_query = time.time()
                 cur.execute(
                     """
                     SELECT
                         st.tune_id,
                         COALESCE(st.alias, t.name) AS tune_name,
                         t.tune_type,
-                        COUNT(sit.session_instance_tune_id) AS play_count,
+                        COALESCE(play_counts.play_count, 0) AS play_count,
                         COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
                         st.setting_id
                     FROM session_tune st
                     LEFT JOIN tune t ON st.tune_id = t.tune_id
-                    LEFT JOIN session_instance si ON si.session_id = %s
-                    LEFT JOIN session_instance_tune sit ON st.tune_id = sit.tune_id AND sit.session_instance_id = si.session_instance_id
+                    LEFT JOIN (
+                        SELECT sit.tune_id, COUNT(*) as play_count
+                        FROM session_instance_tune sit
+                        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                        WHERE si.session_id = %s
+                        GROUP BY sit.tune_id
+                    ) play_counts ON st.tune_id = play_counts.tune_id
                     WHERE st.session_id = %s
-                    GROUP BY st.tune_id, st.alias, t.name, t.tune_type, t.tunebook_count_cached, st.setting_id
                     ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+                    LIMIT 20
                 """,
                     (session[0], session[0]),
                 )
 
                 tunes = cur.fetchall()
+                has_more_tunes = total_tunes_count > 20
+                after_tunes_query = time.time()
+                logger.info(f"[TIMING] First 20 tunes query: {(after_tunes_query - before_tunes_query)*1000:.2f}ms")
 
                 # Check if current user is an admin of this session
                 is_session_admin = False
@@ -551,11 +591,14 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
 
                 cur.close()
                 conn.close()
+                after_db_work = time.time()
+                logger.info(f"[TIMING] All DB work completed: {(after_db_work - start_time)*1000:.2f}ms")
 
                 # Determine default tab based on session type
                 default_tab = 'logs' if session_dict.get('session_type') == 'festival' else 'tunes'
 
-                return render_template(
+                before_render = time.time()
+                result = render_template(
                     "session_detail.html",
                     session=session_dict,
                     instances_by_year=instances_by_year,
@@ -564,6 +607,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     sorted_days=sorted_days,
                     popular_tunes=popular_tunes,
                     tunes=tunes,
+                    has_more_tunes=has_more_tunes,
+                    total_tunes_count=total_tunes_count,
                     is_session_admin=is_session_admin,
                     is_logged_in=current_user.is_authenticated,
                     is_session_member=is_session_member,
@@ -573,6 +618,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     person_id=person_id,
                     default_tab=default_tab,
                 )
+                after_render = time.time()
+                logger.info(f"[TIMING] Template render: {(after_render - before_render)*1000:.2f}ms")
+                logger.info(f"[TIMING] TOTAL TIME: {(after_render - start_time)*1000:.2f}ms")
+
+                return result
             else:
                 cur.close()
                 conn.close()

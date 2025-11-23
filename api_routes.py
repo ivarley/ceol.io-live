@@ -9588,3 +9588,84 @@ def get_session_logs(session_path):
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+def get_session_tunes_remaining(session_path):
+    """
+    Get remaining session tunes (after the first 20) for a session.
+    No authentication required - public endpoint.
+
+    Returns:
+    {
+        "success": true,
+        "tunes": [...]
+    }
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID
+        cur.execute(
+            "SELECT session_id FROM session WHERE path = %s",
+            (session_path,)
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Get remaining session tunes (skip first 20)
+        # Optimized: Use subquery to calculate play counts more efficiently
+        cur.execute(
+            """
+            SELECT
+                st.tune_id,
+                COALESCE(st.alias, t.name) AS tune_name,
+                t.tune_type,
+                COALESCE(play_counts.play_count, 0) AS play_count,
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
+                st.setting_id
+            FROM session_tune st
+            LEFT JOIN tune t ON st.tune_id = t.tune_id
+            LEFT JOIN (
+                SELECT sit.tune_id, COUNT(*) as play_count
+                FROM session_instance_tune sit
+                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                WHERE si.session_id = %s
+                GROUP BY sit.tune_id
+            ) play_counts ON st.tune_id = play_counts.tune_id
+            WHERE st.session_id = %s
+            ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+            OFFSET 20
+        """,
+            (session_id, session_id),
+        )
+
+        tunes = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Convert to list of dicts for JSON serialization
+        tunes_list = [
+            {
+                'tune_id': tune[0],
+                'tune_name': tune[1],
+                'tune_type': tune[2],
+                'play_count': tune[3],
+                'tunebook_count': tune[4],
+                'setting_id': tune[5]
+            }
+            for tune in tunes
+        ]
+
+        return jsonify({
+            "success": True,
+            "tunes": tunes_list
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500

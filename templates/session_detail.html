@@ -2196,13 +2196,15 @@
     }
 
     // Tunes tab functionality
-    const allTunes = {{ tunes|tojson }};
+    let allTunes = {{ tunes|tojson }}; // Changed to let so we can add remaining tunes
     let filteredTunes = [];
     let currentFilters = {
         search: '',
         type: ''
     };
     let isInitializing = true; // Flag to prevent URL updates during initialization
+    let allTunesLoaded = {{ 'false' if has_more_tunes else 'true' }}; // Track if all tunes are loaded
+    let isLoadingTunes = false; // Track if currently loading tunes
 
     // Sort state: type (alpha, session, everywhere) and direction (asc, desc)
     let currentSortType = 'session'; // 'alpha', 'session', 'everywhere' (default to session)
@@ -2224,6 +2226,105 @@
         }
     };
 
+    // Load remaining tunes asynchronously
+    async function loadRemainingTunes() {
+        if (allTunesLoaded || isLoadingTunes) {
+            return;
+        }
+
+        isLoadingTunes = true;
+        console.log('Loading remaining tunes...');
+
+        // Show loading indicator in results count
+        const resultsCountText = document.getElementById('results-count-text');
+        if (resultsCountText) {
+            resultsCountText.textContent = `Loading all tunes... (${allTunes.length}/{{ total_tunes_count }})`;
+        }
+
+        try {
+            const sessionPath = '{{ session.path }}';
+            const response = await fetch(`/api/sessions/${sessionPath}/tunes/remaining`);
+            const data = await response.json();
+
+            if (data.success && data.tunes) {
+                // Convert API format to match existing tuple format
+                // [tune_id, tune_name, tune_type, play_count, tunebook_count, setting_id]
+                const newTunes = data.tunes.map(t => [
+                    t.tune_id,
+                    t.tune_name,
+                    t.tune_type,
+                    t.play_count,
+                    t.tunebook_count,
+                    t.setting_id
+                ]);
+
+                // Add remaining tunes to allTunes array
+                allTunes.push(...newTunes);
+                allTunesLoaded = true;
+
+                console.log('Loaded', newTunes.length, 'more tunes. Total:', allTunes.length);
+
+                // Re-apply filters with all tunes
+                populateTuneTypes(); // Update type filter with any new types
+                applyFilters();
+
+                // Enable filters/sorting now that all data is loaded
+                enableTuneControls();
+            } else {
+                throw new Error(data.message || 'Failed to load remaining tunes');
+            }
+        } catch (error) {
+            console.error('Error loading remaining tunes:', error);
+            // Still mark as loaded to prevent infinite retry, but log error
+            allTunesLoaded = true;
+            // Re-apply filters to update the display even if loading failed
+            applyFilters();
+            enableTuneControls();
+        } finally {
+            isLoadingTunes = false;
+        }
+    }
+
+    // Disable tune controls while loading
+    function disableTuneControls() {
+        const searchInput = document.getElementById('tune-search-input');
+        const typeFilter = document.getElementById('tune-type-filter');
+        const sortButtons = document.querySelectorAll('.sort-button');
+
+        if (searchInput) {
+            searchInput.disabled = true;
+            searchInput.placeholder = 'Loading all tunes...';
+        }
+        if (typeFilter) {
+            typeFilter.disabled = true;
+        }
+        sortButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        });
+    }
+
+    // Enable tune controls after loading
+    function enableTuneControls() {
+        const searchInput = document.getElementById('tune-search-input');
+        const typeFilter = document.getElementById('tune-type-filter');
+        const sortButtons = document.querySelectorAll('.sort-button');
+
+        if (searchInput) {
+            searchInput.disabled = false;
+            searchInput.placeholder = 'Search tunes...';
+        }
+        if (typeFilter) {
+            typeFilter.disabled = false;
+        }
+        sortButtons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        });
+    }
+
     // Initialize tunes tab
     function initializeTunesTab() {
         console.log('Initializing tunes tab with', allTunes.length, 'tunes');
@@ -2232,6 +2333,16 @@
         setupTunesEventListeners();
         applyFilters();
         isInitializing = false; // Allow URL updates after initialization
+
+        // Disable controls if not all tunes loaded yet
+        if (!allTunesLoaded) {
+            disableTuneControls();
+            // Load remaining tunes in the background
+            // Use setTimeout to ensure it doesn't block the initial render
+            setTimeout(() => {
+                loadRemainingTunes();
+            }, 100);
+        }
     }
 
     function toggleFilterPanel() {
