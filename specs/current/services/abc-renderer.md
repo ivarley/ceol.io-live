@@ -25,12 +25,20 @@ Renders ABC notation to a PNG image.
 ```json
 {
   "abc": "X:1\nT:The Banshee\nM:4/4\nL:1/8\nK:Emin\n|:EBBA B2 EB|...",
-  "width": 800,    // optional, default: 800, max: 2000
-  "scale": 1.5     // optional, default: 1.5, max: 3.0
+  "width": 800,        // optional, default: 800, max: 2000
+  "scale": 1.5,        // optional, default: 1.5, max: 3.0
+  "isIncipit": false   // optional, default: false, renders compact preview
 }
 ```
 
 **Response**: Binary PNG image data (`Content-Type: image/png`)
+
+**Incipit Mode** (`isIncipit: true`):
+- Renders first 2 bars only
+- Minimal padding for compact display
+- Hides clef and time signature
+- Smaller default width (400px)
+- Reduced scale (1.2)
 
 **Errors**:
 - 400: Invalid ABC notation or parameters
@@ -128,9 +136,11 @@ Configured in `render.yaml`:
 services:
   - type: web
     name: abc-renderer
-    env: node
-    buildCommand: "cd abc-renderer && npm install"
-    startCommand: "cd abc-renderer && npm start"
+    runtime: node
+    rootDir: abc-renderer
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    plan: free
     envVars:
       - key: NODE_VERSION
         value: "18"

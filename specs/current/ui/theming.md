@@ -16,42 +16,52 @@ CSS custom properties system for light/dark theme switching.
 
 Defined in `templates/base.html` `<style>` block.
 
-**Light Theme** (default):
+**Light Theme**:
 ```css
 :root {
-  --bg-color: #ffffff;
-  --text-color: #333333;
-  --primary-color: #4a90e2;
-  --secondary-text: #666666;
-  --border-color: #dee2e6;
-  --input-bg: #ffffff;
+  --bg-color: #fff;
+  --text-color: #252930;
+  --primary-color: #00a1e0;
+  --secondary-text: #adb4c0;
+  --border-color: #ddd;
+  --input-bg: #fff;
   --hover-bg: #f8f9fa;
-  --link-color: #007bff;
-  --table-header-bg: #f8f9fa;
+  --link-color: #00a1e0;
+  --link-hover-color: #005b7f;
+  --table-header-bg: #f5f6f8;
+  --header-bg: #fff;
+  --dropdown-bg: #fff;
+  --dropdown-border: #ddd;
+  --dropdown-shadow: rgba(0,0,0,0.15);
 }
 ```
 
-**Dark Theme**:
+**Dark Theme** (default):
 ```css
 [data-theme="dark"] {
-  --bg-color: #1e1e1e;
+  --bg-color: #1a1a1a;
   --text-color: #e0e0e0;
-  --primary-color: #6db3f2;
-  --secondary-text: #a0a0a0;
-  --border-color: #404040;
+  --primary-color: #4da6ff;
+  --secondary-text: #888;
+  --border-color: #444;
   --input-bg: #2d2d2d;
-  --hover-bg: #2d2d2d;
-  --link-color: #6db3f2;
+  --hover-bg: #3d3d3d;
+  --link-color: #4da6ff;
+  --link-hover-color: #80c0ff;
   --table-header-bg: #2d2d2d;
+  --header-bg: #2d2d2d;
+  --dropdown-bg: #2d2d2d;
+  --dropdown-border: #444;
+  --dropdown-shadow: rgba(0,0,0,0.3);
 }
 ```
 
 ### Logo Switching
 
-**Light**: `static/logo1.png`
-**Dark**: `static/logo1-dark-transparent.png`
+**Light**: `static/images/logo2-1.png`
+**Dark**: `static/images/logo2-dark-1.png`
 
-**Implementation**: JavaScript updates `<img src>` on theme change.
+**Implementation**: JavaScript updates `<img src>` on theme change (in `base.html` head script).
 
 ## FOUC Prevention
 
@@ -60,7 +70,7 @@ Flash of Unstyled Content prevented by inline script in `<head>`:
 ```javascript
 // Runs before page render
 (function() {
-  const theme = localStorage.getItem('theme') || 'light';
+  const theme = localStorage.getItem('theme') || 'dark';  // Default: dark
   document.documentElement.setAttribute('data-theme', theme);
 })();
 ```

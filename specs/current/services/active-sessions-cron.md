@@ -45,8 +45,10 @@ Located in `active_session_manager.py:update_active_sessions()`
 
 ### Database Tables
 
-**`session.active_session_instance_id`**: Currently active instance (FK → session_instance)
-**`session_person.current_location`**: Person's current location text
+**`session_instance.is_active`**: Boolean flag for currently active instances
+**`session.active_buffer_minutes_before`**: Minutes before session is considered active (default: 60)
+**`session.active_buffer_minutes_after`**: Minutes after session is considered active (default: 60)
+**`person.at_active_session_instance_id`**: FK to session_instance (person's current location)
 
 See `schema/add_active_session_tracking.sql`
 
@@ -156,9 +158,9 @@ See `jobs/README.md` and `README-TESTING-CRON.md` for comprehensive testing guid
 
 ### API Endpoints
 
-**`GET /api/active-sessions`**: Returns currently active sessions (uses data set by cron)
+**`GET /api/session/<id>/active_instance`**: Returns active instance IDs for session
 
-**`GET /api/session/<id>/active`**: Check if specific session is active
+**`GET /api/person/<id>/active_session`**: Returns person's active session
 
 ### UI Display
 

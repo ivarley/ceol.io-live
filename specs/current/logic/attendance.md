@@ -100,7 +100,9 @@ Search people associated with a session (past attendees, regulars).
 - Session admins: Only for their sessions
 - Others: No access
 
-**Implementation**: `api_routes.py:can_view_attendance()`, `can_edit_attendance()`
+**Implementation**: `auth.py:can_view_attendance()`, `auth.py:can_manage_attendance()`
+
+**Note**: There's also `api_routes.py:can_view_attendance()` with different signature (takes session_instance_id instead of session_id)
 
 ### Regular Members
 
@@ -168,4 +170,4 @@ Search people associated with a session (past attendees, regulars).
 
 - [People Model](../data/people-model.md) - Database schema
 - [Session Model](../data/session-model.md) - Session structure
-- [Authentication](auth.md) - User/person relationship
+- [Authentication](auth.md) - User/person relationship and permission system

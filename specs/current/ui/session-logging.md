@@ -16,31 +16,49 @@ Word-processor-like editing experience:
 - **Undo/Redo**: Full operation history
 - **Keyboard Shortcuts**: Ctrl+Z (undo), Ctrl+Y (redo), Ctrl+C/V (copy/paste)
 - **Inline Editing**: Click to edit any field
-- **Live Save**: Auto-save on changes
+- **Auto-save**: Configurable intervals (10s, 30s, 60s) with countdown timer
 - **Tune Search**: Link tunes to thesession.org database
 - **Set Management**: Group consecutive tunes
 - **ABC Notation**: Display tune sheet music
+- **Mobile Support**: Touch-friendly with swipe gestures
 
 ## Implementation
 
-**JavaScript**: Vanilla JS with drag-and-drop API, history management, clipboard integration
+**JavaScript**: Modular architecture with 13 separate modules
+
+**Modules** (`templates/session_instance_detail.html`):
+- `autoSave.js` - Auto-save timer and state
+- `stateManager.js` - Core data state
+- `cursorManager.js` - Cursor positioning
+- `pillRenderer.js` - DOM rendering
+- `pillSelection.js` - Multi-select operations
+- `pillInteraction.js` - Click/touch handling
+- `dragDrop.js` - Drag and drop
+- `textInput.js` - Text input buffer
+- `modalManager.js` - Modal dialogs
+- `keyboardHandler.js` - Keyboard shortcuts
+- `undoRedoManager.js` - Operation history
+- `clipboardManager.js` - Copy/paste
+- `contextMenu.js` - Right-click menu
 
 **State Management**:
 - Client-side tune array
 - Dirty flag for unsaved changes
 - Undo stack with action records
-- Debounced auto-save
+- Auto-save with configurable intervals
 
 ## AJAX Operations
 
-All operations via `api_routes.py`:
+All operations via `api_routes.py` using session path pattern:
 
-- **Add tune**: POST `/api/session_instance/<id>/tunes`
-- **Update tune**: PUT `/api/session_instance/<id>/tunes/<tune_id>`
-- **Delete tune**: DELETE `/api/session_instance/<id>/tunes/<tune_id>`
-- **Reorder**: PUT `/api/session_instance/<id>/tunes/reorder`
-- **Link tune**: PUT `/api/session_instance/<id>/tunes/<tune_id>/link`
-- **Bulk update**: PUT `/api/session_instance/<id>/tunes/bulk`
+- **Save tunes**: POST `/api/sessions/<path>/<date_or_id>/save_tunes` - Bulk save session log
+- **Get tune detail**: GET `/api/sessions/<path>/<date_or_id>/tunes/<tune_id>`
+- **Update tune**: PUT `/api/sessions/<path>/<date_or_id>/tunes/<tune_id>`
+- **Match tune**: POST `/api/sessions/<path>/<date_or_id>/match_tune` - Link to thesession.org
+- **Update instance**: PUT `/api/sessions/<path>/<date_or_id>/update` - Update session instance metadata
+- **Mark complete**: POST `/api/sessions/<path>/<date_or_id>/mark_complete`
+
+**URL Pattern**: Uses session path + date/instance ID rather than direct session_instance_id
 
 ## Set Management
 
