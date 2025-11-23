@@ -245,6 +245,12 @@ app.add_url_rule(
 
 # Register API routes
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/logs",
+    "get_session_logs",
+    get_session_logs,
+    methods=["GET"],
+)
 
 # SESSION routes - MUST come BEFORE session_instance routes!
 # These have fewer segments, so <path:session_path> will greedily match the full path

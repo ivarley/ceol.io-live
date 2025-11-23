@@ -9471,3 +9471,120 @@ def get_cache_settings_stats():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def get_session_logs(session_path):
+    """
+    Get all session instances (logs) for a session.
+    No authentication required - public endpoint.
+
+    Returns:
+    {
+        "success": true,
+        "instances_by_year": {...},
+        "sorted_years": [...],
+        "instances_by_day": {...},
+        "sorted_days": [...],
+        "session_type": "regular" | "festival"
+    }
+    """
+    try:
+        from datetime import datetime, time as datetime_time
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session ID and type
+        cur.execute(
+            "SELECT session_id, session_type FROM session WHERE path = %s",
+            (session_path,)
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+        session_type = session_result[1] or "regular"
+
+        # Fetch past session instances with instance counts per date
+        cur.execute(
+            """
+            SELECT si.date, si.location_override, si.start_time, si.end_time,
+                   si.session_instance_id,
+                   COUNT(*) OVER (PARTITION BY si.date) as instances_on_date
+            FROM session_instance si
+            WHERE si.session_id = %s
+            ORDER BY si.date DESC, si.session_instance_id ASC
+        """,
+            (session_id,),
+        )
+        past_instances = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Group past instances by year or by day depending on session type
+        instances_by_year = {}
+        instances_by_day = {}
+
+        if session_type == "festival":
+            # For festivals, group by day and include time/location info
+            for instance in past_instances:
+                date = instance[0]
+                day_key = date.isoformat()  # Convert to ISO string for JSON
+                if day_key not in instances_by_day:
+                    instances_by_day[day_key] = []
+                instances_by_day[day_key].append({
+                    'date': date.isoformat(),
+                    'location_override': instance[1],
+                    'start_time': instance[2].isoformat() if instance[2] else None,
+                    'end_time': instance[3].isoformat() if instance[3] else None,
+                    'session_instance_id': instance[4],
+                    'multiple_on_date': instance[5] > 1
+                })
+        else:
+            # For regular sessions, group by year and include time info
+            for instance in past_instances:
+                date = instance[0]
+                year = date.year
+                if year not in instances_by_year:
+                    instances_by_year[year] = []
+                instances_by_year[year].append({
+                    'date': date.isoformat(),
+                    'location_override': instance[1],
+                    'start_time': instance[2].isoformat() if instance[2] else None,
+                    'end_time': instance[3].isoformat() if instance[3] else None,
+                    'session_instance_id': instance[4],
+                    'multiple_on_date': instance[5] > 1
+                })
+
+        # Sort instances within each group by start_time
+        for day_key in instances_by_day:
+            instances_by_day[day_key].sort(
+                key=lambda x: x['start_time'] if x['start_time'] else ''
+            )
+
+        for year in instances_by_year:
+            instances_by_year[year].sort(
+                key=lambda x: (x['date'], x['start_time'] if x['start_time'] else ''),
+                reverse=True
+            )
+
+        # Sort years in descending order (for regular sessions)
+        sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
+
+        # Sort days in ascending order for festivals (chronological)
+        sorted_days = sorted(instances_by_day.keys(), reverse=False) if instances_by_day else []
+
+        return jsonify({
+            "success": True,
+            "instances_by_year": instances_by_year,
+            "sorted_years": sorted_years,
+            "instances_by_day": instances_by_day,
+            "sorted_days": sorted_days,
+            "session_type": session_type
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500

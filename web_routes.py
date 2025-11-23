@@ -459,68 +459,12 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 else:
                     session_dict["recurrence_readable"] = None
 
-                # Fetch past session instances with instance counts per date
-                cur.execute(
-                    """
-                    SELECT si.date, si.location_override, si.start_time, si.end_time,
-                           si.session_instance_id,
-                           COUNT(*) OVER (PARTITION BY si.date) as instances_on_date
-                    FROM session_instance si
-                    WHERE si.session_id = %s
-                    ORDER BY si.date DESC, si.session_instance_id ASC
-                """,
-                    (session[0],),
-                )
-                past_instances = cur.fetchall()
-
-                # Group past instances by year or by day depending on session type
+                # Logs will be loaded asynchronously via JavaScript
+                # No need to fetch them here anymore
                 instances_by_year = {}
                 instances_by_day = {}
-                session_type = session_dict.get("session_type", "regular")
-
-                if session_type == "festival":
-                    # For festivals, group by day and include time/location info
-                    for instance in past_instances:
-                        date = instance[0]
-                        day_key = date  # Use the date itself as the key
-                        if day_key not in instances_by_day:
-                            instances_by_day[day_key] = []
-                        instances_by_day[day_key].append({
-                            'date': date,
-                            'location_override': instance[1],
-                            'start_time': instance[2],
-                            'end_time': instance[3],
-                            'session_instance_id': instance[4],
-                            'multiple_on_date': instance[5] > 1
-                        })
-                else:
-                    # For regular sessions, group by year and include time info
-                    for instance in past_instances:
-                        date = instance[0]
-                        year = date.year
-                        if year not in instances_by_year:
-                            instances_by_year[year] = []
-                        instances_by_year[year].append({
-                            'date': date,
-                            'location_override': instance[1],
-                            'start_time': instance[2],
-                            'end_time': instance[3],
-                            'session_instance_id': instance[4],
-                            'multiple_on_date': instance[5] > 1
-                        })
-
-                # Sort instances within each group by start_time
-                for day_key in instances_by_day:
-                    instances_by_day[day_key].sort(key=lambda x: (x['start_time'] or datetime.time.min))
-
-                for year in instances_by_year:
-                    instances_by_year[year].sort(key=lambda x: (x['date'], x['start_time'] or datetime.time.min), reverse=True)
-
-                # Sort years in descending order (for regular sessions)
-                sorted_years = sorted(instances_by_year.keys(), reverse=True) if instances_by_year else []
-
-                # Sort days in ascending order for festivals (chronological)
-                sorted_days = sorted(instances_by_day.keys(), reverse=False) if instances_by_day else []
+                sorted_years = []
+                sorted_days = []
 
                 # Get top 20 most popular tunes for this session
                 cur.execute(

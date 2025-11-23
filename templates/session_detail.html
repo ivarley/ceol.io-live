@@ -1948,6 +1948,9 @@
         if (addLink) addLink.classList.remove('hidden');
     }
 
+    // Track if logs have been loaded
+    let logsLoaded = false;
+
     // Tab switching functionality
     function switchTab(tabName, updateURL = true) {
         // Update tab buttons
@@ -1962,6 +1965,11 @@
         });
         document.getElementById(`${tabName}-tab`).classList.add('active');
 
+        // Load logs if switching to logs tab and not yet loaded
+        if (tabName === 'logs' && !logsLoaded) {
+            loadLogsAsync();
+        }
+
         // Update URL to use path-based navigation
         if (updateURL) {
             // Get the base session path (remove any existing tab suffix and trailing slash)
@@ -1973,6 +1981,217 @@
 
             // Update URL without reloading the page
             window.history.pushState({}, '', newPath);
+        }
+    }
+
+    // Function to load logs asynchronously
+    async function loadLogsAsync() {
+        const logsTab = document.getElementById('logs-tab');
+        if (!logsTab) return;
+
+        // Show loading indicator
+        logsTab.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--disabled-text);"><p>Loading logs...</p></div>';
+
+        try {
+            const sessionPath = '{{ session.path }}';
+            const response = await fetch(`/api/sessions/${sessionPath}/logs`);
+            const data = await response.json();
+
+            if (data.success) {
+                // Render the logs content
+                renderLogs(data);
+                logsLoaded = true;
+            } else {
+                throw new Error(data.message || 'Failed to load logs');
+            }
+        } catch (error) {
+            console.error('Error loading logs:', error);
+            logsTab.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <p style="color: var(--danger, #dc3545);">
+                        Error loading logs. Please <a href="#" onclick="location.reload(); return false;" style="color: var(--primary);">refresh the page</a>.
+                    </p>
+                </div>
+            `;
+        }
+    }
+
+    // Function to render logs from API data
+    function renderLogs(data) {
+        const logsTab = document.getElementById('logs-tab');
+        const sessionType = data.session_type || 'regular';
+        const sessionPath = '{{ session.path }}';
+
+        let html = '';
+
+        if (sessionType === 'festival') {
+            // Festival view
+            if (data.sorted_days && data.sorted_days.length > 0) {
+                html += '<div class="past-instances"><table class="instances-table">';
+
+                data.sorted_days.forEach((dayKey, index) => {
+                    const instances = data.instances_by_day[dayKey];
+                    const firstInstance = instances[0];
+                    const dateObj = new Date(firstInstance.date);
+                    const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+                    html += `<tbody class="year-section">
+                        <tr class="year-header-row">
+                            <td colspan="2" class="year-header-cell">
+                                <div class="year-header" data-year="${dayKey}">
+                                    <div class="year-header-left">
+                                        <span class="year-toggle" data-year="${dayKey}">▼</span>
+                                        <h3 class="year-title">${dateStr}</h3>`;
+
+                    if (index === 0 && {{ 'true' if is_logged_in else 'false' }}) {
+                        html += `<span class="year-add-link" id="add-session-btn" data-year="${dayKey}">Add</span>`;
+                    }
+
+                    html += `</div></div></td></tr>`;
+
+                    instances.forEach(instance => {
+                        const location = instance.location_override || '{{ session.location_name }}';
+                        let timeStr = '';
+                        if (instance.start_time && instance.end_time) {
+                            timeStr = formatTimeRange(instance.start_time, instance.end_time);
+                        } else if (instance.start_time) {
+                            timeStr = formatTime(instance.start_time) + ' - ?';
+                        }
+
+                        const instanceUrl = instance.multiple_on_date ? instance.session_instance_id : instance.date;
+                        html += `<tr class="year-content-row" data-year="${dayKey}">
+                            <td class="instance-location-cell">
+                                <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}">${location}</a>
+                            </td>
+                            <td class="instance-time-cell">${timeStr}</td>
+                        </tr>`;
+                    });
+
+                    html += `</tbody>`;
+                });
+
+                html += '</table></div>';
+            } else {
+                html = '<div class="past-instances"><p><a href="#" id="add-first-session-btn" style="color: var(--primary); text-decoration: none;">Add your first session</a></p></div>';
+            }
+        } else {
+            // Regular session view
+            if (data.sorted_years && data.sorted_years.length > 0) {
+                html += '<div class="past-instances">';
+
+                if (data.sorted_years.length > 1) {
+                    html += '<table class="instances-table">';
+
+                    data.sorted_years.forEach((year, index) => {
+                        const instances = data.instances_by_year[year];
+                        const instanceCount = instances.length;
+
+                        html += `<tbody class="year-section">
+                            <tr class="year-header-row">
+                                <td class="year-header-cell">
+                                    <div class="year-header" data-year="${year}">
+                                        <div class="year-header-left">
+                                            <span class="year-toggle" data-year="${year}">▼</span>
+                                            <h3 class="year-title">${year}</h3>`;
+
+                        if (index === 0 && {{ 'true' if is_logged_in else 'false' }}) {
+                            html += `<span class="year-add-link" id="add-session-btn" data-year="${year}">Add</span>`;
+                        }
+
+                        html += `<a href="#" class="year-view-link" data-year="${year}">view ${instanceCount} log${instanceCount !== 1 ? 's' : ''}</a>
+                                    </div></div></td></tr>`;
+
+                        instances.forEach(instance => {
+                            const instanceUrl = instance.multiple_on_date ? instance.session_instance_id : instance.date;
+                            html += `<tr class="year-content-row" data-year="${year}">
+                                <td class="instance-date-cell">
+                                    <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}">${instance.date}</a>
+                                </td>
+                            </tr>`;
+                        });
+
+                        html += `</tbody>`;
+                    });
+
+                    html += '</table>';
+                } else {
+                    // Single year view (compact)
+                    const year = data.sorted_years[0];
+                    const instances = data.instances_by_year[year];
+
+                    html += `<div style="padding-left: 10px;">
+                        <h3>${year}`;
+
+                    if ({{ 'true' if is_logged_in else 'false' }}) {
+                        html += `<span class="year-add-link" id="add-session-btn" data-year="${year}" style="margin-left: 15px; font-size: 0.6em;">Add</span>`;
+                    }
+
+                    html += `</h3><ul style="list-style: none; padding: 0;">`;
+
+                    instances.forEach(instance => {
+                        const instanceUrl = instance.multiple_on_date ? instance.session_instance_id : instance.date;
+                        html += `<li style="margin-bottom: 8px;">
+                            <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}">${instance.date}</a>
+                        </li>`;
+                    });
+
+                    html += '</ul></div>';
+                }
+
+                html += '</div>';
+            } else {
+                html = '<div class="past-instances"><p><a href="#" id="add-session-btn" style="color: var(--primary); text-decoration: none;">Add your first log</a></p></div>';
+            }
+        }
+
+        logsTab.innerHTML = html;
+
+        // Re-attach event listeners for year toggles and add buttons
+        attachLogEventListeners();
+    }
+
+    // Helper function to format time range
+    function formatTimeRange(startTime, endTime) {
+        return formatTime(startTime) + '-' + formatTime(endTime);
+    }
+
+    // Helper function to format a single time
+    function formatTime(timeStr) {
+        if (!timeStr) return '';
+        const parts = timeStr.split(':');
+        let hour = parseInt(parts[0]);
+        const minute = parts[1];
+        const period = hour >= 12 ? 'pm' : 'am';
+        hour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+        return `${hour}:${minute}${period}`;
+    }
+
+    // Attach event listeners to dynamically created elements
+    function attachLogEventListeners() {
+        // Year toggle functionality
+        document.querySelectorAll('.year-toggle').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const year = this.getAttribute('data-year');
+                const rows = document.querySelectorAll(`.year-content-row[data-year="${year}"]`);
+                const isCollapsed = toggle.textContent === '▶';
+
+                rows.forEach(row => {
+                    row.style.display = isCollapsed ? '' : 'none';
+                });
+                toggle.textContent = isCollapsed ? '▼' : '▶';
+            });
+        });
+
+        // Add session button
+        const addBtn = document.getElementById('add-session-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Trigger the existing add session modal
+                if (window.showAddSessionModal) {
+                    window.showAddSessionModal();
+                }
+            });
         }
     }
 
@@ -2541,6 +2760,11 @@
             basePath = basePath.replace(/\/(tunes|people|logs)$/, '').replace(/\/$/, ''); // Remove tab suffix and trailing slash
             // Preserve query string parameters (e.g., show, added) when rewriting the URL
             window.history.replaceState({}, '', `${basePath}/${defaultTab}${window.location.search}`);
+        }
+
+        // Load logs asynchronously if logs tab is active on page load
+        if (currentTab === 'logs') {
+            loadLogsAsync();
         }
 
         // Always initialize tunes tab so it's ready when user switches to it
