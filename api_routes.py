@@ -9269,3 +9269,205 @@ def get_admin_tune_detail(tune_id):
         return jsonify(
             {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
         ), 500
+
+# ========================================
+# Admin Cache Settings
+# ========================================
+
+
+@login_required
+def run_cache_settings():
+    """Run the cache missing settings script"""
+    import subprocess
+    import os
+    import time
+    import re
+
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    try:
+        # Get the project root directory
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(project_root, "scripts", "cache_missing_settings.py")
+
+        # Run the script and capture output
+        start_time = time.time()
+
+        # Prepare environment - force production ABC renderer
+        env = os.environ.copy()
+        # Always use production ABC renderer (don't inherit old localhost value)
+        env['ABC_RENDERER_URL'] = 'https://abc-renderer.onrender.com'
+
+        result = subprocess.run(
+            ["python3", script_path, "--skip-defaults"],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout
+            env=env
+        )
+
+        elapsed_time = time.time() - start_time
+
+        output = result.stdout + result.stderr
+
+        # Parse the output to extract statistics
+        stats = {
+            "total": 0,
+            "cached": 0,
+            "abc_updated": 0,
+            "images_rendered": 0,
+            "already_cached": 0,
+            "failed": 0,
+            "api_calls": 0,
+            "time_minutes": elapsed_time / 60,
+            "errors": []
+        }
+
+        # Extract stats from output using regex
+        if "Total settings processed:" in output:
+            match = re.search(r"Total settings processed:\s*(\d+)", output)
+            if match:
+                stats["total"] = int(match.group(1))
+
+        if "Newly cached:" in output:
+            match = re.search(r"Newly cached:\s*(\d+)", output)
+            if match:
+                stats["cached"] = int(match.group(1))
+
+        if "ABC updated:" in output:
+            match = re.search(r"ABC updated:\s*(\d+)", output)
+            if match:
+                stats["abc_updated"] = int(match.group(1))
+
+        if "Images rendered:" in output:
+            match = re.search(r"Images rendered:\s*(\d+)", output)
+            if match:
+                stats["images_rendered"] = int(match.group(1))
+
+        if "Already cached:" in output:
+            match = re.search(r"Already cached:\s*(\d+)", output)
+            if match:
+                stats["already_cached"] = int(match.group(1))
+
+        if "Failed:" in output:
+            match = re.search(r"Failed:\s*(\d+)", output)
+            if match:
+                stats["failed"] = int(match.group(1))
+
+        if "thesession.org API calls:" in output:
+            match = re.search(r"thesession\.org API calls:\s*(\d+)", output)
+            if match:
+                stats["api_calls"] = int(match.group(1))
+
+        # Extract errors
+        errors_section = re.search(r"Errors \((\d+)\):(.*?)(?=\n\n|\Z)", output, re.DOTALL)
+        if errors_section:
+            error_lines = errors_section.group(2).strip().split("\n")
+            stats["errors"] = [line.strip().lstrip("- ") for line in error_lines if line.strip().startswith("-")]
+
+        if result.returncode == 0:
+            return jsonify({
+                "success": True,
+                "output": output,
+                "results": stats
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Script failed",
+                "output": output,
+                "results": stats
+            }), 500
+
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "success": False,
+            "error": "Script timed out after 5 minutes"
+        }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@login_required
+def get_cache_settings_stats():
+    """Get statistics about cached tune settings"""
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get statistics about cached settings
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total_settings,
+                COUNT(CASE WHEN abc IS NOT NULL AND abc != '' THEN 1 END) as has_abc,
+                COUNT(CASE WHEN image IS NOT NULL THEN 1 END) as has_image,
+                COUNT(CASE WHEN incipit_image IS NOT NULL THEN 1 END) as has_incipit_image,
+                COUNT(CASE WHEN abc IS NOT NULL AND abc != '' AND image IS NOT NULL AND incipit_image IS NOT NULL THEN 1 END) as fully_cached,
+                COUNT(CASE WHEN abc IS NULL OR abc = '' THEN 1 END) as missing_abc,
+                COUNT(CASE WHEN (abc IS NOT NULL AND abc != '') AND (image IS NULL OR incipit_image IS NULL) THEN 1 END) as missing_images
+            FROM tune_setting
+        """)
+        
+        result = cur.fetchone()
+        
+        # Get count of referenced settings (from person_tune, session_tune, session_instance_tune)
+        cur.execute("""
+            SELECT COUNT(DISTINCT setting_id) as referenced_settings
+            FROM (
+                SELECT setting_id FROM person_tune WHERE setting_id IS NOT NULL
+                UNION
+                SELECT setting_id FROM session_tune WHERE setting_id IS NOT NULL
+                UNION
+                SELECT setting_override as setting_id FROM session_instance_tune WHERE setting_override IS NOT NULL
+            ) as all_settings
+        """)
+        referenced_result = cur.fetchone()
+
+        # Get count of referenced settings that don't exist in tune_setting yet
+        cur.execute("""
+            SELECT COUNT(DISTINCT all_refs.setting_id) as missing_records
+            FROM (
+                SELECT setting_id FROM person_tune WHERE setting_id IS NOT NULL
+                UNION
+                SELECT setting_id FROM session_tune WHERE setting_id IS NOT NULL
+                UNION
+                SELECT setting_override as setting_id FROM session_instance_tune WHERE setting_override IS NOT NULL
+            ) as all_refs
+            LEFT JOIN tune_setting ts ON all_refs.setting_id = ts.setting_id
+            WHERE ts.setting_id IS NULL
+        """)
+        missing_records_result = cur.fetchone()
+
+        # Get count of tunes
+        cur.execute("SELECT COUNT(*) FROM tune")
+        tune_count = cur.fetchone()[0]
+
+        cur.close()
+        conn.close()
+
+        stats = {
+            "total_settings": result[0],
+            "has_abc": result[1],
+            "has_image": result[2],
+            "has_incipit_image": result[3],
+            "fully_cached": result[4],
+            "missing_abc": result[5],
+            "missing_images": result[6],
+            "referenced_settings": referenced_result[0],
+            "missing_records": missing_records_result[0],
+            "total_tunes": tune_count
+        }
+
+        return jsonify({"success": True, "stats": stats})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

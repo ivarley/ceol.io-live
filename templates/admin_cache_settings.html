@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}Cache Settings - Admin{% endblock %}
+
+{% block content %}
+<div class="docs-content">
+    <article class="docs-article">
+        <div class="docs-content-inner container">
+            <h1 class="docs-heading">Admin Dashboard</h1>
+
+            {% include 'admin_tabs.html' %}
+
+            <div class="admin-cache-settings">
+                <h2>Cache Missing Settings</h2>
+                <p>This tool caches missing tune settings from thesession.org, including ABC notation and rendered images.</p>
+
+                <div class="cache-stats" id="cache-stats">
+                    <h3>Current Cache Status</h3>
+                    <div id="stats-loading">Loading statistics...</div>
+                    <div id="stats-content" style="display: none;">
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-label">Total Settings</div>
+                                <div class="stat-value" id="stat-total-settings">-</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Fully Cached</div>
+                                <div class="stat-value stat-success" id="stat-fully-cached">-</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Missing ABC</div>
+                                <div class="stat-value stat-warning" id="stat-missing-abc">-</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Missing Images</div>
+                                <div class="stat-value stat-warning" id="stat-missing-images">-</div>
+                                <div class="stat-help">Have ABC but need image rendering</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Not Yet Cached</div>
+                                <div class="stat-value stat-error" id="stat-missing-records">-</div>
+                                <div class="stat-help">Referenced but don't exist in tune_setting yet</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Referenced Settings</div>
+                                <div class="stat-value" id="stat-referenced">-</div>
+                                <div class="stat-help">Total settings used in tunebooks/sessions</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Total Tunes</div>
+                                <div class="stat-value" id="stat-total-tunes">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cache-status" id="cache-status">
+                    <h3>Process Status</h3>
+                    <p id="status-text">Ready to cache missing settings.</p>
+                </div>
+
+                <div class="cache-controls">
+                    <button id="run-cache-btn" class="btn btn-primary">
+                        Run Cache Process
+                    </button>
+                    <button id="cancel-cache-btn" class="btn btn-secondary" style="display: none;">
+                        Cancel
+                    </button>
+                </div>
+
+                <div class="cache-output" id="cache-output" style="display: none;">
+                    <h3>Output</h3>
+                    <pre id="output-text" class="output-box"></pre>
+                </div>
+
+                <div class="cache-results" id="cache-results" style="display: none;">
+                    <h3>Results</h3>
+                    <div id="results-summary"></div>
+                </div>
+            </div>
+        </div>
+    </article>
+</div>
+
+<style>
+.admin-cache-settings {
+    max-width: 900px;
+}
+
+.admin-cache-settings h2 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.admin-cache-settings p {
+    color: var(--secondary-text);
+    margin-bottom: 2rem;
+}
+
+.cache-stats {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.cache-stats h3 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+    font-size: 1.1rem;
+}
+
+#stats-loading {
+    color: var(--secondary-text);
+    font-style: italic;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.stat-item {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--secondary-text);
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.stat-value.stat-success {
+    color: #28a745;
+}
+
+.stat-value.stat-warning {
+    color: #ffc107;
+}
+
+.stat-value.stat-error {
+    color: #dc3545;
+}
+
+.stat-help {
+    font-size: 0.75rem;
+    color: var(--secondary-text);
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+.cache-status {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.cache-status h3 {
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+    font-size: 1.1rem;
+}
+
+#status-text {
+    margin: 0;
+    color: var(--text-color);
+}
+
+#status-text.running {
+    color: var(--primary);
+    font-weight: 500;
+}
+
+#status-text.error {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+#status-text.success {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.cache-controls {
+    margin-bottom: 2rem;
+}
+
+.cache-controls .btn {
+    margin-right: 1rem;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark, #0056b3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.cache-output {
+    margin-top: 2rem;
+}
+
+.cache-output h3 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.output-box {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--text-color);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.cache-results {
+    margin-top: 2rem;
+}
+
+.cache-results h3 {
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+#results-summary {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1.5rem;
+}
+
+.result-stat {
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.result-stat strong {
+    display: inline-block;
+    min-width: 180px;
+}
+</style>
+
+<script>
+let runCacheBtn = document.getElementById('run-cache-btn');
+let cancelCacheBtn = document.getElementById('cancel-cache-btn');
+let statusText = document.getElementById('status-text');
+let cacheOutput = document.getElementById('cache-output');
+let outputText = document.getElementById('output-text');
+let cacheResults = document.getElementById('cache-results');
+let resultsSummary = document.getElementById('results-summary');
+
+let currentRequest = null;
+let isRunning = false;
+
+// Load statistics on page load
+function loadStats() {
+    fetch('/api/admin/cache_settings/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayStats(data.stats);
+            } else {
+                document.getElementById('stats-loading').textContent = 'Error loading statistics: ' + data.error;
+            }
+        })
+        .catch(error => {
+            document.getElementById('stats-loading').textContent = 'Error loading statistics: ' + error.message;
+        });
+}
+
+function displayStats(stats) {
+    document.getElementById('stats-loading').style.display = 'none';
+    document.getElementById('stats-content').style.display = 'block';
+
+    document.getElementById('stat-total-settings').textContent = stats.total_settings.toLocaleString();
+    document.getElementById('stat-fully-cached').textContent = stats.fully_cached.toLocaleString();
+    document.getElementById('stat-missing-abc').textContent = stats.missing_abc.toLocaleString();
+    document.getElementById('stat-missing-images').textContent = stats.missing_images.toLocaleString();
+    document.getElementById('stat-missing-records').textContent = stats.missing_records.toLocaleString();
+    document.getElementById('stat-referenced').textContent = stats.referenced_settings.toLocaleString();
+    document.getElementById('stat-total-tunes').textContent = stats.total_tunes.toLocaleString();
+}
+
+// Load stats when page loads
+document.addEventListener('DOMContentLoaded', loadStats);
+
+runCacheBtn.addEventListener('click', function() {
+    if (isRunning) return;
+
+    // Reset UI
+    outputText.textContent = '';
+    cacheOutput.style.display = 'block';
+    cacheResults.style.display = 'none';
+    resultsSummary.innerHTML = '';
+
+    statusText.textContent = 'Running cache process...';
+    statusText.className = 'running';
+
+    runCacheBtn.disabled = true;
+    cancelCacheBtn.style.display = 'inline-block';
+    isRunning = true;
+
+    // Start the cache process
+    currentRequest = fetch('/api/admin/cache_settings/run', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        isRunning = false;
+        runCacheBtn.disabled = false;
+        cancelCacheBtn.style.display = 'none';
+
+        if (data.success) {
+            statusText.textContent = 'Cache process completed successfully!';
+            statusText.className = 'success';
+
+            // Display output
+            outputText.textContent = data.output;
+
+            // Display results
+            if (data.results) {
+                cacheResults.style.display = 'block';
+                displayResults(data.results);
+            }
+
+            // Reload statistics to show updated numbers
+            loadStats();
+        } else {
+            statusText.textContent = 'Error: ' + data.error;
+            statusText.className = 'error';
+            outputText.textContent = data.output || data.error;
+        }
+    })
+    .catch(error => {
+        isRunning = false;
+        runCacheBtn.disabled = false;
+        cancelCacheBtn.style.display = 'none';
+
+        statusText.textContent = 'Error: ' + error.message;
+        statusText.className = 'error';
+        outputText.textContent = error.message;
+    });
+});
+
+cancelCacheBtn.addEventListener('click', function() {
+    if (currentRequest) {
+        // Note: This won't actually cancel the server-side process,
+        // but it will stop waiting for the response
+        statusText.textContent = 'Cancelled (process may still be running on server)';
+        statusText.className = 'error';
+        isRunning = false;
+        runCacheBtn.disabled = false;
+        cancelCacheBtn.style.display = 'none';
+    }
+});
+
+function displayResults(results) {
+    let html = '';
+
+    html += '<div class="result-stat"><strong>Total processed:</strong> ' + results.total + '</div>';
+    html += '<div class="result-stat"><strong>Newly cached:</strong> ' + results.cached + ' (fetched from thesession.org)</div>';
+    html += '<div class="result-stat"><strong>ABC updated:</strong> ' + results.abc_updated + ' (fetched from thesession.org)</div>';
+    html += '<div class="result-stat"><strong>Images rendered:</strong> ' + results.images_rendered + ' (used cached ABC)</div>';
+    html += '<div class="result-stat"><strong>Already cached:</strong> ' + results.already_cached + '</div>';
+    html += '<div class="result-stat"><strong>Failed:</strong> ' + results.failed + '</div>';
+    html += '<div class="result-stat"><strong>API calls:</strong> ' + results.api_calls + ' to thesession.org</div>';
+    html += '<div class="result-stat"><strong>Time:</strong> ' + results.time_minutes.toFixed(1) + ' minutes</div>';
+
+    if (results.errors && results.errors.length > 0) {
+        html += '<div class="result-stat" style="margin-top: 1rem;"><strong>Errors:</strong></div>';
+        html += '<ul style="margin-top: 0.5rem;">';
+        results.errors.slice(0, 10).forEach(error => {
+            html += '<li style="color: var(--secondary-text); font-size: 0.875rem;">' + error + '</li>';
+        });
+        if (results.errors.length > 10) {
+            html += '<li style="color: var(--secondary-text); font-size: 0.875rem;">... and ' + (results.errors.length - 10) + ' more errors</li>';
+        }
+        html += '</ul>';
+    }
+
+    resultsSummary.innerHTML = html;
+}
+</script>
+{% endblock %}

@@ -27,10 +27,15 @@
            role="tab">
             Active Logins
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}" 
-           href="{{ url_for('admin_test_links') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}"
+           href="{{ url_for('admin_test_links') }}"
            role="tab">
             Test Links
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'cache_settings' else '' }}"
+           href="{{ url_for('admin_cache_settings') }}"
+           role="tab">
+            Cache Settings
         </a>
     </div>
     
@@ -54,6 +59,9 @@
             </option>
             <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>
                 Test Links
+            </option>
+            <option value="{{ url_for('admin_cache_settings') }}" {{ 'selected' if active_tab == 'cache_settings' else '' }}>
+                Cache Settings
             </option>
         </select>
     </div>

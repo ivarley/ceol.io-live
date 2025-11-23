@@ -221,6 +221,7 @@ app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_hist
 app.add_url_rule("/admin/people", "admin_people", admin_people)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
 app.add_url_rule("/admin/test-links", "admin_test_links", admin_test_links)
+app.add_url_rule("/admin/cache-settings", "admin_cache_settings", admin_cache_settings)
 app.add_url_rule("/admin/people/<int:person_id>", "person_details", person_details)
 app.add_url_rule("/admin/sessions/<path:session_path>", "session_admin", session_admin)
 app.add_url_rule(
@@ -780,6 +781,18 @@ app.add_url_rule(
     "refresh_admin_tune_tunebook_count",
     refresh_admin_tune_tunebook_count,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/cache_settings/run",
+    "run_cache_settings",
+    run_cache_settings,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/cache_settings/stats",
+    "get_cache_settings_stats",
+    get_cache_settings_stats,
+    methods=["GET"],
 )
 
 # Person tune management routes

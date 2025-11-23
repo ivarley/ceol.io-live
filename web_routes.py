@@ -2158,6 +2158,17 @@ def admin_test_links():
 
 
 @login_required
+def admin_cache_settings():
+    """Admin cache settings page - run cache process for missing tune settings"""
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    return render_template("admin_cache_settings.html", active_tab="cache_settings")
+
+
+@login_required
 def person_details(person_id=None):
     """Person details page showing person info, user account, and activity data"""
     # Determine if this is a user profile view or admin view
