@@ -692,15 +692,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Check if it's a URL or ID (contains digits or is a URL)
         if (input.match(/^\d+$/) || input.startsWith('https://thesession.org/')) {
-            // TheSession.org user
-            validateTheSessionUser(input);
+            // TheSession.org entity (member or session)
+            validateTheSessionEntity(input);
         } else {
             // Regular name
             parsePersonName(input);
         }
     }
 
-    function validateTheSessionUser(userInput) {
+    function validateTheSessionEntity(userInput) {
         fetch('/api/validate-thesession-user', {
             method: 'POST',
             headers: {
@@ -721,7 +721,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
-            showStep1Error('Error validating TheSession.org user: ' + error.message);
+            showStep1Error('Error validating TheSession.org entity: ' + error.message);
         });
     }
 

@@ -4918,17 +4918,25 @@ The Ceol.io Session Management System"""
         )
 
 
-def validate_thesession_user():
-    """Validate and get user info from thesession.org"""
+def validate_thesession_entity():
+    """Validate and get info from thesession.org (member or session)"""
     try:
         data = request.get_json()
         user_input = data.get("user_input", "").strip()
 
         # Extract ID from URL or use direct ID
         thesession_id = None
-        if user_input.startswith("https://thesession.org/members/"):
+        if user_input.startswith("https://thesession.org/"):
             try:
-                thesession_id = int(user_input.split("/members/")[-1])
+                # Handle both /members/ and /sessions/ URLs
+                if "/members/" in user_input:
+                    thesession_id = int(user_input.split("/members/")[-1].split("/")[0])
+                elif "/sessions/" in user_input:
+                    thesession_id = int(user_input.split("/sessions/")[-1].split("/")[0])
+                else:
+                    return jsonify(
+                        {"success": False, "message": "Invalid TheSession.org URL format"}
+                    )
             except ValueError:
                 return jsonify(
                     {"success": False, "message": "Invalid TheSession.org URL format"}

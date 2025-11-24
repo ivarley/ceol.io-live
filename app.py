@@ -548,8 +548,8 @@ app.add_url_rule(
 )
 app.add_url_rule(
     "/api/validate-thesession-user",
-    "validate_thesession_user",
-    validate_thesession_user,
+    "validate_thesession_entity",
+    validate_thesession_entity,
     methods=["POST"],
 )
 app.add_url_rule(
