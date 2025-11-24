@@ -2909,14 +2909,14 @@ def get_session_people_list(session_path):
                        array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
                        '{}'::text[]
                    ) as instruments,
-                   COUNT(DISTINCT sip.session_instance_person_id) FILTER (WHERE sip.attendance = 'yes') as attendance_count,
+                   COUNT(DISTINCT sip.session_instance_person_id) FILTER (WHERE sip.attendance = 'yes' AND si.session_id = %s) as attendance_count,
                    sp.is_regular
             FROM session_person sp
             JOIN person p ON sp.person_id = p.person_id
             LEFT JOIN user_account u ON p.person_id = u.person_id
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
             LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
-            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id AND si.session_id = %s
+            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
             WHERE sp.session_id = %s
             GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id, sp.is_regular
             ORDER BY p.first_name, p.last_name
@@ -9677,3 +9677,70 @@ def get_session_tunes_remaining(session_path):
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_login_required
+def join_session(session_path):
+    """
+    Allow a logged-in user to add themselves as a member (non-regular) of a session.
+
+    POST /api/sessions/<session_path>/join
+
+    Returns:
+        JSON response with success status
+    """
+    try:
+        # Get user's person_id
+        user_person_id = getattr(current_user, 'person_id', None)
+        if not user_person_id:
+            return jsonify({"success": False, "message": "User not linked to person"}), 403
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id from path
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Check if already a member
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, user_person_id)
+        )
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Already a member of this session"}), 400
+
+        # Add user as a member (not regular, not admin)
+        cur.execute(
+            """
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
+            VALUES (%s, %s, false, false)
+            """,
+            (session_id, user_person_id)
+        )
+
+        # Save to history
+        save_to_history(
+            cur,
+            "session_person",
+            "INSERT",
+            None,
+            f"user_self_join:{user_person_id}:{session_id}",
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "Successfully joined session"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to join session: {str(e)}"}), 500

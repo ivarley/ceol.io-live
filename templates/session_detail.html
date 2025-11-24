@@ -22,6 +22,19 @@
             background-color: #2a2a2a;
         }
 
+        [data-theme="dark"] .session-join-message {
+            background-color: #1a3a52 !important;
+            border-color: #2a5a7a !important;
+        }
+
+        [data-theme="dark"] .session-join-message p {
+            color: #b3d9ff !important;
+        }
+
+        [data-theme="dark"] .session-join-message a {
+            color: #6db3ff !important;
+        }
+
         /* Tab styles */
         .tabs-container {
             margin-top: 0;
@@ -1373,6 +1386,15 @@
             {% endif %}
         </div>
 
+        {% if is_logged_in and not is_session_member %}
+        <div class="session-join-message" style="background-color: #e7f3ff; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #b3d9ff;">
+            <p style="margin: 0; color: #004085;">
+                Do you attend this session?
+                <a href="#" id="join-session-link" style="color: #0056b3; font-weight: 500; text-decoration: underline; cursor: pointer;">Yes, Add Me</a>
+            </p>
+        </div>
+        {% endif %}
+
         <div id="message-container">
             {% with messages = get_flashed_messages() %}
                 {% if messages %}
@@ -1580,7 +1602,7 @@
                 <div class="people-controls">
                     <input type="text" id="people-search-box" class="people-search-box" placeholder="Search people...">
                     {% if session.session_type != 'festival' %}
-                    <button id="people-filter-btn" class="people-filter-btn" onclick="togglePeopleFilter()">Regulars</button>
+                    <button id="people-filter-btn" class="people-filter-btn" onclick="togglePeopleFilter()">All</button>
                     {% endif %}
                     <button class="people-add-btn" onclick="openAddPersonModal()">Add</button>
                 </div>
@@ -2853,6 +2875,46 @@
 
     // Show initial flash messages and setup event listeners when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
+        // Setup join session link
+        const joinSessionLink = document.getElementById('join-session-link');
+        if (joinSessionLink) {
+            joinSessionLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                const sessionPath = '{{ session.path }}';
+
+                // Disable the link to prevent double-clicks
+                joinSessionLink.style.pointerEvents = 'none';
+                joinSessionLink.textContent = 'Joining...';
+
+                fetch(`/api/sessions/${sessionPath}/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        showMessage('You have been added to this session!', 'success');
+                        // Reload the page to show the People tab (content needs to be server-rendered)
+                        setTimeout(() => {
+                            window.location.href = window.location.pathname.replace(/\/(tunes|logs)$/, '') + '/people';
+                        }, 1500);
+                    } else {
+                        showMessage(data.message || 'Failed to join session', 'error');
+                        joinSessionLink.style.pointerEvents = '';
+                        joinSessionLink.textContent = 'Yes, Add Me';
+                    }
+                })
+                .catch(error => {
+                    showMessage('An error occurred. Please try again.', 'error');
+                    joinSessionLink.style.pointerEvents = '';
+                    joinSessionLink.textContent = 'Yes, Add Me';
+                });
+            });
+        }
+
         // Setup tab switching
         document.querySelectorAll('.tab-button').forEach(button => {
             button.addEventListener('click', function() {
@@ -3005,8 +3067,8 @@
     // People tab functionality
     let peopleData = [];
     let personModalShowTime = 0;
-    // Default to 'all' for festivals, 'regulars' for regular sessions
-    let currentPeopleFilter = sessionType === 'festival' ? 'all' : 'regulars';
+    // Default to 'all' for all session types
+    let currentPeopleFilter = 'all';
     const currentUserId = {{ current_user.person_id if current_user.is_authenticated else 'null' }};
 
     function initializePeopleTab() {
