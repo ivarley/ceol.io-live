@@ -1700,7 +1700,7 @@
 
                         <div class="add-person-form-group">
                             <label for="add-person-thesession">TheSession.org ID or URL (optional)</label>
-                            <input type="text" id="add-person-thesession" placeholder="e.g. 12345 or https://thesession.org/members/12345">
+                            <input type="text" id="add-person-thesession" placeholder="e.g. 12345 or thesession.org URL">
                         </div>
 
                         {% if session.session_type != 'festival' %}
@@ -3278,10 +3278,10 @@
             return parseInt(input);
         }
 
-        // Try to extract from URL
-        const urlMatch = input.match(/thesession\.org\/members\/(\d+)/);
+        // Try to extract from URL - handle both /members/ and /sessions/
+        const urlMatch = input.match(/thesession\.org\/(members|sessions)\/(\d+)/);
         if (urlMatch) {
-            return parseInt(urlMatch[1]);
+            return parseInt(urlMatch[2]);
         }
 
         return null;

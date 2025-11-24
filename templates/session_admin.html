@@ -818,16 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
             hideAddSessionModal();
         }
     });
-
-    // Close modal when clicking outside
-    const addSessionModal = document.getElementById('add-session-instance-modal');
-    if (addSessionModal) {
-        addSessionModal.addEventListener('click', (event) => {
-            if (event.target === event.currentTarget) {
-                hideAddSessionModal();
-            }
-        });
-    }
 });
 
 function loadPlayersContent() {
@@ -1131,7 +1121,8 @@ async function showAddSessionModal() {
 
     // Show modal using ModalManager
     ModalManager.showModal('add-session-instance-modal', {
-        autoFocus: false
+        autoFocus: false,
+        closeOnOutsideClick: false
     });
 
     // Fetch the next suggested session instance from the API
