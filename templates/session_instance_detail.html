@@ -872,13 +872,18 @@
                 padding-top: 0px;
                 margin-top: -12px; /* Pull up to eliminate gap */
                 position: relative;
-                z-index: 2; /* Set container on top */
+                z-index: var(--z-component-1, 1); /* Set container below the tab */
                 background-color: var(--bg-color, white); /* Ensure opaque background */
+            }
+
+            /* Wrapper needs relative positioning for absolute popout */
+            .tune-set-wrapper {
+                position: relative;
             }
 
             .tune-type-label {
                 position: relative;
-                z-index: 1; /* Tab behind the set container */
+                z-index: var(--z-component-2, 2); /* Tab above set so it's clickable */
                 top: -2px; /* Move up 2px */
                 left: 6px; /* Move right 6px */
                 padding-top: 0px; /* Adjust padding for text position */
@@ -906,6 +911,67 @@
                 border-bottom-left-radius: 8px;
                 box-shadow: -4px 0 0 0 #4a4a4a;
             }
+        }
+
+        /* Set Popout Styles */
+        .set-popout {
+            position: absolute;
+            z-index: var(--z-component-elevated, 10); /* Float above tune pills */
+            animation: popout-slide-in 0.2s ease-out;
+            /* Shadow on all sides but clipped on left to avoid showing over endcap */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            clip-path: inset(-20px -20px -20px 0);
+        }
+
+        @keyframes popout-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .set-popout-content {
+            line-height: 1.5;
+        }
+
+        .set-popout-content p {
+            margin: 0 0 8px 0;
+        }
+
+        .set-popout-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .set-popout-content ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+        }
+
+        .set-popout-content li {
+            margin-bottom: 4px;
+        }
+
+        /* Make the type label indicate it's clickable */
+        .tune-type-label:hover {
+            filter: brightness(1.2);
+        }
+
+        .tune-type-label:active {
+            filter: brightness(0.9);
+        }
+
+        /* Disable hover effect when popout is active */
+        .tune-type-label.popout-active:hover {
+            filter: none;
+        }
+
+        /* When popout is active, put the label above the popout to cover any shadow/seam */
+        .tune-type-label.popout-active {
+            z-index: calc(var(--z-component-elevated, 10) + 1);
         }
 
         /* On Now badge styling */

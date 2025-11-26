@@ -260,6 +260,23 @@ export class PillRenderer {
 
         typeLabel.textContent = labelText;
 
+        // Make the label clickable to toggle the set popout
+        typeLabel.style.cursor = 'pointer';
+        typeLabel.dataset.clickable = 'true'; // Debug marker
+        typeLabel.addEventListener('click', (e: MouseEvent) => {
+            console.log('Type label clicked!', typeLabel.textContent);
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleSetPopout(typeLabel, tuneSet);
+        });
+        // Also add touch event for mobile
+        typeLabel.addEventListener('touchend', (e: TouchEvent) => {
+            console.log('Type label touched!', typeLabel.textContent);
+            e.preventDefault();
+            e.stopPropagation();
+            this.toggleSetPopout(typeLabel, tuneSet);
+        });
+
         // Detect mobile vs desktop
         const isMobile = window.innerWidth <= 768;
 
@@ -314,6 +331,124 @@ export class PillRenderer {
         }
 
         return typeLabel;
+    }
+
+    static toggleSetPopout(typeLabel: HTMLElement, tuneSet: TuneSet): void {
+        const isMobile = window.innerWidth <= 768;
+
+        // Find the associated tune-set element
+        let tuneSetElement: HTMLElement | null = null;
+        let wrapper: HTMLElement | null = null;
+
+        if (isMobile) {
+            // On mobile, the label is in the wrapper, tune-set is a sibling
+            wrapper = typeLabel.parentElement;
+            if (wrapper && wrapper.classList.contains('tune-set-wrapper')) {
+                tuneSetElement = wrapper.querySelector('.tune-set') as HTMLElement;
+            }
+        } else {
+            // On desktop, the label is inside the tune-set
+            tuneSetElement = typeLabel.closest('.tune-set') as HTMLElement;
+        }
+
+        if (!tuneSetElement) {
+            console.error('Could not find tune-set element');
+            return;
+        }
+
+        // Check if popout already exists
+        const existingPopout = isMobile
+            ? wrapper?.querySelector('.set-popout')
+            : tuneSetElement.querySelector('.set-popout');
+
+        // Close all existing popouts first
+        const allPopouts = document.querySelectorAll('.set-popout');
+        const allActiveLabels = document.querySelectorAll('.tune-type-label.popout-active');
+        allPopouts.forEach(p => p.remove());
+        allActiveLabels.forEach(label => {
+            (label as HTMLElement).style.backgroundColor = '#4a4a4a';
+            label.classList.remove('popout-active');
+        });
+
+        // If we clicked on the same label that was open, just close it (already done above)
+        if (existingPopout) {
+            return;
+        }
+
+        // Change the label to blue tint to indicate active state
+        typeLabel.style.backgroundColor = '#2a4a6a';
+        typeLabel.classList.add('popout-active');
+
+        // Create the popout element
+        const popout = document.createElement('div');
+        popout.className = 'set-popout';
+
+        // Sample content for prototype
+        popout.innerHTML = `
+            <div class="set-popout-content">
+                <p><strong>Set Options</strong></p>
+                <p>This is a prototype popout for the "${typeLabel.textContent}" set.</p>
+                <p>Number of tunes: ${tuneSet.length}</p>
+                <p>Future features could include:</p>
+                <ul>
+                    <li>Add tune to this set</li>
+                    <li>Delete entire set</li>
+                    <li>Reorder tunes</li>
+                    <li>Set metadata</li>
+                </ul>
+            </div>
+        `;
+
+        if (isMobile) {
+            // Mobile: Absolute positioned panel that appears as extension of the tab
+            // Get the tab's position to align the popout
+            const tabRect = typeLabel.getBoundingClientRect();
+            const wrapperRect = wrapper!.getBoundingClientRect();
+
+            popout.style.cssText = `
+                position: absolute;
+                top: ${tabRect.bottom - wrapperRect.top}px;
+                left: 6px;
+                width: 92%;
+                background-color: #2a4a6a;
+                color: white;
+                border-radius: 0 8px 8px 8px;
+                padding: 12px 16px;
+                box-sizing: border-box;
+                font-size: 14px;
+            `;
+
+            // Insert into the wrapper
+            if (wrapper) {
+                wrapper.appendChild(popout);
+            }
+        } else {
+            // Desktop: Absolute positioned panel that hovers over the tune-set
+            // Slight overlap (-2px) so label covers the seam (label has higher z-index)
+            const labelRect = typeLabel.getBoundingClientRect();
+            const setRect = tuneSetElement.getBoundingClientRect();
+            const leftOffset = labelRect.right - setRect.left - 2;
+
+            popout.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: ${leftOffset}px;
+                right: 0;
+                background-color: #2a4a6a;
+                color: white;
+                border-radius: 0 8px 8px 0;
+                padding: 12px 16px;
+                box-sizing: border-box;
+                font-size: 14px;
+                min-height: 100%;
+            `;
+
+            // Make the tune-set position relative for absolute positioning
+            tuneSetElement.style.position = 'relative';
+
+            // Append the popout to the tune-set
+            tuneSetElement.appendChild(popout);
+        }
     }
 
     static createTuneSetElement(tuneSet: TuneSet, setIndex: number): HTMLElement {
