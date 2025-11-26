@@ -4362,6 +4362,71 @@ def get_person_tunes_ajax(person_id):
         )
 
 
+def get_person_tunes_stats(person_id):
+    """Get tune statistics for a person (total counts, by status, by type)"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get total count and counts by learn_status
+        cur.execute(
+            """
+            SELECT
+                COUNT(*) as total_tunes,
+                COUNT(CASE WHEN learn_status = 'learned' THEN 1 END) as learned,
+                COUNT(CASE WHEN learn_status = 'learning' THEN 1 END) as learning,
+                COUNT(CASE WHEN learn_status = 'bookmarked' THEN 1 END) as bookmarked
+            FROM person_tune
+            WHERE person_id = %s
+            """,
+            (person_id,),
+        )
+        row = cur.fetchone()
+        total_tunes, learned, learning, bookmarked = row if row else (0, 0, 0, 0)
+
+        # Get counts by tune type
+        cur.execute(
+            """
+            SELECT
+                COALESCE(t.tune_type, 'Unknown') as tune_type,
+                COUNT(*) as count
+            FROM person_tune pt
+            JOIN tune t ON pt.tune_id = t.tune_id
+            WHERE pt.person_id = %s
+            GROUP BY t.tune_type
+            ORDER BY count DESC
+            """,
+            (person_id,),
+        )
+        by_type = {}
+        for type_row in cur.fetchall():
+            by_type[type_row[0] or 'Unknown'] = type_row[1]
+
+        cur.close()
+        conn.close()
+
+        return jsonify(
+            {
+                "success": True,
+                "stats": {
+                    "total_tunes": total_tunes or 0,
+                    "learned": learned or 0,
+                    "learning": learning or 0,
+                    "bookmarked": bookmarked or 0,
+                    "by_type": by_type,
+                },
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {"success": False, "error": f"Failed to get tune statistics: {str(e)}"}
+            ),
+            500,
+        )
+
+
 def check_username_availability():
     """Check if a username is available"""
     try:
