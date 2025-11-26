@@ -371,27 +371,25 @@
                                         <option value="regular">Regular Sessions Only</option>
                                     </select>
                                 </div>
-                                <div class="table-responsive">
-                                    <table class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>Session Name</th>
-                                                <th>Location</th>
-                                                <th>Regular Schedule</th>
-                                                <th>Role</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for session in sessions %}
-                                            <tr>
-                                                <td>{{ session.session_name }}</td>
-                                                <td>{{ session.location }}</td>
-                                                <td>{{ session.regular_schedule or 'Not specified' }}</td>
-                                                <td>{{ session.role or 'Member' }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
+                                <div class="sessions-card-list">
+                                    {% for session in sessions %}
+                                    <div class="session-card card mb-2" data-session-path="{{ session.session_path }}">
+                                        <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
+                                            <div class="session-info">
+                                                <a href="/{{ session.session_path }}" class="session-title h6 mb-0 d-block text-decoration-none">{{ session.session_name }}</a>
+                                                <small class="text-muted">{{ session.location }}{% if session.role %} &middot; {{ session.role }}{% endif %}</small>
+                                            </div>
+                                            {% if is_user_profile %}
+                                            <button type="button" class="btn btn-link text-danger p-0 leave-session-btn"
+                                                    data-session-path="{{ session.session_path }}"
+                                                    data-session-name="{{ session.session_name }}"
+                                                    title="Leave this session">
+                                                <span class="leave-x">&times;</span>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
                                 </div>
                                 {% if is_user_profile %}
                                 <div class="mt-3">
@@ -960,18 +958,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function filterSessions() {
         const filterValue = sessionFilter.value;
-        const sessionRows = document.querySelectorAll('#sessions tbody tr');
-        
-        sessionRows.forEach(row => {
-            const roleCell = row.querySelector('td:nth-child(4)'); // Role column
-            if (roleCell) {
-                const role = roleCell.textContent.trim();
+        const sessionCards = document.querySelectorAll('.session-card');
+
+        sessionCards.forEach(card => {
+            const infoText = card.querySelector('.text-muted');
+            if (infoText) {
+                const text = infoText.textContent.trim();
+                const isRegular = text.includes('Regular');
                 if (filterValue === 'all') {
-                    row.style.display = '';
-                } else if (filterValue === 'regular' && role === 'Regular') {
-                    row.style.display = '';
+                    card.style.display = '';
+                } else if (filterValue === 'regular' && isRegular) {
+                    card.style.display = '';
                 } else if (filterValue === 'regular') {
-                    row.style.display = 'none';
+                    card.style.display = 'none';
                 }
             }
         });
@@ -1347,6 +1346,62 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Flash messages are now handled by the global showMessage() function from base.html
+
+    // Leave session functionality
+    document.querySelectorAll('.leave-session-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const sessionPath = this.dataset.sessionPath;
+            const sessionName = this.dataset.sessionName;
+
+            if (!confirm(`Are you sure you want to leave "${sessionName}"?\n\nThis will remove you from the session's member list. Your attendance history will be preserved.`)) {
+                return;
+            }
+
+            fetch(`/api/sessions/${sessionPath}/leave`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the card from the DOM
+                        const card = document.querySelector(`.session-card[data-session-path="${sessionPath}"]`);
+                        if (card) {
+                            card.remove();
+                        }
+                        showMessage(data.message, 'success');
+
+                        // Check if there are no more sessions
+                        const remainingCards = document.querySelectorAll('.session-card');
+                        if (remainingCards.length === 0) {
+                            const cardList = document.querySelector('.sessions-card-list');
+                            if (cardList) {
+                                cardList.innerHTML = '';
+                            }
+                            // Show the "add first session" message
+                            const sessionsTab = document.getElementById('sessions');
+                            if (sessionsTab) {
+                                const mtDiv = sessionsTab.querySelector('.mt-3');
+                                if (mtDiv) {
+                                    mtDiv.innerHTML = `
+                                        <div class="alert alert-info" role="alert">
+                                            <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">add your first session</a>
+                                        </div>`;
+                                }
+                            }
+                        }
+                    } else {
+                        showMessage('Error: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showMessage('Error leaving session: ' + error.message, 'error');
+                });
+        });
+    });
 });
 </script>
 
@@ -1390,6 +1445,42 @@ document.addEventListener('DOMContentLoaded', function() {
     font-style: italic;
     font-weight: normal;
     margin-left: 0.5rem;
+}
+
+/* Session cards in profile */
+.sessions-card-list .session-card {
+    margin-bottom: 0.5rem;
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+}
+
+.sessions-card-list .session-card .card-body {
+    padding: 0.75rem 1rem;
+}
+
+.sessions-card-list .session-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.sessions-card-list .session-title:hover {
+    color: var(--primary);
+}
+
+.sessions-card-list .leave-session-btn {
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.sessions-card-list .leave-session-btn:hover {
+    opacity: 1;
+}
+
+.sessions-card-list .leave-x {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
 }
 
 .nav-tabs {

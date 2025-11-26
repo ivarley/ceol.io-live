@@ -5564,6 +5564,58 @@ def delete_session_player(session_path, person_id):
 
 
 @login_required
+def leave_session_membership(session_path):
+    """Allow user to remove themselves from a session membership.
+
+    This only removes them from session_person (membership), preserving
+    all historical data like attendance records in session_instance_person.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Get session ID
+        cur.execute("SELECT session_id, name FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id, session_name = session_result
+        person_id = current_user.person_id
+
+        # Check if user is actually a member of this session
+        cur.execute(
+            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id)
+        )
+        if not cur.fetchone():
+            return jsonify({"success": False, "message": "You are not a member of this session"}), 404
+
+        # Remove from session_person table only (preserves attendance history)
+        cur.execute(
+            "DELETE FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id)
+        )
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"You have been removed from {session_name}"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+
+@login_required
 def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin
