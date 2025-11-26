@@ -3,6 +3,7 @@
 {% block title %}Admin - {{ session.name }}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/session_instance_modal.css') }}">
 {% endblock %}
 
