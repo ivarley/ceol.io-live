@@ -332,7 +332,8 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                         sit.tune_id,
                         COALESCE(sit.name, st.alias, t.name) AS tune_name,
                         COALESCE(sit.setting_override, st.setting_id) AS setting,
-                        t.tune_type
+                        t.tune_type,
+                        sit.started_by_person_id
                     FROM session_instance_tune sit
                     LEFT JOIN tune t ON sit.tune_id = t.tune_id
                     LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -347,6 +348,46 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 )
 
                 tunes = cur.fetchall()
+
+                # Get attendees for the started-by dropdown
+                session_id = session_instance[8]
+                session_instance_id = session_instance[3]
+                cur.execute("""
+                    SELECT DISTINCT
+                        p.person_id,
+                        p.first_name,
+                        p.last_name
+                    FROM person p
+                    JOIN session_instance_person sip ON p.person_id = sip.person_id
+                    WHERE sip.session_instance_id = %s
+                    ORDER BY p.first_name, p.last_name
+                """, (session_instance_id,))
+
+                attendees_data = cur.fetchall()
+                attendees_list = []
+                for row in attendees_data:
+                    person_id, first_name, last_name = row
+                    display_name = f"{first_name} {last_name[0]}" if last_name else first_name
+                    attendees_list.append({
+                        'person_id': person_id,
+                        'display_name': display_name
+                    })
+
+                # Handle display name disambiguation
+                display_name_counts = {}
+                for attendee in attendees_list:
+                    dn = attendee['display_name']
+                    if dn in display_name_counts:
+                        display_name_counts[dn].append(attendee)
+                    else:
+                        display_name_counts[dn] = [attendee]
+
+                for dn, attendees_with_name in display_name_counts.items():
+                    if len(attendees_with_name) > 1:
+                        attendees_with_name.sort(key=lambda x: x['person_id'])
+                        for attendee in attendees_with_name:
+                            attendee['display_name'] = f"{dn} (#{attendee['person_id']})"
+
                 cur.close()
                 conn.close()
 
@@ -389,6 +430,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     tune_sets=sets,
                     is_session_admin=is_session_admin,
                     is_session_regular=is_regular,
+                    attendees=attendees_list,
                 )
             else:
                 cur.close()

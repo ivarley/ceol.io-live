@@ -1,4 +1,5 @@
 from flask import request, jsonify, session, send_file
+from collections import Counter
 import requests
 import re
 import os
@@ -6085,7 +6086,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         # Get all existing tunes for this session instance
         cur.execute(
             """
-            SELECT session_instance_tune_id, order_number, tune_id, name, continues_set
+            SELECT session_instance_tune_id, order_number, tune_id, name, continues_set, started_by_person_id
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_number
@@ -6101,6 +6102,20 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         sequence_num = 1
 
         for set_idx, tune_set in enumerate(tune_sets):
+            # First pass: collect all started_by_person_id values in this set
+            set_started_by_values = []
+            for tune_data in tune_set:
+                started_by = tune_data.get("started_by_person_id")
+                if started_by:
+                    set_started_by_values.append(started_by)
+
+            # Calculate majority started_by for propagation
+            # (most common value, or None if no values exist)
+            majority_started_by = None
+            if set_started_by_values:
+                value_counts = Counter(set_started_by_values)
+                majority_started_by = value_counts.most_common(1)[0][0]
+
             for tune_idx, tune_data in enumerate(tune_set):
                 # Determine continues_set: false for first tune in set, true otherwise
                 continues_set = tune_idx > 0
@@ -6108,6 +6123,12 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 # Extract tune data
                 tune_id = tune_data.get("tune_id")
                 tune_name = tune_data.get("name") or tune_data.get("tune_name")
+
+                # Extract started_by_person_id, propagate if not set
+                started_by_person_id = tune_data.get("started_by_person_id")
+                if not started_by_person_id and majority_started_by:
+                    # Propagate majority value to tunes without a value
+                    started_by_person_id = majority_started_by
 
                 # Ensure we have either tune_id or name (required by database constraint)
                 if not tune_id and not tune_name:
@@ -6126,6 +6147,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         "tune_id": tune_id,
                         "name": tune_name,
                         "continues_set": continues_set,
+                        "started_by_person_id": started_by_person_id,
                     }
                 )
                 sequence_num += 1
@@ -6241,6 +6263,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         existing[2] != new_tune["tune_id"]
                         or existing[3] != new_tune["name"]
                         or existing[4] != new_tune["continues_set"]
+                        or existing[5] != new_tune["started_by_person_id"]
                     ):
                         # Update existing record
                         save_to_history(
@@ -6250,13 +6273,14 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         cur.execute(
                             """
                             UPDATE session_instance_tune
-                            SET tune_id = %s, name = %s, continues_set = %s, last_modified_date = NOW()
+                            SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s, last_modified_date = NOW()
                             WHERE session_instance_tune_id = %s
                         """,
                             (
                                 new_tune["tune_id"],
                                 new_tune["name"],
                                 new_tune["continues_set"],
+                                new_tune["started_by_person_id"],
                                 existing[0],
                             ),
                         )
@@ -6266,8 +6290,8 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     cur.execute(
                         """
                         INSERT INTO session_instance_tune
-                        (session_instance_id, order_number, tune_id, name, continues_set, created_date, last_modified_date)
-                        VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                        (session_instance_id, order_number, tune_id, name, continues_set, started_by_person_id, created_date, last_modified_date)
+                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
                         RETURNING session_instance_tune_id
                     """,
                         (
@@ -6276,6 +6300,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                             new_tune["tune_id"],
                             new_tune["name"],
                             new_tune["continues_set"],
+                            new_tune["started_by_person_id"],
                         ),
                     )
 
@@ -9225,6 +9250,117 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             conn.close()
         return jsonify(
             {"success": False, "message": f"Error updating tune details: {str(e)}"}
+        ), 500
+
+
+@api_login_required
+def update_set_started_by(session_instance_id, set_index):
+    """
+    Update the started_by_person_id for all tunes in a set.
+
+    PUT /api/session_instance/<session_instance_id>/sets/<set_index>/started_by
+
+    Request body:
+    {
+        "person_id": int or null
+    }
+    """
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        person_id = data.get("person_id")
+        # Allow null/None to clear the value
+        if person_id == "":
+            person_id = None
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Verify session instance exists and get session_id
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,)
+        )
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+
+        session_id = session_result[0]
+
+        # Check if user has permission to edit this session
+        if not current_user.is_system_admin:
+            cur.execute(
+                """
+                SELECT is_admin FROM session_person
+                WHERE session_id = %s AND person_id = %s
+            """,
+                (session_id, current_user.person_id),
+            )
+            permission = cur.fetchone()
+            if not permission or not permission[0]:
+                return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+        # Get all tunes for this session instance ordered by order_number
+        cur.execute(
+            """
+            SELECT session_instance_tune_id, order_number, continues_set
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_number
+        """,
+            (session_instance_id,),
+        )
+        tunes = cur.fetchall()
+
+        if not tunes:
+            return jsonify({"success": False, "message": "No tunes found"}), 404
+
+        # Group tunes into sets (same logic as frontend)
+        sets = []
+        current_set = []
+        for tune in tunes:
+            if not tune[2] and current_set:  # continues_set is False and we have a current set
+                sets.append(current_set)
+                current_set = []
+            current_set.append(tune)
+        if current_set:
+            sets.append(current_set)
+
+        # Validate set_index
+        if set_index < 0 or set_index >= len(sets):
+            return jsonify({"success": False, "message": f"Invalid set index: {set_index}"}), 400
+
+        # Get the tune IDs in the specified set
+        target_set = sets[set_index]
+        tune_ids = [tune[0] for tune in target_set]  # session_instance_tune_id
+
+        # Update all tunes in the set
+        cur.execute(
+            """
+            UPDATE session_instance_tune
+            SET started_by_person_id = %s, last_modified_date = NOW()
+            WHERE session_instance_tune_id = ANY(%s)
+        """,
+            (person_id, tune_ids),
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"Updated {len(tune_ids)} tunes in set {set_index}",
+            "updated_count": len(tune_ids)
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        return jsonify(
+            {"success": False, "message": f"Error updating set started_by: {str(e)}"}
         ), 500
 
 

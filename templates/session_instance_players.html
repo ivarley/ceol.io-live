@@ -135,6 +135,18 @@ window.sessionConfig = {
         is_cancelled: {{ 'true' if session_instance.is_cancelled else 'false' }}
     }
 };
+
+// Check for toast message from set popout redirect
+document.addEventListener('DOMContentLoaded', function() {
+    const toastMessage = sessionStorage.getItem('playersPageToast');
+    if (toastMessage) {
+        sessionStorage.removeItem('playersPageToast');
+        // Use the showMessage function from base.html
+        if (typeof showMessage === 'function') {
+            showMessage(toastMessage, 'info');
+        }
+    }
+});
 </script>
 <script src="{{ url_for('static', filename='js/dist/attendance.js') }}"></script>
 {% include 'modals/person_edit.html' %}

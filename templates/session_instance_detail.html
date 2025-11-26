@@ -918,9 +918,13 @@
             position: absolute;
             z-index: var(--z-component-elevated, 10); /* Float above tune pills */
             animation: popout-slide-in 0.2s ease-out;
-            /* Shadow on all sides but clipped on left to avoid showing over endcap */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            clip-path: inset(-20px -20px -20px 0);
+            /* Shadow only on right and bottom to avoid showing over endcap */
+            box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
+        }
+
+        .set-popout * {
+            pointer-events: auto;
         }
 
         @keyframes popout-slide-in {
@@ -938,21 +942,53 @@
             line-height: 1.5;
         }
 
-        .set-popout-content p {
-            margin: 0 0 8px 0;
+        .set-popout-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
-        .set-popout-content p:last-child {
+        .set-popout-row:last-child {
             margin-bottom: 0;
         }
 
-        .set-popout-content ul {
-            margin: 8px 0 0 0;
-            padding-left: 20px;
+        .set-popout-row label {
+            font-weight: 500;
+            white-space: nowrap;
+            min-width: 80px;
         }
 
-        .set-popout-content li {
-            margin-bottom: 4px;
+        .set-popout-row select {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            max-width: 200px;
+            pointer-events: auto;
+            -webkit-appearance: menulist;
+            appearance: menulist;
+            touch-action: manipulation;
+            position: relative;
+            z-index: 9999;
+        }
+
+        .set-popout-row select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.6);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .set-popout-row select option {
+            background-color: #2a4a6a;
+            color: white;
+        }
+
+        .set-popout-row .set-logged-by {
+            color: rgba(255, 255, 255, 0.8);
         }
 
         /* Make the type label indicate it's clickable */
@@ -1524,8 +1560,15 @@ window.sessionConfig = {
     initialTuneSets: {{ tune_sets|tojson }},
     isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
     userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }},
-    userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }}
+    userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }},
+    attendees: {{ attendees|tojson }}
 };
+
+// Store attendees in localStorage for the started-by dropdown
+localStorage.setItem(
+    `session_attendees_${window.sessionConfig.sessionInstanceId}`,
+    JSON.stringify(window.sessionConfig.attendees)
+);
 
 window.enterEditMode = function() {
     window.editorMode = 'edit';

@@ -12,6 +12,7 @@ export interface TunePill {
     setting: string;
     tuneType: string;
     state: 'linked' | 'unlinked';
+    startedByPersonId: number | null;
 }
 
 export interface TuneSet extends Array<TunePill> {}
@@ -25,7 +26,8 @@ export interface TunePosition {
 }
 
 // Raw tune data from backend (array format)
-export type RawTune = [number, boolean, number | null, string, string, string];
+// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId]
+export type RawTune = [number, boolean, number | null, string, string, string, number | null];
 export type RawTuneSet = RawTune[];
 export type RawTuneSets = RawTuneSet[];
 
@@ -131,7 +133,7 @@ export class StateManager {
         tuneSets.forEach(tuneSet => {
             const setData: TuneSet = [];
             tuneSet.forEach(tune => {
-                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType] = tune;
+                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId] = tune;
                 setData.push({
                     id: this.generateId(),
                     orderNumber: orderNumber,
@@ -139,7 +141,8 @@ export class StateManager {
                     tuneName: tuneName,
                     setting: setting,
                     tuneType: tuneType,
-                    state: tuneId ? 'linked' : 'unlinked'
+                    state: tuneId ? 'linked' : 'unlinked',
+                    startedByPersonId: startedByPersonId || null
                 });
             });
             if (setData.length > 0) {

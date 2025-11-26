@@ -14,6 +14,7 @@ export interface SaveTune {
     tune_id: number | null;
     name: string | null;
     tune_name: string | null;
+    started_by_person_id: number | null;
 }
 
 export interface UserConfig {
@@ -262,11 +263,12 @@ export class AutoSaveManager {
         
         // Convert tunePillsData to the format expected by the API
         const tunePillsData = this.getTunePillsData();
-        const tuneSets = tunePillsData.map(set => 
+        const tuneSets = tunePillsData.map(set =>
             set.map(pill => ({
                 tune_id: pill.tuneId || null,
                 name: pill.tuneName || null,
-                tune_name: pill.tuneName || null
+                tune_name: pill.tuneName || null,
+                started_by_person_id: pill.startedByPersonId || null
             } as SaveTune))
         );
         

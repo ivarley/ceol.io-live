@@ -342,6 +342,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/sets/<int:set_index>/started_by",
+    "update_set_started_by",
+    update_set_started_by,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/update",
     "update_session_instance_ajax",
     update_session_instance_ajax,

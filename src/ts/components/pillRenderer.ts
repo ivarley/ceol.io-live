@@ -262,16 +262,13 @@ export class PillRenderer {
 
         // Make the label clickable to toggle the set popout
         typeLabel.style.cursor = 'pointer';
-        typeLabel.dataset.clickable = 'true'; // Debug marker
         typeLabel.addEventListener('click', (e: MouseEvent) => {
-            console.log('Type label clicked!', typeLabel.textContent);
             e.preventDefault();
             e.stopPropagation();
             this.toggleSetPopout(typeLabel, tuneSet);
         });
         // Also add touch event for mobile
         typeLabel.addEventListener('touchend', (e: TouchEvent) => {
-            console.log('Type label touched!', typeLabel.textContent);
             e.preventDefault();
             e.stopPropagation();
             this.toggleSetPopout(typeLabel, tuneSet);
@@ -333,6 +330,92 @@ export class PillRenderer {
         return typeLabel;
     }
 
+    static createStartedByName(tuneSet: TuneSet): HTMLElement | null {
+        // Calculate the majority startedByPersonId from the tune set
+        const counts: Map<number, number> = new Map();
+        for (const tune of tuneSet) {
+            if (tune.startedByPersonId !== null && tune.startedByPersonId !== undefined) {
+                counts.set(tune.startedByPersonId, (counts.get(tune.startedByPersonId) || 0) + 1);
+            }
+        }
+
+        if (counts.size === 0) {
+            return null;
+        }
+
+        // Find the majority person ID
+        let majorityPersonId: number | null = null;
+        let maxCount = 0;
+        for (const [personId, count] of counts) {
+            if (count > maxCount) {
+                maxCount = count;
+                majorityPersonId = personId;
+            }
+        }
+
+        if (majorityPersonId === null) {
+            return null;
+        }
+
+        // Look up the person's name from the cached attendees
+        const sessionInstanceId = (window as any).sessionConfig?.sessionInstanceId;
+        if (!sessionInstanceId) {
+            return null;
+        }
+
+        const cacheKey = `session_attendees_${sessionInstanceId}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (!cached) {
+            return null;
+        }
+
+        let personName: string | null = null;
+        try {
+            const attendees = JSON.parse(cached);
+            const person = attendees.find((a: any) => a.person_id === majorityPersonId);
+            if (person) {
+                personName = person.display_name;
+            }
+        } catch (e) {
+            return null;
+        }
+
+        if (!personName) {
+            return null;
+        }
+
+        // Create the label element
+        const isMobile = window.innerWidth <= 768;
+        const label = document.createElement('span');
+        label.className = 'started-by-name';
+        label.textContent = personName;
+        label.style.fontStyle = 'italic';
+        label.style.opacity = '0.6';
+        label.style.whiteSpace = 'nowrap';
+        label.style.overflow = 'hidden';
+        label.style.textOverflow = 'ellipsis';
+
+        if (isMobile) {
+            label.style.fontSize = '0.65em';
+            label.style.maxWidth = '150px';
+            label.style.lineHeight = '1';
+            label.style.position = 'absolute';
+            label.style.right = '8px';
+            label.style.top = '2px';
+            label.style.padding = '2px 4px';
+        } else {
+            label.style.fontSize = '0.75em';
+            label.style.maxWidth = '150px';
+            label.style.position = 'absolute';
+            label.style.right = '8px';
+            label.style.top = '50%';
+            label.style.transform = 'translateY(-50%)';
+            label.style.padding = '2px 4px';
+        }
+
+        return label;
+    }
+
     static toggleSetPopout(typeLabel: HTMLElement, tuneSet: TuneSet): void {
         const isMobile = window.innerWidth <= 768;
 
@@ -356,10 +439,8 @@ export class PillRenderer {
             return;
         }
 
-        // Check if popout already exists
-        const existingPopout = isMobile
-            ? wrapper?.querySelector('.set-popout')
-            : tuneSetElement.querySelector('.set-popout');
+        // Check if popout already exists (both mobile and desktop now use _popout reference)
+        const existingPopout = (typeLabel as any)._popout as HTMLElement | null;
 
         // Close all existing popouts first
         const allPopouts = document.querySelectorAll('.set-popout');
@@ -368,6 +449,8 @@ export class PillRenderer {
         allActiveLabels.forEach(label => {
             (label as HTMLElement).style.backgroundColor = '#4a4a4a';
             label.classList.remove('popout-active');
+            // Clear the popout reference
+            (label as any)._popout = null;
         });
 
         // If we clicked on the same label that was open, just close it (already done above)
@@ -382,72 +465,270 @@ export class PillRenderer {
         // Create the popout element
         const popout = document.createElement('div');
         popout.className = 'set-popout';
+        // Prevent contentEditable from affecting form elements inside
+        popout.contentEditable = 'false';
 
-        // Sample content for prototype
+        // Stop clicks on the popout background from propagating, but allow child elements to work normally
+        popout.addEventListener('click', (e) => {
+            if (e.target === popout) {
+                e.stopPropagation();
+            }
+        });
+
+        // Get the session instance ID from the page config
+        const sessionInstanceId = (window as any).sessionConfig?.sessionInstanceId;
+
+        // Calculate the majority startedByPersonId from the tune set
+        const getStartedByMajority = (): number | null => {
+            const counts: Map<number, number> = new Map();
+            let firstPersonId: number | null = null;
+
+            for (const tune of tuneSet) {
+                if (tune.startedByPersonId !== null && tune.startedByPersonId !== undefined) {
+                    if (firstPersonId === null) {
+                        firstPersonId = tune.startedByPersonId;
+                    }
+                    counts.set(tune.startedByPersonId, (counts.get(tune.startedByPersonId) || 0) + 1);
+                }
+            }
+
+            if (counts.size === 0) return null;
+
+            // Find the majority (most frequent)
+            let maxCount = 0;
+            let maxPersonId: number | null = null;
+            for (const [personId, count] of counts) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    maxPersonId = personId;
+                }
+            }
+
+            // If there's no clear majority (tie), return the first one found
+            const maxCountOccurrences = Array.from(counts.values()).filter(c => c === maxCount).length;
+            if (maxCountOccurrences > 1) {
+                return firstPersonId;
+            }
+
+            return maxPersonId;
+        };
+
+        const currentStartedBy = getStartedByMajority();
+
+        // Find the set index in the state
+        const stateManager = (window as any).StateManager;
+        let setIndex = -1;
+        if (stateManager) {
+            const allSets = stateManager.getTunePillsData();
+            for (let i = 0; i < allSets.length; i++) {
+                if (allSets[i] === tuneSet || (tuneSet.length > 0 && allSets[i].length > 0 && allSets[i][0]?.id === tuneSet[0]?.id)) {
+                    setIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // Initial loading state
         popout.innerHTML = `
             <div class="set-popout-content">
-                <p><strong>Set Options</strong></p>
-                <p>This is a prototype popout for the "${typeLabel.textContent}" set.</p>
-                <p>Number of tunes: ${tuneSet.length}</p>
-                <p>Future features could include:</p>
-                <ul>
-                    <li>Add tune to this set</li>
-                    <li>Delete entire set</li>
-                    <li>Reorder tunes</li>
-                    <li>Set metadata</li>
-                </ul>
+                <div class="set-popout-row">
+                    <label>Started by:</label>
+                    <select class="set-started-by" disabled>
+                        <option>Loading...</option>
+                    </select>
+                </div>
+                <div class="set-popout-row">
+                    <label>Logged by:</label>
+                    <span class="set-logged-by">—</span>
+                </div>
             </div>
         `;
 
+        // Fetch attendees and populate the dropdown
+        if (sessionInstanceId) {
+            const cacheKey = `session_attendees_${sessionInstanceId}`;
+            const cached = localStorage.getItem(cacheKey);
+
+            const populateDropdown = (attendees: any[]) => {
+                const select = popout.querySelector('.set-started-by') as HTMLSelectElement;
+                if (!select) return;
+
+                select.innerHTML = '<option value="">— Select —</option>';
+                attendees.forEach((attendee: any) => {
+                    const option = document.createElement('option');
+                    option.value = attendee.person_id;
+                    option.textContent = attendee.display_name;
+                    select.appendChild(option);
+                });
+
+                // Add "Someone else..." option
+                const someoneElseOption = document.createElement('option');
+                someoneElseOption.value = '__someone_else__';
+                someoneElseOption.textContent = 'Someone else...';
+                someoneElseOption.style.fontStyle = 'italic';
+                select.appendChild(someoneElseOption);
+
+                // Pre-select the current value if set
+                if (currentStartedBy !== null) {
+                    select.value = String(currentStartedBy);
+                }
+
+                select.disabled = false;
+
+                // On iOS, selects need explicit interaction handling - stop propagation during capture phase
+                select.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { capture: true, passive: true });
+                select.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                }, { capture: true });
+
+                // Handle selection changes
+                select.addEventListener('change', async () => {
+                    if (select.value === '__someone_else__') {
+                        const sessionPath = (window as any).sessionConfig?.sessionPath;
+                        if (sessionPath && sessionInstanceId) {
+                            // Try to save first if there are unsaved changes
+                            const autoSaveManager = (window as any).AutoSaveManager;
+                            if (autoSaveManager && autoSaveManager.hasUnsavedChanges && autoSaveManager.hasUnsavedChanges()) {
+                                try {
+                                    await autoSaveManager.saveSession();
+                                } catch (e) {
+                                    console.error('Failed to save before navigating:', e);
+                                }
+                            }
+                            // Store message to show on Players page
+                            sessionStorage.setItem('playersPageToast', 'Add the player here to be able to choose them for starting a set.');
+                            // Navigate to Players tab
+                            window.location.href = `/sessions/${sessionPath}/${sessionInstanceId}/players`;
+                        }
+                    } else if (setIndex >= 0) {
+                        const personId = select.value ? parseInt(select.value, 10) : null;
+
+                        // Update the local state immediately
+                        for (const tune of tuneSet) {
+                            tune.startedByPersonId = personId;
+                        }
+
+                        // Update the started-by name display immediately
+                        const newStartedByName = this.createStartedByName(tuneSet);
+                        const existingStartedBy = isMobile
+                            ? wrapper?.querySelector('.started-by-name')
+                            : tuneSetElement?.querySelector('.started-by-name');
+
+                        if (existingStartedBy) {
+                            if (newStartedByName) {
+                                existingStartedBy.replaceWith(newStartedByName);
+                            } else {
+                                existingStartedBy.remove();
+                            }
+                        } else if (newStartedByName) {
+                            const parentEl = isMobile ? wrapper : tuneSetElement;
+                            const labelEl = parentEl?.querySelector('.tune-type-label');
+                            if (labelEl) {
+                                labelEl.after(newStartedByName);
+                            }
+                        }
+
+                        // Close the popout immediately
+                        popout.remove();
+                        typeLabel.style.backgroundColor = '#4a4a4a';
+                        typeLabel.classList.remove('popout-active');
+                        (typeLabel as any)._popout = null;
+
+                        // Save to API in the background (fire and forget)
+                        fetch(`/api/session_instance/${sessionInstanceId}/sets/${setIndex}/started_by`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ person_id: personId }),
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (!result.success) {
+                                console.error('Failed to save started_by:', result.message);
+                            }
+                        })
+                        .catch(e => {
+                            console.error('Error saving started_by:', e);
+                        });
+                    }
+                });
+            };
+
+            // Use cached data from page load (attendees are populated server-side)
+            if (cached) {
+                try {
+                    const cachedData = JSON.parse(cached);
+                    populateDropdown(cachedData);
+                } catch (e) {
+                    localStorage.removeItem(cacheKey);
+                    const select = popout.querySelector('.set-started-by') as HTMLSelectElement;
+                    if (select) {
+                        select.innerHTML = '<option value="">No players found - refresh page</option>';
+                    }
+                }
+            } else {
+                // No cached data - user needs to refresh
+                const select = popout.querySelector('.set-started-by') as HTMLSelectElement;
+                if (select) {
+                    select.innerHTML = '<option value="">No players found - refresh page</option>';
+                }
+            }
+        }
+
         if (isMobile) {
-            // Mobile: Absolute positioned panel that appears as extension of the tab
-            // Get the tab's position to align the popout
+            // Mobile: Use fixed positioning and append to body to avoid contentEditable issues
             const tabRect = typeLabel.getBoundingClientRect();
-            const wrapperRect = wrapper!.getBoundingClientRect();
 
             popout.style.cssText = `
-                position: absolute;
-                top: ${tabRect.bottom - wrapperRect.top}px;
-                left: 6px;
-                width: 92%;
+                position: fixed;
+                top: ${tabRect.bottom}px;
+                left: ${tabRect.left}px;
+                width: calc(100vw - ${tabRect.left + 20}px);
+                max-width: 350px;
                 background-color: #2a4a6a;
                 color: white;
                 border-radius: 0 8px 8px 8px;
                 padding: 12px 16px;
                 box-sizing: border-box;
                 font-size: 14px;
+                z-index: 9999;
             `;
 
-            // Insert into the wrapper
-            if (wrapper) {
-                wrapper.appendChild(popout);
-            }
+            // Append to body to escape contentEditable container
+            document.body.appendChild(popout);
+
+            // Store reference to remove it later
+            (typeLabel as any)._popout = popout;
         } else {
             // Desktop: Absolute positioned panel that hovers over the tune-set
-            // Slight overlap (-2px) so label covers the seam (label has higher z-index)
+            // Desktop: Use fixed positioning and append to body to avoid contentEditable issues
             const labelRect = typeLabel.getBoundingClientRect();
             const setRect = tuneSetElement.getBoundingClientRect();
-            const leftOffset = labelRect.right - setRect.left - 2;
 
             popout.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: ${leftOffset}px;
-                right: 0;
+                position: fixed;
+                top: ${setRect.top}px;
+                left: ${labelRect.right - 2}px;
+                width: ${setRect.right - labelRect.right + 2}px;
+                min-height: ${setRect.height}px;
                 background-color: #2a4a6a;
                 color: white;
                 border-radius: 0 8px 8px 0;
                 padding: 12px 16px;
                 box-sizing: border-box;
                 font-size: 14px;
-                min-height: 100%;
+                z-index: 9999;
+                box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
             `;
 
-            // Make the tune-set position relative for absolute positioning
-            tuneSetElement.style.position = 'relative';
+            // Append to body to escape contentEditable container
+            document.body.appendChild(popout);
 
-            // Append the popout to the tune-set
-            tuneSetElement.appendChild(popout);
+            // Store reference to popout on the label for cleanup
+            (typeLabel as any)._popout = popout;
         }
     }
 
@@ -458,10 +739,16 @@ export class PillRenderer {
         // Create a wrapper for mobile that includes the label outside the set
         const wrapper = document.createElement('div');
         wrapper.className = isMobile ? 'tune-set-wrapper' : '';
+        if (isMobile) {
+            wrapper.style.position = 'relative';
+        }
 
         const setDiv = document.createElement('div');
         setDiv.className = 'tune-set';
         setDiv.dataset.setIndex = setIndex.toString();
+        if (!isMobile) {
+            setDiv.style.position = 'relative';
+        }
 
         // Handle empty sets (especially temporary ones)
         if (tuneSet.length === 0) {
@@ -483,13 +770,22 @@ export class PillRenderer {
         // Add type label
         const typeLabel = this.createTypeLabel(tuneSet);
 
+        // Add started-by name (if available)
+        const startedByName = this.createStartedByName(tuneSet);
+
         if (isMobile) {
             // On mobile, add label to wrapper (outside the set)
             wrapper.appendChild(typeLabel);
+            if (startedByName) {
+                wrapper.appendChild(startedByName);
+            }
             wrapper.appendChild(setDiv);
         } else {
             // On desktop, add label inside the set
             setDiv.appendChild(typeLabel);
+            if (startedByName) {
+                setDiv.appendChild(startedByName);
+            }
         }
 
         tuneSet.forEach((pill, pillIndex) => {
@@ -807,8 +1103,41 @@ export class PillRenderer {
             const newLabel = this.createTypeLabel(tuneSet);
             existingLabel.replaceWith(newLabel);
         }
+
+        // Also update the started-by name
+        let existingStartedBy: HTMLElement | null = null;
+        let parentForStartedBy: HTMLElement | null = null;
+
+        if (isMobile) {
+            const wrapper = setElement.parentElement;
+            if (wrapper && wrapper.classList.contains('tune-set-wrapper')) {
+                existingStartedBy = wrapper.querySelector('.started-by-name') as HTMLElement;
+                parentForStartedBy = wrapper;
+            }
+        } else {
+            existingStartedBy = setElement.querySelector('.started-by-name') as HTMLElement;
+            parentForStartedBy = setElement;
+        }
+
+        const newStartedByName = this.createStartedByName(tuneSet);
+
+        if (existingStartedBy) {
+            if (newStartedByName) {
+                existingStartedBy.replaceWith(newStartedByName);
+            } else {
+                existingStartedBy.remove();
+            }
+        } else if (newStartedByName && parentForStartedBy) {
+            // Insert after the type label
+            const typeLabel = parentForStartedBy.querySelector('.tune-type-label');
+            if (typeLabel && typeLabel.nextSibling) {
+                parentForStartedBy.insertBefore(newStartedByName, typeLabel.nextSibling);
+            } else if (typeLabel) {
+                typeLabel.after(newStartedByName);
+            }
+        }
     }
-    
+
     // Apply landing animation to pills that have been moved
     static applyLandingAnimation(pillIds: string[]): void {
         pillIds.forEach(pillId => {
