@@ -299,34 +299,42 @@
 
 <!-- Add Session Instance Modal -->
 <div id="add-session-instance-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Add Session Instance</h3>
-        </div>
-        <div class="modal-body">
-            <label for="session-date-input">Session Date:</label>
-            <input type="date" id="session-date-input" required>
-
-            <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div>
-                    <label for="session-start-time-input">Start Time:</label>
-                    <input type="time" id="session-start-time-input">
+    <div class="modal-dialog">
+        <div class="modal-dialog-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Session Instance</h3>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="session-date-input" class="form-label">Session Date:</label>
+                    <input type="date" id="session-date-input" class="form-control" required>
                 </div>
-                <div>
-                    <label for="session-end-time-input">End Time:</label>
-                    <input type="time" id="session-end-time-input">
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="mb-3">
+                        <label for="session-start-time-input" class="form-label">Start Time:</label>
+                        <input type="time" id="session-start-time-input" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="session-end-time-input" class="form-label">End Time:</label>
+                        <input type="time" id="session-end-time-input" class="form-control">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="session-location-input" class="form-label">Location:</label>
+                    <input type="text" id="session-location-input" class="form-control" placeholder="The usual: {{ session.location_name }}">
+                </div>
+
+                <div class="mb-3">
+                    <label for="session-comments-input" class="form-label">Comments:</label>
+                    <textarea id="session-comments-input" class="form-control" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
                 </div>
             </div>
-
-            <label for="session-location-input" style="margin-top: 16px;">Location:</label>
-            <input type="text" id="session-location-input" placeholder="The usual: {{ session.location_name }}">
-
-            <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
-            <textarea id="session-comments-input" placeholder="Notes about this session" rows="3" style="resize: vertical;"></textarea>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn-secondary" id="add-session-cancel-btn">Cancel</button>
-            <button type="button" class="btn-primary" id="add-session-confirm-btn">Add Session</button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="add-session-cancel-btn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="add-session-confirm-btn">Add Session</button>
+            </div>
         </div>
     </div>
 </div>
@@ -480,6 +488,23 @@
     border: 1px solid var(--border-color);
     border-radius: 0.375rem;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-dialog-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Add Session Instance Modal specific styles */
+#add-session-instance-modal .modal-dialog {
+    background: var(--bg-color);
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    margin-top: 40px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    pointer-events: auto;
 }
 
 .modal-header {
