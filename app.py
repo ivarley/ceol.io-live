@@ -518,6 +518,11 @@ app.add_url_rule(
     get_person_tunes_ajax,
 )
 app.add_url_rule(
+    "/api/person/<int:person_id>/tunes-stats",
+    "get_person_tunes_stats",
+    get_person_tunes_stats,
+)
+app.add_url_rule(
     "/api/check-username-availability",
     "check_username_availability",
     check_username_availability,

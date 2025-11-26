@@ -13,446 +13,444 @@
                     <a href="/admin/people" class="back-link">← Back To Admin</a>
                 </div>
                 {% endif %}
-                <div class="edit-controls">
-                    <button id="edit-btn" class="btn btn-primary">Edit</button>
-                    <div id="edit-buttons" style="display: none;">
-                        <button id="save-btn" class="btn btn-success">Save</button>
-                        <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
-                    </div>
-                </div>
             </header>
-            
-            <!-- Person Information Section -->
-            <section class="docs-section" id="person-info">
-                <div class="card">
-                    <div class="card-body">
-                        <!-- Display Mode -->
-                        <div id="person-display" class="row">
-                            <div class="col-md-6">
-                                <dl class="row">
-                                    <dt class="col-sm-4">Name:</dt>
-                                    <dd class="col-sm-8">{{ person.name }}</dd>
-                                    
-                                    <dt class="col-sm-4">Email:</dt>
-                                    <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">SMS Number:</dt>
-                                    <dd class="col-sm-8">{{ person.sms_number or 'Not provided' }}</dd>
-                                </dl>
-                            </div>
-                            <div class="col-md-6">
-                                <dl class="row">
-                                    <dt class="col-sm-4">City:</dt>
-                                    <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">State:</dt>
-                                    <dd class="col-sm-8">{{ person.state or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">Country:</dt>
-                                    <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
-                                    
-                                    <dt class="col-sm-4">TheSession.org:</dt>
-                                    <dd class="col-sm-8">
-                                        {% if person.thesession_user_id %}
-                                            <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
-                                                {{ person.thesession_user_id }}
-                                            </a>
-                                        {% else %}
-                                            <span class="text-muted">Not a member</span>
-                                        {% endif %}
-                                    </dd>
-                                </dl>
+
+            <!-- Mobile Tab Navigation (dropdown) -->
+            <div class="profile-mobile-nav d-md-none mb-3">
+                <select id="profile-tab-select" class="form-select">
+                    <option value="profile">Profile</option>
+                    <option value="sessions">{% if is_user_profile %}My Sessions{% else %}Sessions{% endif %}</option>
+                    <option value="attended">{% if is_user_profile %}I've Attended{% else %}Attended{% endif %}</option>
+                    <option value="tunes">Tunes</option>
+                    {% if user %}
+                    <option value="logins">Logins</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <!-- Desktop Tab Navigation -->
+            <ul class="nav nav-tabs d-none d-md-flex" id="profileTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="true">Profile</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab" aria-controls="sessions" aria-selected="false">{% if is_user_profile %}My Sessions{% else %}Sessions{% endif %}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">{% if is_user_profile %}I've Attended{% else %}Attended{% endif %}</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tunes-tab" data-bs-toggle="tab" data-bs-target="#tunes" type="button" role="tab" aria-controls="tunes" aria-selected="false">Tunes</button>
+                </li>
+                {% if user %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="logins-tab" data-bs-toggle="tab" data-bs-target="#logins" type="button" role="tab" aria-controls="logins" aria-selected="false">Logins</button>
+                </li>
+                {% endif %}
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="profileTabContent">
+                <!-- Profile Tab (Person & User Info Combined) -->
+                <div class="tab-pane fade show active" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                    <div class="mt-3">
+                        <div class="edit-controls mb-3">
+                            <button id="edit-btn" class="btn btn-primary">Edit</button>
+                            <div id="edit-buttons" style="display: none;">
+                                <button id="save-btn" class="btn btn-success">Save</button>
+                                <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
                             </div>
                         </div>
 
-                        <!-- Instruments Section -->
-                        <div class="row mt-3">
-                            <div class="col-12">
-                                <dl class="row">
-                                    <dt class="col-sm-2">Instruments:</dt>
-                                    <dd class="col-sm-10">
-                                        {% if person.instruments %}
-                                            <span id="instruments-display">{{ person.instruments|join(', ') }}</span>
-                                        {% else %}
-                                            <span id="instruments-display" class="text-muted">No instruments listed</span>
-                                        {% endif %}
-                                    </dd>
-                                </dl>
+                        <!-- Person Information -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0">Personal Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Display Mode -->
+                                <div id="person-display" class="row">
+                                    <div class="col-md-6">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-4">Name:</dt>
+                                            <dd class="col-sm-8">{{ person.name }}</dd>
+
+                                            <dt class="col-sm-4">Email:</dt>
+                                            <dd class="col-sm-8">{{ person.email or 'Not provided' }}</dd>
+
+                                            <dt class="col-sm-4">SMS Number:</dt>
+                                            <dd class="col-sm-8">{{ person.sms_number or 'Not provided' }}</dd>
+                                        </dl>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-4">City:</dt>
+                                            <dd class="col-sm-8">{{ person.city or 'Not provided' }}</dd>
+
+                                            <dt class="col-sm-4">State:</dt>
+                                            <dd class="col-sm-8">{{ person.state or 'Not provided' }}</dd>
+
+                                            <dt class="col-sm-4">Country:</dt>
+                                            <dd class="col-sm-8">{{ person.country or 'Not provided' }}</dd>
+
+                                            <dt class="col-sm-4">TheSession.org:</dt>
+                                            <dd class="col-sm-8">
+                                                {% if person.thesession_user_id %}
+                                                    <a href="https://thesession.org/members/{{ person.thesession_user_id }}" target="_blank" rel="noopener noreferrer">
+                                                        {{ person.thesession_user_id }}
+                                                    </a>
+                                                {% else %}
+                                                    <span class="text-muted">Not a member</span>
+                                                {% endif %}
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                    <div class="col-12 mt-2">
+                                        <dl class="row mb-0">
+                                            <dt class="col-sm-2">Instruments:</dt>
+                                            <dd class="col-sm-10">
+                                                {% if person.instruments %}
+                                                    <span id="instruments-display">{{ person.instruments|join(', ') }}</span>
+                                                {% else %}
+                                                    <span id="instruments-display" class="text-muted">No instruments listed</span>
+                                                {% endif %}
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                </div>
+
+                                <!-- Edit Mode -->
+                                <div id="person-edit" class="row" style="display: none;">
+                                    <form id="person-form">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="first_name" class="form-label">First Name</label>
+                                                    <input type="text" class="form-control" id="first_name" name="first_name" value="{{ person.first_name or '' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="last_name" class="form-label">Last Name</label>
+                                                    <input type="text" class="form-control" id="last_name" name="last_name" value="{{ person.last_name or '' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="email" class="form-label">Email</label>
+                                                    <input type="email" class="form-control" id="email" name="email" value="{{ person.email or '' }}">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="sms_number" class="form-label">SMS Number</label>
+                                                    <input type="text" class="form-control" id="sms_number" name="sms_number" value="{{ person.sms_number or '' }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="city" class="form-label">City</label>
+                                                    <input type="text" class="form-control" id="city" name="city" value="{{ person.city or '' }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="state" class="form-label">State</label>
+                                                    <input type="text" class="form-control" id="state" name="state" value="{{ person.state or '' }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="country" class="form-label">Country</label>
+                                                    <input type="text" class="form-control" id="country" name="country" value="{{ person.country or '' }}">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="thesession_user_id" class="form-label">TheSession User ID</label>
+                                                    <input type="number" class="form-control" id="thesession_user_id" name="thesession_user_id" value="{{ person.thesession_user_id or '' }}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Instruments</label>
+                                                    <div id="instruments-checkboxes" class="row">
+                                                        <div class="col-md-4">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="fiddle" id="edit-inst-fiddle">
+                                                                <label class="form-check-label" for="edit-inst-fiddle">Fiddle</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="flute" id="edit-inst-flute">
+                                                                <label class="form-check-label" for="edit-inst-flute">Flute</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="tin whistle" id="edit-inst-whistle">
+                                                                <label class="form-check-label" for="edit-inst-whistle">Tin Whistle</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="button accordion" id="edit-inst-accordion">
+                                                                <label class="form-check-label" for="edit-inst-accordion">Button Accordion</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="piano accordion" id="edit-inst-piano-accordion">
+                                                                <label class="form-check-label" for="edit-inst-piano-accordion">Piano Accordion</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="concertina" id="edit-inst-concertina">
+                                                                <label class="form-check-label" for="edit-inst-concertina">Concertina</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="banjo" id="edit-inst-banjo">
+                                                                <label class="form-check-label" for="edit-inst-banjo">Banjo</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="guitar" id="edit-inst-guitar">
+                                                                <label class="form-check-label" for="edit-inst-guitar">Guitar</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="bouzouki" id="edit-inst-bouzouki">
+                                                                <label class="form-check-label" for="edit-inst-bouzouki">Bouzouki</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="mandolin" id="edit-inst-mandolin">
+                                                                <label class="form-check-label" for="edit-inst-mandolin">Mandolin</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="bodhrán" id="edit-inst-bodhran">
+                                                                <label class="form-check-label" for="edit-inst-bodhran">Bodhrán</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="uilleann pipes" id="edit-inst-pipes">
+                                                                <label class="form-check-label" for="edit-inst-pipes">Uilleann Pipes</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="harp" id="edit-inst-harp">
+                                                                <label class="form-check-label" for="edit-inst-harp">Harp</label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="piano" id="edit-inst-piano">
+                                                                <label class="form-check-label" for="edit-inst-piano">Piano</label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <input type="text" class="form-control" id="other-instrument" placeholder="Other instrument...">
+                                                        <button type="button" class="btn btn-sm btn-secondary mt-1" id="add-other-instrument-btn">Add Other</button>
+                                                    </div>
+                                                    <div id="other-instruments-list" class="mt-2"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
-                        
-                        <!-- Edit Mode -->
-                        <div id="person-edit" class="row" style="display: none;">
-                            <form id="person-form">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="first_name" class="form-label">First Name</label>
-                                            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ person.first_name or '' }}" required>
+
+                        <!-- User Account Information -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Account Information</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if user %}
+                                    <!-- Display Mode -->
+                                    <div id="user-display" class="row">
+                                        <div class="col-md-6">
+                                            <dl class="row mb-0">
+                                                <dt class="col-sm-4">Username:</dt>
+                                                <dd class="col-sm-8">
+                                                    <strong>{{ user.username }}</strong>
+                                                    {% if user.is_system_admin %}
+                                                        <span class="admin-indicator">(admin)</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-sm-4">User Email:</dt>
+                                                <dd class="col-sm-8">{{ user.user_email or 'Not provided' }}</dd>
+
+                                                <dt class="col-sm-4">Email Verified:</dt>
+                                                <dd class="col-sm-8">
+                                                    {% if user.email_verified %}
+                                                        <span class="text-success">✓ Verified</span>
+                                                    {% else %}
+                                                        <span class="text-warning">✗ Not verified</span>
+                                                        {% if not is_user_profile %}
+                                                            <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" data-user-id="{{ user.user_id }}">Verify Email</button>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                </dd>
+                                            </dl>
                                         </div>
-                                        <div class="mb-3">
-                                            <label for="last_name" class="form-label">Last Name</label>
-                                            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ person.last_name or '' }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="email" class="form-label">Email</label>
-                                            <input type="email" class="form-control" id="email" name="email" value="{{ person.email or '' }}">
+                                        <div class="col-md-6">
+                                            <dl class="row mb-0">
+                                                <dt class="col-sm-4">Active:</dt>
+                                                <dd class="col-sm-8">
+                                                    {% if user.is_active %}
+                                                        <span class="text-success">✓ Active</span>
+                                                    {% else %}
+                                                        <span class="text-danger">✗ Inactive</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-sm-4">Created:</dt>
+                                                <dd class="col-sm-8">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Unknown' }}</dd>
+
+                                                <dt class="col-sm-4">Last Login:</dt>
+                                                <dd class="col-sm-8">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</dd>
+
+                                                <dt class="col-sm-4">Timezone:</dt>
+                                                <dd class="col-sm-8">{{ user.timezone_display or 'UTC' }}</dd>
+                                            </dl>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            <label for="sms_number" class="form-label">SMS Number</label>
-                                            <input type="text" class="form-control" id="sms_number" name="sms_number" value="{{ person.sms_number or '' }}">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="city" class="form-label">City</label>
-                                            <input type="text" class="form-control" id="city" name="city" value="{{ person.city or '' }}">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="state" class="form-label">State</label>
-                                            <input type="text" class="form-control" id="state" name="state" value="{{ person.state or '' }}">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="country" class="form-label">Country</label>
-                                            <input type="text" class="form-control" id="country" name="country" value="{{ person.country or '' }}">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="thesession_user_id" class="form-label">TheSession User ID</label>
-                                            <input type="number" class="form-control" id="thesession_user_id" name="thesession_user_id" value="{{ person.thesession_user_id or '' }}">
-                                        </div>
+
+                                    {% if is_user_profile %}
+                                    <!-- Change Password Button for User Profile -->
+                                    <div class="mt-3">
+                                        <a href="/change-password" class="btn btn-outline-primary">Change My Password</a>
                                     </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-12">
-                                        <div class="mb-3">
-                                            <label class="form-label">Instruments</label>
-                                            <div id="instruments-checkboxes" class="row">
-                                                <div class="col-md-4">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="fiddle" id="edit-inst-fiddle">
-                                                        <label class="form-check-label" for="edit-inst-fiddle">Fiddle</label>
+                                    {% endif %}
+
+                                    <!-- Edit Mode -->
+                                    <div id="user-edit" class="row" style="display: none;">
+                                        <form id="user-form">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="username" class="form-label">Username</label>
+                                                        <input type="text" class="form-control" id="username" name="username" value="{{ user.username or '' }}" required>
+                                                        <div id="username-warning" class="text-warning" style="display: none;"></div>
                                                     </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="flute" id="edit-inst-flute">
-                                                        <label class="form-check-label" for="edit-inst-flute">Flute</label>
+                                                    <div class="mb-3">
+                                                        <label for="user_email" class="form-label">Email</label>
+                                                        <input type="email" class="form-control" id="user_email" name="user_email" value="{{ user.user_email or '' }}">
                                                     </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="tin whistle" id="edit-inst-whistle">
-                                                        <label class="form-check-label" for="edit-inst-whistle">Tin Whistle</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="button accordion" id="edit-inst-accordion">
-                                                        <label class="form-check-label" for="edit-inst-accordion">Button Accordion</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="piano accordion" id="edit-inst-piano-accordion">
-                                                        <label class="form-check-label" for="edit-inst-piano-accordion">Piano Accordion</label>
+                                                    <div class="mb-3">
+                                                        <label for="timezone" class="form-label">Timezone</label>
+                                                        <select class="form-select" id="timezone" name="timezone">
+                                                            {% for tz_value, tz_display in timezone_options %}
+                                                            <option value="{{ tz_value }}" {% if user.timezone == tz_value %}selected{% endif %}>{{ tz_display }}</option>
+                                                            {% endfor %}
+                                                        </select>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-4">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="concertina" id="edit-inst-concertina">
-                                                        <label class="form-check-label" for="edit-inst-concertina">Concertina</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="banjo" id="edit-inst-banjo">
-                                                        <label class="form-check-label" for="edit-inst-banjo">Banjo</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="guitar" id="edit-inst-guitar">
-                                                        <label class="form-check-label" for="edit-inst-guitar">Guitar</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="bouzouki" id="edit-inst-bouzouki">
-                                                        <label class="form-check-label" for="edit-inst-bouzouki">Bouzouki</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="mandolin" id="edit-inst-mandolin">
-                                                        <label class="form-check-label" for="edit-inst-mandolin">Mandolin</label>
+                                                {% if not is_user_profile %}
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if user.is_active else '' }}>
+                                                            <label class="form-check-label" for="is_active">
+                                                                User Account Active
+                                                            </label>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div class="col-md-4">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="bodhrán" id="edit-inst-bodhran">
-                                                        <label class="form-check-label" for="edit-inst-bodhran">Bodhrán</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="uilleann pipes" id="edit-inst-pipes">
-                                                        <label class="form-check-label" for="edit-inst-pipes">Uilleann Pipes</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="harp" id="edit-inst-harp">
-                                                        <label class="form-check-label" for="edit-inst-harp">Harp</label>
-                                                    </div>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="piano" id="edit-inst-piano">
-                                                        <label class="form-check-label" for="edit-inst-piano">Piano</label>
-                                                    </div>
-                                                </div>
+                                                {% endif %}
                                             </div>
-                                            <div class="mt-2">
-                                                <input type="text" class="form-control" id="other-instrument" placeholder="Other instrument...">
-                                                <button type="button" class="btn btn-sm btn-secondary mt-1" id="add-other-instrument-btn">Add Other</button>
-                                            </div>
-                                            <div id="other-instruments-list" class="mt-2"></div>
-                                        </div>
+                                        </form>
                                     </div>
-                                </div>
-                            </form>
+                                {% else %}
+                                    <div class="alert alert-info mb-0" role="alert">
+                                        <p class="mb-0">This person is not connected with a user account.</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Bottom Edit Buttons -->
+                        <div id="bottom-edit-buttons" class="mt-3" style="display: none;">
+                            <button id="bottom-save-btn" class="btn btn-success">Save</button>
+                            <button id="bottom-cancel-btn" class="btn btn-secondary">Cancel</button>
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- User Account Information Section -->
-            <section class="docs-section" id="user-info">
-                <h2 class="section-heading">User Account Information</h2>
-                <div class="card">
-                    <div class="card-body">
-                        {% if user %}
-                            <!-- Display Mode -->
-                            <div id="user-display" class="row">
-                                <div class="col-md-6">
-                                    <dl class="row">
-                                        <dt class="col-sm-4">Username:</dt>
-                                        <dd class="col-sm-8">
-                                            <strong>{{ user.username }}</strong>
-                                            {% if user.is_system_admin %}
-                                                <span class="admin-indicator">(admin)</span>
-                                            {% endif %}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">User Email:</dt>
-                                        <dd class="col-sm-8">{{ user.user_email or 'Not provided' }}</dd>
-                                        
-                                        <dt class="col-sm-4">Email Verified:</dt>
-                                        <dd class="col-sm-8">
-                                            {% if user.email_verified %}
-                                                <span class="text-success">✓ Verified</span>
-                                            {% else %}
-                                                <span class="text-warning">✗ Not verified</span>
-                                                {% if not is_user_profile %}
-                                                    <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" data-user-id="{{ user.user_id }}">Verify Email</button>
-                                                {% endif %}
-                                            {% endif %}
-                                        </dd>
-                                    </dl>
-                                </div>
-                                <div class="col-md-6">
-                                    <dl class="row">
-                                        <dt class="col-sm-4">Active:</dt>
-                                        <dd class="col-sm-8">
-                                            {% if user.is_active %}
-                                                <span class="text-success">✓ Active</span>
-                                            {% else %}
-                                                <span class="text-danger">✗ Inactive</span>
-                                            {% endif %}
-                                        </dd>
-                                        
-                                        <dt class="col-sm-4">Created:</dt>
-                                        <dd class="col-sm-8">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Unknown' }}</dd>
-                                        
-                                        <dt class="col-sm-4">Last Login:</dt>
-                                        <dd class="col-sm-8">{{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}</dd>
-                                        
-                                        <dt class="col-sm-4">Timezone:</dt>
-                                        <dd class="col-sm-8">{{ user.timezone_display or 'UTC' }}</dd>
-                                    </dl>
-                                </div>
+                <!-- Sessions Tab -->
+                <div class="tab-pane fade" id="sessions" role="tabpanel" aria-labelledby="sessions-tab">
+                    <div class="mt-3">
+                        {% if sessions %}
+                            <div class="mb-3">
+                                <select id="session-filter" class="form-select">
+                                    <option value="all">All Sessions</option>
+                                    <option value="regular">Regular Sessions Only</option>
+                                </select>
                             </div>
-                            
+                            <div class="sessions-card-list">
+                                {% for session in sessions %}
+                                <div class="session-card card mb-2" data-session-path="{{ session.session_path }}">
+                                    <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
+                                        <div class="session-info">
+                                            <a href="/{{ session.session_path }}" class="session-title h6 mb-0 d-block text-decoration-none">{{ session.session_name }}</a>
+                                            <small class="text-muted">{{ session.location }}{% if session.role %} &middot; {{ session.role }}{% endif %}</small>
+                                        </div>
+                                        {% if is_user_profile %}
+                                        <button type="button" class="btn btn-link text-danger p-0 leave-session-btn"
+                                                data-session-path="{{ session.session_path }}"
+                                                data-session-name="{{ session.session_name }}"
+                                                title="Leave this session">
+                                            <span class="leave-x">&times;</span>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             {% if is_user_profile %}
-                            <!-- Change Password Button for User Profile -->
                             <div class="mt-3">
-                                <a href="/change-password" class="btn btn-outline-primary">Change My Password</a>
+                                <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add another session I've been to</a>
+                            </div>
+                            {% else %}
+                            <div class="mt-3">
+                                <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
                             </div>
                             {% endif %}
-                            
-                            <!-- Edit Mode -->
-                            <div id="user-edit" class="row" style="display: none;">
-                                <form id="user-form">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="username" class="form-label">Username</label>
-                                                <input type="text" class="form-control" id="username" name="username" value="{{ user.username or '' }}" required>
-                                                <div id="username-warning" class="text-warning" style="display: none;"></div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="user_email" class="form-label">Email</label>
-                                                <input type="email" class="form-control" id="user_email" name="user_email" value="{{ user.user_email or '' }}">
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="timezone" class="form-label">Timezone</label>
-                                                <select class="form-select" id="timezone" name="timezone">
-                                                    {% for tz_value, tz_display in timezone_options %}
-                                                    <option value="{{ tz_value }}" {% if user.timezone == tz_value %}selected{% endif %}>{{ tz_display }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                            </div>
-                                        </div>
-                                        {% if not is_user_profile %}
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if user.is_active else '' }}>
-                                                    <label class="form-check-label" for="is_active">
-                                                        User Account Active
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                </form>
-                            </div>
                         {% else %}
+                            {% if is_user_profile %}
                             <div class="alert alert-info" role="alert">
-                                <h4 class="alert-heading">No User Account</h4>
-                                <p>This person is not connected with a user account.</p>
+                                <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">add your first session</a>
                             </div>
+                            {% else %}
+                            <div class="alert alert-info" role="alert">
+                                No sessions associated with this person.
+                            </div>
+                            <div class="mt-3">
+                                <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
+                            </div>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
-            </section>
 
-            <!-- Bottom Edit Buttons -->
-            <div id="bottom-edit-buttons" class="mt-4" style="display: none;">
-                <button id="bottom-save-btn" class="btn btn-success">Save</button>
-                <button id="bottom-cancel-btn" class="btn btn-secondary">Cancel</button>
-            </div>
-
-            <!-- Tabbed Interface Section -->
-            <section class="docs-section" id="person-data">
-                <h2 class="section-heading">
-                    Activity Data
-                    {% if is_user_profile %}
-                    <button id="refresh-active-session"
-                            class="btn btn-sm btn-link"
-                            style="vertical-align: middle; padding: 0; margin-left: 8px;"
-                            title="Refresh active session status"
-                            aria-label="Refresh active session status">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                    </button>
-                    {% endif %}
-                </h2>
-                
-                <!-- Tab Navigation -->
-                <ul class="nav nav-tabs" id="personTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="sessions-tab" data-bs-toggle="tab" data-bs-target="#sessions" type="button" role="tab" aria-controls="sessions" aria-selected="true">{% if is_user_profile %}My sessions{% else %}Sessions{% endif %}</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="attended-tab" data-bs-toggle="tab" data-bs-target="#attended" type="button" role="tab" aria-controls="attended" aria-selected="false">{% if is_user_profile %}I've Attended{% else %}Attended{% endif %}</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="tunes-tab" data-bs-toggle="tab" data-bs-target="#tunes" type="button" role="tab" aria-controls="tunes" aria-selected="false">Tunes</button>
-                    </li>
-                    {% if user %}
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="logins-tab" data-bs-toggle="tab" data-bs-target="#logins" type="button" role="tab" aria-controls="logins" aria-selected="false">Logins</button>
-                    </li>
-                    {% endif %}
-                </ul>
-
-                <!-- Tab Content -->
-                <div class="tab-content" id="personTabContent">
-                    <!-- Sessions Tab -->
-                    <div class="tab-pane fade show active" id="sessions" role="tabpanel" aria-labelledby="sessions-tab">
-                        <div class="mt-3">
-                            {% if sessions %}
-                                <div class="mb-3">
-                                    <select id="session-filter" class="form-select">
-                                        <option value="all">All Sessions</option>
-                                        <option value="regular">Regular Sessions Only</option>
-                                    </select>
-                                </div>
-                                <div class="sessions-card-list">
-                                    {% for session in sessions %}
-                                    <div class="session-card card mb-2" data-session-path="{{ session.session_path }}">
-                                        <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
-                                            <div class="session-info">
-                                                <a href="/{{ session.session_path }}" class="session-title h6 mb-0 d-block text-decoration-none">{{ session.session_name }}</a>
-                                                <small class="text-muted">{{ session.location }}{% if session.role %} &middot; {{ session.role }}{% endif %}</small>
-                                            </div>
-                                            {% if is_user_profile %}
-                                            <button type="button" class="btn btn-link text-danger p-0 leave-session-btn"
-                                                    data-session-path="{{ session.session_path }}"
-                                                    data-session-name="{{ session.session_name }}"
-                                                    title="Leave this session">
-                                                <span class="leave-x">&times;</span>
-                                            </button>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% if is_user_profile %}
-                                <div class="mt-3">
-                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add another session I've been to</a>
-                                </div>
-                                {% else %}
-                                <div class="mt-3">
-                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
-                                </div>
-                                {% endif %}
-                            {% else %}
-                                {% if is_user_profile %}
-                                <div class="alert alert-info" role="alert">
-                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">add your first session</a>
-                                </div>
-                                {% else %}
-                                <div class="alert alert-info" role="alert">
-                                    No sessions associated with this person.
-                                </div>
-                                <div class="mt-3">
-                                    <a href="#" id="add-to-session-link" class="btn btn-outline-primary btn-sm">Add this person to a session</a>
-                                </div>
-                                {% endif %}
-                            {% endif %}
+                <!-- Attended Tab -->
+                <div class="tab-pane fade" id="attended" role="tabpanel" aria-labelledby="attended-tab">
+                    <div class="mt-3">
+                        <div id="attended-loading" class="text-center">
+                            <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                            <span style="margin-left: 8px;">Loading attendance history...</span>
                         </div>
+                        <div id="attended-content"></div>
                     </div>
-
-                    <!-- Attended Tab -->
-                    <div class="tab-pane fade" id="attended" role="tabpanel" aria-labelledby="attended-tab">
-                        <div class="mt-3">
-                            <div id="attended-loading" class="text-center">
-                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                <span style="margin-left: 8px;">Loading players ...</span>
-                            </div>
-                            <div id="attended-content"></div>
-                        </div>
-                    </div>
-
-                    <!-- Tunes Tab -->
-                    <div class="tab-pane fade" id="tunes" role="tabpanel" aria-labelledby="tunes-tab">
-                        <div class="mt-3">
-                            <div id="tunes-loading" class="text-center">
-                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                <span style="margin-left: 8px;">Loading tunes...</span>
-                            </div>
-                            <div id="tunes-content"></div>
-                        </div>
-                    </div>
-
-                    <!-- Logins Tab -->
-                    {% if user %}
-                    <div class="tab-pane fade" id="logins" role="tabpanel" aria-labelledby="logins-tab">
-                        <div class="mt-3">
-                            <div id="logins-loading" class="text-center">
-                                <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                <span style="margin-left: 8px;">Loading login history...</span>
-                            </div>
-                            <div id="logins-content"></div>
-                        </div>
-                    </div>
-                    {% endif %}
                 </div>
-            </section>
+
+                <!-- Tunes Tab -->
+                <div class="tab-pane fade" id="tunes" role="tabpanel" aria-labelledby="tunes-tab">
+                    <div class="mt-3">
+                        <div id="tunes-loading" class="text-center">
+                            <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                            <span style="margin-left: 8px;">Loading tune statistics...</span>
+                        </div>
+                        <div id="tunes-content"></div>
+                    </div>
+                </div>
+
+                <!-- Logins Tab -->
+                {% if user %}
+                <div class="tab-pane fade" id="logins" role="tabpanel" aria-labelledby="logins-tab">
+                    <div class="mt-3">
+                        <div id="logins-loading" class="text-center">
+                            <span class="loading-spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-color); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                            <span style="margin-left: 8px;">Loading login history...</span>
+                        </div>
+                        <div id="logins-content"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
         </article>
     </div>
 </div>
@@ -534,7 +532,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const personEdit = document.getElementById('person-edit');
     const userDisplay = document.getElementById('user-display');
     const userEdit = document.getElementById('user-edit');
-    const personData = document.getElementById('person-data');
     const usernameInput = document.getElementById('username');
     const usernameWarning = document.getElementById('username-warning');
 
@@ -577,28 +574,6 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 hideUsernameWarning();
             }
-        });
-    }
-
-    // Refresh active session button
-    const refreshButton = document.getElementById('refresh-active-session');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', function(e) {
-            e.preventDefault();
-
-            // Add animation/feedback
-            const svg = this.querySelector('svg');
-            svg.style.transition = 'transform 0.5s';
-            svg.style.transform = 'rotate(360deg)';
-
-            setTimeout(() => {
-                svg.style.transform = '';
-            }, 500);
-
-            // Trigger a refresh of the badge in base.html
-            window.dispatchEvent(new CustomEvent('refreshActiveSession'));
-
-            showMessage('Active session status refreshed', 'success');
         });
     }
 
@@ -668,7 +643,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (bottomEditButtons) {
                 bottomEditButtons.style.display = 'block';
             }
-            if (personData) personData.style.display = 'none'; // Hide tabbed interface
         } else {
             if (editBtn) editBtn.style.display = 'block';
             if (editButtons) editButtons.style.display = 'none';
@@ -681,7 +655,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (bottomEditButtons) {
                 bottomEditButtons.style.display = 'none';
             }
-            if (personData) personData.style.display = 'block'; // Show tabbed interface
             hideUsernameWarning();
         }
     }
@@ -777,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function checkUsernameAvailability(username) {
         const currentUserId = {{ user.user_id if user else 'null' }};
-        
+
         fetch('/api/check-username-availability', {
             method: 'POST',
             headers: {
@@ -905,44 +878,67 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize tab functionality manually since Bootstrap might not be available
+    // Tab functionality
     function initTabs() {
         const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
         const tabPanes = document.querySelectorAll('.tab-pane');
+        const mobileSelect = document.getElementById('profile-tab-select');
 
+        // Desktop tab clicks
         tabButtons.forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
-                
-                // Remove active from all tabs and panes
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabPanes.forEach(pane => {
-                    pane.classList.remove('show', 'active');
-                });
-                
-                // Add active to clicked tab
-                this.classList.add('active');
-                
-                // Show corresponding pane
                 const targetId = this.getAttribute('data-bs-target').substring(1);
-                const targetPane = document.getElementById(targetId);
-                if (targetPane) {
-                    targetPane.classList.add('show', 'active');
-                    
-                    // Trigger custom event for data loading
-                    if (targetId === 'attended' && !attendedLoaded) {
-                        loadAttendanceData();
-                        attendedLoaded = true;
-                    } else if (targetId === 'tunes' && !tunesLoaded) {
-                        loadTunesData();
-                        tunesLoaded = true;
-                    } else if (targetId === 'logins' && !loginsLoaded) {
-                        loadLoginData();
-                        loginsLoaded = true;
-                    }
+                activateTab(targetId);
+
+                // Sync mobile dropdown
+                if (mobileSelect) {
+                    mobileSelect.value = targetId;
                 }
             });
         });
+
+        // Mobile dropdown change
+        if (mobileSelect) {
+            mobileSelect.addEventListener('change', function() {
+                activateTab(this.value);
+            });
+        }
+    }
+
+    function activateTab(targetId) {
+        const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+
+        // Remove active from all tabs and panes
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabPanes.forEach(pane => {
+            pane.classList.remove('show', 'active');
+        });
+
+        // Add active to clicked tab
+        const targetButton = document.querySelector(`[data-bs-target="#${targetId}"]`);
+        if (targetButton) {
+            targetButton.classList.add('active');
+        }
+
+        // Show corresponding pane
+        const targetPane = document.getElementById(targetId);
+        if (targetPane) {
+            targetPane.classList.add('show', 'active');
+
+            // Trigger data loading for lazy-loaded tabs
+            if (targetId === 'attended' && !attendedLoaded) {
+                loadAttendanceData();
+                attendedLoaded = true;
+            } else if (targetId === 'tunes' && !tunesLoaded) {
+                loadTunesData();
+                tunesLoaded = true;
+            } else if (targetId === 'logins' && !loginsLoaded) {
+                loadLoginData();
+                loginsLoaded = true;
+            }
+        }
     }
 
     // Initialize tabs
@@ -982,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 const attendedLoading = document.getElementById('attended-loading');
                 if (attendedLoading) attendedLoading.style.display = 'none';
-                
+
                 if (data.success && data.attendance.length > 0) {
                     let html = `
                         <div class="table-responsive">
@@ -995,7 +991,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </tr>
                                 </thead>
                                 <tbody>`;
-                    
+
                     data.attendance.forEach(record => {
                         let statusHtml = '';
                         if (record.attendance === 'yes') {
@@ -1015,12 +1011,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td>${statusHtml}</td>
                             </tr>`;
                     });
-                    
+
                     html += '</tbody></table></div>';
                     document.getElementById('attended-content').innerHTML = html;
                 } else {
                     document.getElementById('attended-content').innerHTML =
-                        '<div class="alert alert-info" role="alert">This person hasn\'t been marked as attending any sessions yet.</div>';
+                        '<div class="alert alert-info" role="alert">No attendance records found.</div>';
                 }
             })
             .catch(error => {
@@ -1028,67 +1024,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (attendedLoading) attendedLoading.style.display = 'none';
                 const attendedContent = document.getElementById('attended-content');
                 if (attendedContent) {
-                    attendedContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading players.</div>';
+                    attendedContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading attendance data.</div>';
                 }
                 console.error('Error:', error);
             });
     }
 
     function loadTunesData() {
-        fetch(`/api/person/${personId}/tunes`)
+        fetch(`/api/person/${personId}/tunes-stats`)
             .then(response => response.json())
             .then(data => {
                 const tunesLoading = document.getElementById('tunes-loading');
                 if (tunesLoading) tunesLoading.style.display = 'none';
 
-                if (data.success && data.tunes.length > 0) {
-                    let html = `
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Tune Name</th>
-                                        <th>Type</th>
-                                        <th>Learn Status</th>
-                                        <th>Heard Count</th>
-                                        <th>Learned Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
+                let html = '<div class="tune-stats">';
 
-                    data.tunes.forEach(tune => {
-                        let statusClass = '';
-                        if (tune.learn_status === 'learned') {
-                            statusClass = 'text-success';
-                        } else if (tune.learn_status === 'learning') {
-                            statusClass = 'text-primary';
-                        } else {
-                            statusClass = 'text-muted';
+                if (data.success) {
+                    const stats = data.stats;
+
+                    html += `
+                        <div class="row">
+                            <div class="col-md-6 col-lg-3 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value">${stats.total_tunes || 0}</div>
+                                    <div class="stat-label">Total Tunes</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value">${stats.learned || 0}</div>
+                                    <div class="stat-label">Learned</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value">${stats.learning || 0}</div>
+                                    <div class="stat-label">Learning</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value">${stats.bookmarked || 0}</div>
+                                    <div class="stat-label">Bookmarked</div>
+                                </div>
+                            </div>
+                        </div>`;
+
+                    if (stats.by_type && Object.keys(stats.by_type).length > 0) {
+                        html += `
+                            <div class="mt-3">
+                                <h6>By Tune Type</h6>
+                                <div class="tune-type-breakdown">`;
+
+                        for (const [type, count] of Object.entries(stats.by_type)) {
+                            html += `<span class="badge bg-secondary me-2 mb-2">${type}: ${count}</span>`;
                         }
 
-                        html += `
-                            <tr>
-                                <td><a href="/tunes/${tune.tune_id}">${tune.tune_name}</a></td>
-                                <td>${tune.tune_type}</td>
-                                <td><span class="${statusClass}">${tune.learn_status}</span></td>
-                                <td>${tune.heard_count}</td>
-                                <td>${tune.learned_date || '-'}</td>
-                            </tr>`;
-                    });
-
-                    html += '</tbody></table></div>';
-                    document.getElementById('tunes-content').innerHTML = html;
+                        html += `</div>
+                            </div>`;
+                    }
                 } else {
-                    document.getElementById('tunes-content').innerHTML =
-                        '<div class="alert alert-info" role="alert">This person has no tunes in their collection yet.</div>';
+                    html += '<div class="alert alert-info" role="alert">No tune statistics available.</div>';
                 }
+
+                html += `
+                    <div class="mt-4">
+                        <a href="/my-tunes" class="btn btn-primary">View My Tunes</a>
+                    </div>
+                </div>`;
+
+                document.getElementById('tunes-content').innerHTML = html;
             })
             .catch(error => {
                 const tunesLoading = document.getElementById('tunes-loading');
                 if (tunesLoading) tunesLoading.style.display = 'none';
                 const tunesContent = document.getElementById('tunes-content');
                 if (tunesContent) {
-                    tunesContent.innerHTML = '<div class="alert alert-danger" role="alert">Error loading tunes.</div>';
+                    tunesContent.innerHTML = `
+                        <div class="alert alert-info" role="alert">No tune statistics available.</div>
+                        <div class="mt-4">
+                            <a href="/my-tunes" class="btn btn-primary">View My Tunes</a>
+                        </div>`;
                 }
                 console.error('Error:', error);
             });
@@ -1102,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Login data response:', data); // Debug logging
                 const loginsLoading = document.getElementById('logins-loading');
                 if (loginsLoading) loginsLoading.style.display = 'none';
-                
+
                 if (data.success && data.logins.length > 0) {
                     let html = `
                         <div class="table-responsive">
@@ -1116,10 +1132,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                     </tr>
                                 </thead>
                                 <tbody>`;
-                    
+
                     data.logins.forEach(record => {
-                        const eventClass = record.event_type === 'LOGIN_SUCCESS' ? 'text-success' : 
-                                         record.event_type === 'LOGIN_FAILURE' ? 'text-danger' : 
+                        const eventClass = record.event_type === 'LOGIN_SUCCESS' ? 'text-success' :
+                                         record.event_type === 'LOGIN_FAILURE' ? 'text-danger' :
                                          'text-muted';
                         html += `
                             <tr>
@@ -1129,12 +1145,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td style="font-size: 0.8em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${record.user_agent}</td>
                             </tr>`;
                     });
-                    
+
                     html += '</tbody></table></div>';
                     document.getElementById('logins-content').innerHTML = html;
                 } else {
                     const debugInfo = data.debug ? `<br><small>Debug: ${data.debug}</small>` : '';
-                    document.getElementById('logins-content').innerHTML = 
+                    document.getElementById('logins-content').innerHTML =
                         `<div class="alert alert-info" role="alert">No login history found.${debugInfo}</div>`;
                 }
             })
@@ -1193,7 +1209,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Prepare modal content (page-specific business logic)
         sessionSearch.value = '';
         loadInitialSessions();
-        
+
         // Show modal using ModalManager
         ModalManager.showModal('addToSessionModal');
     }
@@ -1254,20 +1270,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (noSessionsMessage) noSessionsMessage.style.display = 'none';
-        
+
         let html = '<div class="sessions-list">';
         sessions.forEach(session => {
-            const locationInfo = session.location_name && session.location_name !== session.location_display 
+            const locationInfo = session.location_name && session.location_name !== session.location_display
                 ? `${session.location_name} - ${session.location_display}`
                 : session.location_display;
-            
+
             html += `
                 <div class="session-item">
                     <div class="session-info">
                         <div class="session-name">${session.name}</div>
                         <div class="session-location">${locationInfo}</div>
                     </div>
-                    <button class="btn btn-sm btn-primary add-session-btn" 
+                    <button class="btn btn-sm btn-primary add-session-btn"
                             data-session-id="${session.session_id}"
                             data-session-name="${session.name}">
                         Add
@@ -1276,15 +1292,15 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         });
         html += '</div>';
-        
+
         if (sessions.length === 10) {
             html += '<p class="text-muted mt-2"><small>Showing top 10 results. Use search to narrow down.</small></p>';
         }
-        
+
         html += '<p class="mt-3">Don\'t see the session here? <a href="/add-session" target="_blank">Add it!</a></p>';
-        
+
         sessionsResults.innerHTML = html;
-        
+
         // Add event listeners to add buttons
         document.querySelectorAll('.add-session-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1297,11 +1313,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addPersonToSession(sessionId, sessionName) {
         const selectedRole = document.querySelector('input[name="user-role"]:checked').value;
-        
+
         if (!confirm(`Add {{ person.name }} to "${sessionName}" as a ${selectedRole}?`)) {
             return;
         }
-        
+
         fetch('/api/add-person-to-session', {
             method: 'POST',
             headers: {
@@ -1344,8 +1360,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sessionsResults) sessionsResults.innerHTML = `<div class="alert alert-danger">${message}</div>`;
         if (noSessionsMessage) noSessionsMessage.style.display = 'none';
     }
-
-    // Flash messages are now handled by the global showMessage() function from base.html
 
     // Leave session functionality
     document.querySelectorAll('.leave-session-btn').forEach(btn => {
@@ -1412,20 +1426,14 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-bottom: 1rem !important;
 }
 
-/* Refresh active session button */
-#refresh-active-session {
-    color: var(--text-color);
-    opacity: 0.6;
-    transition: opacity 0.2s, transform 0.2s;
+/* Mobile Tab Navigation */
+.profile-mobile-nav {
+    margin-bottom: 1rem;
 }
 
-#refresh-active-session:hover {
-    opacity: 1;
-    text-decoration: none;
-}
-
-#refresh-active-session:active {
-    transform: scale(0.95);
+.profile-mobile-nav .form-select {
+    max-width: 100%;
+    font-weight: 600;
 }
 
 .card {
@@ -1433,11 +1441,21 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 2rem;
+}
+
+.card-header {
+    background-color: var(--hover-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+}
+
+.card-header h5 {
+    color: var(--text-color);
+    font-size: 1rem;
 }
 
 .card-body {
-    padding: 1.5rem;
+    padding: 1rem;
 }
 
 .admin-indicator {
@@ -1483,6 +1501,7 @@ document.addEventListener('DOMContentLoaded', function() {
     line-height: 1;
 }
 
+/* Tab styles */
 .nav-tabs {
     border-bottom: 1px solid var(--border-color);
 }
@@ -1513,6 +1532,31 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 1rem;
 }
 
+/* Tune statistics styles */
+.stat-card {
+    background-color: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: var(--disabled-text);
+    text-transform: uppercase;
+}
+
+.tune-type-breakdown {
+    margin-top: 0.5rem;
+}
+
 .table {
     background-color: var(--bg-color);
     border-radius: 8px;
@@ -1526,7 +1570,6 @@ document.addEventListener('DOMContentLoaded', function() {
     color: var(--text-color);
 }
 
-
 .alert {
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
@@ -1537,21 +1580,6 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: var(--bg-color);
     border-color: var(--primary);
     color: var(--text-color);
-}
-
-.alert-heading {
-    color: var(--text-color);
-}
-
-/* Remove any border/separator above user info section */
-#user-info {
-    border-top: none !important;
-    margin-top: 0 !important;
-    padding-top: 1rem !important;
-}
-
-.docs-section {
-    border-top: none !important;
 }
 
 .back-link {
@@ -1570,7 +1598,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .edit-controls {
-    margin-top: 1rem;
+    margin-bottom: 1rem;
 }
 
 .btn {
@@ -1720,11 +1748,11 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-left: 0.5rem;
 }
 
-.mt-4 {
-    margin-top: 1.5rem;
+.mt-3 {
+    margin-top: 1rem;
 }
 
-#bottom-edit-buttons {
+.mt-4 {
     margin-top: 1.5rem;
 }
 
@@ -1856,8 +1884,6 @@ document.addEventListener('DOMContentLoaded', function() {
     100% { transform: rotate(360deg); }
 }
 
-/* Flash message styles now handled globally in base.html */
-
 /* Instrument checkboxes styling */
 #instruments-checkboxes .form-check {
     margin-bottom: 0.25rem;
@@ -1888,12 +1914,12 @@ document.addEventListener('DOMContentLoaded', function() {
         width: 95%;
         margin: 10% auto;
     }
-    
+
     .session-item {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .add-session-btn {
         margin-left: 0;
         margin-top: 0.5rem;
@@ -1903,17 +1929,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @media (max-width: 768px) {
     /* Match other admin pages - aggressive margin reduction for mobile ONLY */
-    
+
     /* Remove docs-content padding completely - mobile only */
     body .docs-content {
         padding: 0.5rem !important;
     }
-    
+
     /* Remove docs-article padding - mobile only */
     body .docs-article {
         padding: 0.5rem !important;
     }
-    
+
     /* Reduce container padding to minimal - mobile only */
     body .docs-content-inner .container {
         padding-left: 0.5rem !important;
@@ -1922,29 +1948,38 @@ document.addEventListener('DOMContentLoaded', function() {
         margin-left: 0 !important;
         margin-right: 0 !important;
     }
-    
+
     /* Make admin dashboard text smaller - mobile only */
     body .docs-article .docs-heading {
         font-size: 1.75rem !important;
         margin-bottom: 1rem !important;
     }
-    
+
     /* Reduce section padding - mobile only */
     body .docs-section {
         padding: 1rem 0 !important;
     }
-    
+
     .card-body {
         padding: 1rem;
     }
-    
+
     .table-responsive {
         font-size: 0.9rem;
     }
-    
+
     .nav-tabs .nav-link {
         font-size: 0.9rem;
         padding: 0.5rem 0.75rem;
+    }
+
+    /* Stat cards on mobile */
+    .stat-card {
+        padding: 0.75rem;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
     }
 }
 </style>
