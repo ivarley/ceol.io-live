@@ -480,6 +480,12 @@ app.add_url_rule(
     methods=["DELETE"],
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/leave",
+    "leave_session_membership",
+    leave_session_membership,
+    methods=["DELETE"],
+)
+app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/logs",
     "get_session_logs_ajax",
     get_session_logs_ajax,

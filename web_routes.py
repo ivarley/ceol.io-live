@@ -2300,7 +2300,7 @@ def person_details(person_id=None):
         # Get sessions this person is associated with
         cur.execute(
             """
-            SELECT s.name as session_name, s.city, s.state, s.country, sp.is_regular, sp.is_admin
+            SELECT s.name as session_name, s.city, s.state, s.country, sp.is_regular, sp.is_admin, s.path as session_path
             FROM session_person sp
             JOIN session s ON sp.session_id = s.session_id
             WHERE sp.person_id = %s
@@ -2318,6 +2318,7 @@ def person_details(person_id=None):
                 session_country,
                 is_regular,
                 is_admin,
+                session_path,
             ) = row
 
             # Derive role from boolean flags
@@ -2348,6 +2349,7 @@ def person_details(person_id=None):
                     "location": session_location,
                     "regular_schedule": None,  # Would need to be added to query if available
                     "role": role,
+                    "session_path": session_path,
                 }
             )
 
