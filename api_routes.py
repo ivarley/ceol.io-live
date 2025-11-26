@@ -2918,7 +2918,7 @@ def get_session_people_list(session_path):
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
             LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
             LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-            WHERE sp.session_id = %s
+            WHERE sp.session_id = %s AND p.active = TRUE
             GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id, sp.is_regular
             ORDER BY p.first_name, p.last_name
             """,
@@ -7402,7 +7402,8 @@ def search_session_people(session_id):
                 LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
                 LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                 WHERE (sp.session_id = %s OR si.session_id = %s)
-                  AND (LOWER(p.first_name) LIKE %s 
+                  AND p.active = TRUE
+                  AND (LOWER(p.first_name) LIKE %s
                        OR LOWER(p.last_name) LIKE %s
                        OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE %s)
             ),
@@ -7534,7 +7535,7 @@ def get_session_people(session_id):
         cur.execute(
             """
             WITH session_all_people AS (
-                -- Get all people who are associated with this session (regulars, admins, or have attended)
+                -- Get all active people who are associated with this session (regulars, admins, or have attended)
                 SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
                        COALESCE(sp.is_regular, FALSE) as is_regular,
                        COALESCE(sp.is_admin, FALSE) as is_session_admin
@@ -7543,6 +7544,7 @@ def get_session_people(session_id):
                 LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
                 LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                 WHERE (sp.session_id = %s OR si.session_id = %s)
+                  AND p.active = TRUE
             ),
             person_instruments AS (
                 -- Get instruments for these people

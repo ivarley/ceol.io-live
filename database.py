@@ -971,7 +971,8 @@ def search_session_people(session_id, search_query, limit=20):
                 LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
                 LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
                 WHERE (sp.session_id = %s OR si.session_id = %s)
-                  AND (LOWER(p.first_name) LIKE %s 
+                  AND p.active = TRUE
+                  AND (LOWER(p.first_name) LIKE %s
                        OR LOWER(p.last_name) LIKE %s
                        OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE %s)
             ),
