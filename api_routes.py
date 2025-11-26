@@ -3129,13 +3129,17 @@ def add_person_to_session_people_tab(session_path):
 
         # Check if person already exists (by name)
         cur.execute(
-            "SELECT person_id FROM person WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)",
+            "SELECT person_id, active FROM person WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)",
             (first_name, last_name)
         )
         existing_person = cur.fetchone()
 
         if existing_person:
-            person_id = existing_person[0]
+            person_id, active = existing_person
+
+            # Check if the existing person is deactivated
+            if not active:
+                return jsonify({"success": False, "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions"}), 400
 
             # Check if already in this session
             cur.execute(
@@ -3250,7 +3254,7 @@ def search_people_for_session(session_path):
         if not cur.fetchone():
             return jsonify({"success": False, "message": "Not a member of this session"}), 403
 
-        # Search for people not already in this session
+        # Search for active people not already in this session
         search_pattern = f"%{query}%"
         cur.execute(
             """
@@ -3266,6 +3270,7 @@ def search_people_for_session(session_path):
                 OR LOWER(p.last_name) LIKE LOWER(%s)
                 OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE LOWER(%s)
             )
+            AND p.active = TRUE
             AND p.person_id NOT IN (
                 SELECT person_id FROM session_person WHERE session_id = %s
             )
@@ -3357,14 +3362,17 @@ def add_existing_person_to_session(session_path):
         if not cur.fetchone():
             return jsonify({"success": False, "message": "Not a member of this session"}), 403
 
-        # Verify person exists
-        cur.execute("SELECT first_name, last_name FROM person WHERE person_id = %s", (person_id,))
+        # Verify person exists and is active
+        cur.execute("SELECT first_name, last_name, active FROM person WHERE person_id = %s", (person_id,))
         person_result = cur.fetchone()
 
         if not person_result:
             return jsonify({"success": False, "message": "Person not found"}), 404
 
-        first_name, last_name = person_result
+        first_name, last_name, active = person_result
+
+        if not active:
+            return jsonify({"success": False, "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions"}), 400
 
         # Check if person is already in this session
         cur.execute(
@@ -4637,6 +4645,98 @@ def admin_verify_email(user_id):
         )
 
 
+@login_required
+def toggle_person_active(person_id):
+    """
+    Toggle a person's active status (deactivate/reactivate).
+
+    PUT /api/admin/person/<person_id>/active
+
+    Request body:
+    {
+        "active": bool
+    }
+
+    Returns:
+    {
+        "success": true,
+        "message": str,
+        "active": bool
+    }
+
+    Requires system admin access.
+    """
+    # Check if current user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "message": "Unauthorized. Admin access required."}), 403
+
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+
+        active = data.get("active")
+        if active is None:
+            return jsonify({"success": False, "message": "'active' field is required"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Check if person exists and get their name
+        cur.execute(
+            "SELECT first_name, last_name, active FROM person WHERE person_id = %s",
+            (person_id,),
+        )
+        person_row = cur.fetchone()
+
+        if not person_row:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Person not found"}), 404
+
+        first_name, last_name, current_active = person_row
+        person_name = f"{first_name} {last_name}"
+
+        if current_active == active:
+            status_word = "active" if active else "deactivated"
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "message": f"{person_name} is already {status_word}"
+            }), 400
+
+        # Save to history before update
+        save_to_history(cur, "person", "UPDATE", person_id, "admin_toggle_active")
+
+        # Update the active status
+        cur.execute(
+            """
+            UPDATE person
+            SET active = %s, last_modified_date = %s
+            WHERE person_id = %s
+            """,
+            (active, now_utc(), person_id),
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        action_word = "reactivated" if active else "deactivated"
+        return jsonify({
+            "success": True,
+            "message": f"{person_name} has been {action_word}",
+            "active": active
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Failed to update person status: {str(e)}"
+        }), 500
+
+
 def get_available_sessions_for_person(person_id):
     """Get sessions available for a person to join, prioritizing same location sessions"""
     try:
@@ -4853,15 +4953,18 @@ def add_person_to_session():
 
         # Get person and session details for email
         cur.execute(
-            "SELECT first_name, last_name, email FROM person WHERE person_id = %s",
+            "SELECT first_name, last_name, email, active FROM person WHERE person_id = %s",
             (person_id,),
         )
         person_row = cur.fetchone()
         if not person_row:
             return jsonify({"success": False, "message": "Person not found"}), 404
 
-        person_first_name, person_last_name, person_email = person_row
+        person_first_name, person_last_name, person_email, person_active = person_row
         person_name = f"{person_first_name} {person_last_name}"
+
+        if not person_active:
+            return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be added to sessions"}), 400
 
         cur.execute(
             "SELECT name, city, state, country, path FROM session WHERE session_id = %s",
@@ -6609,18 +6712,25 @@ def check_in_person(session_instance_id):
         
         session_id = result[0]
         
-        # Check if person exists
+        # Check if person exists and is active
         cur.execute(
-            "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
+            "SELECT person_id, first_name, last_name, active FROM person WHERE person_id = %s",
             (person_id,)
         )
-        
+
         person_result = cur.fetchone()
         if not person_result:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Person not found"}), 404
-        
+
+        person_active = person_result[3]
+        if not person_active:
+            person_name = f"{person_result[1]} {person_result[2]}"
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be checked in"}), 400
+
         # Permission check - need to verify user can manage this person's attendance
         current_user_id = current_user.user_id
         current_person_id = current_user.person_id
@@ -9288,6 +9398,23 @@ def update_set_started_by(session_instance_id, set_index):
             return jsonify({"success": False, "message": "Session instance not found"}), 404
 
         session_id = session_result[0]
+
+        # If setting a person_id (not clearing), verify the person exists and is active
+        if person_id is not None:
+            cur.execute(
+                "SELECT first_name, last_name, active FROM person WHERE person_id = %s",
+                (person_id,)
+            )
+            person_result = cur.fetchone()
+            if not person_result:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "message": "Person not found"}), 404
+            if not person_result[2]:  # active is False
+                person_name = f"{person_result[0]} {person_result[1]}"
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be set as 'Started By'"}), 400
 
         # Check if user has permission to edit this session
         if not current_user.is_system_admin:

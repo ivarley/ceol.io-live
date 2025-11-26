@@ -547,6 +547,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/admin/person/<int:person_id>/active",
+    "toggle_person_active",
+    toggle_person_active,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/person/<int:person_id>/available-sessions",
     "get_available_sessions_for_person",
     get_available_sessions_for_person,

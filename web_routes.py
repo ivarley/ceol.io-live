@@ -2226,7 +2226,7 @@ def person_details(person_id=None):
         # Get person details
         cur.execute(
             """
-            SELECT person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id
+            SELECT person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id, active
             FROM person
             WHERE person_id = %s
         """,
@@ -2249,6 +2249,7 @@ def person_details(person_id=None):
             state,
             country,
             thesession_user_id,
+            active,
         ) = person_row
 
         # Format location
@@ -2273,6 +2274,7 @@ def person_details(person_id=None):
             "country": country,
             "location": location,
             "thesession_user_id": thesession_user_id,
+            "active": active,
         }
 
         # Get person's instruments

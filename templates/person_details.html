@@ -357,6 +357,39 @@
                             <button id="bottom-save-btn" class="btn btn-success">Save</button>
                             <button id="bottom-cancel-btn" class="btn btn-secondary">Cancel</button>
                         </div>
+
+                        <!-- Danger Zone - Admin Only -->
+                        {% if not is_user_profile %}
+                        <div class="card mt-4 border-danger" id="danger-zone">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="mb-0">Danger Zone</h5>
+                            </div>
+                            <div class="card-body">
+                                {% if person.active %}
+                                <h6 class="text-danger">Deactivate Person</h6>
+                                <p class="text-muted">
+                                    Deactivating {{ person.name }} will prevent them from being added to any sessions, session instances, or tune sets.
+                                    Existing associations will not be affected.
+                                </p>
+                                <button type="button" class="btn btn-outline-danger" id="deactivate-person-btn">
+                                    Deactivate {{ person.first_name }}
+                                </button>
+                                {% else %}
+                                <div class="alert alert-warning mb-3">
+                                    <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.
+                                </div>
+                                <h6 class="text-success">Reactivate Person</h6>
+                                <p class="text-muted">
+                                    Reactivating {{ person.name }} will allow them to be added to sessions, session instances, and tune sets again.
+                                </p>
+                                <button type="button" class="btn btn-success" id="reactivate-person-btn">
+                                    Reactivate {{ person.first_name }}
+                                </button>
+                                {% endif %}
+                                <div id="toggle-active-status" class="mt-3" style="display: none;"></div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -1416,6 +1449,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     });
+
+    // Deactivate/Reactivate person functionality (admin only)
+    const deactivateBtn = document.getElementById('deactivate-person-btn');
+    const reactivateBtn = document.getElementById('reactivate-person-btn');
+    const toggleActiveStatus = document.getElementById('toggle-active-status');
+
+    function togglePersonActive(active) {
+        const action = active ? 'reactivate' : 'deactivate';
+        const personName = '{{ person.name }}';
+
+        if (!confirm(`Are you sure you want to ${action} ${personName}?`)) {
+            return;
+        }
+
+        // Show loading state
+        if (toggleActiveStatus) {
+            toggleActiveStatus.style.display = 'block';
+            toggleActiveStatus.innerHTML = '<div class="alert alert-info">Processing...</div>';
+        }
+
+        fetch(`/api/admin/person/${personId}/active`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ active: active })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message, 'success');
+                // Reload page to reflect new state
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                if (toggleActiveStatus) {
+                    toggleActiveStatus.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling person active status:', error);
+            if (toggleActiveStatus) {
+                toggleActiveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+            }
+        });
+    }
+
+    if (deactivateBtn) {
+        deactivateBtn.addEventListener('click', function() {
+            togglePersonActive(false);
+        });
+    }
+
+    if (reactivateBtn) {
+        reactivateBtn.addEventListener('click', function() {
+            togglePersonActive(true);
+        });
+    }
 });
 </script>
 
