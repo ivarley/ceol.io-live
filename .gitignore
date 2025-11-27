@@ -109,8 +109,8 @@ venv.bak/
 .env
 .env.test
 
-# Database backups - contain sensitive production data
-data/backup/
+# Database backups and other local data, including sensitive production data
+data/
 
 # Claude
 .claude-code-config.json
