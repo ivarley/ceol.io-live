@@ -13,7 +13,15 @@ User accounts, person identities, session membership, attendance tracking.
 ### person
 Individual identity (with or without login).
 - person_id, first_name, last_name, email, phone, location
+- active - Boolean, default true. When false, person is deactivated.
 - at_active_session_instance_id - Currently attending session (FK)
+
+#### Deactivation
+When a person is deactivated (active=false):
+- They don't appear in session people lists
+- They cannot be added to sessions, session instances, or set as "started by" on tune sets
+- Existing associations (session memberships, attendance records) are preserved but hidden
+- Admin can reactivate from admin/people/{id} page (Danger Zone section)
 
 ### user_account
 Login credentials and preferences.

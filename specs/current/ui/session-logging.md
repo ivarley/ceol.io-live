@@ -57,6 +57,7 @@ All operations via `api_routes.py` using session path pattern:
 - **Match tune**: POST `/api/sessions/<path>/<date_or_id>/match_tune` - Link to thesession.org
 - **Update instance**: PUT `/api/sessions/<path>/<date_or_id>/update` - Update session instance metadata
 - **Mark complete**: POST `/api/sessions/<path>/<date_or_id>/mark_complete`
+- **Set Started By**: PUT `/api/session_instance/<id>/sets/<set_index>/started_by` - Update who started a set
 
 **URL Pattern**: Uses session path + date/instance ID rather than direct session_instance_id
 
@@ -68,10 +69,18 @@ A **set** is a group of tunes played consecutively without pause.
 
 - `session_instance_tune.continues_set` - Boolean indicating tune continues previous tune in a set
 - `session_instance_tune.order_number` - Order within entire session
+- `session_instance_tune.started_by_person_id` - FK to person who started the set
 
 ### UI Representation
 
 Visual grouping with borders and labels, drag handle for entire set
+
+### Set Label Popout
+
+Clicking the set label (e.g., "Set 3") opens a popout overlay showing:
+- Set number and tune count
+- **Started By** selector - Dropdown of session attendees to track who started the set
+- Updates via PUT `/api/session_instance/<id>/sets/<set_index>/started_by`
 
 ### Operations
 
@@ -79,6 +88,7 @@ Visual grouping with borders and labels, drag handle for entire set
 - **Break set**: Mark tune as `continues_set = false`
 - **Add to set**: Drag tune into set visual grouping
 - **Remove from set**: Drag out or toggle `continues_set`
+- **Set Started By**: Click set label, select person from dropdown
 
 ## Permissions
 

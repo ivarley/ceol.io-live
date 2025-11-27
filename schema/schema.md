@@ -56,4 +56,23 @@ The database will be a Postgres database. The basic entities in my model will be
     - played_timestamp - a timestamp of when the tune was played. An async process could detect if there are cases where ordering and timestamps appear to conflict.
     - inserted_timestamp - a timestamp (also not shown in the UI) of when the record was inserted
     - key_override - optional field meaning that this instance of playing the tune was in a different key from the key on the tune record / session_tune record.
-    setting_override”, in case this instance of playing the tune differs from that which is mapped as the standard for this session.
+    - setting_override - in case this instance of playing the tune differs from that which is mapped as the standard for this session.
+    - started_by_person_id - foreign key to person table, optional, indicates which person started the set (applies to all tunes in the set)
+
+## People
+
+- **person** - A person who may attend sessions or have a user account. Attributes:
+    - person_id - Unique ID, auto-generated, primary key
+    - first_name - string, required
+    - last_name - string, required
+    - email - string, optional
+    - sms_number - string, optional
+    - city - string, optional
+    - state - string, optional
+    - country - string, optional
+    - thesession_user_id - integer, optional, links to thesession.org user
+    - active - boolean, default true. When false, the person is deactivated and won't appear in session people lists or be available to add to sessions/instances/tune sets.
+    - at_active_session_instance_id - foreign key to session_instance, indicates currently attending session
+    - created_date - timestamp
+    - last_modified_date - timestamp
+

@@ -39,6 +39,7 @@ Logged tune plays (the actual session log).
 - session_instance_tune_id, session_instance_id, tune_id (nullable), name
 - order_number (typically increments of 1000)
 - continues_set (boolean - true if continues previous tune in a set)
+- started_by_person_id (FK to person, nullable) - Who started the set
 - played_timestamp, inserted_timestamp
 - key_override (VARCHAR(20)), setting_override
 
@@ -49,6 +50,8 @@ Logged tune plays (the actual session log).
 **Set** = consecutive tunes played without pause
 - continues_set = TRUE means tune continues previous tune
 - Sets are implicit (no set_id, derived from continues_set sequence)
+- started_by_person_id tracks who started the set (shown via clickable label)
+- Clicking set label shows popout with set details and "Started By" selector
 
 ## ABC Integration
 
