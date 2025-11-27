@@ -1,20 +1,29 @@
 # Makefile for Irish Music Sessions Flask App Testing
 
-.PHONY: help install test test-unit test-integration test-functional test-smoke test-coverage clean setup-db lint format
+.PHONY: help install test test-unit test-integration test-functional test-smoke test-coverage clean setup-test-db reset-test-db seed-test-db schema-test-db lint format
 
 # Default target
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Setup:"
 	@echo "  install          Install dependencies"
-	@echo "  setup-test-db    Set up test database"
+	@echo "  setup-test-db    Set up local test database (creates if not exists)"
+	@echo "  reset-test-db    Drop and recreate test database from scratch"
+	@echo "  seed-test-db     Refresh seed data only (keeps schema)"
+	@echo "  schema-test-db   Run schema only (no seed data)"
+	@echo ""
+	@echo "Testing:"
 	@echo "  test             Run all tests"
 	@echo "  test-unit        Run unit tests only"
-	@echo "  test-integration Run integration tests only" 
+	@echo "  test-integration Run integration tests only"
 	@echo "  test-functional  Run functional tests only"
 	@echo "  test-smoke       Run smoke tests only"
 	@echo "  test-fast        Run fast tests (exclude slow)"
 	@echo "  test-coverage    Run tests with coverage report"
 	@echo "  test-watch       Run tests in watch mode"
+	@echo ""
+	@echo "Code Quality:"
 	@echo "  lint             Run code linting"
 	@echo "  format           Format code"
 	@echo "  clean            Clean up test artifacts"
@@ -26,15 +35,16 @@ install:
 
 # Database setup
 setup-test-db:
-	@echo "Setting up test database..."
-	@echo "Make sure PostgreSQL is running and you have created the test database:"
-	@echo "  CREATE DATABASE ceol_test;"
-	@echo "  CREATE USER test_user WITH PASSWORD 'test_password';"
-	@echo "  GRANT ALL PRIVILEGES ON DATABASE ceol_test TO test_user;"
-	@echo ""
-	@echo "Then run schema files:"
-	@echo "  psql -h localhost -U test_user -d ceol_test -f schema/create_session_table.sql"
-	@echo "  # ... run all schema files"
+	@./scripts/setup_local_db.sh
+
+reset-test-db:
+	@./scripts/setup_local_db.sh --reset
+
+seed-test-db:
+	@./scripts/setup_local_db.sh --seed-only
+
+schema-test-db:
+	@./scripts/setup_local_db.sh --schema-only
 
 # Testing targets
 test:

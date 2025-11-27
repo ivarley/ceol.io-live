@@ -49,13 +49,23 @@ Internal services, microservices, background jobs
 ## Development
 
 ```bash
-# Local development
+# First time setup
+make install              # Install Python/JS dependencies
+make setup-test-db        # Create local database with seed data
+cp .env.test .env         # Use test environment config
+
+# Run the app
 flask --app app run --debug  # http://127.0.0.1:5001
 
-# Environment variables (see .env)
-PGHOST, PGDATABASE, PGUSER, PGPASSWORD
-SECRET_KEY, SENDGRID_API_KEY
+# Database management
+make reset-test-db        # Drop and recreate database
+make seed-test-db         # Refresh seed data only
+make test                 # Run all tests
 ```
+
+See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed setup instructions.
+
+**Test login**: `ian` / `password123` (admin) or `sarah_fiddle` / `password123` (regular user)
 
 ## Key Files
 
