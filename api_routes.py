@@ -9297,6 +9297,11 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             return jsonify({"success": False, "message": "Session instance not found"}), 404
 
         # Check if user has permission to edit this session
+        # System admins and session admins can update all fields
+        # Regular session members can only update setting_override
+        is_session_admin = False
+        is_session_member = False
+
         if not current_user.is_system_admin:
             cur.execute(
                 """
@@ -9306,8 +9311,18 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                 (session_id, current_user.person_id),
             )
             permission = cur.fetchone()
-            if not permission or not permission[0]:
+            if permission:
+                is_session_member = True
+                is_session_admin = permission[0]
+
+            if not is_session_member:
                 return jsonify({"success": False, "message": "Unauthorized"}), 403
+
+            # Non-admins can only update setting_override
+            if not is_session_admin:
+                # Check if they're trying to update restricted fields
+                if data.get("name") or data.get("key_override"):
+                    return jsonify({"success": False, "message": "Only session admins can update name and key_override"}), 403
 
         # Check if this tune exists in this session instance
         cur.execute(
