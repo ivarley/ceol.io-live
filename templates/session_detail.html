@@ -8,10 +8,17 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <style>
         .session-details {
+            position: relative;
             background-color: #f5f5f5;
             padding: 10px;
             border-radius: 8px;
             margin-bottom: 10px;
+        }
+
+        .session-role-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
         }
 
         .session-details p {
@@ -1371,6 +1378,13 @@
         <h1 class="session-title-heading">{{ session.name }} <a href="/sessions" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a>{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
 
         <div class="session-details">
+            {% if is_logged_in %}
+                {% if is_session_admin %}
+                <span class="badge bg-primary session-role-badge">Admin</span>
+                {% elif is_session_member %}
+                <span class="badge bg-success session-role-badge">Member</span>
+                {% endif %}
+            {% endif %}
             {% if session.location_name and session.location_name != session.name %}
             <p><strong>Location:</strong> {{ session.location_name }}</p>
             {% endif %}
