@@ -13,6 +13,8 @@ export interface TunePill {
     tuneType: string;
     state: 'linked' | 'unlinked';
     startedByPersonId: number | null;
+    loggedByLastName: string | null;
+    loggedByFirstName: string | null;
 }
 
 export interface TuneSet extends Array<TunePill> {}
@@ -26,8 +28,8 @@ export interface TunePosition {
 }
 
 // Raw tune data from backend (array format)
-// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId]
-export type RawTune = [number, boolean, number | null, string, string, string, number | null];
+// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName]
+export type RawTune = [number, boolean, number | null, string, string, string, number | null, string | null, string | null];
 export type RawTuneSet = RawTune[];
 export type RawTuneSets = RawTuneSet[];
 
@@ -125,15 +127,15 @@ export class StateManager {
     
     public static convertTuneSetsToPills(tuneSets: RawTuneSets, skipCallback: boolean = false): void {
         this.tunePillsData = [];
-        
+
         if (!tuneSets || tuneSets.length === 0) {
             return;
         }
-        
+
         tuneSets.forEach(tuneSet => {
             const setData: TuneSet = [];
             tuneSet.forEach(tune => {
-                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId] = tune;
+                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName] = tune;
                 setData.push({
                     id: this.generateId(),
                     orderNumber: orderNumber,
@@ -142,14 +144,16 @@ export class StateManager {
                     setting: setting,
                     tuneType: tuneType,
                     state: tuneId ? 'linked' : 'unlinked',
-                    startedByPersonId: startedByPersonId || null
+                    startedByPersonId: startedByPersonId || null,
+                    loggedByLastName: loggedByLastName || null,
+                    loggedByFirstName: loggedByFirstName || null
                 });
             });
             if (setData.length > 0) {
                 this.tunePillsData.push(setData);
             }
         });
-        
+
         if (!skipCallback && this.changeCallback) {
             this.changeCallback();
         }

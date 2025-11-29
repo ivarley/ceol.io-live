@@ -528,6 +528,27 @@ export class PillRenderer {
             }
         }
 
+        // Calculate the logged-by name from the tune set
+        const getLoggedByName = (): string | null => {
+            // Find the first tune with logged-by info (they should all be the same for a set)
+            for (const tune of tuneSet) {
+                if (tune.loggedByLastName || tune.loggedByFirstName) {
+                    const firstName = tune.loggedByFirstName || '';
+                    const lastInitial = tune.loggedByLastName ? tune.loggedByLastName.charAt(0) : '';
+                    if (firstName && lastInitial) {
+                        return `${firstName} ${lastInitial}`;
+                    } else if (firstName) {
+                        return firstName;
+                    } else if (lastInitial) {
+                        return lastInitial;
+                    }
+                }
+            }
+            return null;
+        };
+
+        const loggedByName = getLoggedByName();
+
         // Initial loading state
         popout.innerHTML = `
             <div class="set-popout-content">
@@ -539,7 +560,7 @@ export class PillRenderer {
                 </div>
                 <div class="set-popout-row">
                     <label>Logged by:</label>
-                    <span class="set-logged-by">—</span>
+                    <span class="set-logged-by">${loggedByName || '—'}</span>
                 </div>
             </div>
         `;

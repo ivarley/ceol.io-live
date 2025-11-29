@@ -116,7 +116,10 @@ export class ClipboardManager {
                                     tuneName: tunename,
                                     setting: '',
                                     tuneType: '',
-                                    state: 'loading' as const  // Show loading spinner during matching
+                                    state: 'loading' as const,  // Show loading spinner during matching
+                                    startedByPersonId: null,
+                                    loggedByFirstName: (window as any).sessionConfig?.currentUserFirstName || null,
+                                    loggedByLastName: (window as any).sessionConfig?.currentUserLastName || null
                                 }));
                             });
                             isPlainTextPaste = true;
@@ -215,11 +218,13 @@ export class ClipboardManager {
         
         if (isNewFormat) {
             // New format: array of sets with preserved set breaks
-            const newSets = pillsData.map(set => 
+            const newSets = pillsData.map(set =>
                 set.map(pill => ({
                     ...pill,
                     id: this.callbacks.generateId(),
-                    orderNumber: 0
+                    orderNumber: 0,
+                    loggedByFirstName: pill.loggedByFirstName ?? (window as any).sessionConfig?.currentUserFirstName ?? null,
+                    loggedByLastName: pill.loggedByLastName ?? (window as any).sessionConfig?.currentUserLastName ?? null
                 }))
             );
             
@@ -286,7 +291,9 @@ export class ClipboardManager {
             const newPills = (pillsData as unknown as TunePill[]).map(pill => ({
                 ...pill,
                 id: this.callbacks.generateId(),
-                orderNumber: 0
+                orderNumber: 0,
+                loggedByFirstName: pill.loggedByFirstName ?? (window as any).sessionConfig?.currentUserFirstName ?? null,
+                loggedByLastName: pill.loggedByLastName ?? (window as any).sessionConfig?.currentUserLastName ?? null
             }));
             
             if (position.position === 'newset') {

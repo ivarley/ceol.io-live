@@ -944,7 +944,7 @@
 
         .set-popout-row {
             display: flex;
-            align-items: center;
+            align-items: baseline;
             gap: 8px;
             margin-bottom: 8px;
         }
@@ -1561,7 +1561,9 @@ window.sessionConfig = {
     isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
     userAutoSave: {{ 'true' if current_user.auto_save_tunes else 'false' }},
     userAutoSaveInterval: {{ current_user.auto_save_interval if current_user.is_authenticated else 60 }},
-    attendees: {{ attendees|tojson }}
+    attendees: {{ attendees|tojson }},
+    currentUserFirstName: {{ current_user.first_name|tojson if current_user.is_authenticated else 'null' }},
+    currentUserLastName: {{ current_user.last_name|tojson if current_user.is_authenticated else 'null' }}
 };
 
 // Store attendees in localStorage for the started-by dropdown

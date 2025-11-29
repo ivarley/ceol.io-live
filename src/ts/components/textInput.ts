@@ -710,7 +710,10 @@ export class TextInput {
             setting: '',
             tuneType: '',
             state: 'loading',  // Show loading spinner until API responds
-            previousTuneType: previousTuneType  // Store for API call
+            previousTuneType: previousTuneType,  // Store for API call
+            startedByPersonId: null,
+            loggedByFirstName: (window as any).sessionConfig?.currentUserFirstName || null,
+            loggedByLastName: (window as any).sessionConfig?.currentUserLastName || null
         }));
         
         // Attempt to auto-match each tune via API
