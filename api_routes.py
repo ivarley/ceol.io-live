@@ -6953,16 +6953,16 @@ def check_in_person(session_instance_id):
             (session_id, current_person_id)
         )
         
-        user_session_admin = cur.fetchone()
-        is_session_admin = user_session_admin and user_session_admin[0]
+        user_session_record = cur.fetchone()
+        is_session_member = user_session_record is not None
         is_system_admin = current_user.is_system_admin
         is_self_checkin = (person_id == current_person_id)
-        
+
         # Permission rules:
         # - System admins can manage anyone
-        # - Session admins can manage anyone in their session  
+        # - Session members can manage anyone in their session
         # - Regular users can only manage themselves
-        if not (is_system_admin or is_session_admin or is_self_checkin):
+        if not (is_system_admin or is_session_member or is_self_checkin):
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to manage this person's attendance"}), 403
@@ -7480,16 +7480,16 @@ def remove_person_attendance(session_instance_id, person_id):
             (session_id, current_person_id)
         )
         
-        user_session_admin = cur.fetchone()
-        is_session_admin = user_session_admin and user_session_admin[0]
+        user_session_record = cur.fetchone()
+        is_session_member = user_session_record is not None
         is_system_admin = current_user.is_system_admin
         is_self_removal = (person_id == current_person_id)
-        
+
         # Permission rules:
         # - System admins can remove anyone
-        # - Session admins can remove anyone from their session  
+        # - Session members can remove anyone from their session
         # - Regular users can only remove themselves
-        if not (is_system_admin or is_session_admin or is_self_removal):
+        if not (is_system_admin or is_session_member or is_self_removal):
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to remove this person from attendance"}), 403
@@ -9671,17 +9671,17 @@ def update_set_started_by(session_instance_id, set_index):
                 conn.close()
                 return jsonify({"success": False, "message": f"{person_name} is deactivated and cannot be set as 'Started By'"}), 400
 
-        # Check if user has permission to edit this session
+        # Check if user has permission to edit this session (must be a session member)
         if not current_user.is_system_admin:
             cur.execute(
                 """
-                SELECT is_admin FROM session_person
+                SELECT 1 FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """,
                 (session_id, current_user.person_id),
             )
-            permission = cur.fetchone()
-            if not permission or not permission[0]:
+            is_session_member = cur.fetchone()
+            if not is_session_member:
                 return jsonify({"success": False, "message": "Unauthorized"}), 403
 
         # Get all tunes for this session instance ordered by order_number
