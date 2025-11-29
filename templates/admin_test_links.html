@@ -38,7 +38,13 @@
                                     <li>Remove a tune from session repertoire</li>
                                 </ol>
                             </li>
-                            <li><a href="/sessions/{{ sample_session[1] }}/people" target="_blank">Session People</a></li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/people" target="_blank">Session People</a>
+                                <ol class="inline-tests">
+                                    <li>Add a person to the session who is in the person table (e.g., "Siobhan Walsh")</li>
+                                    <li>Add a new person to the session who isn't in the person table (e.g., "Juanita Perez")</li>
+                                </ol>
+                            </li>
                             <li><a href="/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Logs</a></li>
                             {% if sample_tune_id %}
                             <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
