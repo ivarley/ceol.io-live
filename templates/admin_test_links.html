@@ -29,47 +29,48 @@
                         <h3>Session Pages ({{ sample_session[2] }})</h3>
                         <ul class="test-links-list">
                             <li><a href="/sessions/{{ sample_session[1] }}" target="_blank">Session Home</a></li>
-                            <li><a href="/sessions/{{ sample_session[1] }}/tunes" target="_blank">Session Tunes</a></li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/tunes" target="_blank">Session Tunes</a>
+                                <ol class="inline-tests">
+                                    <li>Add a tune to session repertoire (click +, search, link)</li>
+                                    <li>Edit tune's session-specific key setting</li>
+                                    <li>Add an additional alias for a tune</li>
+                                    <li>Remove a tune from session repertoire</li>
+                                </ol>
+                            </li>
                             <li><a href="/sessions/{{ sample_session[1] }}/people" target="_blank">Session People</a></li>
                             <li><a href="/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Logs</a></li>
                             {% if sample_tune_id %}
                             <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
                             {% endif %}
                             {% if latest_instance_date %}
-                            <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}" target="_blank">Session Instance ({{ latest_instance_date }})</a></li>
-                            <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}/players" target="_blank">Session Instance Players ({{ latest_instance_date }})</a></li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}" target="_blank">Session Instance ({{ latest_instance_date }})</a>
+                                <ol class="inline-tests">
+                                    <li>Type a tune name and press Enter to add to log</li>
+                                    <li>Click a tune pill to open detail modal</li>
+                                    <li>Edit tune name/key override in modal and save</li>
+                                    <li>Fetch/refresh ABC notation and image for a tune</li>
+                                    <li>Drag and drop to reorder tunes</li>
+                                    <li>Select multiple pills (Shift+click) and delete them</li>
+                                    <li>Use Ctrl+Z to undo, Ctrl+Y to redo</li>
+                                    <li>Copy/paste tunes with Ctrl+C/Ctrl+V</li>
+                                    <li>Click set number label to set "Started By" person</li>
+                                    <li>Mark session as complete (checkmark button)</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}/players" target="_blank">Session Instance Players ({{ latest_instance_date }})</a>
+                                <ol class="inline-tests">
+                                    <li>Check in an existing person (search by name)</li>
+                                    <li>Create and check in a new person</li>
+                                    <li>Change attendance status (Yes/Maybe/No)</li>
+                                    <li>Update a person's instruments for this session</li>
+                                    <li>Remove someone from attendance list</li>
+                                </ol>
+                            </li>
                             {% endif %}
                         </ul>
-                        <div class="test-instructions">
-                            <h4>Session Tunes - Test:</h4>
-                            <ol>
-                                <li>Add a tune to session repertoire (click +, search, link)</li>
-                                <li>Edit tune's session-specific key setting</li>
-                                <li>Add an additional alias for a tune</li>
-                                <li>Remove a tune from session repertoire</li>
-                            </ol>
-                            <h4>Session Instance (Tune Log) - Test:</h4>
-                            <ol>
-                                <li>Type a tune name and press Enter to add to log</li>
-                                <li>Click a tune pill to open detail modal</li>
-                                <li>Edit tune name/key override in modal and save</li>
-                                <li>Fetch/refresh ABC notation and image for a tune</li>
-                                <li>Drag and drop to reorder tunes</li>
-                                <li>Select multiple pills (Shift+click) and delete them</li>
-                                <li>Use Ctrl+Z to undo, Ctrl+Y to redo</li>
-                                <li>Copy/paste tunes with Ctrl+C/Ctrl+V</li>
-                                <li>Click set number label to set "Started By" person</li>
-                                <li>Mark session as complete (checkmark button)</li>
-                            </ol>
-                            <h4>Session Instance Players (Attendance) - Test:</h4>
-                            <ol>
-                                <li>Check in an existing person (search by name)</li>
-                                <li>Create and check in a new person</li>
-                                <li>Change attendance status (Yes/Maybe/No)</li>
-                                <li>Update a person's instruments for this session</li>
-                                <li>Remove someone from attendance list</li>
-                            </ol>
-                        </div>
                     </div>
                     {% else %}
                     <div class="test-section">
@@ -82,138 +83,142 @@
                         <h3>Admin Pages</h3>
                         <ul class="test-links-list">
                             <li><a href="/admin" target="_blank">Admin - Dashboard</a></li>
-                            <li><a href="/admin/people" target="_blank">Admin - People</a></li>
+                            <li>
+                                <a href="/admin/people" target="_blank">Admin - People</a>
+                                <ol class="inline-tests">
+                                    <li>Search for a person by name</li>
+                                    <li>Click a person to view their details</li>
+                                    <li>Deactivate a person (hide from lists)</li>
+                                    <li>Reactivate a deactivated person</li>
+                                </ol>
+                            </li>
                             <li><a href="/admin/tunes" target="_blank">Admin - Tunes</a></li>
                             <li><a href="/admin/sessions" target="_blank">Admin - Active Sessions</a></li>
                             <li><a href="/admin/login-history" target="_blank">Admin - Login History</a></li>
                             <li><a href="/admin/login-sessions" target="_blank">Admin - Login Sessions</a></li>
-                            <li><a href="/admin/cache-settings" target="_blank">Admin - Cache Settings</a></li>
+                            <li>
+                                <a href="/admin/cache-settings" target="_blank">Admin - Cache Settings</a>
+                                <ol class="inline-tests">
+                                    <li>View cache statistics</li>
+                                    <li>Run cache process for missing tune images</li>
+                                </ol>
+                            </li>
                             <li><a href="/admin/test-links" target="_blank">Admin - Test Links (this page)</a></li>
                             {% if sample_person_id %}
-                            <li><a href="/admin/people/{{ sample_person_id }}" target="_blank">Person Details (ID: {{ sample_person_id }})</a></li>
+                            <li>
+                                <a href="/admin/people/{{ sample_person_id }}" target="_blank">Person Details (ID: {{ sample_person_id }})</a>
+                                <ol class="inline-tests">
+                                    <li>View person's session memberships</li>
+                                    <li>View person's attendance history</li>
+                                    <li>View linked user account (if any)</li>
+                                    <li>Toggle active/inactive status</li>
+                                </ol>
+                            </li>
                             {% endif %}
                         </ul>
-                        <div class="test-instructions">
-                            <h4>Admin People - Test:</h4>
-                            <ol>
-                                <li>Search for a person by name</li>
-                                <li>Click a person to view their details</li>
-                                <li>Deactivate a person (hide from lists)</li>
-                                <li>Reactivate a deactivated person</li>
-                            </ol>
-                            <h4>Admin Cache Settings - Test:</h4>
-                            <ol>
-                                <li>View cache statistics</li>
-                                <li>Run cache process for missing tune images</li>
-                            </ol>
-                            <h4>Person Details - Test:</h4>
-                            <ol>
-                                <li>View person's session memberships</li>
-                                <li>View person's attendance history</li>
-                                <li>View linked user account (if any)</li>
-                                <li>Toggle active/inactive status</li>
-                            </ol>
-                        </div>
                     </div>
 
                     {% if sample_session %}
                     <div class="test-section">
                         <h3>Session Admin Pages ({{ sample_session[2] }})</h3>
                         <ul class="test-links-list">
-                            <li><a href="/admin/sessions/{{ sample_session[1] }}" target="_blank">Session Admin - Details (test termination/reactivation)</a></li>
-                            <li><a href="/admin/sessions/{{ sample_session[1] }}/players" target="_blank">Session Admin - Players</a></li>
+                            <li>
+                                <a href="/admin/sessions/{{ sample_session[1] }}" target="_blank">Session Admin - Details</a>
+                                <ol class="inline-tests">
+                                    <li>Edit session name, location, timezone</li>
+                                    <li>Update recurrence pattern</li>
+                                    <li>Terminate a session (set end date)</li>
+                                    <li>Reactivate a terminated session</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/admin/sessions/{{ sample_session[1] }}/players" target="_blank">Session Admin - Players</a>
+                                <ol class="inline-tests">
+                                    <li>Add a new person to session membership</li>
+                                    <li>Toggle "Regular" status for a member</li>
+                                    <li>Grant/revoke session admin privileges</li>
+                                    <li>Remove a person from session membership</li>
+                                </ol>
+                            </li>
                             <li><a href="/admin/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Admin - Logs</a></li>
                             {% if sample_person_id %}
                             <li><a href="/admin/sessions/{{ sample_session[1] }}/players/{{ sample_person_id }}" target="_blank">Session Person Detail (ID: {{ sample_person_id }})</a></li>
                             {% endif %}
                         </ul>
-                        <div class="test-instructions">
-                            <h4>Session Admin Details - Test:</h4>
-                            <ol>
-                                <li>Edit session name, location, timezone</li>
-                                <li>Update recurrence pattern</li>
-                                <li>Terminate a session (set end date)</li>
-                                <li>Reactivate a terminated session</li>
-                            </ol>
-                            <h4>Session Admin Players - Test:</h4>
-                            <ol>
-                                <li>Add a new person to session membership</li>
-                                <li>Toggle "Regular" status for a member</li>
-                                <li>Grant/revoke session admin privileges</li>
-                                <li>Remove a person from session membership</li>
-                            </ol>
-                        </div>
                     </div>
                     {% endif %}
 
                     <div class="test-section">
                         <h3>User Account Pages</h3>
                         <ul class="test-links-list">
-                            <li><a href="/login" target="_blank">Login Page</a></li>
-                            <li><a href="/register" target="_blank">Register Page</a></li>
+                            <li>
+                                <a href="/login" target="_blank">Login Page</a>
+                                <ol class="inline-tests">
+                                    <li>Login with valid credentials (ian / password123)</li>
+                                    <li>Login with invalid password (verify error message)</li>
+                                    <li>Login with non-existent username</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/register" target="_blank">Register Page</a>
+                                <ol class="inline-tests">
+                                    <li>Register a new account with valid data</li>
+                                    <li>Try registering with existing username (verify error)</li>
+                                    <li>Try registering with invalid email format</li>
+                                </ol>
+                            </li>
                             <li><a href="/forgot-password" target="_blank">Forgot Password</a></li>
-                            <li><a href="/me" target="_blank">My Profile</a></li>
-                            <li><a href="/add-session" target="_blank">Add Session</a></li>
+                            <li>
+                                <a href="/me" target="_blank">My Profile</a>
+                                <ol class="inline-tests">
+                                    <li>Update display name</li>
+                                    <li>Change timezone preference</li>
+                                    <li>Toggle dark mode preference</li>
+                                    <li>Update auto-save settings</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/add-session" target="_blank">Add Session</a>
+                                <ol class="inline-tests">
+                                    <li>Create a new session with all fields</li>
+                                    <li>Set up recurrence pattern (weekly/monthly)</li>
+                                    <li>Verify duplicate session path detection</li>
+                                </ol>
+                            </li>
                         </ul>
-                        <div class="test-instructions">
-                            <h4>Login - Test:</h4>
-                            <ol>
-                                <li>Login with valid credentials (ian / password123)</li>
-                                <li>Login with invalid password (verify error message)</li>
-                                <li>Login with non-existent username</li>
-                            </ol>
-                            <h4>Register - Test:</h4>
-                            <ol>
-                                <li>Register a new account with valid data</li>
-                                <li>Try registering with existing username (verify error)</li>
-                                <li>Try registering with invalid email format</li>
-                            </ol>
-                            <h4>My Profile - Test:</h4>
-                            <ol>
-                                <li>Update display name</li>
-                                <li>Change timezone preference</li>
-                                <li>Toggle dark mode preference</li>
-                                <li>Update auto-save settings</li>
-                            </ol>
-                            <h4>Add Session - Test:</h4>
-                            <ol>
-                                <li>Create a new session with all fields</li>
-                                <li>Set up recurrence pattern (weekly/monthly)</li>
-                                <li>Verify duplicate session path detection</li>
-                            </ol>
-                        </div>
                     </div>
 
                     <div class="test-section">
                         <h3>My Tunes Pages</h3>
                         <ul class="test-links-list">
-                            <li><a href="/my-tunes" target="_blank">My Tunes List</a></li>
-                            <li><a href="/my-tunes/add" target="_blank">Add Tune to My Tunes</a></li>
-                            <li><a href="/my-tunes/sync" target="_blank">Sync My Tunes</a></li>
+                            <li>
+                                <a href="/my-tunes" target="_blank">My Tunes List</a>
+                                <ol class="inline-tests">
+                                    <li>Filter tunes by status (Want to Learn / Learning / Learned)</li>
+                                    <li>Click a tune to view/edit details</li>
+                                    <li>Change tune status (Want to Learn → Learning → Learned)</li>
+                                    <li>Update "times heard" count</li>
+                                    <li>Add/edit personal notes for a tune</li>
+                                    <li>Remove a tune from your list</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/my-tunes/add" target="_blank">Add Tune to My Tunes</a>
+                                <ol class="inline-tests">
+                                    <li>Search for a tune by name</li>
+                                    <li>Add a tune from TheSession.org results</li>
+                                    <li>Set initial status when adding</li>
+                                </ol>
+                            </li>
+                            <li>
+                                <a href="/my-tunes/sync" target="_blank">Sync My Tunes</a>
+                                <ol class="inline-tests">
+                                    <li>Connect/sync with TheSession.org tunebook</li>
+                                    <li>Verify imported tunes appear in list</li>
+                                </ol>
+                            </li>
                             <li><a href="/help/my-tunes" target="_blank">My Tunes Help</a></li>
                         </ul>
-                        <div class="test-instructions">
-                            <h4>My Tunes List - Test:</h4>
-                            <ol>
-                                <li>Filter tunes by status (Want to Learn / Learning / Learned)</li>
-                                <li>Click a tune to view/edit details</li>
-                                <li>Change tune status (Want to Learn → Learning → Learned)</li>
-                                <li>Update "times heard" count</li>
-                                <li>Add/edit personal notes for a tune</li>
-                                <li>Remove a tune from your list</li>
-                            </ol>
-                            <h4>Add Tune - Test:</h4>
-                            <ol>
-                                <li>Search for a tune by name</li>
-                                <li>Add a tune from TheSession.org results</li>
-                                <li>Set initial status when adding</li>
-                            </ol>
-                            <h4>Sync My Tunes - Test:</h4>
-                            <ol>
-                                <li>Connect/sync with TheSession.org tunebook</li>
-                                <li>Verify imported tunes appear in list</li>
-                            </ol>
-                        </div>
                     </div>
 
                     <div class="test-section">
@@ -306,34 +311,17 @@
     border: 1px solid var(--border-color);
 }
 
-.test-instructions {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px dashed var(--border-color);
-}
-
-.test-instructions h4 {
-    margin: 1rem 0 0.5rem 0;
+.inline-tests {
+    margin: 0.5rem 0 0 1rem;
+    padding-left: 1.25rem;
+    font-size: 0.85rem;
     color: var(--secondary-text);
-    font-size: 0.95rem;
-    font-weight: 600;
 }
 
-.test-instructions h4:first-child {
-    margin-top: 0;
-}
-
-.test-instructions ol {
-    margin: 0 0 0.75rem 0;
-    padding-left: 1.5rem;
-}
-
-.test-instructions ol li {
-    margin: 0.35rem 0;
+.inline-tests li {
+    margin: 0.25rem 0;
     padding: 0;
     border-bottom: none;
-    font-size: 0.9rem;
-    color: var(--text-color);
 }
 
 @media (max-width: 768px) {
