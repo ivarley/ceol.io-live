@@ -30,11 +30,14 @@
                         <ul class="test-links-list">
                             <li><a href="/sessions/{{ sample_session[1] }}" target="_blank">Session Home</a></li>
                             <li><a href="/sessions/{{ sample_session[1] }}/tunes" target="_blank">Session Tunes</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}/people" target="_blank">Session People</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Logs</a></li>
                             {% if sample_tune_id %}
                             <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
                             {% endif %}
                             {% if latest_instance_date %}
                             <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}" target="_blank">Session Instance ({{ latest_instance_date }})</a></li>
+                            <li><a href="/sessions/{{ sample_session[1] }}/{{ latest_instance_date }}/players" target="_blank">Session Instance Players ({{ latest_instance_date }})</a></li>
                             {% endif %}
                         </ul>
                     </div>
@@ -48,9 +51,13 @@
                     <div class="test-section">
                         <h3>Admin Pages</h3>
                         <ul class="test-links-list">
+                            <li><a href="/admin" target="_blank">Admin - Dashboard</a></li>
                             <li><a href="/admin/people" target="_blank">Admin - People</a></li>
-                            <li><a href="/admin/login-history" target="_blank">Admin - Login History</a></li>
+                            <li><a href="/admin/tunes" target="_blank">Admin - Tunes</a></li>
                             <li><a href="/admin/sessions" target="_blank">Admin - Active Sessions</a></li>
+                            <li><a href="/admin/login-history" target="_blank">Admin - Login History</a></li>
+                            <li><a href="/admin/login-sessions" target="_blank">Admin - Login Sessions</a></li>
+                            <li><a href="/admin/cache-settings" target="_blank">Admin - Cache Settings</a></li>
                             <li><a href="/admin/test-links" target="_blank">Admin - Test Links (this page)</a></li>
                             {% if sample_person_id %}
                             <li><a href="/admin/people/{{ sample_person_id }}" target="_blank">Person Details (ID: {{ sample_person_id }})</a></li>
@@ -78,19 +85,44 @@
                             <li><a href="/login" target="_blank">Login Page</a></li>
                             <li><a href="/register" target="_blank">Register Page</a></li>
                             <li><a href="/forgot-password" target="_blank">Forgot Password</a></li>
+                            <li><a href="/me" target="_blank">My Profile</a></li>
                             <li><a href="/add-session" target="_blank">Add Session</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="test-section">
+                        <h3>My Tunes Pages</h3>
+                        <ul class="test-links-list">
+                            <li><a href="/my-tunes" target="_blank">My Tunes List</a></li>
+                            <li><a href="/my-tunes/add" target="_blank">Add Tune to My Tunes</a></li>
+                            <li><a href="/my-tunes/sync" target="_blank">Sync My Tunes</a></li>
+                            <li><a href="/help/my-tunes" target="_blank">My Tunes Help</a></li>
                         </ul>
                     </div>
 
                     <div class="test-section">
                         <h3>API Endpoints (for testing)</h3>
                         <ul class="test-links-list">
-                            <li><code>/api/sessions</code> - Sessions API</li>
-                            <li><code>/api/tunes</code> - Tunes API</li>
-                            <li><code>/api/search-sessions</code> - Session Search API</li>
-                            <li><code>/api/check-existing-session</code> - Check Session API</li>
+                            <li><code>GET /api/sessions/list</code> - Available sessions list</li>
+                            <li><code>GET /api/sessions/data</code> - Sessions data</li>
+                            <li><code>POST /api/search-sessions</code> - Session search</li>
+                            <li><code>POST /api/check-existing-session</code> - Check if session exists</li>
+                            <li><code>GET /api/tunes/search?q=</code> - Tune search</li>
+                            <li><code>POST /api/tunes/{id}/settings/cache</code> - Cache tune setting</li>
+                            <li><code>GET /api/session_instance/{id}/attendees</code> - Get attendees</li>
+                            <li><code>POST /api/session_instance/{id}/attendees/checkin</code> - Check in</li>
+                            <li><code>GET /api/my-tunes</code> - Get my tunes list</li>
                         </ul>
-                        <p class="text-muted"><em>Note: API endpoints require appropriate POST data</em></p>
+                        <p class="text-muted"><em>Note: Most API endpoints require authentication and appropriate request data</em></p>
+                    </div>
+
+                    <div class="test-section">
+                        <h3>External Services</h3>
+                        <ul class="test-links-list">
+                            <li><a href="https://abc-renderer.onrender.com/api/health" target="_blank">ABC Renderer - Health Check (Production)</a></li>
+                            <li><a href="https://abc-renderer.onrender.com/test" target="_blank">ABC Renderer - Test Page (Production)</a></li>
+                            <li><a href="https://thesession.org/tunes/27?format=json" target="_blank">TheSession.org API - Sample Tune (Drowsy Maggie)</a></li>
+                        </ul>
                     </div>
                 </div>
             </section>
