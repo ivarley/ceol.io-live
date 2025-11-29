@@ -166,13 +166,17 @@
                                         </label>
                                         <div class="form-text">Mark as a regular attendee of this session</div>
                                     </div>
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="is-admin" {{ 'checked' if person.is_admin }}>
+                                        <label class="form-check-label" for="is-admin">
+                                            <strong>Session Admin</strong>
+                                        </label>
+                                        <div class="form-text">Grant admin privileges for this session</div>
+                                    </div>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <div class="status-badges">
-                                        {% if person.is_admin %}
-                                        <span class="badge bg-primary">Session Admin</span>
-                                        {% endif %}
                                         
                                         {% if person.gets_email_reminder %}
                                         <span class="badge bg-success">Email Reminders</span>
@@ -559,11 +563,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const personId = document.getElementById('person-id').value;
             const sessionPath = document.getElementById('session-path').value;
             const isRegular = this.checked;
-            
+
             // Show loading state
             saveStatus.style.display = 'block';
             saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
-            
+
             // Make API call to update regular status
             fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/regular`, {
                 method: 'PUT',
@@ -590,6 +594,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
                 // Revert checkbox state
                 this.checked = !isRegular;
+            });
+        });
+    }
+
+    // Handle admin status changes
+    const isAdminCheckbox = document.getElementById('is-admin');
+    if (isAdminCheckbox) {
+        isAdminCheckbox.addEventListener('change', function() {
+            const personId = document.getElementById('person-id').value;
+            const sessionPath = document.getElementById('session-path').value;
+            const isAdmin = this.checked;
+
+            // Show loading state
+            saveStatus.style.display = 'block';
+            saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+
+            // Make API call to update admin status
+            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/admin`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    is_admin: isAdmin
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    saveStatus.innerHTML = '<div class="alert alert-success">Admin status updated successfully!</div>';
+                    setTimeout(() => {
+                        saveStatus.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error(data.error || 'Failed to update admin status');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating admin status:', error);
+                saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+                // Revert checkbox state
+                this.checked = !isAdmin;
             });
         });
     }

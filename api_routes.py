@@ -5596,6 +5596,73 @@ def update_session_player_regular_status(session_path, person_id):
 
 
 @login_required
+def update_session_player_admin_status(session_path, person_id):
+    """Update the admin status for a person in a specific session"""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+
+    # Check if current user is a system admin
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+
+        data = request.get_json()
+        is_admin = data.get("is_admin", False)
+
+        # Get session ID first
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"success": False, "error": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Update the admin status
+        cur.execute(
+            """
+            UPDATE session_person
+            SET is_admin = %s
+            WHERE session_id = %s AND person_id = %s
+        """,
+            (is_admin, session_id, person_id),
+        )
+
+        if cur.rowcount == 0:
+            return (
+                jsonify(
+                    {"success": False, "error": "Person not found in this session"}
+                ),
+                404,
+            )
+
+        # Save to history
+        save_to_history(
+            cur,
+            "session_person",
+            "UPDATE",
+            None,
+            user_id=get_current_user_id(),
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@login_required
 def update_session_player_details(session_path, person_id):
     """Update person details for session admins"""
     if not current_user.is_authenticated:
