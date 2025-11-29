@@ -630,11 +630,8 @@ export class PillRenderer {
                             }
                         }
 
-                        // Close the popout immediately
-                        popout.remove();
-                        typeLabel.style.backgroundColor = '#4a4a4a';
-                        typeLabel.classList.remove('popout-active');
-                        (typeLabel as any)._popout = null;
+                        // Close the popout immediately (closePopout is defined later but available in this async handler)
+                        closePopout();
 
                         // Save to API in the background (fire and forget)
                         fetch(`/api/session_instance/${sessionInstanceId}/sets/${setIndex}/started_by`, {
@@ -678,15 +675,27 @@ export class PillRenderer {
             }
         }
 
+        // Function to update popout position (used for initial positioning and scroll updates)
+        const updatePopoutPosition = () => {
+            if (isMobile) {
+                const tabRect = typeLabel.getBoundingClientRect();
+                popout.style.top = `${tabRect.bottom}px`;
+                popout.style.left = `${tabRect.left}px`;
+                popout.style.width = `calc(100vw - ${tabRect.left + 20}px)`;
+            } else {
+                const labelRect = typeLabel.getBoundingClientRect();
+                const setRect = tuneSetElement.getBoundingClientRect();
+                popout.style.top = `${setRect.top}px`;
+                popout.style.left = `${labelRect.right - 2}px`;
+                popout.style.width = `${setRect.right - labelRect.right + 2}px`;
+                popout.style.minHeight = `${setRect.height}px`;
+            }
+        };
+
         if (isMobile) {
             // Mobile: Use fixed positioning and append to body to avoid contentEditable issues
-            const tabRect = typeLabel.getBoundingClientRect();
-
             popout.style.cssText = `
                 position: fixed;
-                top: ${tabRect.bottom}px;
-                left: ${tabRect.left}px;
-                width: calc(100vw - ${tabRect.left + 20}px);
                 max-width: 350px;
                 background-color: #2a4a6a;
                 color: white;
@@ -696,24 +705,10 @@ export class PillRenderer {
                 font-size: 14px;
                 z-index: 9999;
             `;
-
-            // Append to body to escape contentEditable container
-            document.body.appendChild(popout);
-
-            // Store reference to remove it later
-            (typeLabel as any)._popout = popout;
         } else {
-            // Desktop: Absolute positioned panel that hovers over the tune-set
             // Desktop: Use fixed positioning and append to body to avoid contentEditable issues
-            const labelRect = typeLabel.getBoundingClientRect();
-            const setRect = tuneSetElement.getBoundingClientRect();
-
             popout.style.cssText = `
                 position: fixed;
-                top: ${setRect.top}px;
-                left: ${labelRect.right - 2}px;
-                width: ${setRect.right - labelRect.right + 2}px;
-                min-height: ${setRect.height}px;
                 background-color: #2a4a6a;
                 color: white;
                 border-radius: 0 8px 8px 0;
@@ -723,13 +718,50 @@ export class PillRenderer {
                 z-index: 9999;
                 box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
             `;
-
-            // Append to body to escape contentEditable container
-            document.body.appendChild(popout);
-
-            // Store reference to popout on the label for cleanup
-            (typeLabel as any)._popout = popout;
         }
+
+        // Set initial position
+        updatePopoutPosition();
+
+        // Append to body to escape contentEditable container
+        document.body.appendChild(popout);
+
+        // Store reference to popout on the label for cleanup
+        (typeLabel as any)._popout = popout;
+
+        // Function to clean up all event listeners and close the popout
+        const closePopout = () => {
+            popout.remove();
+            typeLabel.style.backgroundColor = '#4a4a4a';
+            typeLabel.classList.remove('popout-active');
+            (typeLabel as any)._popout = null;
+            document.removeEventListener('click', closeOnClickOutside, true);
+            window.removeEventListener('scroll', onScroll, true);
+        };
+
+        // Add click-outside handler to close the popout
+        const closeOnClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            // Don't close if clicking inside the popout or on the type label
+            if (popout.contains(target) || typeLabel.contains(target)) {
+                return;
+            }
+            closePopout();
+        };
+
+        // Add scroll handler to update popout position
+        const onScroll = () => {
+            updatePopoutPosition();
+        };
+
+        // Use capture phase to catch clicks before they're stopped by other handlers
+        // Use setTimeout to avoid catching the current click that opened the popout
+        setTimeout(() => {
+            document.addEventListener('click', closeOnClickOutside, true);
+        }, 0);
+
+        // Listen for scroll events on window (capture phase to catch all scroll events)
+        window.addEventListener('scroll', onScroll, true);
     }
 
     static createTuneSetElement(tuneSet: TuneSet, setIndex: number): HTMLElement {
