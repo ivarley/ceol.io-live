@@ -46,10 +46,13 @@ CREATE TABLE session (
     active_buffer_minutes_before INTEGER NOT NULL DEFAULT 60,
     active_buffer_minutes_after INTEGER NOT NULL DEFAULT 60,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_path ON session(path);
+CREATE INDEX idx_session_created_by ON session(created_by_user_id);
 CREATE INDEX idx_session_thesession_id ON session(thesession_id);
 CREATE INDEX idx_session_timezone ON session(timezone);
 CREATE INDEX idx_session_type ON session(session_type);
@@ -87,12 +90,15 @@ CREATE TABLE person (
     active BOOLEAN DEFAULT TRUE NOT NULL,
     at_active_session_instance_id INTEGER, -- FK added after session_instance table
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE UNIQUE INDEX idx_person_email_unique ON person (email) WHERE email IS NOT NULL;
 CREATE INDEX idx_person_thesession_user_id ON person (thesession_user_id);
 CREATE INDEX idx_person_active ON person (active);
+CREATE INDEX idx_person_created_by ON person(created_by_user_id);
 
 COMMENT ON COLUMN person.active IS 'Whether the person is active. Inactive persons are hidden from lists.';
 COMMENT ON COLUMN person.at_active_session_instance_id IS 'The session instance this person is currently attending (null when not at a session)';
@@ -107,8 +113,12 @@ CREATE TABLE tune (
     tunebook_count_cached INTEGER DEFAULT 0,
     tunebook_count_cached_date DATE DEFAULT CURRENT_DATE,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
+
+CREATE INDEX idx_tune_created_by ON tune(created_by_user_id);
 
 CREATE OR REPLACE FUNCTION update_tune_last_modified_date()
 RETURNS TRIGGER AS $$
@@ -142,11 +152,14 @@ CREATE TABLE session_instance (
     comments TEXT,
     log_complete_date TIMESTAMPTZ DEFAULT NULL,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_instance_session_id ON session_instance(session_id);
 CREATE INDEX idx_session_instance_date ON session_instance(date);
+CREATE INDEX idx_session_instance_created_by ON session_instance(created_by_user_id);
 CREATE INDEX idx_session_instance_log_complete_date ON session_instance(log_complete_date);
 CREATE INDEX idx_session_instance_is_active ON session_instance(is_active) WHERE is_active = TRUE;
 
@@ -192,7 +205,9 @@ CREATE TABLE user_account (
     password_reset_expires TIMESTAMPTZ,
     referred_by_person_id INTEGER REFERENCES person(person_id) ON DELETE SET NULL,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_user_person_id ON user_account (person_id);
@@ -220,6 +235,8 @@ CREATE TABLE tune_setting (
     cache_updated_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     UNIQUE(setting_id, tune_id)
 );
 
@@ -237,6 +254,8 @@ CREATE TABLE session_tune (
     alias VARCHAR(255),
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     PRIMARY KEY (session_id, tune_id)
 );
 
@@ -263,6 +282,8 @@ CREATE TABLE session_tune_alias (
     alias VARCHAR(255) NOT NULL,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     CONSTRAINT unique_session_alias UNIQUE (session_id, alias)
 );
 
@@ -290,6 +311,8 @@ CREATE TABLE person_instrument (
     person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
     instrument VARCHAR(50) NOT NULL,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     PRIMARY KEY (person_id, instrument)
 );
 
@@ -311,6 +334,8 @@ CREATE TABLE person_tune (
     name_alias VARCHAR(255),
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     UNIQUE(person_id, tune_id)
 );
 
@@ -358,7 +383,9 @@ CREATE TABLE session_person (
     gets_email_reminder BOOLEAN DEFAULT FALSE,
     gets_email_followup BOOLEAN DEFAULT FALSE,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 ALTER TABLE session_person ADD CONSTRAINT uk_session_person UNIQUE (session_id, person_id);
@@ -388,6 +415,8 @@ CREATE TABLE session_instance_tune (
     started_by_person_id INTEGER REFERENCES person(person_id),
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER,
     CONSTRAINT session_instance_tune_name_or_id CHECK (tune_id IS NOT NULL OR name IS NOT NULL)
 );
 
@@ -416,7 +445,9 @@ CREATE TABLE session_instance_person (
     attendance VARCHAR(5) CHECK (attendance IN ('yes', 'maybe', 'no')) DEFAULT NULL,
     comment TEXT,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC')
+    last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 ALTER TABLE session_instance_person ADD CONSTRAINT uk_session_instance_person UNIQUE (session_instance_id, person_id);
@@ -434,7 +465,9 @@ CREATE TABLE user_session (
     last_accessed TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     expires_at TIMESTAMPTZ NOT NULL,
     ip_address INET,
-    user_agent TEXT
+    user_agent TEXT,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_user_session_user_id ON user_session (user_id);
@@ -475,7 +508,7 @@ CREATE TABLE session_history (
     history_id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     thesession_id INTEGER,
     name VARCHAR(255),
@@ -494,7 +527,9 @@ CREATE TABLE session_history (
     recurrence TEXT,
     session_type VARCHAR(50),
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_history_session_id ON session_history(session_id);
@@ -506,7 +541,7 @@ CREATE TABLE session_instance_history (
     history_id SERIAL PRIMARY KEY,
     session_instance_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_id INTEGER,
     date DATE,
@@ -517,7 +552,9 @@ CREATE TABLE session_instance_history (
     comments TEXT,
     log_complete_date TIMESTAMPTZ,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_instance_history_session_instance_id ON session_instance_history(session_instance_id);
@@ -529,14 +566,16 @@ CREATE TABLE tune_history (
     history_id SERIAL PRIMARY KEY,
     tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     name VARCHAR(255),
     tune_type VARCHAR(50),
     tunebook_count_cached INTEGER,
     tunebook_count_cached_date DATE,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_tune_history_tune_id ON tune_history(tune_id);
@@ -549,13 +588,15 @@ CREATE TABLE session_tune_history (
     session_id INTEGER NOT NULL,
     tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     setting_id INTEGER,
     key VARCHAR(20),
     alias VARCHAR(255),
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_tune_history_session_id ON session_tune_history(session_id);
@@ -568,7 +609,7 @@ CREATE TABLE session_instance_tune_history (
     history_id SERIAL PRIMARY KEY,
     session_instance_tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_instance_id INTEGER,
     tune_id INTEGER,
@@ -581,7 +622,9 @@ CREATE TABLE session_instance_tune_history (
     setting_override INTEGER,
     started_by_person_id INTEGER,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_instance_tune_history_session_instance_tune_id ON session_instance_tune_history(session_instance_tune_id);
@@ -593,13 +636,15 @@ CREATE TABLE session_tune_alias_history (
     history_id SERIAL PRIMARY KEY,
     session_tune_alias_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_id INTEGER,
     tune_id INTEGER,
     alias VARCHAR(255),
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_tune_alias_history_session_tune_alias_id ON session_tune_alias_history(session_tune_alias_id);
@@ -611,7 +656,7 @@ CREATE TABLE session_person_history (
     history_id SERIAL PRIMARY KEY,
     session_person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_id INTEGER,
     person_id INTEGER,
@@ -620,7 +665,9 @@ CREATE TABLE session_person_history (
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_person_history_session_person_id ON session_person_history(session_person_id);
@@ -632,14 +679,16 @@ CREATE TABLE session_instance_person_history (
     history_id SERIAL PRIMARY KEY,
     session_instance_person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_instance_id INTEGER,
     person_id INTEGER,
     attendance VARCHAR(5) CHECK (attendance IN ('yes', 'maybe', 'no')),
     comment TEXT,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_session_instance_person_history_session_instance_person_id ON session_instance_person_history(session_instance_person_id);
@@ -651,7 +700,7 @@ CREATE TABLE person_history (
     history_id SERIAL PRIMARY KEY,
     person_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
@@ -663,7 +712,9 @@ CREATE TABLE person_history (
     thesession_user_id INTEGER,
     active BOOLEAN,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_person_history_person_id ON person_history(person_id);
@@ -676,9 +727,12 @@ CREATE TABLE person_instrument_history (
     person_id INTEGER NOT NULL,
     instrument VARCHAR(50) NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    created_date TIMESTAMPTZ
+    created_date TIMESTAMPTZ,
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_person_instrument_history_person_id ON person_instrument_history (person_id);
@@ -690,7 +744,7 @@ CREATE TABLE person_tune_history (
     person_tune_history_id SERIAL PRIMARY KEY,
     person_tune_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(100) NOT NULL DEFAULT 'system',
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     person_id INTEGER NOT NULL,
     tune_id INTEGER NOT NULL,
@@ -701,7 +755,9 @@ CREATE TABLE person_tune_history (
     setting_id INTEGER,
     name_alias VARCHAR(255),
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_person_tune_history_person_tune_id ON person_tune_history (person_tune_id);
@@ -714,7 +770,7 @@ CREATE TABLE user_account_history (
     history_id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(255),
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     person_id INTEGER,
     username VARCHAR(255),
@@ -730,7 +786,9 @@ CREATE TABLE user_account_history (
     password_reset_expires TIMESTAMPTZ,
     referred_by_person_id INTEGER,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_user_account_history_user_id ON user_account_history(user_id);
@@ -742,7 +800,7 @@ CREATE TABLE tune_setting_history (
     tune_setting_history_id SERIAL PRIMARY KEY,
     setting_id INTEGER NOT NULL,
     operation VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    changed_by VARCHAR(100) NOT NULL DEFAULT 'system',
+    changed_by_user_id INTEGER,
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     tune_id INTEGER NOT NULL,
     key VARCHAR(20),
@@ -752,7 +810,9 @@ CREATE TABLE tune_setting_history (
     incipit_image TEXT,
     cache_updated_date TIMESTAMPTZ,
     created_date TIMESTAMPTZ,
-    last_modified_date TIMESTAMPTZ
+    last_modified_date TIMESTAMPTZ,
+    created_by_user_id INTEGER,
+    last_modified_user_id INTEGER
 );
 
 CREATE INDEX idx_tune_setting_history_setting_id ON tune_setting_history (setting_id);
