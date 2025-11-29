@@ -2490,11 +2490,11 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET continues_set = FALSE
+                SET continues_set = FALSE, last_modified_user_id = %s
                 WHERE session_instance_id = %s
                 AND order_number = %s
             """,
-                (session_instance_id, order_number + 1),
+                (audit_user_id, session_instance_id, order_number + 1),
             )
 
         # Delete the tune by order number (works for both tune_id and name-based records)
@@ -2611,10 +2611,10 @@ def link_tune_ajax(session_path, date):
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET tune_id = %s, name = %s, setting_override = %s
+                SET tune_id = %s, name = %s, setting_override = %s, last_modified_user_id = %s
                 WHERE session_instance_id = %s AND order_number = %s
             """,
-                (tune_id, tune_name, setting_id, session_instance_id, order_number),
+                (tune_id, tune_name, setting_id, get_current_user_id(), session_instance_id, order_number),
             )
 
             setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -2656,10 +2656,10 @@ def link_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET tune_id = %s, name = NULL
+                    SET tune_id = %s, name = NULL, last_modified_user_id = %s
                     WHERE session_instance_id = %s AND order_number = %s
                 """,
-                    (tune_id, session_instance_id, order_number),
+                    (tune_id, get_current_user_id(), session_instance_id, order_number),
                 )
 
                 setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -2742,10 +2742,10 @@ def link_tune_ajax(session_path, date):
                     cur.execute(
                         """
                         UPDATE session_instance_tune
-                        SET tune_id = %s, name = NULL
+                        SET tune_id = %s, name = NULL, last_modified_user_id = %s
                         WHERE session_instance_id = %s AND order_number = %s
                     """,
-                        (tune_id, session_instance_id, order_number),
+                        (tune_id, get_current_user_id(), session_instance_id, order_number),
                     )
 
                     setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -3535,10 +3535,10 @@ def move_set_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET order_number = %s
+                    SET order_number = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_order, tune[2]),
+                    (new_order, get_current_user_id(), tune[2]),
                 )
 
             # Previous set goes after target set
@@ -3547,10 +3547,10 @@ def move_set_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET order_number = %s
+                    SET order_number = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_order, tune[2]),
+                    (new_order, get_current_user_id(), tune[2]),
                 )
 
         else:  # direction == 'down'
@@ -3567,10 +3567,10 @@ def move_set_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET order_number = %s
+                    SET order_number = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_order, tune[2]),
+                    (new_order, get_current_user_id(), tune[2]),
                 )
 
             # Target set goes after next set
@@ -3579,10 +3579,10 @@ def move_set_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET order_number = %s
+                    SET order_number = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_order, tune[2]),
+                    (new_order, get_current_user_id(), tune[2]),
                 )
 
         conn.commit()
@@ -3690,19 +3690,19 @@ def move_tune_ajax(session_path, date):
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_number = %s
+                SET order_number = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (prev_tune[0], target_tune[2]),
+                (prev_tune[0], audit_user_id, target_tune[2]),
             )
 
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_number = %s
+                SET order_number = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (target_tune[0], prev_tune[2]),
+                (target_tune[0], audit_user_id, prev_tune[2]),
             )
 
             # If target tune was starting a set and prev was continuing, swap continues_set values
@@ -3710,19 +3710,19 @@ def move_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET continues_set = FALSE
+                    SET continues_set = FALSE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (prev_tune[2]),
+                    (audit_user_id, prev_tune[2]),
                 )
 
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET continues_set = TRUE
+                    SET continues_set = TRUE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (target_tune[2]),
+                    (audit_user_id, target_tune[2]),
                 )
 
         else:  # direction == 'right'
@@ -3760,19 +3760,19 @@ def move_tune_ajax(session_path, date):
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_number = %s
+                SET order_number = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (next_tune[0], target_tune[2]),
+                (next_tune[0], audit_user_id, target_tune[2]),
             )
 
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_number = %s
+                SET order_number = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (target_tune[0], next_tune[2]),
+                (target_tune[0], audit_user_id, next_tune[2]),
             )
 
             # If target tune was starting a set, make next tune start the set
@@ -3780,19 +3780,19 @@ def move_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET continues_set = FALSE
+                    SET continues_set = FALSE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (next_tune[2]),
+                    (audit_user_id, next_tune[2]),
                 )
 
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET continues_set = TRUE
+                    SET continues_set = TRUE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (target_tune[2]),
+                    (audit_user_id, target_tune[2]),
                 )
 
         conn.commit()
@@ -3951,13 +3951,14 @@ def edit_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET name = %s, setting_override = %s, key_override = %s
+                    SET name = %s, setting_override = %s, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
                     (
                         new_name if new_name != original_name else None,
                         setting_id,
                         key_override,
+                        get_current_user_id(),
                         session_instance_tune_id,
                     ),
                 )
@@ -3970,10 +3971,10 @@ def edit_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET tune_id = NULL, name = %s, setting_override = NULL, key_override = %s
+                    SET tune_id = NULL, name = %s, setting_override = NULL, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_name, key_override, session_instance_tune_id),
+                    (new_name, key_override, get_current_user_id(), session_instance_tune_id),
                 )
 
                 message = f'Converted to unlinked tune: "{new_name}"'
@@ -3989,10 +3990,10 @@ def edit_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET tune_id = %s, name = NULL, key_override = %s
+                    SET tune_id = %s, name = NULL, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (tune_id_match, key_override, session_instance_tune_id),
+                    (tune_id_match, key_override, get_current_user_id(), session_instance_tune_id),
                 )
 
                 message = f'Linked tune to "{final_name}"'
@@ -4015,10 +4016,10 @@ def edit_tune_ajax(session_path, date):
                 cur.execute(
                     """
                     UPDATE session_instance_tune
-                    SET name = %s, key_override = %s
+                    SET name = %s, key_override = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_name, key_override, session_instance_tune_id),
+                    (new_name, key_override, get_current_user_id(), session_instance_tune_id),
                 )
 
                 if error_message:
@@ -6399,7 +6400,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         cur.execute(
                             """
                             UPDATE session_instance_tune
-                            SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s, last_modified_date = NOW()
+                            SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s, last_modified_date = NOW(), last_modified_user_id = %s
                             WHERE session_instance_tune_id = %s
                         """,
                             (
@@ -6407,6 +6408,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                                 new_tune["name"],
                                 new_tune["continues_set"],
                                 new_tune["started_by_person_id"],
+                                get_current_user_id(),
                                 existing[0],
                             ),
                         )
@@ -6416,8 +6418,8 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     cur.execute(
                         """
                         INSERT INTO session_instance_tune
-                        (session_instance_id, order_number, tune_id, name, continues_set, started_by_person_id, created_date, last_modified_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        (session_instance_id, order_number, tune_id, name, continues_set, started_by_person_id, created_date, last_modified_date, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
                         RETURNING session_instance_tune_id
                     """,
                         (
@@ -6427,6 +6429,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                             new_tune["name"],
                             new_tune["continues_set"],
                             new_tune["started_by_person_id"],
+                            get_current_user_id(),
                         ),
                     )
 
@@ -9382,10 +9385,11 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             UPDATE session_instance_tune
             SET name = %s,
                 key_override = %s,
-                setting_override = %s
+                setting_override = %s,
+                last_modified_user_id = %s
             WHERE session_instance_id = %s AND tune_id = %s
         """,
-            (name, key_override, setting_override, session_instance_id, tune_id),
+            (name, key_override, setting_override, get_current_user_id(), session_instance_id, tune_id),
         )
 
         conn.commit()
@@ -9509,10 +9513,10 @@ def update_set_started_by(session_instance_id, set_index):
         cur.execute(
             """
             UPDATE session_instance_tune
-            SET started_by_person_id = %s, last_modified_date = NOW()
+            SET started_by_person_id = %s, last_modified_date = NOW(), last_modified_user_id = %s
             WHERE session_instance_tune_id = ANY(%s)
         """,
-            (person_id, tune_ids),
+            (person_id, get_current_user_id(), tune_ids),
         )
 
         conn.commit()
