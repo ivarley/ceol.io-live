@@ -849,34 +849,62 @@ def update_session_tune_details(session_path, tune_id):
         if not data:
             return jsonify({"success": False, "message": "No data provided"})
 
-        setting_id = data.get("setting_id", "").strip()
-        key = data.get("key", "").strip()
-        alias = data.get("alias")  # Single alias for session_tune table
-        aliases_str = data.get("aliases", "").strip()  # Multiple aliases for session_tune_alias table
+        # Build dynamic update - only update fields that are explicitly present in request
+        update_fields = []
+        update_values = []
 
-        # Parse setting_id - convert to int or None
-        parsed_setting_id = None
-        if setting_id:
-            try:
-                parsed_setting_id = int(setting_id)
-            except ValueError:
-                return jsonify(
-                    {
-                        "success": False,
-                        "message": "Setting ID must be a number",
-                    }
-                )
+        # Handle setting_id if present in request
+        if "setting_id" in data:
+            setting_id_raw = data.get("setting_id")
+            if setting_id_raw is None or setting_id_raw == "":
+                update_fields.append("setting_id = %s")
+                update_values.append(None)
+            else:
+                setting_id_str = str(setting_id_raw).strip()
+                if setting_id_str:
+                    try:
+                        update_fields.append("setting_id = %s")
+                        update_values.append(int(setting_id_str))
+                    except ValueError:
+                        return jsonify(
+                            {
+                                "success": False,
+                                "message": "Setting ID must be a number",
+                            }
+                        )
+                else:
+                    update_fields.append("setting_id = %s")
+                    update_values.append(None)
 
-        # Parse alias - convert empty string to None
-        parsed_alias = alias.strip() if alias and alias.strip() else None
+        # Handle key if present in request
+        if "key" in data:
+            key_raw = data.get("key")
+            if key_raw is None or key_raw == "":
+                update_fields.append("key = %s")
+                update_values.append(None)
+            else:
+                key_str = str(key_raw).strip()
+                update_fields.append("key = %s")
+                update_values.append(key_str if key_str else None)
 
-        # Parse aliases - split by comma and clean up
+        # Handle alias if present in request
+        if "alias" in data:
+            alias_raw = data.get("alias")
+            if alias_raw is None or alias_raw == "":
+                update_fields.append("alias = %s")
+                update_values.append(None)
+            else:
+                alias_str = str(alias_raw).strip()
+                update_fields.append("alias = %s")
+                update_values.append(alias_str if alias_str else None)
+
+        # Parse aliases for session_tune_alias table (if present)
         new_aliases = []
-        if aliases_str:
-            new_aliases = [a.strip() for a in aliases_str.split(",") if a.strip()]
-
-        # Convert empty strings to None for key
-        parsed_key = key if key else None
+        if "aliases" in data:
+            aliases_str = data.get("aliases", "")
+            if aliases_str:
+                aliases_str = str(aliases_str).strip()
+                new_aliases = [a.strip() for a in aliases_str.split(",") if a.strip()]
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -909,15 +937,21 @@ def update_session_tune_details(session_path, tune_id):
         # Save to history before making changes
         save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=get_current_user_id())
 
-        # Update session_tune with setting_id, key, and alias
-        cur.execute(
-            """
-            UPDATE session_tune
-            SET setting_id = %s, key = %s, alias = %s, last_modified_user_id = %s
-            WHERE session_id = %s AND tune_id = %s
-        """,
-            (parsed_setting_id, parsed_key, parsed_alias, get_current_user_id(), session_id, tune_id),
-        )
+        # Update session_tune - only update fields that were in the request
+        if update_fields:
+            # Always update last_modified_user_id
+            update_fields.append("last_modified_user_id = %s")
+            update_values.append(get_current_user_id())
+            update_values.extend([session_id, tune_id])
+
+            cur.execute(
+                f"""
+                UPDATE session_tune
+                SET {', '.join(update_fields)}
+                WHERE session_id = %s AND tune_id = %s
+            """,
+                tuple(update_values),
+            )
 
         # Now handle aliases in session_tune_alias table
         # First, get existing aliases
@@ -9364,33 +9398,60 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         if not cur.fetchone():
             return jsonify({"success": False, "message": "Tune not found in this session instance"}), 404
 
-        # Extract fields from request
-        name = data.get("name", "").strip() or None
-        key_override = data.get("key_override", "").strip() or None
-        setting_override = data.get("setting_override")
+        # Build dynamic update - only update fields that are explicitly present in request
+        update_fields = []
+        update_values = []
 
-        # Convert setting_override to int or None
-        if setting_override is not None:
-            if setting_override == "" or setting_override == "null":
-                setting_override = None
+        # Handle name if present in request
+        if "name" in data:
+            name_raw = data.get("name")
+            if name_raw is None or name_raw == "":
+                update_fields.append("name = %s")
+                update_values.append(None)
+            else:
+                name_str = str(name_raw).strip()
+                update_fields.append("name = %s")
+                update_values.append(name_str if name_str else None)
+
+        # Handle key_override if present in request
+        if "key_override" in data:
+            key_raw = data.get("key_override")
+            if key_raw is None or key_raw == "":
+                update_fields.append("key_override = %s")
+                update_values.append(None)
+            else:
+                key_str = str(key_raw).strip()
+                update_fields.append("key_override = %s")
+                update_values.append(key_str if key_str else None)
+
+        # Handle setting_override if present in request
+        if "setting_override" in data:
+            setting_raw = data.get("setting_override")
+            if setting_raw is None or setting_raw == "" or setting_raw == "null":
+                update_fields.append("setting_override = %s")
+                update_values.append(None)
             else:
                 try:
-                    setting_override = int(setting_override)
+                    update_fields.append("setting_override = %s")
+                    update_values.append(int(setting_raw))
                 except (ValueError, TypeError):
                     return jsonify({"success": False, "message": "Invalid setting_override value"}), 400
 
-        # Update the session_instance_tune record
-        cur.execute(
-            """
-            UPDATE session_instance_tune
-            SET name = %s,
-                key_override = %s,
-                setting_override = %s,
-                last_modified_user_id = %s
-            WHERE session_instance_id = %s AND tune_id = %s
-        """,
-            (name, key_override, setting_override, get_current_user_id(), session_instance_id, tune_id),
-        )
+        # Update the session_instance_tune record - only update fields that were in the request
+        if update_fields:
+            # Always update last_modified_user_id
+            update_fields.append("last_modified_user_id = %s")
+            update_values.append(get_current_user_id())
+            update_values.extend([session_instance_id, tune_id])
+
+            cur.execute(
+                f"""
+                UPDATE session_instance_tune
+                SET {', '.join(update_fields)}
+                WHERE session_instance_id = %s AND tune_id = %s
+            """,
+                tuple(update_values),
+            )
 
         conn.commit()
         conn.close()
