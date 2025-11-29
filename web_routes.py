@@ -914,28 +914,28 @@ def register():
                 person_id = existing_person_id
                 if (first_name != existing_person['first_name'] or
                     last_name != existing_person['last_name']):
-                    # Update person's name to match registration
+                    # Update person's name to match registration (no user logged in yet)
                     save_to_history(
                         cur,
                         "person",
                         "UPDATE",
                         person_id,
-                        user_id=get_current_user_id(),
+                        user_id=None,
                     )
                     cur.execute(
                         """
                         UPDATE person
-                        SET first_name = %s, last_name = %s, last_modified_date = %s
+                        SET first_name = %s, last_name = %s, last_modified_date = %s, last_modified_user_id = NULL
                         WHERE person_id = %s
                         """,
                         (first_name, last_name, now_utc(), person_id)
                     )
             else:
-                # Create new person record
+                # Create new person record (no user yet during registration)
                 cur.execute(
                     """
-                    INSERT INTO person (first_name, last_name, email)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO person (first_name, last_name, email, created_by_user_id)
+                    VALUES (%s, %s, %s, NULL)
                     RETURNING person_id
                 """,
                     (first_name, last_name, email),
@@ -946,7 +946,7 @@ def register():
                     return redirect(url_for("register"))
                 person_id = result[0]
 
-            # Create user record (unverified)
+            # Create user record (unverified, no user yet during registration)
             hashed_password = bcrypt.hashpw(
                 password.encode("utf-8"), bcrypt.gensalt()
             ).decode("utf-8")
@@ -959,8 +959,8 @@ def register():
             cur.execute(
                 """
                 INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone,
-                                        email_verified, verification_token, verification_token_expires, referred_by_person_id)
-                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s)
+                                        email_verified, verification_token, verification_token_expires, referred_by_person_id, created_by_user_id)
+                VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s, %s, NULL)
                 RETURNING user_id
             """,
                 (
@@ -1238,18 +1238,18 @@ def forgot_password():
                 token = generate_password_reset_token()
                 expires = now_utc() + timedelta(hours=1)
 
-                # Save token to database
+                # Save token to database (no user logged in during password reset request)
                 save_to_history(
                     cur,
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    user_id=get_current_user_id(),
+                    user_id=None,
                 )
                 cur.execute(
                     """
                     UPDATE user_account
-                    SET password_reset_token = %s, password_reset_expires = %s
+                    SET password_reset_token = %s, password_reset_expires = %s, last_modified_user_id = NULL
                     WHERE user_id = %s
                 """,
                     (token, expires, user_data[0]),
@@ -1331,13 +1331,13 @@ def reset_password(token):
                 username_row = cur.fetchone()
                 username = username_row[0] if username_row else "unknown"
 
-                # Update password and clear reset token
+                # Update password and clear reset token (no user logged in during password reset)
                 save_to_history(
                     cur,
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    user_id=get_current_user_id(),
+                    user_id=None,
                 )
                 hashed_password = bcrypt.hashpw(
                     password.encode("utf-8"), bcrypt.gensalt()
@@ -1345,7 +1345,7 @@ def reset_password(token):
                 cur.execute(
                     """
                     UPDATE user_account
-                    SET hashed_password = %s, password_reset_token = NULL, password_reset_expires = NULL
+                    SET hashed_password = %s, password_reset_token = NULL, password_reset_expires = NULL, last_modified_user_id = NULL
                     WHERE user_id = %s
                 """,
                     (hashed_password, user_data[0]),
@@ -1436,10 +1436,10 @@ def change_password():
             cur.execute(
                 """
                 UPDATE user_account
-                SET hashed_password = %s, last_modified_date = %s
+                SET hashed_password = %s, last_modified_date = %s, last_modified_user_id = %s
                 WHERE user_id = %s
             """,
-                (hashed_password, now_utc(), current_user.user_id),
+                (hashed_password, now_utc(), current_user.user_id, current_user.user_id),
             )
             conn.commit()
 
@@ -1470,9 +1470,9 @@ def verify_email(token):
         user_data = cur.fetchone()
 
         if user_data:
-            # Mark email as verified and clear token
+            # Mark email as verified and clear token (no user logged in during verification)
             save_to_history(
-                cur, "user_account", "UPDATE", user_data[0], user_id=get_current_user_id()
+                cur, "user_account", "UPDATE", user_data[0], user_id=None
             )
             cur.execute(
                 """
@@ -1480,7 +1480,8 @@ def verify_email(token):
                 SET email_verified = TRUE,
                     verification_token = NULL,
                     verification_token_expires = NULL,
-                    last_modified_date = %s
+                    last_modified_date = %s,
+                    last_modified_user_id = NULL
                 WHERE user_id = %s
             """,
                 (now_utc(), user_data[0]),
@@ -1529,18 +1530,18 @@ def resend_verification():
                 verification_token = generate_verification_token()
                 verification_expires = now_utc() + timedelta(hours=24)
 
-                # Update token in database
+                # Update token in database (no user logged in during resend verification)
                 save_to_history(
                     cur,
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    user_id=get_current_user_id(),
+                    user_id=None,
                 )
                 cur.execute(
                     """
                     UPDATE user_account
-                    SET verification_token = %s, verification_token_expires = %s
+                    SET verification_token = %s, verification_token_expires = %s, last_modified_user_id = NULL
                     WHERE user_id = %s
                 """,
                     (verification_token, verification_expires, user_data[0]),

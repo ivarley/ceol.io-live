@@ -237,13 +237,14 @@ class ThesessionSyncService:
 
             # Insert tune into database
             cur.execute("""
-                INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
-                VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+                VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
             """, (
                 metadata['tune_id'],
                 metadata['name'],
                 metadata['tune_type'],
-                metadata['tunebook_count']
+                metadata['tunebook_count'],
+                user_id
             ))
 
             # Save to history
@@ -351,11 +352,13 @@ class ThesessionSyncService:
                 print(f"Inserting {len(tunes_to_create)} new tunes in batch...", file=sys.stderr)
                 from psycopg2.extras import execute_values
                 cur.execute("BEGIN")
+                # Add user_id to each tuple for created_by_user_id
+                tunes_with_user = [(t[0], t[1], t[2], t[3], user_id) for t in tunes_to_create]
                 execute_values(cur, """
-                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
                     VALUES %s
                     ON CONFLICT (tune_id) DO NOTHING
-                """, tunes_to_create, template="(%s, %s, %s, %s, CURRENT_DATE)")
+                """, tunes_with_user, template="(%s, %s, %s, %s, CURRENT_DATE, %s)")
                 conn.commit()
                 results['tunes_created'] = len(tunes_to_create)
                 print(f"Successfully created {len(tunes_to_create)} tunes", file=sys.stderr)
@@ -420,15 +423,16 @@ class ThesessionSyncService:
                 tunes_to_add = [(person_id, tid, learn_status) for tid in valid_tune_ids if tid not in existing_tune_ids]
 
                 if tunes_to_add:
-                    # Batch insert new person_tunes
+                    # Batch insert new person_tunes (add user_id for audit)
                     from psycopg2.extras import execute_values
+                    tunes_with_user = [(t[0], t[1], t[2], user_id) for t in tunes_to_add]
                     execute_values(cur, """
                         INSERT INTO person_tune (
                             person_id, tune_id, learn_status,
-                            created_date, last_modified_date
+                            created_date, last_modified_date, created_by_user_id
                         )
                         VALUES %s
-                    """, tunes_to_add, template="(%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))")
+                    """, tunes_with_user, template="(%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'), %s)")
 
                     results['person_tunes_added'] = len(tunes_to_add)
 

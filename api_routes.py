@@ -273,6 +273,11 @@ def update_session_ajax(session_path):
             conn.close()
             return jsonify({"success": False, "error": "No valid fields to update"})
 
+        # Add audit fields
+        update_fields.append("last_modified_date = CURRENT_TIMESTAMP")
+        update_fields.append("last_modified_user_id = %s")
+        update_values.append(get_current_user_id())
+
         # Execute the update
         update_query = f"UPDATE session SET {', '.join(update_fields)} WHERE path = %s"
         update_values.append(session_path)
@@ -938,11 +943,11 @@ def update_session_tune_details(session_path, tune_id):
         for alias in aliases_to_add:
             cur.execute(
                 """
-                INSERT INTO session_tune_alias (session_id, tune_id, alias)
-                VALUES (%s, %s, %s)
+                INSERT INTO session_tune_alias (session_id, tune_id, alias, created_by_user_id)
+                VALUES (%s, %s, %s, %s)
                 RETURNING session_tune_alias_id
             """,
-                (session_id, tune_id, alias),
+                (session_id, tune_id, alias, get_current_user_id()),
             )
             alias_id = cur.fetchone()[0]
             save_to_history(cur, "session_tune_alias", "INSERT", alias_id, user_id=get_current_user_id())
@@ -1018,8 +1023,8 @@ def add_session_tune(session_path):
                 new_tune_data = data.get("new_tune")
                 cur.execute(
                     """
-                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
-                    VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
                     ON CONFLICT (tune_id) DO NOTHING
                 """,
                     (
@@ -1027,6 +1032,7 @@ def add_session_tune(session_path):
                         new_tune_data.get("name"),
                         new_tune_data.get("tune_type"),
                         new_tune_data.get("tunebook_count", 0),
+                        get_current_user_id(),
                     ),
                 )
             else:
@@ -1047,10 +1053,10 @@ def add_session_tune(session_path):
         # Insert into session_tune
         cur.execute(
             """
-            INSERT INTO session_tune (session_id, tune_id, alias, setting_id, key)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO session_tune (session_id, tune_id, alias, setting_id, key, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """,
-            (session_id, tune_id, alias, parsed_setting_id, key),
+            (session_id, tune_id, alias, parsed_setting_id, key, get_current_user_id()),
         )
 
         # Save to history
@@ -1181,11 +1187,11 @@ def add_session_tune_alias(session_path, tune_id):
         # Insert the new alias
         cur.execute(
             """
-            INSERT INTO session_tune_alias (session_id, tune_id, alias, created_date, last_modified_date)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO session_tune_alias (session_id, tune_id, alias, created_date, last_modified_date, created_by_user_id)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s)
             RETURNING session_tune_alias_id, created_date
         """,
-            (session_id, tune_id, normalized_alias),
+            (session_id, tune_id, normalized_alias, get_current_user_id()),
         )
 
         result = cur.fetchone()
@@ -1329,11 +1335,11 @@ def add_session_instance_ajax(session_path):
         # Insert new session instance
         cur.execute(
             """
-            INSERT INTO session_instance (session_id, date, start_time, end_time, location_override, is_cancelled, comments)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO session_instance (session_id, date, start_time, end_time, location_override, is_cancelled, comments, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING session_instance_id
         """,
-            (session_id, date, start_time, end_time, location_override, cancelled, comments),
+            (session_id, date, start_time, end_time, location_override, cancelled, comments, get_current_user_id()),
         )
 
         session_instance_result = cur.fetchone()
@@ -2180,9 +2186,9 @@ def add_session_ajax():
             """
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
-                city, state, country, initiation_date, recurrence, created_date, last_modified_date
+                city, state, country, initiation_date, recurrence, created_date, last_modified_date, created_by_user_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
         """,
             (
@@ -2197,6 +2203,7 @@ def add_session_ajax():
                 data["country"],
                 data.get("inception_date") or None,
                 data.get("recurrence") or None,
+                get_current_user_id(),
             ),
         )
 
@@ -2621,10 +2628,10 @@ def link_tune_ajax(session_path, date):
                 # Add to session_tune with alias and setting_id
                 cur.execute(
                     """
-                    INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO session_tune (session_id, tune_id, alias, setting_id, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, %s)
                 """,
-                    (session_id, tune_id, tune_name, setting_id),
+                    (session_id, tune_id, tune_name, setting_id, get_current_user_id()),
                 )
 
                 # Save the newly inserted record to history
@@ -2705,10 +2712,10 @@ def link_tune_ajax(session_path, date):
                     # Insert new tune into tune table
                     cur.execute(
                         """
-                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
-                        VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
                     """,
-                        (tune_id, tune_name_from_api, tune_type, tunebook_count),
+                        (tune_id, tune_name_from_api, tune_type, tunebook_count, get_current_user_id()),
                     )
 
                     # Save the newly inserted tune to history
@@ -2720,10 +2727,10 @@ def link_tune_ajax(session_path, date):
                     # Add to session_tune with alias and setting_id
                     cur.execute(
                         """
-                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s)
                     """,
-                        (session_id, tune_id, alias, setting_id),
+                        (session_id, tune_id, alias, setting_id, get_current_user_id()),
                     )
 
                     # Save the newly inserted session_tune to history
@@ -3158,11 +3165,11 @@ def add_person_to_session_people_tab(session_path):
             # Create new person
             cur.execute(
                 """
-                INSERT INTO person (first_name, last_name, thesession_user_id)
-                VALUES (%s, %s, %s)
+                INSERT INTO person (first_name, last_name, thesession_user_id, created_by_user_id)
+                VALUES (%s, %s, %s, %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, thesession_user_id)
+                (first_name, last_name, thesession_user_id, get_current_user_id())
             )
             person_id = cur.fetchone()[0]
 
@@ -3171,20 +3178,20 @@ def add_person_to_session_people_tab(session_path):
                 for instrument in instruments:
                     cur.execute(
                         """
-                        INSERT INTO person_instrument (person_id, instrument)
-                        VALUES (%s, %s)
+                        INSERT INTO person_instrument (person_id, instrument, created_by_user_id)
+                        VALUES (%s, %s, %s)
                         ON CONFLICT (person_id, instrument) DO NOTHING
                         """,
-                        (person_id, instrument)
+                        (person_id, instrument, get_current_user_id())
                     )
 
         # Add person to session with specified is_regular value
         cur.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, false)
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, false, %s)
             """,
-            (session_id, person_id, is_regular)
+            (session_id, person_id, is_regular, get_current_user_id())
         )
 
         conn.commit()
@@ -3390,10 +3397,10 @@ def add_existing_person_to_session(session_path):
         # Add person to session
         cur.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, false)
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, false, %s)
             """,
-            (session_id, person_id, is_regular)
+            (session_id, person_id, is_regular, get_current_user_id())
         )
 
         conn.commit()
@@ -5003,10 +5010,10 @@ def add_person_to_session():
         )
         cur.execute(
             """
-            INSERT INTO session_person (person_id, session_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO session_person (person_id, session_id, is_regular, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s)
         """,
-            (person_id, session_id, is_regular, is_admin),
+            (person_id, session_id, is_regular, is_admin, get_current_user_id()),
         )
 
         # Get session admins for email notification
@@ -5306,10 +5313,10 @@ def create_new_person():
                 )
                 cur.execute(
                     """
-                    INSERT INTO session_person (person_id, session_id, is_regular, is_admin)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO session_person (person_id, session_id, is_regular, is_admin, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, %s)
                 """,
-                    (person_id, session_id, False, False),
+                    (person_id, session_id, False, False, audit_user_id),
                 )  # Default to attendee, not admin
 
             conn.commit()
@@ -5538,9 +5545,9 @@ def update_session_player_details(session_path, person_id):
             if 'is_regular' in data:
                 # Update regular status in session_person table
                 cur.execute(
-                    """UPDATE session_person SET is_regular = %s 
+                    """UPDATE session_person SET is_regular = %s, last_modified_user_id = %s
                        WHERE session_id = %s AND person_id = %s""",
-                    (data['is_regular'], session_id, person_id)
+                    (data['is_regular'], get_current_user_id(), session_id, person_id)
                 )
                 save_to_history(
                     cur,
@@ -5564,15 +5571,17 @@ def update_session_player_details(session_path, person_id):
             
             if updates:
                 updates.append("last_modified_date = NOW()")
+                updates.append("last_modified_user_id = %s")
+                params.append(get_current_user_id())
                 params.append(person_id)
-                
+
                 update_sql = f"""
-                    UPDATE person 
+                    UPDATE person
                     SET {', '.join(updates)}
                     WHERE person_id = %s
                 """
                 cur.execute(update_sql, params)
-                
+
                 save_to_history(
                     cur,
                     "person",
@@ -5584,9 +5593,9 @@ def update_session_player_details(session_path, person_id):
             # Also update regular status if provided
             if 'is_regular' in data:
                 cur.execute(
-                    """UPDATE session_person SET is_regular = %s
+                    """UPDATE session_person SET is_regular = %s, last_modified_user_id = %s
                        WHERE session_id = %s AND person_id = %s""",
-                    (data['is_regular'], session_id, person_id)
+                    (data['is_regular'], get_current_user_id(), session_id, person_id)
                 )
                 save_to_history(
                     cur,
@@ -6134,12 +6143,12 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
         try:
             cur.execute(
                 """
-                INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
-                VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+                VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
             """,
-                (tune_id, tune_name_from_api, tune_type, tunebook_count),
+                (tune_id, tune_name_from_api, tune_type, tunebook_count, get_current_user_id()),
             )
-            
+
             # Save the newly inserted tune to history
             save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
             
@@ -6341,11 +6350,11 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 try:
                     cur.execute(
                         """
-                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (session_id, tune_id) DO NOTHING
                     """,
-                        (session_id, tune_id, alias_name, None),
+                        (session_id, tune_id, alias_name, None, get_current_user_id()),
                     )
                     # Only save to history and count modification if row was actually inserted
                     if cur.rowcount > 0:
@@ -6360,10 +6369,10 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             for session_id_val, tune_id, alias_name in aliases_to_create:
                 cur.execute(
                     """
-                    INSERT INTO session_tune_alias (session_id, tune_id, alias)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO session_tune_alias (session_id, tune_id, alias, created_by_user_id)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (session_id_val, tune_id, alias_name),
+                    (session_id_val, tune_id, alias_name, get_current_user_id()),
                 )
                 modifications += 1
 
@@ -6919,15 +6928,15 @@ def create_person_with_instruments():
             # Insert person
             cur.execute(
                 """
-                INSERT INTO person (first_name, last_name, email, created_date)
-                VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                INSERT INTO person (first_name, last_name, email, created_date, created_by_user_id)
+                VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, email)
+                (first_name, last_name, email, current_user.user_id)
             )
-            
+
             person_id = cur.fetchone()[0]
-            
+
             # Log person creation to history
             save_to_history(
                 cur,
@@ -6941,10 +6950,10 @@ def create_person_with_instruments():
             for instrument in normalized_instruments:
                 cur.execute(
                     """
-                    INSERT INTO person_instrument (person_id, instrument, created_date)
-                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (person_id, instrument)
+                    (person_id, instrument, current_user.user_id)
                 )
 
                 # Log instrument creation to history
@@ -7169,10 +7178,10 @@ def update_person_instruments(person_id):
             for instrument in instruments_to_add:
                 cur.execute(
                     """
-                    INSERT INTO person_instrument (person_id, instrument, created_date)
-                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                    VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (person_id, instrument)
+                    (person_id, instrument, current_user_id)
                 )
 
                 # Log addition to history
@@ -8068,12 +8077,12 @@ def bulk_import_save_session(session_id):
                 if person_data.get('is_duplicate', False):
                     skipped_count += 1
                     continue
-                
+
                 # Create person record
                 cur.execute(
                     """
-                    INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, created_date)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, created_date, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     RETURNING person_id
                     """,
                     (
@@ -8083,10 +8092,11 @@ def bulk_import_save_session(session_id):
                         person_data.get('sms_number'),
                         person_data.get('city'),
                         person_data.get('state'),
-                        person_data.get('country')
+                        person_data.get('country'),
+                        current_user.user_id
                     )
                 )
-                
+
                 person_id = cur.fetchone()[0]
 
                 # Log person creation
@@ -8098,10 +8108,10 @@ def bulk_import_save_session(session_id):
                     if instrument and instrument.strip():
                         cur.execute(
                             """
-                            INSERT INTO person_instrument (person_id, instrument, created_date)
-                            VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
+                            INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                            VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                             """,
-                            (person_id, instrument.strip().lower())
+                            (person_id, instrument.strip().lower(), current_user.user_id)
                         )
 
                         # Log instrument creation
@@ -8112,10 +8122,10 @@ def bulk_import_save_session(session_id):
                 is_regular = person_data.get('is_regular', False)
                 cur.execute(
                     """
-                    INSERT INTO session_person (session_id, person_id, is_regular, created_date)
-                    VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                    INSERT INTO session_person (session_id, person_id, is_regular, created_date, created_by_user_id)
+                    VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (session_id, person_id, is_regular)
+                    (session_id, person_id, is_regular, current_user.user_id)
                 )
 
                 # Log session_person creation
@@ -8329,11 +8339,11 @@ def create_or_get_today_session_instance(session_path):
         # Create new session instance for today
         cur.execute(
             """
-            INSERT INTO session_instance (session_id, date, comments)
-            VALUES (%s, %s, %s)
+            INSERT INTO session_instance (session_id, date, comments, created_by_user_id)
+            VALUES (%s, %s, %s, %s)
             RETURNING session_instance_id
             """,
-            (session_id, today, None),
+            (session_id, today, None, get_current_user_id()),
         )
         new_instance = cur.fetchone()
 
@@ -8619,8 +8629,8 @@ def update_admin_tune(tune_id):
 
         # Update the tune name
         cur.execute(
-            "UPDATE tune SET name = %s, last_modified_date = CURRENT_TIMESTAMP WHERE tune_id = %s",
-            (name, tune_id)
+            "UPDATE tune SET name = %s, last_modified_date = CURRENT_TIMESTAMP, last_modified_user_id = %s WHERE tune_id = %s",
+            (name, get_current_user_id(), tune_id)
         )
         conn.commit()
 
@@ -8854,15 +8864,16 @@ def add_person_tune():
         # Insert into person_tune
         cur.execute(
             """
-            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (person_id, tune_id)
             DO UPDATE SET
                 learn_status = EXCLUDED.learn_status,
                 heard_count = EXCLUDED.heard_count,
-                last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                last_modified_user_id = EXCLUDED.created_by_user_id
             """,
-            (person_id, tune_id, learn_status, heard_count)
+            (person_id, tune_id, learn_status, heard_count, get_current_user_id())
         )
         conn.commit()
 
@@ -10132,10 +10143,10 @@ def join_session(session_path):
         # Add user as a member (not regular, not admin)
         cur.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, false, false)
+            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
+            VALUES (%s, %s, false, false, %s)
             """,
-            (session_id, user_person_id)
+            (session_id, user_person_id, get_current_user_id())
         )
 
         # Save to history

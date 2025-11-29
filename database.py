@@ -641,10 +641,11 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
             
             # Update existing record
             cur.execute("""
-                UPDATE session_instance_person 
-                SET attendance = %s, comment = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                UPDATE session_instance_person
+                SET attendance = %s, comment = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                    last_modified_user_id = %s
                 WHERE session_instance_id = %s AND person_id = %s
-            """, (attendance, comment, session_instance_id, person_id))
+            """, (attendance, comment, user_id, session_instance_id, person_id))
             
             action = "updated"
         else:
@@ -671,25 +672,25 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
             if not session_person_exists:
                 # Create session_person record with is_regular=false by default
                 cur.execute("""
-                    INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                    VALUES (%s, %s, %s, %s)
-                """, (session_id, person_id, False, False))
+                    INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (session_id, person_id, False, False, user_id))
             
             # Insert new attendance record
             cur.execute("""
-                INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date)
-                VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+                INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date, created_by_user_id)
+                VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
                 RETURNING session_instance_person_id
-            """, (session_instance_id, person_id, attendance, comment))
+            """, (session_instance_id, person_id, attendance, comment, user_id))
             
             new_record_id = cur.fetchone()[0]
             
             # Log INSERT to history (manually since record was just created)
             cur.execute("""
                 INSERT INTO session_instance_person_history
-                (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
+                (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (new_record_id, session_instance_id, person_id, attendance, comment, 'INSERT', changed_by))
+            """, (new_record_id, session_instance_id, person_id, attendance, comment, 'INSERT', user_id))
             
             action = "added"
         
@@ -737,7 +738,7 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
         conn.close()
 
 
-def create_person_with_instruments(first_name, last_name, email=None, instruments=None, changed_by='system'):
+def create_person_with_instruments(first_name, last_name, email=None, instruments=None, user_id=None):
     """
     Create a new person with associated instruments.
     
@@ -764,33 +765,33 @@ def create_person_with_instruments(first_name, last_name, email=None, instrument
         
         # Insert person
         cur.execute("""
-            INSERT INTO person (first_name, last_name, email, created_date)
-            VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+            INSERT INTO person (first_name, last_name, email, created_date, created_by_user_id)
+            VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
             RETURNING person_id
-        """, (first_name, last_name, email))
+        """, (first_name, last_name, email, user_id))
         
         person_id = cur.fetchone()[0]
         
         # Log person creation to history (manually since record was just created)
         cur.execute("""
             INSERT INTO person_history
-            (person_id, first_name, last_name, email, operation, changed_by, changed_at, created_date)
+            (person_id, first_name, last_name, email, operation, changed_by_user_id, changed_at, created_date)
             VALUES (%s, %s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-        """, (person_id, first_name, last_name, email, 'INSERT', changed_by))
+        """, (person_id, first_name, last_name, email, 'INSERT', user_id))
         
         # Insert instruments
         for instrument in instruments:
             cur.execute("""
-                INSERT INTO person_instrument (person_id, instrument, created_date)
-                VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument))
-            
+                INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
+            """, (person_id, instrument, user_id))
+
             # Log instrument creation to history (manually since record was just created)
             cur.execute("""
                 INSERT INTO person_instrument_history
-                (person_id, instrument, operation, changed_by, changed_at, created_date)
+                (person_id, instrument, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument, 'INSERT', changed_by))
+            """, (person_id, instrument, 'INSERT', user_id))
         
         # Commit transaction
         cur.execute("COMMIT")
@@ -881,16 +882,16 @@ def update_person_instruments(person_id, instruments, user_id=None):
         # Add new instruments
         for instrument in instruments_to_add:
             cur.execute("""
-                INSERT INTO person_instrument (person_id, instrument, created_date)
-                VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument))
-            
+                INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
+            """, (person_id, instrument, user_id))
+
             # Log addition to history (manually since record was just created)
             cur.execute("""
                 INSERT INTO person_instrument_history
-                (person_id, instrument, operation, changed_by, changed_at, created_date)
+                (person_id, instrument, operation, changed_by_user_id, changed_at, created_date)
                 VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
-            """, (person_id, instrument, 'INSERT', changed_by))
+            """, (person_id, instrument, 'INSERT', user_id))
         
         # Commit transaction
         cur.execute("COMMIT")

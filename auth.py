@@ -158,8 +158,8 @@ class User(UserMixin):
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id, created_by_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, NULL)
                 RETURNING user_id
             """,
                 (person_id, username, user_email, hashed_password, timezone, referred_by_person_id),

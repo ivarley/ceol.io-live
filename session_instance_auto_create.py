@@ -83,10 +83,10 @@ def auto_create_next_week_instances(session_id: int) -> Tuple[int, List[str]]:
         created_dates = []
         for occurrence in occurrences:
             if occurrence['date'] not in existing_dates:
-                # Insert new session instance
+                # Insert new session instance (system auto-creation, no user)
                 cur.execute("""
-                    INSERT INTO session_instance (session_id, date, start_time, end_time)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO session_instance (session_id, date, start_time, end_time, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, NULL)
                     RETURNING session_instance_id
                 """, (
                     session_id,

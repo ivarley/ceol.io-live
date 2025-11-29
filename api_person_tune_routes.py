@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 from functools import wraps
 from services.person_tune_service import PersonTuneService, UNSET
 from services.thesession_sync_service import ThesessionSyncService
-from database import get_db_connection
+from database import get_db_connection, get_current_user_id
 import base64
 
 
@@ -461,15 +461,16 @@ def add_my_tune():
 
                 # Insert the tune into the tune table
                 cur.execute("""
-                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date)
-                    VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                    INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
                     ON CONFLICT (tune_id) DO NOTHING
                     RETURNING tune_id
                 """, (
                     new_tune_data.get('tune_id'),
                     new_tune_data.get('name'),
                     new_tune_data.get('tune_type'),
-                    new_tune_data.get('tunebook_count', 0)
+                    new_tune_data.get('tunebook_count', 0),
+                    get_current_user_id()
                 ))
 
                 conn.commit()

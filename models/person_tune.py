@@ -200,10 +200,11 @@ class PersonTune:
             cur.execute("""
                 UPDATE person_tune
                 SET heard_count = heard_count + 1,
-                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                    last_modified_user_id = %s
                 WHERE person_tune_id = %s
                 RETURNING heard_count
-            """, (self.person_tune_id,))
+            """, (user_id, self.person_tune_id))
 
             # Update local object with new value from database
             result = cur.fetchone()
@@ -241,10 +242,11 @@ class PersonTune:
             cur.execute("""
                 UPDATE person_tune
                 SET heard_count = GREATEST(0, heard_count - 1),
-                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                    last_modified_user_id = %s
                 WHERE person_tune_id = %s
                 RETURNING heard_count
-            """, (self.person_tune_id,))
+            """, (user_id, self.person_tune_id))
 
             # Update local object with new value from database
             result = cur.fetchone()
@@ -287,7 +289,8 @@ class PersonTune:
                     notes = %s,
                     setting_id = %s,
                     name_alias = %s,
-                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                    last_modified_user_id = %s
                 WHERE person_tune_id = %s
             """, (
                 self.learn_status,
@@ -296,6 +299,7 @@ class PersonTune:
                 self.notes,
                 self.setting_id,
                 self.name_alias,
+                user_id,
                 self.person_tune_id
             ))
             
@@ -333,9 +337,10 @@ class PersonTune:
                 cur.execute("""
                     INSERT INTO person_tune (
                         person_id, tune_id, learn_status, heard_count,
-                        learned_date, notes, setting_id, name_alias, created_date, last_modified_date
+                        learned_date, notes, setting_id, name_alias, created_date, last_modified_date,
+                        created_by_user_id
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                             (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'))
+                             (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'), %s)
                     RETURNING person_tune_id, created_date, last_modified_date
                 """, (
                     self.person_id,
@@ -345,7 +350,8 @@ class PersonTune:
                     self.learned_date,
                     self.notes,
                     self.setting_id,
-                    self.name_alias
+                    self.name_alias,
+                    user_id
                 ))
                 
                 result = cur.fetchone()
