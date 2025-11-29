@@ -2,6 +2,28 @@ import os
 import psycopg2
 
 
+def get_current_user_id():
+    """Get current user_id for audit logging, or None for system actions.
+
+    This function safely retrieves the current user's ID from Flask-Login's
+    current_user proxy. Returns None if:
+    - No user is logged in
+    - Running outside a request context (e.g., cron jobs, scripts)
+    - current_user is not authenticated
+
+    Returns:
+        int or None: The current user's user_id, or None for system actions
+    """
+    try:
+        from flask_login import current_user
+        if current_user and hasattr(current_user, 'user_id') and current_user.is_authenticated:
+            return current_user.user_id
+    except RuntimeError:
+        # Outside of request context (e.g., in cron jobs or scripts)
+        pass
+    return None
+
+
 def normalize_apostrophes(text):
     """Normalize smart apostrophes and quotes to standard ASCII characters."""
     if not text:
@@ -213,58 +235,73 @@ def get_db_connection():
     return conn
 
 
-def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
-    """Save a record to its history table before modification/deletion"""
-    # history_table = f"{table_name}_history"
+def save_to_history(cur, table_name, operation, record_id, user_id=None):
+    """Save a record to its history table before modification/deletion.
+
+    Args:
+        cur: Database cursor
+        table_name: Name of the table being modified
+        operation: 'INSERT', 'UPDATE', or 'DELETE'
+        record_id: Primary key of the record (or tuple for composite keys)
+        user_id: The user_id performing the action, or None for system actions
+    """
 
     if table_name == "session":
         cur.execute(
             """
             INSERT INTO session_history
-            (session_id, operation, changed_by, thesession_id, name, path, location_name,
+            (session_id, operation, changed_by_user_id, thesession_id, name, path, location_name,
              location_website, location_phone, location_street, city, state, country, comments,
-             unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date)
+             unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date,
+             created_by_user_id, last_modified_user_id)
             SELECT session_id, %s, %s, thesession_id, name, path, location_name,
                    location_website, location_phone, location_street, city, state, country, comments,
-                   unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date
+                   unlisted_address, initiation_date, termination_date, recurrence, created_date, last_modified_date,
+                   created_by_user_id, last_modified_user_id
             FROM session WHERE session_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "session_instance":
         cur.execute(
             """
             INSERT INTO session_instance_history
-            (session_instance_id, operation, changed_by, session_id, date, start_time,
-             end_time, location_override, is_cancelled, comments, created_date, last_modified_date)
+            (session_instance_id, operation, changed_by_user_id, session_id, date, start_time,
+             end_time, location_override, is_cancelled, comments, created_date, last_modified_date,
+             created_by_user_id, last_modified_user_id)
             SELECT session_instance_id, %s, %s, session_id, date, start_time,
-                   end_time, location_override, is_cancelled, comments, created_date, last_modified_date
+                   end_time, location_override, is_cancelled, comments, created_date, last_modified_date,
+                   created_by_user_id, last_modified_user_id
             FROM session_instance WHERE session_instance_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "tune":
         cur.execute(
             """
             INSERT INTO tune_history
-            (tune_id, operation, changed_by, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_date, last_modified_date)
-            SELECT tune_id, %s, %s, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_date, last_modified_date
+            (tune_id, operation, changed_by_user_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT tune_id, %s, %s, name, tune_type, tunebook_count_cached, tunebook_count_cached_date,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM tune WHERE tune_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "tune_setting":
         cur.execute(
             """
             INSERT INTO tune_setting_history
-            (setting_id, operation, changed_by, tune_id, key, abc, image, incipit_abc, incipit_image, cache_updated_date, created_date, last_modified_date)
-            SELECT setting_id, %s, %s, tune_id, key, abc, image, incipit_abc, incipit_image, cache_updated_date, created_date, last_modified_date
+            (setting_id, operation, changed_by_user_id, tune_id, key, abc, image, incipit_abc, incipit_image,
+             cache_updated_date, created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT setting_id, %s, %s, tune_id, key, abc, image, incipit_abc, incipit_image,
+                   cache_updated_date, created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM tune_setting WHERE setting_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "session_tune":
@@ -273,56 +310,60 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
         cur.execute(
             """
             INSERT INTO session_tune_history
-            (session_id, tune_id, operation, changed_by, setting_id, key, alias, created_date, last_modified_date)
-            SELECT session_id, tune_id, %s, %s, setting_id, key, alias, created_date, last_modified_date
+            (session_id, tune_id, operation, changed_by_user_id, setting_id, key, alias,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT session_id, tune_id, %s, %s, setting_id, key, alias,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_tune WHERE session_id = %s AND tune_id = %s
         """,
-            (operation, changed_by, session_id, tune_id),
+            (operation, user_id, session_id, tune_id),
         )
 
     elif table_name == "session_instance_tune":
         cur.execute(
             """
             INSERT INTO session_instance_tune_history
-            (session_instance_tune_id, operation, changed_by, session_instance_id, tune_id,
+            (session_instance_tune_id, operation, changed_by_user_id, session_instance_id, tune_id,
              name, order_number, continues_set, played_timestamp, inserted_timestamp,
-             key_override, setting_override, created_date, last_modified_date)
+             key_override, setting_override, created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_instance_tune_id, %s, %s, session_instance_id, tune_id,
                    name, order_number, continues_set, played_timestamp, inserted_timestamp,
-                   key_override, setting_override, created_date, last_modified_date
+                   key_override, setting_override, created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_instance_tune WHERE session_instance_tune_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "person":
         cur.execute(
             """
             INSERT INTO person_history
-            (person_id, operation, changed_by, first_name, last_name, email, sms_number,
-             city, state, country, thesession_user_id, created_date, last_modified_date)
+            (person_id, operation, changed_by_user_id, first_name, last_name, email, sms_number,
+             city, state, country, thesession_user_id, created_date, last_modified_date,
+             created_by_user_id, last_modified_user_id)
             SELECT person_id, %s, %s, first_name, last_name, email, sms_number,
-                   city, state, country, thesession_user_id, created_date, last_modified_date
+                   city, state, country, thesession_user_id, created_date, last_modified_date,
+                   created_by_user_id, last_modified_user_id
             FROM person WHERE person_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
 
     elif table_name == "user_account":
         cur.execute(
             """
             INSERT INTO user_account_history
-            (user_id, operation, changed_by, person_id, username, user_email, hashed_password,
+            (user_id, operation, changed_by_user_id, person_id, username, user_email, hashed_password,
              timezone, is_active, is_system_admin, email_verified, verification_token,
              verification_token_expires, password_reset_token, password_reset_expires,
-             created_date, last_modified_date, referred_by_person_id)
+             created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id)
             SELECT user_id, %s, %s, person_id, username, user_email, hashed_password,
                    timezone, is_active, is_system_admin, email_verified, verification_token,
                    verification_token_expires, password_reset_token, password_reset_expires,
-                   created_date, last_modified_date, referred_by_person_id
+                   created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id
             FROM user_account WHERE user_id = %s
         """,
-            (operation, changed_by, record_id),
+            (operation, user_id, record_id),
         )
         
     elif table_name == "person_instrument":
@@ -331,11 +372,13 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
         cur.execute(
             """
             INSERT INTO person_instrument_history
-            (person_id, instrument, operation, changed_by, changed_at, created_date)
-            SELECT person_id, instrument, %s, %s, (NOW() AT TIME ZONE 'UTC'), created_date
+            (person_id, instrument, operation, changed_by_user_id, changed_at, created_date,
+             created_by_user_id, last_modified_user_id)
+            SELECT person_id, instrument, %s, %s, (NOW() AT TIME ZONE 'UTC'), created_date,
+                   created_by_user_id, last_modified_user_id
             FROM person_instrument WHERE person_id = %s AND instrument = %s
         """,
-            (operation, changed_by, person_id, instrument),
+            (operation, user_id, person_id, instrument),
         )
         
     elif table_name == "session_instance_person":
@@ -344,11 +387,13 @@ def save_to_history(cur, table_name, operation, record_id, changed_by="system"):
         cur.execute(
             """
             INSERT INTO session_instance_person_history
-            (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation, changed_by, changed_at, created_date)
-            SELECT session_instance_person_id, session_instance_id, person_id, attendance, comment, %s, %s, (NOW() AT TIME ZONE 'UTC'), created_date
+            (session_instance_person_id, session_instance_id, person_id, attendance, comment, operation,
+             changed_by_user_id, changed_at, created_date, created_by_user_id, last_modified_user_id)
+            SELECT session_instance_person_id, session_instance_id, person_id, attendance, comment, %s,
+                   %s, (NOW() AT TIME ZONE 'UTC'), created_date, created_by_user_id, last_modified_user_id
             FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s
         """,
-            (operation, changed_by, session_instance_id, person_id),
+            (operation, user_id, session_instance_id, person_id),
         )
 
 
@@ -553,7 +598,7 @@ def get_session_attendees(session_instance_id):
         conn.close()
 
 
-def check_in_person(session_instance_id, person_id, attendance, comment='', changed_by='system'):
+def check_in_person(session_instance_id, person_id, attendance, comment='', user_id=None):
     """
     Check a person into a session instance or update their attendance status.
     
@@ -591,7 +636,7 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', chan
                 'session_instance_person',
                 'UPDATE',
                 (session_instance_id, person_id),
-                changed_by
+                user_id=user_id,
             )
             
             # Update existing record
@@ -796,7 +841,7 @@ def get_person_instruments(person_id):
         conn.close()
 
 
-def update_person_instruments(person_id, instruments, changed_by='system'):
+def update_person_instruments(person_id, instruments, user_id=None):
     """
     Update all instruments for a specific person.
     
@@ -827,7 +872,7 @@ def update_person_instruments(person_id, instruments, changed_by='system'):
                 'person_instrument',
                 'DELETE',
                 (person_id, instrument),
-                changed_by
+                user_id=user_id,
             )
             
             cur.execute("DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s", 
@@ -866,7 +911,7 @@ def update_person_instruments(person_id, instruments, changed_by='system'):
         conn.close()
 
 
-def remove_person_attendance(session_instance_id, person_id, changed_by='system'):
+def remove_person_attendance(session_instance_id, person_id, user_id=None):
     """
     Remove a person from a session instance attendance list.
     
@@ -896,7 +941,7 @@ def remove_person_attendance(session_instance_id, person_id, changed_by='system'
             'session_instance_person',
             'DELETE',
             (session_instance_id, person_id),
-            changed_by
+            user_id=user_id,
         )
         
         # Get the session_id for this session_instance_id

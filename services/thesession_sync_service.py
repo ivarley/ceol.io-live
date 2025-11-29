@@ -8,7 +8,7 @@ creating missing tune records, and bulk importing tunes into personal collection
 import requests
 import time
 from typing import Dict, List, Optional, Tuple, Any, Callable
-from database import get_db_connection, save_to_history
+from database import get_db_connection, save_to_history, get_current_user_id
 
 
 class ThesessionSyncService:
@@ -196,13 +196,13 @@ class ThesessionSyncService:
         else:
             return _fetch()
     
-    def ensure_tune_exists(self, tune_id: int, changed_by: str = 'system', retry: bool = True, tune_data: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
+    def ensure_tune_exists(self, tune_id: int, user_id: Optional[int] = None, retry: bool = True, tune_data: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
         """
         Ensure a tune exists in the tune table, fetching from thesession.org if needed.
 
         Args:
             tune_id: The tune ID to check/create
-            changed_by: User who triggered the operation
+            user_id: ID of user who triggered the operation, or None for system
             retry: Whether to retry on transient failures
             tune_data: Optional dict with 'name' and 'type' to avoid API call
 
@@ -247,7 +247,7 @@ class ThesessionSyncService:
             ))
 
             # Save to history
-            save_to_history(cur, 'tune', 'INSERT', tune_id, changed_by)
+            save_to_history(cur, 'tune', 'INSERT', tune_id, user_id=user_id)
 
             conn.commit()
 
@@ -265,7 +265,7 @@ class ThesessionSyncService:
         person_id: int,
         thesession_user_id: int,
         learn_status: str = 'want to learn',
-        changed_by: str = 'system',
+        user_id: Optional[int] = None,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
@@ -275,7 +275,7 @@ class ThesessionSyncService:
             person_id: The person's ID in our system
             thesession_user_id: The thesession.org user ID
             learn_status: Default learning status for imported tunes
-            changed_by: User who triggered the sync
+            user_id: ID of user who triggered the sync, or None for system
             progress_callback: Optional callback function for progress updates
             
         Returns:

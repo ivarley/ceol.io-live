@@ -34,7 +34,7 @@ class PersonTuneService:
         tune_id: int,
         learn_status: str = PersonTune.DEFAULT_LEARN_STATUS,
         notes: Optional[str] = None,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Create a new PersonTune record.
@@ -44,7 +44,7 @@ class PersonTuneService:
             tune_id: ID of the tune
             learn_status: Initial learning status (defaults to 'want to learn')
             notes: Optional notes
-            changed_by: User who created the record
+            user_id: ID of user who created the record
             
         Returns:
             Tuple of (success, message, person_tune_instance)
@@ -64,7 +64,7 @@ class PersonTuneService:
             )
             
             # Save to database
-            saved_person_tune = person_tune.save(changed_by=changed_by)
+            saved_person_tune = person_tune.save(user_id=user_id)
             
             return True, "PersonTune created successfully", saved_person_tune
             
@@ -141,7 +141,7 @@ class PersonTuneService:
         self,
         person_tune_id: int,
         new_status: str,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Update the learning status of a PersonTune.
@@ -149,7 +149,7 @@ class PersonTuneService:
         Args:
             person_tune_id: ID of the PersonTune to update
             new_status: New learning status
-            changed_by: User who made the change
+            user_id: ID of user who made the change
             
         Returns:
             Tuple of (success, message, updated_person_tune)
@@ -160,7 +160,7 @@ class PersonTuneService:
                 return False, f"PersonTune with ID {person_tune_id} not found", None
             
             # Attempt to set the new status
-            status_changed = person_tune.set_learn_status(new_status, changed_by=changed_by)
+            status_changed = person_tune.set_learn_status(new_status, user_id=user_id)
             
             if not status_changed:
                 return False, f"Status was already '{new_status}'", person_tune
@@ -175,14 +175,14 @@ class PersonTuneService:
     def increment_heard_count(
         self,
         person_tune_id: int,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[int]]:
         """
         Increment the heard_count for a PersonTune.
         
         Args:
             person_tune_id: ID of the PersonTune to update
-            changed_by: User who made the change
+            user_id: ID of user who made the change
             
         Returns:
             Tuple of (success, message, new_heard_count)
@@ -193,7 +193,7 @@ class PersonTuneService:
                 return False, f"PersonTune with ID {person_tune_id} not found", None
             
             # Increment the heard count
-            new_count = person_tune.increment_heard_count(changed_by=changed_by)
+            new_count = person_tune.increment_heard_count(user_id=user_id)
             
             return True, f"Heard count incremented to {new_count}", new_count
             
@@ -205,14 +205,14 @@ class PersonTuneService:
     def decrement_heard_count(
         self,
         person_tune_id: int,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[int]]:
         """
         Decrement the heard_count for a PersonTune (minimum 0).
 
         Args:
             person_tune_id: ID of the PersonTune to update
-            changed_by: User who made the change
+            user_id: ID of user who made the change
 
         Returns:
             Tuple of (success, message, new_heard_count)
@@ -223,7 +223,7 @@ class PersonTuneService:
                 return False, f"PersonTune with ID {person_tune_id} not found", None
 
             # Decrement the heard count
-            new_count = person_tune.decrement_heard_count(changed_by=changed_by)
+            new_count = person_tune.decrement_heard_count(user_id=user_id)
 
             return True, f"Heard count decremented to {new_count}", new_count
 
@@ -240,7 +240,7 @@ class PersonTuneService:
         setting_id=UNSET,
         name_alias=UNSET,
         heard_count=UNSET,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Update multiple fields of a PersonTune.
@@ -252,7 +252,7 @@ class PersonTuneService:
             setting_id: New thesession.org setting ID, or UNSET to skip (can be None to clear)
             name_alias: New custom name/alias, or UNSET to skip (can be None to clear)
             heard_count: New heard count, or UNSET to skip (must be >= 0 if provided)
-            changed_by: User who made the change
+            user_id: ID of user who made the change
 
         Returns:
             Tuple of (success, message, updated_person_tune)
@@ -266,7 +266,7 @@ class PersonTuneService:
 
             # Update learn_status if provided
             if learn_status is not UNSET and learn_status != person_tune.learn_status:
-                status_changed = person_tune.set_learn_status(learn_status, changed_by=changed_by)
+                status_changed = person_tune.set_learn_status(learn_status, user_id=user_id)
                 if status_changed:
                     changes_made.append(f"status to '{learn_status}'")
 
@@ -295,7 +295,7 @@ class PersonTuneService:
 
             # Save changes if any were made
             if changes_made:
-                person_tune.save(changed_by=changed_by)
+                person_tune.save(user_id=user_id)
                 message = f"Updated {', '.join(changes_made)} successfully"
             else:
                 message = "No changes were made"
@@ -310,14 +310,14 @@ class PersonTuneService:
     def delete_person_tune(
         self,
         person_tune_id: int,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str]:
         """
         Delete a PersonTune record.
         
         Args:
             person_tune_id: ID of the PersonTune to delete
-            changed_by: User who deleted the record
+            user_id: ID of user who deleted the record
             
         Returns:
             Tuple of (success, message)
@@ -327,7 +327,7 @@ class PersonTuneService:
             if not person_tune:
                 return False, f"PersonTune with ID {person_tune_id} not found"
             
-            deleted = person_tune.delete(changed_by=changed_by)
+            deleted = person_tune.delete(user_id=user_id)
             
             if deleted:
                 return True, "PersonTune deleted successfully"
@@ -342,7 +342,7 @@ class PersonTuneService:
         person_id: int,
         tune_ids: List[int],
         learn_status: str = PersonTune.DEFAULT_LEARN_STATUS,
-        changed_by: str = 'system'
+        user_id: Optional[int] = None
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Create multiple PersonTune records for a person.
@@ -351,7 +351,7 @@ class PersonTuneService:
             person_id: ID of the person
             tune_ids: List of tune IDs to add
             learn_status: Learning status for all tunes
-            changed_by: User who created the records
+            user_id: ID of user who created the records
             
         Returns:
             Tuple of (success, message, results_dict)
@@ -368,7 +368,7 @@ class PersonTuneService:
                 person_id=person_id,
                 tune_id=tune_id,
                 learn_status=learn_status,
-                changed_by=changed_by
+                user_id=user_id
             )
             
             if success:

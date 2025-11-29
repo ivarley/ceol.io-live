@@ -7,7 +7,7 @@ including learning status management, heard count tracking, and validation.
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
-from database import get_db_connection, save_to_history
+from database import get_db_connection, save_to_history, get_current_user_id
 from timezone_utils import now_utc
 
 
@@ -103,13 +103,13 @@ class PersonTune:
         if self.tune_id is None:
             raise ValueError("tune_id is required for save")
     
-    def set_learn_status(self, new_status: str, changed_by: str = 'system') -> bool:
+    def set_learn_status(self, new_status: str, user_id: Optional[int] = None) -> bool:
         """
         Update the learning status, handling learned_date automatically.
         
         Args:
             new_status: New learning status
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
             
         Returns:
             bool: True if status was changed, False if already at that status
@@ -138,52 +138,52 @@ class PersonTune:
         
         # Update in database if this is a persisted record
         if self.person_tune_id is not None:
-            self._update_in_database(changed_by)
-        
+            self._update_in_database(user_id)
+
         return True
     
-    def increment_heard_count(self, changed_by: str = 'system') -> int:
+    def increment_heard_count(self, user_id: Optional[int] = None) -> int:
         """
         Atomically increment the heard_count by 1.
 
         Args:
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
 
         Returns:
             int: New heard count value
         """
         # Update in database if this is a persisted record
         if self.person_tune_id is not None:
-            self._increment_heard_count_in_database(changed_by)
+            self._increment_heard_count_in_database(user_id)
         else:
             self.heard_count += 1
 
         return self.heard_count
 
-    def decrement_heard_count(self, changed_by: str = 'system') -> int:
+    def decrement_heard_count(self, user_id: Optional[int] = None) -> int:
         """
         Atomically decrement the heard_count by 1 (minimum 0).
 
         Args:
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
 
         Returns:
             int: New heard count value
         """
         # Update in database if this is a persisted record
         if self.person_tune_id is not None:
-            self._decrement_heard_count_in_database(changed_by)
+            self._decrement_heard_count_in_database(user_id)
         else:
             self.heard_count = max(0, self.heard_count - 1)
 
         return self.heard_count
 
-    def _increment_heard_count_in_database(self, changed_by: str = 'system') -> None:
+    def _increment_heard_count_in_database(self, user_id: Optional[int] = None) -> None:
         """
         Atomically increment heard_count in the database using SQL.
 
         Args:
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
         """
         if self.person_tune_id is None:
             raise ValueError("Cannot update record without person_tune_id")
@@ -194,7 +194,7 @@ class PersonTune:
             cur.execute("BEGIN")
 
             # Save to history before update
-            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, changed_by)
+            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, user_id=user_id)
 
             # Atomically increment in database
             cur.execute("""
@@ -219,12 +219,12 @@ class PersonTune:
         finally:
             conn.close()
 
-    def _decrement_heard_count_in_database(self, changed_by: str = 'system') -> None:
+    def _decrement_heard_count_in_database(self, user_id: Optional[int] = None) -> None:
         """
         Atomically decrement heard_count in the database using SQL (minimum 0).
 
         Args:
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
         """
         if self.person_tune_id is None:
             raise ValueError("Cannot update record without person_tune_id")
@@ -235,7 +235,7 @@ class PersonTune:
             cur.execute("BEGIN")
 
             # Save to history before update
-            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, changed_by)
+            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, user_id=user_id)
 
             # Atomically decrement in database (minimum 0)
             cur.execute("""
@@ -260,12 +260,12 @@ class PersonTune:
         finally:
             conn.close()
 
-    def _update_in_database(self, changed_by: str = 'system') -> None:
+    def _update_in_database(self, user_id: Optional[int] = None) -> None:
         """
         Update the record in the database.
         
         Args:
-            changed_by: User who made the change
+            user_id: ID of user who made the change, or None for system
         """
         if self.person_tune_id is None:
             raise ValueError("Cannot update record without person_tune_id")
@@ -276,7 +276,7 @@ class PersonTune:
             cur.execute("BEGIN")
             
             # Save to history before update
-            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, changed_by)
+            save_to_history(cur, 'person_tune', 'UPDATE', self.person_tune_id, user_id=user_id)
             
             # Update the record
             cur.execute("""
@@ -308,12 +308,12 @@ class PersonTune:
         finally:
             conn.close()
     
-    def save(self, changed_by: str = 'system') -> 'PersonTune':
+    def save(self, user_id: Optional[int] = None) -> 'PersonTune':
         """
         Save the PersonTune to the database.
         
         Args:
-            changed_by: User who created/modified the record
+            user_id: ID of user who created/modified the record, or None for system
             
         Returns:
             PersonTune: The saved instance with updated fields
@@ -359,20 +359,20 @@ class PersonTune:
                         person_tune_id, person_id, tune_id, learn_status,
                         heard_count, learned_date, notes,
                         setting_id, name_alias,
-                        operation, changed_by, changed_at, created_date
+                        operation, changed_by_user_id, changed_at, created_date
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                              (NOW() AT TIME ZONE 'UTC'), %s)
                 """, (
                     self.person_tune_id, self.person_id, self.tune_id,
                     self.learn_status, self.heard_count,
                     self.learned_date, self.notes, self.setting_id, self.name_alias,
-                    'INSERT', changed_by,
+                    'INSERT', user_id,
                     self.created_date
                 ))
-                
+
             else:
                 # Update existing record
-                self._update_in_database(changed_by)
+                self._update_in_database(user_id)
             
             cur.execute("COMMIT")
             return self
@@ -541,12 +541,12 @@ class PersonTune:
         finally:
             conn.close()
     
-    def delete(self, changed_by: str = 'system') -> bool:
+    def delete(self, user_id: Optional[int] = None) -> bool:
         """
         Delete the PersonTune from the database.
         
         Args:
-            changed_by: User who deleted the record
+            user_id: ID of user who deleted the record, or None for system
             
         Returns:
             bool: True if deleted, False if record didn't exist
@@ -560,7 +560,7 @@ class PersonTune:
             cur.execute("BEGIN")
             
             # Save to history before delete
-            save_to_history(cur, 'person_tune', 'DELETE', self.person_tune_id, changed_by)
+            save_to_history(cur, 'person_tune', 'DELETE', self.person_tune_id, user_id=user_id)
             
             # Delete the record
             cur.execute("""

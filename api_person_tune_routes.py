@@ -497,7 +497,7 @@ def add_my_tune():
         notes = data.get('notes')
 
         person_id = get_user_person_id()
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Create the person_tune
         success, message, person_tune = person_tune_service.create_person_tune(
@@ -505,7 +505,7 @@ def add_my_tune():
             tune_id=tune_id,
             learn_status=learn_status,
             notes=notes,
-            changed_by=changed_by
+            user_id=user_id
         )
 
         if not success:
@@ -618,7 +618,7 @@ def update_person_tune(person_tune_id):
         if notes == '':
             notes = None
 
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Update the person_tune
         success, message, person_tune = person_tune_service.update_person_tune(
@@ -628,7 +628,7 @@ def update_person_tune(person_tune_id):
             setting_id=setting_id,
             name_alias=name_alias,
             heard_count=heard_count,
-            changed_by=changed_by
+            user_id=user_id
         )
 
         if not success:
@@ -676,12 +676,12 @@ def increment_tune_heard_count(person_tune_id):
     Requirements: 1.6, 1.7, 1.8
     """
     try:
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Increment the heard count
         success, message, new_count = person_tune_service.increment_heard_count(
             person_tune_id=person_tune_id,
-            changed_by=changed_by
+            user_id=user_id
         )
 
         if not success:
@@ -735,12 +735,12 @@ def decrement_tune_heard_count(person_tune_id):
         JSON response with updated heard count
     """
     try:
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Decrement the heard count
         success, message, new_count = person_tune_service.decrement_heard_count(
             person_tune_id=person_tune_id,
-            changed_by=changed_by
+            user_id=user_id
         )
 
         if not success:
@@ -795,12 +795,12 @@ def delete_person_tune(person_tune_id):
         JSON response with success status
     """
     try:
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Delete the person_tune
         success, message = person_tune_service.delete_person_tune(
             person_tune_id=person_tune_id,
-            changed_by=changed_by
+            user_id=user_id
         )
 
         if not success:
@@ -1066,7 +1066,7 @@ def sync_my_tunes():
     try:
         data = request.get_json() or {}
         person_id = get_user_person_id()
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
         
         # Get thesession_user_id from request or person record
         thesession_user_id = data.get('thesession_user_id')
@@ -1118,7 +1118,7 @@ def sync_my_tunes():
             person_id=person_id,
             thesession_user_id=thesession_user_id,
             learn_status=learn_status,
-            changed_by=changed_by
+            user_id=user_id
         )
         
         # Build response

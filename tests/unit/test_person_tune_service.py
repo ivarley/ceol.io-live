@@ -38,7 +38,7 @@ class TestPersonTuneServiceCreate:
             tune_id=100,
             learn_status='learning',
             notes='Test notes',
-            changed_by='test_user'
+            user_id=1
         )
         
         # Verify the result
@@ -55,7 +55,7 @@ class TestPersonTuneServiceCreate:
         )
         
         # Verify save was called
-        mock_instance.save.assert_called_once_with(changed_by='test_user')
+        mock_instance.save.assert_called_once_with(user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_create_person_tune_already_exists(self, mock_person_tune_class):
@@ -207,14 +207,14 @@ class TestPersonTuneServiceUpdate:
         success, message, result = self.service.update_learn_status(
             person_tune_id=123,
             new_status='learned',
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
         assert "Status updated to 'learned' successfully" == message
         assert result is mock_tune
         
-        mock_tune.set_learn_status.assert_called_once_with('learned', changed_by='test_user')
+        mock_tune.set_learn_status.assert_called_once_with('learned', user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_update_learn_status_not_found(self, mock_person_tune_class):
@@ -272,14 +272,14 @@ class TestPersonTuneServiceUpdate:
         
         success, message, result = self.service.increment_heard_count(
             person_tune_id=123,
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
         assert "Heard count incremented to 3" == message
         assert result == 3
         
-        mock_tune.increment_heard_count.assert_called_once_with(changed_by='test_user')
+        mock_tune.increment_heard_count.assert_called_once_with(user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_increment_heard_count_not_found(self, mock_person_tune_class):
@@ -319,16 +319,16 @@ class TestPersonTuneServiceUpdate:
             person_tune_id=123,
             learn_status='learning',
             notes='New notes',
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
         assert "Updated status to 'learning', notes successfully" == message
         assert result is mock_tune
         
-        mock_tune.set_learn_status.assert_called_once_with('learning', changed_by='test_user')
+        mock_tune.set_learn_status.assert_called_once_with('learning', user_id=1)
         assert mock_tune.notes == 'New notes'
-        mock_tune.save.assert_called_once_with(changed_by='test_user')
+        mock_tune.save.assert_called_once_with(user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_update_person_tune_no_changes(self, mock_person_tune_class):
@@ -368,13 +368,13 @@ class TestPersonTuneServiceDelete:
         
         success, message = self.service.delete_person_tune(
             person_tune_id=123,
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
         assert message == "PersonTune deleted successfully"
         
-        mock_tune.delete.assert_called_once_with(changed_by='test_user')
+        mock_tune.delete.assert_called_once_with(user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_delete_person_tune_not_found(self, mock_person_tune_class):
@@ -433,7 +433,7 @@ class TestPersonTuneServiceBulkOperations:
                 person_id=1,
                 tune_ids=[100, 101, 102],
                 learn_status='learning',
-                changed_by='test_user'
+                user_id=1
             )
             
             assert success is True
@@ -446,7 +446,7 @@ class TestPersonTuneServiceBulkOperations:
             # Verify all create calls were made
             assert mock_create.call_count == 3
             mock_create.assert_any_call(
-                person_id=1, tune_id=100, learn_status='learning', changed_by='test_user'
+                person_id=1, tune_id=100, learn_status='learning', user_id=1
             )
     
     def test_bulk_create_person_tunes_mixed_results(self):
@@ -644,7 +644,7 @@ class TestPersonTuneServiceIntegration:
         success, message, created_tune = self.service.create_person_tune(
             person_id=1,
             tune_id=100,
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
@@ -658,12 +658,12 @@ class TestPersonTuneServiceIntegration:
         success, message, updated_tune = self.service.update_learn_status(
             person_tune_id=123,
             new_status='learning',
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
         assert updated_tune is mock_instance
-        mock_instance.set_learn_status.assert_called_with('learning', changed_by='test_user')
+        mock_instance.set_learn_status.assert_called_with('learning', user_id=1)
     
     @patch('services.person_tune_service.PersonTune')
     def test_increment_heard_count_workflow(self, mock_person_tune_class):
@@ -675,7 +675,7 @@ class TestPersonTuneServiceIntegration:
         # First increment
         success, message, count = self.service.increment_heard_count(
             person_tune_id=123,
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True
@@ -686,7 +686,7 @@ class TestPersonTuneServiceIntegration:
         mock_instance.increment_heard_count.return_value = 2
         success, message, count = self.service.increment_heard_count(
             person_tune_id=123,
-            changed_by='test_user'
+            user_id=1
         )
         
         assert success is True

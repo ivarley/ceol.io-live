@@ -8,6 +8,7 @@ import psycopg2
 from flask_login import login_required
 from database import (
     get_db_connection,
+    get_current_user_id,
     save_to_history,
     find_matching_tune,
     normalize_apostrophes,
@@ -219,9 +220,8 @@ def update_session_ajax(session_path):
 
         # Save to history before making changes
         session_id = session_result[0]
-        user_id = session.get("user_id")
         save_to_history(
-            cur, "session", "UPDATE", session_id, str(user_id) if user_id else "system"
+            cur, "session", "UPDATE", session_id, user_id=get_current_user_id()
         )
 
         # Prepare the update query
@@ -480,36 +480,39 @@ def cache_tune_setting_ajax(tune_id):
         )
         existing_setting = cur.fetchone()
 
-        changed_by = current_user.username if hasattr(current_user, 'username') else 'system'
+        audit_user_id = get_current_user_id()
 
         if existing_setting:
             # Save to history before updating
-            save_to_history(cur, 'tune_setting', 'UPDATE', setting_id, changed_by=changed_by)
+            save_to_history(cur, 'tune_setting', 'UPDATE', setting_id, user_id=audit_user_id)
 
             # Update existing setting
             cur.execute("""
                 UPDATE tune_setting
                 SET key = %s, abc = %s, incipit_abc = %s, cache_updated_date = (NOW() AT TIME ZONE 'UTC'),
-                    last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                    last_modified_date = (NOW() AT TIME ZONE 'UTC'), last_modified_user_id = %s
                 WHERE setting_id = %s
-            """, (key, abc, incipit_abc, setting_id))
+            """, (key, abc, incipit_abc, audit_user_id, setting_id))
             action = "updated"
         else:
             # Insert new setting
             cur.execute("""
-                INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date)
-                VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
-            """, (setting_id, tune_id, key, abc, incipit_abc))
+                INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
+                                          created_by_user_id, last_modified_user_id)
+                VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+            """, (setting_id, tune_id, key, abc, incipit_abc, audit_user_id, audit_user_id))
 
             # Log INSERT to history (manually since record was just created)
             cur.execute("""
                 INSERT INTO tune_setting_history
-                (setting_id, operation, changed_by, tune_id, key, abc, image, incipit_abc,
-                 incipit_image, cache_updated_date, created_date, last_modified_date)
+                (setting_id, operation, changed_by_user_id, tune_id, key, abc, image, incipit_abc,
+                 incipit_image, cache_updated_date, created_date, last_modified_date,
+                 created_by_user_id, last_modified_user_id)
                 SELECT setting_id, %s, %s, tune_id, key, abc, image, incipit_abc,
-                       incipit_image, cache_updated_date, created_date, last_modified_date
+                       incipit_image, cache_updated_date, created_date, last_modified_date,
+                       created_by_user_id, last_modified_user_id
                 FROM tune_setting WHERE setting_id = %s
-            """, ('INSERT', changed_by, setting_id))
+            """, ('INSERT', audit_user_id, setting_id))
             action = "cached"
 
         conn.commit()
@@ -899,16 +902,16 @@ def update_session_tune_details(session_path, tune_id):
             )
 
         # Save to history before making changes
-        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id))
+        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=get_current_user_id())
 
         # Update session_tune with setting_id, key, and alias
         cur.execute(
             """
             UPDATE session_tune
-            SET setting_id = %s, key = %s, alias = %s
+            SET setting_id = %s, key = %s, alias = %s, last_modified_user_id = %s
             WHERE session_id = %s AND tune_id = %s
         """,
-            (parsed_setting_id, parsed_key, parsed_alias, session_id, tune_id),
+            (parsed_setting_id, parsed_key, parsed_alias, get_current_user_id(), session_id, tune_id),
         )
 
         # Now handle aliases in session_tune_alias table
@@ -942,12 +945,12 @@ def update_session_tune_details(session_path, tune_id):
                 (session_id, tune_id, alias),
             )
             alias_id = cur.fetchone()[0]
-            save_to_history(cur, "session_tune_alias", "INSERT", alias_id)
+            save_to_history(cur, "session_tune_alias", "INSERT", alias_id, user_id=get_current_user_id())
 
         # Remove old aliases
         for alias in aliases_to_remove:
             alias_id = existing_alias_map[alias]
-            save_to_history(cur, "session_tune_alias", "DELETE", alias_id)
+            save_to_history(cur, "session_tune_alias", "DELETE", alias_id, user_id=get_current_user_id())
             cur.execute(
                 "DELETE FROM session_tune_alias WHERE session_tune_alias_id = %s",
                 (alias_id,),
@@ -1051,7 +1054,7 @@ def add_session_tune(session_path):
         )
 
         # Save to history
-        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -1344,7 +1347,7 @@ def add_session_instance_ajax(session_path):
         session_instance_id = session_instance_result[0]
 
         # Save the newly created session instance to history
-        save_to_history(cur, "session_instance", "INSERT", session_instance_id)
+        save_to_history(cur, "session_instance", "INSERT", session_instance_id, user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -1608,7 +1611,7 @@ def update_session_instance_ajax(session_path, date_or_id):
             location_override = location
 
         # Save current state to history before update
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id)
+        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
 
         # Update the session instance
         cur.execute(
@@ -1702,7 +1705,8 @@ def delete_session_instance_ajax(session_path, date_or_id):
         session_instance_id = instance_result[0]
 
         # Save to history before deletion
-        save_to_history(cur, "session_instance", "DELETE", session_instance_id)
+        audit_user_id = get_current_user_id()
+        save_to_history(cur, "session_instance", "DELETE", session_instance_id, user_id=audit_user_id)
 
         # Get all session_instance_tune records to save to history before deletion
         cur.execute(
@@ -1716,7 +1720,7 @@ def delete_session_instance_ajax(session_path, date_or_id):
 
         # Save each tune record to history before deletion
         for tune_record in tune_records:
-            save_to_history(cur, "session_instance_tune", "DELETE", tune_record[0])
+            save_to_history(cur, "session_instance_tune", "DELETE", tune_record[0], user_id=audit_user_id)
 
         # Get all session_instance_person records to save to history before deletion
         cur.execute(
@@ -1731,7 +1735,7 @@ def delete_session_instance_ajax(session_path, date_or_id):
         # Save each person record to history before deletion
         # record_id should be a tuple (session_instance_id, person_id)
         for person_record in person_records:
-            save_to_history(cur, "session_instance_person", "DELETE", person_record)
+            save_to_history(cur, "session_instance_person", "DELETE", person_record, user_id=audit_user_id)
 
         # Delete session_instance_person records first (attendance)
         cur.execute(
@@ -1843,7 +1847,7 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         )
 
         # Record in history table
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id)
+        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -1916,7 +1920,7 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         )
 
         # Record in history table
-        save_to_history(cur, "session_instance", "UPDATE", session_instance_id)
+        save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -2205,7 +2209,7 @@ def add_session_ajax():
         session_id = session_result[0]
 
         # Save the newly created session to history
-        save_to_history(cur, "session", "INSERT", session_id)
+        save_to_history(cur, "session", "INSERT", session_id, user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -2453,8 +2457,9 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
         ) = tune_info
 
         # Save to history before making changes
+        audit_user_id = get_current_user_id()
         save_to_history(
-            cur, "session_instance_tune", "DELETE", session_instance_tune_id
+            cur, "session_instance_tune", "DELETE", session_instance_tune_id, user_id=audit_user_id
         )
 
         # If this tune starts a set (continues_set = False) and there's a next tune,
@@ -2473,7 +2478,7 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
 
             if next_tune_result:
                 next_tune_id = next_tune_result[0]
-                save_to_history(cur, "session_instance_tune", "UPDATE", next_tune_id)
+                save_to_history(cur, "session_instance_tune", "UPDATE", next_tune_id, user_id=audit_user_id)
 
             cur.execute(
                 """
@@ -2592,7 +2597,7 @@ def link_tune_ajax(session_path, date):
 
             if sit_result:
                 sit_id = sit_result[0]
-                save_to_history(cur, "session_instance_tune", "UPDATE", sit_id)
+                save_to_history(cur, "session_instance_tune", "UPDATE", sit_id, user_id=get_current_user_id())
 
             # Tune already in session_tune, just update session_instance_tune
             # Use setting_id as setting_override if provided
@@ -2623,7 +2628,7 @@ def link_tune_ajax(session_path, date):
                 )
 
                 # Save the newly inserted record to history
-                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
 
                 # Get the session_instance_tune_id for history before update
                 cur.execute(
@@ -2638,7 +2643,7 @@ def link_tune_ajax(session_path, date):
 
                 if sit_result:
                     sit_id = sit_result[0]
-                    save_to_history(cur, "session_instance_tune", "UPDATE", sit_id)
+                    save_to_history(cur, "session_instance_tune", "UPDATE", sit_id, user_id=get_current_user_id())
 
                 # Update session_instance_tune
                 cur.execute(
@@ -2707,7 +2712,7 @@ def link_tune_ajax(session_path, date):
                     )
 
                     # Save the newly inserted tune to history
-                    save_to_history(cur, "tune", "INSERT", tune_id)
+                    save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
 
                     # Determine if we need to use an alias
                     alias = tune_name if tune_name != tune_name_from_api else None
@@ -2723,7 +2728,7 @@ def link_tune_ajax(session_path, date):
 
                     # Save the newly inserted session_tune to history
                     save_to_history(
-                        cur, "session_tune", "INSERT", (session_id, tune_id)
+                        cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id()
                     )
 
                     # Update session_instance_tune
@@ -3499,10 +3504,11 @@ def move_set_ajax(session_path, date):
             return jsonify({"success": False, "message": "Cannot move last set down"})
 
         # Save to history before making changes
+        audit_user_id = get_current_user_id()
         for tune_set in sets:
             for tune in tune_set:
                 save_to_history(
-                    cur, "session_instance_tune", "UPDATE", tune[2], "move_set"
+                    cur, "session_instance_tune", "UPDATE", tune[2], user_id=audit_user_id
                 )
 
         # Perform the move
@@ -3665,11 +3671,12 @@ def move_tune_ajax(session_path, date):
                 )
 
             # Save to history
+            audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[2], "move_tune"
+                cur, "session_instance_tune", "UPDATE", target_tune[2], user_id=audit_user_id
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", prev_tune[2], "move_tune"
+                cur, "session_instance_tune", "UPDATE", prev_tune[2], user_id=audit_user_id
             )
 
             # Swap order numbers
@@ -3734,11 +3741,12 @@ def move_tune_ajax(session_path, date):
                 )
 
             # Save to history
+            audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[2], "move_tune"
+                cur, "session_instance_tune", "UPDATE", target_tune[2], user_id=audit_user_id
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", next_tune[2], "move_tune"
+                cur, "session_instance_tune", "UPDATE", next_tune[2], user_id=audit_user_id
             )
 
             # Swap order numbers
@@ -3926,7 +3934,7 @@ def edit_tune_ajax(session_path, date):
 
         # Save to history before making changes
         save_to_history(
-            cur, "session_instance_tune", "UPDATE", session_instance_tune_id
+            cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id()
         )
 
         if current_tune_id:
@@ -4502,7 +4510,7 @@ def update_person_details(person_id):
         # Update person details
         person_data = data.get("person", {})
         if person_data:
-            save_to_history(cur, "person", "UPDATE", person_id, "admin_edit")
+            save_to_history(cur, "person", "UPDATE", person_id, user_id=get_current_user_id())
             cur.execute(
                 """
                 UPDATE person
@@ -4546,7 +4554,7 @@ def update_person_details(person_id):
                         400,
                     )
 
-            save_to_history(cur, "user_account", "UPDATE", user_id, "admin_edit")
+            save_to_history(cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id())
             cur.execute(
                 """
                 UPDATE user_account
@@ -4614,7 +4622,7 @@ def admin_verify_email(user_id):
 
         # Mark email as verified and clear token
         save_to_history(
-            cur, "user_account", "UPDATE", user_id_db, "admin_email_verification"
+            cur, "user_account", "UPDATE", user_id_db, user_id=get_current_user_id()
         )
         cur.execute(
             """
@@ -4707,7 +4715,7 @@ def toggle_person_active(person_id):
             }), 400
 
         # Save to history before update
-        save_to_history(cur, "person", "UPDATE", person_id, "admin_toggle_active")
+        save_to_history(cur, "person", "UPDATE", person_id, user_id=get_current_user_id())
 
         # Update the active status
         cur.execute(
@@ -4991,7 +4999,7 @@ def add_person_to_session():
             "session_person",
             "INSERT",
             None,
-            f"admin_add_person:{person_id}:{session_id}",
+            user_id=get_current_user_id(),
         )
         cur.execute(
             """
@@ -5257,11 +5265,12 @@ def create_new_person():
 
         try:
             # Insert new person
-            save_to_history(cur, "person", "INSERT", None, "admin_create_person")
+            audit_user_id = get_current_user_id()
             cur.execute(
                 """
-                INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, thesession_user_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO person (first_name, last_name, email, sms_number, city, state, country, thesession_user_id,
+                                    created_by_user_id, last_modified_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING person_id
             """,
                 (
@@ -5273,6 +5282,8 @@ def create_new_person():
                     state,
                     country,
                     thesession_user_id,
+                    audit_user_id,
+                    audit_user_id,
                 ),
             )
 
@@ -5281,6 +5292,9 @@ def create_new_person():
                 return jsonify({"success": False, "message": "Failed to create person"})
             person_id = result[0]
 
+            # Save to history after INSERT (we now have person_id)
+            save_to_history(cur, "person", "INSERT", person_id, user_id=audit_user_id)
+
             # Add to session if specified
             if session_id:
                 save_to_history(
@@ -5288,7 +5302,7 @@ def create_new_person():
                     "session_person",
                     "INSERT",
                     None,
-                    f"admin_create_person_add_session:{person_id}:{session_id}",
+                    user_id=audit_user_id,
                 )
                 cur.execute(
                     """
@@ -5445,7 +5459,7 @@ def update_session_player_regular_status(session_path, person_id):
             "session_person",
             "UPDATE",
             None,
-            f"admin_update_regular_status:{person_id}:{session_id}:{is_regular}",
+            user_id=get_current_user_id(),
         )
 
         conn.commit()
@@ -5533,7 +5547,7 @@ def update_session_player_details(session_path, person_id):
                     "session_person",
                     "UPDATE",
                     None,
-                    f"admin_update_regular_status:{person_id}:{session_id}:{data['is_regular']}",
+                    user_id=get_current_user_id(),
                 )
         else:
             # Person doesn't have user account - allow updating additional fields
@@ -5563,14 +5577,14 @@ def update_session_player_details(session_path, person_id):
                     cur,
                     "person",
                     "UPDATE",
-                    None,
-                    f"admin_update_person_details:{person_id}:{','.join(data.keys())}",
+                    person_id,
+                    user_id=get_current_user_id(),
                 )
-            
+
             # Also update regular status if provided
             if 'is_regular' in data:
                 cur.execute(
-                    """UPDATE session_person SET is_regular = %s 
+                    """UPDATE session_person SET is_regular = %s
                        WHERE session_id = %s AND person_id = %s""",
                     (data['is_regular'], session_id, person_id)
                 )
@@ -5579,7 +5593,7 @@ def update_session_player_details(session_path, person_id):
                     "session_person",
                     "UPDATE",
                     None,
-                    f"admin_update_regular_status:{person_id}:{session_id}:{data['is_regular']}",
+                    user_id=get_current_user_id(),
                 )
 
         conn.commit()
@@ -5709,8 +5723,8 @@ def delete_session_player(session_path, person_id):
                 cur,
                 "person",
                 "DELETE",
-                None,
-                f"admin_delete_orphaned_person:{person_id}",
+                person_id,
+                user_id=get_current_user_id(),
             )
             person_deleted = True
 
@@ -5830,8 +5844,8 @@ def terminate_session(session_path):
             cur,
             "session",
             "UPDATE",
-            None,
-            f"admin_terminate_session:{session_id}:{termination_date}",
+            session_id,
+            user_id=get_current_user_id(),
         )
 
         conn.commit()
@@ -5878,7 +5892,7 @@ def reactivate_session(session_path):
 
         # Save to history
         save_to_history(
-            cur, "session", "UPDATE", None, f"admin_reactivate_session:{session_id}"
+            cur, "session", "UPDATE", session_id, user_id=get_current_user_id()
         )
 
         conn.commit()
@@ -6127,7 +6141,7 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
             )
             
             # Save the newly inserted tune to history
-            save_to_history(cur, "tune", "INSERT", tune_id)
+            save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
             
         except Exception as insert_error:
             # Check if this was a duplicate key error (race condition - someone else inserted it)
@@ -6335,7 +6349,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     )
                     # Only save to history and count modification if row was actually inserted
                     if cur.rowcount > 0:
-                        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id))
+                        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
                         modifications += 1
                 except Exception as e:
                     # Log the error but continue - this shouldn't fail the entire save
@@ -6370,7 +6384,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     ):
                         # Update existing record
                         save_to_history(
-                            cur, "session_instance_tune", "UPDATE", existing[0]
+                            cur, "session_instance_tune", "UPDATE", existing[0], user_id=get_current_user_id()
                         )
 
                         cur.execute(
@@ -6411,14 +6425,14 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     if not result:
                         continue
                     new_id = result[0]
-                    save_to_history(cur, "session_instance_tune", "INSERT", new_id)
+                    save_to_history(cur, "session_instance_tune", "INSERT", new_id, user_id=get_current_user_id())
                     modifications += 1
 
             # Delete records that are beyond the new length
             max_new_order = len(new_tunes)
             for existing in existing_tunes:
                 if existing[1] > max_new_order:
-                    save_to_history(cur, "session_instance_tune", "DELETE", existing[0])
+                    save_to_history(cur, "session_instance_tune", "DELETE", existing[0], user_id=get_current_user_id())
                     cur.execute(
                         """
                         DELETE FROM session_instance_tune
@@ -6487,7 +6501,7 @@ def update_auto_save_preference():
             (auto_save, auto_save_interval, current_user.user_id),
         )
 
-        save_to_history(cur, "user_account", "UPDATE", current_user.user_id)
+        save_to_history(cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id)
 
         cur.close()
         conn.commit()
@@ -6769,7 +6783,7 @@ def check_in_person(session_instance_id):
             person_id,
             attendance,
             comment,
-            f"user_{current_user_id}"  # changed_by parameter
+            user_id=current_user_id,
         )
         
         if not success:
@@ -6920,9 +6934,9 @@ def create_person_with_instruments():
                 'person',
                 'INSERT',
                 person_id,
-                current_user.user_id
+                user_id=current_user.user_id
             )
-            
+
             # Insert instruments
             for instrument in normalized_instruments:
                 cur.execute(
@@ -6932,14 +6946,14 @@ def create_person_with_instruments():
                     """,
                     (person_id, instrument)
                 )
-                
+
                 # Log instrument creation to history
                 save_to_history(
                     cur,
                     'person_instrument',
                     'INSERT',
                     (person_id, instrument),
-                    current_user.user_id
+                    user_id=current_user.user_id
                 )
             
             # Commit transaction
@@ -7142,14 +7156,14 @@ def update_person_instruments(person_id):
                     'person_instrument',
                     'DELETE',
                     (person_id, instrument),
-                    current_user_id
+                    user_id=current_user_id
                 )
-                
+
                 cur.execute(
                     "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
                     (person_id, instrument)
                 )
-            
+
             # Add new instruments
             instruments_to_add = new_instruments - existing_instruments
             for instrument in instruments_to_add:
@@ -7160,14 +7174,14 @@ def update_person_instruments(person_id):
                     """,
                     (person_id, instrument)
                 )
-                
+
                 # Log addition to history
                 save_to_history(
                     cur,
                     'person_instrument',
                     'INSERT',
                     (person_id, instrument),
-                    current_user_id
+                    user_id=current_user_id
                 )
             
             # Commit transaction
@@ -8074,10 +8088,10 @@ def bulk_import_save_session(session_id):
                 )
                 
                 person_id = cur.fetchone()[0]
-                
+
                 # Log person creation
-                save_to_history(cur, 'person', 'INSERT', person_id, current_user.user_id)
-                
+                save_to_history(cur, 'person', 'INSERT', person_id, user_id=current_user.user_id)
+
                 # Create instruments
                 instruments = person_data.get('instruments', [])
                 for instrument in instruments:
@@ -8089,11 +8103,11 @@ def bulk_import_save_session(session_id):
                             """,
                             (person_id, instrument.strip().lower())
                         )
-                        
+
                         # Log instrument creation
-                        save_to_history(cur, 'person_instrument', 'INSERT', 
-                                      (person_id, instrument.strip().lower()), current_user.user_id)
-                
+                        save_to_history(cur, 'person_instrument', 'INSERT',
+                                      (person_id, instrument.strip().lower()), user_id=current_user.user_id)
+
                 # Create session_person record
                 is_regular = person_data.get('is_regular', False)
                 cur.execute(
@@ -8103,10 +8117,10 @@ def bulk_import_save_session(session_id):
                     """,
                     (session_id, person_id, is_regular)
                 )
-                
+
                 # Log session_person creation
-                save_to_history(cur, 'session_person', 'INSERT', 
-                              (session_id, person_id), current_user.user_id)
+                save_to_history(cur, 'session_person', 'INSERT',
+                              (session_id, person_id), user_id=current_user.user_id)
                 
                 created_count += 1
                 created_people.append({
@@ -8331,7 +8345,7 @@ def create_or_get_today_session_instance(session_path):
         session_instance_id = new_instance[0]
 
         # Save to history
-        save_to_history(cur, "session_instance", "INSERT", session_instance_id, f"Created instance for {today}")
+        save_to_history(cur, "session_instance", "INSERT", session_instance_id, user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -8600,7 +8614,7 @@ def update_admin_tune(tune_id):
             "tune",
             "UPDATE",
             tune_id,
-            current_user.username if current_user.is_authenticated else "system"
+            user_id=get_current_user_id()
         )
 
         # Update the tune name
@@ -10130,7 +10144,7 @@ def join_session(session_path):
             "session_person",
             "INSERT",
             None,
-            f"user_self_join:{user_person_id}:{session_id}",
+            user_id=get_current_user_id(),
         )
 
         conn.commit()

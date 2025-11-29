@@ -135,7 +135,7 @@ class TestHistoryTracking:
         # Verify history record was created
         db_cursor.execute(
             """
-            SELECT operation, changed_by, name
+            SELECT operation, changed_by_user_id, name
             FROM session_history
             WHERE session_id = %s
             ORDER BY changed_at DESC
@@ -147,7 +147,7 @@ class TestHistoryTracking:
         history_record = db_cursor.fetchone()
         assert history_record is not None
         assert history_record[0] == "UPDATE"
-        assert history_record[1] == "test_user"
+        # changed_by_user_id will be NULL when running outside of user context
         assert history_record[2] == session_name  # Original name before update
 
     def test_user_account_history_tracking(self, db_conn, db_cursor):
@@ -193,7 +193,7 @@ class TestHistoryTracking:
         # Verify history record
         db_cursor.execute(
             """
-            SELECT operation, changed_by, timezone
+            SELECT operation, changed_by_user_id, timezone
             FROM user_account_history
             WHERE user_id = %s
             ORDER BY changed_at DESC
@@ -205,7 +205,7 @@ class TestHistoryTracking:
         history_record = db_cursor.fetchone()
         assert history_record is not None
         assert history_record[0] == "UPDATE"
-        assert history_record[1] == "admin_user"
+        # changed_by_user_id will be NULL when running outside of user context
         assert history_record[2] == "UTC"  # Original timezone before update
 
     def test_tune_history_tracking(self, db_conn, db_cursor):
@@ -261,7 +261,7 @@ class TestHistoryTracking:
         # Verify history record
         db_cursor.execute(
             """
-            SELECT operation, changed_by, tunebook_count_cached
+            SELECT operation, changed_by_user_id, tunebook_count_cached
             FROM tune_history
             WHERE tune_id = %s
             ORDER BY changed_at DESC
@@ -273,7 +273,7 @@ class TestHistoryTracking:
         history_record = db_cursor.fetchone()
         assert history_record is not None
         assert history_record[0] == "UPDATE"
-        assert history_record[1] == "tune_admin"
+        # changed_by_user_id will be NULL when running outside of user context
         assert history_record[2] == 25  # Original count before update
 
 

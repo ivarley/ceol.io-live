@@ -4,18 +4,35 @@ Every change to core tables automatically logged to `*_history` tables before mo
 
 ## Implementation
 
-**Core Function**: `database.py:216-353` (`save_to_history()`)
+**Core Function**: `database.py:238+` (`save_to_history()`)
 
 **Pattern**: Call before UPDATE/DELETE, manual INSERT after creation
 
 ```python
 # Before update/delete
-save_to_history(cur, 'session', 'UPDATE', session_id, changed_by=current_user.username)
+save_to_history(cur, 'session', 'UPDATE', session_id, user_id=current_user.user_id)
 cur.execute("UPDATE session SET name = %s WHERE session_id = %s", (new_name, session_id))
 
 # Composite keys (session_tune, person_instrument)
-save_to_history(cur, 'session_tune', 'DELETE', (session_id, tune_id), changed_by)
+save_to_history(cur, 'session_tune', 'DELETE', (session_id, tune_id), user_id=user_id)
+
+# Helper function for getting current user_id
+from database import get_current_user_id
+user_id = get_current_user_id()  # Returns None outside request context
 ```
+
+## User Tracking Columns
+
+**Core Tables** (14 tables have these columns):
+- `created_by_user_id INTEGER` - User who created the record
+- `last_modified_user_id INTEGER` - User who last modified the record
+
+**History Tables** (13 tables have these columns):
+- `changed_by_user_id INTEGER` - User who made this specific change
+- `created_by_user_id INTEGER` - Snapshot of original record's creator
+- `last_modified_user_id INTEGER` - Snapshot of original record's last modifier
+
+**NULL Values**: NULL indicates system/automated actions (cron jobs, imports, etc.)
 
 ## History Table Structure
 
@@ -23,7 +40,7 @@ save_to_history(cur, 'session_tune', 'DELETE', (session_id, tune_id), changed_by
 - `history_id` SERIAL PRIMARY KEY
 - `<table>_id` - Original record ID
 - `operation` - 'INSERT', 'UPDATE', or 'DELETE'
-- `changed_by` VARCHAR(255) - Username or 'system'
+- `changed_by_user_id` INTEGER - User ID who made the change, or NULL for system
 - `changed_at` TIMESTAMPTZ - When change occurred
 - All original table fields - Full snapshot
 
@@ -55,6 +72,10 @@ All history tables have:
 - `idx_<table>_history_<table>_id` - Find changes for record
 - `idx_<table>_history_changed_at` - Time-based queries
 - `idx_<table>_history_operation` - Filter by operation type
+- `idx_<table>_history_changed_by_user` - Find changes by user
+
+Core tables have:
+- `idx_<table>_created_by` - Find records by creator
 
 ## Query Patterns
 
@@ -63,10 +84,13 @@ All history tables have:
 SELECT * FROM session_history WHERE session_id = 123 ORDER BY changed_at DESC;
 ```
 
-**Who changed what:**
+**Who changed what (by user_id):**
 ```sql
-SELECT changed_by, changed_at, operation, name FROM session_history
-WHERE session_id = 123 AND operation = 'UPDATE' ORDER BY changed_at DESC;
+SELECT h.changed_by_user_id, u.username, h.changed_at, h.operation, h.name
+FROM session_history h
+LEFT JOIN user_account u ON h.changed_by_user_id = u.user_id
+WHERE h.session_id = 123 AND h.operation = 'UPDATE'
+ORDER BY h.changed_at DESC;
 ```
 
 **Point-in-time recovery:**
@@ -75,11 +99,22 @@ SELECT * FROM session_history WHERE session_id = 123
 AND changed_at <= '2025-06-01 23:59:59' ORDER BY changed_at DESC LIMIT 1;
 ```
 
+**All changes by a specific user:**
+```sql
+SELECT * FROM session_history WHERE changed_by_user_id = 5 ORDER BY changed_at DESC;
+```
+
 ## Change Attribution
 
-**Values**: `'system'` (automated), `'admin'`, or username
+**Values**:
+- `NULL` - Automated/system actions (cron jobs, imports, scripts)
+- `user_id INTEGER` - ID of the user who made the change
 
-**Best Practice**: Always pass `changed_by` parameter in save_to_history()
+**Helper Function**: `get_current_user_id()` in `database.py`
+- Returns current user's user_id within Flask request context
+- Returns NULL when outside request context (background jobs, scripts)
+
+**Best Practice**: Always pass `user_id` parameter in save_to_history()
 
 ## Login Tracking
 
@@ -91,3 +126,10 @@ AND changed_at <= '2025-06-01 23:59:59' ORDER BY changed_at DESC LIMIT 1;
 ## Audit Views
 
 **Script**: `schema/create_audit_views.sql` - Simplified views for common queries
+
+## Migration
+
+**Schema Migration**: `schema/add_user_action_logging.sql`
+- Adds `created_by_user_id` and `last_modified_user_id` to core tables
+- Adds `changed_by_user_id` to history tables
+- Drops legacy `changed_by` VARCHAR column from history tables

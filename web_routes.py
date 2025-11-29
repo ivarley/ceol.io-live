@@ -14,7 +14,7 @@ from datetime import timedelta
 import re
 
 # Import from local modules
-from database import get_db_connection, save_to_history
+from database import get_db_connection, save_to_history, get_current_user_id
 from timezone_utils import (
     now_utc,
     get_timezone_display_name,
@@ -920,7 +920,7 @@ def register():
                         "person",
                         "UPDATE",
                         person_id,
-                        f"name_update_during_registration:{username}"
+                        user_id=get_current_user_id(),
                     )
                     cur.execute(
                         """
@@ -987,7 +987,7 @@ def register():
                     "user_account",
                     "INSERT",
                     user_id,
-                    f"linked_existing_person:{person_id}:{username}"
+                    user_id=get_current_user_id(),
                 )
 
             conn.commit()
@@ -1244,7 +1244,7 @@ def forgot_password():
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    "password_reset_request",
+                    user_id=get_current_user_id(),
                 )
                 cur.execute(
                     """
@@ -1337,7 +1337,7 @@ def reset_password(token):
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    "password_reset_completion",
+                    user_id=get_current_user_id(),
                 )
                 hashed_password = bcrypt.hashpw(
                     password.encode("utf-8"), bcrypt.gensalt()
@@ -1428,7 +1428,7 @@ def change_password():
                 "user_account",
                 "UPDATE",
                 current_user.user_id,
-                f"password_change:{current_user.username}",
+                user_id=current_user.user_id,
             )
             hashed_password = bcrypt.hashpw(
                 new_password.encode("utf-8"), bcrypt.gensalt()
@@ -1472,7 +1472,7 @@ def verify_email(token):
         if user_data:
             # Mark email as verified and clear token
             save_to_history(
-                cur, "user_account", "UPDATE", user_data[0], "email_verification"
+                cur, "user_account", "UPDATE", user_data[0], user_id=get_current_user_id()
             )
             cur.execute(
                 """
@@ -1535,7 +1535,7 @@ def resend_verification():
                     "user_account",
                     "UPDATE",
                     user_data[0],
-                    "verification_token_regeneration",
+                    user_id=get_current_user_id(),
                 )
                 cur.execute(
                     """

@@ -164,7 +164,7 @@ class TestPersonTuneStatusManagement:
         """Test that set_learn_status calls database update for persisted records."""
         person_tune = PersonTune(person_tune_id=1, learn_status='want to learn')
         
-        person_tune.set_learn_status('learning', changed_by='test_user')
+        person_tune.set_learn_status('learning', user_id=1)
         
         mock_update.assert_called_once_with('test_user')
 
@@ -200,7 +200,7 @@ class TestPersonTuneHeardCount:
             heard_count=0
         )
         
-        person_tune.increment_heard_count(changed_by='test_user')
+        person_tune.increment_heard_count(user_id=1)
         
         assert person_tune.heard_count == 1
         mock_update.assert_called_once_with('test_user')
@@ -228,7 +228,7 @@ class TestPersonTuneDatabaseOperations:
         
         # Create and save PersonTune
         person_tune = PersonTune(person_id=1, tune_id=100, learn_status='learning')
-        result = person_tune.save(changed_by='test_user')
+        result = person_tune.save(user_id=1)
         
         # Verify database operations
         assert mock_cursor.execute.call_count == 4  # BEGIN, INSERT, history INSERT, COMMIT
@@ -263,7 +263,7 @@ class TestPersonTuneDatabaseOperations:
             learn_status='learned'
         )
         
-        person_tune._update_in_database(changed_by='test_user')
+        person_tune._update_in_database(user_id=1)
         
         # Verify database operations
         mock_save_history.assert_called_once_with(
@@ -396,7 +396,7 @@ class TestPersonTuneDatabaseOperations:
         mock_cursor.rowcount = 1  # Simulate successful deletion
         
         person_tune = PersonTune(person_tune_id=123)
-        result = person_tune.delete(changed_by='test_user')
+        result = person_tune.delete(user_id=1)
         
         # Verify database operations
         mock_save_history.assert_called_once_with(
