@@ -45,9 +45,20 @@
                                     <li>Add a new person to the session who isn't in the person table (e.g., "Juanita Perez")</li>
                                 </ol>
                             </li>
-                            <li><a href="/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Logs</a></li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Logs</a>
+                                <ol class="inline-tests">
+                                    <li>Add session instance</li>
+                                </ol>
+                            </li>
                             {% if sample_tune_id %}
-                            <li><a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a></li>
+                            <li>
+                                <a href="/sessions/{{ sample_session[1] }}/tunes/{{ sample_tune_id }}" target="_blank">Session Tune Detail</a>
+                                <ol class="inline-tests">
+                                    <li>Configure tune name, setting and key</li>
+                                    <li>Fetch setting ABC &amp; incipit</li>
+                                </ol>
+                            </li>
                             {% endif %}
                             {% if latest_instance_date %}
                             <li>
