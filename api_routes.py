@@ -1013,6 +1013,87 @@ def update_session_tune_details(session_path, tune_id):
 
 
 @login_required
+def delete_session_tune(session_path, tune_id):
+    """Delete a tune from a session's session_tune table (session admins only)"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Get session_id
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Check permissions - must be system admin or session admin
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        is_system_admin = user_row and user_row[0]
+
+        if not is_system_admin:
+            cur.execute(
+                "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+                (session_id, current_user.person_id)
+            )
+            admin_row = cur.fetchone()
+            is_session_admin = admin_row and admin_row[0]
+
+            if not is_session_admin:
+                cur.close()
+                conn.close()
+                return jsonify({"success": False, "message": "Only session admins can remove tunes from the session"}), 403
+
+        # Get tune name for response message
+        cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
+        tune_row = cur.fetchone()
+        tune_name = tune_row[0] if tune_row else f"Tune {tune_id}"
+
+        # Check if tune exists in session_tune
+        cur.execute(
+            "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Tune not found in this session"}), 404
+
+        # Delete associated aliases first (foreign key constraint)
+        cur.execute(
+            "DELETE FROM session_tune_alias WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id)
+        )
+
+        # Save to history before deleting
+        save_to_history(cur, "session_tune", "DELETE", (session_id, tune_id), user_id=get_current_user_id())
+
+        # Delete from session_tune
+        cur.execute(
+            "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s",
+            (session_id, tune_id)
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f'"{tune_name}" removed from session tune list'
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error removing tune: {str(e)}"}), 500
+
+
+@login_required
 def add_session_tune(session_path):
     """Add a tune to a session's session_tune table"""
     try:

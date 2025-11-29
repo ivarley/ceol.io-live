@@ -285,6 +285,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/<int:tune_id>",
+    "delete_session_tune",
+    delete_session_tune,
+    methods=["DELETE"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes",
     "add_session_tune",
     add_session_tune,

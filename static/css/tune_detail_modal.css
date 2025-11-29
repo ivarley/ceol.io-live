@@ -546,7 +546,7 @@
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
 }
 
 .modal-additional-links a {

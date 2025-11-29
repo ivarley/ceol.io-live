@@ -2732,7 +2732,8 @@
                 sessionPath: sessionPath,
                 tuneName: tuneName,
                 tuneType: tuneType,
-                isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }}
+                isUserLoggedIn: {{ 'true' if current_user.is_authenticated else 'false' }},
+                isSessionAdmin: {{ 'true' if is_session_admin else 'false' }}
             }
         });
     }

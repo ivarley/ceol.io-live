@@ -662,11 +662,15 @@
             links.push(`<a href="#" onclick="TuneDetailModal.toggleConfigSection(); return false;">Configure This Tune</a>`);
         }
 
+        if (config.context === 'session' && config.additionalData?.isSessionAdmin) {
+            links.push(`<a href="#" class="remove-link" onclick="TuneDetailModal.removeFromSession(); return false;">Remove From Session</a>`);
+        }
+
         if (links.length === 0) return '';
 
         return `
             <div class="modal-additional-links">
-                ${links.join('<br>')}
+                ${links.join('')}
             </div>
         `;
     }
@@ -1886,6 +1890,47 @@
     }
 
     /**
+     * Remove tune from session tune list (session admins only)
+     */
+    function removeFromSession() {
+        if (!confirm('Are you sure you want to remove this tune from the session tune list?')) {
+            return;
+        }
+
+        const sessionPath = currentConfig.additionalData?.sessionPath;
+        const tuneId = currentTuneData?.tune_id;
+
+        if (!sessionPath || !tuneId) {
+            alert('Unable to remove tune from session');
+            return;
+        }
+
+        fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, {
+            method: 'DELETE',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove tune parameter from URL first (before onSave which might reload)
+                removeUrlTuneParam();
+
+                // Call onSave callback if provided (to refresh the list)
+                if (currentConfig.onSave && typeof currentConfig.onSave === 'function') {
+                    currentConfig.onSave();
+                }
+                closeModal();
+            } else {
+                console.error('Error removing tune from session:', data.message);
+                alert(data.message || 'Failed to remove tune from session');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to remove tune from session');
+        });
+    }
+
+    /**
      * Refresh tunebook count from TheSession.org
      */
     function refreshTunebookCount() {
@@ -2193,6 +2238,7 @@
         addToTunebook: addToTunebook,
         updateTunebookStatus: updateTunebookStatus,
         removeFromMyTunes: removeFromMyTunes,
+        removeFromSession: removeFromSession,
         refreshTunebookCount: refreshTunebookCount,
         fetchSetting: fetchSetting,
         getTuneIdFromUrl: getTuneIdFromUrl
