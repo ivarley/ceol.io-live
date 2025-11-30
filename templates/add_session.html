@@ -12,7 +12,7 @@
                 <li>Search by name or location: <code>memphis</code> or <code>murphy's pub</code></li>
                 <li>Paste the session ID (<code>6247</code>) or URL: <code>https://thesession.org/sessions/6247</code></li>
             </ul>
-            <p>We'll pull all the details from TheSession.org. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
+            <p>We'll pull all the details from TheSession.org. If you don't have your session on that site, you can <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>, or <a href="#" onclick="openEmptySessionModal(); return false;">just add it here</a>.</p>
         </section>
     </header>
     <div class="docs-body">
@@ -181,6 +181,21 @@
 
                         <!-- Unparsed recurrence notice -->
                         <div id="recurrence-unparsed" class="recurrence-unparsed" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Add Current User Section -->
+                <div class="mb-3">
+                    <div class="add-user-control">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="addCurrentUser" checked>
+                            Add me as
+                        </label>
+                        <select id="addCurrentUserRole" class="form-control form-control-inline">
+                            <option value="member">a member</option>
+                            <option value="regular">a regular</option>
+                            <option value="admin" selected>an admin</option>
+                        </select>
                     </div>
                 </div>
 
@@ -481,6 +496,20 @@
         margin-bottom: 0;
     }
 
+    /* Form validation styling */
+    .modal-body input.is-invalid,
+    .modal-body select.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+
+    .modal-body .field-error {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: -12px;
+        margin-bottom: 12px;
+    }
+
     .recurrence-unparsed {
         padding: 8px 12px;
         font-size: 12px;
@@ -488,12 +517,64 @@
         color: var(--secondary-text);
         border-top: 1px solid var(--border-color);
     }
+
+    /* Add current user control */
+    .add-user-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .add-user-control .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 0;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    .add-user-control .checkbox-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .add-user-control .form-control-inline {
+        width: auto;
+        display: inline-block;
+        padding: 4px 8px;
+        margin-bottom: 0;
+        font-size: 14px;
+    }
+
+    .add-user-control select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script src="/static/js/dist/modalManager.js"></script>
 <script>
+// Handle "Add current user" checkbox toggle
+document.getElementById('addCurrentUser').addEventListener('change', function() {
+    document.getElementById('addCurrentUserRole').disabled = !this.checked;
+});
+
+// Check query string for acu parameter
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const acuParam = urlParams.get('acu');
+    if (acuParam === 'false') {
+        document.getElementById('addCurrentUser').checked = false;
+        document.getElementById('addCurrentUserRole').disabled = true;
+    }
+})();
+
 document.getElementById('sessionUrlForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -1198,6 +1279,31 @@ function closeSessionModal() {
     ModalManager.hideModal('sessionModal');
 }
 
+function openEmptySessionModal() {
+    // Clear all form fields
+    document.getElementById('thesessionId').value = '';
+    document.getElementById('sessionName').value = '';
+    document.getElementById('sessionPath').value = '';
+    document.getElementById('locationName').value = '';
+    document.getElementById('locationPhone').value = '';
+    document.getElementById('locationWebsite').value = '';
+    document.getElementById('cityName').value = '';
+    document.getElementById('stateName').value = '';
+    document.getElementById('countryName').value = '';
+    document.getElementById('inceptionDate').value = '';
+    document.getElementById('timezone').value = 'America/Chicago'; // Default
+
+    // Reset recurrence
+    resetRecurrenceUI();
+    const unparsedDiv = document.getElementById('recurrence-unparsed');
+    unparsedDiv.style.display = 'none';
+    unparsedDiv.textContent = '';
+    updateRecurrenceSummary();
+
+    // Show the modal
+    ModalManager.showModal('sessionModal', { autoFocus: false });
+}
+
 function showExistingSessionModal(sessionPath, sessionName) {
     // Update modal content (page-specific business logic)
     document.getElementById('existingSessionMessage').textContent = 
@@ -1241,6 +1347,7 @@ function generatePath(city, sessionName) {
 // Handle save button click
 document.getElementById('saveSessionBtn').addEventListener('click', function() {
     const recurrenceJSON = document.getElementById('recurrenceJSON').value;
+    const addCurrentUser = document.getElementById('addCurrentUser').checked;
     const formData = {
         thesession_id: document.getElementById('thesessionId').value,
         name: document.getElementById('sessionName').value.trim(),
@@ -1253,12 +1360,41 @@ document.getElementById('saveSessionBtn').addEventListener('click', function() {
         country: document.getElementById('countryName').value.trim(),
         inception_date: document.getElementById('inceptionDate').value || null,
         timezone: document.getElementById('timezone').value,
-        recurrence: recurrenceJSON || null
+        recurrence: recurrenceJSON || null,
+        add_current_user: addCurrentUser,
+        add_current_user_role: addCurrentUser ? document.getElementById('addCurrentUserRole').value : null
     };
-    
+
     // Validate required fields
-    if (!formData.name || !formData.path || !formData.city || !formData.state || !formData.country) {
-        showError('Please fill in all required fields (Name, Path, City, State, Country)');
+    const requiredFields = [
+        { id: 'sessionName', value: formData.name, label: 'Name' },
+        { id: 'sessionPath', value: formData.path, label: 'Path' },
+        { id: 'cityName', value: formData.city, label: 'City' },
+        { id: 'stateName', value: formData.state, label: 'State' },
+        { id: 'countryName', value: formData.country, label: 'Country' }
+    ];
+
+    // Clear previous validation states
+    requiredFields.forEach(field => {
+        document.getElementById(field.id).classList.remove('is-invalid');
+    });
+
+    // Check for missing fields
+    const missingFields = requiredFields.filter(field => !field.value);
+
+    if (missingFields.length > 0) {
+        // Highlight missing fields
+        missingFields.forEach(field => {
+            document.getElementById(field.id).classList.add('is-invalid');
+        });
+
+        // Scroll to first invalid field
+        const firstInvalid = document.getElementById(missingFields[0].id);
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus();
+
+        const missingNames = missingFields.map(f => f.label).join(', ');
+        showError(`Please fill in required fields: ${missingNames}`);
         return;
     }
     
@@ -1312,6 +1448,13 @@ document.getElementById('goToExistingBtn').addEventListener('click', function() 
 document.querySelector('#existingSessionModal .btn-secondary').addEventListener('click', function() {
     closeExistingSessionModal();
     // Search results should still be visible when modal closes
+});
+
+// Clear validation error when user starts typing in required fields
+['sessionName', 'sessionPath', 'cityName', 'stateName', 'countryName'].forEach(fieldId => {
+    document.getElementById(fieldId).addEventListener('input', function() {
+        this.classList.remove('is-invalid');
+    });
 });
 </script>
 {% endblock %}

@@ -2347,15 +2347,23 @@ def add_session_ajax():
         # Save the newly created session to history
         save_to_history(cur, "session", "INSERT", session_id, user_id=get_current_user_id())
 
-        # Add the creating user as a member and admin of the session
+        # Optionally add the creating user as a member of the session
         user_id = get_current_user_id()
-        if user_id and hasattr(current_user, 'person_id') and current_user.person_id:
+        add_current_user = data.get("add_current_user", True)  # Default to True for backwards compatibility
+        if add_current_user and user_id and hasattr(current_user, 'person_id') and current_user.person_id:
+            role = data.get("add_current_user_role", "admin")  # Default to admin
+            # Determine is_regular and is_admin based on role
+            # member: just in session_person (is_regular=false, is_admin=false)
+            # regular: is_regular=true, is_admin=false
+            # admin: is_regular=true, is_admin=true
+            is_regular = role in ("regular", "admin")
+            is_admin = role == "admin"
             cur.execute(
                 """
                 INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-                VALUES (%s, %s, true, true, %s)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                (session_id, current_user.person_id, user_id)
+                (session_id, current_user.person_id, is_regular, is_admin, user_id)
             )
             save_to_history(cur, "session_person", "INSERT", None, user_id=user_id)
 
