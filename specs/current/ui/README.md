@@ -23,6 +23,9 @@ CSS custom properties, theme switching, FOUC prevention
 ### [AJAX Patterns](ajax.md)
 Frontend-backend integration, error handling, loading states
 
+### [UI Styles](styles.md)
+Standard form controls, search boxes, CSS variables
+
 ## Key Locations
 
 - `templates/base.html` - Base layout with navigation, theme switching

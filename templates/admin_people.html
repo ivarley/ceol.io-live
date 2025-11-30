@@ -6,27 +6,15 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
-            <header class="docs-header">
-                <h1 class="docs-heading">Admin Dashboard</h1>
-            </header>
-            
             {% include 'admin_tabs.html' %}
             
-            <section class="docs-section" id="people">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="section-heading mb-0">People ({{ people|length }})</h2>
-                    <button id="add-person-btn" class="btn btn-primary">Add Person</button>
+            <section class="admin-section" id="people">
+                <!-- Search and Add Button -->
+                <div class="people-toolbar">
+                    <input type="text" class="form-control people-search-input" id="people-search" placeholder="Search by name, email, username, or location...">
+                    <button id="add-person-btn" class="btn btn-primary btn-add-person">Add Person</button>
                 </div>
-                
-                <!-- Search Controls -->
-                <div class="mb-3">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" id="people-search" placeholder="Search by name, email, username, or location...">
-                        </div>
-                    </div>
-                </div>
-                
+
                 <div id="people-content">
                     {% if people %}
                     <div class="table-responsive">
@@ -225,6 +213,47 @@
 </div>
 
 <style>
+.admin-section {
+    padding-top: 10px;
+}
+
+.people-toolbar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.people-search-input {
+    max-width: 400px;
+}
+
+.btn-add-person {
+    margin-left: auto;
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
 .table {
     background-color: var(--bg-color);
     border-radius: 8px;
@@ -512,10 +541,26 @@
 /* Flash message styles now handled globally in base.html */
 
 @media (max-width: 768px) {
+    /* Toolbar responsive - keep on same line */
+    .people-toolbar {
+        gap: 0.5rem;
+    }
+
+    .people-search-input {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .btn-add-person {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
     .table-responsive {
         font-size: 0.85rem;
     }
-    
+
     .person-username,
     .person-last-login {
         font-size: 0.8rem;

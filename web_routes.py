@@ -1594,8 +1594,7 @@ def admin():
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
-    # Redirect to admin_sessions_list as the default tab
-    return redirect(url_for("admin_sessions_list"))
+    return render_template("admin_home.html")
 
 
 @login_required
@@ -1743,212 +1742,29 @@ def admin_sessions_list():
 
 @login_required
 def admin_login_sessions():
-    # Check if user is system admin
-    if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    # Get list of currently logged in users from user_session table
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT
-                us.user_id,
-                p.first_name,
-                p.last_name,
-                us.created_date,
-                us.last_accessed,
-                us.ip_address
-            FROM user_session us
-            JOIN user_account ua ON us.user_id = ua.user_id
-            JOIN person p ON ua.person_id = p.person_id
-            WHERE us.expires_at > %s
-            ORDER BY us.last_accessed DESC
-        """,
-            (now_utc(),),
-        )
-
-        active_sessions = []
-        for row in cur.fetchall():
-            (
-                user_id,
-                first_name,
-                last_name,
-                created_date,
-                last_accessed,
-                ip_address,
-            ) = row
-
-            # Calculate how long they've been logged in
-            login_duration = now_utc() - created_date
-            days = login_duration.days
-            hours, remainder = divmod(login_duration.seconds, 3600)
-            minutes, _ = divmod(remainder, 60)
-
-            if days > 0:
-                duration_str = f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                duration_str = f"{hours}h {minutes}m"
-            else:
-                duration_str = f"{minutes}m"
-
-            active_sessions.append(
-                {
-                    "user_id": user_id,
-                    "name": f"{first_name} {last_name}",
-                    "login_date": created_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    "duration": duration_str,
-                    "ip_address": ip_address or "Unknown",
-                }
-            )
-
-        return render_template(
-            "user_sessions.html", active_sessions=active_sessions, active_tab="login_sessions"
-        )
-
-    finally:
-        conn.close()
+    """Redirect old active logins URL to Activity page with active sessions filter"""
+    return redirect(url_for(
+        "admin_activity",
+        category="logins",
+        activity_type="ACTIVE_SESSIONS"
+    ))
 
 
 @login_required
 def admin_login_history():
-    # Check if user is system admin
-    if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    # Get pagination parameters
-    page = request.args.get("page", 1, type=int)
-    per_page = 50
-    offset = (page - 1) * per_page
-
-    # Get filter parameters
+    """Redirect old login history URL to Activity page with logins category"""
+    # Preserve filter parameters where possible
+    hours = request.args.get("hours", 24, type=int)
     event_type = request.args.get("event_type", "")
-    username_filter = request.args.get("username", "")
-    hours_filter = request.args.get("hours", 24, type=int)  # Default to last 24 hours
+    username = request.args.get("username", "")
 
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-
-        # Build WHERE conditions
-        where_conditions = ["lh.timestamp > %s"]
-        params = [now_utc() - timedelta(hours=hours_filter)]
-
-        if event_type:
-            where_conditions.append("lh.event_type = %s")
-            params.append(event_type)
-
-        if username_filter:
-            where_conditions.append("lh.username ILIKE %s")
-            params.append(f"%{username_filter}%")
-
-        where_clause = " AND ".join(where_conditions)
-
-        # Get total count for pagination
-        count_query = f"""
-            SELECT COUNT(*) FROM login_history lh
-            WHERE {where_clause}
-        """
-        cur.execute(count_query, params)
-        result = cur.fetchone()
-        total_count = result[0] if result else 0
-
-        # Get login history with user details
-        query = f"""
-            SELECT
-                lh.login_history_id,
-                lh.user_id,
-                lh.username,
-                lh.event_type,
-                lh.ip_address,
-                lh.user_agent,
-                lh.session_id,
-                lh.failure_reason,
-                lh.timestamp,
-                lh.additional_data,
-                p.first_name,
-                p.last_name
-            FROM login_history lh
-            LEFT JOIN user_account ua ON lh.user_id = ua.user_id
-            LEFT JOIN person p ON ua.person_id = p.person_id
-            WHERE {where_clause}
-            ORDER BY lh.timestamp DESC
-            LIMIT %s OFFSET %s
-        """
-        params.extend([per_page, offset])
-        cur.execute(query, params)
-
-        login_history = []
-        for row in cur.fetchall():
-            (
-                history_id,
-                user_id,
-                username,
-                row_event_type,
-                ip_address,
-                user_agent,
-                session_id,
-                failure_reason,
-                timestamp,
-                additional_data,
-                first_name,
-                last_name,
-            ) = row
-
-            # Pass the timestamp as-is to the template - the format_datetime_tz filter will handle formatting
-
-            # Get full name if available
-            full_name = (
-                f"{first_name} {last_name}" if first_name and last_name else "Unknown"
-            )
-
-            # Truncate user agent for display
-            display_user_agent = (
-                user_agent[:50] + "..."
-                if user_agent and len(user_agent) > 50
-                else user_agent
-            )
-
-            login_history.append(
-                {
-                    "history_id": history_id,
-                    "user_id": user_id,
-                    "username": username,
-                    "full_name": full_name,
-                    "event_type": row_event_type,
-                    "ip_address": ip_address or "Unknown",
-                    "user_agent": display_user_agent or "Unknown",
-                    "session_id": session_id,
-                    "failure_reason": failure_reason,
-                    "timestamp": timestamp,
-                    "additional_data": additional_data,
-                }
-            )
-
-        # Calculate pagination info
-        total_pages = (total_count + per_page - 1) // per_page
-        has_prev = page > 1
-        has_next = page < total_pages
-
-        return render_template(
-            "admin_login_history.html",
-            login_history=login_history,
-            active_tab="login_history",
-            page=page,
-            total_pages=total_pages,
-            has_prev=has_prev,
-            has_next=has_next,
-            total_count=total_count,
-            event_type=event_type,
-            username_filter=username_filter,
-            hours_filter=hours_filter,
-        )
-
-    finally:
-        conn.close()
+    return redirect(url_for(
+        "admin_activity",
+        category="logins",
+        hours=hours,
+        activity_type=event_type,
+        user=username
+    ))
 
 
 @login_required
@@ -3051,9 +2867,10 @@ ACTIVITY_CATEGORIES = {
     'all': None,  # No filter
     'sessions': ['session', 'session_tune', 'session_tune_alias', 'session_person'],
     'people': ['person', 'user_account', 'person_instrument', 'person_tune',
-               'session_person', 'session_instance_person', 'login'],
+               'session_person', 'session_instance_person'],
     'tunes': ['tune', 'tune_setting', 'session_tune', 'session_tune_alias'],
     'logs': ['session_instance', 'session_instance_tune', 'session_instance_person'],
+    'logins': ['login'],
 }
 
 
@@ -3079,88 +2896,164 @@ def admin_activity():
     try:
         cur = conn.cursor()
 
-        # Build WHERE conditions
-        where_conditions = ["ra.activity_date > %s"]
-        params = [now_utc() - timedelta(hours=hours_filter)]
+        # Special handling for Active Sessions view
+        if activity_type_filter == 'ACTIVE_SESSIONS':
+            # Query active sessions from user_session table
+            where_conditions = ["us.expires_at > %s"]
+            params = [now_utc()]
 
-        # Category filter
-        if category in ACTIVITY_CATEGORIES and ACTIVITY_CATEGORIES[category]:
-            entity_types = ACTIVITY_CATEGORIES[category]
-            placeholders = ','.join(['%s'] * len(entity_types))
-            where_conditions.append(f"ra.entity_type IN ({placeholders})")
-            params.extend(entity_types)
+            if user_filter:
+                where_conditions.append("(u.username ILIKE %s OR p.first_name ILIKE %s OR p.last_name ILIKE %s)")
+                params.extend([f"%{user_filter}%", f"%{user_filter}%", f"%{user_filter}%"])
 
-        # Activity type filter
-        if activity_type_filter:
-            where_conditions.append("ra.activity_type = %s")
-            params.append(activity_type_filter)
+            where_clause = " AND ".join(where_conditions)
 
-        # Session filter
-        if session_filter:
-            where_conditions.append("ra.session_id_ref = %s")
-            params.append(int(session_filter))
+            # Get total count
+            count_query = f"""
+                SELECT COUNT(*)
+                FROM user_session us
+                JOIN user_account u ON us.user_id = u.user_id
+                JOIN person p ON u.person_id = p.person_id
+                WHERE {where_clause}
+            """
+            cur.execute(count_query, params)
+            result = cur.fetchone()
+            total_count = result[0] if result else 0
 
-        # User filter (search by username)
-        if user_filter:
-            where_conditions.append("u.username ILIKE %s")
-            params.append(f"%{user_filter}%")
+            # Get active sessions
+            query = f"""
+                SELECT
+                    us.user_id,
+                    u.username,
+                    p.first_name,
+                    p.last_name,
+                    us.created_date,
+                    us.last_accessed,
+                    us.ip_address
+                FROM user_session us
+                JOIN user_account u ON us.user_id = u.user_id
+                JOIN person p ON u.person_id = p.person_id
+                WHERE {where_clause}
+                ORDER BY us.last_accessed DESC
+                LIMIT %s OFFSET %s
+            """
+            params.extend([per_page, offset])
+            cur.execute(query, params)
 
-        where_clause = " AND ".join(where_conditions)
+            activity_items = []
+            for row in cur.fetchall():
+                (user_id, username, first_name, last_name, created_date, last_accessed, ip_address) = row
 
-        # Get total count for pagination
-        count_query = f"""
-            SELECT COUNT(*)
-            FROM recent_activity ra
-            LEFT JOIN user_account u ON ra.user_id = u.user_id
-            WHERE {where_clause}
-        """
-        cur.execute(count_query, params)
-        result = cur.fetchone()
-        total_count = result[0] if result else 0
+                # Calculate duration
+                login_duration = now_utc() - created_date
+                days = login_duration.days
+                hours, remainder = divmod(login_duration.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
 
-        # Get activity records
-        query = f"""
-            SELECT
-                ra.activity_date,
-                ra.entity_type,
-                ra.entity_id,
-                ra.activity_type,
-                ra.user_id,
-                ra.entity_name,
-                ra.entity_path,
-                u.username
-            FROM recent_activity ra
-            LEFT JOIN user_account u ON ra.user_id = u.user_id
-            WHERE {where_clause}
-            ORDER BY ra.activity_date DESC
-            LIMIT %s OFFSET %s
-        """
-        params.extend([per_page, offset])
-        cur.execute(query, params)
+                if days > 0:
+                    duration_str = f"{days}d {hours}h {minutes}m"
+                elif hours > 0:
+                    duration_str = f"{hours}h {minutes}m"
+                else:
+                    duration_str = f"{minutes}m"
 
-        activity_items = []
-        for row in cur.fetchall():
-            (
-                activity_date,
-                entity_type,
-                entity_id,
-                activity_type,
-                user_id,
-                entity_name,
-                entity_path,
-                username,
-            ) = row
+                activity_items.append({
+                    'activity_date': created_date,
+                    'entity_type': 'active_session',
+                    'entity_id': user_id,
+                    'activity_type': 'ACTIVE',
+                    'user_id': user_id,
+                    'entity_name': f"{first_name} {last_name}",
+                    'entity_path': None,
+                    'username': username,
+                    'duration': duration_str,
+                    'ip_address': ip_address or 'Unknown',
+                    'last_accessed': last_accessed,
+                })
+        else:
+            # Standard activity query
+            # Build WHERE conditions
+            where_conditions = ["ra.activity_date > %s"]
+            params = [now_utc() - timedelta(hours=hours_filter)]
 
-            activity_items.append({
-                'activity_date': activity_date,
-                'entity_type': entity_type,
-                'entity_id': entity_id,
-                'activity_type': activity_type,
-                'user_id': user_id,
-                'entity_name': entity_name,
-                'entity_path': entity_path,
-                'username': username or 'System',
-            })
+            # Category filter
+            if category in ACTIVITY_CATEGORIES and ACTIVITY_CATEGORIES[category]:
+                entity_types = ACTIVITY_CATEGORIES[category]
+                placeholders = ','.join(['%s'] * len(entity_types))
+                where_conditions.append(f"ra.entity_type IN ({placeholders})")
+                params.extend(entity_types)
+
+            # Activity type filter
+            if activity_type_filter:
+                where_conditions.append("ra.activity_type = %s")
+                params.append(activity_type_filter)
+
+            # Session filter
+            if session_filter:
+                where_conditions.append("ra.session_id_ref = %s")
+                params.append(int(session_filter))
+
+            # User filter (search by username)
+            if user_filter:
+                where_conditions.append("u.username ILIKE %s")
+                params.append(f"%{user_filter}%")
+
+            where_clause = " AND ".join(where_conditions)
+
+            # Get total count for pagination
+            count_query = f"""
+                SELECT COUNT(*)
+                FROM recent_activity ra
+                LEFT JOIN user_account u ON ra.user_id = u.user_id
+                WHERE {where_clause}
+            """
+            cur.execute(count_query, params)
+            result = cur.fetchone()
+            total_count = result[0] if result else 0
+
+            # Get activity records
+            query = f"""
+                SELECT
+                    ra.activity_date,
+                    ra.entity_type,
+                    ra.entity_id,
+                    ra.activity_type,
+                    ra.user_id,
+                    ra.entity_name,
+                    ra.entity_path,
+                    u.username
+                FROM recent_activity ra
+                LEFT JOIN user_account u ON ra.user_id = u.user_id
+                WHERE {where_clause}
+                ORDER BY ra.activity_date DESC
+                LIMIT %s OFFSET %s
+            """
+            params.extend([per_page, offset])
+            cur.execute(query, params)
+
+            activity_items = []
+            for row in cur.fetchall():
+                (
+                    activity_date,
+                    entity_type,
+                    entity_id,
+                    activity_type,
+                    user_id,
+                    entity_name,
+                    entity_path,
+                    username,
+                ) = row
+
+                activity_items.append({
+                    'activity_date': activity_date,
+                    'entity_type': entity_type,
+                    'entity_id': entity_id,
+                    'activity_type': activity_type,
+                    'user_id': user_id,
+                    'entity_name': entity_name,
+                    'entity_path': entity_path,
+                    'username': username or 'System',
+                })
 
         # Get list of sessions for filter dropdown
         cur.execute("""

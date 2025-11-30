@@ -6,14 +6,22 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
+            {% if is_user_profile %}
             <header class="docs-header">
-                <h1 class="docs-heading">{% if is_user_profile %}Profile: {{ person.name }}{% else %}Person Details: {{ person.name }}{% endif %}</h1>
-                {% if not is_user_profile %}
-                <div id="back-link-container" style="display: none;">
-                    <a href="/admin/people" class="back-link">← Back To Admin</a>
-                </div>
-                {% endif %}
+                <h1 class="docs-heading">Profile: {{ person.name }}</h1>
             </header>
+            {% else %}
+            <!-- Admin Breadcrumb Navigation -->
+            <nav class="admin-breadcrumb" aria-label="breadcrumb">
+                <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <a href="{{ url_for('admin_people') }}" class="breadcrumb-item">People</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <span id="breadcrumb-person-name" class="breadcrumb-current">{{ person.name }}</span>
+                <span id="breadcrumb-tab-separator" class="breadcrumb-separator" style="display: none;">&gt;&gt;</span>
+                <span id="breadcrumb-tab-name" class="breadcrumb-current" style="display: none;"></span>
+            </nav>
+            {% endif %}
 
             <!-- Mobile Tab Navigation (dropdown) -->
             <div class="profile-mobile-nav d-md-none mb-3">
@@ -537,15 +545,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let editMode = false;
     let originalUsername = '';
 
-    // Show back link if user came from admin page
-    const referer = document.referrer;
-    if (referer && (referer.includes('/admin/people') || referer.includes('/admin'))) {
-        const backLinkContainer = document.getElementById('back-link-container');
-        if (backLinkContainer) {
-            backLinkContainer.style.display = 'block';
-        }
-    }
-
     // Check for saved flash messages from sessionStorage
     const savedMessage = sessionStorage.getItem('personSavedMessage');
     if (savedMessage) {
@@ -972,7 +971,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 loginsLoaded = true;
             }
         }
+
+        // Update breadcrumb for admin view
+        updateBreadcrumb(targetId);
     }
+
+    function updateBreadcrumb(tabId) {
+        const personNameEl = document.getElementById('breadcrumb-person-name');
+        const tabSeparator = document.getElementById('breadcrumb-tab-separator');
+        const tabNameEl = document.getElementById('breadcrumb-tab-name');
+
+        // Only update if breadcrumb elements exist (admin view only)
+        if (!personNameEl || !tabSeparator || !tabNameEl) return;
+
+        const tabDisplayNames = {
+            'profile': null,  // Profile tab shows just the person name
+            'sessions': 'Sessions',
+            'attended': 'Attended',
+            'tunes': 'Tunes',
+            'logins': 'Logins'
+        };
+
+        const tabName = tabDisplayNames[tabId];
+
+        if (tabName) {
+            // Show nested breadcrumb level
+            personNameEl.innerHTML = '<a href="#" class="breadcrumb-item" onclick="activateTab(\'profile\'); return false;">{{ person.name }}</a>';
+            personNameEl.classList.remove('breadcrumb-current');
+            tabSeparator.style.display = '';
+            tabNameEl.style.display = '';
+            tabNameEl.textContent = tabName;
+        } else {
+            // Profile tab - just show person name as current
+            personNameEl.innerHTML = '{{ person.name }}';
+            personNameEl.classList.add('breadcrumb-current');
+            tabSeparator.style.display = 'none';
+            tabNameEl.style.display = 'none';
+        }
+    }
+
+    // Expose activateTab globally for breadcrumb onclick
+    window.activateTab = activateTab;
 
     // Initialize tabs
     initTabs();
@@ -1513,6 +1552,44 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+/* Admin Breadcrumb Styles */
+.admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.admin-breadcrumb .breadcrumb-item,
+.admin-breadcrumb a.breadcrumb-item {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.admin-breadcrumb .breadcrumb-item:hover,
+.admin-breadcrumb a.breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.admin-breadcrumb .breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: var(--secondary-text);
+    font-weight: 400;
+}
+
+.admin-breadcrumb .breadcrumb-current {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .admin-breadcrumb {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+    }
+}
+
 /* Make main headings smaller globally */
 .docs-heading {
     font-size: 2rem !important;
@@ -1673,21 +1750,6 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: var(--bg-color);
     border-color: var(--primary);
     color: var(--text-color);
-}
-
-.back-link {
-    display: inline-block;
-    color: var(--primary);
-    text-decoration: none;
-    font-size: 0.9rem;
-    margin-top: 0.5rem;
-    padding: 0.25rem 0;
-    transition: color 0.3s ease;
-}
-
-.back-link:hover {
-    color: var(--primary);
-    text-decoration: underline;
 }
 
 .edit-controls {

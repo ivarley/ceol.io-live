@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Cache Settings - Admin{% endblock %}
+{% block title %}Admin - Cache Settings{% endblock %}
 
 {% block content %}
-<div class="docs-content">
-    <article class="docs-article">
-        <div class="docs-content-inner container">
-            <h1 class="docs-heading">Admin Dashboard</h1>
-
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
             {% include 'admin_tabs.html' %}
 
-            <div class="admin-cache-settings">
+            <section class="docs-section" id="cache-settings">
+                <div class="admin-cache-settings">
                 <h2>Cache Missing Settings</h2>
                 <p>This tool caches missing tune settings from thesession.org, including ABC notation and rendered images.</p>
 
@@ -77,9 +76,10 @@
                     <h3>Results</h3>
                     <div id="results-summary"></div>
                 </div>
-            </div>
-        </div>
-    </article>
+                </div>
+            </section>
+        </article>
+    </div>
 </div>
 
 <style>

@@ -1,3 +1,20 @@
+<!-- Admin Breadcrumb Navigation -->
+<nav class="admin-breadcrumb" aria-label="breadcrumb">
+    <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
+    {% if active_tab %}
+    <span class="breadcrumb-separator">&gt;&gt;</span>
+    <span class="breadcrumb-current">
+        {% if active_tab == 'sessions_list' %}Sessions
+        {% elif active_tab == 'tunes' %}Tunes
+        {% elif active_tab == 'people' %}People
+        {% elif active_tab == 'activity' %}Activity
+        {% elif active_tab == 'test_links' %}Test Links
+        {% elif active_tab == 'cache_settings' %}Cache Settings
+        {% endif %}
+    </span>
+    {% endif %}
+</nav>
+
 <!-- Admin Tab Navigation -->
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
@@ -17,20 +34,10 @@
            role="tab">
             People
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'login_history' else '' }}"
-           href="{{ url_for('admin_login_history') }}"
-           role="tab">
-            Login History
-        </a>
         <a class="nav-link {{ 'active' if active_tab == 'activity' else '' }}"
            href="{{ url_for('admin_activity') }}"
            role="tab">
             Activity
-        </a>
-        <a class="nav-link {{ 'active' if active_tab == 'login_sessions' else '' }}"
-           href="{{ url_for('admin_login_sessions') }}"
-           role="tab">
-            Active Logins
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'test_links' else '' }}"
            href="{{ url_for('admin_test_links') }}"
@@ -56,14 +63,8 @@
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
                 People
             </option>
-            <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
-                Login History
-            </option>
             <option value="{{ url_for('admin_activity') }}" {{ 'selected' if active_tab == 'activity' else '' }}>
                 Activity
-            </option>
-            <option value="{{ url_for('admin_login_sessions') }}" {{ 'selected' if active_tab == 'login_sessions' else '' }}>
-                Active Logins
             </option>
             <option value="{{ url_for('admin_test_links') }}" {{ 'selected' if active_tab == 'test_links' else '' }}>
                 Test Links
@@ -77,7 +78,7 @@
 
 <style>
 .admin-tabs-nav {
-    margin-bottom: 2rem;
+    margin-bottom: 10px;
 }
 
 /* Desktop/Mobile visibility */
@@ -212,6 +213,41 @@
     .nav-tabs .nav-link {
         padding: 0.75rem 1rem;
         font-size: 0.9rem;
+    }
+}
+
+/* Admin Breadcrumb Styles */
+.admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.admin-breadcrumb .breadcrumb-item {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.admin-breadcrumb .breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.admin-breadcrumb .breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: var(--secondary-text);
+    font-weight: 400;
+}
+
+.admin-breadcrumb .breadcrumb-current {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .admin-breadcrumb {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
     }
 }
 </style>

@@ -11,13 +11,26 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
-            <header class="docs-header">
-                <h1 class="docs-heading">Session Admin: {{ session.name }}</h1>
-                <section class="docs-intro">
-                    <p>Manage session details, players, and view session history. <a href="/sessions/{{ session.path }}">← Back To Session Home</a></p>
-                </section>
-            </header>
-            
+            <!-- Session Admin Breadcrumb Navigation -->
+            <nav class="admin-breadcrumb" aria-label="breadcrumb">
+                <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">Sessions</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                {% if active_tab == 'details' %}
+                <span class="breadcrumb-current">{{ session.name }}</span>
+                {% else %}
+                <a href="/admin/sessions/{{ session.path }}" class="breadcrumb-item">{{ session.name }}</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <span class="breadcrumb-current">
+                    {% if active_tab == 'tunes' %}Tunes
+                    {% elif active_tab == 'players' %}Players
+                    {% elif active_tab == 'logs' %}Logs
+                    {% endif %}
+                </span>
+                {% endif %}
+            </nav>
+
             <!-- Session Admin Tab Navigation -->
             <nav class="session-admin-tabs-nav">
                 <!-- Desktop Tab Navigation -->
@@ -363,6 +376,42 @@
 </div>
 
 <style>
+/* Admin Breadcrumb Styles */
+.admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.admin-breadcrumb .breadcrumb-item {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.admin-breadcrumb .breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.admin-breadcrumb .breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: var(--secondary-text);
+    font-weight: 400;
+}
+
+.admin-breadcrumb .breadcrumb-current {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .admin-breadcrumb {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+    }
+}
+
 .session-admin-tabs-nav {
     margin-bottom: 5px;
 }

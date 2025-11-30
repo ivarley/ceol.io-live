@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Admin{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            {% include 'admin_tabs.html' %}
+
+            <section class="admin-section" id="admin-home">
+                <p class="admin-home-label">Select a section:</p>
+                <ul class="admin-home-links">
+                    <li><a href="{{ url_for('admin_sessions_list') }}">Sessions</a></li>
+                    <li><a href="{{ url_for('admin_tunes') }}">Tunes</a></li>
+                    <li><a href="{{ url_for('admin_people') }}">People</a></li>
+                    <li><a href="{{ url_for('admin_activity') }}">Activity</a></li>
+                    <li><a href="{{ url_for('admin_test_links') }}">Test Links</a></li>
+                    <li><a href="{{ url_for('admin_cache_settings') }}">Cache Settings</a></li>
+                </ul>
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.admin-section {
+    padding-top: 10px;
+}
+
+.admin-home-label {
+    color: var(--text-color);
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.admin-home-links {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin: 0;
+}
+
+.admin-home-links li {
+    margin-bottom: 0.25rem;
+}
+
+.admin-home-links a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.admin-home-links a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

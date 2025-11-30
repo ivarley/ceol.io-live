@@ -6,47 +6,44 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
-            <header class="docs-header">
-                <h1 class="docs-heading">Admin Dashboard</h1>
-            </header>
-            
             {% include 'admin_tabs.html' %}
             
-            <section class="docs-section" id="sessions">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="section-heading mb-0">Sessions ({{ sessions|length }})</h2>
-                    <a href="/add-session?acu=false" class="btn btn-primary">Add Session</a>
+            <section class="admin-section" id="sessions">
+                <!-- Search and Add Button -->
+                <div class="sessions-toolbar">
+                    <input type="text" class="form-control sessions-search-input" id="sessions-search" placeholder="Search by name or location...">
+                    <a href="/add-session?acu=false" class="btn btn-primary btn-add-session">Add Session</a>
                 </div>
-                
-                <!-- Search Controls -->
-                <div class="mb-3">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" id="sessions-search" placeholder="Search by name or location...">
-                        </div>
-                    </div>
-                </div>
-                
+
                 <div id="sessions-content">
                     {% if sessions %}
                     <!-- Desktop Table View -->
                     <div class="table-responsive desktop-view">
-                        <table class="table table-striped">
+                        <table class="table table-striped" id="sessions-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Venue</th>
-                                    <th>Location</th>
-                                    <th>TheSession.org</th>
-                                    <th>Players</th>
-                                    <th>Instances</th>
-                                    <th>Latest Instance</th>
-                                    <th>Status</th>
+                                    <th class="sortable sorted asc" data-sort="name">Name</th>
+                                    <th class="sortable" data-sort="venue">Venue</th>
+                                    <th class="sortable" data-sort="location">Location</th>
+                                    <th class="sortable" data-sort="thesession">TheSession.org</th>
+                                    <th class="sortable" data-sort="players">Players</th>
+                                    <th class="sortable" data-sort="instances">Instances</th>
+                                    <th class="sortable" data-sort="latest">Latest</th>
+                                    <th class="sortable" data-sort="status">Status</th>
                                 </tr>
                             </thead>
                             <tbody id="sessions-tbody">
                                 {% for session in sessions %}
-                                <tr data-session-name="{{ session.name|lower }}" data-session-location="{{ session.location_display|lower }}">
+                                <tr data-session-name="{{ session.name|lower }}"
+                                    data-session-location="{{ session.location_display|lower }}"
+                                    data-sort-name="{{ session.name|lower }}"
+                                    data-sort-venue="{{ (session.location_name or '')|lower }}"
+                                    data-sort-location="{{ session.location_display|lower }}"
+                                    data-sort-thesession="{{ session.thesession_id or 0 }}"
+                                    data-sort-players="{{ session.total_players or 0 }}"
+                                    data-sort-instances="{{ session.instance_count or 0 }}"
+                                    data-sort-latest="{{ session.latest_instance_date or '' }}"
+                                    data-sort-status="{{ 'terminated' if session.termination_date else 'active' }}">
                                     <td class="session-name">
                                         <a href="/admin/sessions/{{ session.path }}" class="session-link">{{ session.name }}</a>
                                     </td>
@@ -179,6 +176,25 @@
 </div>
 
 <style>
+.admin-section {
+    padding-top: 10px;
+}
+
+.sessions-toolbar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.sessions-search-input {
+    max-width: 400px;
+}
+
+.btn-add-session {
+    margin-left: auto;
+}
+
 .table {
     background-color: var(--bg-color);
     border-radius: 8px;
@@ -190,6 +206,46 @@
     border-top: none;
     font-weight: 600;
     color: var(--text-color);
+}
+
+.table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 20px;
+}
+
+.table th.sortable:hover {
+    background-color: var(--border-color);
+}
+
+.table th.sortable::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 5px solid transparent;
+    opacity: 0.3;
+}
+
+.table th.sortable:not(.sorted)::after {
+    border-top-color: var(--text-color);
+    margin-top: 3px;
+}
+
+.table th.sortable.sorted.asc::after {
+    border-bottom-color: var(--primary);
+    border-top-color: transparent;
+    margin-top: -3px;
+    opacity: 1;
+}
+
+.table th.sortable.sorted.desc::after {
+    border-top-color: var(--primary);
+    border-bottom-color: transparent;
+    margin-top: 3px;
+    opacity: 1;
 }
 
 .table-responsive {
@@ -451,6 +507,22 @@ a.btn-primary:hover {
         display: block;
     }
 
+    /* Toolbar responsive - keep on same line */
+    .sessions-toolbar {
+        gap: 0.5rem;
+    }
+
+    .sessions-search-input {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .btn-add-session {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
     /* Ensure mobile margin reduction matches other admin pages */
     body .docs-content {
         padding: 0.5rem !important;
@@ -551,6 +623,69 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } else if (existingNoResults) {
             existingNoResults.remove();
+        }
+    }
+
+    // Sorting functionality
+    const table = document.getElementById('sessions-table');
+    if (table) {
+        const headers = table.querySelectorAll('th.sortable');
+        const tbody = document.getElementById('sessions-tbody');
+
+        headers.forEach(header => {
+            header.addEventListener('click', () => {
+                const sortKey = header.dataset.sort;
+                const isCurrentlySorted = header.classList.contains('sorted');
+                const currentDirection = header.classList.contains('asc') ? 'asc' : 'desc';
+
+                // Remove sorted class from all headers
+                headers.forEach(h => h.classList.remove('sorted', 'asc', 'desc'));
+
+                // Determine new direction
+                let newDirection;
+                if (isCurrentlySorted) {
+                    newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    newDirection = 'asc';
+                }
+
+                // Add sorted class to clicked header
+                header.classList.add('sorted', newDirection);
+
+                // Sort the table
+                sortTable(sortKey, newDirection);
+            });
+        });
+
+        function sortTable(sortKey, direction) {
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Determine if numeric sort is needed
+            const numericColumns = ['thesession', 'players', 'instances'];
+            const isNumeric = numericColumns.includes(sortKey);
+
+            rows.sort((a, b) => {
+                let aVal = a.dataset[`sort${capitalize(sortKey)}`] || '';
+                let bVal = b.dataset[`sort${capitalize(sortKey)}`] || '';
+
+                if (isNumeric) {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                } else {
+                    // String comparison
+                    if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                }
+            });
+
+            // Re-append rows in sorted order
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
         }
     }
 });

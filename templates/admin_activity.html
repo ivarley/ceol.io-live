@@ -6,10 +6,6 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
-            <header class="docs-header">
-                <h1 class="docs-heading">Admin Dashboard</h1>
-            </header>
-
             {% include 'admin_tabs.html' %}
 
             <!-- Category Filter Buttons -->
@@ -25,6 +21,8 @@
                        class="btn btn-category {{ 'active' if category == 'tunes' else '' }}">Tunes</a>
                     <a href="{{ url_for('admin_activity', category='logs', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
                        class="btn btn-category {{ 'active' if category == 'logs' else '' }}">Logs</a>
+                    <a href="{{ url_for('admin_activity', category='logins', hours=hours_filter, activity_type=activity_type_filter, session_id=session_filter, user=user_filter) }}"
+                       class="btn btn-category {{ 'active' if category == 'logins' else '' }}">Logins</a>
                 </div>
             </section>
 
@@ -46,8 +44,16 @@
                             <label for="activity_type" class="form-label">Activity</label>
                             <select name="activity_type" id="activity_type" class="form-select" autocomplete="off">
                                 <option value="" {% if not activity_type_filter %}selected{% endif %}>All</option>
+                                {% if category == 'logins' %}
+                                <option value="ACTIVE_SESSIONS" {% if activity_type_filter == 'ACTIVE_SESSIONS' %}selected{% endif %}>Active Sessions</option>
+                                <option value="LOGIN_SUCCESS" {% if activity_type_filter == 'LOGIN_SUCCESS' %}selected{% endif %}>Login Success</option>
+                                <option value="LOGIN_FAILURE" {% if activity_type_filter == 'LOGIN_FAILURE' %}selected{% endif %}>Login Failure</option>
+                                <option value="LOGOUT" {% if activity_type_filter == 'LOGOUT' %}selected{% endif %}>Logout</option>
+                                <option value="PASSWORD_RESET" {% if activity_type_filter == 'PASSWORD_RESET' %}selected{% endif %}>Password Reset</option>
+                                {% else %}
                                 <option value="created" {% if activity_type_filter == 'created' %}selected{% endif %}>Created</option>
                                 <option value="modified" {% if activity_type_filter == 'modified' %}selected{% endif %}>Modified</option>
+                                {% endif %}
                             </select>
                         </div>
                         <div class="col-md-3 col-sm-6 mb-3">
@@ -73,13 +79,35 @@
 
             <section class="docs-section" id="activity-list">
                 <h2 class="section-heading">
-                    Activity
+                    {% if activity_type_filter == 'ACTIVE_SESSIONS' %}Active Sessions{% else %}Activity{% endif %}
                     <span class="docs-time">({{ total_count }} entries)</span>
                 </h2>
 
                 {% if activity_items %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
+                        {% if activity_type_filter == 'ACTIVE_SESSIONS' %}
+                        <thead>
+                            <tr>
+                                <th>Login Time</th>
+                                <th>Name</th>
+                                <th>Username</th>
+                                <th>Duration</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in activity_items %}
+                            <tr>
+                                <td class="timestamp">{{ item.activity_date | format_datetime_tz }}</td>
+                                <td class="entity-name">{{ item.entity_name }}</td>
+                                <td class="username">{{ item.username }}</td>
+                                <td>{{ item.duration }}</td>
+                                <td class="ip-address">{{ item.ip_address }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% else %}
                         <thead>
                             <tr>
                                 <th>Timestamp</th>
@@ -125,6 +153,7 @@
                             </tr>
                             {% endfor %}
                         </tbody>
+                        {% endif %}
                     </table>
                 </div>
 
@@ -284,6 +313,11 @@
 
 .username {
     font-weight: 500;
+}
+
+.ip-address {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
 }
 
 /* Entity type badges */
