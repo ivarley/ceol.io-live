@@ -1240,6 +1240,9 @@
             }
             const newPath = `${basePath}/${tuneId}`;
             window.history.replaceState({}, '', newPath);
+        } else if (pathname.match(/^\/admin\/tunes(\/\d+)?$/)) {
+            // Admin tunes context: use path-based URL /admin/tunes/<tune_id>
+            window.history.replaceState({}, '', `/admin/tunes/${tuneId}`);
         } else {
             // Other contexts: use query params
             const url = new URL(window.location);
@@ -1260,6 +1263,9 @@
             // Session context: remove tune ID from path
             let newPath = pathname.replace(/\/tunes\/\d+$/, '/tunes');
             window.history.replaceState({}, '', newPath);
+        } else if (pathname.match(/^\/admin\/tunes\/\d+$/)) {
+            // Admin tunes context: reset to /admin/tunes
+            window.history.replaceState({}, '', '/admin/tunes');
         } else {
             // Other contexts: remove query param
             const url = new URL(window.location);
@@ -2211,6 +2217,12 @@
             if (match) {
                 return parseInt(match[1], 10);
             }
+        }
+
+        // For admin tunes, check path-based URL /admin/tunes/<tune_id>
+        const adminTunesMatch = pathname.match(/^\/admin\/tunes\/(\d+)$/);
+        if (adminTunesMatch) {
+            return parseInt(adminTunesMatch[1], 10);
         }
 
         // Fall back to query param for other contexts

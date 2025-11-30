@@ -10416,3 +10416,94 @@ def join_session(session_path):
 
     except Exception as e:
         return jsonify({"success": False, "message": f"Failed to join session: {str(e)}"}), 500
+
+
+# History table mapping for drill-down
+HISTORY_TABLE_MAP = {
+    'session': ('session_history', 'session_id', ['name', 'path', 'city', 'state']),
+    'session_instance': ('session_instance_history', 'session_instance_id', ['date', 'comments', 'is_cancelled']),
+    'tune': ('tune_history', 'tune_id', ['name', 'tune_type']),
+    'tune_setting': ('tune_setting_history', 'setting_id', ['key', 'abc']),
+    'session_tune': ('session_tune_history', 'session_id', ['alias', 'key']),  # composite key
+    'session_tune_alias': ('session_tune_alias_history', 'session_tune_alias_id', ['alias']),
+    'session_instance_tune': ('session_instance_tune_history', 'session_instance_tune_id', ['name', 'order_number']),
+    'person': ('person_history', 'person_id', ['first_name', 'last_name', 'email']),
+    'user_account': ('user_account_history', 'user_id', ['username', 'is_active']),
+    'person_instrument': ('person_instrument_history', 'person_id', ['instrument']),  # composite key
+    'person_tune': ('person_tune_history', 'person_id', ['status']),  # composite key
+    'session_person': ('session_person_history', 'session_id', ['is_regular', 'is_admin']),  # composite key
+    'session_instance_person': ('session_instance_person_history', 'session_instance_id', ['attendance', 'comment']),  # composite key
+}
+
+
+def api_admin_history(entity_type, entity_id):
+    """Get change history for a specific record - admin only"""
+    from flask_login import current_user
+
+    if not current_user.is_authenticated or not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    if entity_type not in HISTORY_TABLE_MAP:
+        return jsonify({"success": False, "error": f"Unknown entity type: {entity_type}"}), 400
+
+    history_table, id_column, _ = HISTORY_TABLE_MAP[entity_type]
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Handle composite keys (contain /)
+        if '/' in entity_id:
+            parts = entity_id.split('/')
+            if entity_type == 'session_tune':
+                where_clause = "session_id = %s AND tune_id = %s"
+                params = [int(parts[0]), int(parts[1])]
+            elif entity_type == 'person_instrument':
+                where_clause = "person_id = %s AND instrument = %s"
+                params = [int(parts[0]), parts[1]]
+            elif entity_type == 'person_tune':
+                where_clause = "person_id = %s AND tune_id = %s"
+                params = [int(parts[0]), int(parts[1])]
+            elif entity_type == 'session_person':
+                where_clause = "session_id = %s AND person_id = %s"
+                params = [int(parts[0]), int(parts[1])]
+            elif entity_type == 'session_instance_person':
+                where_clause = "session_instance_id = %s AND person_id = %s"
+                params = [int(parts[0]), int(parts[1])]
+            else:
+                where_clause = f"{id_column} = %s"
+                params = [entity_id]
+        else:
+            where_clause = f"{id_column} = %s"
+            params = [int(entity_id)]
+
+        query = f"""
+            SELECT
+                h.changed_at,
+                h.operation,
+                h.changed_by_user_id,
+                u.username
+            FROM {history_table} h
+            LEFT JOIN user_account u ON h.changed_by_user_id = u.user_id
+            WHERE {where_clause}
+            ORDER BY h.changed_at DESC
+            LIMIT 100
+        """
+        cur.execute(query, params)
+
+        history = []
+        for row in cur.fetchall():
+            changed_at, operation, changed_by_user_id, username = row
+            history.append({
+                'changed_at': changed_at.strftime('%Y-%m-%d %H:%M:%S') if changed_at else None,
+                'operation': operation,
+                'changed_by_user_id': changed_by_user_id,
+                'changed_by': username or 'System',
+            })
+
+        return jsonify({"success": True, "history": history})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()

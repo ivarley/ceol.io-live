@@ -218,8 +218,10 @@ app.add_url_rule("/admin", "admin", admin)
 app.add_url_rule("/admin/sessions", "admin_sessions_list", admin_sessions_list)
 app.add_url_rule("/admin/login-sessions", "admin_login_sessions", admin_login_sessions)
 app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_history)
+app.add_url_rule("/admin/activity", "admin_activity", admin_activity)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
+app.add_url_rule("/admin/tunes/<int:tune_id>", "admin_tune_detail", admin_tune_detail)
 app.add_url_rule("/admin/test-links", "admin_test_links", admin_test_links)
 app.add_url_rule("/admin/cache-settings", "admin_cache_settings", admin_cache_settings)
 app.add_url_rule("/admin/people/<int:person_id>", "person_details", person_details)
@@ -845,6 +847,12 @@ app.add_url_rule(
     "/api/admin/cache_settings/stats",
     "get_cache_settings_stats",
     get_cache_settings_stats,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/history/<entity_type>/<path:entity_id>",
+    "api_admin_history",
+    api_admin_history,
     methods=["GET"],
 )
 

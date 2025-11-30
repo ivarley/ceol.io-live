@@ -17,13 +17,18 @@
            role="tab">
             People
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'login_history' else '' }}" 
-           href="{{ url_for('admin_login_history') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'login_history' else '' }}"
+           href="{{ url_for('admin_login_history') }}"
            role="tab">
             Login History
         </a>
-        <a class="nav-link {{ 'active' if active_tab == 'login_sessions' else '' }}" 
-           href="{{ url_for('admin_login_sessions') }}" 
+        <a class="nav-link {{ 'active' if active_tab == 'activity' else '' }}"
+           href="{{ url_for('admin_activity') }}"
+           role="tab">
+            Activity
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'login_sessions' else '' }}"
+           href="{{ url_for('admin_login_sessions') }}"
            role="tab">
             Active Logins
         </a>
@@ -53,6 +58,9 @@
             </option>
             <option value="{{ url_for('admin_login_history') }}" {{ 'selected' if active_tab == 'login_history' else '' }}>
                 Login History
+            </option>
+            <option value="{{ url_for('admin_activity') }}" {{ 'selected' if active_tab == 'activity' else '' }}>
+                Activity
             </option>
             <option value="{{ url_for('admin_login_sessions') }}" {{ 'selected' if active_tab == 'login_sessions' else '' }}>
                 Active Logins

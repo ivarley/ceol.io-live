@@ -2107,6 +2107,17 @@ def admin_tunes():
 
 
 @login_required
+def admin_tune_detail(tune_id):
+    """Admin tune detail page - shows tunes list with specific tune modal open"""
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    return render_template("admin_tunes.html", active_tab="tunes", tune_id=tune_id)
+
+
+@login_required
 def admin_test_links():
     """Admin test links page with sample URLs for testing"""
     # Check if user is system admin
@@ -3011,3 +3022,153 @@ def add_session_tune_page(session_path):
 
     except Exception as e:
         return f"Database connection failed: {str(e)}"
+
+
+# Category to entity type mapping for activity view
+ACTIVITY_CATEGORIES = {
+    'all': None,  # No filter
+    'sessions': ['session', 'session_tune', 'session_tune_alias', 'session_person'],
+    'people': ['person', 'user_account', 'person_instrument', 'person_tune',
+               'session_person', 'session_instance_person', 'login'],
+    'tunes': ['tune', 'tune_setting', 'session_tune', 'session_tune_alias'],
+    'logs': ['session_instance', 'session_instance_tune', 'session_instance_person'],
+}
+
+
+@login_required
+def admin_activity():
+    """Admin activity view - unified feed of site activity"""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    # Get filter parameters
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    category = request.args.get("category", "all")
+    hours_filter = request.args.get("hours", 24, type=int)
+    activity_type_filter = request.args.get("activity_type", "")
+    session_filter = request.args.get("session_id", "", type=str)
+    user_filter = request.args.get("user", "")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Build WHERE conditions
+        where_conditions = ["ra.activity_date > %s"]
+        params = [now_utc() - timedelta(hours=hours_filter)]
+
+        # Category filter
+        if category in ACTIVITY_CATEGORIES and ACTIVITY_CATEGORIES[category]:
+            entity_types = ACTIVITY_CATEGORIES[category]
+            placeholders = ','.join(['%s'] * len(entity_types))
+            where_conditions.append(f"ra.entity_type IN ({placeholders})")
+            params.extend(entity_types)
+
+        # Activity type filter
+        if activity_type_filter:
+            where_conditions.append("ra.activity_type = %s")
+            params.append(activity_type_filter)
+
+        # Session filter
+        if session_filter:
+            where_conditions.append("ra.session_id_ref = %s")
+            params.append(int(session_filter))
+
+        # User filter (search by username)
+        if user_filter:
+            where_conditions.append("u.username ILIKE %s")
+            params.append(f"%{user_filter}%")
+
+        where_clause = " AND ".join(where_conditions)
+
+        # Get total count for pagination
+        count_query = f"""
+            SELECT COUNT(*)
+            FROM recent_activity ra
+            LEFT JOIN user_account u ON ra.user_id = u.user_id
+            WHERE {where_clause}
+        """
+        cur.execute(count_query, params)
+        result = cur.fetchone()
+        total_count = result[0] if result else 0
+
+        # Get activity records
+        query = f"""
+            SELECT
+                ra.activity_date,
+                ra.entity_type,
+                ra.entity_id,
+                ra.activity_type,
+                ra.user_id,
+                ra.entity_name,
+                ra.entity_path,
+                u.username
+            FROM recent_activity ra
+            LEFT JOIN user_account u ON ra.user_id = u.user_id
+            WHERE {where_clause}
+            ORDER BY ra.activity_date DESC
+            LIMIT %s OFFSET %s
+        """
+        params.extend([per_page, offset])
+        cur.execute(query, params)
+
+        activity_items = []
+        for row in cur.fetchall():
+            (
+                activity_date,
+                entity_type,
+                entity_id,
+                activity_type,
+                user_id,
+                entity_name,
+                entity_path,
+                username,
+            ) = row
+
+            activity_items.append({
+                'activity_date': activity_date,
+                'entity_type': entity_type,
+                'entity_id': entity_id,
+                'activity_type': activity_type,
+                'user_id': user_id,
+                'entity_name': entity_name,
+                'entity_path': entity_path,
+                'username': username or 'System',
+            })
+
+        # Get list of sessions for filter dropdown
+        cur.execute("""
+            SELECT session_id, name, path
+            FROM session
+            ORDER BY name
+        """)
+        sessions = [{'session_id': r[0], 'name': r[1], 'path': r[2]} for r in cur.fetchall()]
+
+        # Pagination calculations
+        total_pages = (total_count + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
+
+        return render_template(
+            "admin_activity.html",
+            activity_items=activity_items,
+            active_tab="activity",
+            page=page,
+            total_pages=total_pages,
+            has_prev=has_prev,
+            has_next=has_next,
+            total_count=total_count,
+            category=category,
+            hours_filter=hours_filter,
+            activity_type_filter=activity_type_filter,
+            session_filter=session_filter,
+            user_filter=user_filter,
+            sessions=sessions,
+        )
+
+    finally:
+        conn.close()
