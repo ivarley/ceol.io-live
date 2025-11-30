@@ -2703,6 +2703,28 @@ def session_admin_logs(session_path):
 
 
 @login_required
+def session_admin_tunes(session_path):
+    """Session admin tunes page - grid view of all tunes played at this session"""
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        from app import render_error_page
+
+        return render_error_page("Session not found", 404)
+
+    return render_template(
+        "session_admin.html",
+        session=session_data,
+        session_path=session_path,
+        active_tab="tunes",
+    )
+
+
+@login_required
 def session_admin_person(session_path, person_id):
     """Session admin person details page"""
     # Check if user is system admin or session admin

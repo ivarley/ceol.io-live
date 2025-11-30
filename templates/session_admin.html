@@ -22,24 +22,29 @@
             <nav class="session-admin-tabs-nav">
                 <!-- Desktop Tab Navigation -->
                 <div class="nav nav-tabs" id="session-admin-tabs" role="tablist">
-                    <a class="nav-link {{ 'active' if active_tab == 'details' else '' }}" 
+                    <a class="nav-link {{ 'active' if active_tab == 'details' else '' }}"
                        href="/admin/sessions/{{ session.path }}">
                         Details
                     </a>
-                    <a class="nav-link {{ 'active' if active_tab == 'players' else '' }}" 
+                    <a class="nav-link {{ 'active' if active_tab == 'tunes' else '' }}"
+                       href="/admin/sessions/{{ session.path }}/tunes">
+                        Tunes
+                    </a>
+                    <a class="nav-link {{ 'active' if active_tab == 'players' else '' }}"
                        href="/admin/sessions/{{ session.path }}/players">
                         Players
                     </a>
-                    <a class="nav-link {{ 'active' if active_tab == 'logs' else '' }}" 
+                    <a class="nav-link {{ 'active' if active_tab == 'logs' else '' }}"
                        href="/admin/sessions/{{ session.path }}/logs">
                         Logs
                     </a>
                 </div>
-                
+
                 <!-- Mobile Dropdown Navigation -->
                 <div class="session-admin-tabs-mobile">
                     <select class="form-select" id="session-admin-mobile-select">
                         <option value="details" {{ 'selected' if active_tab == 'details' else '' }}>Details</option>
+                        <option value="tunes" {{ 'selected' if active_tab == 'tunes' else '' }}>Tunes</option>
                         <option value="players" {{ 'selected' if active_tab == 'players' else '' }}>Players</option>
                         <option value="logs" {{ 'selected' if active_tab == 'logs' else '' }}>Logs</option>
                     </select>
@@ -215,7 +220,25 @@
                         </form>
                     </section>
                 </div>
-                
+
+                <!-- Tunes Tab -->
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'tunes' else '' }}" id="tunes" role="tabpanel">
+                    <section class="docs-section">
+                        <!-- Search Control -->
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="flex-grow-1">
+                                    <input type="text" class="form-control" id="tunes-search" placeholder="Search tunes...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tunes-content">
+                            <p class="text-muted">Loading tunes...</p>
+                        </div>
+                    </section>
+                </div>
+
                 <!-- Players Tab -->
                 <div class="tab-pane fade {{ 'show active' if active_tab == 'players' else '' }}" id="players" role="tabpanel">
                     <section class="docs-section">
@@ -770,8 +793,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loadPlayersContent();
     } else if (activeTab === 'logs') {
         loadLogsContent();
+    } else if (activeTab === 'tunes') {
+        loadTunesContent();
     }
-    
+
     // Mobile dropdown functionality
     const mobileSelect = document.getElementById('session-admin-mobile-select');
     if (mobileSelect) {
@@ -781,6 +806,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (this.value === 'details') {
                 url = `/admin/sessions/${sessionPath}`;
+            } else if (this.value === 'tunes') {
+                url = `/admin/sessions/${sessionPath}/tunes`;
             } else if (this.value === 'players') {
                 url = `/admin/sessions/${sessionPath}/players`;
             } else if (this.value === 'logs') {
@@ -1028,6 +1055,232 @@ function filterPlayers() {
     `;
     
     playersContainer.innerHTML = html;
+}
+
+// ============================================
+// Tunes Tab Functions
+// ============================================
+
+function loadTunesContent() {
+    const sessionPath = {{ session_path|tojson|safe }};
+
+    fetch(`/api/admin/sessions/${sessionPath}/tunes`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('tunes-content').innerHTML =
+                    `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            displayTunes(data.tunes);
+        })
+        .catch(error => {
+            document.getElementById('tunes-content').innerHTML =
+                `<div class="alert alert-danger">Failed to load tunes: ${error}</div>`;
+        });
+}
+
+function displayTunes(allTunes) {
+    const tunesContainer = document.getElementById('tunes-content');
+
+    if (allTunes.length === 0) {
+        tunesContainer.innerHTML = '<div class="alert alert-info">No tunes have been played at this session yet.</div>';
+        return;
+    }
+
+    // Store all tunes for filtering and initialize sorting state
+    window.allTunes = allTunes;
+    window.tunesSortColumn = 'tune_name'; // Default sort by tune name
+    window.tunesSortDirection = 'asc'; // Default ascending
+
+    // Apply current filters
+    filterTunes();
+
+    // Add event listener for search
+    document.getElementById('tunes-search').addEventListener('input', filterTunes);
+}
+
+function sortTunes(column) {
+    if (window.tunesSortColumn === column) {
+        // Toggle direction if same column
+        window.tunesSortDirection = window.tunesSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New column, default to ascending
+        window.tunesSortColumn = column;
+        window.tunesSortDirection = 'asc';
+    }
+    filterTunes();
+}
+
+function filterTunes() {
+    if (!window.allTunes) return;
+
+    const search = normalizeQuotes(document.getElementById('tunes-search').value.toLowerCase());
+
+    let filteredTunes = window.allTunes;
+
+    // Apply search filter
+    if (search) {
+        filteredTunes = filteredTunes.filter(tune =>
+            tune.tune_name.toLowerCase().includes(search) ||
+            tune.session_alias.toLowerCase().includes(search) ||
+            (tune.tune_type && tune.tune_type.toLowerCase().includes(search)) ||
+            tune.session_key.toLowerCase().includes(search) ||
+            tune.setting_key.toLowerCase().includes(search)
+        );
+    }
+
+    // Apply sorting
+    filteredTunes.sort((a, b) => {
+        let aValue, bValue;
+
+        switch(window.tunesSortColumn) {
+            case 'tune_name':
+                aValue = a.tune_name.toLowerCase();
+                bValue = b.tune_name.toLowerCase();
+                break;
+            case 'session_alias':
+                aValue = (a.session_alias || '').toLowerCase();
+                bValue = (b.session_alias || '').toLowerCase();
+                break;
+            case 'tune_type':
+                aValue = (a.tune_type || '').toLowerCase();
+                bValue = (b.tune_type || '').toLowerCase();
+                break;
+            case 'session_key':
+                aValue = (a.session_key || '').toLowerCase();
+                bValue = (b.session_key || '').toLowerCase();
+                break;
+            case 'setting_key':
+                aValue = (a.setting_key || '').toLowerCase();
+                bValue = (b.setting_key || '').toLowerCase();
+                break;
+            case 'play_count':
+                aValue = a.play_count || 0;
+                bValue = b.play_count || 0;
+                break;
+            case 'want_to_learn':
+                aValue = a.want_to_learn_count || 0;
+                bValue = b.want_to_learn_count || 0;
+                break;
+            case 'learning':
+                aValue = a.learning_count || 0;
+                bValue = b.learning_count || 0;
+                break;
+            case 'learned':
+                aValue = a.learned_count || 0;
+                bValue = b.learned_count || 0;
+                break;
+            default:
+                aValue = 0;
+                bValue = 0;
+        }
+
+        if (aValue < bValue) return window.tunesSortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return window.tunesSortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // Render filtered tunes
+    const tunesContainer = document.getElementById('tunes-content');
+
+    if (filteredTunes.length === 0) {
+        tunesContainer.innerHTML = '<div class="alert alert-info">No tunes match the search criteria.</div>';
+        return;
+    }
+
+    // Helper function to get sort indicator
+    function getTunesSortIndicator(column) {
+        if (window.tunesSortColumn !== column) return '';
+        return window.tunesSortDirection === 'asc' ? ' ↑' : ' ↓';
+    }
+
+    const sessionPath = {{ session_path|tojson|safe }};
+
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-striped" id="tunes-table">
+                <thead>
+                    <tr>
+                        <th style="cursor: pointer;" onclick="sortTunes('tune_name')">Tune Name${getTunesSortIndicator('tune_name')}</th>
+                        <th style="cursor: pointer;" onclick="sortTunes('session_alias')">Session Alias${getTunesSortIndicator('session_alias')}</th>
+                        <th style="cursor: pointer;" onclick="sortTunes('tune_type')">Type${getTunesSortIndicator('tune_type')}</th>
+                        <th style="cursor: pointer;" onclick="sortTunes('session_key')">Session Key${getTunesSortIndicator('session_key')}</th>
+                        <th style="cursor: pointer;" onclick="sortTunes('setting_key')">Setting Key${getTunesSortIndicator('setting_key')}</th>
+                        <th style="cursor: pointer; text-align: center;" onclick="sortTunes('play_count')">Plays${getTunesSortIndicator('play_count')}</th>
+                        <th style="cursor: pointer; text-align: center;" onclick="sortTunes('want_to_learn')">Want${getTunesSortIndicator('want_to_learn')}</th>
+                        <th style="cursor: pointer; text-align: center;" onclick="sortTunes('learning')">Learning${getTunesSortIndicator('learning')}</th>
+                        <th style="cursor: pointer; text-align: center;" onclick="sortTunes('learned')">Learned${getTunesSortIndicator('learned')}</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    filteredTunes.forEach(tune => {
+        const aliasDisplay = tune.session_alias && tune.session_alias !== tune.tune_name
+            ? tune.session_alias
+            : '<span class="text-muted">-</span>';
+
+        html += `
+            <tr>
+                <td class="tune-name">
+                    <a href="/sessions/${sessionPath}/tunes/${tune.tune_id}" class="tune-link">
+                        ${tune.tune_name}
+                    </a>
+                </td>
+                <td class="tune-alias">${aliasDisplay}</td>
+                <td class="tune-type">${tune.tune_type || '<span class="text-muted">-</span>'}</td>
+                <td class="tune-session-key">${tune.session_key || '<span class="text-muted">-</span>'}</td>
+                <td class="tune-setting-key">${tune.setting_key || '<span class="text-muted">-</span>'}</td>
+                <td class="tune-play-count text-center">${tune.play_count}</td>
+                <td class="tune-want-to-learn text-center">${tune.want_to_learn_count > 0 ? tune.want_to_learn_count : '<span class="text-muted">-</span>'}</td>
+                <td class="tune-learning text-center">${tune.learning_count > 0 ? tune.learning_count : '<span class="text-muted">-</span>'}</td>
+                <td class="tune-learned text-center">${tune.learned_count > 0 ? tune.learned_count : '<span class="text-muted">-</span>'}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <style>
+            #tunes-table th {
+                background-color: var(--light);
+                border-bottom: 2px solid var(--border-color);
+                font-weight: 600;
+                color: var(--text-color);
+                white-space: nowrap;
+            }
+            [data-theme="dark"] #tunes-table th {
+                background-color: rgba(255, 255, 255, 0.05);
+            }
+            #tunes-table td {
+                vertical-align: middle;
+            }
+            .tune-link {
+                color: var(--primary);
+                text-decoration: none;
+                font-weight: 500;
+            }
+            .tune-link:hover {
+                color: var(--primary);
+                text-decoration: underline;
+            }
+            @media (max-width: 768px) {
+                #tunes-table {
+                    font-size: 0.85em;
+                }
+                #tunes-table th,
+                #tunes-table td {
+                    padding: 0.5rem 0.25rem;
+                }
+            }
+        </style>
+    `;
+
+    tunesContainer.innerHTML = html;
 }
 
 function loadLogsContent() {

@@ -4348,6 +4348,112 @@ def get_session_logs_ajax(session_path):
         return jsonify({"error": f"Failed to get session logs: {str(e)}"}), 500
 
 
+def get_session_tunes_grid_ajax(session_path):
+    """Get all tunes played at a session with statistics for the admin tunes grid"""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+
+    # Check if current user is a system admin
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        user_row = cur.fetchone()
+        if not user_row or not user_row[0]:
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+
+        # Get session ID first
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return jsonify({"error": "Session not found"}), 404
+
+        session_id = session_result[0]
+
+        # Get all unique tunes that have been played at this session
+        # along with session_tune settings if they exist, play counts, and tunebook stats
+        cur.execute(
+            """
+            WITH session_tune_plays AS (
+                -- Count how many times each tune has been played at this session
+                SELECT
+                    sit.tune_id,
+                    COUNT(DISTINCT si.session_instance_id) as play_count
+                FROM session_instance_tune sit
+                INNER JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                WHERE si.session_id = %s AND sit.tune_id IS NOT NULL
+                GROUP BY sit.tune_id
+            ),
+            session_regulars AS (
+                -- Get the list of regular players for this session
+                SELECT person_id
+                FROM session_person
+                WHERE session_id = %s AND is_regular = true
+            ),
+            tunebook_stats AS (
+                -- Count how many session regulars have each tune in their tunebook by status
+                SELECT
+                    pt.tune_id,
+                    COUNT(CASE WHEN pt.learn_status = 'want to learn' THEN 1 END) as want_to_learn_count,
+                    COUNT(CASE WHEN pt.learn_status = 'learning' THEN 1 END) as learning_count,
+                    COUNT(CASE WHEN pt.learn_status = 'learned' THEN 1 END) as learned_count
+                FROM person_tune pt
+                INNER JOIN session_regulars sr ON pt.person_id = sr.person_id
+                GROUP BY pt.tune_id
+            )
+            SELECT
+                t.tune_id,
+                t.name as tune_name,
+                t.tune_type,
+                st.alias as session_alias,
+                st.setting_id,
+                st.key as session_key,
+                ts.key as setting_key,
+                COALESCE(stp.play_count, 0) as play_count,
+                COALESCE(tbs.want_to_learn_count, 0) as want_to_learn_count,
+                COALESCE(tbs.learning_count, 0) as learning_count,
+                COALESCE(tbs.learned_count, 0) as learned_count
+            FROM session_tune_plays stp
+            INNER JOIN tune t ON stp.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s
+            LEFT JOIN tune_setting ts ON st.setting_id = ts.setting_id
+            LEFT JOIN tunebook_stats tbs ON t.tune_id = tbs.tune_id
+            ORDER BY t.name
+        """,
+            (session_id, session_id, session_id),
+        )
+
+        tunes = []
+        for row in cur.fetchall():
+            tunes.append(
+                {
+                    "tune_id": row[0],
+                    "tune_name": row[1],
+                    "tune_type": row[2],
+                    "session_alias": row[3] or "",
+                    "setting_id": row[4],
+                    "session_key": row[5] or "",
+                    "setting_key": row[6] or "",
+                    "play_count": row[7],
+                    "want_to_learn_count": row[8],
+                    "learning_count": row[9],
+                    "learned_count": row[10],
+                }
+            )
+
+        cur.close()
+        conn.close()
+
+        return jsonify({"tunes": tunes})
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to get session tunes: {str(e)}"}), 500
+
+
 def get_person_attendance_ajax(person_id):
     """Get attendance records for a person"""
     try:

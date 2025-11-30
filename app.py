@@ -237,6 +237,9 @@ app.add_url_rule(
     session_admin_person,
 )
 app.add_url_rule(
+    "/admin/sessions/<path:session_path>/tunes", "session_admin_tunes", session_admin_tunes
+)
+app.add_url_rule(
     "/admin/sessions/<path:session_path>/logs", "session_admin_logs", session_admin_logs
 )
 app.add_url_rule(
@@ -509,6 +512,11 @@ app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/logs",
     "get_session_logs_ajax",
     get_session_logs_ajax,
+)
+app.add_url_rule(
+    "/api/admin/sessions/<path:session_path>/tunes",
+    "get_session_tunes_grid_ajax",
+    get_session_tunes_grid_ajax,
 )
 app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/terminate",
