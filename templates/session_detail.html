@@ -3484,13 +3484,20 @@
             });
     }
 
+    // Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
+    function normalizeQuotes(str) {
+        return str
+            .replace(/[\u2018\u2019]/g, "'")  // Smart single quotes → straight
+            .replace(/[\u201C\u201D]/g, '"'); // Smart double quotes → straight
+    }
+
     function renderPeople() {
         const peopleList = document.getElementById('people-list');
         if (!peopleList) return;
 
         // Get search query
         const searchBox = document.getElementById('people-search-box');
-        const searchQuery = searchBox ? searchBox.value.toLowerCase().trim() : '';
+        const searchQuery = searchBox ? normalizeQuotes(searchBox.value.toLowerCase().trim()) : '';
 
         // Filter people
         let filteredPeople = peopleData;

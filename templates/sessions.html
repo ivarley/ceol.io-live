@@ -218,6 +218,13 @@
         'inactive': 'Inactive'
     };
 
+    // Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
+    function normalizeQuotes(str) {
+        return str
+            .replace(/[\u2018\u2019]/g, "'")  // Smart single quotes → straight
+            .replace(/[\u201C\u201D]/g, '"'); // Smart double quotes → straight
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         loadSessionData();
         setupEventListeners();
@@ -257,7 +264,7 @@
 
         // Search bar
         document.getElementById('search-bar').addEventListener('input', function(e) {
-            searchTerm = e.target.value.toLowerCase();
+            searchTerm = normalizeQuotes(e.target.value.toLowerCase());
             updateDisplay();
         });
     }

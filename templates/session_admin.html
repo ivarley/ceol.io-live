@@ -901,11 +901,18 @@ function sortPlayers(column) {
     filterPlayers();
 }
 
+// Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
+function normalizeQuotes(str) {
+    return str
+        .replace(/[\u2018\u2019]/g, "'")  // Smart single quotes → straight
+        .replace(/[\u201C\u201D]/g, '"'); // Smart double quotes → straight
+}
+
 function filterPlayers() {
     if (!window.allPlayers) return;
-    
+
     const filter = document.getElementById('players-filter').value;
-    const search = document.getElementById('players-search').value.toLowerCase();
+    const search = normalizeQuotes(document.getElementById('players-search').value.toLowerCase());
     
     let filteredPlayers = window.allPlayers;
     

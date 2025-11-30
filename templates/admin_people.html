@@ -887,8 +887,15 @@ document.addEventListener('DOMContentLoaded', function() {
         rows.forEach(row => tbody.appendChild(row));
     }
 
+    // Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
+    function normalizeQuotes(str) {
+        return str
+            .replace(/[\u2018\u2019]/g, "'")  // Smart single quotes → straight
+            .replace(/[\u201C\u201D]/g, '"'); // Smart double quotes → straight
+    }
+
     function filterPeople() {
-        const searchTerm = document.getElementById('people-search').value.toLowerCase();
+        const searchTerm = normalizeQuotes(document.getElementById('people-search').value.toLowerCase());
         const tbody = document.getElementById('people-tbody');
         const rows = tbody.getElementsByTagName('tr');
         let visibleCount = 0;
