@@ -15,7 +15,7 @@
             <section class="docs-section" id="sessions">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="section-heading mb-0">Sessions ({{ sessions|length }})</h2>
-                    <button id="add-session-btn" class="btn btn-primary">Add Session</button>
+                    <a href="/add-session?acu=false" class="btn btn-primary">Add Session</a>
                 </div>
                 
                 <!-- Search Controls -->
@@ -178,113 +178,6 @@
     </div>
 </div>
 
-<!-- Add Session Modal -->
-<div class="modal" id="addSessionModal" aria-labelledby="addSessionModalLabel" aria-hidden="true" style="display: none;" onclick="if(event.target === this) hideAddSessionModal();">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addSessionModalLabel">Add New Session</h5>
-                <button type="button" class="btn-close" onclick="hideAddSessionModal()" aria-label="Close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="add-session-form">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="new-session-name" class="form-label">Session Name *</label>
-                                <input type="text" class="form-control" id="new-session-name" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-session-path" class="form-label">URL Path *</label>
-                                <input type="text" class="form-control" id="new-session-path" required>
-                                <small class="form-text text-muted">e.g., "austin/mueller" or "dublin/cobblestone"</small>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-location-name" class="form-label">Location Name</label>
-                                <input type="text" class="form-control" id="new-location-name">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-location-street" class="form-label">Street Address</label>
-                                <input type="text" class="form-control" id="new-location-street">
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="new-city" class="form-label">City *</label>
-                                <input type="text" class="form-control" id="new-city" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-state" class="form-label">State *</label>
-                                <input type="text" class="form-control" id="new-state" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-country" class="form-label">Country *</label>
-                                <input type="text" class="form-control" id="new-country" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-timezone" class="form-label">Timezone</label>
-                                <select class="form-select" id="new-timezone" name="timezone">
-                                    <option value="America/Chicago">America/Chicago (Central Time)</option>
-                                    <option value="America/New_York">America/New_York (Eastern Time)</option>
-                                    <option value="America/Denver">America/Denver (Mountain Time)</option>
-                                    <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
-                                    <option value="Europe/Dublin">Europe/Dublin (Irish Time)</option>
-                                    <option value="Europe/London">Europe/London (UK Time)</option>
-                                    <option value="UTC">UTC</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="new-location-phone" class="form-label">Location Phone</label>
-                                <input type="tel" class="form-control" id="new-location-phone">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-location-website" class="form-label">Location Website</label>
-                                <input type="url" class="form-control" id="new-location-website">
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="new-initiation-date" class="form-label">First Session Date</label>
-                                <input type="date" class="form-control" id="new-initiation-date">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="new-thesession-id" class="form-label">TheSession.org ID</label>
-                                <input type="number" class="form-control" id="new-thesession-id">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="new-comments" class="form-label">Comments</label>
-                        <textarea class="form-control" id="new-comments" rows="3"></textarea>
-                    </div>
-
-                    <div id="add-session-error-message" class="alert alert-danger" style="display: none;"></div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="hideAddSessionModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="save-session-btn">Create Session</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
 .table {
     background-color: var(--bg-color);
@@ -377,10 +270,16 @@
     transition: all 0.15s ease-in-out;
 }
 
-.btn-primary {
+.btn-primary,
+a.btn-primary {
     background-color: var(--primary);
     border-color: var(--primary);
-    color: white;
+    color: white !important;
+}
+
+a.btn-primary:hover {
+    color: white !important;
+    text-decoration: none;
 }
 
 .btn-primary:hover {
@@ -428,136 +327,6 @@
 
 .mb-0 {
     margin-bottom: 0;
-}
-
-/* Modal styling */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1900;
-}
-
-.modal-dialog {
-    position: relative;
-    margin: 1.75rem auto;
-    max-width: 800px;
-    pointer-events: none;
-}
-
-.modal-dialog.modal-lg {
-    max-width: 900px;
-}
-
-.modal-content {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    pointer-events: auto;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    max-height: calc(100vh - 3.5rem);
-    overflow-y: auto;
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.modal-body {
-    position: relative;
-    flex: 1 1 auto;
-    padding: 1rem;
-    color: var(--text-color);
-}
-
-.modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 0.75rem;
-    border-top: 1px solid var(--border-color);
-    gap: 0.5rem;
-}
-
-.modal-title {
-    margin-bottom: 0;
-    line-height: 1.5;
-    color: var(--text-color);
-}
-
-.btn-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text-color);
-    opacity: 0.5;
-    cursor: pointer;
-}
-
-.btn-close:hover {
-    opacity: 0.75;
-}
-
-body.modal-open {
-    overflow: hidden;
-}
-
-.form-label {
-    font-weight: 500;
-    color: var(--text-color);
-}
-
-.form-text {
-    color: var(--secondary-text);
-}
-
-.form-select {
-    display: block;
-    width: 100%;
-    padding: 0.375rem 2.25rem 0.375rem 0.75rem;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.5;
-    color: var(--text-color);
-    background-color: var(--bg-color);
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23999' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 16px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 0.25rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    appearance: none;
-}
-
-[data-theme="dark"] .form-select {
-    background-color: var(--dropdown-bg);
-    color: var(--text-color);
-    border-color: var(--dropdown-border);
-}
-
-[data-theme="dark"] .form-select option {
-    background-color: var(--dropdown-bg);
-    color: var(--text-color);
-}
-
-.form-select:focus {
-    border-color: var(--primary);
-    outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 /* Mobile Card View Styles */
@@ -717,26 +486,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (searchInput) {
         searchInput.addEventListener('input', filterSessions);
     }
-    
-    // Add Session Button functionality
-    const addSessionBtn = document.getElementById('add-session-btn');
-    if (addSessionBtn) {
-        addSessionBtn.addEventListener('click', function() {
-            showAddSessionModal();
-        });
-    }
-
-    // Save Session Button functionality
-    const saveSessionBtn = document.getElementById('save-session-btn');
-    if (saveSessionBtn) {
-        saveSessionBtn.addEventListener('click', function() {
-            saveNewSession();
-        });
-    }
-    
-    // Make functions available globally for onclick handlers
-    window.hideAddSessionModal = hideAddSessionModal;
-    window.showAddSessionModal = showAddSessionModal;
 
     // Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
     function normalizeQuotes(str) {
@@ -803,109 +552,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (existingNoResults) {
             existingNoResults.remove();
         }
-    }
-
-    function showAddSessionModal() {
-        const modal = document.getElementById('addSessionModal');
-        modal.style.display = 'block';
-        document.body.classList.add('modal-open');
-
-        // Clear form
-        document.getElementById('add-session-form').reset();
-        document.getElementById('add-session-error-message').style.display = 'none';
-    }
-
-    function hideAddSessionModal() {
-        const modal = document.getElementById('addSessionModal');
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-    }
-
-    function saveNewSession() {
-        // Collect form data
-        const formData = {
-            name: document.getElementById('new-session-name').value.trim(),
-            path: document.getElementById('new-session-path').value.trim(),
-            location_name: document.getElementById('new-location-name').value.trim(),
-            location_street: document.getElementById('new-location-street').value.trim(),
-            city: document.getElementById('new-city').value.trim(),
-            state: document.getElementById('new-state').value.trim(),
-            country: document.getElementById('new-country').value.trim(),
-            timezone: document.getElementById('new-timezone').value,
-            location_phone: document.getElementById('new-location-phone').value.trim(),
-            location_website: document.getElementById('new-location-website').value.trim(),
-            inception_date: document.getElementById('new-initiation-date').value,
-            comments: document.getElementById('new-comments').value.trim()
-        };
-
-        // Include TheSession.org ID if provided
-        const thesessionId = document.getElementById('new-thesession-id').value.trim();
-        if (thesessionId) {
-            formData.thesession_id = parseInt(thesessionId);
-        }
-
-        // Basic validation
-        if (!formData.name) {
-            showAddSessionError('Session name is required');
-            return;
-        }
-
-        if (!formData.path) {
-            showAddSessionError('URL path is required');
-            return;
-        }
-
-        if (!formData.city) {
-            showAddSessionError('City is required');
-            return;
-        }
-
-        if (!formData.state) {
-            showAddSessionError('State is required');
-            return;
-        }
-
-        if (!formData.country) {
-            showAddSessionError('Country is required');
-            return;
-        }
-
-        // Disable button while saving
-        const saveBtn = document.getElementById('save-session-btn');
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Creating...';
-
-        // Make API call
-        fetch('/api/add-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Success! Reload page to show new session
-                window.location.reload();
-            } else {
-                showAddSessionError(data.message || 'Failed to create session');
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Create Session';
-            }
-        })
-        .catch(error => {
-            console.error('Error creating session:', error);
-            showAddSessionError('An error occurred while creating the session');
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Create Session';
-        });
-    }
-
-    function showAddSessionError(message) {
-        const errorDiv = document.getElementById('add-session-error-message');
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
     }
 });
 </script>
