@@ -2217,6 +2217,17 @@ def fetch_session_data_ajax():
         date_str = data.get("date", "")
         inception_date = date_str.split(" ")[0] if date_str else ""
 
+        # Extract comments (sorted by date, most recent first)
+        comments = data.get("comments", [])
+        comments_list = []
+        for comment in comments:
+            comments_list.append({
+                "date": comment.get("date", ""),
+                "content": comment.get("content", "")
+            })
+        # Sort by date descending (most recent first)
+        comments_list.sort(key=lambda x: x.get("date", ""), reverse=True)
+
         session_data = {
             "id": data.get("id"),
             "name": venue_name,  # Default session name to location name
@@ -2234,6 +2245,7 @@ def fetch_session_data_ajax():
             if data.get("country")
             else "",
             "recurrence": data.get("schedule", ""),
+            "comments": comments_list,
         }
 
         return jsonify({"success": True, "session_data": session_data})
@@ -2296,14 +2308,15 @@ def add_session_ajax():
                     }
                 )
 
-        # Insert new session
+        # Insert new session with timezone
+        timezone = data.get("timezone") or "America/Chicago"  # Default to Central Time
         cur.execute(
             """
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
-                city, state, country, initiation_date, recurrence, created_date, last_modified_date, created_by_user_id
+                city, state, country, timezone, initiation_date, recurrence, created_date, last_modified_date, created_by_user_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
         """,
             (
@@ -2316,6 +2329,7 @@ def add_session_ajax():
                 data["city"],
                 data["state"],
                 data["country"],
+                timezone,
                 data.get("inception_date") or None,
                 data.get("recurrence") or None,
                 get_current_user_id(),
@@ -2333,6 +2347,18 @@ def add_session_ajax():
         # Save the newly created session to history
         save_to_history(cur, "session", "INSERT", session_id, user_id=get_current_user_id())
 
+        # Add the creating user as a member and admin of the session
+        user_id = get_current_user_id()
+        if user_id and hasattr(current_user, 'person_id') and current_user.person_id:
+            cur.execute(
+                """
+                INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
+                VALUES (%s, %s, true, true, %s)
+                """,
+                (session_id, current_user.person_id, user_id)
+            )
+            save_to_history(cur, "session_person", "INSERT", None, user_id=user_id)
+
         conn.commit()
         cur.close()
         conn.close()
@@ -2341,6 +2367,7 @@ def add_session_ajax():
             {
                 "success": True,
                 "message": f'Session "{data["name"]}" created successfully!',
+                "session_path": data["path"],
             }
         )
 

@@ -7,17 +7,16 @@
     <header class="docs-header">
         <h1 class="docs-heading">Add A New Session</h1>
         <section class="docs-intro">
-            <p>We'd love for you to add your new session to the site. You can:</p>
+            <p>To add your session to the site, you can:</p>
             <ul>
-                <li>Paste the full URL: <code>https://thesession.org/sessions/6247</code></li>
-                <li>Enter just the session ID: <code>6247</code></li>
                 <li>Search by name or location: <code>memphis</code> or <code>murphy's pub</code></li>
+                <li>Paste the session ID (<code>6247</code>) or URL: <code>https://thesession.org/sessions/6247</code></li>
             </ul>
             <p>We'll pull all the details from TheSession.org. If you don't have your session on that site, <a href="https://thesession.org/sessions/add#step1" target="_blank">put it there first</a>.</p>
         </section>
     </header>
     <div class="docs-body">
-        <section class="docs-section">
+        <section>
             <div class="alert alert-info" id="loadingSpinner" style="display: none;">
                 <i class="fas fa-spinner fa-spin"></i> Fetching session data from TheSession.org...
             </div>
@@ -27,7 +26,7 @@
             <form id="sessionUrlForm">
                 <div class="mb-3">
                     <label for="sessionUrl" class="form-label">Session URL, ID, or search term:</label>
-                    <input type="text" class="form-control" id="sessionUrl" placeholder="https://thesession.org/sessions/6247, 6247, or 'memphis'" required>
+                    <input type="text" class="form-control" id="sessionUrl" placeholder="e.g. 'memphis' or a URL" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Next</button>
             </form>
@@ -90,10 +89,100 @@
                     <input type="date" id="inceptionDate">
                 </div>
                 <div class="mb-3">
-                    <label for="recurrence">Recurrence:</label>
-                    <input type="text" id="recurrence" placeholder="e.g., Weekly on Tuesdays">
+                    <label for="timezone">Timezone:</label>
+                    <select id="timezone" class="form-control">
+                        <option value="America/Chicago">America/Chicago (Central Time)</option>
+                        <option value="America/New_York">America/New_York (Eastern Time)</option>
+                        <option value="America/Denver">America/Denver (Mountain Time)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
+                        <option value="Europe/Dublin">Europe/Dublin (Irish Time)</option>
+                        <option value="Europe/London">Europe/London (UK Time)</option>
+                        <option value="UTC">UTC</option>
+                    </select>
                 </div>
+
+                <!-- Recurrence Section (collapsible) -->
+                <div class="mb-3">
+                    <label>Schedule:</label>
+                    <div id="recurrence-section" class="recurrence-section">
+                        <!-- Collapsed summary view -->
+                        <div id="recurrence-summary" class="recurrence-summary" onclick="toggleRecurrenceEdit()">
+                            <span id="recurrence-summary-text">No schedule set</span>
+                            <span class="recurrence-toggle-icon">&#9662;</span>
+                        </div>
+
+                        <!-- Expanded edit view -->
+                        <div id="recurrence-edit" class="recurrence-edit" style="display: none;">
+                            <div class="mb-2">
+                                <label class="form-label small">Pattern Type:</label>
+                                <select id="recurrence-type" class="form-control" onchange="updateRecurrenceTypeUI()">
+                                    <option value="">No schedule</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="monthly_nth_weekday">Monthly (Nth Weekday)</option>
+                                </select>
+                            </div>
+
+                            <div id="recurrence-options" style="display: none;">
+                                <div class="mb-2">
+                                    <label class="form-label small">Day:</label>
+                                    <div class="weekday-buttons">
+                                        <button type="button" class="weekday-btn" data-weekday="monday" onclick="selectWeekday('monday')">Mon</button>
+                                        <button type="button" class="weekday-btn" data-weekday="tuesday" onclick="selectWeekday('tuesday')">Tue</button>
+                                        <button type="button" class="weekday-btn" data-weekday="wednesday" onclick="selectWeekday('wednesday')">Wed</button>
+                                        <button type="button" class="weekday-btn" data-weekday="thursday" onclick="selectWeekday('thursday')">Thu</button>
+                                        <button type="button" class="weekday-btn" data-weekday="friday" onclick="selectWeekday('friday')">Fri</button>
+                                        <button type="button" class="weekday-btn" data-weekday="saturday" onclick="selectWeekday('saturday')">Sat</button>
+                                        <button type="button" class="weekday-btn" data-weekday="sunday" onclick="selectWeekday('sunday')">Sun</button>
+                                    </div>
+                                </div>
+
+                                <div id="weekly-options" style="display: none;">
+                                    <div class="mb-2">
+                                        <label class="form-label small">Frequency:</label>
+                                        <select id="recurrence-frequency" class="form-control" onchange="updateRecurrenceSummary()">
+                                            <option value="1">Every week</option>
+                                            <option value="2">Every 2 weeks</option>
+                                            <option value="3">Every 3 weeks</option>
+                                            <option value="4">Every 4 weeks</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div id="monthly-options" style="display: none;">
+                                    <div class="mb-2">
+                                        <label class="form-label small">Which occurrences:</label>
+                                        <div class="nth-checkboxes">
+                                            <label><input type="checkbox" class="nth-checkbox" value="1" onchange="updateRecurrenceSummary()"> 1st</label>
+                                            <label><input type="checkbox" class="nth-checkbox" value="2" onchange="updateRecurrenceSummary()"> 2nd</label>
+                                            <label><input type="checkbox" class="nth-checkbox" value="3" onchange="updateRecurrenceSummary()"> 3rd</label>
+                                            <label><input type="checkbox" class="nth-checkbox" value="4" onchange="updateRecurrenceSummary()"> 4th</label>
+                                            <label><input type="checkbox" class="nth-checkbox" value="-1" onchange="updateRecurrenceSummary()"> Last</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label class="form-label small">Start:</label>
+                                        <input type="time" id="recurrence-start" class="form-control" value="19:00" onchange="updateRecurrenceSummary()">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">End:</label>
+                                        <input type="time" id="recurrence-end" class="form-control" value="22:00" onchange="updateRecurrenceSummary()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="toggleRecurrenceEdit()">Done</button>
+                        </div>
+
+                        <!-- Unparsed recurrence notice -->
+                        <div id="recurrence-unparsed" class="recurrence-unparsed" style="display: none;"></div>
+                    </div>
+                </div>
+
                 <input type="hidden" id="thesessionId">
+                <input type="hidden" id="recurrenceJSON">
             </form>
         </div>
         <div class="modal-footer">
@@ -204,13 +293,16 @@
 
     .modal-body input[type="date"],
     .modal-body input[type="text"],
-    .modal-body input[type="url"] {
+    .modal-body input[type="url"],
+    .modal-body select {
         width: 100%;
         padding: 8px 12px;
         border: 1px solid var(--border-color);
         border-radius: 4px;
         margin-bottom: 15px;
         font-size: 14px;
+        background-color: var(--input-bg);
+        color: var(--text-color);
     }
 
     .modal-footer {
@@ -246,6 +338,8 @@
     }
 
     .modal-body input:focus {
+        background-color: var(--input-bg);
+        color: var(--text-color);
         border-color: var(--primary);
         outline: 0;
         box-shadow: 0 0 0 0.2rem var(--dropdown-shadow);
@@ -290,6 +384,106 @@
         font-size: 12px;
         font-style: italic;
         margin-top: 4px;
+    }
+
+    /* Recurrence section styles */
+    .recurrence-section {
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .recurrence-summary {
+        padding: 10px 12px;
+        background-color: var(--input-bg);
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--text-color);
+    }
+
+    .recurrence-summary:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .recurrence-toggle-icon {
+        font-size: 12px;
+        transition: transform 0.2s;
+    }
+
+    .recurrence-section.expanded .recurrence-toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    .recurrence-edit {
+        padding: 12px;
+        background-color: var(--bg-color);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .weekday-buttons {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .weekday-btn {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        background-color: var(--input-bg);
+        color: var(--text-color);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        min-width: 40px;
+    }
+
+    .weekday-btn:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .weekday-btn.active {
+        background-color: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+
+    .nth-checkboxes {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .nth-checkboxes label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        margin-bottom: 0;
+        cursor: pointer;
+    }
+
+    .recurrence-edit .form-label.small {
+        font-size: 12px;
+        margin-bottom: 4px;
+        color: var(--secondary-text);
+    }
+
+    .recurrence-edit .row {
+        margin-top: 10px;
+    }
+
+    .recurrence-edit input[type="time"] {
+        margin-bottom: 0;
+    }
+
+    .recurrence-unparsed {
+        padding: 8px 12px;
+        font-size: 12px;
+        font-style: italic;
+        color: var(--secondary-text);
+        border-top: 1px solid var(--border-color);
     }
 </style>
 {% endblock %}
@@ -475,10 +669,466 @@ function populateModal(sessionData) {
     document.getElementById('stateName').value = sessionData.state || '';
     document.getElementById('countryName').value = sessionData.country || '';
     document.getElementById('inceptionDate').value = sessionData.inception_date || '';
-    document.getElementById('recurrence').value = sessionData.recurrence || '';
-    
-    // Show the modal using ModalManager
-    ModalManager.showModal('sessionModal');
+
+    // Set timezone based on country
+    const country = (sessionData.country || '').toLowerCase();
+    let defaultTimezone = 'America/Chicago'; // Default
+    if (country === 'ireland') {
+        defaultTimezone = 'Europe/Dublin';
+    } else if (country === 'united kingdom' || country === 'uk' || country === 'england' || country === 'scotland' || country === 'wales') {
+        defaultTimezone = 'Europe/London';
+    } else if (country === 'united states' || country === 'usa' || country === 'us') {
+        // Default to Central for US, user can change
+        defaultTimezone = 'America/Chicago';
+    }
+    document.getElementById('timezone').value = defaultTimezone;
+
+    // Parse and set recurrence from thesession.org data
+    resetRecurrenceUI();
+    const unparsedDiv = document.getElementById('recurrence-unparsed');
+    unparsedDiv.style.display = 'none';
+    unparsedDiv.textContent = '';
+
+    if (sessionData.recurrence || sessionData.comments) {
+        const parsed = parseTheSessionRecurrence(sessionData.recurrence, sessionData.comments);
+        if (parsed) {
+            setRecurrenceFromSchedule(parsed);
+        } else if (sessionData.recurrence) {
+            // Show the unparsed text so user knows what was in thesession.org
+            const recurrenceText = Array.isArray(sessionData.recurrence)
+                ? sessionData.recurrence.join(' ')
+                : sessionData.recurrence;
+            unparsedDiv.textContent = `Couldn't parse schedule from: "${recurrenceText}"`;
+            unparsedDiv.style.display = 'block';
+        }
+    }
+    updateRecurrenceSummary();
+
+    // Show the modal using ModalManager (without autofocus)
+    ModalManager.showModal('sessionModal', { autoFocus: false });
+}
+
+// ============ Recurrence Functions ============
+
+function parseTheSessionRecurrence(text, comments) {
+    // Parse thesession.org schedule text into our format
+    // Common formats: "Every Tuesday @ 8pm", "Weekly on Thursdays", "First and third Mondays", or just "Tuesday"
+    // Also checks comments for additional schedule details
+
+    // Day patterns to look for (longer patterns first to avoid substring issues)
+    const dayPatterns = [
+        ['wednesday', 'wednesday'],
+        ['thursdays', 'thursday'],
+        ['thursday', 'thursday'],
+        ['saturdays', 'saturday'],
+        ['saturday', 'saturday'],
+        ['tuesdays', 'tuesday'],
+        ['tuesday', 'tuesday'],
+        ['sundays', 'sunday'],
+        ['sunday', 'sunday'],
+        ['mondays', 'monday'],
+        ['monday', 'monday'],
+        ['fridays', 'friday'],
+        ['friday', 'friday'],
+        // Abbreviations (check after full names)
+        ['thurs', 'thursday'],
+        ['thur', 'thursday'],
+        ['tues', 'tuesday'],
+        ['wed', 'wednesday'],
+        ['thu', 'thursday'],
+        ['tue', 'tuesday'],
+        ['mon', 'monday'],
+        ['fri', 'friday'],
+        ['sat', 'saturday'],
+        ['sun', 'sunday']
+    ];
+
+    // Helper to find weekday in text
+    function findWeekday(str) {
+        const lower = str.toLowerCase();
+        for (const [pattern, day] of dayPatterns) {
+            if (lower.indexOf(pattern) !== -1) {
+                return day;
+            }
+        }
+        return null;
+    }
+
+    // Helper to parse time from text
+    function parseTime(str) {
+        // Match patterns like "8pm", "7:30pm", "2:00-4:00 pm", "7pm to 9pm", "from 8pm", "@ 8pm"
+        // Pattern for "7pm to 9pm" or "7:00pm - 9:00pm" (am/pm after each time)
+        const timeRangeWithBothAmPm = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*(?:-|to|–|until)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+        // Pattern for "7 to 9pm" or "2:00-4:00 pm" (am/pm only at end)
+        const timeRangeEndAmPm = /(\d{1,2})(?::(\d{2}))?\s*(?:-|to|–|until)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+        const singleTimePattern = /(?:@|at|from|starts?|begins?)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+
+        let startTime = null;
+        let endTime = null;
+
+        // Try to match time range with am/pm on both times first (e.g., "7pm to 9pm")
+        let rangeMatch = str.match(timeRangeWithBothAmPm);
+        if (rangeMatch) {
+            let startHours = parseInt(rangeMatch[1]);
+            const startMins = rangeMatch[2] || '00';
+            const startAmPm = rangeMatch[3]?.toLowerCase();
+            let endHours = parseInt(rangeMatch[4]);
+            const endMins = rangeMatch[5] || '00';
+            const endAmPm = rangeMatch[6]?.toLowerCase();
+
+            // Apply am/pm to each time
+            if (startAmPm === 'pm' && startHours < 12) startHours += 12;
+            if (startAmPm === 'am' && startHours === 12) startHours = 0;
+            if (endAmPm === 'pm' && endHours < 12) endHours += 12;
+            if (endAmPm === 'am' && endHours === 12) endHours = 0;
+
+            startTime = `${startHours.toString().padStart(2, '0')}:${startMins}`;
+            endTime = `${endHours.toString().padStart(2, '0')}:${endMins}`;
+        } else {
+            // Try range with am/pm only at end (e.g., "7 to 9pm")
+            rangeMatch = str.match(timeRangeEndAmPm);
+            if (rangeMatch) {
+                let startHours = parseInt(rangeMatch[1]);
+                const startMins = rangeMatch[2] || '00';
+                let endHours = parseInt(rangeMatch[3]);
+                const endMins = rangeMatch[4] || '00';
+                const ampm = rangeMatch[5]?.toLowerCase();
+
+                // Apply am/pm to both times intelligently
+                if (ampm === 'pm') {
+                    if (endHours < 12) endHours += 12;
+                    // If start is less than end and end is PM, start is probably PM too
+                    if (startHours < 12 && startHours <= endHours - 12) startHours += 12;
+                } else if (ampm === 'am') {
+                    if (startHours === 12) startHours = 0;
+                    if (endHours === 12) endHours = 0;
+                }
+
+                startTime = `${startHours.toString().padStart(2, '0')}:${startMins}`;
+                endTime = `${endHours.toString().padStart(2, '0')}:${endMins}`;
+            } else {
+                // Try single time
+                const singleMatch = str.match(singleTimePattern);
+                if (singleMatch) {
+                    let hours = parseInt(singleMatch[1]);
+                    const mins = singleMatch[2] || '00';
+                    const ampm = singleMatch[3]?.toLowerCase();
+
+                    if (ampm === 'pm' && hours < 12) hours += 12;
+                    if (ampm === 'am' && hours === 12) hours = 0;
+
+                    startTime = `${hours.toString().padStart(2, '0')}:${mins}`;
+                    // Estimate end time as 3 hours after start
+                    const endHours = (hours + 3) % 24;
+                    endTime = `${endHours.toString().padStart(2, '0')}:${mins}`;
+                }
+            }
+        }
+
+        return { startTime, endTime };
+    }
+
+    // Helper to parse nth weekday patterns
+    function parseNthPatterns(str) {
+        const lower = str.toLowerCase();
+        const nthMap = {
+            'first': 1, '1st': 1,
+            'second': 2, '2nd': 2,
+            'third': 3, '3rd': 3,
+            'fourth': 4, '4th': 4,
+            'last': -1
+        };
+
+        const which = [];
+        for (const [pattern, value] of Object.entries(nthMap)) {
+            // Look for "every first", "first and third", "1st sunday", etc.
+            const regex = new RegExp(`(every\\s+)?${pattern}\\b`, 'i');
+            if (regex.test(lower)) {
+                if (!which.includes(value)) which.push(value);
+            }
+        }
+        return which;
+    }
+
+    // Helper to check for bi-weekly
+    function isBiWeekly(str) {
+        const lower = str.toLowerCase();
+        return lower.includes('every other') || lower.includes('bi-weekly') || lower.includes('biweekly');
+    }
+
+    // Normalize input text
+    let scheduleText = '';
+    if (text) {
+        if (Array.isArray(text)) {
+            scheduleText = text.join(' ');
+        } else if (typeof text === 'string') {
+            scheduleText = text;
+        }
+    }
+
+    // First, try to parse from the schedule field
+    let weekday = findWeekday(scheduleText);
+    let timeInfo = parseTime(scheduleText);
+    let which = parseNthPatterns(scheduleText);
+    let biWeekly = isBiWeekly(scheduleText);
+
+    // If we have comments and need more info, search them
+    if (comments && Array.isArray(comments) && comments.length > 0) {
+        // First pass: find the most recent comment that mentions a weekday
+        for (const comment of comments) {
+            const content = comment.content || '';
+            const commentWeekday = findWeekday(content);
+
+            if (commentWeekday) {
+                // Use comment weekday if we don't have one
+                if (!weekday) {
+                    weekday = commentWeekday;
+                }
+
+                // Only use this comment's details if weekday matches (or we didn't have one)
+                if (commentWeekday === weekday || !findWeekday(scheduleText)) {
+                    // Get time info from comment if we don't have it
+                    if (!timeInfo.startTime) {
+                        timeInfo = parseTime(content);
+                    }
+
+                    // Get nth patterns from comment if we don't have them
+                    if (which.length === 0) {
+                        which = parseNthPatterns(content);
+                    }
+
+                    // Check bi-weekly
+                    if (!biWeekly) {
+                        biWeekly = isBiWeekly(content);
+                    }
+                }
+
+                // Stop after finding the first (most recent) comment with a weekday
+                break;
+            }
+        }
+
+        // Second pass: if we still need time info, find any comment with time
+        if (!timeInfo.startTime) {
+            for (const comment of comments) {
+                const content = comment.content || '';
+                const commentTimeInfo = parseTime(content);
+                if (commentTimeInfo.startTime) {
+                    timeInfo = commentTimeInfo;
+                    break;
+                }
+            }
+        }
+
+        // Third pass: if we still need nth patterns, find any comment with them
+        if (which.length === 0) {
+            for (const comment of comments) {
+                const content = comment.content || '';
+                const commentWhich = parseNthPatterns(content);
+                if (commentWhich.length > 0) {
+                    which = commentWhich;
+                    break;
+                }
+            }
+        }
+    }
+
+    // If we still don't have a weekday, we can't create a schedule
+    if (!weekday) return null;
+
+    // Default times if not found
+    const startTime = timeInfo.startTime || '19:00';
+    const endTime = timeInfo.endTime || '22:00';
+
+    // Determine pattern type
+    if (which.length > 0) {
+        return {
+            type: 'monthly_nth_weekday',
+            weekday: weekday,
+            which: which,
+            start_time: startTime,
+            end_time: endTime
+        };
+    } else {
+        return {
+            type: 'weekly',
+            weekday: weekday,
+            every_n_weeks: biWeekly ? 2 : 1,
+            start_time: startTime,
+            end_time: endTime
+        };
+    }
+}
+
+function resetRecurrenceUI() {
+    // Reset all recurrence controls to default state
+    document.getElementById('recurrence-type').value = '';
+    document.getElementById('recurrence-options').style.display = 'none';
+    document.getElementById('weekly-options').style.display = 'none';
+    document.getElementById('monthly-options').style.display = 'none';
+    document.getElementById('recurrence-frequency').value = '1';
+    document.getElementById('recurrence-start').value = '19:00';
+    document.getElementById('recurrence-end').value = '22:00';
+
+    // Clear weekday selection
+    document.querySelectorAll('.weekday-btn').forEach(btn => btn.classList.remove('active'));
+
+    // Clear nth checkboxes
+    document.querySelectorAll('.nth-checkbox').forEach(cb => cb.checked = false);
+
+    // Collapse the edit section
+    document.getElementById('recurrence-edit').style.display = 'none';
+    document.getElementById('recurrence-section').classList.remove('expanded');
+
+    // Clear hidden field
+    document.getElementById('recurrenceJSON').value = '';
+}
+
+function setRecurrenceFromSchedule(schedule) {
+    // Set UI from a schedule object
+    document.getElementById('recurrence-type').value = schedule.type;
+    updateRecurrenceTypeUI();
+
+    // Set weekday
+    if (schedule.weekday) {
+        selectWeekday(schedule.weekday);
+    }
+
+    // Set times
+    if (schedule.start_time) {
+        document.getElementById('recurrence-start').value = schedule.start_time;
+    }
+    if (schedule.end_time) {
+        document.getElementById('recurrence-end').value = schedule.end_time;
+    }
+
+    // Set type-specific options
+    if (schedule.type === 'weekly' && schedule.every_n_weeks) {
+        document.getElementById('recurrence-frequency').value = schedule.every_n_weeks.toString();
+    } else if (schedule.type === 'monthly_nth_weekday' && schedule.which) {
+        schedule.which.forEach(n => {
+            const checkbox = document.querySelector(`.nth-checkbox[value="${n}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+    }
+}
+
+function toggleRecurrenceEdit() {
+    const editSection = document.getElementById('recurrence-edit');
+    const section = document.getElementById('recurrence-section');
+
+    if (editSection.style.display === 'none') {
+        editSection.style.display = 'block';
+        section.classList.add('expanded');
+    } else {
+        editSection.style.display = 'none';
+        section.classList.remove('expanded');
+        updateRecurrenceSummary();
+    }
+}
+
+function updateRecurrenceTypeUI() {
+    const type = document.getElementById('recurrence-type').value;
+    const optionsDiv = document.getElementById('recurrence-options');
+    const weeklyDiv = document.getElementById('weekly-options');
+    const monthlyDiv = document.getElementById('monthly-options');
+
+    if (!type) {
+        optionsDiv.style.display = 'none';
+    } else {
+        optionsDiv.style.display = 'block';
+        weeklyDiv.style.display = type === 'weekly' ? 'block' : 'none';
+        monthlyDiv.style.display = type === 'monthly_nth_weekday' ? 'block' : 'none';
+    }
+
+    updateRecurrenceSummary();
+}
+
+function selectWeekday(day) {
+    // Deselect all
+    document.querySelectorAll('.weekday-btn').forEach(btn => btn.classList.remove('active'));
+    // Select the clicked one
+    const btn = document.querySelector(`.weekday-btn[data-weekday="${day}"]`);
+    if (btn) btn.classList.add('active');
+    updateRecurrenceSummary();
+}
+
+function getSelectedWeekday() {
+    const activeBtn = document.querySelector('.weekday-btn.active');
+    return activeBtn ? activeBtn.dataset.weekday : null;
+}
+
+function updateRecurrenceSummary() {
+    const type = document.getElementById('recurrence-type').value;
+    const summaryText = document.getElementById('recurrence-summary-text');
+
+    if (!type) {
+        summaryText.textContent = 'No schedule set';
+        document.getElementById('recurrenceJSON').value = '';
+        return;
+    }
+
+    const weekday = getSelectedWeekday();
+    if (!weekday) {
+        summaryText.textContent = 'Select a day...';
+        document.getElementById('recurrenceJSON').value = '';
+        return;
+    }
+
+    const startTime = document.getElementById('recurrence-start').value;
+    const endTime = document.getElementById('recurrence-end').value;
+
+    // Format times for display
+    const formatTime = (time) => {
+        const [hours, mins] = time.split(':');
+        let h = parseInt(hours);
+        const ampm = h >= 12 ? 'pm' : 'am';
+        h = h % 12 || 12;
+        return mins === '00' ? `${h}${ampm}` : `${h}:${mins}${ampm}`;
+    };
+
+    const dayCapitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    let summary = '';
+    let schedule = {
+        type: type,
+        weekday: weekday,
+        start_time: startTime,
+        end_time: endTime
+    };
+
+    if (type === 'weekly') {
+        const frequency = parseInt(document.getElementById('recurrence-frequency').value);
+        schedule.every_n_weeks = frequency;
+
+        if (frequency === 1) {
+            summary = `${dayCapitalized}s`;
+        } else if (frequency === 2) {
+            summary = `Every other ${dayCapitalized}`;
+        } else {
+            summary = `Every ${frequency} weeks on ${dayCapitalized}`;
+        }
+    } else if (type === 'monthly_nth_weekday') {
+        const checkedBoxes = document.querySelectorAll('.nth-checkbox:checked');
+        const which = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+        schedule.which = which;
+
+        if (which.length === 0) {
+            summaryText.textContent = 'Select which occurrences...';
+            document.getElementById('recurrenceJSON').value = '';
+            return;
+        }
+
+        const ordinals = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', '-1': 'last' };
+        const whichStr = which.map(n => ordinals[n]).join(' & ');
+        summary = `${whichStr} ${dayCapitalized}`;
+    }
+
+    summary += ` from ${formatTime(startTime)}-${formatTime(endTime)}`;
+    summaryText.textContent = summary;
+
+    // Store as JSON
+    const recurrenceJSON = JSON.stringify({ schedules: [schedule] });
+    document.getElementById('recurrenceJSON').value = recurrenceJSON;
 }
 
 function closeSessionModal() {
@@ -527,6 +1177,7 @@ function generatePath(city, sessionName) {
 
 // Handle save button click
 document.getElementById('saveSessionBtn').addEventListener('click', function() {
+    const recurrenceJSON = document.getElementById('recurrenceJSON').value;
     const formData = {
         thesession_id: document.getElementById('thesessionId').value,
         name: document.getElementById('sessionName').value.trim(),
@@ -538,7 +1189,8 @@ document.getElementById('saveSessionBtn').addEventListener('click', function() {
         state: document.getElementById('stateName').value.trim(),
         country: document.getElementById('countryName').value.trim(),
         inception_date: document.getElementById('inceptionDate').value || null,
-        recurrence: document.getElementById('recurrence').value.trim() || null
+        timezone: document.getElementById('timezone').value,
+        recurrence: recurrenceJSON || null
     };
     
     // Validate required fields

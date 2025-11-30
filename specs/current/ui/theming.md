@@ -106,6 +106,26 @@ All colors reference CSS variables:
 - Modern browsers with CSS custom properties support
 - Fallback: Light theme for browsers without localStorage
 
+## Mobile/Responsive Standards
+
+**Breakpoints** (Bootstrap 4.5):
+- `max-width: 767.98px` - Mobile devices
+- `max-width: 1199.98px` - Tablets and small desktops
+
+**Padding Standards**:
+- Desktop: `2rem` (32px) for content areas like `.docs-article`
+- Mobile (≤767.98px): `1rem` (16px) for content areas
+
+**Form Inputs**:
+All form inputs must use CSS variables for dark mode compatibility:
+```css
+.form-control {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+```
+
 ## Related Specs
 
 - [Templates](templates.md) - Base layout structure
