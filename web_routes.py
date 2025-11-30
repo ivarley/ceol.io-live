@@ -601,26 +601,28 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 after_tunes_query = time.time()
                 logger.info(f"[TIMING] First 20 tunes query: {(after_tunes_query - before_tunes_query)*1000:.2f}ms")
 
-                # Check if current user is an admin of this session
+                # Check if current user is an admin or member of this session
                 is_session_admin = False
                 is_session_member = False
                 if current_user.is_authenticated:
-                    # session is the database tuple, session[0] is the session_id
-                    # Use request.session to access Flask session data
                     from flask import session as flask_session
 
-                    is_session_admin = flask_session.get(
-                        "is_system_admin", False
-                    ) or session[0] in flask_session.get("admin_session_ids", [])
+                    # System admins are always session admins
+                    if flask_session.get("is_system_admin", False):
+                        is_session_admin = True
 
-                    # Check if user is a member of this session (in session_person table)
+                    # Check database for membership and admin status
                     user_person_id = getattr(current_user, 'person_id', None)
                     if user_person_id:
                         cur.execute(
-                            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+                            "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
                             (session[0], user_person_id)
                         )
-                        is_session_member = cur.fetchone() is not None
+                        row = cur.fetchone()
+                        if row is not None:
+                            is_session_member = True
+                            if row[0]:  # is_admin column
+                                is_session_admin = True
 
                 # Calculate today's date in the session's timezone
                 try:
