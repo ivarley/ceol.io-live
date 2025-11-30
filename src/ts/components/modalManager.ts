@@ -98,6 +98,8 @@ export class ModalManager {
         modal.style.display = config.display || 'flex';
         // Add 'show' class for CSS animations (opacity transition)
         modal.classList.add('show');
+        // Remove aria-hidden to allow assistive technology access
+        modal.removeAttribute('aria-hidden');
 
         // Track active modal
         this.currentModals.add(modalId);
@@ -132,9 +134,17 @@ export class ModalManager {
         // Stop the focus keeper
         this.stopFocusKeeper();
 
+        // Blur any focused element inside the modal before hiding
+        const focusedElement = modal.querySelector(':focus') as HTMLElement;
+        if (focusedElement) {
+            focusedElement.blur();
+        }
+
         modal.style.display = 'none';
         // Remove 'show' class
         modal.classList.remove('show');
+        // Restore aria-hidden for assistive technology
+        modal.setAttribute('aria-hidden', 'true');
         this.currentModals.delete(modalId);
 
         // Remove modal-open class from body if no more modals are open

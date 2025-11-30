@@ -1171,7 +1171,8 @@
             color: var(--text-color);
         }
 
-        .add-person-form-group input[type="text"] {
+        .add-person-form-group input[type="text"],
+        .add-person-form-group input[type="email"] {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid var(--border-color);
@@ -1182,7 +1183,8 @@
             box-sizing: border-box;
         }
 
-        .add-person-form-group input[type="text"]:focus {
+        .add-person-form-group input[type="text"]:focus,
+        .add-person-form-group input[type="email"]:focus {
             outline: none;
             border-color: var(--primary);
         }
@@ -1642,6 +1644,7 @@
                     <div style="padding: 20px;">
                         <button class="modal-close-btn" onclick="closeSearchPersonModal()" title="Close">&times;</button>
                         <h2 style="margin: 0 32px 20px 0; color: var(--text-color); font-size: 20px; font-weight: 600;">Add Person to Session</h2>
+                        <p style="margin: 0 0 16px 0; color: var(--secondary-text); font-size: 14px;">Search people who are members of other sessions, or add someone new.</p>
 
                         <input type="text" id="search-person-input" class="search-person-input" placeholder="Search by name..." autocomplete="off">
 
@@ -1653,7 +1656,7 @@
 
                         <div class="search-person-actions">
                             <button class="add-person-btn-cancel" onclick="closeSearchPersonModal()">Cancel</button>
-                            <button class="add-person-btn-save" onclick="openCreatePersonModal()">None Of These</button>
+                            <button class="add-person-btn-save" onclick="openCreatePersonModal()">Add New Person</button>
                         </div>
                     </div>
                 </div>
@@ -1674,6 +1677,11 @@
                         <div class="add-person-form-group">
                             <label for="add-person-last-name">Last Name *</label>
                             <input type="text" id="add-person-last-name" required>
+                        </div>
+
+                        <div class="add-person-form-group">
+                            <label for="add-person-email">Email (optional)</label>
+                            <input type="email" id="add-person-email">
                         </div>
 
                         <div class="add-person-form-group">
@@ -3198,6 +3206,7 @@
             // Clear form
             document.getElementById('add-person-first-name').value = '';
             document.getElementById('add-person-last-name').value = '';
+            document.getElementById('add-person-email').value = '';
             document.getElementById('add-person-thesession').value = '';
             document.querySelectorAll('#add-person-instruments input[type="checkbox"]').forEach(cb => cb.checked = false);
 
@@ -3367,6 +3376,7 @@
     function saveNewPerson() {
         const firstName = document.getElementById('add-person-first-name').value.trim();
         const lastName = document.getElementById('add-person-last-name').value.trim();
+        const email = document.getElementById('add-person-email').value.trim();
         const thesessionInput = document.getElementById('add-person-thesession').value.trim();
 
         // Validate required fields
@@ -3406,6 +3416,7 @@
         const data = {
             first_name: firstName,
             last_name: lastName,
+            email: email || null,
             instruments: instruments,
             thesession_user_id: thesessionId,
             is_regular: isRegular
@@ -3502,9 +3513,13 @@
             const message = searchQuery
                 ? 'No people found matching your search'
                 : (currentPeopleFilter === 'regulars' ? 'No regulars in this session yet' : 'No people in this session yet');
+            const addButton = searchQuery
+                ? `<button onclick="openAddPersonModal()" style="margin-top: 16px; padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Add Someone To This Session</button>`
+                : '';
             peopleList.innerHTML = `
                 <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
                     <p>${message}</p>
+                    ${addButton}
                 </div>
             `;
             return;

@@ -3200,6 +3200,7 @@ def add_person_to_session_people_tab(session_path):
     {
         "first_name": str,
         "last_name": str,
+        "email": str or null (optional),
         "instruments": [str],
         "thesession_user_id": int or null
     }
@@ -3222,6 +3223,7 @@ def add_person_to_session_people_tab(session_path):
 
         first_name = data.get('first_name', '').strip()
         last_name = data.get('last_name', '').strip()
+        email = data.get('email', '').strip() if data.get('email') else None
         instruments = data.get('instruments', [])
         thesession_user_id = data.get('thesession_user_id')
         is_regular = data.get('is_regular', False)
@@ -3280,11 +3282,11 @@ def add_person_to_session_people_tab(session_path):
             # Create new person
             cur.execute(
                 """
-                INSERT INTO person (first_name, last_name, thesession_user_id, created_by_user_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO person (first_name, last_name, email, thesession_user_id, created_by_user_id)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, thesession_user_id, get_current_user_id())
+                (first_name, last_name, email, thesession_user_id, get_current_user_id())
             )
             person_id = cur.fetchone()[0]
 

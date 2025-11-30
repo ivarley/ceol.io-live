@@ -32,11 +32,11 @@
                         <div id="instruments-container">
                             <!-- Instrument checkboxes will be dynamically added here -->
                         </div>
-                        <div class="mt-2">
-                            <input type="text" class="form-control" id="new-instrument" placeholder="Add new instrument...">
-                            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addInstrument()">
-                                Add Instrument
-                            </button>
+                        <div class="input-group" style="margin-top: 8px;">
+                            <input type="text" class="form-control" id="new-instrument" placeholder="Other instrument...">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addInstrument()">Add</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -94,6 +94,26 @@
                         <label>Instruments</label>
                         <div id="add-instruments-container">
                             <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="banjo" id="inst-banjo">
+                                <label class="form-check-label" for="inst-banjo">Banjo</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="bodhrán" id="inst-bodhran">
+                                <label class="form-check-label" for="inst-bodhran">Bodhrán</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="bouzouki" id="inst-bouzouki">
+                                <label class="form-check-label" for="inst-bouzouki">Bouzouki</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="button accordion" id="inst-accordion">
+                                <label class="form-check-label" for="inst-accordion">Button Accordion</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="concertina" id="inst-concertina">
+                                <label class="form-check-label" for="inst-concertina">Concertina</label>
+                            </div>
+                            <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="fiddle" id="inst-fiddle">
                                 <label class="form-check-label" for="inst-fiddle">Fiddle</label>
                             </div>
@@ -102,69 +122,40 @@
                                 <label class="form-check-label" for="inst-flute">Flute</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="tin whistle" id="inst-whistle">
-                                <label class="form-check-label" for="inst-whistle">Tin Whistle</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="button accordion" id="inst-accordion">
-                                <label class="form-check-label" for="inst-accordion">Button Accordion</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="piano accordion" id="inst-piano-accordion">
-                                <label class="form-check-label" for="inst-piano-accordion">Piano Accordion</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="concertina" id="inst-concertina">
-                                <label class="form-check-label" for="inst-concertina">Concertina</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="banjo" id="inst-banjo">
-                                <label class="form-check-label" for="inst-banjo">Banjo</label>
-                            </div>
-                            <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="guitar" id="inst-guitar">
                                 <label class="form-check-label" for="inst-guitar">Guitar</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="bouzouki" id="inst-bouzouki">
-                                <label class="form-check-label" for="inst-bouzouki">Bouzouki</label>
+                                <input class="form-check-input" type="checkbox" value="harp" id="inst-harp">
+                                <label class="form-check-label" for="inst-harp">Harp</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="mandolin" id="inst-mandolin">
                                 <label class="form-check-label" for="inst-mandolin">Mandolin</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="bodhrán" id="inst-bodhran">
-                                <label class="form-check-label" for="inst-bodhran">Bodhrán</label>
+                                <input class="form-check-input" type="checkbox" value="piano accordion" id="inst-piano-accordion">
+                                <label class="form-check-label" for="inst-piano-accordion">Piano Accordion</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="tin whistle" id="inst-whistle">
+                                <label class="form-check-label" for="inst-whistle">Tin Whistle</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="uilleann pipes" id="inst-pipes">
                                 <label class="form-check-label" for="inst-pipes">Uilleann Pipes</label>
                             </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="harp" id="inst-harp">
-                                <label class="form-check-label" for="inst-harp">Harp</label>
+                        </div>
+                        <div class="input-group" style="margin-top: 8px;">
+                            <input type="text" class="form-control" id="add-new-instrument" placeholder="Other instrument...">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-secondary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addNewInstrument()">Add</button>
                             </div>
                         </div>
-                        <div class="mt-2">
-                            <input type="text" class="form-control" id="add-new-instrument" placeholder="Other instrument...">
-                            <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.addNewInstrument()">
-                                Add Other
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="add-attendance-status">Initial Attendance Status</label>
-                        <select class="form-control" id="add-attendance-status" name="attendance_status">
-                            <option value="yes" selected>Yes - Attending</option>
-                            <option value="maybe">Maybe</option>
-                            <option value="no">No - Not Attending</option>
-                        </select>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="margin-top: 0; padding-top: 12px;">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.closeModal('addPersonModal')">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.createPerson()">Add Person</button>
             </div>

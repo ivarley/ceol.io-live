@@ -806,6 +806,16 @@ class AttendanceManager {
     }
 
     showAddPersonModal(): void {
+        // Hide search results dropdown and clear search input
+        const searchResults = document.getElementById('search-results');
+        if (searchResults) {
+            searchResults.style.display = 'none';
+        }
+        const searchInput = document.getElementById('attendee-search') as HTMLInputElement;
+        if (searchInput) {
+            searchInput.value = '';
+        }
+
         // Temporarily disable beta page text input if present
         if (this.isBetaPage && window.TextInput) {
             this.originalTextInputTyping = window.TextInput.prototype.handleTextInput;
@@ -814,7 +824,7 @@ class AttendanceManager {
                 return;
             };
         }
-        
+
         // Check if ModalManager is available
         if (window.ModalManager) {
             const result = window.ModalManager.showModal('addPersonModal');
@@ -840,6 +850,7 @@ class AttendanceManager {
             if (modal) {
                 modal.style.display = 'flex';
                 modal.classList.add('show');
+                modal.removeAttribute('aria-hidden');
             }
         }
     }
@@ -853,6 +864,12 @@ class AttendanceManager {
         
         const modal = document.getElementById(modalId);
         if (modal) {
+            // Blur any focused element inside the modal before hiding
+            const focusedElement = modal.querySelector(':focus') as HTMLElement;
+            if (focusedElement) {
+                focusedElement.blur();
+            }
+
             modal.style.display = 'none';
             modal.classList.remove('show', 'fade');
             modal.setAttribute('aria-hidden', 'true');

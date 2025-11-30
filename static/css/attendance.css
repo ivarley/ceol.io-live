@@ -665,3 +665,25 @@
         color: var(--primary, #90cdf4);
     }
 }
+
+/* Add Person Modal - Full width on mobile, standard on desktop */
+#addPersonModal .modal-dialog,
+#personEditModal .modal-dialog {
+    max-width: 500px;
+    width: 100%;
+    margin: 1.75rem auto;
+}
+
+@media (max-width: 576px) {
+    #addPersonModal .modal-dialog,
+    #personEditModal .modal-dialog {
+        max-width: none;
+        width: 100%;
+        margin: 0;
+    }
+
+    #addPersonModal .modal-content,
+    #personEditModal .modal-content {
+        border-radius: 0;
+    }
+}
