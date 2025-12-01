@@ -4283,7 +4283,7 @@ def get_session_players_ajax(session_path):
         return jsonify({"players": players})
 
     except Exception as e:
-        return jsonify({"error": f"Failed to get session players: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to get session members: {str(e)}"}), 500
 
 
 def get_session_logs_ajax(session_path):
@@ -5332,7 +5332,7 @@ Person Details:
 - Name: {person_name}
 - Email: {person_email or 'Not provided'}
 
-You can review and modify this person's role in the session admin interface: https://ceol.io/admin/sessions/{session_path}/players
+You can review and modify this person's role in the session admin interface: https://ceol.io/admin/sessions/{session_path}/people
 
 Best regards,
 The Ceol.io Session Management System"""
@@ -6067,9 +6067,9 @@ def delete_session_player(session_path, person_id):
         
         response_data = {"success": True}
         if person_deleted:
-            response_data["message"] = "Player removed from session and person record deleted (no other session associations)"
+            response_data["message"] = "Member removed from session and person record deleted (no other session associations)"
         else:
-            response_data["message"] = "Player successfully removed from session"
+            response_data["message"] = "Member successfully removed from session"
             
         return jsonify(response_data)
 

@@ -145,7 +145,7 @@
                                 </ol>
                             </li>
                             <li>
-                                <a href="/admin/sessions/{{ sample_session[1] }}/players" target="_blank">Session Admin - Players</a>
+                                <a href="/admin/sessions/{{ sample_session[1] }}/people" target="_blank">Session Admin - Members</a>
                                 <ol class="inline-tests">
                                     <li>Add a new person to session membership</li>
                                     <li>Toggle "Regular" status for a member</li>
@@ -155,7 +155,7 @@
                             </li>
                             <li><a href="/admin/sessions/{{ sample_session[1] }}/logs" target="_blank">Session Admin - Logs</a></li>
                             {% if sample_person_id %}
-                            <li><a href="/admin/sessions/{{ sample_session[1] }}/players/{{ sample_person_id }}" target="_blank">Session Person Detail (ID: {{ sample_person_id }})</a></li>
+                            <li><a href="/admin/sessions/{{ sample_session[1] }}/people/{{ sample_person_id }}" target="_blank">Session Person Detail (ID: {{ sample_person_id }})</a></li>
                             {% endif %}
                         </ul>
                     </div>

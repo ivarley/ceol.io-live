@@ -337,7 +337,7 @@ class TestSessionAdminJourney:
             ]
 
             with admin_user:
-                response = client.get("/api/admin/sessions/test-session/players")
+                response = client.get("/api/admin/sessions/test-session/people")
             # The route now exists and returns 404 when session not found
             assert response.status_code == 404
 

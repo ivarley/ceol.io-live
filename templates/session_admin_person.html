@@ -9,11 +9,11 @@
             <header class="docs-header">
                 <h1 class="docs-heading">{{ person.first_name }} {{ person.last_name }}</h1>
                 <section class="docs-intro">
-                    <p>Player details for <strong>{{ session.name }}</strong>. 
+                    <p>Member details for <strong>{{ session.name }}</strong>.
                     {% if from_attendance and session_instance_date and session_instance_id %}
                         <a href="/sessions/{{ session_path }}/{{ session_instance_id }}#players">← Back to session on {{ session_instance_date }}</a>
                     {% else %}
-                        <a href="/admin/sessions/{{ session_path }}/players">← Back to players list</a>
+                        <a href="/admin/sessions/{{ session_path }}/people">← Back to members list</a>
                     {% endif %}
                     </p>
                 </section>
@@ -162,9 +162,9 @@
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-regular" {{ 'checked' if person.is_regular }}>
                                         <label class="form-check-label" for="is-regular">
-                                            <strong>Regular Player</strong>
+                                            <strong>Regular Member</strong>
                                         </label>
-                                        <div class="form-text">Mark as a regular attendee of this session</div>
+                                        <div class="form-text">Mark as a regular member of this session</div>
                                     </div>
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-admin" {{ 'checked' if person.is_admin }}>
@@ -333,15 +333,15 @@
                 <h2 class="section-heading text-danger">Danger Zone</h2>
                 <div class="card border-danger">
                     <div class="card-body">
-                        <h5 class="card-title text-danger">Remove Player from Session</h5>
+                        <h5 class="card-title text-danger">Remove Member from Session</h5>
                         <p class="card-text text-muted">
-                            This will remove {{ person.first_name }} {{ person.last_name }} from the session "{{ session.name }}". 
+                            This will remove {{ person.first_name }} {{ person.last_name }} from the session "{{ session.name }}".
                             {% if not person.username %}
                             If this person is not associated with any other sessions and has no user account, the person record will also be deleted permanently.
                             {% endif %}
                         </p>
                         <button type="button" class="btn btn-outline-danger" id="delete-player-btn">
-                            <i class="fas fa-trash-alt me-1"></i>Delete Player From This Session
+                            <i class="fas fa-trash-alt me-1"></i>Remove Member
                         </button>
                     </div>
                 </div>
@@ -372,7 +372,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger" id="confirm-delete-btn">
-                    <i class="fas fa-trash-alt me-1"></i>Delete Player
+                    <i class="fas fa-trash-alt me-1"></i>Remove Member
                 </button>
             </div>
         </div>
@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', function() {
             saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
 
             // Make API call to update regular status
-            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/regular`, {
+            fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/regular`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function() {
             saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
 
             // Make API call to update admin status
-            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/admin`, {
+            fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/admin`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -761,7 +761,7 @@ document.addEventListener('DOMContentLoaded', function() {
             personSaveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
             
             // Make API call to update person details
-            fetch(`/api/admin/sessions/${sessionPath}/players/${personId}/details`, {
+            fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/details`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -819,36 +819,36 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting...';
             
             try {
-                const response = await fetch(`/api/admin/sessions/${sessionPath}/players/${personId}`, {
+                const response = await fetch(`/api/admin/sessions/${sessionPath}/people/${personId}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Show success message and redirect
                     deleteModal.style.display = 'none';
                     deleteModal.classList.remove('show');
                     document.body.classList.remove('modal-open');
-                    showMessage('Player successfully removed from session', 'success');
-                    
-                    // Redirect back to players list after a short delay
+                    showMessage('Member successfully removed from session', 'success');
+
+                    // Redirect back to members list after a short delay
                     setTimeout(() => {
-                        window.location.href = `/admin/sessions/${sessionPath}/players`;
+                        window.location.href = `/admin/sessions/${sessionPath}/people`;
                     }, 1500);
                 } else {
-                    throw new Error(data.message || 'Failed to delete player');
+                    throw new Error(data.message || 'Failed to remove member');
                 }
             } catch (error) {
                 console.error('Delete error:', error);
-                showMessage('Error deleting player: ' + error.message, 'error');
+                showMessage('Error removing member: ' + error.message, 'error');
                 
                 // Reset button
                 confirmDeleteBtn.disabled = false;
-                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Delete Player';
+                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Remove Member';
             }
         });
     }

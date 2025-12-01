@@ -94,11 +94,16 @@
     border: none;
     border-bottom: 3px solid transparent;
     background: none;
-    color: var(--disabled-text);
+    color: var(--primary, #007bff);
     font-weight: 500;
     padding: 1rem 1.5rem;
     text-decoration: none;
     transition: all 0.3s ease;
+}
+
+/* Override visited state to keep consistent color */
+.nav-tabs .nav-link:visited {
+    color: var(--primary, #007bff);
 }
 
 .nav-tabs .nav-link:hover {
@@ -107,8 +112,9 @@
     background: none;
 }
 
-.nav-tabs .nav-link.active {
-    color: var(--primary, #007bff);
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-link.active:visited {
+    color: var(--text-color);
     border-bottom-color: var(--primary, #007bff);
     background: none;
     font-weight: 600;

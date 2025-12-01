@@ -688,7 +688,7 @@ class TestAdminAPI:
     def test_admin_api_requires_privileges(self, client, authenticated_user):
         """Test that admin API endpoints require admin privileges."""
         with authenticated_user:
-            response = client.get("/api/admin/sessions/test-session/players")
+            response = client.get("/api/admin/sessions/test-session/people")
 
         # Non-admin authenticated user should get 403 forbidden
         assert response.status_code == 403
@@ -745,7 +745,7 @@ class TestAdminAPI:
         db_conn.commit()
 
         with admin_user:
-            response = client.get(f"/api/admin/sessions/{session_path}/players")
+            response = client.get(f"/api/admin/sessions/{session_path}/people")
 
         if response.status_code != 200:
             print(f"Error response: {response.data.decode()}")
@@ -811,7 +811,7 @@ class TestAdminAPI:
         # Update regular status
         with admin_user:
             response = client.put(
-                f"/api/admin/sessions/{session_path}/players/{person_id}/regular",
+                f"/api/admin/sessions/{session_path}/people/{person_id}/regular",
                 json={"is_regular": True},
             )
 
@@ -890,7 +890,7 @@ class TestAdminAPI:
 
         with admin_user:
             response = client.put(
-                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                f"/api/admin/sessions/{session_path}/people/{person_id}/details",
                 json=update_data,
             )
 
@@ -993,7 +993,7 @@ class TestAdminAPI:
 
         with admin_user:
             response = client.put(
-                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                f"/api/admin/sessions/{session_path}/people/{person_id}/details",
                 json=update_data,
             )
 
@@ -1079,7 +1079,7 @@ class TestAdminAPI:
 
         with authenticated_regular_user:
             response = client.put(
-                f"/api/admin/sessions/{session_path}/players/{person_id}/details",
+                f"/api/admin/sessions/{session_path}/people/{person_id}/details",
                 json=update_data,
             )
 
@@ -1265,7 +1265,7 @@ class TestAdminAPI:
 
         # Delete player from session
         with authenticated_admin_user:
-            response = client.delete(f"/api/admin/sessions/{session_path}/players/{person_id}")
+            response = client.delete(f"/api/admin/sessions/{session_path}/people/{person_id}")
 
         print(f"Response status: {response.status_code}")
         print(f"Response data: {response.data.decode()}")
@@ -1344,7 +1344,7 @@ class TestAdminAPI:
 
         # Delete player from session
         with authenticated_admin_user:
-            response = client.delete(f"/api/admin/sessions/{session_path}/players/{person_id}")
+            response = client.delete(f"/api/admin/sessions/{session_path}/people/{person_id}")
 
         print(f"Response status: {response.status_code}")
         print(f"Response data: {response.data.decode()}")

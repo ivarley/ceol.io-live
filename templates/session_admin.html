@@ -24,7 +24,7 @@
                 <span class="breadcrumb-separator">&gt;&gt;</span>
                 <span class="breadcrumb-current">
                     {% if active_tab == 'tunes' %}Tunes
-                    {% elif active_tab == 'players' %}Players
+                    {% elif active_tab == 'people' %}Members
                     {% elif active_tab == 'logs' %}Logs
                     {% endif %}
                 </span>
@@ -43,9 +43,9 @@
                        href="/admin/sessions/{{ session.path }}/tunes">
                         Tunes
                     </a>
-                    <a class="nav-link {{ 'active' if active_tab == 'players' else '' }}"
-                       href="/admin/sessions/{{ session.path }}/players">
-                        Players
+                    <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}"
+                       href="/admin/sessions/{{ session.path }}/people">
+                        Members
                     </a>
                     <a class="nav-link {{ 'active' if active_tab == 'logs' else '' }}"
                        href="/admin/sessions/{{ session.path }}/logs">
@@ -58,7 +58,7 @@
                     <select class="form-select" id="session-admin-mobile-select">
                         <option value="details" {{ 'selected' if active_tab == 'details' else '' }}>Details</option>
                         <option value="tunes" {{ 'selected' if active_tab == 'tunes' else '' }}>Tunes</option>
-                        <option value="players" {{ 'selected' if active_tab == 'players' else '' }}>Players</option>
+                        <option value="people" {{ 'selected' if active_tab == 'people' else '' }}>Members</option>
                         <option value="logs" {{ 'selected' if active_tab == 'logs' else '' }}>Logs</option>
                     </select>
                 </div>
@@ -252,14 +252,14 @@
                     </section>
                 </div>
 
-                <!-- Players Tab -->
-                <div class="tab-pane fade {{ 'show active' if active_tab == 'players' else '' }}" id="players" role="tabpanel">
+                <!-- People Tab -->
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'people' else '' }}" id="people" role="tabpanel">
                     <section class="docs-section">
                         <!-- Controls -->
                         <div class="mb-3">
                             <div class="d-flex align-items-center gap-3">
                                 <div class="flex-grow-1">
-                                    <input type="text" class="form-control" id="players-search" placeholder="Search by name...">
+                                    <input type="text" class="form-control" id="people-search" placeholder="Search by name...">
                                 </div>
                                 <div>
                                     <a href="/admin/sessions/{{ session.path }}/bulk-import" class="btn btn-outline-primary btn-sm">
@@ -267,16 +267,16 @@
                                     </a>
                                 </div>
                                 <div class="ms-auto">
-                                    <select class="form-select players-filter-select" id="players-filter">
+                                    <select class="form-select people-filter-select" id="people-filter">
                                         <option value="regulars">Regulars Only</option>
                                         <option value="everyone">Everyone</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div id="players-content">
-                            <p class="text-muted">Loading players...</p>
+
+                        <div id="people-content">
+                            <p class="text-muted">Loading members...</p>
                         </div>
                     </section>
                 </div>
@@ -416,11 +416,11 @@
     margin-bottom: 5px;
 }
 
-.player-status {
+.person-status {
     white-space: nowrap;
 }
 
-.player-admin {
+.person-admin {
     white-space: nowrap;
 }
 
@@ -513,7 +513,7 @@
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
-.players-filter-select {
+.people-filter-select {
     width: auto;
     min-width: 150px;
     background-color: var(--bg-color);
@@ -521,13 +521,13 @@
     color: var(--text-color);
 }
 
-.player-link {
+.person-link {
     color: var(--primary);
     text-decoration: none;
     font-weight: 500;
 }
 
-.player-link:hover {
+.person-link:hover {
     color: var(--primary);
     text-decoration: underline;
 }
@@ -816,7 +816,7 @@ body.modal-open {
     }
     
     /* Keep heading and filter on same line on mobile, but adjust spacing */
-    .players-filter-select {
+    .people-filter-select {
         min-width: 120px !important;
         width: auto !important;
         font-size: 0.9rem;
@@ -838,8 +838,8 @@ body.modal-open {
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize content for the active tab on page load
     const activeTab = '{{ active_tab }}';
-    if (activeTab === 'players') {
-        loadPlayersContent();
+    if (activeTab === 'people') {
+        loadPeopleContent();
     } else if (activeTab === 'logs') {
         loadLogsContent();
     } else if (activeTab === 'tunes') {
@@ -857,8 +857,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 url = `/admin/sessions/${sessionPath}`;
             } else if (this.value === 'tunes') {
                 url = `/admin/sessions/${sessionPath}/tunes`;
-            } else if (this.value === 'players') {
-                url = `/admin/sessions/${sessionPath}/players`;
+            } else if (this.value === 'people') {
+                url = `/admin/sessions/${sessionPath}/people`;
             } else if (this.value === 'logs') {
                 url = `/admin/sessions/${sessionPath}/logs`;
             }
@@ -924,48 +924,48 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function loadPlayersContent() {
+function loadPeopleContent() {
     const sessionPath = {{ session_path|tojson|safe }};
 
-    fetch(`/api/admin/sessions/${sessionPath}/players`)
+    fetch(`/api/admin/sessions/${sessionPath}/people`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                document.getElementById('players-content').innerHTML = 
+                document.getElementById('people-content').innerHTML =
                     `<div class="alert alert-danger">${data.error}</div>`;
                 return;
             }
-            
-            displayPlayers(data.players);
+
+            displayPeople(data.players);
         })
         .catch(error => {
-            document.getElementById('players-content').innerHTML = 
-                `<div class="alert alert-danger">Failed to load players: ${error}</div>`;
+            document.getElementById('people-content').innerHTML =
+                `<div class="alert alert-danger">Failed to load members: ${error}</div>`;
         });
 }
 
-function displayPlayers(allPlayers) {
-    const playersContainer = document.getElementById('players-content');
-    
-    if (allPlayers.length === 0) {
-        playersContainer.innerHTML = '<div class="alert alert-info">No players found for this session.</div>';
+function displayPeople(allPeople) {
+    const peopleContainer = document.getElementById('people-content');
+
+    if (allPeople.length === 0) {
+        peopleContainer.innerHTML = '<div class="alert alert-info">No members found for this session.</div>';
         return;
     }
-    
-    // Store all players for filtering and initialize sorting state
-    window.allPlayers = allPlayers;
+
+    // Store all people for filtering and initialize sorting state
+    window.allPeople = allPeople;
     window.sortColumn = 'name'; // Default sort by name
     window.sortDirection = 'asc'; // Default ascending
-    
+
     // Apply current filters
-    filterPlayers();
-    
+    filterPeople();
+
     // Add event listeners for filters
-    document.getElementById('players-filter').addEventListener('change', filterPlayers);
-    document.getElementById('players-search').addEventListener('input', filterPlayers);
+    document.getElementById('people-filter').addEventListener('change', filterPeople);
+    document.getElementById('people-search').addEventListener('input', filterPeople);
 }
 
-function sortPlayers(column) {
+function sortPeople(column) {
     if (window.sortColumn === column) {
         // Toggle direction if same column
         window.sortDirection = window.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -974,7 +974,7 @@ function sortPlayers(column) {
         window.sortColumn = column;
         window.sortDirection = 'asc';
     }
-    filterPlayers();
+    filterPeople();
 }
 
 // Normalize smart quotes to straight quotes (for iOS keyboard compatibility)
@@ -984,31 +984,31 @@ function normalizeQuotes(str) {
         .replace(/[\u201C\u201D]/g, '"'); // Smart double quotes → straight
 }
 
-function filterPlayers() {
-    if (!window.allPlayers) return;
+function filterPeople() {
+    if (!window.allPeople) return;
 
-    const filter = document.getElementById('players-filter').value;
-    const search = normalizeQuotes(document.getElementById('players-search').value.toLowerCase());
-    
-    let filteredPlayers = window.allPlayers;
-    
+    const filter = document.getElementById('people-filter').value;
+    const search = normalizeQuotes(document.getElementById('people-search').value.toLowerCase());
+
+    let filteredPeople = window.allPeople;
+
     // Apply regular/everyone filter
     if (filter === 'regulars') {
-        filteredPlayers = filteredPlayers.filter(player => player.is_regular);
+        filteredPeople = filteredPeople.filter(person => person.is_regular);
     }
-    
+
     // Apply name search
     if (search) {
-        filteredPlayers = filteredPlayers.filter(player => 
-            player.name.toLowerCase().includes(search) ||
-            player.email.toLowerCase().includes(search)
+        filteredPeople = filteredPeople.filter(person =>
+            person.name.toLowerCase().includes(search) ||
+            person.email.toLowerCase().includes(search)
         );
     }
-    
+
     // Apply sorting
-    filteredPlayers.sort((a, b) => {
+    filteredPeople.sort((a, b) => {
         let aValue, bValue;
-        
+
         switch(window.sortColumn) {
             case 'name':
                 aValue = a.name.toLowerCase();
@@ -1030,26 +1030,26 @@ function filterPlayers() {
                 aValue = 0;
                 bValue = 0;
         }
-        
+
         if (aValue < bValue) return window.sortDirection === 'asc' ? -1 : 1;
         if (aValue > bValue) return window.sortDirection === 'asc' ? 1 : -1;
         return 0;
     });
-    
-    // Render filtered players
-    const playersContainer = document.getElementById('players-content');
-    
-    if (filteredPlayers.length === 0) {
-        playersContainer.innerHTML = '<div class="alert alert-info">No players match the current filter.</div>';
+
+    // Render filtered people
+    const peopleContainer = document.getElementById('people-content');
+
+    if (filteredPeople.length === 0) {
+        peopleContainer.innerHTML = '<div class="alert alert-info">No members match the current filter.</div>';
         return;
     }
-    
+
     // Helper function to get sort indicator
     function getSortIndicator(column) {
         if (window.sortColumn !== column) return '';
         return window.sortDirection === 'asc' ? ' ↑' : ' ↓';
     }
-    
+
     const sessionPath = {{ session_path|tojson|safe }};
 
     let html = `
@@ -1057,53 +1057,53 @@ function filterPlayers() {
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th style="cursor: pointer;" onclick="sortPlayers('name')">Name${getSortIndicator('name')}</th>
-                        <th style="cursor: pointer;" onclick="sortPlayers('email')">Email${getSortIndicator('email')}</th>
+                        <th style="cursor: pointer;" onclick="sortPeople('name')">Name${getSortIndicator('name')}</th>
+                        <th style="cursor: pointer;" onclick="sortPeople('email')">Email${getSortIndicator('email')}</th>
                         <th>Status</th>
-                        <th style="cursor: pointer;" onclick="sortPlayers('attendance')">Attendance${getSortIndicator('attendance')}</th>
-                        <th style="cursor: pointer;" onclick="sortPlayers('last_attended')">Last Attended${getSortIndicator('last_attended')}</th>
+                        <th style="cursor: pointer;" onclick="sortPeople('attendance')">Attendance${getSortIndicator('attendance')}</th>
+                        <th style="cursor: pointer;" onclick="sortPeople('last_attended')">Last Attended${getSortIndicator('last_attended')}</th>
                         <th>Admin</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
-    filteredPlayers.forEach(player => {
+    filteredPeople.forEach(person => {
         const statusBadges = [];
-        if (player.is_regular) statusBadges.push('<span class="badge bg-success">Regular</span>');
-        if (player.username) statusBadges.push('<span class="badge bg-info">User</span>');
+        if (person.is_regular) statusBadges.push('<span class="badge bg-success">Regular</span>');
+        if (person.username) statusBadges.push('<span class="badge bg-info">User</span>');
 
         const adminBadges = [];
-        if (player.is_admin) adminBadges.push('<span class="badge bg-primary">Session</span>');
-        if (player.is_system_admin) adminBadges.push('<span class="badge bg-warning">System</span>');
+        if (person.is_admin) adminBadges.push('<span class="badge bg-primary">Session</span>');
+        if (person.is_system_admin) adminBadges.push('<span class="badge bg-warning">System</span>');
 
         html += `
             <tr>
-                <td class="player-name">
-                    <a href="/admin/sessions/${sessionPath}/players/${player.person_id}" class="player-link">
-                        ${player.name}
+                <td class="person-name">
+                    <a href="/admin/sessions/${sessionPath}/people/${person.person_id}" class="person-link">
+                        ${person.name}
                     </a>
                 </td>
-                <td class="player-email">${player.email || '<span class="text-muted">No email</span>'}</td>
-                <td class="player-status">${statusBadges.join(' ')}</td>
-                <td class="player-attendance">${player.attendance_count} sessions</td>
-                <td class="player-last-attended">
-                    ${player.last_attended ? new Date(player.last_attended).toLocaleDateString() : '<span class="text-muted">Never</span>'}
+                <td class="person-email">${person.email || '<span class="text-muted">No email</span>'}</td>
+                <td class="person-status">${statusBadges.join(' ')}</td>
+                <td class="person-attendance">${person.attendance_count} sessions</td>
+                <td class="person-last-attended">
+                    ${person.last_attended ? new Date(person.last_attended).toLocaleDateString() : '<span class="text-muted">Never</span>'}
                 </td>
-                <td class="player-admin">
+                <td class="person-admin">
                     ${adminBadges.join(' ')}
                 </td>
             </tr>
         `;
     });
-    
+
     html += `
                 </tbody>
             </table>
         </div>
     `;
-    
-    playersContainer.innerHTML = html;
+
+    peopleContainer.innerHTML = html;
 }
 
 // ============================================

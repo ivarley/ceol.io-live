@@ -2492,7 +2492,7 @@ def session_admin_players(session_path):
         "session_admin.html",
         session=session_data,
         session_path=session_path,
-        active_tab="players",
+        active_tab="people",
     )
 
 

@@ -446,7 +446,7 @@ class AttendanceManager {
                 // Set up clickable name for editing
                 const editLink = item.querySelector('.person-edit-link') as HTMLAnchorElement;
                 if (editLink) {
-                    editLink.href = `/admin/sessions/${this.config!.sessionPath}/players/${attendee.person_id}?from=attendance&instance_id=${this.config!.sessionInstanceId}`;
+                    editLink.href = `/admin/sessions/${this.config!.sessionPath}/people/${attendee.person_id}?from=attendance&instance_id=${this.config!.sessionInstanceId}`;
                 }
             } else {
                 const statusDisplay = item.querySelector('.attendance-status-display') as HTMLElement;
@@ -1336,7 +1336,7 @@ class AttendanceManager {
             // Update edit link with real ID
             const editBtn = attendeeElement.querySelector('.person-edit-link') as HTMLAnchorElement;
             if (editBtn && this.config) {
-                editBtn.href = `/admin/sessions/${this.config.sessionPath}/players/${realId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
+                editBtn.href = `/admin/sessions/${this.config.sessionPath}/people/${realId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
             }
         }
     }
@@ -1395,7 +1395,7 @@ class AttendanceManager {
         // Set up edit button
         const editBtn = attendeeElement.querySelector('.person-edit-link') as HTMLAnchorElement;
         if (editBtn && this.config) {
-            editBtn.href = `/admin/sessions/${this.config.sessionPath}/players/${personId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
+            editBtn.href = `/admin/sessions/${this.config.sessionPath}/people/${personId}?from=attendance&instance_id=${this.config.sessionInstanceId}`;
         }
         
         // Set up remove button

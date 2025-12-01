@@ -227,12 +227,12 @@ app.add_url_rule("/admin/cache-settings", "admin_cache_settings", admin_cache_se
 app.add_url_rule("/admin/people/<int:person_id>", "person_details", person_details)
 app.add_url_rule("/admin/sessions/<path:session_path>", "session_admin", session_admin)
 app.add_url_rule(
-    "/admin/sessions/<path:session_path>/players",
+    "/admin/sessions/<path:session_path>/people",
     "session_admin_players",
     session_admin_players,
 )
 app.add_url_rule(
-    "/admin/sessions/<path:session_path>/players/<int:person_id>",
+    "/admin/sessions/<path:session_path>/people/<int:person_id>",
     "session_admin_person",
     session_admin_person,
 )
@@ -474,30 +474,30 @@ app.add_url_rule(
     "/api/add-session", "add_session_ajax", add_session_ajax, methods=["POST"]
 )
 app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/players",
+    "/api/admin/sessions/<path:session_path>/people",
     "get_session_players_ajax",
     get_session_players_ajax,
 )
 app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/players/<int:person_id>/regular",
+    "/api/admin/sessions/<path:session_path>/people/<int:person_id>/regular",
     "update_session_player_regular_status",
     update_session_player_regular_status,
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/players/<int:person_id>/admin",
+    "/api/admin/sessions/<path:session_path>/people/<int:person_id>/admin",
     "update_session_player_admin_status",
     update_session_player_admin_status,
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/players/<int:person_id>/details",
+    "/api/admin/sessions/<path:session_path>/people/<int:person_id>/details",
     "update_session_player_details",
     update_session_player_details,
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/players/<int:person_id>",
+    "/api/admin/sessions/<path:session_path>/people/<int:person_id>",
     "delete_session_player",
     delete_session_player,
     methods=["DELETE"],
