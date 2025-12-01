@@ -4733,15 +4733,15 @@ def check_username_availability():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Check if username exists, excluding current user if provided
+        # Check if username exists (case-insensitive), excluding current user if provided
         if current_user_id:
             cur.execute(
-                "SELECT user_id FROM user_account WHERE username = %s AND user_id != %s",
+                "SELECT user_id FROM user_account WHERE LOWER(username) = LOWER(%s) AND user_id != %s",
                 (username, current_user_id),
             )
         else:
             cur.execute(
-                "SELECT user_id FROM user_account WHERE username = %s", (username,)
+                "SELECT user_id FROM user_account WHERE LOWER(username) = LOWER(%s)", (username,)
             )
 
         existing_user = cur.fetchone()
@@ -4803,11 +4803,11 @@ def update_person_details(person_id):
         if user_data and user_data.get("user_id"):
             user_id = user_data.get("user_id")
 
-            # Check if username is being changed and is available
+            # Check if username is being changed and is available (case-insensitive)
             username = user_data.get("username")
             if username:
                 cur.execute(
-                    "SELECT user_id FROM user_account WHERE username = %s AND user_id != %s",
+                    "SELECT user_id FROM user_account WHERE LOWER(username) = LOWER(%s) AND user_id != %s",
                     (username, user_id),
                 )
                 if cur.fetchone():

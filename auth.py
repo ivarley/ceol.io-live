@@ -115,7 +115,7 @@ class User(UserMixin):
                        ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
-                WHERE ua.username = %s
+                WHERE LOWER(ua.username) = LOWER(%s)
             """,
                 (username,),
             )
