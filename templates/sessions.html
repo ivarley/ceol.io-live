@@ -241,6 +241,16 @@
                 allSessions = data.sessions;
                 todayStr = data.today;
 
+                // If user is logged in but has no sessions, default to "All Active" instead of "My Sessions"
+                if (isLoggedIn && currentFilter === 'my') {
+                    const userHasSessions = allSessions.some(s => s.user_is_member);
+                    if (!userHasSessions) {
+                        currentFilterIndex = 1; // 'active' is at index 1 for logged-in users
+                        currentFilter = 'active';
+                        document.getElementById('filter-toggle-button').textContent = filterButtonLabels[currentFilter];
+                    }
+                }
+
                 // Hide loading message
                 document.getElementById('loading-message').style.display = 'none';
 
