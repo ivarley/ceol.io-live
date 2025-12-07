@@ -1,5 +1,6 @@
 <!-- Admin Breadcrumb Navigation -->
 <nav class="admin-breadcrumb" aria-label="breadcrumb">
+    {% if current_user.is_system_admin %}
     <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
     {% if active_tab %}
     <span class="breadcrumb-separator">&gt;&gt;</span>
@@ -13,9 +14,14 @@
         {% endif %}
     </span>
     {% endif %}
+    {% else %}
+    {# Session admins just see a simple header #}
+    <span class="breadcrumb-current">My Sessions</span>
+    {% endif %}
 </nav>
 
-<!-- Admin Tab Navigation -->
+{% if current_user.is_system_admin %}
+<!-- Admin Tab Navigation (system admins only) -->
 <nav class="admin-tabs-nav">
     <!-- Desktop Tab Navigation -->
     <div class="nav nav-tabs" id="admin-tabs" role="tablist">
@@ -50,7 +56,7 @@
             Cache Settings
         </a>
     </div>
-    
+
     <!-- Mobile Dropdown Navigation -->
     <div class="admin-tabs-mobile">
         <select class="form-select" onchange="location = this.value">
@@ -75,6 +81,7 @@
         </select>
     </div>
 </nav>
+{% endif %}
 
 <style>
 .admin-tabs-nav {

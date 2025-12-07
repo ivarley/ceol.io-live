@@ -2302,8 +2302,11 @@ def admin():
 
 @login_required
 def admin_sessions_list():
-    # Check if user is system admin
-    if not current_user.is_system_admin:
+    # Check if user is system admin or a session admin for at least one session
+    is_system_admin = current_user.is_system_admin
+    admin_session_ids = session.get("admin_session_ids", [])
+
+    if not is_system_admin and not admin_session_ids:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -2311,9 +2314,8 @@ def admin_sessions_list():
     try:
         cur = conn.cursor()
 
-        # Get all sessions with counts of logged instances, players (regulars and total), and latest instance date
-        cur.execute(
-            """
+        # Build the query - system admins see all, session admins see only their sessions
+        base_query = """
             SELECT
                 s.session_id,
                 s.thesession_id,
@@ -2359,9 +2361,17 @@ def admin_sessions_list():
                 FROM session_instance si
                 ORDER BY si.session_id, si.date DESC
             ) latest_si ON s.session_id = latest_si.session_id
-            ORDER BY s.name
         """
-        )
+
+        if is_system_admin:
+            # System admins see all sessions
+            cur.execute(base_query + " ORDER BY s.name")
+        else:
+            # Session admins only see sessions they admin
+            cur.execute(
+                base_query + " WHERE s.session_id = ANY(%s) ORDER BY s.name",
+                (admin_session_ids,)
+            )
 
         sessions = []
         for row in cur.fetchall():
@@ -3089,11 +3099,45 @@ def _get_session_data(session_path):
         conn.close()
 
 
+def _check_session_admin_access(session_path):
+    """
+    Check if the current user has admin access to a specific session.
+    Returns True if user is a system admin or a session-level admin for this session.
+    Returns False if not authorized.
+    """
+    if not current_user.is_authenticated:
+        return False
+
+    # System admins have access to all sessions
+    if current_user.is_system_admin:
+        return True
+
+    # Check if user is an admin for this specific session
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            return False
+
+        session_id = session_result[0]
+        cur.execute(
+            """SELECT sp.is_admin FROM session_person sp
+               WHERE sp.session_id = %s AND sp.person_id = %s""",
+            (session_id, current_user.person_id)
+        )
+        admin_row = cur.fetchone()
+        return admin_row and admin_row[0]
+    finally:
+        conn.close()
+
+
 @login_required
 def session_admin(session_path):
     """Session admin details page"""
-    # Check if user is system admin
-    if not current_user.is_system_admin:
+    # Check if user is system admin or session admin
+    if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -3182,8 +3226,8 @@ def session_admin(session_path):
 @login_required
 def session_admin_players(session_path):
     """Session admin players page"""
-    # Check if user is system admin
-    if not current_user.is_system_admin:
+    # Check if user is system admin or session admin
+    if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -3204,8 +3248,8 @@ def session_admin_players(session_path):
 @login_required
 def session_admin_logs(session_path):
     """Session admin logs page"""
-    # Check if user is system admin
-    if not current_user.is_system_admin:
+    # Check if user is system admin or session admin
+    if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -3226,8 +3270,8 @@ def session_admin_logs(session_path):
 @login_required
 def session_admin_tunes(session_path):
     """Session admin tunes page - grid view of all tunes played at this session"""
-    # Check if user is system admin
-    if not current_user.is_system_admin:
+    # Check if user is system admin or session admin
+    if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
@@ -3249,29 +3293,7 @@ def session_admin_tunes(session_path):
 def session_admin_person(session_path, person_id):
     """Session admin person details page"""
     # Check if user is system admin or session admin
-    is_system_admin = current_user.is_system_admin
-    is_session_admin = False
-
-    if not is_system_admin:
-        # Check if user is an admin for this specific session
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-            session_result = cur.fetchone()
-            if session_result:
-                session_id = session_result[0]
-                cur.execute(
-                    """SELECT sp.is_admin FROM session_person sp 
-                       WHERE sp.session_id = %s AND sp.person_id = %s""",
-                    (session_id, current_user.person_id)
-                )
-                admin_row = cur.fetchone()
-                is_session_admin = admin_row and admin_row[0]
-        finally:
-            conn.close()
-    
-    if not is_system_admin and not is_session_admin:
+    if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 

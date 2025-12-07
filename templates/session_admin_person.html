@@ -6,6 +6,23 @@
 <div class="docs-content-inner">
     <div class="container">
         <article class="docs-article" id="section-1">
+            <!-- Session Admin Person Breadcrumb Navigation -->
+            <nav class="admin-breadcrumb" aria-label="breadcrumb">
+                {% if current_user.is_system_admin %}
+                <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">Sessions</a>
+                {% else %}
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">My Sessions</a>
+                {% endif %}
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <a href="/admin/sessions/{{ session.path }}" class="breadcrumb-item">{{ session.name }}</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <a href="/admin/sessions/{{ session_path }}/people" class="breadcrumb-item">Members</a>
+                <span class="breadcrumb-separator">&gt;&gt;</span>
+                <span class="breadcrumb-current">{{ person.first_name }} {{ person.last_name }}</span>
+            </nav>
+
             <header class="docs-header">
                 <h1 class="docs-heading">{{ person.first_name }} {{ person.last_name }}</h1>
                 <section class="docs-intro">
@@ -200,24 +217,31 @@
                 <h2 class="section-heading">Instruments</h2>
                 <div class="card">
                     <div class="card-body">
-                        {% if person.username %}
-                            <!-- Person has user account - read only -->
+                        <!-- Display view (shown by default) -->
+                        <div id="instruments-display">
                             <div class="row">
                                 <div class="col-12">
                                     {% if person.instruments %}
                                         <div class="instrument-tags">
                                             {% for instrument in person.instruments %}
-                                                <span class="badge bg-secondary me-1 mb-1">{{ instrument|title }}</span>
+                                                <span class="badge bg-info me-1 mb-1">{{ instrument|title }}</span>
                                             {% endfor %}
                                         </div>
                                     {% else %}
                                         <p class="text-muted">No instruments specified.</p>
                                     {% endif %}
-                                    <small class="text-muted">This person can edit their own instruments by logging into their account.</small>
+                                    {% if person.username %}
+                                        <small class="text-muted d-block mt-2">This person can edit their own instruments by logging into their account.</small>
+                                    {% else %}
+                                        <button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>
+                                    {% endif %}
                                 </div>
                             </div>
-                        {% else %}
-                            <!-- Person doesn't have user account - editable -->
+                        </div>
+
+                        {% if not person.username %}
+                        <!-- Edit view (hidden by default) -->
+                        <div id="instruments-edit" style="display: none;">
                             <div class="row">
                                 <div class="col-12">
                                     <form id="instruments-form">
@@ -228,8 +252,8 @@
                                                 {% for instrument in ['banjo', 'bodhrán', 'bouzouki', 'button accordion', 'concertina', 'fiddle', 'flute', 'guitar', 'harp', 'mandolin', 'piano', 'piano accordion', 'tin whistle', 'uilleann pipes'] %}
                                                 <div class="col-md-4 col-sm-6 mb-2">
                                                     <div class="form-check">
-                                                        <input class="form-check-input instrument-checkbox" type="checkbox" 
-                                                               id="instrument-{{ loop.index }}" value="{{ instrument }}" 
+                                                        <input class="form-check-input instrument-checkbox" type="checkbox"
+                                                               id="instrument-{{ loop.index }}" value="{{ instrument }}"
                                                                {% if instrument in person.instruments %}checked{% endif %}>
                                                         <label class="form-check-label" for="instrument-{{ loop.index }}">
                                                             {{ instrument|title }}
@@ -239,7 +263,7 @@
                                                 {% endfor %}
                                             </div>
                                         </div>
-                                        
+
                                         <!-- Custom instruments section -->
                                         <div class="mb-3">
                                             <label class="form-label"><strong>Other Instruments</strong></label>
@@ -255,17 +279,19 @@
                                             </div>
                                             <button type="button" id="add-custom-instrument" class="btn btn-outline-primary btn-sm">Add Other Instrument</button>
                                         </div>
-                                        
+
                                         <div class="row">
                                             <div class="col-12">
                                                 <button type="button" id="save-instruments" class="btn btn-primary btn-sm">Save Instruments</button>
+                                                <button type="button" id="cancel-instruments" class="btn btn-outline-secondary btn-sm ms-2">Cancel</button>
                                             </div>
                                         </div>
-                                        
+
                                         <div id="instruments-save-status" class="mt-3" style="display: none;"></div>
                                     </form>
                                 </div>
                             </div>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
@@ -293,7 +319,7 @@
                                     {% for attendance in attendance_history %}
                                     <tr>
                                         <td>
-                                            <a href="/sessions/{{ session_path }}/{{ attendance | instance_url_id }}" target="_blank">
+                                            <a href="/admin/sessions/{{ session_path }}/logs?instance={{ attendance.session_instance_id }}">
                                                 {{ attendance.date }}
                                             </a>
                                         </td>
@@ -380,6 +406,42 @@
 </div>
 
 <style>
+/* Admin Breadcrumb Styles */
+.admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.admin-breadcrumb .breadcrumb-item {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.admin-breadcrumb .breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.admin-breadcrumb .breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: var(--secondary-text);
+    font-weight: 400;
+}
+
+.admin-breadcrumb .breadcrumb-current {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .admin-breadcrumb {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+}
+
 .status-badges .badge {
     margin-right: 0.5rem;
     margin-bottom: 0.25rem;
@@ -641,10 +703,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Handle instruments functionality
+    const instrumentsDisplay = document.getElementById('instruments-display');
+    const instrumentsEdit = document.getElementById('instruments-edit');
+    const editInstrumentsBtn = document.getElementById('edit-instruments-btn');
+    const cancelInstrumentsBtn = document.getElementById('cancel-instruments');
     const addCustomInstrumentBtn = document.getElementById('add-custom-instrument');
     const saveInstrumentsBtn = document.getElementById('save-instruments');
     const instrumentsSaveStatus = document.getElementById('instruments-save-status');
-    
+
+    // Edit button - show edit form
+    if (editInstrumentsBtn) {
+        editInstrumentsBtn.addEventListener('click', function() {
+            instrumentsDisplay.style.display = 'none';
+            instrumentsEdit.style.display = 'block';
+        });
+    }
+
+    // Cancel button - hide edit form
+    if (cancelInstrumentsBtn) {
+        cancelInstrumentsBtn.addEventListener('click', function() {
+            instrumentsEdit.style.display = 'none';
+            instrumentsDisplay.style.display = 'block';
+        });
+    }
+
     if (addCustomInstrumentBtn) {
         addCustomInstrumentBtn.addEventListener('click', function() {
             const customInstrumentsDiv = document.getElementById('custom-instruments');
@@ -706,9 +788,43 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     instrumentsSaveStatus.innerHTML = '<div class="alert alert-success">Instruments updated successfully!</div>';
+
+                    // Update the display view with new instruments
+                    const instrumentTagsDiv = instrumentsDisplay.querySelector('.instrument-tags') || instrumentsDisplay.querySelector('.col-12');
+                    if (instruments.length > 0) {
+                        let tagsHtml = '<div class="instrument-tags">';
+                        instruments.forEach(function(inst) {
+                            // Title case the instrument name
+                            const titleCase = inst.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                            tagsHtml += '<span class="badge bg-info me-1 mb-1">' + titleCase + '</span>';
+                        });
+                        tagsHtml += '</div>';
+                        tagsHtml += '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>';
+                        instrumentsDisplay.querySelector('.col-12').innerHTML = tagsHtml;
+
+                        // Re-attach event listener to new edit button
+                        document.getElementById('edit-instruments-btn').addEventListener('click', function() {
+                            instrumentsDisplay.style.display = 'none';
+                            instrumentsEdit.style.display = 'block';
+                        });
+                    } else {
+                        instrumentsDisplay.querySelector('.col-12').innerHTML =
+                            '<p class="text-muted">No instruments specified.</p>' +
+                            '<button type="button" id="edit-instruments-btn" class="btn btn-outline-primary btn-sm mt-2">Edit</button>';
+
+                        // Re-attach event listener to new edit button
+                        document.getElementById('edit-instruments-btn').addEventListener('click', function() {
+                            instrumentsDisplay.style.display = 'none';
+                            instrumentsEdit.style.display = 'block';
+                        });
+                    }
+
+                    // Switch back to display view
                     setTimeout(() => {
                         instrumentsSaveStatus.style.display = 'none';
-                    }, 3000);
+                        instrumentsEdit.style.display = 'none';
+                        instrumentsDisplay.style.display = 'block';
+                    }, 1000);
                 } else {
                     throw new Error(data.message || 'Failed to update instruments');
                 }

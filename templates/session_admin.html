@@ -13,9 +13,13 @@
         <article class="docs-article" id="section-1">
             <!-- Session Admin Breadcrumb Navigation -->
             <nav class="admin-breadcrumb" aria-label="breadcrumb">
+                {% if current_user.is_system_admin %}
                 <a href="{{ url_for('admin') }}" class="breadcrumb-item">Admin</a>
                 <span class="breadcrumb-separator">&gt;&gt;</span>
                 <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">Sessions</a>
+                {% else %}
+                <a href="{{ url_for('admin_sessions_list') }}" class="breadcrumb-item">My Sessions</a>
+                {% endif %}
                 <span class="breadcrumb-separator">&gt;&gt;</span>
                 {% if active_tab == 'details' %}
                 <span class="breadcrumb-current">{{ session.name }}</span>
@@ -1339,15 +1343,28 @@ function loadLogsContent() {
         .then(response => response.json())
         .then(data => {
             if (data.error) {
-                document.getElementById('logs-content').innerHTML = 
+                document.getElementById('logs-content').innerHTML =
                     `<div class="alert alert-danger">${data.error}</div>`;
                 return;
             }
-            
+
             displayLogs(data.logs);
+
+            // Check if we should auto-open a specific instance modal
+            const urlParams = new URLSearchParams(window.location.search);
+            const instanceId = urlParams.get('instance');
+            if (instanceId) {
+                // Find the log with this instance ID to get the date
+                const log = data.logs.find(l => l.session_instance_id == instanceId);
+                if (log) {
+                    SessionInstanceModal.show(parseInt(instanceId), sessionPath, log.date);
+                }
+                // Clear the querystring so refreshing doesn't re-open
+                window.history.replaceState({}, '', window.location.pathname);
+            }
         })
         .catch(error => {
-            document.getElementById('logs-content').innerHTML = 
+            document.getElementById('logs-content').innerHTML =
                 `<div class="alert alert-danger">Failed to load session logs: ${error}</div>`;
         });
 }

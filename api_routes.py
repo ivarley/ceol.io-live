@@ -4199,19 +4199,18 @@ def get_session_players_ajax(session_path):
     """Get all players associated with a session"""
     if not current_user.is_authenticated:
         return jsonify({"success": False, "error": "Authentication required"}), 401
-    
-    # Check if current user is a system admin
+
+    # Check if current user is a system admin or session admin
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         cur.execute(
             "SELECT is_system_admin FROM user_account WHERE user_id = %s",
             (current_user.user_id,)
         )
         user_row = cur.fetchone()
-        if not user_row or not user_row[0]:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+        is_system_admin = user_row and user_row[0]
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -4220,6 +4219,18 @@ def get_session_players_ajax(session_path):
             return jsonify({"error": "Session not found"}), 404
 
         session_id = session_result[0]
+
+        # If not system admin, check if they're a session admin
+        if not is_system_admin:
+            cur.execute(
+                """SELECT sp.is_admin FROM session_person sp
+                   WHERE sp.session_id = %s AND sp.person_id = %s""",
+                (session_id, current_user.person_id)
+            )
+            admin_row = cur.fetchone()
+            is_session_admin = admin_row and admin_row[0]
+            if not is_session_admin:
+                return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
         # Get session players with person details and attendance stats
         cur.execute(
@@ -4353,7 +4364,7 @@ def get_session_tunes_grid_ajax(session_path):
     if not current_user.is_authenticated:
         return jsonify({"success": False, "error": "Authentication required"}), 401
 
-    # Check if current user is a system admin
+    # Check if current user is a system admin or session admin
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -4363,8 +4374,7 @@ def get_session_tunes_grid_ajax(session_path):
             (current_user.user_id,)
         )
         user_row = cur.fetchone()
-        if not user_row or not user_row[0]:
-            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+        is_system_admin = user_row and user_row[0]
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -4373,6 +4383,18 @@ def get_session_tunes_grid_ajax(session_path):
             return jsonify({"error": "Session not found"}), 404
 
         session_id = session_result[0]
+
+        # If not system admin, check if they're a session admin
+        if not is_system_admin:
+            cur.execute(
+                """SELECT sp.is_admin FROM session_person sp
+                   WHERE sp.session_id = %s AND sp.person_id = %s""",
+                (session_id, current_user.person_id)
+            )
+            admin_row = cur.fetchone()
+            is_session_admin = admin_row and admin_row[0]
+            if not is_session_admin:
+                return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
         # Get all unique tunes that have been played at this session
         # along with session_tune settings if they exist, play counts, and tunebook stats
