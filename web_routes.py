@@ -2008,28 +2008,38 @@ def reset_password(token):
 
 @login_required
 def change_password():
+    # Get current user with hashed password to check if they have one
+    user = User.get_by_username(current_user.username)
+    user_has_password = user.has_password() if user else False
+
     if request.method == "POST":
         current_password = request.form.get("current_password", "")
         new_password = request.form.get("new_password", "")
         confirm_password = request.form.get("confirm_password", "")
 
-        if not current_password or not new_password or not confirm_password:
-            flash("All password fields are required.", "error")
-            return render_template("auth/change_password.html")
+        # Only require current password if user has one
+        if user_has_password:
+            if not current_password or not new_password or not confirm_password:
+                flash("All password fields are required.", "error")
+                return render_template("auth/change_password.html", has_password=user_has_password)
+        else:
+            if not new_password or not confirm_password:
+                flash("Password fields are required.", "error")
+                return render_template("auth/change_password.html", has_password=user_has_password)
 
         if new_password != confirm_password:
             flash("New passwords do not match.", "error")
-            return render_template("auth/change_password.html")
+            return render_template("auth/change_password.html", has_password=user_has_password)
 
         if len(new_password) < 8:
             flash("Password must be at least 8 characters long.", "error")
-            return render_template("auth/change_password.html")
+            return render_template("auth/change_password.html", has_password=user_has_password)
 
-        # Get current user with hashed password
-        user = User.get_by_username(current_user.username)
-        if not user or not user.check_password(current_password):
-            flash("Current password is incorrect.", "error")
-            return render_template("auth/change_password.html")
+        # Verify current password only if user has one
+        if user_has_password:
+            if not user or not user.check_password(current_password):
+                flash("Current password is incorrect.", "error")
+                return render_template("auth/change_password.html", has_password=user_has_password)
 
         # Update password
         conn = get_db_connection()
@@ -2055,13 +2065,16 @@ def change_password():
             )
             conn.commit()
 
-            flash("Password changed successfully.", "success")
+            if user_has_password:
+                flash("Password changed successfully.", "success")
+            else:
+                flash("Password created successfully.", "success")
             return redirect(url_for("home"))
 
         finally:
             conn.close()
 
-    return render_template("auth/change_password.html")
+    return render_template("auth/change_password.html", has_password=user_has_password)
 
 
 def verify_email(token):
@@ -2787,7 +2800,7 @@ def person_details(person_id=None):
         # Get user account details if exists
         cur.execute(
             """
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password
             FROM user_account
             WHERE person_id = %s
         """,
@@ -2806,6 +2819,7 @@ def person_details(person_id=None):
                 is_active,
                 created_date,
                 timezone,
+                hashed_password,
             ) = user_row
 
             # Get last login from user_session table
@@ -2833,6 +2847,7 @@ def person_details(person_id=None):
                 "last_login": last_login,
                 "timezone": timezone,
                 "timezone_display": get_timezone_display_name(timezone or "UTC"),
+                "has_password": hashed_password is not None and hashed_password != "",
             }
 
         # Get sessions this person is associated with

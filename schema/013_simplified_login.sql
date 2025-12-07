@@ -4,6 +4,11 @@
 -- Make password optional for passwordless users
 ALTER TABLE user_account ALTER COLUMN hashed_password DROP NOT NULL;
 
+-- Update login_history event_type constraint to include new event types
+ALTER TABLE login_history DROP CONSTRAINT IF EXISTS login_history_event_type_check;
+ALTER TABLE login_history ADD CONSTRAINT login_history_event_type_check
+    CHECK (event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE', 'LOGOUT', 'PASSWORD_RESET', 'ACCOUNT_LOCKED', 'MAGIC_LINK_SENT', 'REGISTRATION'));
+
 -- Add magic link login tokens
 ALTER TABLE user_account ADD COLUMN IF NOT EXISTS login_token VARCHAR(255);
 ALTER TABLE user_account ADD COLUMN IF NOT EXISTS login_token_expires TIMESTAMPTZ;

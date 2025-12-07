@@ -308,9 +308,9 @@
                                     </div>
 
                                     {% if is_user_profile %}
-                                    <!-- Change Password Button for User Profile -->
+                                    <!-- Change/Create Password Button for User Profile -->
                                     <div class="mt-3">
-                                        <a href="/change-password" class="btn btn-outline-primary">Change My Password</a>
+                                        <a href="/change-password" class="btn btn-outline-primary">{{ 'Change My Password' if user.has_password else 'Create A Password' }}</a>
                                     </div>
                                     {% endif %}
 
