@@ -1,0 +1,58 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Session Members" %}
+{% set page_description = "Managing people at sessions" %}
+{% set active_page = "members" %}
+
+{% block help_content %}
+<h1>Session Members</h1>
+
+<p>The <strong>Members</strong> tab helps you track who plays at your session and manage their attendance.</p>
+
+<h2>Types of Members</h2>
+
+<ul>
+    <li><strong>Regulars</strong> - People who attend frequently and are considered part of the session's core group</li>
+    <li><strong>Attendees</strong> - Anyone who has played at the session</li>
+    <li><strong>Session Admins</strong> - People who can edit the session's details and logs</li>
+</ul>
+
+<h2>Tracking Attendance</h2>
+
+<p>For each session instance, you can track who attended:</p>
+<ul>
+    <li><strong>Yes</strong> - Confirmed attendance</li>
+    <li><strong>Maybe</strong> - Uncertain</li>
+    <li><strong>No</strong> - Not attending</li>
+</ul>
+
+<p>Regulars are automatically shown in the attendance list for each session instance.</p>
+
+<h2>Adding People</h2>
+
+<p>Session admins can:</p>
+<ul>
+    <li>Search for existing users to add to the session</li>
+    <li>Create new person records for people not yet in the system</li>
+    <li>Set someone as a regular member</li>
+    <li>Grant session admin privileges</li>
+</ul>
+
+<h2>Member Information</h2>
+
+<p>Each member's profile can include:</p>
+<ul>
+    <li>Name</li>
+    <li>Instruments they play</li>
+    <li>Email address (for notifications)</li>
+    <li>Attendance history</li>
+</ul>
+
+<h2>Check-In Feature</h2>
+
+<p>When a session is active (during its scheduled time), members can check in to show they're attending. This updates the "On Now" indicator and lets others know who's at the session.</p>
+
+<h2>Who Started What</h2>
+
+<p>When logging tunes, session admins can optionally note who started each set. This helps track who introduces which tunes to the session.</p>
+{% endblock %}

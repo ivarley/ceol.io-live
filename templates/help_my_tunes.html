@@ -1,130 +1,69 @@
-{% extends "base.html" %}
+{% extends "help_base.html" %}
 
-{% block title %}My Tunes Help{% endblock %}
-{% block description %}How to use the My Tunes feature{% endblock %}
+{% set page_title = "My Tune List" %}
+{% set page_description = "How to use the My Tunes feature" %}
+{% set active_page = "my-tunes" %}
 
-{% block extra_css %}
-<style>
-    .help-container {
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-    }
+{% block help_content %}
+<h1>My Tune List</h1>
 
-    .help-container h1 {
-        color: var(--text-color);
-        margin-bottom: 1.5rem;
-        font-size: 2rem;
-    }
+<p>The <strong>My Tunes</strong> page lets you keep track of tunes you're learning or want to learn. Think of it as your personal tune library that helps you organize your learning journey.</p>
 
-    .help-container h2 {
-        color: var(--text-color);
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        font-size: 1.4rem;
-        border-bottom: 2px solid var(--border-color);
-        padding-bottom: 0.5rem;
-    }
+<h2>Adding Tunes</h2>
 
-    .help-container p {
-        color: var(--text-color);
-        line-height: 1.6;
-        margin-bottom: 1rem;
-    }
+<p>Click the <strong>Add</strong> button to add a new tune to your collection. You can:</p>
+<ul>
+    <li>Search for tunes from TheSession.org database</li>
+    <li>Set your learning status: <strong>Want to Learn</strong>, <strong>Learning</strong>, or <strong>Learned</strong></li>
+    <li>Add personal notes about the tune</li>
+    <li>Link to a specific setting if you play a particular version</li>
+</ul>
 
-    .help-container ul {
-        color: var(--text-color);
-        line-height: 1.6;
-        margin-bottom: 1rem;
-        padding-left: 2rem;
-    }
+<h2>Tracking Your Progress</h2>
 
-    .help-container li {
-        margin-bottom: 0.5rem;
-    }
+<p>Each tune shows your current learning status with a color-coded badge:</p>
+<ul>
+    <li><strong>Want to Learn</strong> - Tunes on your wish list</li>
+    <li><strong>Learning</strong> - Tunes you're actively practicing</li>
+    <li><strong>Learned</strong> - Tunes you know well</li>
+</ul>
 
-    .help-container strong {
-        color: var(--primary);
-    }
+<h2>Heard Count Feature <span class="feature-badge">Mobile</span></h2>
 
-    .help-back-link {
-        display: inline-block;
-        margin-top: 2rem;
-        padding: 10px 20px;
-        background-color: var(--primary);
-        color: white !important;
-        text-decoration: none;
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
+<p>For tunes marked as "Want to Learn," you can track how often you hear them at sessions. On mobile devices, swipe right on any tune card to quickly increment the heard count. This helps you prioritize which tunes to learn next based on how frequently they're played.</p>
 
-    .help-back-link:hover {
-        background-color: var(--primary-dark, #0056b3);
-        color: white !important;
-        text-decoration: none;
-    }
+<h2>Filtering and Sorting</h2>
 
-    .feature-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        background-color: var(--primary);
-        color: white;
-        font-size: 0.85rem;
-        border-radius: 3px;
-        margin-left: 8px;
-    }
-</style>
-{% endblock %}
+<p>Use the filters at the top to find specific tunes:</p>
+<ul>
+    <li><strong>Search</strong> - Find tunes by name</li>
+    <li><strong>Type Filter</strong> - Show only jigs, reels, hornpipes, etc.</li>
+    <li><strong>Status Filter</strong> - Click the status button to cycle through learning statuses</li>
+    <li><strong>Sort Toggle</strong> - Switch between alphabetical and popularity sorting</li>
+</ul>
 
-{% block content %}
-<div class="help-container">
-    <h1>How to Use My Tunes</h1>
+<h2>Editing Tunes</h2>
 
-    <p>The <strong>My Tunes</strong> page lets you keep track of tunes you're learning or want to learn. Think of it as your personal tune library that helps you organize your learning journey.</p>
+<p>Tap any tune card to open the detail view where you can:</p>
+<ul>
+    <li>Update your learning status</li>
+    <li>Add or edit notes</li>
+    <li>Set a custom name (click the tune title)</li>
+    <li>Change the setting ID if needed</li>
+    <li>Adjust the heard count</li>
+    <li>View tune popularity and session play stats</li>
+</ul>
 
-    <h2>Adding Tunes</h2>
-    <p>Click the <strong>Add</strong> button to add a new tune to your collection. You can:</p>
-    <ul>
-        <li>Search for tunes from TheSession.org database</li>
-        <li>Set your learning status: <strong>Want to Learn</strong>, <strong>Learning</strong>, or <strong>Learned</strong></li>
-        <li>Add personal notes about the tune</li>
-        <li>Link to a specific setting if you play a particular version</li>
-    </ul>
+<h2>Syncing from TheSession.org</h2>
 
-    <h2>Tracking Your Progress</h2>
-    <p>Each tune shows your current learning status with a color-coded badge:</p>
-    <ul>
-        <li><strong>Want to Learn</strong> - Tunes on your wish list</li>
-        <li><strong>Learning</strong> - Tunes you're actively practicing</li>
-        <li><strong>Learned</strong> - Tunes you know well</li>
-    </ul>
+<p>If you have a TheSession.org account with a tunebook, click <strong>Sync</strong> to import tunes from your tunebook. You'll need to provide your TheSession.org user ID (found in your profile URL).</p>
 
-    <h2>Heard Count Feature <span class="feature-badge">Mobile</span></h2>
-    <p>For tunes marked as "Want to Learn," you can track how often you hear them at sessions. On mobile devices, swipe right on any tune card to quickly increment the heard count. This helps you prioritize which tunes to learn next based on how frequently they're played.</p>
+<h2>Tips for Learning Tunes</h2>
 
-    <h2>Filtering and Sorting</h2>
-    <p>Use the filters at the top to find specific tunes:</p>
-    <ul>
-        <li><strong>Search</strong> - Find tunes by name</li>
-        <li><strong>Type Filter</strong> - Show only jigs, reels, hornpipes, etc.</li>
-        <li><strong>Status Filter</strong> - Click the status button to cycle through learning statuses</li>
-        <li><strong>Sort Toggle</strong> - Switch between alphabetical and popularity sorting</li>
-    </ul>
-
-    <h2>Editing Tunes</h2>
-    <p>Tap any tune card to open the detail view where you can:</p>
-    <ul>
-        <li>Update your learning status</li>
-        <li>Add or edit notes</li>
-        <li>Set a custom name (click the tune title)</li>
-        <li>Change the setting ID if needed</li>
-        <li>Adjust the heard count</li>
-        <li>View tune popularity and session play stats</li>
-    </ul>
-
-    <h2>Syncing from TheSession.org</h2>
-    <p>If you have a TheSession.org account with a tunebook, click <strong>Sync</strong> to import tunes from your tunebook. You'll need to provide your TheSession.org user ID (found in your profile URL).</p>
-
-    <a href="/my-tunes" class="help-back-link">← Back to My Tunes</a>
-</div>
+<ul>
+    <li>Start with tunes that have high "heard counts" - these are played frequently at sessions</li>
+    <li>Focus on the common tune types first: reels and jigs make up the majority of session repertoire</li>
+    <li>Use the popularity sorting to see which tunes are most commonly played across all sessions</li>
+    <li>Add notes to remind yourself of tricky passages or alternate settings</li>
+</ul>
 {% endblock %}

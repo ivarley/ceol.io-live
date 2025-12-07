@@ -837,6 +837,36 @@ def help_my_tunes():
     return render_template("help_my_tunes.html")
 
 
+def help_sessions():
+    return render_template("help_sessions.html")
+
+
+def help_session_tunes():
+    return render_template("help_session_tunes.html")
+
+
+def help_session_logs():
+    return render_template("help_session_logs.html")
+
+
+def help_session_members():
+    return render_template("help_session_members.html")
+
+
+def help_release_notes(month):
+    # Map month to display name
+    month_names = {
+        '2025-12': 'December 2025',
+        '2025-11': 'November 2025',
+        '2025-10': 'October 2025',
+        '2025-09': 'September 2025',
+        '2025-08': 'August 2025',
+        '2025-07': 'July 2025',
+    }
+    month_name = month_names.get(month, month)
+    return render_template("help_release_notes.html", month=month, month_name=month_name)
+
+
 def register():
     # Get session_id from query parameter if present
     session_id_param = request.args.get("session_id")

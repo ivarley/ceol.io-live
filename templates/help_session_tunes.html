@@ -1,0 +1,45 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Session Tunes" %}
+{% set page_description = "Managing tunes for a session" %}
+{% set active_page = "tunes" %}
+
+{% block help_content %}
+<h1>Session Tunes</h1>
+
+<p>Each session has a <strong>Tunes</strong> tab that shows all the tunes that have been played at that session across all logs. This gives you a comprehensive view of the session's repertoire.</p>
+
+<h2>Viewing Session Tunes</h2>
+
+<p>The tunes tab displays:</p>
+<ul>
+    <li><strong>Tune Name</strong> - The name of the tune, linked to its details on TheSession.org</li>
+    <li><strong>Tune Type</strong> - Reel, jig, hornpipe, etc.</li>
+    <li><strong>Play Count</strong> - How many times this tune has been logged at this session</li>
+    <li><strong>Last Played</strong> - When the tune was most recently logged</li>
+</ul>
+
+<h2>Sorting and Filtering</h2>
+
+<p>You can organize the tune list by:</p>
+<ul>
+    <li><strong>Popularity</strong> - Sort by how often each tune is played</li>
+    <li><strong>Alphabetical</strong> - Sort by tune name</li>
+    <li><strong>Type Filter</strong> - Show only specific tune types</li>
+    <li><strong>Search</strong> - Find specific tunes by name</li>
+</ul>
+
+<h2>Tune Details</h2>
+
+<p>Click on any tune to see its details:</p>
+<ul>
+    <li>Links to each session instance where the tune was played</li>
+    <li>The tune's page on TheSession.org</li>
+    <li>Sheet music notation (incipit) if available</li>
+    <li>Option to add the tune to your personal tune list</li>
+</ul>
+
+<h2>Popular Tunes</h2>
+
+<p>The session home page shows the most popular tunes for that session. These are the "core repertoire" - tunes that get played frequently and are good ones to learn if you want to participate more actively.</p>
+{% endblock %}

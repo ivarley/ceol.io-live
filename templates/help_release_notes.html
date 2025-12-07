@@ -1,0 +1,246 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Release Notes - " + month_name %}
+{% set page_description = "What's new in " + month_name %}
+{% set active_page = "release-" + month %}
+
+{% block help_content %}
+<h1>Release Notes: {{ month_name }}</h1>
+
+{% if month == '2025-12' %}
+<p class="release-date">December 2025</p>
+
+<h2>Admin & User Management</h2>
+<ul class="release-notes-list">
+    <li>Improved login and registration flow with clearer password creation prompts</li>
+    <li>Added subsequent screen after email verification for profile completion</li>
+    <li>Username lookups are now case-insensitive</li>
+    <li>Clarified terminology around people, members, and players</li>
+    <li>Style and consistency improvements for admin screens</li>
+</ul>
+
+<h2>Session Management</h2>
+<ul class="release-notes-list">
+    <li>Added session tune admin tab for better tune management</li>
+    <li>First cut of admin activity view</li>
+    <li>Improved add session flow with better defaults</li>
+    <li>Default time zone now set correctly by state</li>
+    <li>Session admin status now based on database query rather than login cache</li>
+</ul>
+
+<h2>Tune Features</h2>
+<ul class="release-notes-list">
+    <li>Normalize quotes when searching for tunes</li>
+    <li>Allow non-admin session members to mark who played a set</li>
+    <li>Added "who logged the tune" tracking</li>
+    <li>Added ability for session admins to remove session tunes</li>
+</ul>
+
+<h2>Bug Fixes</h2>
+<ul class="release-notes-list">
+    <li>Fixed set popout positioning and closing behavior</li>
+    <li>Fixed session tune details modal configuration saving</li>
+    <li>Fixed saving created_by_user_id on session instance tunes</li>
+</ul>
+
+{% elif month == '2025-11' %}
+<p class="release-date">November 2025</p>
+
+<h2>ABC Notation Rendering</h2>
+<ul class="release-notes-list">
+    <li>Added new ABC notation rendering service for displaying sheet music</li>
+    <li>Initial cut of tune settings with incipit (first few bars) display</li>
+    <li>Added ability to switch between different tune renditions</li>
+    <li>Improvements to incipit rendering and display</li>
+</ul>
+
+<h2>Search Improvements</h2>
+<ul class="release-notes-list">
+    <li>Make all searches accent-insensitive (e.g., "Gaelic" matches "Gaelic")</li>
+    <li>Added name search within tune log</li>
+    <li>Better search handling when results include tunes already on the list</li>
+    <li>Combining tune search into a shared component across the app</li>
+</ul>
+
+<h2>Admin Features</h2>
+<ul class="release-notes-list">
+    <li>Add tune list to admin person view</li>
+    <li>Sorting and tune count on admin people list</li>
+    <li>Add session instance creation from admin logs view</li>
+    <li>Admin verify email button on user account page</li>
+</ul>
+
+<h2>UI Improvements</h2>
+<ul class="release-notes-list">
+    <li>Cleaner URLs for session detail page tabs and people pages</li>
+    <li>More consistent modals throughout the app</li>
+    <li>Comprehensive z-index overhaul for proper layering</li>
+    <li>Fixed tune history modal position label text</li>
+    <li>After adding a tune, scroll and highlight it in the list</li>
+</ul>
+
+{% elif month == '2025-10' %}
+<p class="release-date">October 2025</p>
+
+<h2>Active Sessions & Check-In</h2>
+<ul class="release-notes-list">
+    <li>Added active session status badge and "On Now" button in header</li>
+    <li>Session instance highlighting when active</li>
+    <li>Store and calculate when a session is currently active</li>
+    <li>Cron job to track active sessions in real-time</li>
+    <li>User check-in updates active status immediately</li>
+</ul>
+
+<h2>Festival Mode</h2>
+<ul class="release-notes-list">
+    <li>Added festival-type sessions for multi-day events</li>
+    <li>UI changes for festival mode display</li>
+    <li>Default to showing today's sessions in festival mode</li>
+</ul>
+
+<h2>Session People & Attendance</h2>
+<ul class="release-notes-list">
+    <li>Session people tab for managing members</li>
+    <li>Add person flow for new session members</li>
+    <li>Common tunes feature to see repertoire overlap</li>
+</ul>
+
+<h2>Tune List Improvements</h2>
+<ul class="release-notes-list">
+    <li>Tune details slide-out panel from tune list</li>
+    <li>Ability to add tune to your list from session or instance tune list</li>
+    <li>Improved filters for tune lists</li>
+    <li>Preserve sort/filter values in the querystring</li>
+</ul>
+
+<h2>PWA & Mobile</h2>
+<ul class="release-notes-list">
+    <li>Added PWA manifest and icons</li>
+    <li>QR code on share page</li>
+    <li>Refresh in PWA mode</li>
+    <li>Simple sharing options</li>
+</ul>
+
+<h2>Other Improvements</h2>
+<ul class="release-notes-list">
+    <li>Show recurrence on session details page</li>
+    <li>Ability to permalink to individual tunes</li>
+    <li>Merging to existing person on registration if one exists</li>
+    <li>Added tune types to session instance logs</li>
+    <li>Edit instruments on profile page</li>
+</ul>
+
+{% elif month == '2025-09' %}
+<p class="release-date">September 2025</p>
+
+<h2>Attendance Tracking System</h2>
+<ul class="release-notes-list">
+    <li>Complete attendance tracking implementation</li>
+    <li>Session person management (regulars, admins)</li>
+    <li>Filtering by attendance status</li>
+    <li>Bulk player import for sessions</li>
+    <li>Delete player functionality</li>
+</ul>
+
+<h2>TypeScript Migration</h2>
+<ul class="release-notes-list">
+    <li>Began converting JavaScript source to TypeScript</li>
+    <li>Added TypeScript build step</li>
+    <li>JavaScript testing infrastructure</li>
+</ul>
+
+<h2>Session Admin Improvements</h2>
+<ul class="release-notes-list">
+    <li>Added session admin tab</li>
+    <li>Link to and from session admin person page</li>
+    <li>Improvements to attendance page UX</li>
+    <li>Always showing regulars in attendance list</li>
+    <li>Search to add players quickly</li>
+</ul>
+
+<h2>Editor Improvements</h2>
+<ul class="release-notes-list">
+    <li>Added "info" to context menu in beta editor</li>
+    <li>Ability to add linked tune in beta editor</li>
+    <li>Fixed expand arrows on session detail page</li>
+</ul>
+
+{% elif month == '2025-08' %}
+<p class="release-date">August 2025</p>
+
+<h2>Tune List Editor v2</h2>
+<ul class="release-notes-list">
+    <li>Complete rewrite of tune list editor with word-processor-style interface</li>
+    <li>Mobile functionality for tune editing</li>
+    <li>Drag and drop for reordering tunes</li>
+    <li>Undo/redo support</li>
+    <li>Auto-save functionality with configurable interval</li>
+    <li>Context menus for tune actions</li>
+</ul>
+
+<h2>Dark Mode</h2>
+<ul class="release-notes-list">
+    <li>Added dark mode support throughout the app</li>
+    <li>Theme toggle in hamburger menu</li>
+    <li>Preference saved in local storage</li>
+</ul>
+
+<h2>Admin Features</h2>
+<ul class="release-notes-list">
+    <li>Admin people search</li>
+    <li>Added users view in admin screen</li>
+    <li>Session people functionality</li>
+    <li>Login history tracking</li>
+    <li>Person details section in admin</li>
+</ul>
+
+<h2>User System</h2>
+<ul class="release-notes-list">
+    <li>User account creation and login</li>
+    <li>Email verification with SendGrid integration</li>
+    <li>Logged-in user profile at /me</li>
+    <li>Return to previous page after login</li>
+</ul>
+
+<h2>Session Features</h2>
+<ul class="release-notes-list">
+    <li>Session time zone support</li>
+    <li>Add session dialogue</li>
+    <li>Session instance editing and creation</li>
+    <li>Session completion feature</li>
+    <li>Tune linking and relinking</li>
+</ul>
+
+<h2>UI/UX Improvements</h2>
+<ul class="release-notes-list">
+    <li>Hamburger menu for navigation</li>
+    <li>Consolidated page layout with base template</li>
+    <li>Custom error pages</li>
+    <li>History tracking tables</li>
+</ul>
+
+{% elif month == '2025-07' %}
+<p class="release-date">July 2025</p>
+
+<h2>Initial Launch</h2>
+<ul class="release-notes-list">
+    <li>Core session tracking functionality</li>
+    <li>Session detail pages</li>
+    <li>Session instance pages with tune lists</li>
+    <li>Database connectivity and schema</li>
+    <li>Integration with TheSession.org for tune data</li>
+</ul>
+
+<h2>Basic Features</h2>
+<ul class="release-notes-list">
+    <li>Add and delete tunes from session instances</li>
+    <li>Edit/view mode distinction for session instances</li>
+    <li>Group tunes into sets</li>
+    <li>Tune frequency/popularity tracking</li>
+    <li>"Magic 8 Ball" random tune picker using session frequency</li>
+</ul>
+
+{% else %}
+<p>No release notes available for this month.</p>
+{% endif %}
+{% endblock %}

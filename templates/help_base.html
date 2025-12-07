@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title | default('Help') }} - ceol.io{% endblock %}
+{% block description %}{{ page_description | default('Help and documentation for ceol.io') }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .help-layout {
+        display: flex;
+        min-height: calc(100vh - 60px);
+    }
+
+    /* Sidebar styles */
+    .help-sidebar {
+        width: 260px;
+        min-width: 260px;
+        background-color: var(--sidebar-bg, var(--dropdown-bg));
+        border-right: 1px solid var(--border-color);
+        padding: 20px 0;
+        position: sticky;
+        top: 50px;
+        height: calc(100vh - 50px);
+        overflow-y: auto;
+    }
+
+    .help-sidebar-header {
+        padding: 0 20px 15px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: var(--text-color);
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 10px;
+    }
+
+    .help-nav {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .help-nav-item {
+        margin: 0;
+    }
+
+    .help-nav-link {
+        display: block;
+        padding: 10px 20px;
+        color: var(--text-color);
+        text-decoration: none;
+        transition: background-color 0.2s, color 0.2s;
+        font-size: 0.95rem;
+    }
+
+    .help-nav-link:hover {
+        background-color: var(--hover-bg);
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .help-nav-link.active {
+        background-color: var(--hover-bg);
+        color: var(--primary);
+        font-weight: 500;
+        border-left: 3px solid var(--primary);
+        padding-left: 17px;
+    }
+
+    /* Nested navigation */
+    .help-nav-section {
+        margin: 0;
+    }
+
+    .help-nav-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 20px;
+        color: var(--text-color);
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-size: 0.95rem;
+        user-select: none;
+    }
+
+    .help-nav-section-header:hover {
+        background-color: var(--hover-bg);
+    }
+
+    .help-nav-section-header .chevron {
+        font-size: 0.7rem;
+        transition: transform 0.2s;
+    }
+
+    .help-nav-section.expanded .chevron {
+        transform: rotate(90deg);
+    }
+
+    .help-nav-subnav {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: none;
+        background-color: var(--input-bg);
+    }
+
+    .help-nav-section.expanded .help-nav-subnav {
+        display: block;
+    }
+
+    .help-nav-subnav .help-nav-link {
+        padding-left: 35px;
+        font-size: 0.9rem;
+    }
+
+    .help-nav-subnav .help-nav-link.active {
+        padding-left: 32px;
+    }
+
+    /* Sub-sub navigation for session tracking */
+    .help-nav-subnav .help-nav-subnav {
+        background-color: var(--body-bg);
+    }
+
+    .help-nav-subnav .help-nav-subnav .help-nav-link {
+        padding-left: 50px;
+    }
+
+    .help-nav-subnav .help-nav-subnav .help-nav-link.active {
+        padding-left: 47px;
+    }
+
+    /* Main content area */
+    .help-content {
+        flex: 1;
+        padding: 30px 40px;
+        max-width: 900px;
+    }
+
+    .help-content h1 {
+        color: var(--text-color);
+        margin-bottom: 1.5rem;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+
+    .help-content h2 {
+        color: var(--text-color);
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        font-size: 1.4rem;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 0.5rem;
+    }
+
+    .help-content h3 {
+        color: var(--text-color);
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 1.15rem;
+    }
+
+    .help-content p {
+        color: var(--text-color);
+        line-height: 1.7;
+        margin-bottom: 1rem;
+    }
+
+    .help-content ul, .help-content ol {
+        color: var(--text-color);
+        line-height: 1.7;
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+    }
+
+    .help-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    .help-content strong {
+        color: var(--primary);
+    }
+
+    .help-content a {
+        color: var(--link-color);
+    }
+
+    .help-content a:hover {
+        text-decoration: underline;
+    }
+
+    /* Feature badge */
+    .feature-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        background-color: var(--primary);
+        color: white;
+        font-size: 0.8rem;
+        border-radius: 3px;
+        margin-left: 8px;
+        vertical-align: middle;
+    }
+
+    /* Mobile styles */
+    .help-mobile-nav {
+        display: none;
+        background-color: var(--sidebar-bg, var(--dropdown-bg));
+        border-bottom: 1px solid var(--border-color);
+        padding: 0;
+    }
+
+    .help-mobile-nav-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px 20px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .help-mobile-nav-title {
+        font-weight: 500;
+        color: var(--text-color);
+    }
+
+    .help-mobile-nav-chevron {
+        font-size: 0.8rem;
+        color: var(--secondary-text);
+        transition: transform 0.2s;
+    }
+
+    .help-mobile-nav.expanded .help-mobile-nav-chevron {
+        transform: rotate(180deg);
+    }
+
+    .help-mobile-nav-menu {
+        display: none;
+        border-top: 1px solid var(--border-color);
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+
+    .help-mobile-nav.expanded .help-mobile-nav-menu {
+        display: block;
+    }
+
+    /* Release notes specific */
+    .release-notes-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .release-notes-list li {
+        margin-bottom: 0.75rem;
+        padding-left: 1.5rem;
+        position: relative;
+    }
+
+    .release-notes-list li::before {
+        content: "•";
+        position: absolute;
+        left: 0;
+        color: var(--primary);
+        font-weight: bold;
+    }
+
+    .release-date {
+        color: var(--secondary-text);
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .help-layout {
+            flex-direction: column;
+        }
+
+        .help-sidebar {
+            display: none;
+        }
+
+        .help-mobile-nav {
+            display: block;
+        }
+
+        .help-content {
+            padding: 20px;
+        }
+
+        .help-content h1 {
+            font-size: 1.6rem;
+        }
+
+        .help-content h2 {
+            font-size: 1.2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Mobile Navigation -->
+<div class="help-mobile-nav" id="helpMobileNav">
+    <div class="help-mobile-nav-header" onclick="toggleMobileNav()">
+        <span class="help-mobile-nav-title">{{ page_title | default('Help Topics') }}</span>
+        <span class="help-mobile-nav-chevron">&#9662;</span>
+    </div>
+    <div class="help-mobile-nav-menu">
+        <ul class="help-nav">
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_page') }}" class="help-nav-link {{ 'active' if active_page == 'about' else '' }}">What's ceol.io?</a>
+            </li>
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">What's a Session?</a>
+            </li>
+            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                    <span>Features</span>
+                    <span class="chevron">&#9656;</span>
+                </div>
+                <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_my_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'my-tunes' else '' }}">My Tune List</a>
+                    </li>
+                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                        <div class="help-nav-section-header" onclick="event.stopPropagation(); toggleSection(this.parentElement)">
+                            <span>Session Tracking</span>
+                            <span class="chevron">&#9656;</span>
+                        </div>
+                        <ul class="help-nav-subnav">
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'tunes' else '' }}">Tunes</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_logs') }}" class="help-nav-link {{ 'active' if active_page == 'logs' else '' }}">Logs</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">Members</a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li class="help-nav-section {{ 'expanded' if active_page and active_page.startswith('release-') else '' }}">
+                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                    <span>Release Notes</span>
+                    <span class="chevron">&#9656;</span>
+                </div>
+                <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-12') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-12' else '' }}">December 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-11') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-11' else '' }}">November 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-10') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-10' else '' }}">October 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-09') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-09' else '' }}">September 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-08') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-08' else '' }}">August 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-07' else '' }}">July 2025</a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<div class="help-layout">
+    <!-- Desktop Sidebar -->
+    <aside class="help-sidebar">
+        <div class="help-sidebar-header">Help Topics</div>
+        <ul class="help-nav">
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_page') }}" class="help-nav-link {{ 'active' if active_page == 'about' else '' }}">What's ceol.io?</a>
+            </li>
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">What's a Session?</a>
+            </li>
+            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                    <span>Features</span>
+                    <span class="chevron">&#9656;</span>
+                </div>
+                <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_my_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'my-tunes' else '' }}">My Tune List</a>
+                    </li>
+                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                        <div class="help-nav-section-header" onclick="event.stopPropagation(); toggleSection(this.parentElement)">
+                            <span>Session Tracking</span>
+                            <span class="chevron">&#9656;</span>
+                        </div>
+                        <ul class="help-nav-subnav">
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'tunes' else '' }}">Tunes</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_logs') }}" class="help-nav-link {{ 'active' if active_page == 'logs' else '' }}">Logs</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">Members</a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li class="help-nav-section {{ 'expanded' if active_page and active_page.startswith('release-') else '' }}">
+                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                    <span>Release Notes</span>
+                    <span class="chevron">&#9656;</span>
+                </div>
+                <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-12') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-12' else '' }}">December 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-11') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-11' else '' }}">November 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-10') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-10' else '' }}">October 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-09') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-09' else '' }}">September 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-08') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-08' else '' }}">August 2025</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2025-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-07' else '' }}">July 2025</a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="help-content">
+        {% block help_content %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleSection(section) {
+    section.classList.toggle('expanded');
+}
+
+function toggleMobileNav() {
+    const nav = document.getElementById('helpMobileNav');
+    nav.classList.toggle('expanded');
+}
+
+// Auto-expand sections containing active links on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const activeLinks = document.querySelectorAll('.help-nav-link.active');
+    activeLinks.forEach(link => {
+        let parent = link.closest('.help-nav-section');
+        while (parent) {
+            parent.classList.add('expanded');
+            parent = parent.parentElement.closest('.help-nav-section');
+        }
+    });
+});
+</script>
+{% endblock %}

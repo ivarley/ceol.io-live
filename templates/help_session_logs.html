@@ -1,0 +1,59 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Session Logs" %}
+{% set page_description = "Recording what was played at each session" %}
+{% set active_page = "logs" %}
+
+{% block help_content %}
+<h1>Session Logs</h1>
+
+<p>Session logs are records of what happened at each individual session instance. They capture the tunes that were played, organized by sets.</p>
+
+<h2>Creating a Log</h2>
+
+<p>To create a new log:</p>
+<ol>
+    <li>Go to your session's page</li>
+    <li>Click the <strong>Add</strong> button</li>
+    <li>Select the date (it defaults to the next scheduled session based on your recurrence)</li>
+    <li>The new session instance is created with an empty tune list</li>
+</ol>
+
+<h2>Adding Tunes to a Log</h2>
+
+<p>The tune editor works like a word processor:</p>
+<ul>
+    <li><strong>Type tune names</strong> - Press Enter after each tune name, and the system will try to match it to a tune in the database</li>
+    <li><strong>Paste lists</strong> - Copy tune names from elsewhere and paste them in; each line becomes a tune</li>
+    <li><strong>Sets</strong> - Tunes are grouped into sets. Press Enter twice to start a new set</li>
+    <li><strong>Auto-linking</strong> - The system automatically matches tune names to the database and creates links</li>
+</ul>
+
+<h2>Editing Tunes</h2>
+
+<p>Right-click (or long-press on mobile) any tune to access options:</p>
+<ul>
+    <li><strong>Edit Name</strong> - Change how the tune name is displayed</li>
+    <li><strong>Relink</strong> - Choose a different tune from the database if the auto-match was wrong</li>
+    <li><strong>Move</strong> - Relocate the tune to a different position or set</li>
+    <li><strong>Delete</strong> - Remove the tune from the log</li>
+    <li><strong>Info</strong> - View tune details and link to TheSession.org</li>
+</ul>
+
+<h2>Drag and Drop</h2>
+
+<p>You can reorganize tunes by dragging them:</p>
+<ul>
+    <li>Drag within a set to reorder</li>
+    <li>Drag between sets to move a tune</li>
+    <li>The order is saved automatically</li>
+</ul>
+
+<h2>Auto-Save</h2>
+
+<p>Changes to the tune list are saved automatically. You can also manually save using the Save button. The auto-save interval is configurable in the session settings.</p>
+
+<h2>Viewing Historical Logs</h2>
+
+<p>The <strong>Logs</strong> tab shows all session instances, organized by year. Click on any date to view the tunes that were played that night.</p>
+{% endblock %}
