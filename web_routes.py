@@ -5,6 +5,7 @@ from flask import (
     url_for,
     flash,
     session,
+    jsonify,
 )
 import random
 import bcrypt
@@ -26,9 +27,10 @@ from auth import (
     cleanup_expired_sessions,
     generate_password_reset_token,
     generate_verification_token,
+    generate_login_token,
     log_login_event,
 )
-from email_utils import send_password_reset_email, send_verification_email
+from email_utils import send_password_reset_email, send_verification_email, send_login_link_email
 from recurrence_utils import to_human_readable
 
 
@@ -1216,6 +1218,413 @@ def logout():
     return response
 
 
+def check_email_api():
+    """
+    API endpoint for the unified login flow.
+    Check if email exists and return appropriate action:
+    - password_login: User exists with password, show password field
+    - magic_link_sent: User exists without password, magic link emailed
+    - registration_started: New user created, verification email sent
+    """
+    if not request.is_json:
+        return jsonify({"error": "JSON request required"}), 400
+
+    data = request.get_json()
+    email = data.get("email", "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email address is required"}), 400
+
+    # Basic email validation
+    if "@" not in email or "." not in email:
+        return jsonify({"error": "Please enter a valid email address"}), 400
+
+    # Get client info for logging
+    ip_address = request.environ.get(
+        "HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR")
+    )
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent")
+
+    # Check if user exists with this email
+    user = User.get_by_email(email)
+
+    if user:
+        # User exists
+        if not user.is_active:
+            return jsonify({"error": "This account has been deactivated. Please contact support."}), 403
+
+        if user.has_password():
+            # User has password - prompt for password login
+            return jsonify({
+                "action": "password_login",
+                "email": email,
+                "message": "Enter your password to log in"
+            })
+        else:
+            # User has no password - send magic link
+            token = generate_login_token()
+            expires = now_utc() + timedelta(minutes=15)
+
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE user_account
+                    SET login_token = %s, login_token_expires = %s, last_modified_date = %s
+                    WHERE user_id = %s
+                """,
+                    (token, expires, now_utc(), user.user_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            send_login_link_email(user, token)
+
+            log_login_event(
+                user.user_id,
+                email,
+                "MAGIC_LINK_SENT",
+                ip_address,
+                user_agent,
+            )
+
+            return jsonify({
+                "action": "magic_link_sent",
+                "email": email,
+                "message": "Check your email for a login link"
+            })
+    else:
+        # New user - create account and send verification email
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+
+            # Check if person exists with this email
+            cur.execute(
+                "SELECT person_id FROM person WHERE LOWER(email) = LOWER(%s)",
+                (email,)
+            )
+            person_row = cur.fetchone()
+
+            if person_row:
+                person_id = person_row[0]
+            else:
+                # Create minimal person record (can be updated later)
+                # Use email prefix as placeholder name
+                email_prefix = email.split('@')[0]
+                cur.execute(
+                    """
+                    INSERT INTO person (first_name, last_name, email, created_date, last_modified_date)
+                    VALUES (%s, '', %s, %s, %s)
+                    RETURNING person_id
+                """,
+                    (email_prefix, email, now_utc(), now_utc()),
+                )
+                person_id = cur.fetchone()[0]
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Create passwordless user
+        user_id = User.create_user_passwordless(email, person_id)
+
+        if not user_id:
+            return jsonify({"error": "Failed to create account. Please try again."}), 500
+
+        # Generate verification token
+        token = generate_verification_token()
+        expires = now_utc() + timedelta(hours=24)
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE user_account
+                SET verification_token = %s, verification_token_expires = %s
+                WHERE user_id = %s
+            """,
+                (token, expires, user_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Get user object for email
+        user = User.get_by_id(user_id)
+        send_verification_email(user, token)
+
+        log_login_event(
+            user_id,
+            email,
+            "REGISTRATION",
+            ip_address,
+            user_agent,
+        )
+
+        return jsonify({
+            "action": "registration_started",
+            "email": email,
+            "message": "Check your email to verify your account"
+        })
+
+
+def login_password_api():
+    """API endpoint for email + password login"""
+    if not request.is_json:
+        return jsonify({"error": "JSON request required"}), 400
+
+    data = request.get_json()
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    # Get client info for logging
+    ip_address = request.environ.get(
+        "HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR")
+    )
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent")
+
+    user = User.get_by_email(email)
+
+    if not user:
+        log_login_event(
+            None,
+            email,
+            "LOGIN_FAILURE",
+            ip_address,
+            user_agent,
+            failure_reason="USER_NOT_FOUND",
+        )
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    if not user.is_active:
+        log_login_event(
+            user.user_id,
+            email,
+            "LOGIN_FAILURE",
+            ip_address,
+            user_agent,
+            failure_reason="ACCOUNT_INACTIVE",
+        )
+        return jsonify({"error": "This account has been deactivated"}), 403
+
+    if not user.check_password(password):
+        log_login_event(
+            user.user_id,
+            email,
+            "LOGIN_FAILURE",
+            ip_address,
+            user_agent,
+            failure_reason="INVALID_PASSWORD",
+        )
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    if not user.email_verified:
+        log_login_event(
+            user.user_id,
+            email,
+            "LOGIN_FAILURE",
+            ip_address,
+            user_agent,
+            failure_reason="EMAIL_NOT_VERIFIED",
+        )
+        return jsonify({
+            "error": "Please verify your email address first",
+            "action": "resend_verification"
+        }), 403
+
+    # Successful login
+    login_user(user, remember=True)
+
+    # Create session record
+    session_id = create_session(user.user_id, ip_address, user_agent)
+
+    log_login_event(
+        user.user_id,
+        email,
+        "LOGIN_SUCCESS",
+        ip_address,
+        user_agent,
+        session_id=session_id,
+    )
+
+    session.permanent = True
+    session["db_session_id"] = session_id
+
+    # Cache admin session IDs
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.session_id
+            FROM session_person sp
+            JOIN session s ON sp.session_id = s.session_id
+            WHERE sp.person_id = %s AND sp.is_admin = TRUE
+        """,
+            (user.person_id,),
+        )
+        admin_session_ids = [row[0] for row in cur.fetchall()]
+        session["admin_session_ids"] = admin_session_ids
+    finally:
+        conn.close()
+
+    cleanup_expired_sessions()
+
+    return jsonify({
+        "success": True,
+        "redirect": url_for("home")
+    })
+
+
+def login_with_token(token):
+    """Login via magic link token"""
+    user = User.get_by_login_token(token)
+
+    # Get client info for logging
+    ip_address = request.environ.get(
+        "HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR")
+    )
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent")
+
+    if not user:
+        log_login_event(
+            None,
+            None,
+            "LOGIN_FAILURE",
+            ip_address,
+            user_agent,
+            failure_reason="INVALID_LOGIN_TOKEN",
+        )
+        flash("Invalid or expired login link. Please request a new one.", "error")
+        return redirect(url_for("login"))
+
+    if not user.is_active:
+        flash("This account has been deactivated.", "error")
+        return redirect(url_for("login"))
+
+    # Clear the login token
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE user_account
+            SET login_token = NULL, login_token_expires = NULL, last_modified_date = %s
+            WHERE user_id = %s
+        """,
+            (now_utc(), user.user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Log user in
+    login_user(user, remember=True)
+
+    session_id = create_session(user.user_id, ip_address, user_agent)
+
+    log_login_event(
+        user.user_id,
+        user.email,
+        "LOGIN_SUCCESS",
+        ip_address,
+        user_agent,
+        session_id=session_id,
+        additional_data={"method": "magic_link"},
+    )
+
+    session.permanent = True
+    session["db_session_id"] = session_id
+
+    # Cache admin session IDs
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.session_id
+            FROM session_person sp
+            JOIN session s ON sp.session_id = s.session_id
+            WHERE sp.person_id = %s AND sp.is_admin = TRUE
+        """,
+            (user.person_id,),
+        )
+        admin_session_ids = [row[0] for row in cur.fetchall()]
+        session["admin_session_ids"] = admin_session_ids
+    finally:
+        conn.close()
+
+    cleanup_expired_sessions()
+
+    # Redirect to password setup (optional) for users without password
+    if not user.has_password():
+        return redirect(url_for("set_password_optional"))
+
+    flash("You have been logged in.", "success")
+    return redirect(url_for("home"))
+
+
+@login_required
+def set_password_optional():
+    """Optional password setup for passwordless users"""
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if password:
+            if len(password) < 8:
+                flash("Password must be at least 8 characters.", "error")
+                return render_template("auth/set_password.html")
+
+            if password != confirm_password:
+                flash("Passwords do not match.", "error")
+                return render_template("auth/set_password.html")
+
+            # Hash and save password
+            hashed_password = bcrypt.hashpw(
+                password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                save_to_history(
+                    cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id
+                )
+                cur.execute(
+                    """
+                    UPDATE user_account
+                    SET hashed_password = %s, last_modified_date = %s, last_modified_user_id = %s
+                    WHERE user_id = %s
+                """,
+                    (hashed_password, now_utc(), current_user.user_id, current_user.user_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            flash("Password set successfully! You can use it to log in next time.", "success")
+            return redirect(url_for("home"))
+        else:
+            # User chose to skip
+            return redirect(url_for("home"))
+
+    return render_template("auth/set_password.html")
+
+
 def forgot_password():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -1459,6 +1868,15 @@ def change_password():
 
 
 def verify_email(token):
+    """Verify email and auto-login the user"""
+    # Get client info for logging
+    ip_address = request.environ.get(
+        "HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR")
+    )
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent")
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -1476,9 +1894,11 @@ def verify_email(token):
         user_data = cur.fetchone()
 
         if user_data:
-            # Mark email as verified and clear token (no user logged in during verification)
+            user_id = user_data[0]
+
+            # Mark email as verified and clear token
             save_to_history(
-                cur, "user_account", "UPDATE", user_data[0], user_id=None
+                cur, "user_account", "UPDATE", user_id, user_id=None
             )
             cur.execute(
                 """
@@ -1490,12 +1910,55 @@ def verify_email(token):
                     last_modified_user_id = NULL
                 WHERE user_id = %s
             """,
-                (now_utc(), user_data[0]),
+                (now_utc(), user_id),
             )
             conn.commit()
 
+            # Auto-login the user
+            user = User.get_by_id(user_id)
+            if user and user.is_active:
+                login_user(user, remember=True)
+
+                session_id = create_session(user.user_id, ip_address, user_agent)
+
+                log_login_event(
+                    user.user_id,
+                    user.email,
+                    "LOGIN_SUCCESS",
+                    ip_address,
+                    user_agent,
+                    session_id=session_id,
+                    additional_data={"method": "email_verification"},
+                )
+
+                session.permanent = True
+                session["db_session_id"] = session_id
+
+                # Cache admin session IDs
+                cur.execute(
+                    """
+                    SELECT s.session_id
+                    FROM session_person sp
+                    JOIN session s ON sp.session_id = s.session_id
+                    WHERE sp.person_id = %s AND sp.is_admin = TRUE
+                """,
+                    (user.person_id,),
+                )
+                admin_session_ids = [row[0] for row in cur.fetchall()]
+                session["admin_session_ids"] = admin_session_ids
+
+                cleanup_expired_sessions()
+
+                flash("Email verified! Welcome to Irish Music Sessions.", "success")
+
+                # Redirect to password setup if user has no password
+                if not user.has_password():
+                    return redirect(url_for("set_password_optional"))
+
+                return redirect(url_for("home"))
+
             flash("Email verified successfully! You can now log in.", "success")
-            return redirect(url_for("login", next=url_for("home")))
+            return redirect(url_for("login"))
         else:
             flash(
                 "Invalid or expired verification link. Please request a new verification email.",

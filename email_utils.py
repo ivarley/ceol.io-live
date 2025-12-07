@@ -125,3 +125,38 @@ This link will expire in 24 hours.
         logger.error(f"Verification email failed - User: {user.username}, Email: {user.email}")
 
     return result
+
+
+def send_login_link_email(user, token):
+    """Send magic link for passwordless login (15 min expiry)"""
+    logger.info(f"Initiating login link email - User: {user.username}, Email: {user.email}")
+
+    login_url = url_for("login_with_token", token=token, _external=True)
+
+    subject = "Your Login Link - Irish Music Sessions"
+    body_text = f"""Click this link to log in to Irish Music Sessions:
+{login_url}
+
+This link will expire in 15 minutes.
+
+If you did not request this login link, please ignore this email.
+"""
+
+    body_html = f"""
+    <h2>Log In to Irish Music Sessions</h2>
+    <p>Click the button below to log in:</p>
+    <p><a href="{login_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Log In</a></p>
+    <p>If the button doesn't work, copy and paste this link into your browser:</p>
+    <p>{login_url}</p>
+    <p><strong>This link will expire in 15 minutes.</strong></p>
+    <p>If you did not request this login link, please ignore this email.</p>
+    """
+
+    result = send_email_via_sendgrid(user.email, subject, body_text, body_html)
+
+    if result:
+        logger.info(f"Login link email sent successfully - User: {user.username}")
+    else:
+        logger.error(f"Login link email failed - User: {user.username}, Email: {user.email}")
+
+    return result

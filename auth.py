@@ -141,12 +141,92 @@ class User(UserMixin):
         finally:
             conn.close()
 
+    @staticmethod
+    def get_by_email(email):
+        """Get user by email address (case-insensitive)"""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE LOWER(ua.user_email) = LOWER(%s)
+            """,
+                (email,),
+            )
+            user_data = cur.fetchone()
+            if user_data:
+                user = User(
+                    user_id=user_data[0],
+                    person_id=user_data[1],
+                    username=user_data[2],
+                    is_active=user_data[4],
+                    is_system_admin=user_data[5],
+                    timezone=user_data[6],
+                    email_verified=user_data[7],
+                    first_name=user_data[8],
+                    last_name=user_data[9],
+                    email=user_data[10],
+                    auto_save_tunes=user_data[11],
+                    auto_save_interval=user_data[12],
+                )
+                user.hashed_password = user_data[3]
+                return user
+            return None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_by_login_token(token):
+        """Get user by valid magic link login token"""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                FROM user_account ua
+                JOIN person p ON ua.person_id = p.person_id
+                WHERE ua.login_token = %s AND ua.login_token_expires > %s
+            """,
+                (token, now_utc()),
+            )
+            user_data = cur.fetchone()
+            if user_data:
+                user = User(
+                    user_id=user_data[0],
+                    person_id=user_data[1],
+                    username=user_data[2],
+                    is_active=user_data[4],
+                    is_system_admin=user_data[5],
+                    timezone=user_data[6],
+                    email_verified=user_data[7],
+                    first_name=user_data[8],
+                    last_name=user_data[9],
+                    email=user_data[10],
+                    auto_save_tunes=user_data[11],
+                    auto_save_interval=user_data[12],
+                )
+                user.hashed_password = user_data[3]
+                return user
+            return None
+        finally:
+            conn.close()
+
     def check_password(self, password):
         if not self.hashed_password:
             return False
         return bcrypt.checkpw(
             password.encode("utf-8"), self.hashed_password.encode("utf-8")
         )
+
+    def has_password(self):
+        """Check if user has a password set (vs passwordless/magic-link user)"""
+        return self.hashed_password is not None and self.hashed_password != ""
 
     @staticmethod
     def create_user(username, password, person_id, timezone="UTC", user_email=None, referred_by_person_id=None):
@@ -163,6 +243,49 @@ class User(UserMixin):
                 RETURNING user_id
             """,
                 (person_id, username, user_email, hashed_password, timezone, referred_by_person_id),
+            )
+            result = cur.fetchone()
+            if not result:
+                return None
+            user_id = result[0]
+            conn.commit()
+            return user_id
+        finally:
+            conn.close()
+
+    @staticmethod
+    def create_user_passwordless(email, person_id, timezone="UTC", referred_by_person_id=None):
+        """
+        Create user without password (for magic link users).
+        Username is auto-generated from email (part before @, with suffix if needed for uniqueness).
+        """
+        # Generate username from email
+        base_username = email.split('@')[0].lower()
+        username = base_username
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+
+            # Find unique username
+            suffix = 0
+            while True:
+                cur.execute(
+                    "SELECT 1 FROM user_account WHERE LOWER(username) = LOWER(%s)",
+                    (username,)
+                )
+                if not cur.fetchone():
+                    break
+                suffix += 1
+                username = f"{base_username}{suffix}"
+
+            cur.execute(
+                """
+                INSERT INTO user_account (person_id, username, user_email, hashed_password, timezone, referred_by_person_id, created_by_user_id)
+                VALUES (%s, %s, %s, NULL, %s, %s, NULL)
+                RETURNING user_id
+            """,
+                (person_id, username, email, timezone, referred_by_person_id),
             )
             result = cur.fetchone()
             if not result:
@@ -226,6 +349,11 @@ def generate_password_reset_token():
 
 
 def generate_verification_token():
+    return secrets.token_urlsafe(32)
+
+
+def generate_login_token():
+    """Generate secure token for magic link login"""
     return secrets.token_urlsafe(32)
 
 

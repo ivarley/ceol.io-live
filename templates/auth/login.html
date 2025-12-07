@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login - Irish Music Sessions{% endblock %}
+{% block title %}Login or Register - Irish Music Sessions{% endblock %}
 
 {% block content %}
 <div class="page-wrapper">
@@ -9,7 +9,7 @@
             <div class="col-md-6 col-lg-4">
                 <div class="card mt-5">
                     <div class="card-header">
-                        <h3 class="card-title text-center mb-0">Login</h3>
+                        <h3 class="card-title text-center mb-0">Login or Register</h3>
                     </div>
                     <div class="card-body">
                         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -25,24 +25,80 @@
                             {% endif %}
                         {% endwith %}
 
-                        <form method="POST">
+                        <div id="alert-container"></div>
+
+                        <!-- Step 1: Email input -->
+                        <div id="email-step">
+                            <p class="text-muted mb-3">Enter your email to log in or create an account.</p>
                             <div class="mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
+                                <label for="email" class="form-label">Email address</label>
+                                <input type="email" class="form-control" id="email" name="email" required autofocus>
+                            </div>
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-primary" id="next-btn" onclick="checkEmail()">
+                                    <span id="next-btn-text">Next</span>
+                                    <span id="next-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 2a: Password login -->
+                        <div id="password-step" class="d-none">
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Email</label>
+                                <div class="d-flex align-items-center">
+                                    <span id="display-email" class="me-2"></span>
+                                    <button type="button" class="btn btn-link btn-sm p-0" onclick="resetForm()">Change</button>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label for="password" class="form-label">Password</label>
                                 <input type="password" class="form-control" id="password" name="password" required>
                             </div>
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">Login</button>
+                                <button type="button" class="btn btn-primary" id="login-btn" onclick="loginWithPassword()">
+                                    <span id="login-btn-text">Login</span>
+                                    <span id="login-btn-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                </button>
                             </div>
-                        </form>
+                            <div class="text-center mt-3">
+                                <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
+                            </div>
+                        </div>
 
-                        <div class="text-center mt-3">
-                            <p><a href="{{ url_for('forgot_password') }}">Forgot your password?</a></p>
-                            <p><a href="{{ url_for('resend_verification') }}">Resend verification email</a></p>
-                            <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
+                        <!-- Step 2b: Magic link sent -->
+                        <div id="magic-link-step" class="d-none">
+                            <div class="text-center">
+                                <div class="mb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-primary" viewBox="0 0 16 16">
+                                        <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
+                                    </svg>
+                                </div>
+                                <h5>Check your email</h5>
+                                <p class="text-muted">We've sent a login link to <strong id="magic-link-email"></strong></p>
+                                <p class="text-muted small">The link expires in 15 minutes.</p>
+                                <button type="button" class="btn btn-link" onclick="resetForm()">Use a different email</button>
+                            </div>
+                        </div>
+
+                        <!-- Step 2c: Registration started (verification email sent) -->
+                        <div id="registration-step" class="d-none">
+                            <div class="text-center">
+                                <div class="mb-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="text-success" viewBox="0 0 16 16">
+                                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                                    </svg>
+                                </div>
+                                <h5>Check your email to verify</h5>
+                                <p class="text-muted">We've sent a verification link to <strong id="registration-email"></strong></p>
+                                <p class="text-muted small">Click the link in the email to complete your registration and log in.</p>
+                                <button type="button" class="btn btn-link" onclick="resetForm()">Use a different email</button>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+                        <div class="text-center">
+                            <p class="text-muted small mb-0">Having trouble? <a href="{{ url_for('resend_verification') }}">Resend verification email</a></p>
                         </div>
                     </div>
                 </div>
@@ -50,4 +106,175 @@
         </div>
     </div>
 </div>
+
+<script>
+let currentEmail = '';
+
+function showAlert(message, type) {
+    const container = document.getElementById('alert-container');
+    container.innerHTML = `
+        <div class="alert alert-${type === 'error' ? 'danger' : type} alert-dismissible" role="alert">
+            ${message}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    `;
+}
+
+function clearAlerts() {
+    document.getElementById('alert-container').innerHTML = '';
+}
+
+function setButtonLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    const text = document.getElementById(btnId + '-text');
+    const spinner = document.getElementById(btnId + '-spinner');
+
+    if (loading) {
+        btn.disabled = true;
+        text.classList.add('d-none');
+        spinner.classList.remove('d-none');
+    } else {
+        btn.disabled = false;
+        text.classList.remove('d-none');
+        spinner.classList.add('d-none');
+    }
+}
+
+function resetForm() {
+    clearAlerts();
+    currentEmail = '';
+    document.getElementById('email').value = '';
+    document.getElementById('password').value = '';
+
+    document.getElementById('email-step').classList.remove('d-none');
+    document.getElementById('password-step').classList.add('d-none');
+    document.getElementById('magic-link-step').classList.add('d-none');
+    document.getElementById('registration-step').classList.add('d-none');
+
+    document.getElementById('email').focus();
+}
+
+async function checkEmail() {
+    clearAlerts();
+    const email = document.getElementById('email').value.trim();
+
+    if (!email) {
+        showAlert('Please enter your email address.', 'error');
+        return;
+    }
+
+    if (!email.includes('@') || !email.includes('.')) {
+        showAlert('Please enter a valid email address.', 'error');
+        return;
+    }
+
+    currentEmail = email;
+    setButtonLoading('next-btn', true);
+
+    try {
+        const response = await fetch('/api/auth/check-email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            showAlert(data.error || 'An error occurred. Please try again.', 'error');
+            setButtonLoading('next-btn', false);
+            return;
+        }
+
+        // Hide email step
+        document.getElementById('email-step').classList.add('d-none');
+
+        if (data.action === 'password_login') {
+            // Show password step
+            document.getElementById('display-email').textContent = email;
+            document.getElementById('password-step').classList.remove('d-none');
+            document.getElementById('password').focus();
+        } else if (data.action === 'magic_link_sent') {
+            // Show magic link confirmation
+            document.getElementById('magic-link-email').textContent = email;
+            document.getElementById('magic-link-step').classList.remove('d-none');
+        } else if (data.action === 'registration_started') {
+            // Show registration confirmation
+            document.getElementById('registration-email').textContent = email;
+            document.getElementById('registration-step').classList.remove('d-none');
+        }
+
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('Network error. Please check your connection and try again.', 'error');
+    } finally {
+        setButtonLoading('next-btn', false);
+    }
+}
+
+async function loginWithPassword() {
+    clearAlerts();
+    const password = document.getElementById('password').value;
+
+    if (!password) {
+        showAlert('Please enter your password.', 'error');
+        return;
+    }
+
+    setButtonLoading('login-btn', true);
+
+    try {
+        const response = await fetch('/api/auth/login-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: currentEmail, password: password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (data.action === 'resend_verification') {
+                showAlert(data.error + ' <a href="{{ url_for("resend_verification") }}">Resend verification email</a>', 'warning');
+            } else {
+                showAlert(data.error || 'Invalid email or password.', 'error');
+            }
+            setButtonLoading('login-btn', false);
+            return;
+        }
+
+        // Redirect on success
+        if (data.redirect) {
+            window.location.href = data.redirect;
+        } else {
+            window.location.href = '/';
+        }
+
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('Network error. Please check your connection and try again.', 'error');
+        setButtonLoading('login-btn', false);
+    }
+}
+
+// Handle Enter key
+document.getElementById('email').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        checkEmail();
+    }
+});
+
+document.getElementById('password').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        loginWithPassword();
+    }
+});
+</script>
 {% endblock %}
