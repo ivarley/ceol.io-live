@@ -1617,12 +1617,171 @@ def set_password_optional():
                 conn.close()
 
             flash("Password set successfully! You can use it to log in next time.", "success")
-            return redirect(url_for("home"))
+            return redirect(url_for("setup_profile"))
         else:
             # User chose to skip
-            return redirect(url_for("home"))
+            return redirect(url_for("setup_profile"))
 
     return render_template("auth/set_password.html")
+
+
+# Common instruments for Irish/folk music
+COMMON_INSTRUMENTS = [
+    "Fiddle",
+    "Flute",
+    "Tin Whistle",
+    "Uilleann Pipes",
+    "Accordion",
+    "Concertina",
+    "Banjo",
+    "Mandolin",
+    "Guitar",
+    "Bouzouki",
+    "Bodhrán",
+    "Harp",
+    "Piano",
+    "Vocals",
+]
+
+
+@login_required
+def setup_profile():
+    """Profile setup for new users - collect name, location, timezone, instruments"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get current person data
+        cur.execute(
+            """
+            SELECT person_id, first_name, last_name, city, state, country
+            FROM person WHERE person_id = %s
+        """,
+            (current_user.person_id,),
+        )
+        person_row = cur.fetchone()
+        person = {
+            "person_id": person_row[0],
+            "first_name": person_row[1],
+            "last_name": person_row[2],
+            "city": person_row[3],
+            "state": person_row[4],
+            "country": person_row[5],
+        } if person_row else {}
+
+        # Get user's current instruments
+        cur.execute(
+            "SELECT instrument FROM person_instrument WHERE person_id = %s",
+            (current_user.person_id,),
+        )
+        user_instruments = [row[0] for row in cur.fetchall()]
+
+        if request.method == "POST":
+            first_name = request.form.get("first_name", "").strip()
+            last_name = request.form.get("last_name", "").strip()
+            city = request.form.get("city", "").strip()
+            state = request.form.get("state", "").strip()
+            country = request.form.get("country", "").strip()
+            timezone = request.form.get("timezone", "UTC")
+            instruments = request.form.getlist("instruments")
+            other_instrument = request.form.get("other_instrument", "").strip()
+
+            # Add other instrument if specified
+            if other_instrument:
+                for instr in other_instrument.split(","):
+                    instr = instr.strip()
+                    if instr and instr not in instruments:
+                        instruments.append(instr)
+
+            # Update person record
+            save_to_history(
+                cur, "person", "UPDATE", current_user.person_id, user_id=current_user.user_id
+            )
+            cur.execute(
+                """
+                UPDATE person
+                SET first_name = COALESCE(NULLIF(%s, ''), first_name),
+                    last_name = COALESCE(NULLIF(%s, ''), last_name),
+                    city = NULLIF(%s, ''),
+                    state = NULLIF(%s, ''),
+                    country = NULLIF(%s, ''),
+                    last_modified_date = %s,
+                    last_modified_user_id = %s
+                WHERE person_id = %s
+            """,
+                (first_name, last_name, city, state, country, now_utc(), current_user.user_id, current_user.person_id),
+            )
+
+            # Update user timezone
+            save_to_history(
+                cur, "user_account", "UPDATE", current_user.user_id, user_id=current_user.user_id
+            )
+            cur.execute(
+                """
+                UPDATE user_account
+                SET timezone = %s, last_modified_date = %s, last_modified_user_id = %s
+                WHERE user_id = %s
+            """,
+                (timezone, now_utc(), current_user.user_id, current_user.user_id),
+            )
+
+            # Update instruments - delete existing and insert new
+            cur.execute(
+                "DELETE FROM person_instrument WHERE person_id = %s",
+                (current_user.person_id,),
+            )
+            for instrument in instruments:
+                if instrument:
+                    cur.execute(
+                        """
+                        INSERT INTO person_instrument (person_id, instrument)
+                        VALUES (%s, %s)
+                        ON CONFLICT (person_id, instrument) DO NOTHING
+                    """,
+                        (current_user.person_id, instrument),
+                    )
+
+            conn.commit()
+            flash("Profile updated!", "success")
+            return redirect(url_for("home"))
+
+        # Build timezone options
+        timezone_options = [
+            {"value": "UTC", "display": get_timezone_display_with_offset("UTC")},
+            {"value": "America/New_York", "display": get_timezone_display_with_offset("America/New_York")},
+            {"value": "America/Chicago", "display": get_timezone_display_with_offset("America/Chicago")},
+            {"value": "America/Denver", "display": get_timezone_display_with_offset("America/Denver")},
+            {"value": "America/Los_Angeles", "display": get_timezone_display_with_offset("America/Los_Angeles")},
+            {"value": "America/Anchorage", "display": get_timezone_display_with_offset("America/Anchorage")},
+            {"value": "Pacific/Honolulu", "display": get_timezone_display_with_offset("Pacific/Honolulu")},
+            {"value": "America/Toronto", "display": get_timezone_display_with_offset("America/Toronto")},
+            {"value": "America/Vancouver", "display": get_timezone_display_with_offset("America/Vancouver")},
+            {"value": "America/Phoenix", "display": get_timezone_display_with_offset("America/Phoenix")},
+            {"value": "Europe/London", "display": get_timezone_display_with_offset("Europe/London")},
+            {"value": "Europe/Dublin", "display": get_timezone_display_with_offset("Europe/Dublin")},
+            {"value": "Europe/Paris", "display": get_timezone_display_with_offset("Europe/Paris")},
+            {"value": "Europe/Berlin", "display": get_timezone_display_with_offset("Europe/Berlin")},
+            {"value": "Europe/Rome", "display": get_timezone_display_with_offset("Europe/Rome")},
+            {"value": "Europe/Madrid", "display": get_timezone_display_with_offset("Europe/Madrid")},
+            {"value": "Europe/Amsterdam", "display": get_timezone_display_with_offset("Europe/Amsterdam")},
+            {"value": "Australia/Sydney", "display": get_timezone_display_with_offset("Australia/Sydney")},
+            {"value": "Australia/Melbourne", "display": get_timezone_display_with_offset("Australia/Melbourne")},
+            {"value": "Australia/Perth", "display": get_timezone_display_with_offset("Australia/Perth")},
+            {"value": "Pacific/Auckland", "display": get_timezone_display_with_offset("Pacific/Auckland")},
+            {"value": "Asia/Tokyo", "display": get_timezone_display_with_offset("Asia/Tokyo")},
+            {"value": "Asia/Singapore", "display": get_timezone_display_with_offset("Asia/Singapore")},
+        ]
+
+        return render_template(
+            "auth/setup_profile.html",
+            person=person,
+            timezones=timezone_options,
+            common_instruments=COMMON_INSTRUMENTS,
+            user_instruments=user_instruments,
+        )
+
+    finally:
+        conn.close()
 
 
 def forgot_password():

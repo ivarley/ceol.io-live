@@ -192,6 +192,7 @@ app.add_url_rule("/api/auth/check-email", "check_email_api", check_email_api, me
 app.add_url_rule("/api/auth/login-password", "login_password_api", login_password_api, methods=["POST"])
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
 app.add_url_rule("/auth/set-password", "set_password_optional", set_password_optional, methods=["GET", "POST"])
+app.add_url_rule("/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"])
 app.add_url_rule(
     "/forgot-password", "forgot_password", forgot_password, methods=["GET", "POST"]
 )

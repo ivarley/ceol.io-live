@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Complete Your Profile - Irish Music Sessions{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card mt-5">
+                    <div class="card-header">
+                        <h3 class="card-title text-center mb-0">Complete Your Profile</h3>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="this.parentElement.style.display='none'">
+                                            <span aria-hidden="true">&times;</span>
+                                        </button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <p class="text-muted mb-4">Help other musicians find you by completing your profile. All fields are optional.</p>
+
+                        <form method="POST" id="profile-form">
+                            <!-- Name -->
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label for="first_name" class="form-label">First Name</label>
+                                    <input type="text" class="form-control" id="first_name" name="first_name"
+                                           value="{{ current_user.first_name if current_user.first_name and '@' not in current_user.first_name else '' }}">
+                                </div>
+                                <div class="col-6">
+                                    <label for="last_name" class="form-label">Last Name</label>
+                                    <input type="text" class="form-control" id="last_name" name="last_name"
+                                           value="{{ current_user.last_name or '' }}">
+                                </div>
+                            </div>
+
+                            <!-- Location -->
+                            <div class="mb-3">
+                                <label class="form-label">Where do you live?</label>
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <input type="text" class="form-control" id="city" name="city"
+                                               placeholder="City" value="{{ person.city or '' }}">
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <input type="text" class="form-control" id="state" name="state"
+                                               placeholder="State/Province" value="{{ person.state or '' }}">
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <input type="text" class="form-control" id="country" name="country"
+                                               placeholder="Country" value="{{ person.country or '' }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Timezone -->
+                            <div class="mb-3">
+                                <label for="timezone" class="form-label">Time Zone</label>
+                                <select class="form-control" id="timezone" name="timezone">
+                                    {% for tz in timezones %}
+                                        <option value="{{ tz.value }}" {% if tz.value == current_user.timezone %}selected{% endif %}>
+                                            {{ tz.display }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Used for displaying session times</small>
+                            </div>
+
+                            <!-- Instruments -->
+                            <div class="mb-4">
+                                <label class="form-label">What instruments do you play?</label>
+                                <div class="row">
+                                    {% for instrument in common_instruments %}
+                                    <div class="col-6 col-md-4 mb-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   name="instruments" value="{{ instrument }}"
+                                                   id="instr-{{ loop.index }}"
+                                                   {% if instrument in user_instruments %}checked{% endif %}>
+                                            <label class="form-check-label" for="instr-{{ loop.index }}">
+                                                {{ instrument }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mt-2">
+                                    <input type="text" class="form-control" id="other_instrument" name="other_instrument"
+                                           placeholder="Other instrument(s)...">
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary">Save Profile</button>
+                                <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Skip for now</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Country to timezone mapping for smart defaults
+const countryTimezones = {
+    'united states': 'America/New_York',
+    'usa': 'America/New_York',
+    'us': 'America/New_York',
+    'canada': 'America/Toronto',
+    'ireland': 'Europe/Dublin',
+    'uk': 'Europe/London',
+    'united kingdom': 'Europe/London',
+    'england': 'Europe/London',
+    'scotland': 'Europe/London',
+    'wales': 'Europe/London',
+    'australia': 'Australia/Sydney',
+    'germany': 'Europe/Berlin',
+    'france': 'Europe/Paris',
+    'spain': 'Europe/Madrid',
+    'italy': 'Europe/Rome',
+    'netherlands': 'Europe/Amsterdam',
+    'belgium': 'Europe/Brussels',
+    'japan': 'Asia/Tokyo',
+    'new zealand': 'Pacific/Auckland'
+};
+
+// US state to timezone mapping
+const usStateTimezones = {
+    'california': 'America/Los_Angeles',
+    'ca': 'America/Los_Angeles',
+    'washington': 'America/Los_Angeles',
+    'wa': 'America/Los_Angeles',
+    'oregon': 'America/Los_Angeles',
+    'or': 'America/Los_Angeles',
+    'nevada': 'America/Los_Angeles',
+    'nv': 'America/Los_Angeles',
+    'texas': 'America/Chicago',
+    'tx': 'America/Chicago',
+    'illinois': 'America/Chicago',
+    'il': 'America/Chicago',
+    'colorado': 'America/Denver',
+    'co': 'America/Denver',
+    'arizona': 'America/Phoenix',
+    'az': 'America/Phoenix',
+    'new york': 'America/New_York',
+    'ny': 'America/New_York',
+    'massachusetts': 'America/New_York',
+    'ma': 'America/New_York',
+    'florida': 'America/New_York',
+    'fl': 'America/New_York',
+    'pennsylvania': 'America/New_York',
+    'pa': 'America/New_York'
+};
+
+function updateTimezoneFromLocation() {
+    const country = document.getElementById('country').value.toLowerCase().trim();
+    const state = document.getElementById('state').value.toLowerCase().trim();
+    const tzSelect = document.getElementById('timezone');
+
+    let suggestedTz = null;
+
+    // Check US states first
+    if (country === 'us' || country === 'usa' || country === 'united states' || country === '') {
+        if (usStateTimezones[state]) {
+            suggestedTz = usStateTimezones[state];
+        }
+    }
+
+    // Fall back to country
+    if (!suggestedTz && countryTimezones[country]) {
+        suggestedTz = countryTimezones[country];
+    }
+
+    // Update select if we found a match
+    if (suggestedTz) {
+        for (let option of tzSelect.options) {
+            if (option.value === suggestedTz) {
+                tzSelect.value = suggestedTz;
+                break;
+            }
+        }
+    }
+}
+
+// Try to detect timezone from browser
+function detectBrowserTimezone() {
+    try {
+        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tzSelect = document.getElementById('timezone');
+        for (let option of tzSelect.options) {
+            if (option.value === browserTz) {
+                tzSelect.value = browserTz;
+                break;
+            }
+        }
+    } catch (e) {
+        console.log('Could not detect browser timezone');
+    }
+}
+
+// Attach event listeners
+document.getElementById('country').addEventListener('change', updateTimezoneFromLocation);
+document.getElementById('state').addEventListener('change', updateTimezoneFromLocation);
+
+// Detect browser timezone on load if user hasn't set one
+document.addEventListener('DOMContentLoaded', function() {
+    const tzSelect = document.getElementById('timezone');
+    if (tzSelect.value === 'UTC') {
+        detectBrowserTimezone();
+    }
+});
+</script>
+{% endblock %}
