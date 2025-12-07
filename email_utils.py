@@ -2,7 +2,7 @@ import os
 import logging
 from flask import url_for
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, Header
 
 # Configure logger for email operations
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
             return False
 
         from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
+        unsubscribe_email = os.environ.get("MAIL_UNSUBSCRIBE", "unsubscribe@ceol.io")
 
         logger.info(
             f"Sending email via SendGrid - To: {to_email}, From: {from_email}, Subject: {subject}"
@@ -30,6 +31,10 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
             plain_text_content=body_text,
             html_content=body_html,
         )
+
+        # Add List-Unsubscribe headers for better deliverability
+        message.header = Header("List-Unsubscribe", f"<mailto:{unsubscribe_email}>")
+        message.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
 
         response = sg.send(message)
 
