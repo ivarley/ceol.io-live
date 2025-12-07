@@ -1313,16 +1313,14 @@ def check_email_api():
             if person_row:
                 person_id = person_row[0]
             else:
-                # Create minimal person record (can be updated later)
-                # Use email prefix as placeholder name
-                email_prefix = email.split('@')[0]
+                # Create minimal person record (name will be collected in profile setup)
                 cur.execute(
                     """
                     INSERT INTO person (first_name, last_name, email, created_date, last_modified_date)
-                    VALUES (%s, '', %s, %s, %s)
+                    VALUES ('', '', %s, %s, %s)
                     RETURNING person_id
                 """,
-                    (email_prefix, email, now_utc(), now_utc()),
+                    (email, now_utc(), now_utc()),
                 )
                 person_id = cur.fetchone()[0]
 
@@ -1577,6 +1575,40 @@ def login_with_token(token):
     return redirect(url_for("home"))
 
 
+def _needs_profile_setup(person_id):
+    """Check if a person needs to complete their profile (missing name or location)"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT first_name, last_name, city, state, country
+            FROM person WHERE person_id = %s
+        """,
+            (person_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return True
+
+        first_name, last_name, city, state, country = row
+
+        # Need setup if first name or last name is missing/empty
+        if not first_name or not first_name.strip():
+            return True
+        if not last_name or not last_name.strip():
+            return True
+
+        # Need setup if all location fields are empty
+        has_location = (city and city.strip()) or (state and state.strip()) or (country and country.strip())
+        if not has_location:
+            return True
+
+        return False
+    finally:
+        conn.close()
+
+
 @login_required
 def set_password_optional():
     """Optional password setup for passwordless users"""
@@ -1617,10 +1649,11 @@ def set_password_optional():
                 conn.close()
 
             flash("Password set successfully! You can use it to log in next time.", "success")
+
+        # Check if profile setup is needed
+        if _needs_profile_setup(current_user.person_id):
             return redirect(url_for("setup_profile"))
-        else:
-            # User chose to skip
-            return redirect(url_for("setup_profile"))
+        return redirect(url_for("home"))
 
     return render_template("auth/set_password.html")
 
@@ -1675,6 +1708,10 @@ def setup_profile():
             (current_user.person_id,),
         )
         user_instruments = [row[0] for row in cur.fetchall()]
+
+        # Separate common instruments from other instruments (case-insensitive)
+        common_instruments_lower = [i.lower() for i in COMMON_INSTRUMENTS]
+        other_instruments = [i for i in user_instruments if i.lower() not in common_instruments_lower]
 
         if request.method == "POST":
             first_name = request.form.get("first_name", "").strip()
@@ -1778,6 +1815,7 @@ def setup_profile():
             timezones=timezone_options,
             common_instruments=COMMON_INSTRUMENTS,
             user_instruments=user_instruments,
+            other_instruments=other_instruments,
         )
 
     finally:
