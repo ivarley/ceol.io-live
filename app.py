@@ -899,6 +899,18 @@ app.add_url_rule(
     increment_person_tune_heard_count,
     methods=["PUT"],
 )
+app.add_url_rule(
+    "/api/user/admin-sessions",
+    "get_user_admin_sessions",
+    get_user_admin_sessions,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/copy",
+    "copy_tunes_to_destination",
+    copy_tunes_to_destination,
+    methods=["POST"],
+)
 
 # Error handlers
 FUNNY_ERROR_TEXTS = ["Stroh Piano Accordion", "Traditional Irish Djembe"]

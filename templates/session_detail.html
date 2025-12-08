@@ -780,6 +780,246 @@
             color: #7dda8b;
         }
 
+        /* Tune selection mode styles */
+        .tune-select-checkbox {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            min-height: 20px;
+            border: 2px solid var(--border-color, #dee2e6);
+            border-radius: 50%;
+            background-color: var(--bg-color, white);
+            cursor: pointer;
+            flex-shrink: 0;
+            margin: 0;
+            padding: 0;
+            display: none;
+            position: relative;
+        }
+
+        .tune-select-checkbox:checked {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .tune-select-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background-color: white;
+            border-radius: 50%;
+        }
+
+        .tune-select-checkbox:hover {
+            border-color: var(--primary);
+        }
+
+        /* Dark mode checkbox styles */
+        [data-theme="dark"] .tune-select-checkbox {
+            border-color: var(--border-color, #495057);
+            background-color: var(--bg-color, #2d2d2d);
+        }
+
+        [data-theme="dark"] .tune-select-checkbox:checked {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .tune-row.selection-mode .tune-select-checkbox {
+            display: block;
+            margin-right: 10px;
+        }
+
+        .selection-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .selection-btn {
+            padding: 8px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .selection-btn:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .selection-btn.primary {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .selection-btn.primary:hover {
+            background-color: var(--primary-dark, #0056b3);
+        }
+
+        .selection-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .select-all-row {
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .select-all-row.visible {
+            display: flex;
+        }
+
+        .select-all-row .tune-select-checkbox {
+            display: block;
+            width: 16px;
+            height: 16px;
+            min-width: 16px;
+            min-height: 16px;
+        }
+
+        .select-all-row .tune-select-checkbox:checked::after {
+            width: 6px;
+            height: 6px;
+        }
+
+        .select-all-row label {
+            cursor: pointer;
+            color: var(--text-muted, #6c757d);
+            font-size: 14px;
+            transform: translateY(4px);
+        }
+
+        .deselect-link {
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 8px;
+        }
+
+        .deselect-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Copy To Modal Styles */
+        .copy-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .copy-modal-overlay.hidden {
+            display: none;
+        }
+
+        .copy-modal {
+            background: var(--bg-color);
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 450px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .copy-modal h3 {
+            margin: 0 0 16px 0;
+            color: var(--text-color);
+            font-size: 18px;
+        }
+
+        .copy-modal-destinations {
+            margin-bottom: 20px;
+        }
+
+        .copy-destination-option {
+            display: block;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-destination-option:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .copy-destination-option.selected {
+            border-color: var(--primary);
+            background-color: rgba(0, 123, 255, 0.1);
+        }
+
+        .copy-destination-option input[type="radio"] {
+            margin-right: 10px;
+            accent-color: var(--primary);
+        }
+
+        .my-tunes-status-options {
+            margin-left: 26px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .my-tunes-status-options.visible {
+            display: block;
+        }
+
+        .my-tunes-status-options label {
+            display: block;
+            padding: 6px 0;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .my-tunes-status-options input[type="radio"] {
+            margin-right: 8px;
+        }
+
+        .copy-modal-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            color: #856404;
+            font-size: 13px;
+        }
+
+        [data-theme="dark"] .copy-modal-warning {
+            background-color: #3d3200;
+            border-color: #665200;
+            color: #ffc107;
+        }
+
+        .copy-modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
         /* Modal button group and button styles (matching my_tunes) */
         .modal-button-group {
             display: flex;
@@ -1484,11 +1724,22 @@
                         <div class="filter-panel-actions">
                             <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
                         </div>
+                        {% if is_logged_in %}
+                        <div class="selection-buttons">
+                            <button id="select-tunes-btn" class="selection-btn" onclick="toggleSelectionMode()">Select Tunes...</button>
+                            <button id="copy-to-btn" class="selection-btn primary" onclick="showCopyModal()" disabled>And Copy To...</button>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
                 <div class="results-count">
                     <span id="results-count-text"></span>
+                    <div class="select-all-row" id="select-all-row">
+                        <input type="checkbox" id="select-all-checkbox" class="tune-select-checkbox" onclick="toggleSelectAll(event)">
+                        <label for="select-all-checkbox" id="select-all-label">Select all</label>
+                        <span id="deselect-link" class="deselect-link" onclick="deselectAll()" style="display: none;">(Clear)</span>
+                    </div>
                 </div>
 
                 <div class="tunes-list" id="tunes-list">
@@ -1498,6 +1749,33 @@
 
             <!-- Tune Detail Modal -->
             {% include 'tune_detail_modal.html' %}
+
+            <!-- Copy Tunes Modal -->
+            {% if is_logged_in %}
+            <div id="copy-modal-overlay" class="copy-modal-overlay hidden" onclick="closeCopyModal(event)">
+                <div class="copy-modal" onclick="event.stopPropagation()">
+                    <div id="copy-modal-step-1">
+                        <h3 id="copy-modal-title">Copy selected tunes to:</h3>
+                        <div class="copy-modal-destinations" id="copy-destinations">
+                            <!-- Destinations will be populated by JavaScript -->
+                        </div>
+                        <div class="copy-modal-actions">
+                            <button class="selection-btn" onclick="closeCopyModal()">Cancel</button>
+                            <button id="copy-next-btn" class="selection-btn primary" onclick="showCopyConfirmation()" disabled>Next</button>
+                        </div>
+                    </div>
+                    <div id="copy-modal-step-2" style="display: none;">
+                        <h3 id="copy-confirm-title">Confirm Copy</h3>
+                        <p id="copy-confirm-message"></p>
+                        <div id="copy-warning" class="copy-modal-warning" style="display: none;"></div>
+                        <div class="copy-modal-actions">
+                            <button class="selection-btn" onclick="backToCopyStep1()">Back</button>
+                            <button id="copy-confirm-btn" class="selection-btn primary" onclick="executeCopy()">Copy Them!</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Logs Tab Content -->
@@ -2254,6 +2532,13 @@
     let currentSortType = 'session'; // 'alpha', 'session', 'everywhere' (default to session)
     let currentSortDirection = 'desc'; // 'asc', 'desc' (default to descending for session)
 
+    // Selection mode state
+    let isSelectionMode = false;
+    let selectedTuneIds = new Set(); // Track selected tune IDs (persists across filters)
+    let adminSessions = []; // Cache admin sessions for copy modal
+    let selectedDestination = null; // Current selected destination in copy modal
+    let selectedLearnStatus = 'want to learn'; // Default learn status for My Tunes
+
     // Sort functions based on type and direction
     const sortFunctions = {
         alpha: {
@@ -2714,9 +2999,14 @@
             typeBadge = tuneType ? `<span class="tune-type">${tuneType}</span>` : '';
         }
 
+        // Check if tune is selected
+        const isChecked = selectedTuneIds.has(tuneId) ? 'checked' : '';
+        const selectionModeClass = isSelectionMode ? ' selection-mode' : '';
+
         return `
-            <div class="tune-row" data-tune-id="${tuneId}" onclick="showTuneDetail(${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
+            <div class="tune-row${selectionModeClass}" data-tune-id="${tuneId}" onclick="handleTuneRowClick(event, ${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
                 <div class="tune-row-header">
+                    <input type="checkbox" class="tune-select-checkbox" data-tune-id="${tuneId}" ${isChecked} onclick="handleTuneCheckboxClick(event, ${tuneId})">
                     <h3 class="tune-name">${tuneName}</h3>
                 </div>
                 <div class="tune-meta">
@@ -2744,6 +3034,303 @@
                 isSessionAdmin: {{ 'true' if is_session_admin else 'false' }}
             }
         });
+    }
+
+    // ========================================
+    // Tune Selection & Copy Functions
+    // ========================================
+
+    function handleTuneRowClick(event, tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId) {
+        // If in selection mode, toggle the checkbox instead of opening modal
+        if (isSelectionMode) {
+            toggleTuneSelection(tuneId);
+            return;
+        }
+        // Otherwise show tune detail
+        showTuneDetail(tuneId, tuneName, tuneType, timesPlayed, tunebookCount, settingId);
+    }
+
+    function handleTuneCheckboxClick(event, tuneId) {
+        event.stopPropagation();
+        toggleTuneSelection(tuneId);
+    }
+
+    function toggleTuneSelection(tuneId) {
+        if (selectedTuneIds.has(tuneId)) {
+            selectedTuneIds.delete(tuneId);
+        } else {
+            selectedTuneIds.add(tuneId);
+        }
+        updateSelectionUI();
+    }
+
+    function toggleSelectionMode() {
+        isSelectionMode = !isSelectionMode;
+        const btn = document.getElementById('select-tunes-btn');
+        const selectAllRow = document.getElementById('select-all-row');
+
+        if (isSelectionMode) {
+            btn.textContent = 'Cancel Selection';
+            selectAllRow.classList.add('visible');
+        } else {
+            btn.textContent = 'Select Tunes...';
+            selectAllRow.classList.remove('visible');
+            selectedTuneIds.clear();
+        }
+
+        updateSelectionUI();
+        renderTunes(); // Re-render to add/remove selection mode classes
+    }
+
+    function updateSelectionUI() {
+        const copyBtn = document.getElementById('copy-to-btn');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const deselectLink = document.getElementById('deselect-link');
+
+        // Update copy button state
+        if (copyBtn) {
+            copyBtn.disabled = selectedTuneIds.size === 0;
+        }
+
+        // Update checkboxes in tune rows
+        document.querySelectorAll('.tune-select-checkbox[data-tune-id]').forEach(checkbox => {
+            const tuneId = parseInt(checkbox.dataset.tuneId);
+            checkbox.checked = selectedTuneIds.has(tuneId);
+        });
+
+        // Update select all checkbox and label
+        if (selectAllCheckbox) {
+            const visibleTuneIds = filteredTunes.map(t => t[0]);
+            const allVisibleSelected = visibleTuneIds.length > 0 &&
+                visibleTuneIds.every(id => selectedTuneIds.has(id));
+
+            selectAllCheckbox.checked = allVisibleSelected;
+
+            // Show deselect link if any tunes are selected
+            if (deselectLink) {
+                deselectLink.style.display = selectedTuneIds.size > 0 ? 'inline' : 'none';
+            }
+        }
+    }
+
+    function toggleSelectAll(event) {
+        event.stopPropagation();
+        const visibleTuneIds = filteredTunes.map(t => t[0]);
+        const allVisibleSelected = visibleTuneIds.every(id => selectedTuneIds.has(id));
+
+        if (allVisibleSelected) {
+            // Deselect all visible
+            visibleTuneIds.forEach(id => selectedTuneIds.delete(id));
+        } else {
+            // Select all visible
+            visibleTuneIds.forEach(id => selectedTuneIds.add(id));
+        }
+
+        updateSelectionUI();
+    }
+
+    function deselectAll() {
+        selectedTuneIds.clear();
+        updateSelectionUI();
+    }
+
+    // Copy Modal Functions
+    async function showCopyModal() {
+        if (selectedTuneIds.size === 0) return;
+
+        const overlay = document.getElementById('copy-modal-overlay');
+        const step1 = document.getElementById('copy-modal-step-1');
+        const step2 = document.getElementById('copy-modal-step-2');
+        const title = document.getElementById('copy-modal-title');
+
+        // Reset to step 1
+        step1.style.display = 'block';
+        step2.style.display = 'none';
+        selectedDestination = null;
+
+        // Update title with count
+        title.textContent = `Copy the ${selectedTuneIds.size} selected tune${selectedTuneIds.size !== 1 ? 's' : ''} to:`;
+
+        // Build destinations list
+        await buildDestinationsList();
+
+        overlay.classList.remove('hidden');
+    }
+
+    async function buildDestinationsList() {
+        const container = document.getElementById('copy-destinations');
+        container.innerHTML = '<p style="color: var(--text-muted);">Loading destinations...</p>';
+
+        try {
+            // Fetch admin sessions if not cached
+            if (adminSessions.length === 0) {
+                const response = await fetch('/api/user/admin-sessions');
+                const data = await response.json();
+                if (data.success) {
+                    // Filter out the current session
+                    adminSessions = data.sessions.filter(s => s.path !== sessionPath);
+                }
+            }
+
+            let html = `
+                <div class="copy-destination-option" onclick="selectDestination('my_tunes', this)">
+                    <input type="radio" name="destination" value="my_tunes">
+                    <span>My Tunes</span>
+                    <div class="my-tunes-status-options" id="my-tunes-status-options">
+                        <label><input type="radio" name="learn_status" value="want to learn" checked onclick="setLearnStatus('want to learn')"> Want to Learn</label>
+                        <label><input type="radio" name="learn_status" value="learning" onclick="setLearnStatus('learning')"> Learning</label>
+                        <label><input type="radio" name="learn_status" value="learned" onclick="setLearnStatus('learned')"> Learned</label>
+                    </div>
+                </div>
+            `;
+
+            adminSessions.forEach(session => {
+                html += `
+                    <div class="copy-destination-option" onclick="selectDestination('session:${session.path}', this)">
+                        <input type="radio" name="destination" value="session:${session.path}">
+                        <span>${escapeHtml(session.name)}</span>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            container.innerHTML = '<p style="color: #dc3545;">Failed to load destinations. Please try again.</p>';
+        }
+    }
+
+    function selectDestination(destination, element) {
+        // Remove selected class from all options
+        document.querySelectorAll('.copy-destination-option').forEach(opt => {
+            opt.classList.remove('selected');
+            opt.querySelector('input[type="radio"]').checked = false;
+        });
+
+        // Add selected class to clicked option
+        element.classList.add('selected');
+        element.querySelector('input[type="radio"]').checked = true;
+        selectedDestination = destination;
+
+        // Show/hide learn status options
+        const statusOptions = document.getElementById('my-tunes-status-options');
+        if (destination === 'my_tunes') {
+            statusOptions.classList.add('visible');
+        } else {
+            statusOptions.classList.remove('visible');
+        }
+
+        // Enable next button
+        document.getElementById('copy-next-btn').disabled = false;
+    }
+
+    function setLearnStatus(status) {
+        selectedLearnStatus = status;
+        event.stopPropagation();
+    }
+
+    function showCopyConfirmation() {
+        if (!selectedDestination) return;
+
+        const step1 = document.getElementById('copy-modal-step-1');
+        const step2 = document.getElementById('copy-modal-step-2');
+        const confirmMessage = document.getElementById('copy-confirm-message');
+        const warningDiv = document.getElementById('copy-warning');
+
+        // Determine destination name
+        let destinationName;
+        if (selectedDestination === 'my_tunes') {
+            destinationName = `My Tunes (as "${selectedLearnStatus}")`;
+        } else {
+            const sessionPath = selectedDestination.replace('session:', '');
+            const session = adminSessions.find(s => s.path === sessionPath);
+            destinationName = session ? session.name : sessionPath;
+        }
+
+        confirmMessage.textContent = `${selectedTuneIds.size} tune${selectedTuneIds.size !== 1 ? 's' : ''} will be copied to ${destinationName}. Proceed?`;
+
+        // Check for filter warning
+        const visibleSelectedCount = filteredTunes.filter(t => selectedTuneIds.has(t[0])).length;
+        const totalSelectedCount = selectedTuneIds.size;
+
+        if (visibleSelectedCount !== totalSelectedCount && (currentFilters.search || currentFilters.type)) {
+            warningDiv.textContent = `Warning: This will copy all ${totalSelectedCount} selected tunes, not just the ${visibleSelectedCount} selected tunes visible right now with your filters and searches enabled!`;
+            warningDiv.style.display = 'block';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+
+        step1.style.display = 'none';
+        step2.style.display = 'block';
+    }
+
+    function backToCopyStep1() {
+        document.getElementById('copy-modal-step-1').style.display = 'block';
+        document.getElementById('copy-modal-step-2').style.display = 'none';
+    }
+
+    function closeCopyModal(event) {
+        // If event is passed and target is the overlay itself, close the modal
+        if (event && event.target !== event.currentTarget) return;
+
+        document.getElementById('copy-modal-overlay').classList.add('hidden');
+    }
+
+    async function executeCopy() {
+        if (!selectedDestination || selectedTuneIds.size === 0) return;
+
+        const confirmBtn = document.getElementById('copy-confirm-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Copying...';
+
+        try {
+            const payload = {
+                tune_ids: Array.from(selectedTuneIds)
+            };
+
+            if (selectedDestination === 'my_tunes') {
+                payload.destination_type = 'my_tunes';
+                payload.learn_status = selectedLearnStatus;
+            } else {
+                payload.destination_type = 'session';
+                payload.destination_session_path = selectedDestination.replace('session:', '');
+            }
+
+            const response = await fetch('/api/tunes/copy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Store message in sessionStorage for display on destination page
+                sessionStorage.setItem('copyTunesMessage', data.message);
+                // Redirect to destination
+                window.location.href = data.redirect_url;
+            } else {
+                showMessage(data.error || 'Failed to copy tunes', 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Copy Them!';
+            }
+
+        } catch (error) {
+            showMessage('An error occurred while copying tunes', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Copy Them!';
+        }
+    }
+
+    // Check for copy success message on page load
+    function checkForCopyMessage() {
+        const message = sessionStorage.getItem('copyTunesMessage');
+        if (message) {
+            sessionStorage.removeItem('copyTunesMessage');
+            showMessage(message, 'success');
+        }
     }
 
     // Active Session Instance Highlighting
@@ -2971,6 +3558,7 @@
 
         // Check for success message and highlight newly added tune
         checkForSuccessMessage();
+        checkForCopyMessage();
         scrollToAndHighlightTune();
 
         // Check for server-provided tune_id (from path-based URLs)

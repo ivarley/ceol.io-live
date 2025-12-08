@@ -372,6 +372,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     loadFiltersFromURL();
     checkForSuccessMessage();
+    checkForCopyMessage();
     scrollToAndHighlightTune();
     setupScrollDetection();
 
@@ -420,6 +421,14 @@ function checkForSuccessMessage() {
     } else if (params.has('already')) {
         showMessage('This tune is already on your list', 'info');
         // Note: URL cleanup is handled by scrollToAndHighlightTune()
+    }
+}
+
+function checkForCopyMessage() {
+    const message = sessionStorage.getItem('copyTunesMessage');
+    if (message) {
+        sessionStorage.removeItem('copyTunesMessage');
+        showMessage(message, 'success');
     }
 }
 

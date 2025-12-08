@@ -10635,3 +10635,225 @@ def api_admin_history(entity_type, entity_id):
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         conn.close()
+
+
+# ============================================================================
+# Tune Copy/Bulk Operations
+# ============================================================================
+
+@api_login_required
+def get_user_admin_sessions():
+    """
+    Get list of sessions the current user is admin of.
+
+    GET /api/user/admin-sessions
+
+    Returns:
+    {
+        "success": true,
+        "sessions": [
+            {"session_id": int, "name": str, "path": str},
+            ...
+        ]
+    }
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        # Get sessions where user is admin
+        cur.execute(
+            """
+            SELECT s.session_id, s.name, s.path
+            FROM session s
+            JOIN session_person sp ON s.session_id = sp.session_id
+            WHERE sp.person_id = %s AND sp.is_admin = TRUE
+            ORDER BY s.name
+            """,
+            (person_id,)
+        )
+
+        sessions = []
+        for row in cur.fetchall():
+            sessions.append({
+                "session_id": row[0],
+                "name": row[1],
+                "path": row[2]
+            })
+
+        return jsonify({"success": True, "sessions": sessions})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@api_login_required
+def copy_tunes_to_destination():
+    """
+    Copy multiple tunes to a destination (My Tunes or a session).
+
+    POST /api/tunes/copy
+
+    Request body:
+    {
+        "tune_ids": [int, ...],
+        "destination_type": "my_tunes" | "session",
+        "destination_session_path": str (required if destination_type is "session"),
+        "learn_status": "want to learn" | "learning" | "learned" (required if destination_type is "my_tunes")
+    }
+
+    Returns:
+    {
+        "success": true,
+        "copied_count": int,
+        "skipped_count": int,
+        "message": str,
+        "redirect_url": str
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+
+    tune_ids = data.get("tune_ids", [])
+    destination_type = data.get("destination_type")
+    destination_session_path = data.get("destination_session_path")
+    learn_status = data.get("learn_status", "want to learn")
+
+    if not tune_ids:
+        return jsonify({"success": False, "error": "No tunes selected"}), 400
+
+    if destination_type not in ["my_tunes", "session"]:
+        return jsonify({"success": False, "error": "Invalid destination type"}), 400
+
+    if destination_type == "session" and not destination_session_path:
+        return jsonify({"success": False, "error": "Session path is required for session destination"}), 400
+
+    # Validate learn_status for my_tunes
+    if destination_type == "my_tunes":
+        valid_statuses = ["want to learn", "learning", "learned"]
+        if learn_status not in valid_statuses:
+            return jsonify({"success": False, "error": f"learn_status must be one of: {', '.join(valid_statuses)}"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Get person_id from current user
+        cur.execute(
+            "SELECT person_id FROM user_account WHERE user_id = %s",
+            (current_user.user_id,)
+        )
+        person_row = cur.fetchone()
+        if not person_row:
+            return jsonify({"success": False, "error": "User's person record not found"}), 404
+
+        person_id = person_row[0]
+
+        copied_count = 0
+        skipped_count = 0
+        destination_name = ""
+        redirect_url = ""
+
+        if destination_type == "my_tunes":
+            destination_name = "My Tunes"
+            redirect_url = "/my-tunes"
+
+            for tune_id in tune_ids:
+                # Check if tune already exists in person_tune
+                cur.execute(
+                    "SELECT person_tune_id FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (person_id, tune_id)
+                )
+                if cur.fetchone():
+                    skipped_count += 1
+                    continue
+
+                # Insert into person_tune
+                cur.execute(
+                    """
+                    INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
+                    VALUES (%s, %s, %s, 1, %s)
+                    """,
+                    (person_id, tune_id, learn_status, get_current_user_id())
+                )
+                copied_count += 1
+
+        else:  # destination_type == "session"
+            # Get session_id and verify user is admin
+            cur.execute("SELECT session_id, name FROM session WHERE path = %s", (destination_session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "error": "Destination session not found"}), 404
+
+            session_id, session_name = session_result
+            destination_name = session_name
+            redirect_url = f"/sessions/{destination_session_path}/tunes"
+
+            # Check if user is admin of this session (or system admin)
+            if not current_user.is_system_admin:
+                cur.execute(
+                    "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+                    (session_id, person_id)
+                )
+                admin_row = cur.fetchone()
+                if not admin_row or not admin_row[0]:
+                    return jsonify({"success": False, "error": "You must be an admin of the destination session"}), 403
+
+            for tune_id in tune_ids:
+                # Check if tune already exists in session_tune
+                cur.execute(
+                    "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                    (session_id, tune_id)
+                )
+                if cur.fetchone():
+                    skipped_count += 1
+                    continue
+
+                # Insert into session_tune
+                cur.execute(
+                    """
+                    INSERT INTO session_tune (session_id, tune_id, created_by_user_id)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (session_id, tune_id, get_current_user_id())
+                )
+
+                # Save to history
+                save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
+
+                copied_count += 1
+
+        conn.commit()
+
+        # Build message
+        message = f"Copied {copied_count} tune{'s' if copied_count != 1 else ''} to {destination_name}."
+        if skipped_count > 0:
+            message += f" ({skipped_count} tune{'s' if skipped_count != 1 else ''} skipped because it was already there.)"
+
+        return jsonify({
+            "success": True,
+            "copied_count": copied_count,
+            "skipped_count": skipped_count,
+            "message": message,
+            "redirect_url": redirect_url
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
