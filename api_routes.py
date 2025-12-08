@@ -675,15 +675,16 @@ def get_session_tune_detail(session_path, tune_id):
         incipit_abc = None
         abc_image = None
         incipit_image = None
+        setting_key = None
         if setting_id:
             cur.execute(
-                "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
                 (setting_id,)
             )
         else:
             # Fall back to the first setting for this tune (ordered by setting_id)
             cur.execute(
-                """SELECT abc, incipit_abc, image, incipit_image
+                """SELECT abc, incipit_abc, image, incipit_image, key
                    FROM tune_setting
                    WHERE tune_id = %s
                    ORDER BY setting_id ASC
@@ -696,6 +697,7 @@ def get_session_tune_detail(session_path, tune_id):
             incipit_abc = abc_result[1]
             abc_image = abc_result[2]
             incipit_image = abc_result[3]
+            setting_key = abc_result[4]
 
         # Get all aliases from session_tune_alias table
         cur.execute(
@@ -817,6 +819,7 @@ def get_session_tune_detail(session_path, tune_id):
                     "aliases": aliases,
                     "setting_id": setting_id,
                     "key": key,
+                    "setting_key": setting_key,
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
                     "image": bytea_to_base64(abc_image),
@@ -9477,16 +9480,17 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         incipit_abc = None
         abc_image = None
         incipit_image = None
+        setting_key = None
         effective_setting_id = setting_override if setting_override else session_setting_id
         if effective_setting_id:
             cur.execute(
-                "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
+                "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
                 (effective_setting_id,)
             )
         else:
             # Fall back to the first setting for this tune (ordered by setting_id)
             cur.execute(
-                """SELECT abc, incipit_abc, image, incipit_image
+                """SELECT abc, incipit_abc, image, incipit_image, key
                    FROM tune_setting
                    WHERE tune_id = %s
                    ORDER BY setting_id ASC
@@ -9499,6 +9503,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
             incipit_abc = abc_result[1]
             abc_image = abc_result[2]
             incipit_image = abc_result[3]
+            setting_key = abc_result[4]
 
         # Get play count for this session (all instances)
         cur.execute(
@@ -9605,6 +9610,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     "alias": session_alias,
                     "setting_id": session_setting_id,
                     "key": session_key,
+                    "setting_key": setting_key,
                     # Instance-specific overrides
                     "name": name_override,
                     "key_override": key_override,
@@ -9950,9 +9956,10 @@ def get_admin_tune_detail(tune_id):
         abc_image = None
         incipit_image = None
         first_setting_id = None
+        setting_key = None
         cur.execute(
             """
-            SELECT setting_id, abc, incipit_abc, image, incipit_image
+            SELECT setting_id, abc, incipit_abc, image, incipit_image, key
             FROM tune_setting
             WHERE tune_id = %s
             ORDER BY setting_id ASC
@@ -9967,6 +9974,7 @@ def get_admin_tune_detail(tune_id):
             incipit_abc = setting_result[2]
             abc_image = setting_result[3]
             incipit_image = setting_result[4]
+            setting_key = setting_result[5]
 
         # Get count of distinct sessions playing this tune
         cur.execute(
@@ -10055,6 +10063,7 @@ def get_admin_tune_detail(tune_id):
                     "tune_name": tune_name,
                     "tune_type": tune_type,
                     "setting_id": first_setting_id,
+                    "setting_key": setting_key,
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
                     "image": bytea_to_base64(abc_image),

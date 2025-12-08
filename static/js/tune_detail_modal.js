@@ -336,7 +336,8 @@
         // Get tune metadata for headers
         const tuneName = tuneData.tune_name || tuneData.name || tuneData.name_alias || tuneData.alias || 'Tune';
         const tuneType = tuneData.tune_type || '';
-        const tuneKey = tuneData.key || tuneData.key_override || '';
+        // Prefer setting_key (from tune_setting), fall back to user-specified key or key_override
+        const tuneKey = tuneData.setting_key || tuneData.key || tuneData.key_override || '';
         const meter = getMeterForTuneType(tuneType);
 
         // Build full ABC with headers

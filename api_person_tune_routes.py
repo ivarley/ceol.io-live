@@ -152,13 +152,13 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
             if person_tune.setting_id:
                 # Use the specific setting_id if saved
                 cur.execute(
-                    "SELECT abc, incipit_abc, image, incipit_image FROM tune_setting WHERE setting_id = %s",
+                    "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
                     (person_tune.setting_id,)
                 )
             else:
                 # Fall back to the first setting for this tune (ordered by setting_id)
                 cur.execute(
-                    """SELECT abc, incipit_abc, image, incipit_image
+                    """SELECT abc, incipit_abc, image, incipit_image, key
                        FROM tune_setting
                        WHERE tune_id = %s
                        ORDER BY setting_id ASC
@@ -171,6 +171,7 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
                 response['incipit_abc'] = abc_result[1]
                 response['image'] = bytea_to_base64(abc_result[2])
                 response['incipit_image'] = bytea_to_base64(abc_result[3])
+                response['setting_key'] = abc_result[4]
         finally:
             conn.close()
         response['abc'] = abc_notation
