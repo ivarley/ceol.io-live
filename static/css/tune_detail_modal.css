@@ -95,13 +95,6 @@
     text-align: center;
     padding: 0;
     padding-top: 10px;
-    vertical-align: middle;
-}
-
-.modal-header-spacer-cell .thesession-link-icon,
-.modal-header-spacer-cell .abctools-link-icon {
-    display: inline-flex;
-    vertical-align: middle;
 }
 
 .modal-header-close-cell {
@@ -820,12 +813,45 @@
     position: relative;
 }
 
-/* Mode Tabs - hanging off bottom */
+/* Controls row - mode tabs on left, external links on right */
+.notation-controls-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+    padding: 0 6px 6px 6px;
+}
+
+/* Mode Tabs - left side */
 .notation-mode-tabs {
     display: flex;
     gap: 0;
-    margin-top: 4px;
-    padding: 0 6px 6px 6px;
+}
+
+/* External links - right side */
+.notation-external-links {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.notation-external-link {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--secondary-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: lowercase;
+    text-decoration: none;
+}
+
+.notation-external-link:hover {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
 }
 
 .notation-mode-tab {

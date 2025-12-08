@@ -225,8 +225,6 @@
      */
     function buildHeaderSection(tuneData, config) {
         const displayName = getDisplayName(tuneData, config);
-        const thesessionLink = buildTheSessionLink(tuneData);
-        const abcToolsLink = buildAbcToolsLink(tuneData);
         const tuneType = tuneData.tune_type || config.additionalData?.tuneType || '';
         const isClickable = config.context !== 'admin';
         const clickHandler = isClickable ? ' onclick="TuneDetailModal.toggleConfigSection()"' : '';
@@ -242,7 +240,6 @@
                         </h2>
                     </td>
                     <td class="modal-header-spacer-cell">
-                        ${thesessionLink}${abcToolsLink}
                     </td>
                     <td class="modal-header-close-cell">
                         <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
@@ -288,13 +285,34 @@
         const baseUrl = `https://thesession.org/tunes/${tuneData.tune_id}`;
         let url = baseUrl;
 
-        // Add setting_id if available
+        // Add setting_id anchor if available
         const settingId = tuneData.setting_id || tuneData.setting_override;
         if (settingId) {
-            url = `${baseUrl}?setting=${settingId}#setting${settingId}`;
+            url = `${baseUrl}#setting${settingId}`;
         }
 
-        return `<a href="${url}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();"><img src="/static/images/thesession-logo-1.png" alt="TheSession.org" class="thesession-logo-img"></a>`;
+        return `<a href="${url}" target="_blank" class="notation-external-link" title="View on TheSession.org" onclick="event.stopPropagation();">thesession</a>`;
+    }
+
+    /**
+     * Get meter (time signature) for a tune type
+     */
+    function getMeterForTuneType(tuneType) {
+        const meterMap = {
+            'polka': '2/4',
+            'barndance': '4/4',
+            'hornpipe': '4/4',
+            'waltz': '3/4',
+            'reel': '4/4',
+            'hop jig': '9/8',
+            'jig': '6/8',
+            'set dance': '6/8',
+            'march': '4/4',
+            'mazurka': '3/4',
+            'slide': '12/8'
+        };
+        const normalizedType = (tuneType || '').toLowerCase();
+        return meterMap[normalizedType] || '';
     }
 
     /**
@@ -319,11 +337,13 @@
         const tuneName = tuneData.tune_name || tuneData.name || tuneData.name_alias || tuneData.alias || 'Tune';
         const tuneType = tuneData.tune_type || '';
         const tuneKey = tuneData.key || tuneData.key_override || '';
+        const meter = getMeterForTuneType(tuneType);
 
         // Build full ABC with headers
         const formattedAbc = `X: 1
 T: ${tuneName}
-R: ${tuneType}
+R: ${tuneType}${meter ? `\nM: ${meter}` : ''}
+L: 1/8
 K: ${tuneKey}
 ${abcBody}`;
 
@@ -338,7 +358,7 @@ ${abcBody}`;
         // format=noten means standard notation only, ssp=45 is sample size parameter, play=1 enables autoplay
         const url = `https://michaeleskin.com/abctools/abctools.html?lzw=${compressed}&format=noten&ssp=45&name=${encodeURIComponent(tuneName)}&play=1`;
 
-        return `<a href="${url}" target="_blank" class="abctools-link-icon" title="View in ABC Tools" onclick="event.stopPropagation();"><img src="/static/images/abctools-icon-57x57.png" alt="ABC Tools" class="abctools-logo-img"></a>`;
+        return `<a href="${url}" target="_blank" class="notation-external-link" title="View in ABC Tools" onclick="event.stopPropagation();">abc-tools</a>`;
     }
 
     /**
@@ -400,7 +420,6 @@ ${abcBody}`;
 
         // Build mode tabs (only if both modes available)
         const modeTabs = (hasDotsMode && hasAbcMode) ? `
-            <div class="notation-mode-tabs">
                 <button class="notation-mode-tab ${initialMode === 'dots' ? 'active' : ''}"
                         data-mode="dots"
                         onclick="TuneDetailModal.switchNotationMode('dots'); event.stopPropagation();">
@@ -411,8 +430,11 @@ ${abcBody}`;
                         onclick="TuneDetailModal.switchNotationMode('abc'); event.stopPropagation();">
                     abc
                 </button>
-            </div>
         ` : '';
+
+        // Build external links (TheSession and ABC Tools)
+        const thesessionLink = buildTheSessionLink(tuneData);
+        const abcToolsLink = buildAbcToolsLink(tuneData);
 
         return `
             <div class="abc-notation-section">
@@ -425,7 +447,14 @@ ${abcBody}`;
                      data-incipit-image="${incipitImage || ''}">
                     ${displayContent}
                 </div>
-                ${modeTabs}
+                <div class="notation-controls-row">
+                    <div class="notation-mode-tabs">
+                        ${modeTabs}
+                    </div>
+                    <div class="notation-external-links">
+                        ${thesessionLink}${abcToolsLink}
+                    </div>
+                </div>
             </div>
         `;
     }
