@@ -95,10 +95,13 @@
     text-align: center;
     padding: 0;
     padding-top: 10px;
+    vertical-align: middle;
 }
 
-.modal-header-spacer-cell .thesession-link-icon {
-    display: inline-block;
+.modal-header-spacer-cell .thesession-link-icon,
+.modal-header-spacer-cell .abctools-link-icon {
+    display: inline-flex;
+    vertical-align: middle;
 }
 
 .modal-header-close-cell {
@@ -178,6 +181,27 @@
 .thesession-logo-img {
     height: 18px;
     width: auto;
+}
+
+/* ABC Tools link icon */
+.abctools-link-icon {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    vertical-align: middle;
+}
+
+.abctools-link-icon:hover {
+    opacity: 1;
+}
+
+.abctools-logo-img {
+    height: 16px;
+    width: 16px;
+    object-fit: contain;
 }
 
 /* Configure section */

@@ -226,6 +226,7 @@
     function buildHeaderSection(tuneData, config) {
         const displayName = getDisplayName(tuneData, config);
         const thesessionLink = buildTheSessionLink(tuneData);
+        const abcToolsLink = buildAbcToolsLink(tuneData);
         const tuneType = tuneData.tune_type || config.additionalData?.tuneType || '';
         const isClickable = config.context !== 'admin';
         const clickHandler = isClickable ? ' onclick="TuneDetailModal.toggleConfigSection()"' : '';
@@ -241,7 +242,7 @@
                         </h2>
                     </td>
                     <td class="modal-header-spacer-cell">
-                        ${thesessionLink}
+                        ${thesessionLink}${abcToolsLink}
                     </td>
                     <td class="modal-header-close-cell">
                         <button class="modal-close-btn" onclick="TuneDetailModal.close()" title="Close">&times;</button>
@@ -294,6 +295,50 @@
         }
 
         return `<a href="${url}" target="_blank" class="thesession-link-icon" title="View on TheSession.org" onclick="event.stopPropagation();"><img src="/static/images/thesession-logo-1.png" alt="TheSession.org" class="thesession-logo-img"></a>`;
+    }
+
+    /**
+     * Build ABC Tools link icon
+     * Links to michaeleskin.com/abctools with the ABC notation compressed via LZ-String
+     */
+    function buildAbcToolsLink(tuneData) {
+        // Get ABC notation - prefer full ABC, fall back to incipit
+        const abc = tuneData.abc || tuneData.incipit_abc;
+        if (!abc) return '';
+
+        // Check if LZString is available
+        if (typeof LZString === 'undefined') {
+            console.warn('LZString not available for ABC Tools link');
+            return '';
+        }
+
+        // Convert stored ABC format (using ! as line separator) to standard ABC format
+        const abcBody = abc.replace(/!/g, '\n');
+
+        // Get tune metadata for headers
+        const tuneName = tuneData.tune_name || tuneData.name || tuneData.name_alias || tuneData.alias || 'Tune';
+        const tuneType = tuneData.tune_type || '';
+        const tuneKey = tuneData.key || tuneData.key_override || '';
+
+        // Build full ABC with headers
+        const formattedAbc = `X: 1
+T: ${tuneName}
+R: ${tuneType}
+K: ${tuneKey}
+${abcBody}`;
+
+        // Compress the ABC notation using LZString
+        const compressed = LZString.compressToEncodedURIComponent(formattedAbc);
+
+        // Log what's being compressed for debugging
+        console.log('ABC Tools link - input ABC:', formattedAbc);
+        console.log('ABC Tools link - compressed:', compressed);
+
+        // Build the ABC Tools URL
+        // format=noten means standard notation only, ssp=45 is sample size parameter, play=1 enables autoplay
+        const url = `https://michaeleskin.com/abctools/abctools.html?lzw=${compressed}&format=noten&ssp=45&name=${encodeURIComponent(tuneName)}&play=1`;
+
+        return `<a href="${url}" target="_blank" class="abctools-link-icon" title="View in ABC Tools" onclick="event.stopPropagation();"><img src="/static/images/abctools-icon-57x57.png" alt="ABC Tools" class="abctools-logo-img"></a>`;
     }
 
     /**
