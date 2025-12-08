@@ -2538,6 +2538,7 @@
     let adminSessions = []; // Cache admin sessions for copy modal
     let selectedDestination = null; // Current selected destination in copy modal
     let selectedLearnStatus = 'want to learn'; // Default learn status for My Tunes
+    let pendingTuneId = null; // Tune ID to open after lazy loading completes
 
     // Sort functions based on type and direction
     const sortFunctions = {
@@ -2599,6 +2600,17 @@
 
                 // Enable filters/sorting now that all data is loaded
                 enableTuneControls();
+
+                // Check if we have a pending tune to open from URL navigation
+                if (pendingTuneId) {
+                    const tune = allTunes.find(t => t[0] === pendingTuneId);
+                    if (tune) {
+                        setTimeout(() => {
+                            showTuneDetail(tune[0], tune[1], tune[2], tune[3], tune[4], tune[5]);
+                        }, 100);
+                    }
+                    pendingTuneId = null;
+                }
             } else {
                 throw new Error(data.message || 'Failed to load remaining tunes');
             }
@@ -2609,6 +2621,7 @@
             // Re-apply filters to update the display even if loading failed
             applyFilters();
             enableTuneControls();
+            pendingTuneId = null; // Clear pending tune on error
         } finally {
             isLoadingTunes = false;
         }
@@ -3571,6 +3584,10 @@
                 setTimeout(() => {
                     showTuneDetail(tune[0], tune[1], tune[2], tune[3], tune[4], tune[5]);
                 }, 100);
+            } else if (!allTunesLoaded) {
+                // Tune not found in initial batch - load remaining tunes and try again
+                pendingTuneId = tuneIdFromServer;
+                loadRemainingTunes();
             }
         }
 
