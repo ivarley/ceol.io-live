@@ -2,6 +2,10 @@
 
 Irish music session tracker. Flask/PostgreSQL web app for tracking live music sessions and tunes.
 
+## Work Process
+
+The high level view of the system is documented in the /specs directory. Before beginning work on any task, read any specs that are relevant to the task.
+
 ## Quick Reference
 
 **Stack**: Flask 3.1 + PostgreSQL + Bootstrap 4.5 + Jinja2

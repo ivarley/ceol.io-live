@@ -1102,6 +1102,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    let tuneStatsData = null; // Store the stats data for filtering
+
     function loadTunesData() {
         fetch(`/api/person/${personId}/tunes-stats`)
             .then(response => response.json())
@@ -1109,63 +1111,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const tunesLoading = document.getElementById('tunes-loading');
                 if (tunesLoading) tunesLoading.style.display = 'none';
 
-                let html = '<div class="tune-stats">';
-
                 if (data.success) {
-                    const stats = data.stats;
-
-                    html += `
-                        <div class="row">
-                            <div class="col-md-6 col-lg-3 mb-3">
-                                <div class="stat-card">
-                                    <div class="stat-value">${stats.total_tunes || 0}</div>
-                                    <div class="stat-label">Total Tunes</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-lg-3 mb-3">
-                                <div class="stat-card">
-                                    <div class="stat-value">${stats.learned || 0}</div>
-                                    <div class="stat-label">Learned</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-lg-3 mb-3">
-                                <div class="stat-card">
-                                    <div class="stat-value">${stats.learning || 0}</div>
-                                    <div class="stat-label">Learning</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-lg-3 mb-3">
-                                <div class="stat-card">
-                                    <div class="stat-value">${stats.bookmarked || 0}</div>
-                                    <div class="stat-label">Bookmarked</div>
-                                </div>
-                            </div>
-                        </div>`;
-
-                    if (stats.by_type && Object.keys(stats.by_type).length > 0) {
-                        html += `
-                            <div class="mt-3">
-                                <h6>By Tune Type</h6>
-                                <div class="tune-type-breakdown">`;
-
-                        for (const [type, count] of Object.entries(stats.by_type)) {
-                            html += `<span class="badge bg-secondary me-2 mb-2">${type}: ${count}</span>`;
-                        }
-
-                        html += `</div>
-                            </div>`;
-                    }
+                    tuneStatsData = data.stats;
+                    renderTuneStats('');
                 } else {
-                    html += '<div class="alert alert-info" role="alert">No tune statistics available.</div>';
+                    document.getElementById('tunes-content').innerHTML = `
+                        <div class="alert alert-info" role="alert">No tune statistics available.</div>
+                        <div class="mt-3">
+                            <a href="/my-tunes" class="tune-list-link">View tune list</a>
+                        </div>`;
                 }
-
-                html += `
-                    <div class="mt-4">
-                        <a href="/my-tunes" class="btn btn-primary">View My Tunes</a>
-                    </div>
-                </div>`;
-
-                document.getElementById('tunes-content').innerHTML = html;
             })
             .catch(error => {
                 const tunesLoading = document.getElementById('tunes-loading');
@@ -1174,12 +1129,102 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (tunesContent) {
                     tunesContent.innerHTML = `
                         <div class="alert alert-info" role="alert">No tune statistics available.</div>
-                        <div class="mt-4">
-                            <a href="/my-tunes" class="btn btn-primary">View My Tunes</a>
+                        <div class="mt-3">
+                            <a href="/my-tunes" class="tune-list-link">View tune list</a>
                         </div>`;
                 }
                 console.error('Error:', error);
             });
+    }
+
+    function renderTuneStats(selectedType) {
+        if (!tuneStatsData) return;
+
+        const stats = tuneStatsData;
+        let displayStats;
+        let tuneListUrl = '/my-tunes';
+
+        if (selectedType && stats.by_type_detailed && stats.by_type_detailed[selectedType]) {
+            // Show filtered stats for selected type
+            displayStats = stats.by_type_detailed[selectedType];
+            tuneListUrl = `/my-tunes?type=${encodeURIComponent(selectedType)}`;
+        } else {
+            // Show overall stats
+            displayStats = {
+                total: stats.total_tunes,
+                learned: stats.learned,
+                learning: stats.learning,
+                bookmarked: stats.bookmarked
+            };
+        }
+
+        let html = '<div class="tune-stats">';
+
+        // Filter control row
+        if (stats.by_type && Object.keys(stats.by_type).length > 0) {
+            html += `
+                <div class="tune-filter-row mb-3">
+                    <label for="tune-type-filter" class="filter-label">Filter by type:</label>
+                    <select id="tune-type-filter" class="form-select tune-type-select">
+                        <option value="">All Types</option>`;
+
+            // Sort types alphabetically for the dropdown
+            const sortedTypes = Object.keys(stats.by_type).sort();
+            for (const type of sortedTypes) {
+                const selected = type === selectedType ? 'selected' : '';
+                html += `<option value="${type}" ${selected}>${type} (${stats.by_type[type]})</option>`;
+            }
+
+            html += `
+                    </select>
+                    <a href="${tuneListUrl}" class="tune-list-link">View tune list</a>
+                </div>`;
+        } else {
+            html += `
+                <div class="tune-filter-row mb-3">
+                    <a href="${tuneListUrl}" class="tune-list-link">View tune list</a>
+                </div>`;
+        }
+
+        // Stats cards
+        html += `
+            <div class="row">
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-value">${displayStats.total || 0}</div>
+                        <div class="stat-label">Total Tunes</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-value">${displayStats.learned || 0}</div>
+                        <div class="stat-label">Learned</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-value">${displayStats.learning || 0}</div>
+                        <div class="stat-label">Learning</div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-value">${displayStats.bookmarked || 0}</div>
+                        <div class="stat-label">Bookmarked</div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+        document.getElementById('tunes-content').innerHTML = html;
+
+        // Add event listener for filter dropdown
+        const filterSelect = document.getElementById('tune-type-filter');
+        if (filterSelect) {
+            filterSelect.addEventListener('change', function() {
+                renderTuneStats(this.value);
+            });
+        }
     }
 
     {% if user %}
@@ -1723,8 +1768,34 @@ document.addEventListener('DOMContentLoaded', function() {
     text-transform: uppercase;
 }
 
-.tune-type-breakdown {
-    margin-top: 0.5rem;
+.tune-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.tune-filter-row .filter-label {
+    font-weight: 500;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+.tune-type-select {
+    width: auto;
+    min-width: 150px;
+    max-width: 200px;
+}
+
+.tune-list-link {
+    color: var(--link-color);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.tune-list-link:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
 }
 
 .table {

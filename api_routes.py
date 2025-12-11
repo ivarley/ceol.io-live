@@ -4853,7 +4853,7 @@ def get_person_tunes_stats(person_id):
         row = cur.fetchone()
         total_tunes, learned, learning, bookmarked = row if row else (0, 0, 0, 0)
 
-        # Get counts by tune type
+        # Get counts by tune type (for the filter dropdown)
         cur.execute(
             """
             SELECT
@@ -4871,6 +4871,33 @@ def get_person_tunes_stats(person_id):
         for type_row in cur.fetchall():
             by_type[type_row[0] or 'Unknown'] = type_row[1]
 
+        # Get detailed breakdown by type and status (for filtering)
+        cur.execute(
+            """
+            SELECT
+                COALESCE(t.tune_type, 'Unknown') as tune_type,
+                COUNT(*) as total,
+                COUNT(CASE WHEN pt.learn_status = 'learned' THEN 1 END) as learned,
+                COUNT(CASE WHEN pt.learn_status = 'learning' THEN 1 END) as learning,
+                COUNT(CASE WHEN pt.learn_status = 'bookmarked' THEN 1 END) as bookmarked
+            FROM person_tune pt
+            JOIN tune t ON pt.tune_id = t.tune_id
+            WHERE pt.person_id = %s
+            GROUP BY t.tune_type
+            ORDER BY COUNT(*) DESC
+            """,
+            (person_id,),
+        )
+        by_type_detailed = {}
+        for row in cur.fetchall():
+            tune_type = row[0] or 'Unknown'
+            by_type_detailed[tune_type] = {
+                'total': row[1],
+                'learned': row[2],
+                'learning': row[3],
+                'bookmarked': row[4]
+            }
+
         cur.close()
         conn.close()
 
@@ -4883,6 +4910,7 @@ def get_person_tunes_stats(person_id):
                     "learning": learning or 0,
                     "bookmarked": bookmarked or 0,
                     "by_type": by_type,
+                    "by_type_detailed": by_type_detailed,
                 },
             }
         )
