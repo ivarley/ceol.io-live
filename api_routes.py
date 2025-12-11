@@ -2260,8 +2260,8 @@ def search_sessions_ajax():
         return jsonify({"success": False, "message": "Search query is required"})
 
     try:
-        # Search sessions on thesession.org API
-        api_url = f"https://thesession.org/sessions/search?q={search_query}&format=json"
+        # Search sessions on thesession.org API (perpage=50 is the max allowed)
+        api_url = f"https://thesession.org/sessions/search?q={search_query}&format=json&perpage=50"
         response = requests.get(api_url, timeout=10)
 
         if response.status_code != 200:
@@ -2279,9 +2279,9 @@ def search_sessions_ajax():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Return first 5 results with formatted data and existence check
+        # Return first 50 results with formatted data and existence check
         results = []
-        for session_item in sessions[:5]:
+        for session_item in sessions[:50]:
             session_id = session_item.get("id")
             venue_name = (
                 session_item.get("venue", {}).get("name", "")
@@ -4832,40 +4832,61 @@ def get_person_tunes_ajax(person_id):
 
 
 def get_person_tunes_stats(person_id):
-    """Get tune statistics for a person (total counts, by status, by type)"""
+    """Get tune statistics for a person (total counts, by status, by type)
+
+    Optional query parameters:
+    - start_date: Filter tunes added on or after this date (YYYY-MM-DD)
+    - end_date: Filter tunes added on or before this date (YYYY-MM-DD)
+    """
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # Get optional date range filters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        # Build date filter clause
+        date_filter = ""
+        date_params = [person_id]
+        if start_date:
+            date_filter += " AND pt.created_date >= %s"
+            date_params.append(start_date)
+        if end_date:
+            date_filter += " AND pt.created_date < %s::date + interval '1 day'"
+            date_params.append(end_date)
+
         # Get total count and counts by learn_status
         cur.execute(
-            """
+            f"""
             SELECT
                 COUNT(*) as total_tunes,
                 COUNT(CASE WHEN learn_status = 'learned' THEN 1 END) as learned,
                 COUNT(CASE WHEN learn_status = 'learning' THEN 1 END) as learning,
-                COUNT(CASE WHEN learn_status = 'bookmarked' THEN 1 END) as bookmarked
-            FROM person_tune
-            WHERE person_id = %s
+                COUNT(CASE WHEN learn_status = 'bookmarked' THEN 1 END) as bookmarked,
+                MIN(pt.created_date) as earliest_date,
+                MAX(pt.created_date) as latest_date
+            FROM person_tune pt
+            WHERE pt.person_id = %s{date_filter}
             """,
-            (person_id,),
+            tuple(date_params),
         )
         row = cur.fetchone()
-        total_tunes, learned, learning, bookmarked = row if row else (0, 0, 0, 0)
+        total_tunes, learned, learning, bookmarked, earliest_date, latest_date = row if row else (0, 0, 0, 0, None, None)
 
         # Get counts by tune type (for the filter dropdown)
         cur.execute(
-            """
+            f"""
             SELECT
                 COALESCE(t.tune_type, 'Unknown') as tune_type,
                 COUNT(*) as count
             FROM person_tune pt
             JOIN tune t ON pt.tune_id = t.tune_id
-            WHERE pt.person_id = %s
+            WHERE pt.person_id = %s{date_filter}
             GROUP BY t.tune_type
             ORDER BY count DESC
             """,
-            (person_id,),
+            tuple(date_params),
         )
         by_type = {}
         for type_row in cur.fetchall():
@@ -4873,7 +4894,7 @@ def get_person_tunes_stats(person_id):
 
         # Get detailed breakdown by type and status (for filtering)
         cur.execute(
-            """
+            f"""
             SELECT
                 COALESCE(t.tune_type, 'Unknown') as tune_type,
                 COUNT(*) as total,
@@ -4882,11 +4903,11 @@ def get_person_tunes_stats(person_id):
                 COUNT(CASE WHEN pt.learn_status = 'bookmarked' THEN 1 END) as bookmarked
             FROM person_tune pt
             JOIN tune t ON pt.tune_id = t.tune_id
-            WHERE pt.person_id = %s
+            WHERE pt.person_id = %s{date_filter}
             GROUP BY t.tune_type
             ORDER BY COUNT(*) DESC
             """,
-            (person_id,),
+            tuple(date_params),
         )
         by_type_detailed = {}
         for row in cur.fetchall():
@@ -4911,6 +4932,10 @@ def get_person_tunes_stats(person_id):
                     "bookmarked": bookmarked or 0,
                     "by_type": by_type,
                     "by_type_detailed": by_type_detailed,
+                    "date_range": {
+                        "earliest": earliest_date.strftime('%Y-%m-%d') if earliest_date else None,
+                        "latest": latest_date.strftime('%Y-%m-%d') if latest_date else None,
+                    }
                 },
             }
         )

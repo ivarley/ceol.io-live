@@ -544,6 +544,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let loginsLoaded = false;
     let editMode = false;
     let originalUsername = '';
+    let tuneStatsData = null; // Store the stats data for filtering
+    let tuneFilterState = { type: '', startDate: '', endDate: '' };
 
     // Check for saved flash messages from sessionStorage
     const savedMessage = sessionStorage.getItem('personSavedMessage');
@@ -938,7 +940,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function activateTab(targetId) {
+    function activateTab(targetId, updateUrl = true) {
         const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
         const tabPanes = document.querySelectorAll('.tab-pane');
 
@@ -974,6 +976,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update breadcrumb for admin view
         updateBreadcrumb(targetId);
+
+        // Update URL with tab parameter
+        if (updateUrl) {
+            const url = new URL(window.location);
+            if (targetId === 'profile') {
+                url.searchParams.delete('tab');
+            } else {
+                url.searchParams.set('tab', targetId);
+            }
+            window.history.replaceState({}, '', url);
+        }
     }
 
     function updateBreadcrumb(tabId) {
@@ -1015,6 +1028,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize tabs
     initTabs();
+
+    // Check for tab in URL and activate it
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabFromUrl = urlParams.get('tab');
+    if (tabFromUrl) {
+        const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logins'];
+        if (validTabs.includes(tabFromUrl)) {
+            activateTab(tabFromUrl, false);
+            // Sync mobile dropdown
+            const mobileSelect = document.getElementById('profile-tab-select');
+            if (mobileSelect) {
+                mobileSelect.value = tabFromUrl;
+            }
+        }
+    }
 
     // Session filter functionality
     const sessionFilter = document.getElementById('session-filter');
@@ -1102,18 +1130,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    let tuneStatsData = null; // Store the stats data for filtering
-
     function loadTunesData() {
-        fetch(`/api/person/${personId}/tunes-stats`)
+        // Build URL with date filters if set
+        let url = `/api/person/${personId}/tunes-stats`;
+        const params = new URLSearchParams();
+        if (tuneFilterState.startDate) params.append('start_date', tuneFilterState.startDate);
+        if (tuneFilterState.endDate) params.append('end_date', tuneFilterState.endDate);
+        if (params.toString()) url += '?' + params.toString();
+
+        // Show loading state
+        const tunesContent = document.getElementById('tunes-content');
+        const tunesLoading = document.getElementById('tunes-loading');
+        if (tunesLoading) tunesLoading.style.display = 'block';
+        if (tunesContent) tunesContent.innerHTML = '';
+
+        fetch(url)
             .then(response => response.json())
             .then(data => {
-                const tunesLoading = document.getElementById('tunes-loading');
                 if (tunesLoading) tunesLoading.style.display = 'none';
 
                 if (data.success) {
                     tuneStatsData = data.stats;
-                    renderTuneStats('');
+                    renderTuneStats(tuneFilterState.type);
                 } else {
                     document.getElementById('tunes-content').innerHTML = `
                         <div class="alert alert-info" role="alert">No tune statistics available.</div>
@@ -1123,9 +1161,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                const tunesLoading = document.getElementById('tunes-loading');
                 if (tunesLoading) tunesLoading.style.display = 'none';
-                const tunesContent = document.getElementById('tunes-content');
                 if (tunesContent) {
                     tunesContent.innerHTML = `
                         <div class="alert alert-info" role="alert">No tune statistics available.</div>
@@ -1140,14 +1176,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderTuneStats(selectedType) {
         if (!tuneStatsData) return;
 
+        tuneFilterState.type = selectedType;
         const stats = tuneStatsData;
         let displayStats;
         let tuneListUrl = '/my-tunes';
+        const tuneListParams = new URLSearchParams();
 
         if (selectedType && stats.by_type_detailed && stats.by_type_detailed[selectedType]) {
             // Show filtered stats for selected type
             displayStats = stats.by_type_detailed[selectedType];
-            tuneListUrl = `/my-tunes?type=${encodeURIComponent(selectedType)}`;
+            tuneListParams.append('type', selectedType);
         } else {
             // Show overall stats
             displayStats = {
@@ -1158,13 +1196,21 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
 
+        // Add date range to tune list URL if set
+        if (tuneFilterState.startDate) tuneListParams.append('start_date', tuneFilterState.startDate);
+        if (tuneFilterState.endDate) tuneListParams.append('end_date', tuneFilterState.endDate);
+        if (tuneListParams.toString()) tuneListUrl += '?' + tuneListParams.toString();
+
         let html = '<div class="tune-stats">';
 
-        // Filter control row
+        // Filter controls row
+        html += `<div class="tune-filter-row mb-3">`;
+
+        // Type filter (only if there are types)
         if (stats.by_type && Object.keys(stats.by_type).length > 0) {
             html += `
-                <div class="tune-filter-row mb-3">
-                    <label for="tune-type-filter" class="filter-label">Filter by type:</label>
+                <div class="filter-group">
+                    <label for="tune-type-filter" class="filter-label">Type:</label>
                     <select id="tune-type-filter" class="form-select tune-type-select">
                         <option value="">All Types</option>`;
 
@@ -1175,16 +1221,52 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += `<option value="${type}" ${selected}>${type} (${stats.by_type[type]})</option>`;
             }
 
-            html += `
-                    </select>
-                    <a href="${tuneListUrl}" class="tune-list-link">View tune list</a>
-                </div>`;
-        } else {
-            html += `
-                <div class="tune-filter-row mb-3">
-                    <a href="${tuneListUrl}" class="tune-list-link">View tune list</a>
+            html += `</select>
                 </div>`;
         }
+
+        // Date filter toggle link or active filter display
+        const hasDateFilter = tuneFilterState.startDate || tuneFilterState.endDate;
+        if (hasDateFilter) {
+            // Show active date filter summary
+            let dateText = '';
+            if (tuneFilterState.startDate && tuneFilterState.endDate) {
+                dateText = `${tuneFilterState.startDate} – ${tuneFilterState.endDate}`;
+            } else if (tuneFilterState.startDate) {
+                dateText = `from ${tuneFilterState.startDate}`;
+            } else {
+                dateText = `until ${tuneFilterState.endDate}`;
+            }
+            html += `
+                <span class="date-filter-summary">
+                    <span class="date-filter-text">${dateText}</span>
+                    <a href="#" id="edit-date-filter" class="date-filter-link">edit</a>
+                    <a href="#" id="clear-date-filter" class="date-filter-link date-filter-clear">clear</a>
+                </span>`;
+        } else {
+            html += `<a href="#" id="show-date-filter" class="date-filter-link">Filter by date</a>`;
+        }
+
+        html += `
+            <a href="${tuneListUrl}" class="tune-list-link">View tune list</a>
+        </div>`;
+
+        // Date filter panel (hidden by default, shown when editing)
+        html += `
+            <div id="date-filter-panel" class="date-filter-panel" style="display: none;">
+                <div class="date-filter-row">
+                    <label for="tune-start-date" class="filter-label">From:</label>
+                    <input type="date" id="tune-start-date" class="form-control date-input" value="${tuneFilterState.startDate}">
+                </div>
+                <div class="date-filter-row">
+                    <label for="tune-end-date" class="filter-label">To:</label>
+                    <input type="date" id="tune-end-date" class="form-control date-input" value="${tuneFilterState.endDate}">
+                </div>
+                <div class="date-filter-row">
+                    <button id="apply-date-filter" class="btn btn-sm btn-primary">Apply</button>
+                    <button id="cancel-date-filter" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                </div>
+            </div>`;
 
         // Stats cards
         html += `
@@ -1218,11 +1300,84 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('tunes-content').innerHTML = html;
 
-        // Add event listener for filter dropdown
+        // Add event listeners
         const filterSelect = document.getElementById('tune-type-filter');
         if (filterSelect) {
             filterSelect.addEventListener('change', function() {
                 renderTuneStats(this.value);
+            });
+        }
+
+        // Date filter panel controls
+        const dateFilterPanel = document.getElementById('date-filter-panel');
+        const showDateFilterLink = document.getElementById('show-date-filter');
+        const editDateFilterLink = document.getElementById('edit-date-filter');
+        const clearDateFilterLink = document.getElementById('clear-date-filter');
+        const applyDateFilterBtn = document.getElementById('apply-date-filter');
+        const cancelDateFilterBtn = document.getElementById('cancel-date-filter');
+        const startDateInput = document.getElementById('tune-start-date');
+        const endDateInput = document.getElementById('tune-end-date');
+
+        function showDatePanel() {
+            if (dateFilterPanel) dateFilterPanel.style.display = 'block';
+        }
+
+        function hideDatePanel() {
+            if (dateFilterPanel) dateFilterPanel.style.display = 'none';
+        }
+
+        // Helper to set up date input behavior
+        function setupDateInput(input) {
+            if (!input) return;
+
+            // Open picker when clicking anywhere on the input
+            input.addEventListener('click', function() {
+                this.showPicker();
+            });
+
+            // Block keyboard input
+            input.addEventListener('keydown', function(e) {
+                e.preventDefault();
+            });
+        }
+
+        setupDateInput(startDateInput);
+        setupDateInput(endDateInput);
+
+        if (showDateFilterLink) {
+            showDateFilterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showDatePanel();
+            });
+        }
+
+        if (editDateFilterLink) {
+            editDateFilterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showDatePanel();
+            });
+        }
+
+        if (clearDateFilterLink) {
+            clearDateFilterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                tuneFilterState.startDate = '';
+                tuneFilterState.endDate = '';
+                loadTunesData();
+            });
+        }
+
+        if (applyDateFilterBtn) {
+            applyDateFilterBtn.addEventListener('click', function() {
+                tuneFilterState.startDate = startDateInput ? startDateInput.value : '';
+                tuneFilterState.endDate = endDateInput ? endDateInput.value : '';
+                loadTunesData();
+            });
+        }
+
+        if (cancelDateFilterBtn) {
+            cancelDateFilterBtn.addEventListener('click', function() {
+                hideDatePanel();
             });
         }
     }
@@ -1771,20 +1926,115 @@ document.addEventListener('DOMContentLoaded', function() {
 .tune-filter-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
     flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .tune-filter-row .filter-label {
     font-weight: 500;
-    color: var(--text-color);
+    color: var(--secondary-text);
     white-space: nowrap;
+    font-size: 0.85rem;
 }
 
 .tune-type-select {
     width: auto;
-    min-width: 150px;
-    max-width: 200px;
+    min-width: 120px;
+    max-width: 180px;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.5rem;
+}
+
+/* Date filter link and summary */
+.date-filter-link {
+    color: var(--link-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.date-filter-link:hover {
+    text-decoration: underline;
+}
+
+.date-filter-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.date-filter-text {
+    color: var(--text-color);
+}
+
+.date-filter-clear {
+    color: var(--secondary-text);
+}
+
+/* Date filter panel */
+.date-filter-panel {
+    background-color: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.date-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.date-filter-row:last-child {
+    margin-bottom: 0;
+    margin-top: 0.75rem;
+}
+
+.date-filter-panel .filter-label {
+    font-weight: 500;
+    color: var(--secondary-text);
+    font-size: 0.85rem;
+    min-width: 40px;
+}
+
+.date-filter-panel .date-input {
+    width: 150px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.5rem;
+}
+
+/* Prevent keyboard input but allow date picker */
+.date-input::-webkit-datetime-edit {
+    pointer-events: none;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+}
+
+/* Make date picker icon visible in dark mode */
+[data-theme="dark"] .date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+}
+
+@media (max-width: 767.98px) {
+    .tune-filter-row {
+        gap: 0.5rem 0.75rem;
+    }
+
+    .date-filter-panel .date-input {
+        flex: 1;
+        width: auto;
+    }
 }
 
 .tune-list-link {
