@@ -252,6 +252,13 @@ class ThesessionSyncService:
 
             conn.commit()
 
+            # Cache the default setting and generate images
+            # Use lazy import to avoid circular dependency with api_routes
+            from api_routes import cache_default_tune_setting
+            # We may or may not have full tune data (with settings) - if not, the helper will fetch it
+            api_data = tune_data if tune_data and 'settings' in tune_data else None
+            cache_default_tune_setting(tune_id, api_data, user_id, sync=True)
+
             return True, f"Created tune #{tune_id}: {metadata['name']}"
 
         except Exception as e:
@@ -362,6 +369,28 @@ class ThesessionSyncService:
                 conn.commit()
                 results['tunes_created'] = len(tunes_to_create)
                 print(f"Successfully created {len(tunes_to_create)} tunes", file=sys.stderr)
+
+                # ============================================================================
+                # ASYNC SETTING CACHE PLACEHOLDER
+                #
+                # For bulk tune imports, we skip synchronous setting caching because:
+                # 1. It would make the sync operation extremely slow (each tune requires
+                #    an API call to thesession.org + image rendering)
+                # 2. Users expect bulk imports to complete quickly
+                #
+                # FUTURE IMPLEMENTATION:
+                # When async processing is available, enqueue each newly created tune_id
+                # for background setting cache. Example:
+                #
+                #     from api_routes import cache_default_tune_setting
+                #     for tune_id, _, _, _, _ in tunes_with_user:
+                #         # Enqueue: cache_default_tune_setting(tune_id, None, user_id, sync=False)
+                #         # or: job_queue.enqueue('cache_tune_setting', tune_id=tune_id, user_id=user_id)
+                #         pass
+                #
+                # For now, settings will be cached on-demand when users view tune details.
+                # ============================================================================
+                print(f"[sync_tunebook_to_person] Skipping setting cache for {len(tunes_to_create)} tunes - async not yet implemented", file=sys.stderr)
 
             # Report progress
             if progress_callback:

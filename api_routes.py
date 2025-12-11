@@ -104,6 +104,154 @@ def render_abc_to_png(abc_notation, is_incipit=False):
         return None
 
 
+def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
+    """
+    Fetch and cache the default (first) setting for a tune from thesession.org.
+    Creates the tune_setting record and generates PNG images for both full ABC and incipit.
+
+    This function should be called whenever a new tune is added to the tune table
+    from thesession.org, to ensure the default setting and images are immediately available.
+
+    Args:
+        tune_id: The tune ID (thesession.org tune ID)
+        tune_data: Dict containing tune data from thesession.org API response.
+                   Must include 'settings' array and 'type' field.
+                   If None, will fetch from thesession.org API.
+        user_id: ID of user who triggered the operation (for audit trail)
+        sync: If True, process synchronously. If False, skip processing (placeholder for future async).
+
+    Returns:
+        Tuple of (success: bool, message: str, setting_id: int or None)
+    """
+    # ============================================================================
+    # ASYNC PROCESSING PLACEHOLDER
+    # When sync=False, this is where we would enqueue the setting cache job
+    # for background/async processing. For now, we just skip and return.
+    # Future implementation: Add to a job queue (e.g., Celery, RQ, or custom)
+    # that processes tune settings in the background.
+    # ============================================================================
+    if not sync:
+        print(f"[cache_default_tune_setting] Skipping tune {tune_id} - async processing not yet implemented")
+        return True, "Skipped (async not implemented)", None
+
+    try:
+        from database import extract_abc_incipit
+
+        # If tune_data not provided, fetch from API
+        if tune_data is None:
+            api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+            response = requests.get(api_url, timeout=10)
+            if response.status_code != 200:
+                return False, f"Failed to fetch tune data (status: {response.status_code})", None
+            tune_data = response.json()
+
+        # Check if settings exist in the response
+        if "settings" not in tune_data or not tune_data["settings"]:
+            return False, "No settings found for this tune", None
+
+        # Use the first setting as the default
+        setting = tune_data["settings"][0]
+        setting_id = setting["id"]
+        key = setting.get("key", "")
+        abc = setting.get("abc", "")
+        tune_type = tune_data.get("type", "").title()
+
+        # Replace "!" with newline for proper staff line breaks
+        # thesession.org uses "!" as a line break marker
+        abc = abc.replace("!", "\n")
+
+        # Extract incipit from ABC notation
+        incipit_abc = extract_abc_incipit(abc, tune_type)
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            # Check if this setting already exists
+            cur.execute(
+                "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
+                (setting_id,)
+            )
+            existing_setting = cur.fetchone()
+
+            if existing_setting:
+                # Setting already cached, nothing to do
+                cur.close()
+                conn.close()
+                return True, f"Setting {setting_id} already cached", setting_id
+
+            # Insert new setting
+            cur.execute("""
+                INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
+                                          created_by_user_id, last_modified_user_id)
+                VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+            """, (setting_id, tune_id, key, abc, incipit_abc, user_id, user_id))
+
+            # Log INSERT to history
+            cur.execute("""
+                INSERT INTO tune_setting_history
+                (setting_id, operation, changed_by_user_id, tune_id, key, abc, image, incipit_abc,
+                 incipit_image, cache_updated_date, created_date, last_modified_date,
+                 created_by_user_id, last_modified_user_id)
+                SELECT setting_id, %s, %s, tune_id, key, abc, image, incipit_abc,
+                       incipit_image, cache_updated_date, created_date, last_modified_date,
+                       created_by_user_id, last_modified_user_id
+                FROM tune_setting WHERE setting_id = %s
+            """, ('INSERT', user_id, setting_id))
+
+            conn.commit()
+
+            # Generate PNG images for both full ABC and incipit
+            full_image = None
+            incipit_image = None
+
+            # Construct full ABC notation with headers for rendering
+            abc_with_headers = abc
+            if not abc.startswith('X:'):
+                abc_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{abc}"
+
+            # Render full ABC image
+            full_image = render_abc_to_png(abc_with_headers)
+
+            # Render incipit image
+            if incipit_abc:
+                incipit_with_headers = incipit_abc
+                if not incipit_abc.startswith('X:'):
+                    incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+                incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
+
+            # Update database with images if they were generated
+            if full_image or incipit_image:
+                cur.execute("""
+                    UPDATE tune_setting
+                    SET image = %s, incipit_image = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC')
+                    WHERE setting_id = %s
+                """, (
+                    psycopg2.Binary(full_image) if full_image else None,
+                    psycopg2.Binary(incipit_image) if incipit_image else None,
+                    setting_id
+                ))
+                conn.commit()
+
+            cur.close()
+            conn.close()
+
+            return True, f"Cached setting {setting_id} with images", setting_id
+
+        except Exception as db_error:
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return False, f"Database error: {str(db_error)}", None
+
+    except requests.exceptions.RequestException as e:
+        return False, f"Error connecting to thesession.org: {str(e)}", None
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return False, f"Error caching tune setting: {str(e)}", None
+
+
 def get_session_instance_id(cur, session_id, date_or_id):
     """
     Helper function to get session_instance_id from either date or ID.
@@ -1134,6 +1282,7 @@ def add_session_tune(session_path):
         session_id = session_result[0]
 
         # Check if tune exists in tune table
+        new_tune_inserted = False
         cur.execute("SELECT tune_id FROM tune WHERE tune_id = %s", (tune_id,))
         if not cur.fetchone():
             # If new_tune data provided, insert it
@@ -1144,6 +1293,7 @@ def add_session_tune(session_path):
                     INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
                     VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
                     ON CONFLICT (tune_id) DO NOTHING
+                    RETURNING tune_id
                 """,
                     (
                         new_tune_data.get("tune_id"),
@@ -1153,6 +1303,8 @@ def add_session_tune(session_path):
                         get_current_user_id(),
                     ),
                 )
+                # Track if a new tune was actually inserted (not a conflict)
+                new_tune_inserted = cur.fetchone() is not None
             else:
                 cur.close()
                 conn.close()
@@ -1183,6 +1335,11 @@ def add_session_tune(session_path):
         conn.commit()
         cur.close()
         conn.close()
+
+        # If a new tune was inserted, cache the default setting and generate images
+        # This must happen after commit so the tune exists for foreign key constraints
+        if new_tune_inserted:
+            cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True)
 
         return jsonify({"success": True, "message": "Tune added to session successfully"}), 201
 
@@ -2873,6 +3030,10 @@ def link_tune_ajax(session_path, date):
 
                     # Save the newly inserted tune to history
                     save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
+
+                    # Cache the default setting and generate images
+                    # (we already have tune data from the API, pass it to avoid another fetch)
+                    cache_default_tune_setting(tune_id, data, get_current_user_id(), sync=True)
 
                     # Determine if we need to use an alias
                     alias = tune_name if tune_name != tune_name_from_api else None
@@ -6450,46 +6611,51 @@ def test_match_tune_ajax(session_path, date):
 def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
     """
     Ensure a tune exists in the tune table. If not, fetch from thesession.org.
-    
+
     Returns:
-        tuple: (success, error_message, final_name_for_alias)
+        tuple: (success, error_message, final_name_for_alias, new_tune_api_data)
             - success: True if tune exists/was created, False if failed
             - error_message: Error message if failed, None if successful
             - final_name_for_alias: Name to use as alias if different from API name
+            - new_tune_api_data: If a new tune was inserted, the API data for caching settings
+                                 (caller should cache after commit); None if tune already existed
     """
     if not tune_id:
-        return True, None, None  # No tune_id to validate
-    
+        return True, None, None, None  # No tune_id to validate
+
     try:
         # Check if tune already exists in tune table
         cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
         tune_exists = cur.fetchone()
-        
+
         if tune_exists:
             # Tune exists, determine if we need an alias
             api_name = tune_exists[0]
             alias_needed = user_provided_name and user_provided_name != api_name
-            return True, None, user_provided_name if alias_needed else None
-        
+            return True, None, user_provided_name if alias_needed else None, None
+
         # Tune doesn't exist, fetch from thesession.org
         api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
         response = requests.get(api_url, timeout=10)
-        
+
         if response.status_code == 404:
-            return False, f"Tune #{tune_id} not found on thesession.org", None
+            return False, f"Tune #{tune_id} not found on thesession.org", None, None
         elif response.status_code != 200:
-            return False, f"Failed to fetch tune data from thesession.org (status: {response.status_code})", None
-        
+            return False, f"Failed to fetch tune data from thesession.org (status: {response.status_code})", None, None
+
         data = response.json()
-        
+
         # Extract required fields
         if "name" not in data or "type" not in data:
-            return False, "Invalid tune data received from thesession.org", None
-        
+            return False, "Invalid tune data received from thesession.org", None, None
+
         tune_name_from_api = data["name"]
         tune_type = data["type"].title()  # Convert to title case
         tunebook_count = data.get("tunebooks", 0)  # Default to 0 if not present
-        
+
+        # Track if we actually inserted a new tune
+        new_tune_inserted = False
+
         # Try to insert new tune into tune table (handle race condition gracefully)
         try:
             cur.execute(
@@ -6502,7 +6668,11 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
 
             # Save the newly inserted tune to history
             save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
-            
+            new_tune_inserted = True
+
+            # NOTE: Setting caching is NOT done here because we haven't committed yet.
+            # The caller must cache the setting after commit using the returned api_data.
+
         except Exception as insert_error:
             # Check if this was a duplicate key error (race condition - someone else inserted it)
             if "duplicate key" in str(insert_error).lower() or "already exists" in str(insert_error).lower():
@@ -6512,21 +6682,22 @@ def ensure_tune_exists_in_table(cur, tune_id, user_provided_name):
                 if existing_tune:
                     tune_name_from_api = existing_tune[0]
                 else:
-                    return False, f"Race condition error inserting tune {tune_id}", None
+                    return False, f"Race condition error inserting tune {tune_id}", None, None
             else:
                 # Some other database error
-                return False, f"Database error inserting tune {tune_id}: {str(insert_error)}", None
-        
+                return False, f"Database error inserting tune {tune_id}: {str(insert_error)}", None, None
+
         # Determine if we need to use an alias
         alias_needed = user_provided_name and user_provided_name != tune_name_from_api
-        return True, None, user_provided_name if alias_needed else None
-        
+        # Return api_data only if we inserted a new tune (so caller can cache settings after commit)
+        return True, None, user_provided_name if alias_needed else None, data if new_tune_inserted else None
+
     except requests.exceptions.Timeout:
-        return False, "Timeout connecting to thesession.org", None
+        return False, "Timeout connecting to thesession.org", None, None
     except requests.exceptions.RequestException as e:
-        return False, f"Error connecting to thesession.org: {str(e)}", None
+        return False, f"Error connecting to thesession.org: {str(e)}", None, None
     except Exception as e:
-        return False, f"Error processing tune data: {str(e)}", None
+        return False, f"Error processing tune data: {str(e)}", None, None
 
 
 @api_login_required
@@ -6633,19 +6804,24 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         # This handles the race condition where tunes were linked but may not exist yet
         tunes_to_add_to_session = {}  # Dict to track unique tunes we need to add to session_tune table (tune_id -> alias_name)
         aliases_to_create = []  # Track aliases we need to add to session_tune_alias table
+        new_tunes_to_cache = []  # Track newly inserted tunes that need setting cache after commit
 
         for new_tune in new_tunes:
             tune_id = new_tune.get("tune_id")
             user_provided_name = new_tune.get("name")
 
             if tune_id:
-                # Ensure tune exists in tune table, get alias info
-                success, error_message, alias_name = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
+                # Ensure tune exists in tune table, get alias info and API data for new tunes
+                success, error_message, alias_name, new_tune_api_data = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
 
                 if not success:
                     cur.close()
                     conn.close()
                     return jsonify({"success": False, "message": f"Failed to validate tune #{tune_id}: {error_message}"})
+
+                # Track new tunes that need setting cache after commit
+                if new_tune_api_data:
+                    new_tunes_to_cache.append((tune_id, new_tune_api_data))
 
                 # Check if tune needs to be added to session_tune table
                 cur.execute(
@@ -6809,6 +6985,10 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
             cur.close()
             conn.close()
+
+            # Cache settings for any newly inserted tunes (must happen after commit)
+            for tune_id, api_data in new_tunes_to_cache:
+                cache_default_tune_setting(tune_id, api_data, get_current_user_id(), sync=True)
 
             return jsonify(
                 {

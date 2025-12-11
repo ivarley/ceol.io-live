@@ -474,7 +474,17 @@ def add_my_tune():
                     get_current_user_id()
                 ))
 
+                # If a new tune was actually inserted (not a conflict), cache the default setting
+                inserted_tune = cur.fetchone()
                 conn.commit()
+
+                if inserted_tune:
+                    # Cache the default setting and generate images
+                    # Use lazy import to avoid circular dependency with api_routes
+                    from api_routes import cache_default_tune_setting
+                    # new_tune data from frontend doesn't include settings, so pass None
+                    # to have the helper fetch full tune data from thesession.org
+                    cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True)
 
                 # Get the tune details after insertion
                 tune_details = _get_tune_details(tune_id)
