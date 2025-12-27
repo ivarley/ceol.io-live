@@ -407,6 +407,7 @@ CREATE TABLE session_instance_tune (
     tune_id INTEGER REFERENCES tune(tune_id),
     name VARCHAR(255),
     order_number INTEGER NOT NULL,
+    order_position VARCHAR(32),  -- Fractional index for CRDT-compatible ordering (base-36: 0-9a-z)
     continues_set BOOLEAN DEFAULT FALSE,
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -421,6 +422,7 @@ CREATE TABLE session_instance_tune (
 );
 
 CREATE INDEX idx_session_instance_tune_started_by ON session_instance_tune (started_by_person_id) WHERE started_by_person_id IS NOT NULL;
+CREATE INDEX idx_session_instance_tune_order_position ON session_instance_tune (session_instance_id, order_position);
 
 CREATE OR REPLACE FUNCTION update_session_instance_tune_last_modified_date()
 RETURNS TRIGGER AS $$
@@ -615,6 +617,7 @@ CREATE TABLE session_instance_tune_history (
     tune_id INTEGER,
     name VARCHAR(255),
     order_number INTEGER,
+    order_position VARCHAR(32),
     continues_set BOOLEAN,
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ,

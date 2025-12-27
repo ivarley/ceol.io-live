@@ -8,13 +8,20 @@ import { TunePillsData } from './stateManager.js';
 export interface SaveData {
     success: boolean;
     message?: string;
+    tune_sets?: RawTuneSets;  // Updated tune data from server for syncing IDs
+    rebalanced?: boolean;  // True if positions were regenerated due to overflow
 }
+
+// Import RawTuneSets type from stateManager
+type RawTuneSets = import('./stateManager.js').RawTuneSets;
 
 export interface SaveTune {
     tune_id: number | null;
     name: string | null;
     tune_name: string | null;
     started_by_person_id: number | null;
+    session_instance_tune_id: number | null;  // Database ID for identity-based matching
+    order_position: string | null;  // Fractional index for CRDT ordering
 }
 
 export interface UserConfig {
@@ -268,7 +275,9 @@ export class AutoSaveManager {
                 tune_id: pill.tuneId || null,
                 name: pill.tuneName || null,
                 tune_name: pill.tuneName || null,
-                started_by_person_id: pill.startedByPersonId || null
+                started_by_person_id: pill.startedByPersonId || null,
+                session_instance_tune_id: pill.sessionInstanceTuneId || null,
+                order_position: pill.orderPosition || null
             } as SaveTune))
         );
         
@@ -283,6 +292,21 @@ export class AutoSaveManager {
         .then(response => response.json())
         .then((data: SaveData) => {
             if (data.success) {
+                // If server returned updated tune_sets, sync the frontend state
+                // This updates session_instance_tune_id and order_position values
+                if (data.tune_sets && data.tune_sets.length > 0 && (window as any).StateManager) {
+                    (window as any).StateManager.convertTuneSetsToPills(data.tune_sets, true);  // skipCallback to avoid triggering dirty state
+                    // Re-render pills with updated data
+                    if ((window as any).PillRenderer) {
+                        (window as any).PillRenderer.renderTunePills();
+                    }
+                }
+
+                // Show warning toast if positions were rebalanced
+                if (data.rebalanced) {
+                    this.showRebalanceWarning();
+                }
+
                 this.markClean();
                 if (saveStatus) {
                     saveStatus.textContent = data.message || 'Saved successfully!';
@@ -292,7 +316,7 @@ export class AutoSaveManager {
                     saveBtn.textContent = 'Save Session';
                     saveBtn.disabled = true;  // Ensure button is disabled after successful save
                 }
-                
+
                 // Hide status message after 3 seconds
                 if (saveStatus) {
                     setTimeout(() => {
@@ -430,7 +454,7 @@ export class AutoSaveManager {
     static updateOptionText(): void {
         const select = document.getElementById('auto-save-interval') as HTMLSelectElement | null;
         const isMobile = window.innerWidth <= 768;
-        
+
         if (select) {
             const options = select.querySelectorAll('option');
             options.forEach(option => {
@@ -441,6 +465,13 @@ export class AutoSaveManager {
                     option.textContent = `${value} seconds`;
                 }
             });
+        }
+    }
+
+    static showRebalanceWarning(): void {
+        const message = 'Tune positions rebalanced. Other editors will lose pending changes if they save.';
+        if (typeof (window as any).showMessage === 'function') {
+            (window as any).showMessage(message, 'warning');
         }
     }
 }

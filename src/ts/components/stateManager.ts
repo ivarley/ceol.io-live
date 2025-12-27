@@ -15,6 +15,8 @@ export interface TunePill {
     startedByPersonId: number | null;
     loggedByLastName: string | null;
     loggedByFirstName: string | null;
+    orderPosition: string | null;  // Fractional index for CRDT ordering
+    sessionInstanceTuneId: number | null;  // Database ID for stable matching
 }
 
 export interface TuneSet extends Array<TunePill> {}
@@ -28,8 +30,8 @@ export interface TunePosition {
 }
 
 // Raw tune data from backend (array format)
-// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName]
-export type RawTune = [number, boolean, number | null, string, string, string, number | null, string | null, string | null];
+// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId]
+export type RawTune = [number, boolean, number | null, string, string, string, number | null, string | null, string | null, string | null, number | null];
 export type RawTuneSet = RawTune[];
 export type RawTuneSets = RawTuneSet[];
 
@@ -135,7 +137,7 @@ export class StateManager {
         tuneSets.forEach(tuneSet => {
             const setData: TuneSet = [];
             tuneSet.forEach(tune => {
-                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName] = tune;
+                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId] = tune;
                 setData.push({
                     id: this.generateId(),
                     orderNumber: orderNumber,
@@ -146,7 +148,9 @@ export class StateManager {
                     state: tuneId ? 'linked' : 'unlinked',
                     startedByPersonId: startedByPersonId || null,
                     loggedByLastName: loggedByLastName || null,
-                    loggedByFirstName: loggedByFirstName || null
+                    loggedByFirstName: loggedByFirstName || null,
+                    orderPosition: orderPosition || null,
+                    sessionInstanceTuneId: sessionInstanceTuneId || null
                 });
             });
             if (setData.length > 0) {

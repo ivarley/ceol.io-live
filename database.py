@@ -324,10 +324,10 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO session_instance_tune_history
             (session_instance_tune_id, operation, changed_by_user_id, session_instance_id, tune_id,
-             name, order_number, continues_set, played_timestamp, inserted_timestamp,
+             name, order_number, order_position, continues_set, played_timestamp, inserted_timestamp,
              key_override, setting_override, created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_instance_tune_id, %s, %s, session_instance_id, tune_id,
-                   name, order_number, continues_set, played_timestamp, inserted_timestamp,
+                   name, order_number, order_position, continues_set, played_timestamp, inserted_timestamp,
                    key_override, setting_override, created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_instance_tune WHERE session_instance_tune_id = %s
         """,

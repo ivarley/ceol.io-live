@@ -337,7 +337,9 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                         t.tune_type,
                         sit.started_by_person_id,
                         created_by_person.last_name,
-                        created_by_person.first_name
+                        created_by_person.first_name,
+                        sit.order_position,
+                        sit.session_instance_tune_id
                     FROM session_instance_tune sit
                     LEFT JOIN tune t ON sit.tune_id = t.tune_id
                     LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -348,7 +350,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     LEFT JOIN user_account created_by_user ON sit.created_by_user_id = created_by_user.user_id
                     LEFT JOIN person created_by_person ON created_by_user.person_id = created_by_person.person_id
                     WHERE sit.session_instance_id = %s
-                    ORDER BY sit.order_number
+                    ORDER BY sit.order_position
                 """,
                     (session_instance[3], session_instance[3]),
                 )

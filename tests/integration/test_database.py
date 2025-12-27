@@ -772,3 +772,136 @@ class TestComplexQueries:
             db_conn.commit()
 
         db_conn.rollback()  # Reset transaction state
+
+
+@pytest.mark.integration
+class TestFractionalIndexingCollation:
+    """Test fractional indexing order_position column collation.
+
+    These tests verify that the order_position column sorts correctly
+    in the database. This catches issues where the column is missing
+    COLLATE "C", which would cause incorrect sorting with locale-aware
+    collations (e.g., 'a' sorting near 'A' instead of after 'Z').
+    """
+
+    def test_order_position_collation_is_c(self, db_conn, db_cursor):
+        """Verify the order_position column has COLLATE C."""
+        db_cursor.execute("""
+            SELECT collation_name
+            FROM information_schema.columns
+            WHERE table_name = 'session_instance_tune'
+              AND column_name = 'order_position'
+        """)
+        result = db_cursor.fetchone()
+        assert result is not None, "order_position column not found"
+        assert result[0] == "C", (
+            f"order_position column has collation '{result[0]}' but should be 'C'. "
+            "Run: ALTER TABLE session_instance_tune "
+            "ALTER COLUMN order_position TYPE VARCHAR(32) COLLATE \"C\";"
+        )
+
+    def test_order_position_sorts_by_ascii_byte_order(self, db_conn, db_cursor):
+        """Verify ORDER BY order_position uses ASCII byte order (0-9 < A-Z < a-z)."""
+        # Create test session instance
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"collation-test-{unique_id}"
+
+        db_cursor.execute("""
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """, (f"Collation Test {unique_id}", session_path, "Austin", "TX", "USA"))
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute("""
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, %s)
+            RETURNING session_instance_id
+        """, (session_id, date(2023, 8, 15)))
+        instance_id = db_cursor.fetchone()[0]
+
+        # Insert tunes with order_position values that would sort wrong without COLLATE "C"
+        # With locale collation: a, b might sort near A, B (before V)
+        # With COLLATE "C": 0-9 < A-Z < a-z (correct byte order)
+        test_positions = [
+            ("V", "tune_V"),
+            ("W", "tune_W"),
+            ("X", "tune_X"),
+            ("Y", "tune_Y"),
+            ("Z", "tune_Z"),
+            ("a", "tune_a"),  # This must come AFTER Z
+            ("b", "tune_b"),  # This must come AFTER a
+        ]
+
+        for i, (pos, name) in enumerate(test_positions):
+            db_cursor.execute("""
+                INSERT INTO session_instance_tune
+                    (session_instance_id, name, order_number, order_position, continues_set)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (instance_id, name, i + 1, pos, False))
+
+        db_conn.commit()
+
+        # Query with ORDER BY order_position
+        db_cursor.execute("""
+            SELECT order_position, name
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_position
+        """, (instance_id,))
+
+        results = db_cursor.fetchall()
+        actual_positions = [r[0] for r in results]
+        expected_positions = ["V", "W", "X", "Y", "Z", "a", "b"]
+
+        assert actual_positions == expected_positions, (
+            f"order_position not sorting correctly. "
+            f"Expected {expected_positions}, got {actual_positions}. "
+            "This indicates COLLATE \"C\" is not set on the column."
+        )
+
+    def test_mixed_case_positions_sort_correctly(self, db_conn, db_cursor):
+        """Test that positions with digits, uppercase, and lowercase sort correctly."""
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"mixed-case-{unique_id}"
+
+        db_cursor.execute("""
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """, (f"Mixed Case Test {unique_id}", session_path, "Austin", "TX", "USA"))
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute("""
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, %s)
+            RETURNING session_instance_id
+        """, (session_id, date(2023, 8, 15)))
+        instance_id = db_cursor.fetchone()[0]
+
+        # Mix of all character types - must sort: digits < uppercase < lowercase
+        test_positions = ["9", "A", "Z", "a", "z", "zV", "zW", "zz"]
+
+        for i, pos in enumerate(test_positions):
+            db_cursor.execute("""
+                INSERT INTO session_instance_tune
+                    (session_instance_id, name, order_number, order_position, continues_set)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (instance_id, f"tune_{pos}", i + 1, pos, False))
+
+        db_conn.commit()
+
+        db_cursor.execute("""
+            SELECT order_position
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_position
+        """, (instance_id,))
+
+        actual = [r[0] for r in db_cursor.fetchall()]
+        expected = ["9", "A", "Z", "a", "z", "zV", "zW", "zz"]
+
+        assert actual == expected, (
+            f"Mixed case positions not sorting correctly. "
+            f"Expected {expected}, got {actual}"
+        )
