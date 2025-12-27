@@ -261,13 +261,15 @@ export class PillRenderer {
         typeLabel.textContent = labelText;
 
         // Make the label clickable to toggle the set popout
-        // Debouncing is handled in toggleSetPopout itself
+        // Set contentEditable false so clicks work properly inside the editable container
+        typeLabel.contentEditable = 'false';
         typeLabel.style.cursor = 'pointer';
         typeLabel.addEventListener('click', (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             this.toggleSetPopout(typeLabel, tuneSet);
         });
+        // Also handle touchend for more responsive mobile interaction
         typeLabel.addEventListener('touchend', (e: TouchEvent) => {
             e.preventDefault();
             e.stopPropagation();
@@ -606,14 +608,6 @@ export class PillRenderer {
 
                 select.disabled = false;
 
-                // On iOS, selects need explicit interaction handling - stop propagation during capture phase
-                select.addEventListener('touchstart', (e) => {
-                    e.stopPropagation();
-                }, { capture: true, passive: true });
-                select.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                }, { capture: true });
-
                 // Handle selection changes
                 select.addEventListener('change', async () => {
                     if (select.value === '__someone_else__') {
@@ -760,12 +754,54 @@ export class PillRenderer {
         // Store reference to popout on the label for cleanup
         (typeLabel as any)._popout = popout;
 
+        // Set global flag to prevent container from stealing focus
+        (window as any).popoutActive = true;
+
+        // Temporarily make the container non-focusable to prevent it from stealing focus
+        const container = document.getElementById('tune-pills-container');
+        const originalTabIndex = container?.getAttribute('tabindex');
+        const originalContentEditable = container?.contentEditable;
+
+        if (container) {
+            // Disable the container completely while popout is open
+            container.style.pointerEvents = 'none';
+            container.removeAttribute('tabindex');
+            container.setAttribute('contenteditable', 'false');
+            container.blur();
+
+            // Override contentEditable setter to block external code from re-enabling it while popout is open
+            Object.defineProperty(container, 'contentEditable', {
+                get: function() {
+                    return this.getAttribute('contenteditable') || 'inherit';
+                },
+                set: function(value) {
+                    // Block attempts to set contenteditable to true while popout is active
+                    if ((window as any).popoutActive && value === 'true') {
+                        return;
+                    }
+                    this.setAttribute('contenteditable', value);
+                },
+                configurable: true
+            });
+        }
+
         // Function to clean up all event listeners and close the popout
         const closePopout = () => {
             popout.remove();
             typeLabel.style.backgroundColor = '#4a4a4a';
             typeLabel.classList.remove('popout-active');
             (typeLabel as any)._popout = null;
+            (window as any).popoutActive = false;  // Clear the flag
+            // Restore container focusability
+            if (container) {
+                // Remove the setter override
+                delete (container as any).contentEditable;
+                container.style.pointerEvents = '';
+                if (originalTabIndex) {
+                    container.setAttribute('tabindex', originalTabIndex);
+                }
+                container.setAttribute('contenteditable', originalContentEditable || 'true');
+            }
             document.removeEventListener('click', closeOnClickOutside, true);
             window.removeEventListener('scroll', onScroll, true);
         };
@@ -786,10 +822,11 @@ export class PillRenderer {
         };
 
         // Use capture phase to catch clicks before they're stopped by other handlers
-        // Use setTimeout to avoid catching the current click that opened the popout
+        // Use setTimeout to avoid catching the current click/touch that opened the popout
+        // Longer delay (100ms) to ensure all touch-related events have finished
         setTimeout(() => {
             document.addEventListener('click', closeOnClickOutside, true);
-        }, 0);
+        }, 100);
 
         // Listen for scroll events on window (capture phase to catch all scroll events)
         window.addEventListener('scroll', onScroll, true);

@@ -610,7 +610,9 @@ export class TextInput {
 
                 // Re-focus after a longer delay to ensure everything is complete
                 setTimeout(() => {
-                    container.focus();
+                    if (!(window as any).popoutActive) {
+                        container.focus();
+                    }
                 }, 300);
             }
         }

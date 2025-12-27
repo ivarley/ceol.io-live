@@ -503,6 +503,8 @@ export class CursorManager {
     }
     
     static setCursorPositionOriginal(setIndex: number, pillIndex: number, positionType: string, maintainKeyboard: boolean = false): void {
+        console.log('[setCursorPosition] called with', { setIndex, pillIndex, positionType, maintainKeyboard });
+
         // Update internal cursor position
         this.cursorPosition = { setIndex, pillIndex, position: positionType };
         
@@ -547,13 +549,19 @@ export class CursorManager {
             (container as any).inputMode = 'text';
             
             // Focus - with special handling for maintaining keyboard
-            if (maintainKeyboard) {
+            // But don't steal focus if a popout is open (user might be interacting with it)
+            const popoutActive = (window as any).popoutActive === true;
+
+            if (popoutActive) {
+                console.log('[setCursorPosition] skipping focus - popout is active');
+            } else if (maintainKeyboard) {
                 // When maintaining keyboard, always focus to keep it visible
                 container.focus();
-                
+
                 // Add a delayed re-focus attempt for stubborn mobile browsers
                 setTimeout(() => {
-                    if (container.contentEditable === 'true') {
+                    // Check again for popout before re-focusing
+                    if (container.contentEditable === 'true' && !(window as any).popoutActive) {
                         container.focus();
                     }
                 }, 100);
@@ -632,7 +640,9 @@ export class CursorManager {
             }
         } else {
             // Desktop behavior - just focus normally
-            container.focus();
+            if (!(window as any).popoutActive) {
+                container.focus();
+            }
         }
         
         // Trigger cursor change callback
