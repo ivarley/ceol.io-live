@@ -261,27 +261,17 @@ export class PillRenderer {
         typeLabel.textContent = labelText;
 
         // Make the label clickable to toggle the set popout
-        // Use a flag to prevent touchend + click double-firing
-        let handledByTouch = false;
-
+        // Debouncing is handled in toggleSetPopout itself
         typeLabel.style.cursor = 'pointer';
         typeLabel.addEventListener('click', (e: MouseEvent) => {
-            if (handledByTouch) {
-                handledByTouch = false;
-                return;
-            }
             e.preventDefault();
             e.stopPropagation();
             this.toggleSetPopout(typeLabel, tuneSet);
         });
-        // Touch event for mobile - set flag to skip the subsequent click
         typeLabel.addEventListener('touchend', (e: TouchEvent) => {
             e.preventDefault();
             e.stopPropagation();
-            handledByTouch = true;
             this.toggleSetPopout(typeLabel, tuneSet);
-            // Reset flag after a delay in case click doesn't fire
-            setTimeout(() => { handledByTouch = false; }, 500);
         });
 
         // Detect mobile vs desktop
@@ -426,7 +416,17 @@ export class PillRenderer {
         return label;
     }
 
+    // Static flag to prevent rapid re-entry during touch/click events
+    static isTogglingPopout: boolean = false;
+
     static toggleSetPopout(typeLabel: HTMLElement, tuneSet: TuneSet): void {
+        // Debounce: prevent rapid re-entry (e.g., touchend + click firing together)
+        if (PillRenderer.isTogglingPopout) {
+            return;
+        }
+        PillRenderer.isTogglingPopout = true;
+        setTimeout(() => { PillRenderer.isTogglingPopout = false; }, 300);
+
         const isMobile = window.innerWidth <= 768;
 
         // Find the associated tune-set element
