@@ -261,30 +261,28 @@ export class PillRenderer {
         typeLabel.textContent = labelText;
 
         // Make the label clickable to toggle the set popout
-        // Track recent touch to prevent double-firing (touchend + synthetic click)
-        let recentlyTouched = false;
+        // Track recent toggle to prevent double-firing (touchend + synthetic click, or rapid taps)
+        let recentlyToggled = false;
 
-        typeLabel.style.cursor = 'pointer';
-        typeLabel.addEventListener('click', (e: MouseEvent) => {
-            // Skip if this is a synthetic click after a touch event
-            if (recentlyTouched) {
+        const handleToggle = (e: Event) => {
+            // Debounce: skip if we just toggled recently
+            if (recentlyToggled) {
                 return;
             }
             e.preventDefault();
             e.stopPropagation();
-            this.toggleSetPopout(typeLabel, tuneSet);
-        });
-        // Also add touch event for mobile
-        typeLabel.addEventListener('touchend', (e: TouchEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            recentlyTouched = true;
+            recentlyToggled = true;
             this.toggleSetPopout(typeLabel, tuneSet);
             // Reset after a short delay
             setTimeout(() => {
-                recentlyTouched = false;
+                recentlyToggled = false;
             }, 300);
-        });
+        };
+
+        typeLabel.style.cursor = 'pointer';
+        typeLabel.addEventListener('click', handleToggle);
+        // Also add touch event for mobile
+        typeLabel.addEventListener('touchend', handleToggle);
 
         // Detect mobile vs desktop
         const isMobile = window.innerWidth <= 768;
@@ -480,18 +478,11 @@ export class PillRenderer {
         // Prevent contentEditable from affecting form elements inside
         popout.contentEditable = 'false';
 
-        // Stop clicks and touches on the popout from propagating, but allow child elements to work normally
+        // Stop clicks on the popout background from propagating, but allow child elements to work normally
         popout.addEventListener('click', (e) => {
             if (e.target === popout) {
                 e.stopPropagation();
             }
-        });
-        // Prevent touch events inside popout from bubbling up to typeLabel handlers
-        popout.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        }, { passive: true });
-        popout.addEventListener('touchend', (e) => {
-            e.stopPropagation();
         });
 
         // Get the session instance ID from the page config
@@ -619,9 +610,6 @@ export class PillRenderer {
                 select.addEventListener('touchstart', (e) => {
                     e.stopPropagation();
                 }, { capture: true, passive: true });
-                select.addEventListener('touchend', (e) => {
-                    e.stopPropagation();
-                }, { capture: true });
                 select.addEventListener('click', (e) => {
                     e.stopPropagation();
                 }, { capture: true });
