@@ -261,8 +261,15 @@ export class PillRenderer {
         typeLabel.textContent = labelText;
 
         // Make the label clickable to toggle the set popout
+        // Track recent touch to prevent double-firing (touchend + synthetic click)
+        let recentlyTouched = false;
+
         typeLabel.style.cursor = 'pointer';
         typeLabel.addEventListener('click', (e: MouseEvent) => {
+            // Skip if this is a synthetic click after a touch event
+            if (recentlyTouched) {
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             this.toggleSetPopout(typeLabel, tuneSet);
@@ -271,7 +278,12 @@ export class PillRenderer {
         typeLabel.addEventListener('touchend', (e: TouchEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            recentlyTouched = true;
             this.toggleSetPopout(typeLabel, tuneSet);
+            // Reset after a short delay
+            setTimeout(() => {
+                recentlyTouched = false;
+            }, 300);
         });
 
         // Detect mobile vs desktop
@@ -468,11 +480,18 @@ export class PillRenderer {
         // Prevent contentEditable from affecting form elements inside
         popout.contentEditable = 'false';
 
-        // Stop clicks on the popout background from propagating, but allow child elements to work normally
+        // Stop clicks and touches on the popout from propagating, but allow child elements to work normally
         popout.addEventListener('click', (e) => {
             if (e.target === popout) {
                 e.stopPropagation();
             }
+        });
+        // Prevent touch events inside popout from bubbling up to typeLabel handlers
+        popout.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        }, { passive: true });
+        popout.addEventListener('touchend', (e) => {
+            e.stopPropagation();
         });
 
         // Get the session instance ID from the page config
@@ -600,6 +619,9 @@ export class PillRenderer {
                 select.addEventListener('touchstart', (e) => {
                     e.stopPropagation();
                 }, { capture: true, passive: true });
+                select.addEventListener('touchend', (e) => {
+                    e.stopPropagation();
+                }, { capture: true });
                 select.addEventListener('click', (e) => {
                     e.stopPropagation();
                 }, { capture: true });
