@@ -7,6 +7,7 @@
     <span class="breadcrumb-current">
         {% if active_tab == 'sessions_list' %}Sessions
         {% elif active_tab == 'tunes' %}Tunes
+        {% elif active_tab == 'merge_tunes' %}Merge Tunes
         {% elif active_tab == 'people' %}People
         {% elif active_tab == 'activity' %}Activity
         {% elif active_tab == 'test_links' %}Test Links
@@ -34,6 +35,11 @@
            href="{{ url_for('admin_tunes') }}"
            role="tab">
             Tunes
+        </a>
+        <a class="nav-link {{ 'active' if active_tab == 'merge_tunes' else '' }}"
+           href="{{ url_for('admin_tune_merge') }}"
+           role="tab">
+            Merge Tunes
         </a>
         <a class="nav-link {{ 'active' if active_tab == 'people' else '' }}"
            href="{{ url_for('admin_people') }}"
@@ -65,6 +71,9 @@
             </option>
             <option value="{{ url_for('admin_tunes') }}" {{ 'selected' if active_tab == 'tunes' else '' }}>
                 Tunes
+            </option>
+            <option value="{{ url_for('admin_tune_merge') }}" {{ 'selected' if active_tab == 'merge_tunes' else '' }}>
+                Merge Tunes
             </option>
             <option value="{{ url_for('admin_people') }}" {{ 'selected' if active_tab == 'people' else '' }}>
                 People

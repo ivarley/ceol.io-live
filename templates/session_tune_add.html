@@ -143,6 +143,15 @@
         border: 1px solid #c3e6cb;
     }
 
+    .info-message {
+        background-color: #cce5ff;
+        color: #004085;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #b8daff;
+    }
+
     /* Mobile optimizations */
     @media (max-width: 768px) {
         .add-tune-container {
@@ -174,6 +183,12 @@
         background-color: #1f4a2f;
         color: #d4edda;
         border-color: #155724;
+    }
+
+    [data-theme="dark"] .info-message {
+        background-color: #1a3a5c;
+        color: #cce5ff;
+        border-color: #004085;
     }
 </style>
 {% endblock %}
@@ -517,17 +532,21 @@ function handleSubmit(e) {
         body: JSON.stringify(formData)
     })
     .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => {
-                const errorInfo = handleApiError(null, response);
-                throw new Error(data.error || errorInfo.message);
-            });
-        }
-        return response.json();
+        return response.json().then(data => {
+            data._status = response.status;
+            return data;
+        });
     })
     .then(data => {
         if (data.success) {
             window.location.href = `/sessions/${sessionPath}?show=${selectedTuneId}&added=` + encodeURIComponent(tuneSearch.getValue());
+        } else if (data.error === 'tune_redirected') {
+            // Tune was merged - show message and redirect to the destination tune
+            loading.hide();
+            showMessage(`This tune was merged with ${data.redirect_to_tune_name}, redirecting...`, 'info');
+            setTimeout(() => {
+                window.location.href = `/sessions/${sessionPath}?show=${data.redirect_to_tune_id}`;
+            }, 1500);
         } else {
             loading.hide();
             throw new Error(data.error || 'Failed to add tune');
@@ -541,6 +560,21 @@ function handleSubmit(e) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Tune';
     });
+}
+
+function showMessage(message, type = 'error') {
+    // Remove any existing message
+    const existingMsg = document.querySelector('.form-message');
+    if (existingMsg) existingMsg.remove();
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `form-message ${type}-message`;
+    msgDiv.textContent = message;
+
+    const formContainer = document.querySelector('.form-container');
+    if (formContainer) {
+        formContainer.insertBefore(msgDiv, formContainer.firstChild);
+    }
 }
 
 function escapeHtml(text) {

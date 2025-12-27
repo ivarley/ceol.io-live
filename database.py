@@ -454,6 +454,7 @@ def find_matching_tune(
             return alias_matches[0][0], tune_name, None
         elif len(alias_matches) == 0:
             # No alias match in either table, search tune table by name with flexible "The " matching (accent insensitive)
+            # Exclude redirected tunes - they should not match
             cur.execute(
                 """
                 SELECT tune_id, name
@@ -461,6 +462,7 @@ def find_matching_tune(
                 WHERE (LOWER(unaccent(name)) = LOWER(unaccent(%s))
                 OR LOWER(unaccent(name)) = LOWER(unaccent('The ' || %s))
                 OR LOWER(unaccent('The ' || name)) = LOWER(unaccent(%s)))
+                AND redirect_to_tune_id IS NULL
             """,
                 (normalized_tune_name, normalized_tune_name, normalized_tune_name),
             )

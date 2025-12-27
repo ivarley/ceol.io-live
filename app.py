@@ -231,6 +231,7 @@ app.add_url_rule("/admin/login-history", "admin_login_history", admin_login_hist
 app.add_url_rule("/admin/activity", "admin_activity", admin_activity)
 app.add_url_rule("/admin/people", "admin_people", admin_people)
 app.add_url_rule("/admin/tunes", "admin_tunes", admin_tunes)
+app.add_url_rule("/admin/tunes/merge", "admin_tune_merge", admin_tune_merge)
 app.add_url_rule("/admin/tunes/<int:tune_id>", "admin_tune_detail", admin_tune_detail)
 app.add_url_rule("/admin/test-links", "admin_test_links", admin_test_links)
 app.add_url_rule("/admin/cache-settings", "admin_cache_settings", admin_cache_settings)
@@ -853,6 +854,12 @@ app.add_url_rule(
     "/api/admin/tunes/<int:tune_id>/refresh_tunebook_count",
     "refresh_admin_tune_tunebook_count",
     refresh_admin_tune_tunebook_count,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/merge",
+    "merge_tune",
+    merge_tune,
     methods=["POST"],
 )
 app.add_url_rule(

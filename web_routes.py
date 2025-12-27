@@ -2649,6 +2649,17 @@ def admin_tune_detail(tune_id):
 
 
 @login_required
+def admin_tune_merge():
+    """Admin tune merge page - merge tune references when thesession.org merges tunes"""
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    return render_template("admin_tune_merge.html", active_tab="merge_tunes")
+
+
+@login_required
 def admin_test_links():
     """Admin test links page with sample URLs for testing"""
     # Check if user is system admin

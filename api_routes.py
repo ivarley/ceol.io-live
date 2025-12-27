@@ -94,8 +94,14 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
         raise ValueError(f"No session instance found for session_id {session_id} on date {date}")
     session_instance_id = result[0]
 
-    # If tune_id is provided, ensure it exists in session_tune
+    # If tune_id is provided, check for redirect and ensure it exists in session_tune
     if tune_id is not None:
+        # Check if tune is a redirect - prevent adding merged tunes
+        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        redirect_check = cur.fetchone()
+        if redirect_check and redirect_check[0] is not None:
+            raise ValueError(f"Tune #{tune_id} has been merged into tune #{redirect_check[0]} on thesession.org. Use tune #{redirect_check[0]} instead.")
+
         cur.execute(
             """
             INSERT INTO session_tune (session_id, tune_id, setting_id, key, alias)
@@ -1369,10 +1375,30 @@ def add_session_tune(session_path):
 
         session_id = session_result[0]
 
+        # Check if tune exists and if it's a redirect
+        cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        tune_check = cur.fetchone()
+
+        if tune_check and tune_check[1] is not None:
+            # Tune is a redirect - get the destination tune's info
+            redirect_to_id = tune_check[1]
+            cur.execute("SELECT name FROM tune WHERE tune_id = %s", (redirect_to_id,))
+            redirect_tune = cur.fetchone()
+            redirect_tune_name = redirect_tune[0] if redirect_tune else f"Tune #{redirect_to_id}"
+
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "error": "tune_redirected",
+                "message": f"This tune was merged with {redirect_tune_name}",
+                "redirect_to_tune_id": redirect_to_id,
+                "redirect_to_tune_name": redirect_tune_name
+            }), 409
+
         # Check if tune exists in tune table
         new_tune_inserted = False
-        cur.execute("SELECT tune_id FROM tune WHERE tune_id = %s", (tune_id,))
-        if not cur.fetchone():
+        if not tune_check:
             # If new_tune data provided, insert it
             if data.get("new_tune"):
                 new_tune_data = data.get("new_tune")
@@ -2976,6 +3002,18 @@ def link_tune_ajax(session_path, date):
 
         session_instance_id = session_instance_result[0]
 
+        # Check if tune is a redirect BEFORE any other processing
+        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        tune_redirect_check = cur.fetchone()
+        if tune_redirect_check and tune_redirect_check[0] is not None:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "message": f"Tune #{tune_id} has been merged into tune #{tune_redirect_check[0]} on thesession.org. Please use tune #{tune_redirect_check[0]} instead.",
+                "redirect_to_tune_id": tune_redirect_check[0]
+            })
+
         # Check if tune_id is already in session_tune for this session
         cur.execute(
             """
@@ -3016,7 +3054,7 @@ def link_tune_ajax(session_path, date):
             setting_msg = f" with setting #{setting_id}" if setting_id else ""
             message = f'Linked "{tune_name}" to existing tune in session{setting_msg}'
         else:
-            # Check if tune exists in tune table
+            # Check if tune exists in tune table (redirect already checked above)
             cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
             tune_exists = cur.fetchone()
 
@@ -6653,6 +6691,7 @@ def match_tune_ajax(session_path, date_or_id):
         )
 
         # Query with all the ordering criteria (accent insensitive)
+        # Exclude redirected tunes - they should not appear in search results
         query = """
             SELECT
                 t.tune_id,
@@ -6673,6 +6712,7 @@ def match_tune_ajax(session_path, date_or_id):
             ) playcounts
                 ON t.tune_id = playcounts.tune_id
             WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
+              AND t.redirect_to_tune_id IS NULL
             ORDER BY
                 preferred_tune_type ASC,
                 playcounts.plays DESC NULLS LAST,
@@ -6972,6 +7012,18 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             user_provided_name = new_tune.get("name")
 
             if tune_id:
+                # Check if tune is a redirect - prevent adding merged tunes
+                cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+                redirect_check = cur.fetchone()
+                if redirect_check and redirect_check[0] is not None:
+                    cur.close()
+                    conn.close()
+                    return jsonify({
+                        "success": False,
+                        "message": f"Tune #{tune_id} has been merged into tune #{redirect_check[0]} on thesession.org. Please use tune #{redirect_check[0]} instead.",
+                        "redirect_to_tune_id": redirect_check[0]
+                    })
+
                 # Ensure tune exists in tune table, get alias info and API data for new tunes
                 success, error_message, alias_name, new_tune_api_data = ensure_tune_exists_in_table(cur, tune_id, user_provided_name)
 
@@ -9399,7 +9451,8 @@ def get_admin_tunes():
                 t.tune_type,
                 COALESCE(session_counts.session_count, 0) as session_count,
                 COALESCE(tunelist_counts.tunelist_count, 0) as tunelist_count,
-                t.tunebook_count_cached
+                t.tunebook_count_cached,
+                t.redirect_to_tune_id
             FROM tune t
             LEFT JOIN (
                 -- Count distinct sessions where tune has been played
@@ -9424,7 +9477,8 @@ def get_admin_tunes():
                 "tune_type": row[2],
                 "session_count": row[3],
                 "tunelist_count": row[4],
-                "tunebook_count_cached": row[5] or 0
+                "tunebook_count_cached": row[5] or 0,
+                "redirect_to_tune_id": row[6]
             })
 
         return jsonify({
@@ -9589,6 +9643,206 @@ def refresh_admin_tune_tunebook_count(tune_id):
                 "error": f"Failed to fetch from TheSession.org: {str(e)}"
             }), 500
 
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# Admin Tune Merge API Endpoints
+# ============================================================================
+
+
+@api_login_required
+def merge_tune():
+    """
+    Merge references from one tune ID to another (for thesession.org merges).
+
+    POST /api/admin/tunes/merge
+
+    Request body:
+    {
+        "old_tune_id": int (required),
+        "new_tune_id": int (required),
+        "confirm": boolean (optional, default false)
+    }
+
+    If confirm is false or not provided, returns a preview of affected records.
+    If confirm is true, executes the migration.
+
+    Returns preview:
+    {
+        "success": true,
+        "preview": true,
+        "old_tune": { "tune_id": int, "name": string, "type": string },
+        "new_tune": { "tune_id": int, "name": string, "type": string },
+        "affected_records": {
+            "tune_settings": int,
+            "session_tunes": int,
+            "session_tune_aliases": int,
+            "session_instance_tunes": int,
+            "person_tunes": int
+        },
+        "warnings": [string, ...]
+    }
+
+    Returns execution result:
+    {
+        "success": true,
+        "message": "Migrated tune X → Y",
+        "migrated_records": { ... }
+    }
+    """
+    # Check if user is system admin
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Request body required"}), 400
+
+    old_tune_id = data.get("old_tune_id")
+    new_tune_id = data.get("new_tune_id")
+    confirm = data.get("confirm", False)
+
+    if not old_tune_id or not new_tune_id:
+        return jsonify({"success": False, "error": "Both old_tune_id and new_tune_id are required"}), 400
+
+    if old_tune_id == new_tune_id:
+        return jsonify({"success": False, "error": "old_tune_id and new_tune_id cannot be the same"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Fetch old tune info
+        cur.execute(
+            "SELECT tune_id, name, tune_type, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+            (old_tune_id,)
+        )
+        old_tune_row = cur.fetchone()
+        if not old_tune_row:
+            return jsonify({"success": False, "error": f"Tune {old_tune_id} not found"}), 404
+
+        if old_tune_row[3] is not None:
+            return jsonify({
+                "success": False,
+                "error": f"Tune {old_tune_id} is already a redirect to tune {old_tune_row[3]}"
+            }), 400
+
+        old_tune = {
+            "tune_id": old_tune_row[0],
+            "name": old_tune_row[1],
+            "type": old_tune_row[2]
+        }
+
+        # Fetch new tune info
+        cur.execute(
+            "SELECT tune_id, name, tune_type, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+            (new_tune_id,)
+        )
+        new_tune_row = cur.fetchone()
+        if not new_tune_row:
+            return jsonify({"success": False, "error": f"Tune {new_tune_id} not found"}), 404
+
+        if new_tune_row[3] is not None:
+            return jsonify({
+                "success": False,
+                "error": f"Tune {new_tune_id} is a redirect to tune {new_tune_row[3]} - cannot redirect to a redirect"
+            }), 400
+
+        new_tune = {
+            "tune_id": new_tune_row[0],
+            "name": new_tune_row[1],
+            "type": new_tune_row[2]
+        }
+
+        # Count affected records
+        cur.execute("SELECT COUNT(*) FROM tune_setting WHERE tune_id = %s", (old_tune_id,))
+        tune_settings_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM session_tune WHERE tune_id = %s", (old_tune_id,))
+        session_tunes_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM session_tune_alias WHERE tune_id = %s", (old_tune_id,))
+        session_tune_aliases_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (old_tune_id,))
+        session_instance_tunes_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (old_tune_id,))
+        person_tunes_count = cur.fetchone()[0]
+
+        # Check for conflicts (records that will be merged/deleted)
+        warnings = []
+
+        cur.execute("""
+            SELECT COUNT(*) FROM session_tune st1
+            WHERE st1.tune_id = %s
+            AND EXISTS (
+                SELECT 1 FROM session_tune st2
+                WHERE st2.session_id = st1.session_id AND st2.tune_id = %s
+            )
+        """, (old_tune_id, new_tune_id))
+        session_tune_conflicts = cur.fetchone()[0]
+        if session_tune_conflicts > 0:
+            warnings.append(f"{session_tune_conflicts} session_tune record(s) will be merged (session already has new tune)")
+
+        cur.execute("""
+            SELECT COUNT(*) FROM person_tune pt1
+            WHERE pt1.tune_id = %s
+            AND EXISTS (
+                SELECT 1 FROM person_tune pt2
+                WHERE pt2.person_id = pt1.person_id AND pt2.tune_id = %s
+            )
+        """, (old_tune_id, new_tune_id))
+        person_tune_conflicts = cur.fetchone()[0]
+        if person_tune_conflicts > 0:
+            warnings.append(f"{person_tune_conflicts} person_tune record(s) will be merged (person already has new tune)")
+
+        if not confirm:
+            # Return preview
+            return jsonify({
+                "success": True,
+                "preview": True,
+                "old_tune": old_tune,
+                "new_tune": new_tune,
+                "affected_records": {
+                    "tune_settings": tune_settings_count,
+                    "session_tunes": session_tunes_count,
+                    "session_tune_aliases": session_tune_aliases_count,
+                    "session_instance_tunes": session_instance_tunes_count,
+                    "person_tunes": person_tunes_count
+                },
+                "warnings": warnings
+            })
+
+        # Execute the migration using the stored procedure
+        cur.execute(
+            "SELECT merge_tune_ids(%s, %s, %s)",
+            (old_tune_id, new_tune_id, current_user.user_id)
+        )
+        result = cur.fetchone()[0]
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": f"Migrated tune {old_tune_id} → {new_tune_id}",
+            "old_tune": old_tune,
+            "new_tune": new_tune,
+            "migrated_records": result.get("tables_updated", {}),
+            "total_records_affected": result.get("total_records_affected", 0)
+        })
+
+    except psycopg2.Error as e:
+        conn.rollback()
+        error_msg = str(e)
+        # Extract the actual error message from PostgreSQL
+        if hasattr(e, 'pgerror') and e.pgerror:
+            error_msg = e.pgerror
+        return jsonify({"success": False, "error": error_msg}), 500
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "error": str(e)}), 500

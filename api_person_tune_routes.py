@@ -450,6 +450,59 @@ def add_my_tune():
                 "error": "tune_id is required"
             }), 400
 
+        # Check if tune exists and if it's a redirect
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            redirect_check = cur.fetchone()
+
+            if redirect_check and redirect_check[0] is not None:
+                # Tune is a redirect - get the destination tune's info
+                redirect_to_id = redirect_check[0]
+                cur.execute("SELECT name FROM tune WHERE tune_id = %s", (redirect_to_id,))
+                redirect_tune = cur.fetchone()
+                redirect_tune_name = redirect_tune[0] if redirect_tune else f"Tune #{redirect_to_id}"
+
+                # Check if the destination tune is already in their tunebook
+                person_id = get_user_person_id()
+                cur.execute(
+                    "SELECT person_tune_id FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (person_id, redirect_to_id)
+                )
+                existing_person_tune = cur.fetchone()
+
+                if existing_person_tune:
+                    # Already in tunebook
+                    cur.close()
+                    conn.close()
+                    return jsonify({
+                        "success": False,
+                        "error": "tune_redirected_exists",
+                        "message": f"This tune was merged with {redirect_tune_name}, which is already in your tunebook",
+                        "redirect_to_tune_id": redirect_to_id,
+                        "redirect_to_tune_name": redirect_tune_name
+                    }), 409
+                else:
+                    # Add the destination tune instead
+                    cur.close()
+                    conn.close()
+
+                    # Update tune_id to use the redirect destination
+                    tune_id = redirect_to_id
+                    # Clear new_tune data since we're using the existing redirected-to tune
+                    data['new_tune'] = None
+                    # Flag that we did a redirect so we can return the right message
+                    data['_redirected_from'] = data.get('tune_id')
+                    data['_redirect_tune_name'] = redirect_tune_name
+
+            else:
+                cur.close()
+                conn.close()
+        except Exception as e:
+            conn.close()
+            raise e
+
         # Check if tune exists locally
         tune_details = _get_tune_details(tune_id)
 
@@ -534,6 +587,17 @@ def add_my_tune():
 
         # Build response with tune details
         response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+
+        # Check if we redirected from another tune
+        if data.get('_redirected_from'):
+            return jsonify({
+                "success": True,
+                "redirected": True,
+                "message": f"This tune was merged with {data.get('_redirect_tune_name')}, added it to your tunebook",
+                "redirect_to_tune_id": tune_id,
+                "redirect_to_tune_name": data.get('_redirect_tune_name'),
+                "person_tune": response_data
+            }), 201
 
         return jsonify({
             "success": True,
@@ -1006,6 +1070,7 @@ def search_tunes():
                 FROM tune t
                 {join_clause}
                 WHERE LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s))
+                  AND t.redirect_to_tune_id IS NULL
                 ORDER BY {order_by_clause}
                 LIMIT %s
             """

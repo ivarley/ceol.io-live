@@ -185,6 +185,24 @@
     text-transform: capitalize;
 }
 
+.redirect-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 6px;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 3px;
+    margin-left: 8px;
+}
+
+.redirected-tune {
+    opacity: 0.6;
+}
+
+.redirected-tune:hover {
+    opacity: 0.8;
+}
+
 .modal-dialog {
     background: var(--bg-color, white);
     border-radius: 8px;
@@ -596,12 +614,15 @@ function createTuneRow(tune) {
     const sessionCount = tune.session_count || 0;
     const tunelistCount = tune.tunelist_count || 0;
     const tunebookCount = tune.tunebook_count_cached || 0;
+    const redirectTo = tune.redirect_to_tune_id;
 
     const typeBadge = tuneType ? `<span class="tune-type-badge">${tuneType}</span>` : '<span style="color: var(--text-muted);">-</span>';
+    const redirectBadge = redirectTo ? `<span class="redirect-badge" title="Merged into tune #${redirectTo}">&#8594; #${redirectTo}</span>` : '';
+    const rowClass = redirectTo ? 'redirected-tune' : '';
 
     return `
-        <tr onclick="showTuneDetail(${tune.tune_id}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${sessionCount}, ${tunelistCount}, ${tunebookCount})">
-            <td>${tuneName}</td>
+        <tr class="${rowClass}" onclick="showTuneDetail(${tune.tune_id}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${sessionCount}, ${tunelistCount}, ${tunebookCount})">
+            <td>${tuneName} ${redirectBadge}</td>
             <td>${typeBadge}</td>
             <td class="text-center">${sessionCount}</td>
             <td class="text-center">${tunelistCount}</td>

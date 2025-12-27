@@ -1,0 +1,607 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Merge Tunes{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            {% include 'admin_tabs.html' %}
+
+            <section class="docs-section" id="tune-merge">
+                <div class="admin-tune-merge">
+                    <h2>Merge Tunes</h2>
+                    <p>Use this tool when thesession.org has merged two tunes. All references to the old tune will be updated to point to the new tune.</p>
+
+                    <!-- Input Form -->
+                    <div id="input-form" class="merge-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="old-tune-id">Old Tune ID</label>
+                                <input type="number" id="old-tune-id" class="form-control" placeholder="e.g. 1234">
+                                <div class="form-help">The tune being retired</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-tune-id">New Tune ID</label>
+                                <input type="number" id="new-tune-id" class="form-control" placeholder="e.g. 5678">
+                                <div class="form-help">The tune to merge to</div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="preview-btn" class="btn btn-primary">Preview Merge</button>
+                        </div>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="error-message" class="error-box" style="display: none;"></div>
+
+                    <!-- Preview Results -->
+                    <div id="preview-results" class="preview-box" style="display: none;">
+                        <h3>Merge Preview</h3>
+
+                        <div class="tune-comparison">
+                            <div class="tune-info old-tune">
+                                <div class="tune-label">Old Tune</div>
+                                <div class="tune-name" id="old-tune-name"></div>
+                                <div class="tune-meta" id="old-tune-meta"></div>
+                            </div>
+                            <div class="tune-arrow">&#8594;</div>
+                            <div class="tune-info new-tune">
+                                <div class="tune-label">New Tune</div>
+                                <div class="tune-name" id="new-tune-name"></div>
+                                <div class="tune-meta" id="new-tune-meta"></div>
+                            </div>
+                        </div>
+
+                        <h4>Records to merge:</h4>
+                        <table class="records-table">
+                            <thead>
+                                <tr>
+                                    <th>Table</th>
+                                    <th class="text-right">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="records-tbody">
+                            </tbody>
+                        </table>
+
+                        <div id="warnings-box" class="warnings-box" style="display: none;">
+                            <h4>Warnings</h4>
+                            <ul id="warnings-list"></ul>
+                        </div>
+
+                        <div class="confirm-actions">
+                            <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                            <button id="confirm-btn" class="btn btn-danger">Confirm Merge</button>
+                        </div>
+                    </div>
+
+                    <!-- Success Results -->
+                    <div id="success-results" class="success-box" style="display: none;">
+                        <h3>Merge Complete</h3>
+                        <p id="success-message"></p>
+
+                        <div class="results-summary" id="results-summary"></div>
+
+                        <p class="success-note">The old tune has been marked as a redirect and will not appear in searches or be re-added to the system.</p>
+
+                        <div class="success-actions">
+                            <button id="merge-another-btn" class="btn btn-primary">Merge Another</button>
+                            <a href="{{ url_for('admin_tunes') }}" class="btn btn-secondary">Back to Tunes</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+    </div>
+</div>
+
+<style>
+.admin-tune-merge {
+    max-width: 700px;
+}
+
+.admin-tune-merge h2 {
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.admin-tune-merge > p {
+    color: var(--secondary-text);
+    margin-bottom: 2rem;
+}
+
+.merge-form {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.form-group .form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-size: 1rem;
+}
+
+.form-group .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.form-help {
+    font-size: 0.8rem;
+    color: var(--secondary-text);
+    margin-top: 0.25rem;
+}
+
+.form-actions {
+    text-align: right;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark, #0056b3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #c82333;
+}
+
+.error-box {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    color: #721c24;
+}
+
+[data-theme="dark"] .error-box {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: #f8d7da;
+}
+
+.preview-box {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.preview-box h3 {
+    margin: 0 0 1.5rem 0;
+    color: var(--text-color);
+}
+
+.preview-box h4 {
+    margin: 1.5rem 0 1rem 0;
+    color: var(--text-color);
+    font-size: 1rem;
+}
+
+.tune-comparison {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .tune-comparison {
+        flex-direction: column;
+    }
+    .tune-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+.tune-info {
+    flex: 1;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.tune-info.old-tune {
+    border-left: 3px solid #dc3545;
+}
+
+.tune-info.new-tune {
+    border-left: 3px solid #28a745;
+}
+
+.tune-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--secondary-text);
+    margin-bottom: 0.25rem;
+}
+
+.tune-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.tune-meta {
+    font-size: 0.875rem;
+    color: var(--secondary-text);
+    margin-top: 0.25rem;
+}
+
+.tune-arrow {
+    font-size: 2rem;
+    color: var(--secondary-text);
+    flex-shrink: 0;
+}
+
+.records-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+
+.records-table th,
+.records-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.records-table th {
+    font-weight: 600;
+    background: var(--bg-color);
+}
+
+.records-table .text-right {
+    text-align: right;
+}
+
+.warnings-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+[data-theme="dark"] .warnings-box {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.3);
+}
+
+.warnings-box h4 {
+    margin: 0 0 0.5rem 0;
+    color: #856404;
+}
+
+[data-theme="dark"] .warnings-box h4 {
+    color: #ffc107;
+}
+
+.warnings-box ul {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: #856404;
+}
+
+[data-theme="dark"] .warnings-box ul {
+    color: #fff3cd;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.success-box {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+[data-theme="dark"] .success-box {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.3);
+}
+
+.success-box h3 {
+    margin: 0 0 1rem 0;
+    color: #155724;
+}
+
+[data-theme="dark"] .success-box h3 {
+    color: #28a745;
+}
+
+.success-box p {
+    color: #155724;
+}
+
+[data-theme="dark"] .success-box p {
+    color: #d4edda;
+}
+
+.results-summary {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.results-summary .result-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    color: var(--text-color);
+}
+
+.success-note {
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.success-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+</style>
+
+<script>
+const previewBtn = document.getElementById('preview-btn');
+const cancelBtn = document.getElementById('cancel-btn');
+const confirmBtn = document.getElementById('confirm-btn');
+const mergeAnotherBtn = document.getElementById('merge-another-btn');
+
+const inputForm = document.getElementById('input-form');
+const errorMessage = document.getElementById('error-message');
+const previewResults = document.getElementById('preview-results');
+const successResults = document.getElementById('success-results');
+
+const oldTuneIdInput = document.getElementById('old-tune-id');
+const newTuneIdInput = document.getElementById('new-tune-id');
+
+let currentPreview = null;
+
+previewBtn.addEventListener('click', async function() {
+    const oldTuneId = parseInt(oldTuneIdInput.value);
+    const newTuneId = parseInt(newTuneIdInput.value);
+
+    if (!oldTuneId || !newTuneId) {
+        showError('Please enter both old and new tune IDs.');
+        return;
+    }
+
+    if (oldTuneId === newTuneId) {
+        showError('Old and new tune IDs cannot be the same.');
+        return;
+    }
+
+    previewBtn.disabled = true;
+    previewBtn.textContent = 'Loading...';
+    hideError();
+
+    try {
+        const response = await fetch('/api/admin/tunes/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_tune_id: oldTuneId, new_tune_id: newTuneId })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.preview) {
+            currentPreview = data;
+            showPreview(data);
+        } else {
+            showError(data.error || 'Failed to preview merge.');
+        }
+    } catch (error) {
+        showError('Network error: ' + error.message);
+    } finally {
+        previewBtn.disabled = false;
+        previewBtn.textContent = 'Preview Merge';
+    }
+});
+
+cancelBtn.addEventListener('click', function() {
+    previewResults.style.display = 'none';
+    inputForm.style.display = 'block';
+    currentPreview = null;
+});
+
+confirmBtn.addEventListener('click', async function() {
+    if (!currentPreview) return;
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Merging...';
+
+    try {
+        const response = await fetch('/api/admin/tunes/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                old_tune_id: currentPreview.old_tune.tune_id,
+                new_tune_id: currentPreview.new_tune.tune_id,
+                confirm: true
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showSuccess(data);
+        } else {
+            showError(data.error || 'Failed to execute merge.');
+            previewResults.style.display = 'none';
+            inputForm.style.display = 'block';
+        }
+    } catch (error) {
+        showError('Network error: ' + error.message);
+    } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Confirm Merge';
+    }
+});
+
+mergeAnotherBtn.addEventListener('click', function() {
+    successResults.style.display = 'none';
+    inputForm.style.display = 'block';
+    oldTuneIdInput.value = '';
+    newTuneIdInput.value = '';
+    currentPreview = null;
+});
+
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+}
+
+function hideError() {
+    errorMessage.style.display = 'none';
+}
+
+function showPreview(data) {
+    inputForm.style.display = 'none';
+    previewResults.style.display = 'block';
+
+    // Old tune info
+    document.getElementById('old-tune-name').textContent = `#${data.old_tune.tune_id} "${data.old_tune.name}"`;
+    document.getElementById('old-tune-meta').textContent = data.old_tune.type || 'Unknown type';
+
+    // New tune info
+    document.getElementById('new-tune-name').textContent = `#${data.new_tune.tune_id} "${data.new_tune.name}"`;
+    document.getElementById('new-tune-meta').textContent = data.new_tune.type || 'Unknown type';
+
+    // Records table
+    const tbody = document.getElementById('records-tbody');
+    const records = data.affected_records;
+    tbody.innerHTML = `
+        <tr><td>Tune Settings (ABC notation)</td><td class="text-right">${records.tune_settings}</td></tr>
+        <tr><td>Session Tunes</td><td class="text-right">${records.session_tunes}</td></tr>
+        <tr><td>Session Tune Aliases</td><td class="text-right">${records.session_tune_aliases}</td></tr>
+        <tr><td>Session Log Entries</td><td class="text-right">${records.session_instance_tunes}</td></tr>
+        <tr><td>Personal Tune Collections</td><td class="text-right">${records.person_tunes}</td></tr>
+    `;
+
+    // Warnings
+    const warningsBox = document.getElementById('warnings-box');
+    const warningsList = document.getElementById('warnings-list');
+    if (data.warnings && data.warnings.length > 0) {
+        warningsList.innerHTML = data.warnings.map(w => `<li>${w}</li>`).join('');
+        warningsBox.style.display = 'block';
+    } else {
+        warningsBox.style.display = 'none';
+    }
+}
+
+function showSuccess(data) {
+    previewResults.style.display = 'none';
+    successResults.style.display = 'block';
+
+    document.getElementById('success-message').textContent =
+        `Tune #${data.old_tune.tune_id} has been merged into #${data.new_tune.tune_id}`;
+
+    // Results summary
+    const summary = document.getElementById('results-summary');
+    const tables = data.migrated_records || {};
+    let html = '';
+
+    if (tables.tune_setting) {
+        html += `<div class="result-item"><span>Tune settings merged</span><span>${tables.tune_setting.updated || 0}</span></div>`;
+    }
+    if (tables.session_tune) {
+        const updated = tables.session_tune.updated || 0;
+        const merged = tables.session_tune.deleted || 0;
+        html += `<div class="result-item"><span>Session tunes updated</span><span>${updated}${merged > 0 ? `, ${merged} merged` : ''}</span></div>`;
+    }
+    if (tables.session_tune_alias) {
+        const updated = tables.session_tune_alias.updated || 0;
+        const deleted = tables.session_tune_alias.deleted || 0;
+        html += `<div class="result-item"><span>Session tune aliases updated</span><span>${updated}${deleted > 0 ? `, ${deleted} merged` : ''}</span></div>`;
+    }
+    if (tables.session_instance_tune) {
+        html += `<div class="result-item"><span>Session log entries updated</span><span>${tables.session_instance_tune.updated || 0}</span></div>`;
+    }
+    if (tables.person_tune) {
+        const updated = tables.person_tune.updated || 0;
+        const merged = tables.person_tune.deleted || 0;
+        html += `<div class="result-item"><span>Personal tune records updated</span><span>${updated}${merged > 0 ? `, ${merged} merged` : ''}</span></div>`;
+    }
+
+    summary.innerHTML = html || '<div class="result-item"><span>No records needed updating</span></div>';
+}
+</script>
+{% endblock %}
