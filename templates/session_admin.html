@@ -1166,22 +1166,38 @@ function sortTunes(column) {
     filterTunes();
 }
 
+function extractTuneId(input) {
+    if (!input) return null;
+    const trimmed = input.trim();
+    if (/^\d+$/.test(trimmed)) {
+        return parseInt(trimmed);
+    }
+    const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i);
+    if (urlMatch) {
+        return parseInt(urlMatch[1]);
+    }
+    return null;
+}
+
 function filterTunes() {
     if (!window.allTunes) return;
 
     const search = normalizeQuotes(document.getElementById('tunes-search').value.toLowerCase());
+    const searchTuneId = extractTuneId(document.getElementById('tunes-search').value);
 
     let filteredTunes = window.allTunes;
 
-    // Apply search filter
+    // Apply search filter (also handles tune IDs/URLs)
     if (search) {
-        filteredTunes = filteredTunes.filter(tune =>
-            tune.tune_name.toLowerCase().includes(search) ||
-            tune.session_alias.toLowerCase().includes(search) ||
-            (tune.tune_type && tune.tune_type.toLowerCase().includes(search)) ||
-            tune.session_key.toLowerCase().includes(search) ||
-            tune.setting_key.toLowerCase().includes(search)
-        );
+        filteredTunes = filteredTunes.filter(tune => {
+            const tuneIdMatch = searchTuneId && tune.tune_id === searchTuneId;
+            const textMatch = tune.tune_name.toLowerCase().includes(search) ||
+                tune.session_alias.toLowerCase().includes(search) ||
+                (tune.tune_type && tune.tune_type.toLowerCase().includes(search)) ||
+                tune.session_key.toLowerCase().includes(search) ||
+                tune.setting_key.toLowerCase().includes(search);
+            return tuneIdMatch || textMatch;
+        });
     }
 
     // Apply sorting

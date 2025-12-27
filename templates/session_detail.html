@@ -2556,6 +2556,19 @@
         }
     };
 
+    function extractTuneId(input) {
+        if (!input) return null;
+        const trimmed = input.trim();
+        if (/^\d+$/.test(trimmed)) {
+            return parseInt(trimmed);
+        }
+        const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i);
+        if (urlMatch) {
+            return parseInt(urlMatch[1]);
+        }
+        return null;
+    }
+
     // Load remaining tunes asynchronously
     async function loadRemainingTunes() {
         if (allTunesLoaded || isLoadingTunes) {
@@ -2894,10 +2907,13 @@
     function applyFilters() {
         // Filter tunes based on search and type
         filteredTunes = allTunes.filter(tune => {
-            // Search filter (accent-insensitive)
+            // Search filter (accent-insensitive, also handles tune IDs/URLs)
             if (currentFilters.search) {
+                const searchTuneId = extractTuneId(currentFilters.search);
                 const tuneName = tune[1] || '';
-                if (!AccentUtils.includes(tuneName, currentFilters.search)) {
+                const nameMatch = AccentUtils.includes(tuneName, currentFilters.search);
+                const tuneIdMatch = searchTuneId && tune[0] === searchTuneId;
+                if (!nameMatch && !tuneIdMatch) {
                     return false;
                 }
             }

@@ -347,6 +347,19 @@ const sortFunctions = {
     }
 };
 
+function extractTuneId(input) {
+    if (!input) return null;
+    const trimmed = input.trim();
+    if (/^\d+$/.test(trimmed)) {
+        return parseInt(trimmed);
+    }
+    const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i);
+    if (urlMatch) {
+        return parseInt(urlMatch[1]);
+    }
+    return null;
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
@@ -501,10 +514,13 @@ function clearFilters() {
 function applyFilters() {
     // Filter tunes based on search and type
     filteredTunes = allTunes.filter(tune => {
-        // Search filter (accent-insensitive)
+        // Search filter (accent-insensitive, also handles tune IDs/URLs)
         if (currentFilters.search) {
+            const searchTuneId = extractTuneId(currentFilters.search);
             const tuneName = tune.name || '';
-            if (!AccentUtils.includes(tuneName, currentFilters.search)) {
+            const nameMatch = AccentUtils.includes(tuneName, currentFilters.search);
+            const tuneIdMatch = searchTuneId && tune.tune_id === searchTuneId;
+            if (!nameMatch && !tuneIdMatch) {
                 return false;
             }
         }
