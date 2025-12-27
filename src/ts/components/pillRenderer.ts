@@ -261,37 +261,28 @@ export class PillRenderer {
         typeLabel.textContent = labelText;
 
         // Make the label clickable to toggle the set popout
-        // Track recent toggle to prevent double-firing (touchend + synthetic click, or rapid taps)
-        let recentlyToggled = false;
+        // Use a flag to prevent touchend + click double-firing
+        let handledByTouch = false;
 
-        const handleToggle = (e: Event) => {
-            // Debounce: skip if we just toggled recently
-            if (recentlyToggled) {
+        typeLabel.style.cursor = 'pointer';
+        typeLabel.addEventListener('click', (e: MouseEvent) => {
+            if (handledByTouch) {
+                handledByTouch = false;
                 return;
             }
             e.preventDefault();
             e.stopPropagation();
-            recentlyToggled = true;
             this.toggleSetPopout(typeLabel, tuneSet);
-            // Reset after a short delay
-            setTimeout(() => {
-                recentlyToggled = false;
-            }, 300);
-        };
-
-        typeLabel.style.cursor = 'pointer';
-        // Prevent mousedown from triggering contenteditable focus/cursor changes
-        typeLabel.addEventListener('mousedown', (e: Event) => {
+        });
+        // Touch event for mobile - set flag to skip the subsequent click
+        typeLabel.addEventListener('touchend', (e: TouchEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            handledByTouch = true;
+            this.toggleSetPopout(typeLabel, tuneSet);
+            // Reset flag after a delay in case click doesn't fire
+            setTimeout(() => { handledByTouch = false; }, 500);
         });
-        typeLabel.addEventListener('click', handleToggle);
-        // Prevent touchstart from triggering contenteditable focus/cursor changes
-        typeLabel.addEventListener('touchstart', (e: Event) => {
-            e.stopPropagation();
-        }, { passive: true });
-        // Handle touchend for mobile
-        typeLabel.addEventListener('touchend', handleToggle);
 
         // Detect mobile vs desktop
         const isMobile = window.innerWidth <= 768;
