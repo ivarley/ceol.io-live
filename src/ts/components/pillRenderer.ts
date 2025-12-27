@@ -280,8 +280,17 @@ export class PillRenderer {
         };
 
         typeLabel.style.cursor = 'pointer';
+        // Prevent mousedown from triggering contenteditable focus/cursor changes
+        typeLabel.addEventListener('mousedown', (e: Event) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
         typeLabel.addEventListener('click', handleToggle);
-        // Also add touch event for mobile
+        // Prevent touchstart from triggering contenteditable focus/cursor changes
+        typeLabel.addEventListener('touchstart', (e: Event) => {
+            e.stopPropagation();
+        }, { passive: true });
+        // Handle touchend for mobile
         typeLabel.addEventListener('touchend', handleToggle);
 
         // Detect mobile vs desktop
