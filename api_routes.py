@@ -7146,50 +7146,58 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         "is_new": True,
                     })
 
-            # Second pass: generate order_positions for new tunes
+            # Check if existing tunes have been reordered
+            # If existing positions are not in sorted order, we need to rebalance
             MAX_POSITION_LENGTH = 32
             needs_rebalance = False
 
-            for idx, tune in enumerate(processed_tunes):
-                if not tune["is_new"]:
-                    continue
+            existing_positions = [t["order_position"] for t in processed_tunes if not t.get("is_new", False)]
+            if existing_positions != sorted(existing_positions):
+                # Existing tunes were reordered - must regenerate all positions
+                needs_rebalance = True
 
-                # Find prev and next order_positions
-                prev_position = None
-                next_position = None
-                prev_is_new = False
+            # Second pass: generate order_positions for new tunes (if no rebalance needed)
+            if not needs_rebalance:
+                for idx, tune in enumerate(processed_tunes):
+                    if not tune["is_new"]:
+                        continue
 
-                # Look backward for prev position
-                for j in range(idx - 1, -1, -1):
-                    if processed_tunes[j]["order_position"]:
-                        prev_position = processed_tunes[j]["order_position"]
-                        prev_is_new = processed_tunes[j].get("is_new", False)
-                        break
+                    # Find prev and next order_positions
+                    prev_position = None
+                    next_position = None
+                    prev_is_new = False
 
-                # Look forward for next position (only from existing tunes)
-                for j in range(idx + 1, len(processed_tunes)):
-                    if processed_tunes[j]["order_position"] and not processed_tunes[j].get("is_new", False):
-                        next_position = processed_tunes[j]["order_position"]
-                        break
+                    # Look backward for prev position
+                    for j in range(idx - 1, -1, -1):
+                        if processed_tunes[j]["order_position"]:
+                            prev_position = processed_tunes[j]["order_position"]
+                            prev_is_new = processed_tunes[j].get("is_new", False)
+                            break
 
-                # If previous tune was also new, use sequential append instead of bisect
-                # This gives us JI, JJ, JK instead of JI, JII, JIII
-                if prev_is_new and prev_position:
-                    new_position = generate_append_position(prev_position)
-                    # Make sure it's still less than next_position
-                    if next_position and new_position >= next_position:
-                        # Fall back to bisect if append would exceed next
+                    # Look forward for next position (only from existing tunes)
+                    for j in range(idx + 1, len(processed_tunes)):
+                        if processed_tunes[j]["order_position"] and not processed_tunes[j].get("is_new", False):
+                            next_position = processed_tunes[j]["order_position"]
+                            break
+
+                    # If previous tune was also new, use sequential append instead of bisect
+                    # This gives us JI, JJ, JK instead of JI, JII, JIII
+                    if prev_is_new and prev_position:
+                        new_position = generate_append_position(prev_position)
+                        # Make sure it's still less than next_position
+                        if next_position and new_position >= next_position:
+                            # Fall back to bisect if append would exceed next
+                            new_position = generate_position_between(prev_position, next_position)
+                    else:
+                        # First new tune in a sequence - bisect between existing positions
                         new_position = generate_position_between(prev_position, next_position)
-                else:
-                    # First new tune in a sequence - bisect between existing positions
-                    new_position = generate_position_between(prev_position, next_position)
 
-                # Check if position is too long - if so, we need to rebalance all positions
-                if len(new_position) > MAX_POSITION_LENGTH:
-                    needs_rebalance = True
-                    break
+                    # Check if position is too long - if so, we need to rebalance all positions
+                    if len(new_position) > MAX_POSITION_LENGTH:
+                        needs_rebalance = True
+                        break
 
-                tune["order_position"] = new_position
+                    tune["order_position"] = new_position
 
             # If any position would be too long, regenerate ALL positions from scratch
             if needs_rebalance:
