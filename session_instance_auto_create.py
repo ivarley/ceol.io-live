@@ -181,7 +181,8 @@ def auto_create_instances_hours_ahead(
         end_date = future_local.date()
 
         # Get all occurrences in the date range
-        occurrences = session_recurrence.get_occurrences(start_date, end_date)
+        # Returns list of (start_datetime, end_datetime) tuples
+        occurrences = session_recurrence.get_occurrences_in_range(start_date, end_date, tz)
 
         if not occurrences:
             logger.debug(f"No occurrences found for session {session_id} in next {hours_ahead} hours")
@@ -189,19 +190,17 @@ def auto_create_instances_hours_ahead(
 
         # Filter occurrences to only those starting within the hours_ahead window
         valid_occurrences = []
-        for occ in occurrences:
-            if occ['start_time']:
-                occ_datetime = datetime.combine(occ['date'], occ['start_time']).replace(tzinfo=tz)
-                # Only include if the session starts within the window
-                if now_local <= occ_datetime <= future_local:
-                    valid_occurrences.append(occ)
+        for start_dt, end_dt in occurrences:
+            # Only include if the session starts within the window
+            if now_local <= start_dt <= future_local:
+                valid_occurrences.append((start_dt, end_dt))
 
         if not valid_occurrences:
             logger.debug(f"No occurrences starting in next {hours_ahead} hours for session {session_id}")
             return 0, []
 
         # Check which instances already exist
-        dates_to_check = [occ['date'] for occ in valid_occurrences]
+        dates_to_check = [start_dt.date() for start_dt, _ in valid_occurrences]
         placeholders = ','.join(['%s'] * len(dates_to_check))
 
         cur.execute(f"""
@@ -214,8 +213,9 @@ def auto_create_instances_hours_ahead(
 
         # Create missing instances
         created_dates = []
-        for occurrence in valid_occurrences:
-            if occurrence['date'] not in existing_dates:
+        for start_dt, end_dt in valid_occurrences:
+            occ_date = start_dt.date()
+            if occ_date not in existing_dates:
                 # Insert new session instance (system auto-creation, no user)
                 cur.execute("""
                     INSERT INTO session_instance (session_id, date, start_time, end_time, created_by_user_id)
@@ -223,17 +223,17 @@ def auto_create_instances_hours_ahead(
                     RETURNING session_instance_id
                 """, (
                     session_id,
-                    occurrence['date'],
-                    occurrence['start_time'],
-                    occurrence['end_time']
+                    occ_date,
+                    start_dt.time(),
+                    end_dt.time()
                 ))
 
                 new_instance_id = cur.fetchone()[0]
-                created_dates.append(occurrence['date'].isoformat())
+                created_dates.append(occ_date.isoformat())
 
                 logger.info(
                     f"Auto-created session_instance {new_instance_id} for session {session_id} "
-                    f"on {occurrence['date']} from {occurrence['start_time']} to {occurrence['end_time']} "
+                    f"on {occ_date} from {start_dt.time()} to {end_dt.time()} "
                     f"({hours_ahead}h ahead)"
                 )
 
