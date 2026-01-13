@@ -7,7 +7,13 @@ for sessions that have recurrence patterns defined.
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
 from database import get_db_connection
 from recurrence_utils import SessionRecurrence
 
@@ -119,6 +125,132 @@ def auto_create_next_week_instances(session_id: int) -> Tuple[int, List[str]]:
     finally:
         cur.close()
         conn.close()
+
+
+def auto_create_instances_hours_ahead(
+    session_id: int,
+    hours_ahead: int,
+    session_timezone: str,
+    recurrence_json: str,
+    conn=None
+) -> Tuple[int, List[str]]:
+    """
+    Auto-create session instances for a specified number of hours ahead.
+
+    This is called by the cron job for sessions that have auto_create_instances=TRUE.
+    It creates instances that fall within the hours_ahead window from now.
+
+    Args:
+        session_id: The session ID to create instances for
+        hours_ahead: Number of hours ahead to look for occurrences
+        session_timezone: IANA timezone string for the session
+        recurrence_json: The recurrence pattern JSON
+        conn: Optional database connection (creates new one if not provided)
+
+    Returns:
+        Tuple of (count of instances created, list of created dates as strings)
+    """
+    should_close = conn is None
+    if conn is None:
+        conn = get_db_connection()
+
+    cur = conn.cursor()
+
+    try:
+        # Parse timezone
+        try:
+            tz = ZoneInfo(session_timezone)
+        except Exception as e:
+            logger.error(f"Invalid timezone '{session_timezone}' for session {session_id}: {e}")
+            return 0, []
+
+        # Parse recurrence pattern
+        try:
+            session_recurrence = SessionRecurrence(recurrence_json, session_timezone)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid recurrence pattern for session {session_id}: {e}")
+            return 0, []
+
+        # Calculate the time window in the session's timezone
+        now_utc = datetime.now(ZoneInfo('UTC'))
+        now_local = now_utc.astimezone(tz)
+        future_local = now_local + timedelta(hours=hours_ahead)
+
+        # Get date range to check (we need whole days for the recurrence lookup)
+        start_date = now_local.date()
+        end_date = future_local.date()
+
+        # Get all occurrences in the date range
+        occurrences = session_recurrence.get_occurrences(start_date, end_date)
+
+        if not occurrences:
+            logger.debug(f"No occurrences found for session {session_id} in next {hours_ahead} hours")
+            return 0, []
+
+        # Filter occurrences to only those starting within the hours_ahead window
+        valid_occurrences = []
+        for occ in occurrences:
+            if occ['start_time']:
+                occ_datetime = datetime.combine(occ['date'], occ['start_time']).replace(tzinfo=tz)
+                # Only include if the session starts within the window
+                if now_local <= occ_datetime <= future_local:
+                    valid_occurrences.append(occ)
+
+        if not valid_occurrences:
+            logger.debug(f"No occurrences starting in next {hours_ahead} hours for session {session_id}")
+            return 0, []
+
+        # Check which instances already exist
+        dates_to_check = [occ['date'] for occ in valid_occurrences]
+        placeholders = ','.join(['%s'] * len(dates_to_check))
+
+        cur.execute(f"""
+            SELECT date
+            FROM session_instance
+            WHERE session_id = %s AND date IN ({placeholders})
+        """, [session_id] + dates_to_check)
+
+        existing_dates = set(row[0] for row in cur.fetchall())
+
+        # Create missing instances
+        created_dates = []
+        for occurrence in valid_occurrences:
+            if occurrence['date'] not in existing_dates:
+                # Insert new session instance (system auto-creation, no user)
+                cur.execute("""
+                    INSERT INTO session_instance (session_id, date, start_time, end_time, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, NULL)
+                    RETURNING session_instance_id
+                """, (
+                    session_id,
+                    occurrence['date'],
+                    occurrence['start_time'],
+                    occurrence['end_time']
+                ))
+
+                new_instance_id = cur.fetchone()[0]
+                created_dates.append(occurrence['date'].isoformat())
+
+                logger.info(
+                    f"Auto-created session_instance {new_instance_id} for session {session_id} "
+                    f"on {occurrence['date']} from {occurrence['start_time']} to {occurrence['end_time']} "
+                    f"({hours_ahead}h ahead)"
+                )
+
+        if should_close:
+            conn.commit()
+
+        return len(created_dates), created_dates
+
+    except Exception as e:
+        if should_close:
+            conn.rollback()
+        logger.error(f"Error auto-creating instances for session {session_id}: {e}")
+        raise
+    finally:
+        cur.close()
+        if should_close:
+            conn.close()
 
 
 def auto_create_instances_for_all_sessions() -> dict:

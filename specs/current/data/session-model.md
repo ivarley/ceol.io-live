@@ -21,6 +21,8 @@ Represents a regular music session (e.g., "Mueller Monday Night Session").
 - `session_type` - "regular" or "class" (default: "regular")
 - `active_buffer_minutes_before` - Minutes before session is considered active (default: 60)
 - `active_buffer_minutes_after` - Minutes after session is considered active (default: 60)
+- `auto_create_instances` - Whether to auto-create instances ahead of schedule (default: FALSE)
+- `auto_create_hours_ahead` - Hours ahead to auto-create instances (default: 24, range: 1-168)
 - `created_date`, `last_modified_date` - Audit timestamps
 
 **Note**: Times are stored on `session_instance`, not `session`. The recurrence pattern may contain default times.

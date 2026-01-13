@@ -25,6 +25,8 @@ The database will be a Postgres database. The basic entities in my model will be
     - recurrence - a standard recurrence schema that is at most daily, but also supports patterns like "every other thursday" and "first and third sundays of the month", and also includes start and end time
     - active_buffer_minutes_before - integer, minutes before session start time when it becomes active (default 60) - Feature 005
     - active_buffer_minutes_after - integer, minutes after session end time when it stops being active (default 60) - Feature 005
+    - auto_create_instances - boolean, when TRUE the cron job will automatically create instances ahead of time based on recurrence (default FALSE) - Feature 018
+    - auto_create_hours_ahead - integer, how many hours ahead to auto-create instances (default 24, valid range 1-168) - Feature 018
 
 - **session_instance** - This is one instance of a session that happens on a particular date and time. Session instances can be in the past or future. The same session should not ever have multiple instances  that overlap in time. Attributes:
     - session_id

@@ -16,6 +16,7 @@ except ImportError:
     from backports.zoneinfo import ZoneInfo
 
 from database import get_db_connection
+from session_instance_auto_create import auto_create_instances_hours_ahead
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,85 @@ def update_active_sessions() -> Dict[str, any]:
             f"Active session update completed: "
             f"{len(stats['activated'])} activated, "
             f"{len(stats['deactivated'])} deactivated, "
+            f"{len(stats['errors'])} errors"
+        )
+
+        return stats
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+def auto_create_scheduled_instances() -> Dict[str, any]:
+    """
+    Auto-create session instances for sessions configured with auto_create_instances=TRUE.
+
+    For each eligible session, creates instances that fall within the configured
+    hours_ahead window based on the session's recurrence pattern.
+
+    Returns:
+        Dictionary with statistics about auto-created instances
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    stats = {
+        'auto_created': [],
+        'errors': []
+    }
+
+    try:
+        # Get sessions configured for auto-creation
+        cur.execute("""
+            SELECT session_id, name, recurrence, timezone,
+                   COALESCE(auto_create_hours_ahead, 24) as auto_create_hours_ahead
+            FROM session
+            WHERE COALESCE(auto_create_instances, FALSE) = TRUE
+              AND recurrence IS NOT NULL
+              AND recurrence != ''
+              AND (termination_date IS NULL OR termination_date >= CURRENT_DATE)
+            ORDER BY session_id
+        """)
+
+        sessions = cur.fetchall()
+
+        for session_row in sessions:
+            try:
+                (session_id, name, recurrence_json, timezone_str,
+                 hours_ahead) = session_row
+
+                count, dates = auto_create_instances_hours_ahead(
+                    session_id=session_id,
+                    hours_ahead=hours_ahead,
+                    session_timezone=timezone_str,
+                    recurrence_json=recurrence_json,
+                    conn=conn
+                )
+
+                if count > 0:
+                    stats['auto_created'].append({
+                        'session_id': session_id,
+                        'session_name': name,
+                        'instances_created': count,
+                        'dates': dates
+                    })
+
+            except Exception as e:
+                logger.error(f"Error auto-creating instances for session {session_id}: {e}")
+                stats['errors'].append({
+                    'session_id': session_id,
+                    'error': f'Auto-create failed: {str(e)}'
+                })
+                conn.rollback()
+                continue
+
+        conn.commit()
+
+        total_created = sum(item['instances_created'] for item in stats['auto_created'])
+        logger.info(
+            f"Auto-create instances completed: "
+            f"{total_created} instances created for {len(stats['auto_created'])} sessions, "
             f"{len(stats['errors'])} errors"
         )
 
