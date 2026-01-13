@@ -1692,19 +1692,20 @@ def set_password_optional():
 
 # Common instruments for Irish/folk music
 COMMON_INSTRUMENTS = [
+    "Accordion",
+    "Banjo",
+    "Bodhrán",
+    "Bouzouki",
+    "Concertina",
     "Fiddle",
     "Flute",
+    "Guitar",
+    "Harp",
+    "Mandolin",
+    "Piano",
+    "Piano Accordion",
     "Tin Whistle",
     "Uilleann Pipes",
-    "Accordion",
-    "Concertina",
-    "Banjo",
-    "Mandolin",
-    "Guitar",
-    "Bouzouki",
-    "Bodhrán",
-    "Harp",
-    "Piano",
     "Vocals",
 ]
 
