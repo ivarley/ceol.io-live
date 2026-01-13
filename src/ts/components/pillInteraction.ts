@@ -187,7 +187,10 @@ export class PillInteraction {
                     // Enter drag mode
                     isDragMode = true;
                     pillElement.classList.add('dragging');
-                    
+
+                    // Hide any open context menu when entering drag mode
+                    this.hideContextMenu && this.hideContextMenu();
+
                     // If pill isn't selected, select it
                     if (!pillSelection.isSelected(pillData.id)) {
                         pillSelection.selectSingle(pillData.id);
@@ -215,11 +218,28 @@ export class PillInteraction {
         });
         
         pillElement.addEventListener('touchmove', (e: TouchEvent) => {
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            // If not yet in drag mode, check if user moved too much - cancel the long press
+            if (!isDragMode && longPressTimer) {
+                const deltaX = Math.abs(touch.clientX - touchStartX);
+                const deltaY = Math.abs(touch.clientY - touchStartY);
+                // If moved more than 10px, cancel the long press timer (user is scrolling)
+                if (deltaX > 10 || deltaY > 10) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            }
+
             if (isDragMode && dragDrop && dragDrop.handleMobileDragMove) {
-                e.preventDefault();
+                // Only prevent default if the event is cancelable (not already scrolling)
+                if (e.cancelable) {
+                    e.preventDefault();
+                }
                 dragDrop.handleMobileDragMove(e);
             }
-        });
+        }, { passive: false }); // passive: false allows us to call preventDefault
         
         pillElement.addEventListener('touchend', (e: TouchEvent) => {
             if (longPressTimer) {
@@ -305,10 +325,15 @@ export class PillInteraction {
             delete pillElement.dataset.touchOnChevron;
         });
         
-        // Right-click context menu
+        // Right-click context menu (desktop only - mobile uses chevron)
         pillElement.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
-            this.showContextMenu && this.showContextMenu(e, pillData);
+            // On mobile/touch devices, don't show context menu on long-press
+            // Users should use the chevron instead
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (!isTouchDevice) {
+                this.showContextMenu && this.showContextMenu(e, pillData);
+            }
         });
         
         // Register drag event handlers with DragDrop module

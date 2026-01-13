@@ -33,6 +33,9 @@ let textInput = null;
 
 // Drag ghost cleanup now handled by DragDrop module
 
+// Guard against duplicate drop operations
+let dropOperationInProgress = false;
+
 
 // Save functionality - now handled directly by AutoSaveManager
 
@@ -259,22 +262,25 @@ function convertTuneSetsToPills(tuneSets, skipCallback = false) {
 // Specialized function for dropping structured sets at a new position (horizontal zones)
 function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
     if (!dragData || dragData.length === 0) return;
-    
+
     // Filter out any empty sets from drag data
     dragData = dragData.filter(set => set && set.length > 0);
-    
+
     if (dragData.length === 0) {
         return;
     }
-    
+
+    // Ensure we're working with the latest data from StateManager
+    tunePillsData = StateManager.getTunePillsData();
+
     undoRedoManager.saveToUndo();
-    
+
     // Remove dragged pills from their current positions (same logic as performDrop)
     const draggedPillIds = Array.from(PillSelection.getSelectedPills());
     const setsToRemove = new Set();
-    
-    
+
     draggedPillIds.forEach(pillId => {
+        let found = false;
         for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
             const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
             if (pillIndex !== -1) {
@@ -282,8 +288,12 @@ function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
                 if (tunePillsData[setIndex].length === 0) {
                     setsToRemove.add(setIndex);
                 }
+                found = true;
                 break;
             }
+        }
+        if (!found) {
+            console.warn(`dropStructuredSetsAtNewPosition: Could not find pill with id ${pillId} to remove`);
         }
     });
     
@@ -329,79 +339,98 @@ function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
 
 function performDrop(position, draggedPillIds) {
     if (!draggedPillIds || draggedPillIds.length === 0) return;
-    
-    undoRedoManager.saveToUndo();
-    
-    // Track which sets will become empty after removal
-    const originalSetCount = tunePillsData.length;
-    const setsToRemove = new Set();
-    
-    // Remove dragged pills from their current positions
-    const draggedPills = [];
-    draggedPillIds.forEach(pillId => {
-        for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
-            const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
-            if (pillIndex !== -1) {
-                draggedPills.push(tunePillsData[setIndex].splice(pillIndex, 1)[0]);
-                if (tunePillsData[setIndex].length === 0) {
-                    setsToRemove.add(setIndex);
+
+    // Guard against duplicate calls (can happen with some mobile event timing issues)
+    if (dropOperationInProgress) {
+        console.warn('performDrop: Ignoring duplicate call while operation in progress');
+        return;
+    }
+    dropOperationInProgress = true;
+
+    try {
+        // Ensure we're working with the latest data from StateManager
+        tunePillsData = StateManager.getTunePillsData();
+
+        undoRedoManager.saveToUndo();
+
+        // Track which sets will become empty after removal
+        const originalSetCount = tunePillsData.length;
+        const setsToRemove = new Set();
+
+        // Remove dragged pills from their current positions
+        const draggedPills = [];
+        draggedPillIds.forEach(pillId => {
+            let found = false;
+            for (let setIndex = 0; setIndex < tunePillsData.length; setIndex++) {
+                const pillIndex = tunePillsData[setIndex].findIndex(p => p.id === pillId);
+                if (pillIndex !== -1) {
+                    draggedPills.push(tunePillsData[setIndex].splice(pillIndex, 1)[0]);
+                    if (tunePillsData[setIndex].length === 0) {
+                        setsToRemove.add(setIndex);
+                    }
+                    found = true;
+                    break;
                 }
-                break;
+            }
+            if (!found) {
+                console.warn(`performDrop: Could not find pill with id ${pillId} to remove`);
+            }
+        });
+
+        // Calculate how many sets before target position will be removed
+        let adjustedTargetIndex = position.setIndex;
+        for (let i = 0; i < position.setIndex; i++) {
+            if (setsToRemove.has(i)) {
+                adjustedTargetIndex--;
             }
         }
-    });
-    
-    // Calculate how many sets before target position will be removed
-    let adjustedTargetIndex = position.setIndex;
-    for (let i = 0; i < position.setIndex; i++) {
-        if (setsToRemove.has(i)) {
-            adjustedTargetIndex--;
-        }
-    }
-    
-    // Clean up empty sets
-    tunePillsData = tunePillsData.filter(set => set.length > 0);
-    
-    // Insert at new position
-    if (position.position === 'newset') {
-        if (adjustedTargetIndex >= tunePillsData.length) {
-            // Create new set at end
-            tunePillsData.push(draggedPills);
-        } else {
-            // Create new set at specific index (insert between existing sets)
-            tunePillsData.splice(adjustedTargetIndex, 0, draggedPills);
-        }
-    } else {
-        // Use the adjusted target index for existing sets too
-        if (adjustedTargetIndex >= tunePillsData.length) {
-            // Create new set at end
-            tunePillsData.push(draggedPills);
-        } else {
-            // Insert into existing set
-            const targetSet = tunePillsData[adjustedTargetIndex];
-            let insertIndex;
-            
-            if (position.position === 'before') {
-                insertIndex = position.pillIndex;
-            } else { // 'after'
-                insertIndex = position.pillIndex;
+
+        // Clean up empty sets
+        tunePillsData = tunePillsData.filter(set => set.length > 0);
+
+        // Insert at new position
+        if (position.position === 'newset') {
+            if (adjustedTargetIndex >= tunePillsData.length) {
+                // Create new set at end
+                tunePillsData.push(draggedPills);
+            } else {
+                // Create new set at specific index (insert between existing sets)
+                tunePillsData.splice(adjustedTargetIndex, 0, draggedPills);
             }
-            
-            // Insert pills into target set at the specified position
-            targetSet.splice(insertIndex, 0, ...draggedPills);
+        } else {
+            // Use the adjusted target index for existing sets too
+            if (adjustedTargetIndex >= tunePillsData.length) {
+                // Create new set at end
+                tunePillsData.push(draggedPills);
+            } else {
+                // Insert into existing set
+                const targetSet = tunePillsData[adjustedTargetIndex];
+                let insertIndex;
+
+                if (position.position === 'before') {
+                    insertIndex = position.pillIndex;
+                } else { // 'after'
+                    insertIndex = position.pillIndex;
+                }
+
+                // Insert pills into target set at the specified position
+                targetSet.splice(insertIndex, 0, ...draggedPills);
+            }
         }
+
+        // Update StateManager with the modified data
+        StateManager.setTunePillsData(tunePillsData);
+
+        PillRenderer.renderTunePills();
+
+        // Apply landing animation to moved pills
+        const movedPillIds = draggedPills.map(pill => pill.id);
+        setTimeout(() => {
+            PillRenderer.applyLandingAnimation(movedPillIds);
+        }, 50); // Small delay to ensure pills are rendered
+    } finally {
+        dropOperationInProgress = false;
     }
-    
-    // Update StateManager with the modified data
-    StateManager.setTunePillsData(tunePillsData);
-    
-    PillRenderer.renderTunePills();
-    
-    // Apply landing animation to moved pills
-    const movedPillIds = draggedPills.map(pill => pill.id);
-    setTimeout(() => {
-        PillRenderer.applyLandingAnimation(movedPillIds);
-    }, 50); // Small delay to ensure pills are rendered
 }
 
 // Drag and drop support functions
