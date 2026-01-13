@@ -112,6 +112,7 @@ CREATE TABLE tune (
     tune_type VARCHAR(50) CHECK (tune_type IN ('Jig', 'Reel', 'Slip Jig', 'Hop Jig', 'Hornpipe', 'Polka', 'Set Dance', 'Slide', 'Waltz', 'Barndance', 'Strathspey', 'Three-Two', 'Mazurka', 'March', 'Air')),
     tunebook_count_cached INTEGER DEFAULT 0,
     tunebook_count_cached_date DATE DEFAULT CURRENT_DATE,
+    redirect_to_tune_id INTEGER REFERENCES tune(tune_id),
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by_user_id INTEGER,
@@ -119,6 +120,37 @@ CREATE TABLE tune (
 );
 
 CREATE INDEX idx_tune_created_by ON tune(created_by_user_id);
+CREATE INDEX idx_tune_redirect_to ON tune(redirect_to_tune_id) WHERE redirect_to_tune_id IS NOT NULL;
+
+-- Prevent redirect chains: a tune cannot redirect to another redirect
+CREATE OR REPLACE FUNCTION check_tune_redirect_chain()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.redirect_to_tune_id IS NOT NULL THEN
+        -- Check that target tune is not itself a redirect
+        IF EXISTS (
+            SELECT 1 FROM tune
+            WHERE tune_id = NEW.redirect_to_tune_id
+            AND redirect_to_tune_id IS NOT NULL
+        ) THEN
+            RAISE EXCEPTION 'Cannot redirect to a tune that is itself a redirect (tune_id: %)', NEW.redirect_to_tune_id;
+        END IF;
+
+        -- Check for self-redirect
+        IF NEW.tune_id = NEW.redirect_to_tune_id THEN
+            RAISE EXCEPTION 'A tune cannot redirect to itself';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_check_tune_redirect_chain
+    BEFORE INSERT OR UPDATE ON tune
+    FOR EACH ROW
+    WHEN (NEW.redirect_to_tune_id IS NOT NULL)
+    EXECUTE FUNCTION check_tune_redirect_chain();
 
 CREATE OR REPLACE FUNCTION update_tune_last_modified_date()
 RETURNS TRIGGER AS $$
@@ -189,10 +221,10 @@ CREATE INDEX idx_person_at_active_session ON person(at_active_session_instance_i
 -- -----------------------------------------------------------------------------
 CREATE TABLE user_account (
     user_id SERIAL PRIMARY KEY,
-    person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL UNIQUE REFERENCES person(person_id) ON DELETE CASCADE,
     username VARCHAR(255) NOT NULL UNIQUE,
     user_email VARCHAR(255) NOT NULL,
-    hashed_password VARCHAR(255) NOT NULL,
+    hashed_password VARCHAR(255),  -- NULL for passwordless (magic link) users
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
@@ -203,6 +235,8 @@ CREATE TABLE user_account (
     verification_token_expires TIMESTAMPTZ,
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMPTZ,
+    login_token VARCHAR(255),
+    login_token_expires TIMESTAMPTZ,
     referred_by_person_id INTEGER REFERENCES person(person_id) ON DELETE SET NULL,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -214,11 +248,16 @@ CREATE INDEX idx_user_person_id ON user_account (person_id);
 CREATE INDEX idx_user_username ON user_account (username);
 CREATE INDEX idx_user_verification_token ON user_account (verification_token) WHERE verification_token IS NOT NULL;
 CREATE INDEX idx_user_reset_token ON user_account (password_reset_token) WHERE password_reset_token IS NOT NULL;
+CREATE INDEX idx_user_login_token ON user_account (login_token) WHERE login_token IS NOT NULL;
+CREATE UNIQUE INDEX idx_user_account_email_lower ON user_account (LOWER(user_email));
 CREATE INDEX idx_user_referred_by ON user_account (referred_by_person_id) WHERE referred_by_person_id IS NOT NULL;
 
 COMMENT ON COLUMN user_account.timezone IS 'IANA timezone identifier for displaying dates to user';
 COMMENT ON COLUMN user_account.auto_save_tunes IS 'User preference for auto-saving tunes in session instance editor';
 COMMENT ON COLUMN user_account.auto_save_interval IS 'User preference for auto-save interval in seconds (10, 30, or 60)';
+COMMENT ON COLUMN user_account.hashed_password IS 'Bcrypt hashed password, NULL for passwordless users who use magic links';
+COMMENT ON COLUMN user_account.login_token IS 'Token for magic link (passwordless) login, expires after 15 minutes';
+COMMENT ON COLUMN user_account.login_token_expires IS 'UTC timestamp when magic link login token expires';
 COMMENT ON COLUMN user_account.referred_by_person_id IS 'Person ID of the user who referred this account';
 
 -- -----------------------------------------------------------------------------
@@ -483,7 +522,7 @@ CREATE TABLE login_history (
     login_history_id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES user_account(user_id) ON DELETE SET NULL,
     username VARCHAR(255),
-    event_type VARCHAR(20) NOT NULL CHECK (event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE', 'LOGOUT', 'PASSWORD_RESET', 'ACCOUNT_LOCKED')),
+    event_type VARCHAR(20) NOT NULL CHECK (event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE', 'LOGOUT', 'PASSWORD_RESET', 'ACCOUNT_LOCKED', 'MAGIC_LINK_SENT', 'REGISTRATION')),
     ip_address INET,
     user_agent TEXT,
     session_id VARCHAR(255),
@@ -574,6 +613,7 @@ CREATE TABLE tune_history (
     tune_type VARCHAR(50),
     tunebook_count_cached INTEGER,
     tunebook_count_cached_date DATE,
+    redirect_to_tune_id INTEGER,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,
@@ -787,6 +827,8 @@ CREATE TABLE user_account_history (
     verification_token_expires TIMESTAMPTZ,
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMPTZ,
+    login_token VARCHAR(255),
+    login_token_expires TIMESTAMPTZ,
     referred_by_person_id INTEGER,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
@@ -821,6 +863,216 @@ CREATE TABLE tune_setting_history (
 CREATE INDEX idx_tune_setting_history_setting_id ON tune_setting_history (setting_id);
 CREATE INDEX idx_tune_setting_history_changed_at ON tune_setting_history (changed_at);
 CREATE INDEX idx_tune_setting_history_operation ON tune_setting_history (operation);
+
+-- =============================================================================
+-- STORED PROCEDURES AND FUNCTIONS
+-- =============================================================================
+
+-- Function to generate fractional positions from integers for CRDT-compatible ordering
+-- Uses base-62 alphabet: 0-9, A-Z, a-z (sorted by ASCII byte value)
+CREATE OR REPLACE FUNCTION generate_fractional_position(order_num INTEGER)
+RETURNS VARCHAR(32) AS $$
+DECLARE
+    alphabet VARCHAR(62) := '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    start_idx INTEGER := 31;  -- 'V' is at index 31 (0-indexed)
+    first_range INTEGER := 31;  -- V-z (31 positions)
+    second_range INTEGER := 31;  -- zV-zz (31 positions)
+    third_range INTEGER := 31;  -- zzV-zzz (31 positions)
+    pos INTEGER;
+BEGIN
+    IF order_num IS NULL OR order_num < 1 THEN
+        RETURN 'V';
+    END IF;
+
+    IF order_num <= first_range THEN
+        -- V(1) through z(31)
+        RETURN SUBSTRING(alphabet FROM start_idx + order_num FOR 1);
+    END IF;
+
+    pos := order_num - first_range;
+
+    IF pos <= second_range THEN
+        -- zV(32) through zz(62)
+        RETURN 'z' || SUBSTRING(alphabet FROM start_idx + pos FOR 1);
+    END IF;
+
+    pos := pos - second_range;
+
+    IF pos <= third_range THEN
+        -- zzV(63) through zzz(93)
+        RETURN 'zz' || SUBSTRING(alphabet FROM start_idx + pos FOR 1);
+    END IF;
+
+    pos := pos - third_range;
+
+    IF pos <= 31 THEN
+        -- zzzV(94) through zzzz(124)
+        RETURN 'zzz' || SUBSTRING(alphabet FROM start_idx + pos FOR 1);
+    END IF;
+
+    -- Beyond 124, use zzzzVN format (very rare, >100 tunes in a session)
+    RETURN 'zzzz' || SUBSTRING(alphabet FROM start_idx + 1 FOR 1) || (pos - 31)::text;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Stored procedure to merge one tune_id into another across all relevant tables
+-- This updates main tables but leaves history tables unchanged to preserve audit trail
+CREATE OR REPLACE FUNCTION merge_tune_ids(
+    old_tune_id INTEGER,
+    new_tune_id INTEGER,
+    changed_by_user_id INTEGER DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    tune_setting_updated INTEGER := 0;
+    session_tune_updated INTEGER := 0;
+    session_tune_deleted INTEGER := 0;
+    session_tune_alias_updated INTEGER := 0;
+    session_tune_alias_deleted INTEGER := 0;
+    session_instance_tune_updated INTEGER := 0;
+    person_tune_updated INTEGER := 0;
+    person_tune_deleted INTEGER := 0;
+    result JSON;
+BEGIN
+    -- Validate inputs
+    IF old_tune_id IS NULL OR new_tune_id IS NULL THEN
+        RAISE EXCEPTION 'Both old_tune_id and new_tune_id must be provided';
+    END IF;
+
+    IF old_tune_id = new_tune_id THEN
+        RAISE EXCEPTION 'old_tune_id and new_tune_id cannot be the same';
+    END IF;
+
+    -- Verify both tune_ids exist
+    IF NOT EXISTS (SELECT 1 FROM tune WHERE tune_id = old_tune_id) THEN
+        RAISE EXCEPTION 'old_tune_id % does not exist in tune table', old_tune_id;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM tune WHERE tune_id = new_tune_id) THEN
+        RAISE EXCEPTION 'new_tune_id % does not exist in tune table', new_tune_id;
+    END IF;
+
+    -- Verify old tune is not already a redirect
+    IF EXISTS (SELECT 1 FROM tune WHERE tune_id = old_tune_id AND redirect_to_tune_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'old_tune_id % is already a redirect', old_tune_id;
+    END IF;
+
+    -- Verify new tune is not a redirect (prevent chains)
+    IF EXISTS (SELECT 1 FROM tune WHERE tune_id = new_tune_id AND redirect_to_tune_id IS NOT NULL) THEN
+        RAISE EXCEPTION 'new_tune_id % is a redirect - cannot redirect to a redirect', new_tune_id;
+    END IF;
+
+    -- 1. tune_setting table - just update tune_id, setting_id is globally unique
+    UPDATE tune_setting
+    SET tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id;
+
+    GET DIAGNOSTICS tune_setting_updated = ROW_COUNT;
+
+    -- 2. session_instance_tune table - update tune_id
+    UPDATE session_instance_tune
+    SET tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id;
+
+    GET DIAGNOSTICS session_instance_tune_updated = ROW_COUNT;
+
+    -- 3. session_tune_alias table - update where no conflict
+    UPDATE session_tune_alias
+    SET tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id
+      AND NOT EXISTS (
+        SELECT 1 FROM session_tune_alias sta2
+        WHERE sta2.session_id = session_tune_alias.session_id
+        AND sta2.tune_id = new_tune_id
+        AND sta2.alias = session_tune_alias.alias
+      );
+
+    GET DIAGNOSTICS session_tune_alias_updated = ROW_COUNT;
+
+    -- Delete remaining duplicates
+    DELETE FROM session_tune_alias
+    WHERE tune_id = old_tune_id;
+
+    GET DIAGNOSTICS session_tune_alias_deleted = ROW_COUNT;
+
+    -- 4. session_tune table - update where no conflict
+    UPDATE session_tune
+    SET tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id
+      AND NOT EXISTS (
+        SELECT 1 FROM session_tune st2
+        WHERE st2.session_id = session_tune.session_id
+        AND st2.tune_id = new_tune_id
+      );
+
+    GET DIAGNOSTICS session_tune_updated = ROW_COUNT;
+
+    -- Delete remaining duplicates
+    DELETE FROM session_tune
+    WHERE tune_id = old_tune_id;
+
+    GET DIAGNOSTICS session_tune_deleted = ROW_COUNT;
+
+    -- 5. person_tune table - update where no conflict
+    UPDATE person_tune
+    SET tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id
+      AND NOT EXISTS (
+        SELECT 1 FROM person_tune pt2
+        WHERE pt2.person_id = person_tune.person_id
+        AND pt2.tune_id = new_tune_id
+      );
+
+    GET DIAGNOSTICS person_tune_updated = ROW_COUNT;
+
+    -- Delete remaining duplicates
+    DELETE FROM person_tune
+    WHERE tune_id = old_tune_id;
+
+    GET DIAGNOSTICS person_tune_deleted = ROW_COUNT;
+
+    -- 6. Mark old tune as redirect
+    UPDATE tune
+    SET redirect_to_tune_id = new_tune_id,
+        last_modified_user_id = changed_by_user_id
+    WHERE tune_id = old_tune_id;
+
+    -- Build result JSON
+    result := json_build_object(
+        'success', true,
+        'old_tune_id', old_tune_id,
+        'new_tune_id', new_tune_id,
+        'tables_updated', json_build_object(
+            'tune_setting', json_build_object('updated', tune_setting_updated),
+            'session_instance_tune', json_build_object('updated', session_instance_tune_updated),
+            'session_tune_alias', json_build_object('updated', session_tune_alias_updated, 'deleted', session_tune_alias_deleted),
+            'session_tune', json_build_object('updated', session_tune_updated, 'deleted', session_tune_deleted),
+            'person_tune', json_build_object('updated', person_tune_updated, 'deleted', person_tune_deleted)
+        ),
+        'total_records_affected',
+            tune_setting_updated + session_instance_tune_updated +
+            session_tune_alias_updated + session_tune_alias_deleted +
+            session_tune_updated + session_tune_deleted +
+            person_tune_updated + person_tune_deleted
+    );
+
+    RETURN result;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Error merging tune_ids: %', SQLERRM;
+END;
+$$;
+
+COMMENT ON FUNCTION merge_tune_ids(INTEGER, INTEGER, INTEGER) IS
+'Merges all references from old_tune_id to new_tune_id across tables. Marks old tune with redirect_to_tune_id.';
 
 -- =============================================================================
 -- Schema creation complete
