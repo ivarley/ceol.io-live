@@ -3062,7 +3062,9 @@ def _get_session_data(session_path):
             """
             SELECT session_id, name, path, location_name, location_website, location_phone,
                    location_street, city, state, country, comments, unlisted_address,
-                   initiation_date, termination_date, recurrence, timezone
+                   initiation_date, termination_date, recurrence, timezone,
+                   COALESCE(auto_create_instances, FALSE) as auto_create_instances,
+                   COALESCE(auto_create_hours_ahead, 24) as auto_create_hours_ahead
             FROM session
             WHERE path = %s
         """,
@@ -3091,6 +3093,8 @@ def _get_session_data(session_path):
             "recurrence": session_row[14],
             "timezone": session_row[15],
             "timezone_display": get_timezone_display_name(session_row[15] or "UTC"),
+            "auto_create_instances": session_row[16],
+            "auto_create_hours_ahead": session_row[17],
         }
 
         # Add human-readable recurrence if JSON format

@@ -227,7 +227,31 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
+                            <!-- Auto-create instances settings -->
+                            <div class="mb-3">
+                                <label class="form-label">Auto-Create Instances</label>
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="auto-create-instances" {{ 'checked' if session.auto_create_instances }}>
+                                        <label class="form-check-label" for="auto-create-instances">
+                                            Automatically create session instances ahead of time
+                                        </label>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2" id="auto-create-hours-container">
+                                        <label for="auto-create-hours" class="form-label mb-0">Create instances</label>
+                                        <input type="number" class="form-control" id="auto-create-hours"
+                                               value="{{ session.auto_create_hours_ahead }}"
+                                               min="1" max="168" style="width: 80px;">
+                                        <span>hours ahead</span>
+                                    </div>
+                                    <small class="text-muted d-block mt-2">
+                                        When enabled, the system will automatically create upcoming session instances based on the recurrence pattern.
+                                        This runs every 15 minutes.
+                                    </small>
+                                </div>
+                            </div>
+
                             <div class="mb-3">
                                 <label for="comments" class="form-label">Comments</label>
                                 <textarea class="form-control" id="comments" rows="4">{{ session.comments or '' }}</textarea>
@@ -1604,7 +1628,9 @@ function saveSessionDetails() {
         location_phone: document.getElementById('location-phone').value.trim(),
         initiation_date: document.getElementById('initiation-date').value,
         unlisted_address: document.getElementById('unlisted-address').checked,
-        comments: document.getElementById('comments').value.trim()
+        comments: document.getElementById('comments').value.trim(),
+        auto_create_instances: document.getElementById('auto-create-instances').checked,
+        auto_create_hours_ahead: parseInt(document.getElementById('auto-create-hours').value) || 24
     };
     
     // Include termination date if it exists

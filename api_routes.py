@@ -487,6 +487,8 @@ def update_session_ajax(session_path):
             "unlisted_address": "unlisted_address",
             "recurrence": "recurrence",
             "comments": "comments",
+            "auto_create_instances": "auto_create_instances",
+            "auto_create_hours_ahead": "auto_create_hours_ahead",
         }
 
         # Build update query dynamically based on provided fields
@@ -504,8 +506,10 @@ def update_session_ajax(session_path):
                     "comments",
                 ]:
                     value = None
-                elif form_field == "unlisted_address":
+                elif form_field in ["unlisted_address", "auto_create_instances"]:
                     value = bool(value)
+                elif form_field == "auto_create_hours_ahead":
+                    value = int(value) if value else 24
 
                 update_fields.append(f"{db_field} = %s")
                 update_values.append(value)
