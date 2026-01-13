@@ -166,7 +166,7 @@ def auto_create_instances_hours_ahead(
 
         # Parse recurrence pattern
         try:
-            session_recurrence = SessionRecurrence(recurrence_json, session_timezone)
+            session_recurrence = SessionRecurrence(recurrence_json)
         except (ValueError, TypeError) as e:
             logger.error(f"Invalid recurrence pattern for session {session_id}: {e}")
             return 0, []
