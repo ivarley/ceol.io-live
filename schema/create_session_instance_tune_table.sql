@@ -5,7 +5,7 @@ CREATE TABLE session_instance_tune (
     tune_id INTEGER REFERENCES tune(tune_id),
     name VARCHAR(255),
     order_number INTEGER NOT NULL,
-    order_position VARCHAR(32),  -- Fractional index for CRDT-compatible ordering (base-36: 0-9a-z)
+    order_position VARCHAR(32) COLLATE "C",  -- Fractional index for CRDT-compatible ordering (base-62: 0-9, A-Z, a-z)
     continues_set BOOLEAN DEFAULT FALSE,
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),

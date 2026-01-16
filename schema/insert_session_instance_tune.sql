@@ -1,4 +1,16 @@
--- Stored procedure to insert a tune into session_instance_tune table
+-- =============================================================================
+-- DEPRECATED: This SQL stored procedure is no longer used.
+--
+-- Replaced by: Python function insert_session_instance_tune() in api_routes.py:62
+-- Reason: Fractional indexing (order_position) requires Python-based position
+--         generation for CRDT compatibility. This SQL function only generates
+--         order_number and does NOT set order_position.
+--
+-- See: specs/changes/015-fractional-indexing.md
+-- =============================================================================
+
+-- Original stored procedure to insert a tune into session_instance_tune table
+-- WARNING: This function is DEPRECATED and will raise an error if called.
 CREATE OR REPLACE FUNCTION insert_session_instance_tune(
     p_session_id INTEGER,
     p_date DATE,
@@ -15,6 +27,10 @@ DECLARE
     v_new_id INTEGER;
     v_session_tune_exists BOOLEAN;
 BEGIN
+    -- DEPRECATED: This function does not set order_position and should not be used.
+    -- Use the Python function insert_session_instance_tune() in api_routes.py instead.
+    RAISE EXCEPTION 'DEPRECATED: insert_session_instance_tune SQL function is no longer supported. Use Python function in api_routes.py instead.';
+
     -- Look up the session_instance_id for the given session_id and date
     -- If multiple exist, take the highest id
     SELECT session_instance_id 

@@ -2188,5 +2188,27 @@ SELECT setval('session_instance_person_session_instance_person_id_seq', (SELECT 
 SELECT setval('person_tune_person_tune_id_seq', (SELECT MAX(person_tune_id) FROM person_tune));
 
 -- =============================================================================
+-- Populate order_position for session_instance_tune
+-- Uses base-62 fractional indexing: positions start at 'V' and increment
+-- This matches the logic in migrate_to_fractional_indexing.sql
+-- =============================================================================
+
+UPDATE session_instance_tune
+SET order_position = CASE
+    -- order_number 1-31: V through z (single char)
+    WHEN order_number BETWEEN 1 AND 31 THEN
+        SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + order_number FOR 1)
+    -- order_number 32-62: zV through zz (two chars)
+    WHEN order_number BETWEEN 32 AND 62 THEN
+        'z' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 31) FOR 1)
+    -- order_number 63-93: zzV through zzz (three chars)
+    WHEN order_number BETWEEN 63 AND 93 THEN
+        'zz' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 62) FOR 1)
+    ELSE
+        'zzz' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 93) FOR 1)
+END
+WHERE order_position IS NULL;
+
+-- =============================================================================
 -- Seed data complete
 -- =============================================================================

@@ -905,3 +905,161 @@ class TestFractionalIndexingCollation:
             f"Mixed case positions not sorting correctly. "
             f"Expected {expected}, got {actual}"
         )
+
+
+@pytest.mark.integration
+class TestInsertSessionInstanceTuneFunction:
+    """Test the Python insert_session_instance_tune function.
+
+    This tests that the Python function (which replaced the SQL stored procedure)
+    correctly generates order_position values using fractional indexing.
+    """
+
+    def test_insert_generates_order_position(self, db_conn, db_cursor):
+        """Verify insert_session_instance_tune generates order_position."""
+        # Import the function here to avoid circular imports
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from api_routes import insert_session_instance_tune
+
+        # Create test session and instance
+        unique_id = str(uuid.uuid4())[:8]
+        db_cursor.execute("""
+            INSERT INTO session (name, path, day_of_week, time_of_day, city, state, country)
+            VALUES (%s, %s, 'monday', '20:00', 'Test City', 'Test State', 'Test Country')
+            RETURNING session_id
+        """, (f"Test Session {unique_id}", f"test-session-{unique_id}"))
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute("""
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, CURRENT_DATE)
+            RETURNING session_instance_id
+        """, (session_id,))
+        instance_id = db_cursor.fetchone()[0]
+
+        # Insert a tune using the Python function
+        tune_id = insert_session_instance_tune(
+            db_cursor, session_id, "CURRENT_DATE", None, None, f"Test Tune {unique_id}", True
+        )
+
+        # Verify order_position was set
+        db_cursor.execute("""
+            SELECT order_number, order_position
+            FROM session_instance_tune
+            WHERE session_instance_tune_id = %s
+        """, (tune_id,))
+        result = db_cursor.fetchone()
+
+        assert result is not None, "Inserted tune not found"
+        order_number, order_position = result
+        assert order_number == 1, "First tune should have order_number 1"
+        assert order_position == "V", "First tune should have order_position 'V'"
+
+    def test_insert_multiple_generates_sequential_positions(self, db_conn, db_cursor):
+        """Verify multiple inserts generate sequential order_positions."""
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from api_routes import insert_session_instance_tune
+
+        # Create test session and instance
+        unique_id = str(uuid.uuid4())[:8]
+        db_cursor.execute("""
+            INSERT INTO session (name, path, day_of_week, time_of_day, city, state, country)
+            VALUES (%s, %s, 'monday', '20:00', 'Test City', 'Test State', 'Test Country')
+            RETURNING session_id
+        """, (f"Test Session {unique_id}", f"test-session-{unique_id}"))
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute("""
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, CURRENT_DATE)
+            RETURNING session_instance_id
+        """, (session_id,))
+        instance_id = db_cursor.fetchone()[0]
+
+        # Insert multiple tunes
+        tune_ids = []
+        for i in range(5):
+            tune_id = insert_session_instance_tune(
+                db_cursor, session_id, "CURRENT_DATE", None, None, f"Test Tune {i} {unique_id}", i == 0
+            )
+            tune_ids.append(tune_id)
+
+        # Verify order_positions are sequential and sorted
+        db_cursor.execute("""
+            SELECT order_number, order_position
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_number
+        """, (instance_id,))
+        results = db_cursor.fetchall()
+
+        assert len(results) == 5, "Should have 5 tunes"
+
+        order_numbers = [r[0] for r in results]
+        order_positions = [r[1] for r in results]
+
+        # Order numbers should be 1, 2, 3, 4, 5
+        assert order_numbers == [1, 2, 3, 4, 5]
+
+        # Order positions should be V, W, X, Y, Z
+        assert order_positions == ["V", "W", "X", "Y", "Z"]
+
+        # Verify sorting by order_position gives same order
+        db_cursor.execute("""
+            SELECT order_position
+            FROM session_instance_tune
+            WHERE session_instance_id = %s
+            ORDER BY order_position
+        """, (instance_id,))
+        sorted_positions = [r[0] for r in db_cursor.fetchall()]
+        assert sorted_positions == order_positions, "order_position should sort same as order_number"
+
+    def test_order_position_and_order_number_ordering_match(self, db_conn, db_cursor):
+        """Verify order_position and order_number always produce the same ordering."""
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from api_routes import insert_session_instance_tune
+
+        # Create test session and instance
+        unique_id = str(uuid.uuid4())[:8]
+        db_cursor.execute("""
+            INSERT INTO session (name, path, day_of_week, time_of_day, city, state, country)
+            VALUES (%s, %s, 'monday', '20:00', 'Test City', 'Test State', 'Test Country')
+            RETURNING session_id
+        """, (f"Test Session {unique_id}", f"test-session-{unique_id}"))
+        session_id = db_cursor.fetchone()[0]
+
+        db_cursor.execute("""
+            INSERT INTO session_instance (session_id, date)
+            VALUES (%s, CURRENT_DATE)
+            RETURNING session_instance_id
+        """, (session_id,))
+        instance_id = db_cursor.fetchone()[0]
+
+        # Insert 35 tunes (more than 31 to test multi-char positions)
+        for i in range(35):
+            insert_session_instance_tune(
+                db_cursor, session_id, "CURRENT_DATE", None, None, f"Tune {i:02d} {unique_id}", i == 0
+            )
+
+        # Get both orderings
+        db_cursor.execute("""
+            SELECT session_instance_tune_id FROM session_instance_tune
+            WHERE session_instance_id = %s ORDER BY order_number
+        """, (instance_id,))
+        by_number = [r[0] for r in db_cursor.fetchall()]
+
+        db_cursor.execute("""
+            SELECT session_instance_tune_id FROM session_instance_tune
+            WHERE session_instance_id = %s ORDER BY order_position
+        """, (instance_id,))
+        by_position = [r[0] for r in db_cursor.fetchall()]
+
+        assert by_number == by_position, (
+            "ORDER BY order_number and ORDER BY order_position should produce same ordering"
+        )

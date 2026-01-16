@@ -351,3 +351,146 @@ class TestMigrationCompatibility:
         assert last_migrated < new1 < new2
         assert new1 == "Y"
         assert new2 == "Z"
+
+
+class TestRebalanceScenarios:
+    """Tests for scenarios that would trigger position rebalancing."""
+
+    MAX_POSITION_LENGTH = 32  # Same as in api_routes.py
+
+    def test_repeated_middle_inserts_eventually_exceed_length(self):
+        """Demonstrate that repeated inserts at the same point grow position length.
+
+        This test shows WHY rebalancing is needed. When repeatedly inserting
+        between the same two positions, the position length grows because
+        we keep bisecting smaller and smaller gaps.
+        """
+        # Start with two positions far apart
+        before = "A"
+        after = "z"
+        positions = []
+
+        # Insert 50 items, always inserting right after 'before' (before the last insert)
+        current_after = after
+        for _ in range(50):
+            new_pos = generate_position_between(before, current_after)
+            positions.append(new_pos)
+            # Next insert goes between 'before' and 'new_pos'
+            current_after = new_pos
+
+        # Early positions are short
+        assert len(positions[0]) <= 2
+        assert len(positions[5]) <= 4
+
+        # Later positions get longer due to repeated bisection
+        long_positions = [p for p in positions if len(p) > self.MAX_POSITION_LENGTH]
+        # Should have some positions that exceed the limit
+        assert len(long_positions) > 0, "Expected some positions to exceed max length"
+
+    def test_bulk_insert_optimization_stays_short(self):
+        """Test that the bulk insert pattern (append after first bisect) stays efficient.
+
+        This is the optimization used in save_session_instance_tunes_ajax:
+        - First new tune: bisect between existing positions
+        - Subsequent new tunes: append from previous (not bisect)
+        """
+        # Simulate inserting 100 new tunes between existing 'V' and 'z'
+        prev_existing = "V"
+        next_existing = "z"
+        positions = []
+
+        # First new item uses bisect
+        first_pos = generate_position_between(prev_existing, next_existing)
+        positions.append(first_pos)
+
+        # Subsequent items use append (simulating save_session_instance_tunes_ajax logic)
+        current_pos = first_pos
+        for _ in range(99):
+            new_pos = generate_append_position(current_pos)
+            # Check if append would exceed bound - fall back to bisect
+            if new_pos >= next_existing:
+                new_pos = generate_position_between(current_pos, next_existing)
+            positions.append(new_pos)
+            current_pos = new_pos
+
+        # All positions should stay within max length
+        max_len = max(len(p) for p in positions)
+        assert max_len <= self.MAX_POSITION_LENGTH, (
+            f"Bulk insert optimization failed: max length {max_len} > {self.MAX_POSITION_LENGTH}"
+        )
+
+        # Verify ordering is correct
+        assert positions == sorted(positions)
+        assert all(prev_existing < p < next_existing for p in positions)
+
+    def test_rebalance_resets_position_lengths(self):
+        """Test that rebalancing (regenerating from scratch) produces short positions.
+
+        After rebalancing, all positions should be regenerated using append,
+        which produces the shortest possible positions.
+        """
+        # Simulate a rebalance: regenerate all positions from scratch
+        num_tunes = 100
+        positions = []
+        current_pos = None
+
+        for _ in range(num_tunes):
+            current_pos = generate_append_position(current_pos)
+            positions.append(current_pos)
+
+        # All positions should be very short
+        max_len = max(len(p) for p in positions)
+        assert max_len <= 4, f"Rebalanced positions too long: max {max_len}"
+
+        # Verify ordering
+        assert positions == sorted(positions)
+
+    def test_normal_append_usage_stays_within_limits(self):
+        """Test that normal append-only usage stays within length limits.
+
+        In typical session logging, tunes are mostly appended to the end.
+        This should never trigger rebalancing.
+        """
+        positions = []
+        current_pos = None
+
+        # Simulate 500 tunes (very large session)
+        for _ in range(500):
+            current_pos = generate_append_position(current_pos)
+            positions.append(current_pos)
+
+        # Even with 500 tunes, positions should stay manageable
+        max_len = max(len(p) for p in positions)
+        assert max_len <= 10, f"Normal usage produced long positions: max {max_len}"
+
+        # Verify ordering
+        assert positions == sorted(positions)
+
+    def test_interleaved_inserts_and_appends(self):
+        """Test mixed insert and append operations maintain ordering."""
+        positions = []
+
+        # Start with a few tunes
+        pos = None
+        for _ in range(5):
+            pos = generate_append_position(pos)
+            positions.append(pos)
+
+        # Insert some tunes in the middle
+        mid_pos = generate_position_between(positions[1], positions[2])
+        positions.insert(2, mid_pos)
+
+        # Append more at the end
+        pos = positions[-1]
+        for _ in range(5):
+            pos = generate_append_position(pos)
+            positions.append(pos)
+
+        # Insert at the beginning
+        start_pos = generate_position_between(None, positions[0])
+        positions.insert(0, start_pos)
+
+        # Verify all positions are valid and ordered
+        for p in positions:
+            assert validate_position(p)
+        assert positions == sorted(positions)
