@@ -2175,6 +2175,27 @@ fB cd B2|gB cd B2|AB cd ed|ce dc B2||', '');
 
 -- Total settings: 300
 -- =============================================================================
+-- CURRENT WEEK SESSION INSTANCES (for home page demo)
+-- Week of Jan 26 - Feb 1, 2026
+-- =============================================================================
+
+-- Mueller Session Tuesday Jan 27 (logged) and Downtown Session Thursday Jan 29 (upcoming)
+INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time, log_complete_date, comments) VALUES
+(90, 1, '2026-01-27', '19:00', '22:00', '2026-01-27 23:00:00+00', 'Great session to start the week'),
+(91, 2, '2026-01-29', '20:00', '23:00', NULL, NULL);
+
+-- Tune log for Mueller Tuesday Jan 27 (instance 90)
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+(90, 27, 1, FALSE, 1), (90, 1, 2, TRUE, NULL), (90, 74, 3, TRUE, NULL),
+(90, 55, 4, FALSE, 2), (90, 71, 5, TRUE, NULL),
+(90, 116, 6, FALSE, 3), (90, 138, 7, TRUE, NULL), (90, 64, 8, TRUE, NULL),
+(90, 441, 9, FALSE, 1), (90, 238, 10, TRUE, NULL);
+
+-- Attendance for current week instances
+INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
+(90, 1, 'yes'), (90, 2, 'yes'), (90, 3, 'yes'), (90, 4, 'yes');
+
+-- =============================================================================
 -- Reset sequences to avoid conflicts with future inserts
 -- =============================================================================
 
