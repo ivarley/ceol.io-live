@@ -47,7 +47,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 ### session_instance_tune
 - `tune_id` INTEGER (nullable) - Link to canonical tune
 - `name` VARCHAR(255) - Tune name as played
-- `order_number` INTEGER - Display order
+- `order_position` VARCHAR(32) - Fractional index for ordering (base-62 CRDT string)
 - `continues_set` BOOLEAN - Set continuation flag
 
 ### tune

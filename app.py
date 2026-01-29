@@ -405,9 +405,9 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/delete_tune_by_order/<int:order_number>",
-    "delete_tune_by_order_ajax",
-    delete_tune_by_order_ajax,
+    "/api/sessions/delete_tune/<int:session_instance_tune_id>",
+    "delete_tune_ajax",
+    delete_tune_ajax,
     methods=["DELETE"],
 )
 app.add_url_rule(

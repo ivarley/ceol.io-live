@@ -339,11 +339,11 @@ def get_person_tune_detail(person_tune_id):
                     S.name,
                     S.path,
                     SI.date,
-                    SIT.order_number,
                     SIT.name,
                     SIT.key_override,
                     SIT.setting_override,
-                    SI.session_instance_id
+                    SI.session_instance_id,
+                    ROW_NUMBER() OVER (PARTITION BY SIT.session_instance_id ORDER BY SIT.order_position) AS position_in_set
                 FROM session_instance_tune SIT
                 INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
                 INNER JOIN session S ON SI.session_id = S.session_id
@@ -358,11 +358,11 @@ def get_person_tune_detail(person_tune_id):
                 session_name = row[0]
                 session_path = row[1]
                 date = row[2]
-                order_number = row[3]
-                name_override = row[4]
-                key_override = row[5]
-                setting_override = row[6]
-                session_instance_id = row[7]
+                name_override = row[3]
+                key_override = row[4]
+                setting_override = row[5]
+                session_instance_id = row[6]
+                position_in_set = row[7]
 
                 # Build full name for display: "Session Name - YYYY-MM-DD"
                 full_name = f"{session_name} - {date.strftime('%Y-%m-%d')}" if date else session_name
@@ -374,7 +374,7 @@ def get_person_tune_detail(person_tune_id):
                     "session_name": session_name,
                     "session_path": session_path,
                     "date": date.isoformat() if date else None,
-                    "position_in_set": order_number,
+                    "position_in_set": position_in_set,
                     "name_override": name_override,
                     "key_override": key_override,
                     "setting_id_override": setting_override,

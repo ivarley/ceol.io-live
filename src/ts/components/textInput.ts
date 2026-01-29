@@ -133,7 +133,6 @@ export class TextInput {
         if (!this.typingPill) {
             this.typingPill = {
                 id: 'typing-' + Date.now(),
-                orderNumber: 0,
                 tuneId: null,
                 tuneName: this.typingBuffer.trim(),
                 setting: '',
@@ -706,7 +705,6 @@ export class TextInput {
         // Create new pills with the calculated previous tune type
         const newPills: TypingPill[] = tuneNames.map(name => ({
             id: window.StateManager.generateId(),
-            orderNumber: 0,
             tuneId: null,
             tuneName: name,
             setting: '',

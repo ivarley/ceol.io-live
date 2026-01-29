@@ -291,7 +291,7 @@ class TestOrderingConsistency:
 
 
 class TestMigrationCompatibility:
-    """Tests related to migration from integer order_number."""
+    """Tests related to migration from integer ordering to fractional indexing."""
 
     def test_sequential_positions_from_migration(self):
         """Verify migration pattern produces correct ordering."""
@@ -324,24 +324,24 @@ class TestMigrationCompatibility:
 
             return "zzzz" + str(pos - 62)
 
-        # Generate positions for order_numbers 1-100
+        # Generate positions for sequence numbers 1-100
         positions = [simulate_migration_position(i) for i in range(1, 101)]
 
         # Verify they're in sorted order
         assert positions == sorted(positions)
 
         # Verify first few match expected values
-        assert positions[0] == "V"  # order_number 1
-        assert positions[1] == "W"  # order_number 2
-        assert positions[30] == "z"  # order_number 31
-        assert positions[31] == "z0"  # order_number 32
+        assert positions[0] == "V"  # sequence 1
+        assert positions[1] == "W"  # sequence 2
+        assert positions[30] == "z"  # sequence 31
+        assert positions[31] == "z0"  # sequence 32
 
     def test_migration_positions_compatible_with_append(self):
         """Positions from migration work with subsequent appends."""
         # After migration, existing data has positions like V, W, X, ...
         # New appends should work correctly
 
-        # Simulate last migrated position is 'X' (order_number 3)
+        # Simulate last migrated position is 'X' (sequence 3)
         last_migrated = "X"
 
         # Append new items

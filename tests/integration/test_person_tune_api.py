@@ -732,9 +732,9 @@ class TestPersonTuneAPI:
         
         # Add tune to session instance
         db_cursor.execute("""
-            INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number)
+            INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position)
             VALUES (%s, %s, %s)
-        """, (session_instance_id, tune_id, 1))
+        """, (session_instance_id, tune_id, 'V'))
         
         db_cursor.execute("""
             INSERT INTO person_tune (person_id, tune_id, learn_status)

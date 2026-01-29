@@ -111,18 +111,17 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             (session_id, tune_id, setting_id),
         )
 
-    # Get the last order_number and order_position
+    # Get the last order_position
     cur.execute(
         """
-        SELECT COALESCE(MAX(order_number), 0), MAX(order_position)
+        SELECT MAX(order_position)
         FROM session_instance_tune
         WHERE session_instance_id = %s
         """,
         (session_instance_id,),
     )
     last_result = cur.fetchone()
-    new_order_number = last_result[0] + 1
-    last_order_position = last_result[1]
+    last_order_position = last_result[0]
 
     # Generate new fractional position
     new_order_position = generate_append_position(last_order_position)
@@ -131,10 +130,10 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
     cur.execute(
         """
         INSERT INTO session_instance_tune (
-            session_instance_id, tune_id, name, order_number, order_position,
+            session_instance_id, tune_id, name, order_position,
             continues_set, inserted_timestamp, setting_override
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s
+            %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s
         )
         RETURNING session_instance_tune_id
         """,
@@ -142,7 +141,6 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             session_instance_id,
             tune_id,
             name,
-            new_order_number,
             new_order_position,
             not starts_set,  # continues_set is opposite of starts_set
             setting_id,
@@ -976,7 +974,6 @@ def get_session_tune_detail(session_path, tune_id):
             """
             SELECT
                 si.date,
-                sit.order_number,
                 sit.name,
                 sit.key_override,
                 sit.setting_override,
@@ -992,11 +989,10 @@ def get_session_tune_detail(session_path, tune_id):
         play_instances = [
             {
                 "date": row[0].isoformat() if row[0] else None,
-                "position_in_set": row[1],
-                "name_override": row[2],
-                "key_override": row[3],
-                "setting_id_override": row[4],
-                "session_instance_id": row[5],
+                "name_override": row[1],
+                "key_override": row[2],
+                "setting_id_override": row[3],
+                "session_instance_id": row[4],
             }
             for row in play_instances_raw
         ]
@@ -2696,14 +2692,14 @@ def add_tune_ajax(session_path, date):
 
         # If first line starts with delimiter, we need to append to the existing last set
         if first_line_starts_with_delimiter:
-            # Get the highest order number (last tune) to find the last set
+            # Get the last tune to find the last set
             cur.execute(
                 """
-                SELECT order_number
+                SELECT session_instance_tune_id
                 FROM session_instance_tune sit
                 JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
                 WHERE si.session_id = %s AND si.date = %s
-                ORDER BY sit.order_number DESC
+                ORDER BY sit.order_position DESC
                 LIMIT 1
             """,
                 (session_id, date),
@@ -2712,8 +2708,6 @@ def add_tune_ajax(session_path, date):
             last_tune_result = cur.fetchone()
             if last_tune_result:
                 # There are existing tunes, so we can append to the last set
-                # last_order_number = last_tune_result[0]
-
                 # Parse all the tune names from all lines and add them to the existing last set
                 all_tune_names = []
                 for line in lines:
@@ -2845,12 +2839,12 @@ def add_tune_ajax(session_path, date):
 
 
 @login_required
-def delete_tune_by_order_ajax(session_path, date, order_number):
+def delete_tune_ajax(session_instance_tune_id):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get the tune info and session_instance_tune_id for history
+        # Get the tune info for history and set boundary handling
         cur.execute(
             """
             SELECT
@@ -2858,7 +2852,6 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
                 sit.continues_set,
                 sit.session_instance_id,
                 sit.tune_id,
-                sit.session_instance_tune_id,
                 sit.order_position
             FROM session_instance_tune sit
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
@@ -2867,11 +2860,9 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
                 FROM session_instance si
                 WHERE si.session_instance_id = sit.session_instance_id
             )
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            JOIN session s ON si.session_id = s.session_id
-            WHERE s.path = %s AND si.date = %s AND sit.order_number = %s
+            WHERE sit.session_instance_tune_id = %s
         """,
-            (session_path, date, order_number),
+            (session_instance_tune_id,),
         )
 
         tune_info = cur.fetchone()
@@ -2885,7 +2876,6 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
             continues_set,
             session_instance_id,
             tune_id,
-            session_instance_tune_id,
             order_position,
         ) = tune_info
 
@@ -2940,7 +2930,7 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
         return jsonify(
             {
                 "success": True,
-                "message": f"{tune_name} deleted from position {order_number} in the set.",
+                "message": f"{tune_name} deleted from the set.",
             }
         )
 
@@ -2960,9 +2950,9 @@ def link_tune_ajax(session_path, date_or_id):
         return jsonify({"success": False, "message": "No JSON data provided"})
     tune_input = request.json.get("tune_id", "").strip()
     tune_name = normalize_apostrophes(request.json.get("tune_name", "").strip())
-    order_number = request.json.get("order_number")
+    session_instance_tune_id = request.json.get("session_instance_tune_id")
 
-    if not tune_input or not tune_name or order_number is None:
+    if not tune_input or not tune_name or session_instance_tune_id is None:
         return jsonify({"success": False, "message": "Missing required parameters"})
 
     # Parse tune ID and setting ID from input
@@ -3038,20 +3028,8 @@ def link_tune_ajax(session_path, date_or_id):
                 tune_name_canonical = tune_meta[0]
                 tune_type_result = tune_meta[1]
 
-            # Get the session_instance_tune_id for history
-            cur.execute(
-                """
-                SELECT session_instance_tune_id
-                FROM session_instance_tune
-                WHERE session_instance_id = %s AND order_number = %s
-            """,
-                (session_instance_id, order_number),
-            )
-            sit_result = cur.fetchone()
-
-            if sit_result:
-                sit_id = sit_result[0]
-                save_to_history(cur, "session_instance_tune", "UPDATE", sit_id, user_id=get_current_user_id())
+            # Save history before update
+            save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
 
             # Tune already in session_tune, just update session_instance_tune
             # Use setting_id as setting_override if provided
@@ -3059,9 +3037,9 @@ def link_tune_ajax(session_path, date_or_id):
                 """
                 UPDATE session_instance_tune
                 SET tune_id = %s, name = %s, setting_override = %s, last_modified_user_id = %s
-                WHERE session_instance_id = %s AND order_number = %s
+                WHERE session_instance_tune_id = %s
             """,
-                (tune_id, tune_name, setting_id, get_current_user_id(), session_instance_id, order_number),
+                (tune_id, tune_name, setting_id, get_current_user_id(), session_instance_tune_id),
             )
 
             setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -3088,29 +3066,17 @@ def link_tune_ajax(session_path, date_or_id):
                 # Save the newly inserted record to history
                 save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id())
 
-                # Get the session_instance_tune_id for history before update
-                cur.execute(
-                    """
-                    SELECT session_instance_tune_id
-                    FROM session_instance_tune
-                    WHERE session_instance_id = %s AND order_number = %s
-                """,
-                    (session_instance_id, order_number),
-                )
-                sit_result = cur.fetchone()
-
-                if sit_result:
-                    sit_id = sit_result[0]
-                    save_to_history(cur, "session_instance_tune", "UPDATE", sit_id, user_id=get_current_user_id())
+                # Save history before update
+                save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
 
                 # Update session_instance_tune
                 cur.execute(
                     """
                     UPDATE session_instance_tune
                     SET tune_id = %s, name = NULL, last_modified_user_id = %s
-                    WHERE session_instance_id = %s AND order_number = %s
+                    WHERE session_instance_tune_id = %s
                 """,
-                    (tune_id, get_current_user_id(), session_instance_id, order_number),
+                    (tune_id, get_current_user_id(), session_instance_tune_id),
                 )
 
                 setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -3198,13 +3164,14 @@ def link_tune_ajax(session_path, date_or_id):
                     )
 
                     # Update session_instance_tune
+                    save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
                     cur.execute(
                         """
                         UPDATE session_instance_tune
                         SET tune_id = %s, name = NULL, last_modified_user_id = %s
-                        WHERE session_instance_id = %s AND order_number = %s
+                        WHERE session_instance_tune_id = %s
                     """,
-                        (tune_id, get_current_user_id(), session_instance_id, order_number),
+                        (tune_id, get_current_user_id(), session_instance_tune_id),
                     )
 
                     setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -3282,7 +3249,6 @@ def get_session_tunes_ajax(session_path, date):
         cur.execute(
             """
             SELECT
-                sit.order_number,
                 sit.continues_set,
                 sit.tune_id,
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
@@ -3887,10 +3853,10 @@ def add_existing_person_to_session(session_path):
 @login_required
 def move_set_ajax(session_path, date):
     data = request.get_json()
-    order_number = data.get("order_number")
+    session_instance_tune_id = data.get("session_instance_tune_id")
     direction = data.get("direction")  # 'up' or 'down'
 
-    if not order_number or not direction or direction not in ["up", "down"]:
+    if not session_instance_tune_id or not direction or direction not in ["up", "down"]:
         return jsonify({"success": False, "message": "Invalid parameters"})
 
     try:
@@ -3919,7 +3885,7 @@ def move_set_ajax(session_path, date):
         # Get all tunes ordered by order_position
         cur.execute(
             """
-            SELECT order_number, continues_set, session_instance_tune_id, order_position
+            SELECT continues_set, session_instance_tune_id, order_position
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -3933,9 +3899,9 @@ def move_set_ajax(session_path, date):
             conn.close()
             return jsonify({"success": False, "message": "No tunes found"})
 
-        # Find the tune and its set (by order_number for backward compatibility)
+        # Find the tune by session_instance_tune_id
         target_tune_index = next(
-            (i for i, tune in enumerate(all_tunes) if tune[0] == order_number), -1
+            (i for i, tune in enumerate(all_tunes) if tune[1] == session_instance_tune_id), -1
         )
         if target_tune_index == -1:
             cur.close()
@@ -3943,12 +3909,12 @@ def move_set_ajax(session_path, date):
             return jsonify({"success": False, "message": "Tune not found"})
 
         # Group tunes into sets to identify set boundaries
-        # Each set entry is a list of (order_number, continues_set, id, order_position)
+        # Each set entry is a list of (continues_set, session_instance_tune_id, order_position)
         sets = []
         current_set = []
         for tune in all_tunes:
             if (
-                not tune[1] and current_set
+                not tune[0] and current_set
             ):  # continues_set is False and we have a current set
                 sets.append(current_set)
                 current_set = []
@@ -3959,7 +3925,7 @@ def move_set_ajax(session_path, date):
         # Find which set the target tune belongs to
         target_set_index = -1
         for set_index, tune_set in enumerate(sets):
-            if any(tune[0] == order_number for tune in tune_set):
+            if any(tune[1] == session_instance_tune_id for tune in tune_set):
                 target_set_index = set_index
                 break
 
@@ -3984,7 +3950,7 @@ def move_set_ajax(session_path, date):
         target_set = sets[target_set_index]
         for tune in target_set:
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", tune[2], user_id=audit_user_id
+                cur, "session_instance_tune", "UPDATE", tune[1], user_id=audit_user_id
             )
 
         # Perform the move using fractional indexing
@@ -3996,12 +3962,12 @@ def move_set_ajax(session_path, date):
             # Position before prev_set (None if prev_set is first)
             if target_set_index - 1 > 0:
                 before_prev_set = sets[target_set_index - 2]
-                before_position = before_prev_set[-1][3]  # Last tune of set before prev
+                before_position = before_prev_set[-1][2]  # Last tune of set before prev
             else:
                 before_position = None
 
             # Position of first tune in prev_set
-            after_position = prev_set[0][3]
+            after_position = prev_set[0][2]
 
             # Generate new positions for each tune in target_set
             current_pos = before_position
@@ -4018,7 +3984,7 @@ def move_set_ajax(session_path, date):
                     SET order_position = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_position, audit_user_id, tune[2]),
+                    (new_position, audit_user_id, tune[1]),
                 )
                 current_pos = new_position
 
@@ -4027,12 +3993,12 @@ def move_set_ajax(session_path, date):
             next_set = sets[target_set_index + 1]
 
             # Position of last tune in next_set
-            before_position = next_set[-1][3]
+            before_position = next_set[-1][2]
 
             # Position after next_set (None if next_set is last)
             if target_set_index + 1 < len(sets) - 1:
                 after_next_set = sets[target_set_index + 2]
-                after_position = after_next_set[0][3]  # First tune of set after next
+                after_position = after_next_set[0][2]  # First tune of set after next
             else:
                 after_position = None
 
@@ -4046,28 +4012,9 @@ def move_set_ajax(session_path, date):
                     SET order_position = %s, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (new_position, audit_user_id, tune[2]),
+                    (new_position, audit_user_id, tune[1]),
                 )
                 current_pos = new_position
-
-        # Renumber all tunes' order_numbers to match the new order_position ordering
-        # This ensures order_number and order_position always produce the same ordering
-        cur.execute(
-            """
-            WITH numbered AS (
-                SELECT session_instance_tune_id,
-                       ROW_NUMBER() OVER (ORDER BY order_position) as new_order
-                FROM session_instance_tune
-                WHERE session_instance_id = %s
-            )
-            UPDATE session_instance_tune sit
-            SET order_number = numbered.new_order
-            FROM numbered
-            WHERE sit.session_instance_tune_id = numbered.session_instance_tune_id
-              AND sit.order_number != numbered.new_order
-            """,
-            (session_instance_id,),
-        )
 
         conn.commit()
         cur.close()
@@ -4084,10 +4031,10 @@ def move_set_ajax(session_path, date):
 @login_required
 def move_tune_ajax(session_path, date):
     data = request.get_json()
-    order_number = data.get("order_number")
+    session_instance_tune_id = data.get("session_instance_tune_id")
     direction = data.get("direction")  # 'left' or 'right'
 
-    if not order_number or not direction or direction not in ["left", "right"]:
+    if not session_instance_tune_id or not direction or direction not in ["left", "right"]:
         return jsonify({"success": False, "message": "Invalid parameters"})
 
     try:
@@ -4116,7 +4063,7 @@ def move_tune_ajax(session_path, date):
         # Get tune info and adjacent tunes
         cur.execute(
             """
-            SELECT order_number, continues_set, session_instance_tune_id, order_position
+            SELECT continues_set, session_instance_tune_id, order_position
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -4126,9 +4073,9 @@ def move_tune_ajax(session_path, date):
 
         all_tunes = cur.fetchall()
 
-        # Find the target tune (by order_number for backward compatibility)
+        # Find the target tune by session_instance_tune_id
         target_tune_index = next(
-            (i for i, tune in enumerate(all_tunes) if tune[0] == order_number), -1
+            (i for i, tune in enumerate(all_tunes) if tune[1] == session_instance_tune_id), -1
         )
         if target_tune_index == -1:
             cur.close()
@@ -4150,7 +4097,7 @@ def move_tune_ajax(session_path, date):
 
             # Check if previous tune is in the same set (continues_set = True for target or prev is first tune)
             if (
-                not target_tune[1] and prev_tune[1]
+                not target_tune[0] and prev_tune[0]
             ):  # target starts set, prev continues set - different sets
                 cur.close()
                 conn.close()
@@ -4164,40 +4111,40 @@ def move_tune_ajax(session_path, date):
             # Save to history
             audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[2], user_id=audit_user_id
+                cur, "session_instance_tune", "UPDATE", target_tune[1], user_id=audit_user_id
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", prev_tune[2], user_id=audit_user_id
+                cur, "session_instance_tune", "UPDATE", prev_tune[1], user_id=audit_user_id
             )
 
-            # Swap order positions (and order_number for backward compatibility)
+            # Swap order positions
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_position = %s, order_number = %s, last_modified_user_id = %s
+                SET order_position = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (prev_tune[3], prev_tune[0], audit_user_id, target_tune[2]),
+                (prev_tune[2], audit_user_id, target_tune[1]),
             )
 
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_position = %s, order_number = %s, last_modified_user_id = %s
+                SET order_position = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (target_tune[3], target_tune[0], audit_user_id, prev_tune[2]),
+                (target_tune[2], audit_user_id, prev_tune[1]),
             )
 
             # If target tune was starting a set and prev was continuing, swap continues_set values
-            if not target_tune[1] and prev_tune[1]:
+            if not target_tune[0] and prev_tune[0]:
                 cur.execute(
                     """
                     UPDATE session_instance_tune
                     SET continues_set = FALSE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (audit_user_id, prev_tune[2]),
+                    (audit_user_id, prev_tune[1]),
                 )
 
                 cur.execute(
@@ -4206,7 +4153,7 @@ def move_tune_ajax(session_path, date):
                     SET continues_set = TRUE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (audit_user_id, target_tune[2]),
+                    (audit_user_id, target_tune[1]),
                 )
 
         else:  # direction == 'right'
@@ -4221,7 +4168,7 @@ def move_tune_ajax(session_path, date):
             next_tune = all_tunes[target_tune_index + 1]
 
             # Check if next tune is in the same set
-            if not next_tune[1]:  # next tune starts a new set
+            if not next_tune[0]:  # next tune starts a new set
                 cur.close()
                 conn.close()
                 return jsonify(
@@ -4234,40 +4181,40 @@ def move_tune_ajax(session_path, date):
             # Save to history
             audit_user_id = get_current_user_id()
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", target_tune[2], user_id=audit_user_id
+                cur, "session_instance_tune", "UPDATE", target_tune[1], user_id=audit_user_id
             )
             save_to_history(
-                cur, "session_instance_tune", "UPDATE", next_tune[2], user_id=audit_user_id
+                cur, "session_instance_tune", "UPDATE", next_tune[1], user_id=audit_user_id
             )
 
-            # Swap order positions (and order_number for backward compatibility)
+            # Swap order positions
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_position = %s, order_number = %s, last_modified_user_id = %s
+                SET order_position = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (next_tune[3], next_tune[0], audit_user_id, target_tune[2]),
+                (next_tune[2], audit_user_id, target_tune[1]),
             )
 
             cur.execute(
                 """
                 UPDATE session_instance_tune
-                SET order_position = %s, order_number = %s, last_modified_user_id = %s
+                SET order_position = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (target_tune[3], target_tune[0], audit_user_id, next_tune[2]),
+                (target_tune[2], audit_user_id, next_tune[1]),
             )
 
             # If target tune was starting a set, make next tune start the set
-            if not target_tune[1]:
+            if not target_tune[0]:
                 cur.execute(
                     """
                     UPDATE session_instance_tune
                     SET continues_set = FALSE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (audit_user_id, next_tune[2]),
+                    (audit_user_id, next_tune[1]),
                 )
 
                 cur.execute(
@@ -4276,7 +4223,7 @@ def move_tune_ajax(session_path, date):
                     SET continues_set = TRUE, last_modified_user_id = %s
                     WHERE session_instance_tune_id = %s
                 """,
-                    (audit_user_id, target_tune[2]),
+                    (audit_user_id, target_tune[1]),
                 )
 
         conn.commit()
@@ -4295,9 +4242,9 @@ def move_tune_ajax(session_path, date):
 def add_tunes_to_set_ajax(session_path, date):
     data = request.get_json()
     tune_names_input = data.get("tune_names", "").strip()
-    reference_order_number = data.get("reference_order_number")
+    reference_session_instance_tune_id = data.get("reference_session_instance_tune_id")
 
-    if not tune_names_input or reference_order_number is None:
+    if not tune_names_input or reference_session_instance_tune_id is None:
         return jsonify({"success": False, "message": "Missing required parameters"})
 
     # Parse comma-separated tune names
@@ -4369,7 +4316,7 @@ def add_tunes_to_set_ajax(session_path, date):
 def edit_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
-    order_number = request.json.get("order_number")
+    session_instance_tune_id = request.json.get("session_instance_tune_id")
     new_name = normalize_apostrophes(request.json.get("new_name", "").strip())
     original_name = request.json.get("original_name", "").strip()
     tune_id = request.json.get("tune_id")
@@ -4380,7 +4327,7 @@ def edit_tune_ajax(session_path, date):
         else None
     )
 
-    if order_number is None or not new_name:
+    if session_instance_tune_id is None or not new_name:
         return jsonify({"success": False, "message": "Missing required parameters"})
 
     try:
@@ -4403,9 +4350,9 @@ def edit_tune_ajax(session_path, date):
             SELECT si.session_instance_id, sit.session_instance_tune_id, sit.tune_id, sit.name
             FROM session_instance si
             JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
-            WHERE si.session_id = %s AND si.date = %s AND sit.order_number = %s
+            WHERE sit.session_instance_tune_id = %s
         """,
-            (session_id, date, order_number),
+            (session_instance_tune_id,),
         )
 
         result = cur.fetchone()
@@ -6955,7 +6902,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
         # Get all existing tunes for this session instance
         cur.execute(
             """
-            SELECT session_instance_tune_id, order_number, tune_id, name, continues_set, started_by_person_id, order_position
+            SELECT session_instance_tune_id, tune_id, name, continues_set, started_by_person_id, order_position
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -6969,7 +6916,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
         # Build new tune list from the sets
         new_tunes = []
-        sequence_num = 1
 
         for set_idx, tune_set in enumerate(tune_sets):
             # First pass: collect all started_by_person_id values in this set
@@ -7017,7 +6963,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
                 new_tunes.append(
                     {
-                        "order_number": sequence_num,
                         "tune_id": tune_id,
                         "name": tune_name,
                         "continues_set": continues_set,
@@ -7026,7 +6971,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                         "order_position": order_position,
                     }
                 )
-                sequence_num += 1
 
         # Validate and ensure all linked tunes exist in the tune table
         # This handles the race condition where tunes were linked but may not exist yet
@@ -7162,7 +7106,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     remaining_tune_ids.add(sit_id)
                     processed_tunes.append({
                         **new_tune,
-                        "order_position": existing[6],  # Get order_position from DB
+                        "order_position": existing[5],  # Get order_position from DB
                         "is_new": False,
                     })
                 else:
@@ -7243,13 +7187,12 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     cur.execute(
                         """
                         INSERT INTO session_instance_tune
-                        (session_instance_id, order_number, tune_id, name, continues_set, started_by_person_id, order_position, created_date, last_modified_date, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
+                        (session_instance_id, tune_id, name, continues_set, started_by_person_id, order_position, created_date, last_modified_date, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
                         RETURNING session_instance_tune_id
                     """,
                         (
                             session_instance_id,
-                            tune["order_number"],
                             tune["tune_id"],
                             tune["name"],
                             tune["continues_set"],
@@ -7267,14 +7210,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 else:
                     # Existing tune - check what needs updating
                     existing = existing_by_id[sit_id]
-                    # existing: (sit_id, order_number, tune_id, name, continues_set, started_by_person_id, order_position)
+                    # existing: (sit_id, tune_id, name, continues_set, started_by_person_id, order_position)
                     position_changed = tune.get("position_changed", False)
                     data_changed = (
-                        existing[2] != tune["tune_id"]
-                        or existing[3] != tune["name"]
-                        or existing[4] != tune["continues_set"]
-                        or existing[5] != tune["started_by_person_id"]
-                        or existing[1] != tune["order_number"]
+                        existing[1] != tune["tune_id"]
+                        or existing[2] != tune["name"]
+                        or existing[3] != tune["continues_set"]
+                        or existing[4] != tune["started_by_person_id"]
                     )
 
                     if data_changed or position_changed:
@@ -7288,7 +7230,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                                 """
                                 UPDATE session_instance_tune
                                 SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s,
-                                    order_number = %s, order_position = %s, last_modified_date = NOW(), last_modified_user_id = %s
+                                    order_position = %s, last_modified_date = NOW(), last_modified_user_id = %s
                                 WHERE session_instance_tune_id = %s
                             """,
                                 (
@@ -7296,7 +7238,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                                     tune["name"],
                                     tune["continues_set"],
                                     tune["started_by_person_id"],
-                                    tune["order_number"],
                                     tune["order_position"],
                                     get_current_user_id(),
                                     sit_id,
@@ -7308,7 +7249,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                                 """
                                 UPDATE session_instance_tune
                                 SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s,
-                                    order_number = %s, last_modified_date = NOW(), last_modified_user_id = %s
+                                    last_modified_date = NOW(), last_modified_user_id = %s
                                 WHERE session_instance_tune_id = %s
                             """,
                                 (
@@ -7316,7 +7257,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                                     tune["name"],
                                     tune["continues_set"],
                                     tune["started_by_person_id"],
-                                    tune["order_number"],
                                     get_current_user_id(),
                                     sit_id,
                                 ),
@@ -7344,7 +7284,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             cur.execute(
                 """
                 SELECT
-                    sit.order_number,
                     sit.continues_set,
                     sit.tune_id,
                     COALESCE(sit.name, st.alias, t.name) AS tune_name,
@@ -7370,9 +7309,9 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             tune_sets = []
             current_set = []
             for row in updated_tunes:
-                # row: (order_number, continues_set, tune_id, tune_name, setting, tune_type,
+                # row: (continues_set, tune_id, tune_name, setting, tune_type,
                 #       started_by_person_id, last_name, first_name, order_position, session_instance_tune_id)
-                continues_set = row[1]
+                continues_set = row[0]
 
                 if not continues_set and current_set:
                     # Start of new set, save previous set
@@ -7381,17 +7320,16 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
                 # Add tune to current set (format matches RawTune type)
                 current_set.append([
-                    row[0],   # order_number
-                    row[1],   # continues_set
-                    row[2],   # tune_id
-                    row[3],   # tune_name
-                    row[4] or '',   # setting
-                    row[5] or '',   # tune_type
-                    row[6],   # started_by_person_id
-                    row[7],   # last_name
-                    row[8],   # first_name
-                    row[9],   # order_position
-                    row[10],  # session_instance_tune_id
+                    row[0],   # continues_set
+                    row[1],   # tune_id
+                    row[2],   # tune_name
+                    row[3] or '',   # setting
+                    row[4] or '',   # tune_type
+                    row[5],   # started_by_person_id
+                    row[6],   # last_name
+                    row[7],   # first_name
+                    row[8],   # order_position
+                    row[9],   # session_instance_tune_id
                 ])
 
             if current_set:
@@ -10256,7 +10194,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         # Get instance-specific overrides from session_instance_tune
         cur.execute(
             """
-            SELECT name, key_override, setting_override, order_number
+            SELECT name, key_override, setting_override
             FROM session_instance_tune
             WHERE session_instance_id = %s AND tune_id = %s
         """,
@@ -10267,10 +10205,9 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         name_override = None
         key_override = None
         setting_override = None
-        order_number = None
 
         if instance_tune_info:
-            name_override, key_override, setting_override, order_number = instance_tune_info
+            name_override, key_override, setting_override = instance_tune_info
 
         # Get ABC notation from tune_setting
         # Prefer setting_override if available, otherwise use session_setting_id, or fall back to first setting
@@ -10321,7 +10258,6 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
             """
             SELECT
                 si.date,
-                sit.order_number,
                 sit.name,
                 sit.key_override,
                 sit.setting_override,
@@ -10337,11 +10273,10 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         play_instances = [
             {
                 "date": row[0].isoformat() if row[0] else None,
-                "position_in_set": row[1],
-                "name_override": row[2],
-                "key_override": row[3],
-                "setting_id_override": row[4],
-                "session_instance_id": row[5],
+                "name_override": row[1],
+                "key_override": row[2],
+                "setting_id_override": row[3],
+                "session_instance_id": row[4],
             }
             for row in play_instances_raw
         ]
@@ -10413,7 +10348,6 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     "name": name_override,
                     "key_override": key_override,
                     "setting_override": setting_override,
-                    "order_number": order_number,
                     # ABC notation
                     "abc": abc_notation,
                     "incipit_abc": incipit_abc,
@@ -10653,13 +10587,13 @@ def update_set_started_by(session_instance_id, set_index):
             if not is_session_member:
                 return jsonify({"success": False, "message": "Unauthorized"}), 403
 
-        # Get all tunes for this session instance ordered by order_number
+        # Get all tunes for this session instance ordered by order_position
         cur.execute(
             """
-            SELECT session_instance_tune_id, order_number, continues_set
+            SELECT session_instance_tune_id, continues_set
             FROM session_instance_tune
             WHERE session_instance_id = %s
-            ORDER BY order_number
+            ORDER BY order_position
         """,
             (session_instance_id,),
         )
@@ -10672,7 +10606,7 @@ def update_set_started_by(session_instance_id, set_index):
         sets = []
         current_set = []
         for tune in tunes:
-            if not tune[2] and current_set:  # continues_set is False and we have a current set
+            if not tune[1] and current_set:  # continues_set is False and we have a current set
                 sets.append(current_set)
                 current_set = []
             current_set.append(tune)
@@ -10805,11 +10739,11 @@ def get_admin_tune_detail(tune_id):
                 S.name,
                 S.path,
                 SI.date,
-                SIT.order_number,
                 SIT.name,
                 SIT.key_override,
                 SIT.setting_override,
-                SI.session_instance_id
+                SI.session_instance_id,
+                ROW_NUMBER() OVER (PARTITION BY SIT.session_instance_id ORDER BY SIT.order_position) AS position_in_set
             FROM session_instance_tune SIT
             INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
             INNER JOIN session S ON SI.session_id = S.session_id
@@ -10825,11 +10759,11 @@ def get_admin_tune_detail(tune_id):
             session_name = row[0]
             session_path = row[1]
             date = row[2]
-            order_number = row[3]
-            name_override = row[4]
-            key_override = row[5]
-            setting_override = row[6]
-            session_instance_id = row[7]
+            name_override = row[3]
+            key_override = row[4]
+            setting_override = row[5]
+            session_instance_id = row[6]
+            position_in_set = row[7]
 
             # Build full name for display: "Session Name - YYYY-MM-DD"
             full_name = f"{session_name} - {date.strftime('%Y-%m-%d')}" if date else session_name
@@ -10841,7 +10775,7 @@ def get_admin_tune_detail(tune_id):
                 "session_name": session_name,
                 "session_path": session_path,
                 "date": date.isoformat() if date else None,
-                "position_in_set": order_number,
+                "position_in_set": position_in_set,
                 "name_override": name_override,
                 "key_override": key_override,
                 "setting_id_override": setting_override,
@@ -11361,7 +11295,7 @@ HISTORY_TABLE_MAP = {
     'tune_setting': ('tune_setting_history', 'setting_id', ['key', 'abc']),
     'session_tune': ('session_tune_history', 'session_id', ['alias', 'key']),  # composite key
     'session_tune_alias': ('session_tune_alias_history', 'session_tune_alias_id', ['alias']),
-    'session_instance_tune': ('session_instance_tune_history', 'session_instance_tune_id', ['name', 'order_number']),
+    'session_instance_tune': ('session_instance_tune_history', 'session_instance_tune_id', ['name']),
     'person': ('person_history', 'person_id', ['first_name', 'last_name', 'email']),
     'user_account': ('user_account_history', 'user_id', ['username', 'is_active']),
     'person_instrument': ('person_instrument_history', 'person_id', ['instrument']),  # composite key

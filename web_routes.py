@@ -329,7 +329,6 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 cur.execute(
                     """
                     SELECT
-                        sit.order_number,
                         sit.continues_set,
                         sit.tune_id,
                         COALESCE(sit.name, st.alias, t.name) AS tune_name,
@@ -404,7 +403,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 current_set = []
                 for tune in tunes:
                     if (
-                        not tune[1] and current_set
+                        not tune[0] and current_set
                     ):  # continues_set is False and we have a current set
                         sets.append(current_set)
                         current_set = []

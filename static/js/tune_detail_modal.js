@@ -846,7 +846,7 @@ ${abcBody}`;
         const items = playInstances.map(instance => {
             const instanceName = buildInstanceName(instance, showFullInstanceName, config);
             const link = buildInstanceLink(instance, tuneData.tune_id, config);
-            const position = instance.position_in_set || instance.order_number || '?';
+            const position = instance.position_in_set || '?';
             const settingId = instance.setting_id_override || instance.setting_override || '';
 
             return `

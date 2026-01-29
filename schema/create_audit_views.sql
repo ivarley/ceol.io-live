@@ -202,7 +202,7 @@ BEGIN
             'session_instance_id', sith.session_instance_id,
             'tune_id', sith.tune_id,
             'name', sith.name,
-            'order_number', sith.order_number
+            'order_position', sith.order_position
         ) AS details
     FROM session_instance_tune_history sith
     LEFT JOIN user_account u ON sith.changed_by_user_id = u.user_id

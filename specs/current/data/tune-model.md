@@ -37,7 +37,7 @@ ABC notation cache from thesession.org.
 ### session_instance_tune
 Logged tune plays (the actual session log).
 - session_instance_tune_id, session_instance_id, tune_id (nullable), name
-- order_number (typically increments of 1000)
+- order_position (VARCHAR(32) - base-62 fractional index for CRDT-compatible ordering)
 - continues_set (boolean - true if continues previous tune in a set)
 - started_by_person_id (FK to person, nullable) - Who started the set
 - played_timestamp, inserted_timestamp

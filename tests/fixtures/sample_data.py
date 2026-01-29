@@ -318,6 +318,20 @@ class SessionInstanceFactory(factory.Factory):
     )  # 70% have complete logs
 
 
+def _order_position_for_sequence(n):
+    """Convert a 1-based sequence number to a fractional index position string."""
+    alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    start_idx = 31  # 'V'
+    first_range = 62 - start_idx  # 31: V-z
+    if n <= first_range:
+        return alphabet[start_idx + n - 1]
+    pos = n - first_range
+    if pos <= 62:
+        return "z" + alphabet[pos - 1]
+    pos -= 62
+    return "zz" + alphabet[pos - 1]
+
+
 class SessionInstanceTuneFactory(factory.Factory):
     """Factory for generating session instance tune data."""
 
@@ -325,7 +339,7 @@ class SessionInstanceTuneFactory(factory.Factory):
         model = dict
 
     name = factory.LazyFunction(lambda: random.choice(IRISH_TUNE_NAMES))
-    order_number = factory.Sequence(lambda n: n + 1)
+    order_position = factory.Sequence(lambda n: _order_position_for_sequence(n + 1))
     continues_set = factory.LazyFunction(
         lambda: random.choice([True, False, False])
     )  # 33% continue sets
@@ -433,7 +447,7 @@ def generate_sample_session_instance_tunes(
             tune_entry = SessionInstanceTuneFactory()
             tune_entry["session_instance_id"] = instance_id
             tune_entry["tune_id"] = tune_id
-            tune_entry["order_number"] = order
+            tune_entry["order_position"] = _order_position_for_sequence(order)
 
             # Adjust continues_set logic for first tune
             if order == 1:

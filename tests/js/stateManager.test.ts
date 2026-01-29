@@ -1,5 +1,21 @@
 import { StateManager, TunePill, TuneSet, TunePillsData, RawTuneSets } from '../../src/ts/components/stateManager';
 
+function makePill(overrides: Partial<TunePill> & { id: string }): TunePill {
+    return {
+        tuneId: null,
+        tuneName: '',
+        setting: '',
+        tuneType: '',
+        state: 'unlinked',
+        startedByPersonId: null,
+        loggedByLastName: null,
+        loggedByFirstName: null,
+        orderPosition: null,
+        sessionInstanceTuneId: null,
+        ...overrides,
+    };
+}
+
 describe('StateManager', () => {
     let mockCallback: jest.Mock;
 
@@ -24,15 +40,14 @@ describe('StateManager', () => {
 
     describe('basic data management', () => {
         test('should set and get tune pills data', () => {
-            const testData: TunePillsData = [[{
+            const testData: TunePillsData = [[makePill({
                 id: 'test1',
-                orderNumber: 1,
                 tuneId: 123,
                 tuneName: 'Test Tune',
                 setting: 'A major',
                 tuneType: 'jig',
                 state: 'linked'
-            }]];
+            })]];
 
             StateManager.setTunePillsData(testData);
             
@@ -54,15 +69,14 @@ describe('StateManager', () => {
         let sampleTune: TunePill;
 
         beforeEach(() => {
-            sampleTune = {
+            sampleTune = makePill({
                 id: 'test1',
-                orderNumber: 1,
                 tuneId: 123,
                 tuneName: 'Test Tune',
                 setting: 'A major',
                 tuneType: 'jig',
                 state: 'linked'
-            };
+            });
         });
 
         test('should save to undo and allow undo/redo', () => {
@@ -109,7 +123,7 @@ describe('StateManager', () => {
         test('should limit undo stack size', () => {
             // Add more than maxUndoSize (50) items
             for (let i = 0; i < 55; i++) {
-                StateManager.setTunePillsData([[{ ...sampleTune, orderNumber: i }]]);
+                StateManager.setTunePillsData([[{ ...sampleTune, tuneName: `Tune ${i}` }]]);
                 StateManager.saveToUndo();
             }
 
@@ -127,15 +141,14 @@ describe('StateManager', () => {
         let sampleSet: TuneSet;
 
         beforeEach(() => {
-            sampleTune = {
+            sampleTune = makePill({
                 id: 'test1',
-                orderNumber: 1,
                 tuneId: 123,
                 tuneName: 'Test Tune',
                 setting: 'A major',
                 tuneType: 'jig',
                 state: 'linked'
-            };
+            });
             sampleSet = [sampleTune];
         });
 
@@ -170,15 +183,14 @@ describe('StateManager', () => {
         let sampleTune: TunePill;
 
         beforeEach(() => {
-            sampleTune = {
+            sampleTune = makePill({
                 id: 'test1',
-                orderNumber: 1,
                 tuneId: 123,
                 tuneName: 'Test Tune',
                 setting: 'A major',
                 tuneType: 'jig',
                 state: 'linked'
-            };
+            });
             StateManager.setTunePillsData([[sampleTune]]);
         });
 
@@ -242,8 +254,8 @@ describe('StateManager', () => {
     describe('data conversion', () => {
         test('should convert raw tune sets to pills', () => {
             const rawTuneSets: RawTuneSets = [
-                [[1, false, 123, 'Test Tune 1', 'A major', 'jig']],
-                [[2, false, null, 'Unlinked Tune', 'D major', 'reel']]
+                [[false, 123, 'Test Tune 1', 'A major', 'jig', null, null, null, null, null]],
+                [[false, null, 'Unlinked Tune', 'D major', 'reel', null, null, null, null, null]]
             ];
 
             StateManager.convertTuneSetsToPills(rawTuneSets);
@@ -268,7 +280,7 @@ describe('StateManager', () => {
         });
 
         test('should skip callback when requested', () => {
-            const rawTuneSets: RawTuneSets = [[[1, false, 123, 'Test', 'A', 'jig']]];
+            const rawTuneSets: RawTuneSets = [[[false, 123, 'Test', 'A', 'jig', null, null, null, null, null]]];
             
             StateManager.convertTuneSetsToPills(rawTuneSets, true);
             
@@ -280,11 +292,11 @@ describe('StateManager', () => {
         beforeEach(() => {
             const testData: TunePillsData = [
                 [
-                    { id: 'tune1', orderNumber: 1, tuneId: 123, tuneName: 'First', setting: 'A', tuneType: 'jig', state: 'linked' },
-                    { id: 'tune2', orderNumber: 2, tuneId: 456, tuneName: 'Second', setting: 'D', tuneType: 'reel', state: 'linked' }
+                    makePill({ id: 'tune1', tuneId: 123, tuneName: 'First', setting: 'A', tuneType: 'jig', state: 'linked' }),
+                    makePill({ id: 'tune2', tuneId: 456, tuneName: 'Second', setting: 'D', tuneType: 'reel', state: 'linked' })
                 ],
                 [
-                    { id: 'tune3', orderNumber: 3, tuneId: null, tuneName: 'Third', setting: 'G', tuneType: 'hornpipe', state: 'unlinked' }
+                    makePill({ id: 'tune3', tuneId: null, tuneName: 'Third', setting: 'G', tuneType: 'hornpipe', state: 'unlinked' })
                 ]
             ];
             StateManager.setTunePillsData(testData);
@@ -317,15 +329,14 @@ describe('StateManager', () => {
         let testData: TunePillsData;
 
         beforeEach(() => {
-            testData = [[{
+            testData = [[makePill({
                 id: 'test1',
-                orderNumber: 1,
                 tuneId: 123,
                 tuneName: 'Export Test',
                 setting: 'A major',
                 tuneType: 'jig',
                 state: 'linked'
-            }]];
+            })]];
             StateManager.setTunePillsData(testData);
         });
 
@@ -338,15 +349,14 @@ describe('StateManager', () => {
         });
 
         test('should import data and trigger callback', () => {
-            const importData: TunePillsData = [[{
+            const importData: TunePillsData = [[makePill({
                 id: 'imported1',
-                orderNumber: 1,
                 tuneId: 789,
                 tuneName: 'Imported Tune',
                 setting: 'D major',
                 tuneType: 'reel',
                 state: 'linked'
-            }]];
+            })]];
 
             StateManager.importData(importData);
 

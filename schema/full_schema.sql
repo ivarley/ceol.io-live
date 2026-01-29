@@ -445,7 +445,6 @@ CREATE TABLE session_instance_tune (
     session_instance_id INTEGER REFERENCES session_instance(session_instance_id),
     tune_id INTEGER REFERENCES tune(tune_id),
     name VARCHAR(255),
-    order_number INTEGER NOT NULL,
     order_position VARCHAR(32) COLLATE "C",  -- Fractional index for CRDT-compatible ordering (base-62: 0-9, A-Z, a-z)
     continues_set BOOLEAN DEFAULT FALSE,
     played_timestamp TIMESTAMPTZ,
@@ -656,7 +655,7 @@ CREATE TABLE session_instance_tune_history (
     session_instance_id INTEGER,
     tune_id INTEGER,
     name VARCHAR(255),
-    order_number INTEGER,
+    order_number INTEGER,  -- historical only, no longer written
     order_position VARCHAR(32) COLLATE "C",
     continues_set BOOLEAN,
     played_timestamp TIMESTAMPTZ,

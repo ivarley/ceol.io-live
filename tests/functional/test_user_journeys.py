@@ -461,7 +461,6 @@ class TestTuneLinkingWorkflow:
                 json={
                     "tune_name": "The Butterfly",
                     "tune_id": "1001",
-                    "order_number": 1,
                 },
             )
 

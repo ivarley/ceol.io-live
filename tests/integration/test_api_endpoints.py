@@ -543,19 +543,19 @@ class TestTuneAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_number, continues_set)
+            INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, continues_set)
             VALUES (%s, %s, %s, %s, %s), (%s, %s, %s, %s, %s)
         """,
             (
                 session_instance_id,
                 tune_id_1,
                 f"First Reel {unique_id}",
-                1,
+                'V',
                 False,
                 session_instance_id,
                 tune_id_2,
                 f"Second Jig {unique_id}",
-                2,
+                'W',
                 True,
             ),
         )
@@ -569,20 +569,18 @@ class TestTuneAPI:
         assert "tune_sets" in data
         assert len(data["tune_sets"]) == 1  # One set containing both tunes
 
-        # Verify tune data - API returns tuples in format [order, continues_set, tune_id, name, key, type]
+        # Verify tune data - API returns tuples in format [continues_set, tune_id, name, key, type, ...]
         tune_set = data["tune_sets"][0]
         assert len(tune_set) == 2  # Two tunes in the set
 
         first_tune = tune_set[0]
         second_tune = tune_set[1]
 
-        assert first_tune[0] == 1  # order_number
-        assert first_tune[1] is False  # continues_set
-        assert first_tune[3] == f"First Reel {unique_id}"  # name
+        assert first_tune[0] is False  # continues_set
+        assert first_tune[2] == f"First Reel {unique_id}"  # name
 
-        assert second_tune[0] == 2  # order_number
-        assert second_tune[1] is True  # continues_set
-        assert second_tune[3] == f"Second Jig {unique_id}"  # name
+        assert second_tune[0] is True  # continues_set
+        assert second_tune[2] == f"Second Jig {unique_id}"  # name
 
 
 @pytest.mark.integration

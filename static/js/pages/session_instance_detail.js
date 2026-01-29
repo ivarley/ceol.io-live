@@ -314,7 +314,7 @@ function dropStructuredSetsAtNewPosition(dragData, targetSetIndex) {
         set.map(pill => ({
             ...pill,
             id: StateManager.generateId(),
-            orderNumber: null
+            orderPosition: null
         }))
     );
     
@@ -1110,7 +1110,7 @@ async function confirmLink() {
     // Store the user-provided name before linking
     // This will be saved as an alias if it differs from the canonical name
     const userProvidedName = window.currentLinkingPill.tuneName;
-    const orderNumber = window.currentLinkingPill.orderNumber;
+    const sessionInstanceTuneId = window.currentLinkingPill.sessionInstanceTuneId;
 
     // Update the pill to loading state while calling the backend
     window.currentLinkingPill.state = 'loading';
@@ -1127,7 +1127,7 @@ async function confirmLink() {
             body: JSON.stringify({
                 tune_id: tuneId,
                 tune_name: userProvidedName,
-                order_number: orderNumber,
+                session_instance_tune_id: sessionInstanceTuneId,
             }),
         });
 

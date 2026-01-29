@@ -7,7 +7,6 @@
 // Type definitions
 export interface PillData {
     id: string;
-    orderNumber: number;
     tuneId: number | null;
     tuneName: string;
     setting: string;

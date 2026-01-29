@@ -97,7 +97,7 @@ CREATE TABLE session_instance_tune_history (
     session_instance_id INTEGER,
     tune_id INTEGER,
     name VARCHAR(255),
-    order_number INTEGER,
+    order_number INTEGER,  -- historical only, no longer written
     order_position VARCHAR(32) COLLATE "C",
     continues_set BOOLEAN,
     played_timestamp TIMESTAMPTZ,

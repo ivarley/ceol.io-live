@@ -6,7 +6,6 @@
 // Type definitions
 export interface TunePill {
     id: string;
-    orderNumber: number;
     tuneId: number | null;
     tuneName: string;
     setting: string;
@@ -30,8 +29,8 @@ export interface TunePosition {
 }
 
 // Raw tune data from backend (array format)
-// [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId]
-export type RawTune = [number, boolean, number | null, string, string, string, number | null, string | null, string | null, string | null, number | null];
+// [continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId]
+export type RawTune = [boolean, number | null, string, string, string, number | null, string | null, string | null, string | null, number | null];
 export type RawTuneSet = RawTune[];
 export type RawTuneSets = RawTuneSet[];
 
@@ -137,10 +136,9 @@ export class StateManager {
         tuneSets.forEach(tuneSet => {
             const setData: TuneSet = [];
             tuneSet.forEach(tune => {
-                const [orderNumber, continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId] = tune;
+                const [continuesSet, tuneId, tuneName, setting, tuneType, startedByPersonId, loggedByLastName, loggedByFirstName, orderPosition, sessionInstanceTuneId] = tune;
                 setData.push({
                     id: this.generateId(),
-                    orderNumber: orderNumber,
                     tuneId: tuneId,
                     tuneName: tuneName,
                     setting: setting,

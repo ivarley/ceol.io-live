@@ -54,7 +54,7 @@ Individual tunes played during a session instance.
 - `session_instance_id` (FK → session_instance)
 - `tune_id` (FK → tune, nullable)
 - `name` - Name as played
-- `order_number` - Order within session (typically increments of 1000)
+- `order_position` - Fractional index for ordering (VARCHAR(32), base-62 CRDT string)
 - `continues_set` - True if continues previous tune in a set
 - `played_timestamp` - When tune was played
 - `inserted_timestamp` - When log entry was created
@@ -105,7 +105,7 @@ Stored as JSON in `session.recurrence` field. Schema in `schema/recurrence_schem
 ### Set Management
 - Group tunes: Set `continues_set = TRUE` to continue previous tune
 - Break set: Set `continues_set = FALSE`
-- Reorder: Update `order_number` via API
+- Reorder: Update `order_position` via API (fractional indexing allows insertion without reordering)
 
 ## Access Patterns
 
@@ -124,7 +124,7 @@ SELECT sit.*, t.name as canonical_name, t.type, t.thesession_tune_id
 FROM session_instance_tune sit
 LEFT JOIN tune t ON sit.tune_id = t.tune_id
 WHERE sit.session_instance_id = ?
-ORDER BY sit.order_number
+ORDER BY sit.order_position
 ```
 
 ## Related Specs

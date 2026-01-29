@@ -53,7 +53,7 @@ The database will be a Postgres database. The basic entities in my model will be
     - session_instance_id
     - tune_id - foreign key to the tune table, but can be null if this tune isn't matched to a known session_tune
     - name - a string, which can be null if there's a tune_id (the name from the tune is assumed in that case)
-    - order - an integer indicating what order tunes were played in
+    - order_position - a VARCHAR(32) fractional index (base-62 CRDT string) indicating the ordering of tunes within the session. Allows insertion without reordering existing tunes.
     - continues-set - a bit; when true, means this tune immediately followed the previous one in a set (which is the used to create derived set_number attribute). When false, means it started a new set.
     - played_timestamp - a timestamp of when the tune was played. An async process could detect if there are cases where ordering and timestamps appear to conflict.
     - inserted_timestamp - a timestamp (also not shown in the UI) of when the record was inserted

@@ -68,7 +68,7 @@ A **set** is a group of tunes played consecutively without pause.
 ### Data Model
 
 - `session_instance_tune.continues_set` - Boolean indicating tune continues previous tune in a set
-- `session_instance_tune.order_number` - Order within entire session
+- `session_instance_tune.order_position` - Fractional index for ordering (VARCHAR(32) base-62 string)
 - `session_instance_tune.started_by_person_id` - FK to person who started the set
 
 ### UI Representation

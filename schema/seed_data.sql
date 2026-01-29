@@ -389,260 +389,260 @@ INSERT INTO session_instance (session_instance_id, session_id, date, start_time,
 -- =============================================================================
 
 -- Mueller Session tune logs (session instances 1-12)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
 -- Instance 1: Reels, jigs, polkas
-(1, 27, 1, FALSE, 2), (1, 1, 2, TRUE, NULL), (1, 74, 3, TRUE, NULL),
-(1, 55, 4, FALSE, 3), (1, 71, 5, TRUE, NULL), (1, 108, 6, TRUE, NULL),
-(1, 116, 7, FALSE, 1), (1, 138, 8, TRUE, NULL),
-(1, 441, 9, FALSE, 4), (1, 238, 10, TRUE, NULL), (1, 4195, 11, TRUE, NULL),
-(1, 10, 12, FALSE, 2), (1, 52, 13, TRUE, NULL),
-(1, 83, 14, FALSE, 1), (1, 872, 15, TRUE, NULL),
+(1, 27, 'V', FALSE, 2), (1, 1, 'W', TRUE, NULL), (1, 74, 'X', TRUE, NULL),
+(1, 55, 'Y', FALSE, 3), (1, 71, 'Z', TRUE, NULL), (1, 108, 'a', TRUE, NULL),
+(1, 116, 'b', FALSE, 1), (1, 138, 'c', TRUE, NULL),
+(1, 441, 'd', FALSE, 4), (1, 238, 'e', TRUE, NULL), (1, 4195, 'f', TRUE, NULL),
+(1, 10, 'g', FALSE, 2), (1, 52, 'h', TRUE, NULL),
+(1, 83, 'i', FALSE, 1), (1, 872, 'j', TRUE, NULL),
 -- Instance 2
-(2, 8, 1, FALSE, 1), (2, 2, 2, TRUE, NULL), (2, 64, 3, TRUE, NULL),
-(2, 12, 4, FALSE, 2), (2, 19, 5, TRUE, NULL),
-(2, 103, 6, FALSE, 3), (2, 105, 7, TRUE, NULL), (2, 86, 8, TRUE, NULL),
-(2, 651, 9, FALSE, 4), (2, 475, 10, TRUE, NULL),
-(2, 70, 11, FALSE, 1), (2, 70, 12, TRUE, NULL),
+(2, 8, 'V', FALSE, 1), (2, 2, 'W', TRUE, NULL), (2, 64, 'X', TRUE, NULL),
+(2, 12, 'Y', FALSE, 2), (2, 19, 'Z', TRUE, NULL),
+(2, 103, 'a', FALSE, 3), (2, 105, 'b', TRUE, NULL), (2, 86, 'c', TRUE, NULL),
+(2, 651, 'd', FALSE, 4), (2, 475, 'e', TRUE, NULL),
+(2, 70, 'f', FALSE, 1), (2, 70, 'g', TRUE, NULL),
 -- Instance 3
-(3, 182, 1, FALSE, 2), (3, 21, 2, TRUE, NULL), (3, 73, 3, TRUE, NULL),
-(3, 62, 4, FALSE, 3), (3, 106, 5, TRUE, NULL), (3, 88, 6, TRUE, NULL),
-(3, 68, 7, FALSE, 1), (3, 75, 8, TRUE, NULL),
-(3, 750, 9, FALSE, 4), (3, 527, 10, TRUE, NULL),
-(3, 559, 11, FALSE, 2), (3, 1426, 12, TRUE, NULL), (3, 418, 13, TRUE, NULL),
+(3, 182, 'V', FALSE, 2), (3, 21, 'W', TRUE, NULL), (3, 73, 'X', TRUE, NULL),
+(3, 62, 'Y', FALSE, 3), (3, 106, 'Z', TRUE, NULL), (3, 88, 'a', TRUE, NULL),
+(3, 68, 'b', FALSE, 1), (3, 75, 'c', TRUE, NULL),
+(3, 750, 'd', FALSE, 4), (3, 527, 'e', TRUE, NULL),
+(3, 559, 'f', FALSE, 2), (3, 1426, 'g', TRUE, NULL), (3, 418, 'h', TRUE, NULL),
 -- Instance 4
-(4, 248, 1, FALSE, 1), (4, 197, 2, TRUE, NULL), (4, 208, 3, TRUE, NULL),
-(4, 9, 4, FALSE, 2), (4, 15, 5, TRUE, NULL),
-(4, 87, 6, FALSE, 3), (4, 281, 7, TRUE, NULL), (4, 222, 8, TRUE, NULL),
-(4, 312, 9, FALSE, 4), (4, 566, 10, TRUE, NULL),
-(4, 482, 11, FALSE, 1), (4, 527, 12, TRUE, NULL),
+(4, 248, 'V', FALSE, 1), (4, 197, 'W', TRUE, NULL), (4, 208, 'X', TRUE, NULL),
+(4, 9, 'Y', FALSE, 2), (4, 15, 'Z', TRUE, NULL),
+(4, 87, 'a', FALSE, 3), (4, 281, 'b', TRUE, NULL), (4, 222, 'c', TRUE, NULL),
+(4, 312, 'd', FALSE, 4), (4, 566, 'e', TRUE, NULL),
+(4, 482, 'f', FALSE, 1), (4, 527, 'g', TRUE, NULL),
 -- Instance 5
-(5, 517, 1, FALSE, 2), (5, 1148, 2, TRUE, NULL), (5, 33, 3, TRUE, NULL),
-(5, 537, 4, FALSE, 3), (5, 273, 5, TRUE, NULL), (5, 373, 6, TRUE, NULL),
-(5, 605, 7, FALSE, 1), (5, 589, 8, TRUE, NULL),
-(5, 905, 9, FALSE, 4), (5, 79, 10, TRUE, NULL),
-(5, 6170, 11, FALSE, 2), (5, 4883, 12, TRUE, NULL),
+(5, 517, 'V', FALSE, 2), (5, 1148, 'W', TRUE, NULL), (5, 33, 'X', TRUE, NULL),
+(5, 537, 'Y', FALSE, 3), (5, 273, 'Z', TRUE, NULL), (5, 373, 'a', TRUE, NULL),
+(5, 605, 'b', FALSE, 1), (5, 589, 'c', TRUE, NULL),
+(5, 905, 'd', FALSE, 4), (5, 79, 'e', TRUE, NULL),
+(5, 6170, 'f', FALSE, 2), (5, 4883, 'g', TRUE, NULL),
 -- Instance 6
-(6, 803, 1, FALSE, 1), (6, 217, 2, TRUE, NULL), (6, 448, 3, TRUE, NULL),
-(6, 736, 4, FALSE, 2), (6, 3842, 5, TRUE, NULL),
-(6, 235, 6, FALSE, 3), (6, 228, 7, TRUE, NULL), (6, 793, 8, TRUE, NULL),
-(6, 1076, 9, FALSE, 4), (6, 5405, 10, TRUE, NULL),
-(6, 1244, 11, FALSE, 1), (6, 544, 12, TRUE, NULL),
+(6, 803, 'V', FALSE, 1), (6, 217, 'W', TRUE, NULL), (6, 448, 'X', TRUE, NULL),
+(6, 736, 'Y', FALSE, 2), (6, 3842, 'Z', TRUE, NULL),
+(6, 235, 'a', FALSE, 3), (6, 228, 'b', TRUE, NULL), (6, 793, 'c', TRUE, NULL),
+(6, 1076, 'd', FALSE, 4), (6, 5405, 'e', TRUE, NULL),
+(6, 1244, 'f', FALSE, 1), (6, 544, 'g', TRUE, NULL),
 -- Instance 7 (polka night)
-(7, 441, 1, FALSE, 4), (7, 238, 2, TRUE, NULL), (7, 4195, 3, TRUE, NULL),
-(7, 559, 4, FALSE, 2), (7, 1426, 5, TRUE, NULL), (7, 418, 6, TRUE, NULL),
-(7, 6170, 7, FALSE, 1), (7, 4883, 8, TRUE, NULL), (7, 8895, 9, TRUE, NULL),
-(7, 2772, 10, FALSE, 3), (7, 1251, 11, TRUE, NULL),
-(7, 27, 12, FALSE, 2), (7, 138, 13, TRUE, NULL),
+(7, 441, 'V', FALSE, 4), (7, 238, 'W', TRUE, NULL), (7, 4195, 'X', TRUE, NULL),
+(7, 559, 'Y', FALSE, 2), (7, 1426, 'Z', TRUE, NULL), (7, 418, 'a', TRUE, NULL),
+(7, 6170, 'b', FALSE, 1), (7, 4883, 'c', TRUE, NULL), (7, 8895, 'd', TRUE, NULL),
+(7, 2772, 'e', FALSE, 3), (7, 1251, 'f', TRUE, NULL),
+(7, 27, 'g', FALSE, 2), (7, 138, 'h', TRUE, NULL),
 -- Instance 8
-(8, 1197, 1, FALSE, 1), (8, 440, 2, TRUE, NULL), (8, 514, 3, TRUE, NULL),
-(8, 829, 4, FALSE, 2), (8, 264, 5, TRUE, NULL), (8, 1511, 6, TRUE, NULL),
-(8, 634, 7, FALSE, 3), (8, 883, 8, TRUE, NULL),
-(8, 974, 9, FALSE, 4), (8, 312, 10, TRUE, NULL),
-(8, 52, 11, FALSE, 1), (8, 750, 12, TRUE, NULL),
+(8, 1197, 'V', FALSE, 1), (8, 440, 'W', TRUE, NULL), (8, 514, 'X', TRUE, NULL),
+(8, 829, 'Y', FALSE, 2), (8, 264, 'Z', TRUE, NULL), (8, 1511, 'a', TRUE, NULL),
+(8, 634, 'b', FALSE, 3), (8, 883, 'c', TRUE, NULL),
+(8, 974, 'd', FALSE, 4), (8, 312, 'e', TRUE, NULL),
+(8, 52, 'f', FALSE, 1), (8, 750, 'g', TRUE, NULL),
 -- Instance 9
-(9, 27, 1, FALSE, 2), (9, 8, 2, TRUE, NULL), (9, 1, 3, TRUE, NULL),
-(9, 67, 4, FALSE, 3), (9, 76, 5, TRUE, NULL), (9, 89, 6, TRUE, NULL),
-(9, 72, 7, FALSE, 1), (9, 828, 8, TRUE, NULL),
-(9, 647, 9, FALSE, 4), (9, 3262, 10, TRUE, NULL),
-(9, 70, 11, FALSE, 2), (9, 70, 12, TRUE, NULL),
+(9, 27, 'V', FALSE, 2), (9, 8, 'W', TRUE, NULL), (9, 1, 'X', TRUE, NULL),
+(9, 67, 'Y', FALSE, 3), (9, 76, 'Z', TRUE, NULL), (9, 89, 'a', TRUE, NULL),
+(9, 72, 'b', FALSE, 1), (9, 828, 'c', TRUE, NULL),
+(9, 647, 'd', FALSE, 4), (9, 3262, 'e', TRUE, NULL),
+(9, 70, 'f', FALSE, 2), (9, 70, 'g', TRUE, NULL),
 -- Instance 10
-(10, 321, 1, FALSE, 1), (10, 1091, 2, TRUE, NULL), (10, 399, 3, TRUE, NULL),
-(10, 398, 4, FALSE, 2), (10, 515, 5, TRUE, NULL),
-(10, 112, 6, FALSE, 3), (10, 2192, 7, TRUE, NULL), (10, 703, 8, TRUE, NULL),
-(10, 160, 9, FALSE, 4), (10, 45, 10, TRUE, NULL),
-(10, 1357, 11, FALSE, 1), (10, 667, 12, TRUE, NULL),
+(10, 321, 'V', FALSE, 1), (10, 1091, 'W', TRUE, NULL), (10, 399, 'X', TRUE, NULL),
+(10, 398, 'Y', FALSE, 2), (10, 515, 'Z', TRUE, NULL),
+(10, 112, 'a', FALSE, 3), (10, 2192, 'b', TRUE, NULL), (10, 703, 'c', TRUE, NULL),
+(10, 160, 'd', FALSE, 4), (10, 45, 'e', TRUE, NULL),
+(10, 1357, 'f', FALSE, 1), (10, 667, 'g', TRUE, NULL),
 -- Instance 11
-(11, 1843, 1, FALSE, 2), (11, 256, 2, TRUE, NULL), (11, 1133, 3, TRUE, NULL),
-(11, 636, 4, FALSE, 3), (11, 182, 5, TRUE, NULL), (11, 430, 6, TRUE, NULL),
-(11, 116, 7, FALSE, 1), (11, 74, 8, TRUE, NULL),
-(11, 858, 9, FALSE, 4), (11, 211, 10, TRUE, NULL),
-(11, 9, 11, FALSE, 2), (11, 219, 12, TRUE, NULL),
+(11, 1843, 'V', FALSE, 2), (11, 256, 'W', TRUE, NULL), (11, 1133, 'X', TRUE, NULL),
+(11, 636, 'Y', FALSE, 3), (11, 182, 'Z', TRUE, NULL), (11, 430, 'a', TRUE, NULL),
+(11, 116, 'b', FALSE, 1), (11, 74, 'c', TRUE, NULL),
+(11, 858, 'd', FALSE, 4), (11, 211, 'e', TRUE, NULL),
+(11, 9, 'f', FALSE, 2), (11, 219, 'g', TRUE, NULL),
 -- Instance 12
-(12, 1214, 1, FALSE, 1), (12, 1744, 2, TRUE, NULL), (12, 496, 3, TRUE, NULL),
-(12, 361, 4, FALSE, 2), (12, 1316, 5, TRUE, NULL),
-(12, 302, 6, FALSE, 3), (12, 2706, 7, TRUE, NULL), (12, 1709, 8, TRUE, NULL),
-(12, 1892, 9, FALSE, 4), (12, 741, 10, TRUE, NULL),
-(12, 510, 11, FALSE, 1), (12, 5976, 12, TRUE, NULL);
+(12, 1214, 'V', FALSE, 1), (12, 1744, 'W', TRUE, NULL), (12, 496, 'X', TRUE, NULL),
+(12, 361, 'Y', FALSE, 2), (12, 1316, 'Z', TRUE, NULL),
+(12, 302, 'a', FALSE, 3), (12, 2706, 'b', TRUE, NULL), (12, 1709, 'c', TRUE, NULL),
+(12, 1892, 'd', FALSE, 4), (12, 741, 'e', TRUE, NULL),
+(12, 510, 'f', FALSE, 1), (12, 5976, 'g', TRUE, NULL);
 
 -- Downtown Session tune logs (session instances 20-25)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
 -- Instance 20
-(20, 27, 1, FALSE, 1), (20, 1, 2, TRUE, NULL), (20, 74, 3, TRUE, NULL),
-(20, 55, 4, FALSE, 2), (20, 12, 5, TRUE, NULL),
-(20, 83, 6, FALSE, 4), (20, 872, 7, TRUE, NULL),
+(20, 27, 'V', FALSE, 1), (20, 1, 'W', TRUE, NULL), (20, 74, 'X', TRUE, NULL),
+(20, 55, 'Y', FALSE, 2), (20, 12, 'Z', TRUE, NULL),
+(20, 83, 'a', FALSE, 4), (20, 872, 'b', TRUE, NULL),
 -- Instance 21
-(21, 8, 1, FALSE, 2), (21, 2, 2, TRUE, NULL), (21, 64, 3, TRUE, NULL),
-(21, 108, 4, FALSE, 1), (21, 19, 5, TRUE, NULL), (21, 62, 6, TRUE, NULL),
-(21, 10, 7, FALSE, 4), (21, 52, 8, TRUE, NULL),
+(21, 8, 'V', FALSE, 2), (21, 2, 'W', TRUE, NULL), (21, 64, 'X', TRUE, NULL),
+(21, 108, 'Y', FALSE, 1), (21, 19, 'Z', TRUE, NULL), (21, 62, 'a', TRUE, NULL),
+(21, 10, 'b', FALSE, 4), (21, 52, 'c', TRUE, NULL),
 -- Instance 22
-(22, 182, 1, FALSE, 1), (22, 21, 2, TRUE, NULL), (22, 73, 3, TRUE, NULL),
-(22, 9, 4, FALSE, 2), (22, 15, 5, TRUE, NULL),
-(22, 651, 6, FALSE, 4), (22, 475, 7, TRUE, NULL),
+(22, 182, 'V', FALSE, 1), (22, 21, 'W', TRUE, NULL), (22, 73, 'X', TRUE, NULL),
+(22, 9, 'Y', FALSE, 2), (22, 15, 'Z', TRUE, NULL),
+(22, 651, 'a', FALSE, 4), (22, 475, 'b', TRUE, NULL),
 -- Instance 23 (Clare set night)
-(23, 248, 1, FALSE, 2), (23, 103, 2, TRUE, NULL), (23, 105, 3, TRUE, NULL),
-(23, 537, 4, FALSE, 1), (23, 273, 5, TRUE, NULL), (23, 373, 6, TRUE, NULL),
-(23, 312, 7, FALSE, 4), (23, 566, 8, TRUE, NULL),
+(23, 248, 'V', FALSE, 2), (23, 103, 'W', TRUE, NULL), (23, 105, 'X', TRUE, NULL),
+(23, 537, 'Y', FALSE, 1), (23, 273, 'Z', TRUE, NULL), (23, 373, 'a', TRUE, NULL),
+(23, 312, 'b', FALSE, 4), (23, 566, 'c', TRUE, NULL),
 -- Instance 24
-(24, 68, 1, FALSE, 1), (24, 75, 2, TRUE, NULL), (24, 116, 3, TRUE, NULL),
-(24, 736, 4, FALSE, 2), (24, 3842, 5, TRUE, NULL),
-(24, 750, 6, FALSE, 4), (24, 527, 7, TRUE, NULL),
+(24, 68, 'V', FALSE, 1), (24, 75, 'W', TRUE, NULL), (24, 116, 'X', TRUE, NULL),
+(24, 736, 'Y', FALSE, 2), (24, 3842, 'Z', TRUE, NULL),
+(24, 750, 'a', FALSE, 4), (24, 527, 'b', TRUE, NULL),
 -- Instance 25
-(25, 74, 1, FALSE, 2), (25, 197, 2, TRUE, NULL), (25, 208, 3, TRUE, NULL),
-(25, 829, 4, FALSE, 1), (25, 264, 5, TRUE, NULL), (25, 1511, 6, TRUE, NULL),
-(25, 905, 7, FALSE, 4), (25, 79, 8, TRUE, NULL);
+(25, 74, 'V', FALSE, 2), (25, 197, 'W', TRUE, NULL), (25, 208, 'X', TRUE, NULL),
+(25, 829, 'Y', FALSE, 1), (25, 264, 'Z', TRUE, NULL), (25, 1511, 'a', TRUE, NULL),
+(25, 905, 'b', FALSE, 4), (25, 79, 'c', TRUE, NULL);
 
 -- Boston Celtic tune logs (session instances 30-41)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
 -- Instance 30
-(30, 27, 1, FALSE, 6), (30, 8, 2, TRUE, NULL), (30, 1, 3, TRUE, NULL),
-(30, 55, 4, FALSE, 7), (30, 71, 5, TRUE, NULL),
-(30, 83, 6, FALSE, 8), (30, 872, 7, TRUE, NULL),
+(30, 27, 'V', FALSE, 6), (30, 8, 'W', TRUE, NULL), (30, 1, 'X', TRUE, NULL),
+(30, 55, 'Y', FALSE, 7), (30, 71, 'Z', TRUE, NULL),
+(30, 83, 'a', FALSE, 8), (30, 872, 'b', TRUE, NULL),
 -- Instance 31
-(31, 2, 1, FALSE, 7), (31, 182, 2, TRUE, NULL), (31, 21, 3, TRUE, NULL),
-(31, 12, 4, FALSE, 6), (31, 108, 5, TRUE, NULL), (31, 19, 6, TRUE, NULL),
-(31, 10, 7, FALSE, 8), (31, 52, 8, TRUE, NULL),
+(31, 2, 'V', FALSE, 7), (31, 182, 'W', TRUE, NULL), (31, 21, 'X', TRUE, NULL),
+(31, 12, 'Y', FALSE, 6), (31, 108, 'Z', TRUE, NULL), (31, 19, 'a', TRUE, NULL),
+(31, 10, 'b', FALSE, 8), (31, 52, 'c', TRUE, NULL),
 -- Instance 32
-(32, 74, 1, FALSE, 6), (32, 64, 2, TRUE, NULL), (32, 73, 3, TRUE, NULL),
-(32, 62, 4, FALSE, 7), (32, 106, 5, TRUE, NULL),
-(32, 441, 6, FALSE, 8), (32, 238, 7, TRUE, NULL), (32, 4195, 8, TRUE, NULL),
+(32, 74, 'V', FALSE, 6), (32, 64, 'W', TRUE, NULL), (32, 73, 'X', TRUE, NULL),
+(32, 62, 'Y', FALSE, 7), (32, 106, 'Z', TRUE, NULL),
+(32, 441, 'a', FALSE, 8), (32, 238, 'b', TRUE, NULL), (32, 4195, 'c', TRUE, NULL),
 -- Instance 33
-(33, 248, 1, FALSE, 7), (33, 103, 2, TRUE, NULL), (33, 105, 3, TRUE, NULL),
-(33, 9, 4, FALSE, 6), (33, 15, 5, TRUE, NULL), (33, 537, 6, TRUE, NULL),
-(33, 651, 7, FALSE, 8), (33, 475, 8, TRUE, NULL),
+(33, 248, 'V', FALSE, 7), (33, 103, 'W', TRUE, NULL), (33, 105, 'X', TRUE, NULL),
+(33, 9, 'Y', FALSE, 6), (33, 15, 'Z', TRUE, NULL), (33, 537, 'a', TRUE, NULL),
+(33, 651, 'b', FALSE, 8), (33, 475, 'c', TRUE, NULL),
 -- Instance 34
-(34, 68, 1, FALSE, 6), (34, 75, 2, TRUE, NULL), (34, 116, 3, TRUE, NULL),
-(34, 273, 4, FALSE, 7), (34, 373, 5, TRUE, NULL),
-(34, 750, 6, FALSE, 8), (34, 527, 7, TRUE, NULL),
+(34, 68, 'V', FALSE, 6), (34, 75, 'W', TRUE, NULL), (34, 116, 'X', TRUE, NULL),
+(34, 273, 'Y', FALSE, 7), (34, 373, 'Z', TRUE, NULL),
+(34, 750, 'a', FALSE, 8), (34, 527, 'b', TRUE, NULL),
 -- Instance 35
-(35, 74, 1, FALSE, 7), (35, 197, 2, TRUE, NULL), (35, 208, 3, TRUE, NULL),
-(35, 736, 4, FALSE, 6), (35, 3842, 5, TRUE, NULL), (35, 829, 6, TRUE, NULL),
-(35, 70, 7, FALSE, 8), (35, 70, 8, TRUE, NULL),
+(35, 74, 'V', FALSE, 7), (35, 197, 'W', TRUE, NULL), (35, 208, 'X', TRUE, NULL),
+(35, 736, 'Y', FALSE, 6), (35, 3842, 'Z', TRUE, NULL), (35, 829, 'a', TRUE, NULL),
+(35, 70, 'b', FALSE, 8), (35, 70, 'c', TRUE, NULL),
 -- Instance 36
-(36, 138, 1, FALSE, 6), (36, 87, 2, TRUE, NULL), (36, 281, 3, TRUE, NULL),
-(36, 264, 4, FALSE, 7), (36, 1511, 5, TRUE, NULL),
-(36, 312, 6, FALSE, 8), (36, 566, 7, TRUE, NULL),
+(36, 138, 'V', FALSE, 6), (36, 87, 'W', TRUE, NULL), (36, 281, 'X', TRUE, NULL),
+(36, 264, 'Y', FALSE, 7), (36, 1511, 'Z', TRUE, NULL),
+(36, 312, 'a', FALSE, 8), (36, 566, 'b', TRUE, NULL),
 -- Instance 37
-(37, 222, 1, FALSE, 7), (37, 517, 2, TRUE, NULL), (37, 1148, 3, TRUE, NULL),
-(37, 67, 4, FALSE, 6), (37, 76, 5, TRUE, NULL), (37, 89, 6, TRUE, NULL),
-(37, 482, 7, FALSE, 8), (37, 527, 8, TRUE, NULL),
+(37, 222, 'V', FALSE, 7), (37, 517, 'W', TRUE, NULL), (37, 1148, 'X', TRUE, NULL),
+(37, 67, 'Y', FALSE, 6), (37, 76, 'Z', TRUE, NULL), (37, 89, 'a', TRUE, NULL),
+(37, 482, 'b', FALSE, 8), (37, 527, 'c', TRUE, NULL),
 -- Instance 38
-(38, 33, 1, FALSE, 6), (38, 605, 2, TRUE, NULL), (38, 589, 3, TRUE, NULL),
-(38, 398, 4, FALSE, 7), (38, 515, 5, TRUE, NULL),
-(38, 559, 6, FALSE, 8), (38, 1426, 7, TRUE, NULL), (38, 418, 8, TRUE, NULL),
+(38, 33, 'V', FALSE, 6), (38, 605, 'W', TRUE, NULL), (38, 589, 'X', TRUE, NULL),
+(38, 398, 'Y', FALSE, 7), (38, 515, 'Z', TRUE, NULL),
+(38, 559, 'a', FALSE, 8), (38, 1426, 'b', TRUE, NULL), (38, 418, 'c', TRUE, NULL),
 -- Instance 39
-(39, 803, 1, FALSE, 7), (39, 217, 2, TRUE, NULL), (39, 448, 3, TRUE, NULL),
-(39, 1076, 4, FALSE, 6), (39, 5405, 5, TRUE, NULL), (39, 1244, 6, TRUE, NULL),
-(39, 905, 7, FALSE, 8), (39, 79, 8, TRUE, NULL),
+(39, 803, 'V', FALSE, 7), (39, 217, 'W', TRUE, NULL), (39, 448, 'X', TRUE, NULL),
+(39, 1076, 'Y', FALSE, 6), (39, 5405, 'Z', TRUE, NULL), (39, 1244, 'a', TRUE, NULL),
+(39, 905, 'b', FALSE, 8), (39, 79, 'c', TRUE, NULL),
 -- Instance 40
-(40, 235, 1, FALSE, 6), (40, 228, 2, TRUE, NULL), (40, 793, 3, TRUE, NULL),
-(40, 361, 4, FALSE, 7), (40, 1316, 5, TRUE, NULL),
-(40, 52, 6, FALSE, 8), (40, 750, 7, TRUE, NULL),
+(40, 235, 'V', FALSE, 6), (40, 228, 'W', TRUE, NULL), (40, 793, 'X', TRUE, NULL),
+(40, 361, 'Y', FALSE, 7), (40, 1316, 'Z', TRUE, NULL),
+(40, 52, 'a', FALSE, 8), (40, 750, 'b', TRUE, NULL),
 -- Instance 41
-(41, 27, 1, FALSE, 7), (41, 138, 2, TRUE, NULL), (41, 1197, 3, TRUE, NULL),
-(41, 264, 4, FALSE, 6), (41, 829, 5, TRUE, NULL), (41, 67, 6, TRUE, NULL),
-(41, 6170, 7, FALSE, 8), (41, 4883, 8, TRUE, NULL);
+(41, 27, 'V', FALSE, 7), (41, 138, 'W', TRUE, NULL), (41, 1197, 'X', TRUE, NULL),
+(41, 264, 'Y', FALSE, 6), (41, 829, 'Z', TRUE, NULL), (41, 67, 'a', TRUE, NULL),
+(41, 6170, 'b', FALSE, 8), (41, 4883, 'c', TRUE, NULL);
 
 -- Chicago Traditional tune logs (session instances 50-61)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
 -- Instance 50
-(50, 27, 1, FALSE, 9), (50, 8, 2, TRUE, NULL), (50, 1, 3, TRUE, NULL),
-(50, 55, 4, FALSE, 10), (50, 71, 5, TRUE, NULL),
-(50, 83, 6, FALSE, 11), (50, 872, 7, TRUE, NULL),
+(50, 27, 'V', FALSE, 9), (50, 8, 'W', TRUE, NULL), (50, 1, 'X', TRUE, NULL),
+(50, 55, 'Y', FALSE, 10), (50, 71, 'Z', TRUE, NULL),
+(50, 83, 'a', FALSE, 11), (50, 872, 'b', TRUE, NULL),
 -- Instance 51
-(51, 2, 1, FALSE, 10), (51, 182, 2, TRUE, NULL), (51, 21, 3, TRUE, NULL),
-(51, 12, 4, FALSE, 9), (51, 108, 5, TRUE, NULL), (51, 19, 6, TRUE, NULL),
-(51, 647, 7, FALSE, 11), (51, 3262, 8, TRUE, NULL),
+(51, 2, 'V', FALSE, 10), (51, 182, 'W', TRUE, NULL), (51, 21, 'X', TRUE, NULL),
+(51, 12, 'Y', FALSE, 9), (51, 108, 'Z', TRUE, NULL), (51, 19, 'a', TRUE, NULL),
+(51, 647, 'b', FALSE, 11), (51, 3262, 'c', TRUE, NULL),
 -- Instance 52
-(52, 74, 1, FALSE, 9), (52, 64, 2, TRUE, NULL), (52, 73, 3, TRUE, NULL),
-(52, 62, 4, FALSE, 10), (52, 106, 5, TRUE, NULL),
-(52, 10, 6, FALSE, 11), (52, 52, 7, TRUE, NULL),
+(52, 74, 'V', FALSE, 9), (52, 64, 'W', TRUE, NULL), (52, 73, 'X', TRUE, NULL),
+(52, 62, 'Y', FALSE, 10), (52, 106, 'Z', TRUE, NULL),
+(52, 10, 'a', FALSE, 11), (52, 52, 'b', TRUE, NULL),
 -- Instance 53
-(53, 248, 1, FALSE, 10), (53, 103, 2, TRUE, NULL), (53, 105, 3, TRUE, NULL),
-(53, 9, 4, FALSE, 9), (53, 15, 5, TRUE, NULL), (53, 537, 6, TRUE, NULL),
-(53, 651, 7, FALSE, 11), (53, 475, 8, TRUE, NULL),
+(53, 248, 'V', FALSE, 10), (53, 103, 'W', TRUE, NULL), (53, 105, 'X', TRUE, NULL),
+(53, 9, 'Y', FALSE, 9), (53, 15, 'Z', TRUE, NULL), (53, 537, 'a', TRUE, NULL),
+(53, 651, 'b', FALSE, 11), (53, 475, 'c', TRUE, NULL),
 -- Instance 54
-(54, 68, 1, FALSE, 9), (54, 75, 2, TRUE, NULL), (54, 116, 3, TRUE, NULL),
-(54, 273, 4, FALSE, 10), (54, 373, 5, TRUE, NULL),
-(54, 441, 6, FALSE, 11), (54, 238, 7, TRUE, NULL), (54, 4195, 8, TRUE, NULL),
+(54, 68, 'V', FALSE, 9), (54, 75, 'W', TRUE, NULL), (54, 116, 'X', TRUE, NULL),
+(54, 273, 'Y', FALSE, 10), (54, 373, 'Z', TRUE, NULL),
+(54, 441, 'a', FALSE, 11), (54, 238, 'b', TRUE, NULL), (54, 4195, 'c', TRUE, NULL),
 -- Instance 55
-(55, 74, 1, FALSE, 10), (55, 197, 2, TRUE, NULL), (55, 208, 3, TRUE, NULL),
-(55, 736, 4, FALSE, 9), (55, 3842, 5, TRUE, NULL), (55, 829, 6, TRUE, NULL),
-(55, 312, 7, FALSE, 11), (55, 566, 8, TRUE, NULL),
+(55, 74, 'V', FALSE, 10), (55, 197, 'W', TRUE, NULL), (55, 208, 'X', TRUE, NULL),
+(55, 736, 'Y', FALSE, 9), (55, 3842, 'Z', TRUE, NULL), (55, 829, 'a', TRUE, NULL),
+(55, 312, 'b', FALSE, 11), (55, 566, 'c', TRUE, NULL),
 -- Instance 56
-(56, 138, 1, FALSE, 9), (56, 87, 2, TRUE, NULL), (56, 281, 3, TRUE, NULL),
-(56, 264, 4, FALSE, 10), (56, 1511, 5, TRUE, NULL),
-(56, 750, 6, FALSE, 11), (56, 527, 7, TRUE, NULL),
+(56, 138, 'V', FALSE, 9), (56, 87, 'W', TRUE, NULL), (56, 281, 'X', TRUE, NULL),
+(56, 264, 'Y', FALSE, 10), (56, 1511, 'Z', TRUE, NULL),
+(56, 750, 'a', FALSE, 11), (56, 527, 'b', TRUE, NULL),
 -- Instance 57
-(57, 222, 1, FALSE, 10), (57, 517, 2, TRUE, NULL), (57, 1148, 3, TRUE, NULL),
-(57, 67, 4, FALSE, 9), (57, 76, 5, TRUE, NULL), (57, 89, 6, TRUE, NULL),
-(57, 70, 7, FALSE, 11), (57, 70, 8, TRUE, NULL),
+(57, 222, 'V', FALSE, 10), (57, 517, 'W', TRUE, NULL), (57, 1148, 'X', TRUE, NULL),
+(57, 67, 'Y', FALSE, 9), (57, 76, 'Z', TRUE, NULL), (57, 89, 'a', TRUE, NULL),
+(57, 70, 'b', FALSE, 11), (57, 70, 'c', TRUE, NULL),
 -- Instance 58
-(58, 33, 1, FALSE, 9), (58, 605, 2, TRUE, NULL), (58, 589, 3, TRUE, NULL),
-(58, 398, 4, FALSE, 10), (58, 515, 5, TRUE, NULL),
-(58, 905, 6, FALSE, 11), (58, 79, 7, TRUE, NULL),
+(58, 33, 'V', FALSE, 9), (58, 605, 'W', TRUE, NULL), (58, 589, 'X', TRUE, NULL),
+(58, 398, 'Y', FALSE, 10), (58, 515, 'Z', TRUE, NULL),
+(58, 905, 'a', FALSE, 11), (58, 79, 'b', TRUE, NULL),
 -- Instance 59
-(59, 803, 1, FALSE, 10), (59, 217, 2, TRUE, NULL), (59, 448, 3, TRUE, NULL),
-(59, 1076, 4, FALSE, 9), (59, 5405, 5, TRUE, NULL), (59, 1244, 6, TRUE, NULL),
-(59, 482, 7, FALSE, 11), (59, 527, 8, TRUE, NULL),
+(59, 803, 'V', FALSE, 10), (59, 217, 'W', TRUE, NULL), (59, 448, 'X', TRUE, NULL),
+(59, 1076, 'Y', FALSE, 9), (59, 5405, 'Z', TRUE, NULL), (59, 1244, 'a', TRUE, NULL),
+(59, 482, 'b', FALSE, 11), (59, 527, 'c', TRUE, NULL),
 -- Instance 60
-(60, 235, 1, FALSE, 9), (60, 228, 2, TRUE, NULL), (60, 793, 3, TRUE, NULL),
-(60, 361, 4, FALSE, 10), (60, 1316, 5, TRUE, NULL),
-(60, 559, 6, FALSE, 11), (60, 1426, 7, TRUE, NULL), (60, 418, 8, TRUE, NULL),
+(60, 235, 'V', FALSE, 9), (60, 228, 'W', TRUE, NULL), (60, 793, 'X', TRUE, NULL),
+(60, 361, 'Y', FALSE, 10), (60, 1316, 'Z', TRUE, NULL),
+(60, 559, 'a', FALSE, 11), (60, 1426, 'b', TRUE, NULL), (60, 418, 'c', TRUE, NULL),
 -- Instance 61
-(61, 27, 1, FALSE, 10), (61, 138, 2, TRUE, NULL), (61, 1197, 3, TRUE, NULL),
-(61, 264, 4, FALSE, 9), (61, 829, 5, TRUE, NULL), (61, 67, 6, TRUE, NULL),
-(61, 858, 7, FALSE, 11), (61, 211, 8, TRUE, NULL);
+(61, 27, 'V', FALSE, 10), (61, 138, 'W', TRUE, NULL), (61, 1197, 'X', TRUE, NULL),
+(61, 264, 'Y', FALSE, 9), (61, 829, 'Z', TRUE, NULL), (61, 67, 'a', TRUE, NULL),
+(61, 858, 'b', FALSE, 11), (61, 211, 'c', TRUE, NULL);
 
 -- San Francisco tune logs (session instances 70-81)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
 -- Instance 70
-(70, 27, 1, FALSE, 12), (70, 8, 2, TRUE, NULL), (70, 1, 3, TRUE, NULL),
-(70, 55, 4, FALSE, 13), (70, 71, 5, TRUE, NULL),
-(70, 83, 6, FALSE, 14), (70, 872, 7, TRUE, NULL),
+(70, 27, 'V', FALSE, 12), (70, 8, 'W', TRUE, NULL), (70, 1, 'X', TRUE, NULL),
+(70, 55, 'Y', FALSE, 13), (70, 71, 'Z', TRUE, NULL),
+(70, 83, 'a', FALSE, 14), (70, 872, 'b', TRUE, NULL),
 -- Instance 71
-(71, 2, 1, FALSE, 13), (71, 182, 2, TRUE, NULL), (71, 21, 3, TRUE, NULL),
-(71, 12, 4, FALSE, 12), (71, 108, 5, TRUE, NULL), (71, 19, 6, TRUE, NULL),
-(71, 10, 7, FALSE, 14), (71, 52, 8, TRUE, NULL),
+(71, 2, 'V', FALSE, 13), (71, 182, 'W', TRUE, NULL), (71, 21, 'X', TRUE, NULL),
+(71, 12, 'Y', FALSE, 12), (71, 108, 'Z', TRUE, NULL), (71, 19, 'a', TRUE, NULL),
+(71, 10, 'b', FALSE, 14), (71, 52, 'c', TRUE, NULL),
 -- Instance 72
-(72, 74, 1, FALSE, 12), (72, 64, 2, TRUE, NULL), (72, 73, 3, TRUE, NULL),
-(72, 62, 4, FALSE, 13), (72, 106, 5, TRUE, NULL),
-(72, 441, 6, FALSE, 14), (72, 238, 7, TRUE, NULL), (72, 4195, 8, TRUE, NULL),
+(72, 74, 'V', FALSE, 12), (72, 64, 'W', TRUE, NULL), (72, 73, 'X', TRUE, NULL),
+(72, 62, 'Y', FALSE, 13), (72, 106, 'Z', TRUE, NULL),
+(72, 441, 'a', FALSE, 14), (72, 238, 'b', TRUE, NULL), (72, 4195, 'c', TRUE, NULL),
 -- Instance 73
-(73, 248, 1, FALSE, 13), (73, 103, 2, TRUE, NULL), (73, 105, 3, TRUE, NULL),
-(73, 9, 4, FALSE, 12), (73, 15, 5, TRUE, NULL), (73, 537, 6, TRUE, NULL),
-(73, 651, 7, FALSE, 14), (73, 475, 8, TRUE, NULL),
+(73, 248, 'V', FALSE, 13), (73, 103, 'W', TRUE, NULL), (73, 105, 'X', TRUE, NULL),
+(73, 9, 'Y', FALSE, 12), (73, 15, 'Z', TRUE, NULL), (73, 537, 'a', TRUE, NULL),
+(73, 651, 'b', FALSE, 14), (73, 475, 'c', TRUE, NULL),
 -- Instance 74
-(74, 68, 1, FALSE, 12), (74, 75, 2, TRUE, NULL), (74, 116, 3, TRUE, NULL),
-(74, 273, 4, FALSE, 13), (74, 373, 5, TRUE, NULL),
-(74, 750, 6, FALSE, 14), (74, 527, 7, TRUE, NULL),
+(74, 68, 'V', FALSE, 12), (74, 75, 'W', TRUE, NULL), (74, 116, 'X', TRUE, NULL),
+(74, 273, 'Y', FALSE, 13), (74, 373, 'Z', TRUE, NULL),
+(74, 750, 'a', FALSE, 14), (74, 527, 'b', TRUE, NULL),
 -- Instance 75
-(75, 74, 1, FALSE, 13), (75, 197, 2, TRUE, NULL), (75, 208, 3, TRUE, NULL),
-(75, 736, 4, FALSE, 12), (75, 3842, 5, TRUE, NULL), (75, 829, 6, TRUE, NULL),
-(75, 70, 7, FALSE, 14), (75, 70, 8, TRUE, NULL),
+(75, 74, 'V', FALSE, 13), (75, 197, 'W', TRUE, NULL), (75, 208, 'X', TRUE, NULL),
+(75, 736, 'Y', FALSE, 12), (75, 3842, 'Z', TRUE, NULL), (75, 829, 'a', TRUE, NULL),
+(75, 70, 'b', FALSE, 14), (75, 70, 'c', TRUE, NULL),
 -- Instance 76
-(76, 138, 1, FALSE, 12), (76, 87, 2, TRUE, NULL), (76, 281, 3, TRUE, NULL),
-(76, 264, 4, FALSE, 13), (76, 1511, 5, TRUE, NULL),
-(76, 312, 6, FALSE, 14), (76, 566, 7, TRUE, NULL),
+(76, 138, 'V', FALSE, 12), (76, 87, 'W', TRUE, NULL), (76, 281, 'X', TRUE, NULL),
+(76, 264, 'Y', FALSE, 13), (76, 1511, 'Z', TRUE, NULL),
+(76, 312, 'a', FALSE, 14), (76, 566, 'b', TRUE, NULL),
 -- Instance 77
-(77, 222, 1, FALSE, 13), (77, 517, 2, TRUE, NULL), (77, 1148, 3, TRUE, NULL),
-(77, 67, 4, FALSE, 12), (77, 76, 5, TRUE, NULL), (77, 89, 6, TRUE, NULL),
-(77, 482, 7, FALSE, 14), (77, 527, 8, TRUE, NULL),
+(77, 222, 'V', FALSE, 13), (77, 517, 'W', TRUE, NULL), (77, 1148, 'X', TRUE, NULL),
+(77, 67, 'Y', FALSE, 12), (77, 76, 'Z', TRUE, NULL), (77, 89, 'a', TRUE, NULL),
+(77, 482, 'b', FALSE, 14), (77, 527, 'c', TRUE, NULL),
 -- Instance 78
-(78, 33, 1, FALSE, 12), (78, 605, 2, TRUE, NULL), (78, 589, 3, TRUE, NULL),
-(78, 398, 4, FALSE, 13), (78, 515, 5, TRUE, NULL),
-(78, 559, 6, FALSE, 14), (78, 1426, 7, TRUE, NULL), (78, 418, 8, TRUE, NULL),
+(78, 33, 'V', FALSE, 12), (78, 605, 'W', TRUE, NULL), (78, 589, 'X', TRUE, NULL),
+(78, 398, 'Y', FALSE, 13), (78, 515, 'Z', TRUE, NULL),
+(78, 559, 'a', FALSE, 14), (78, 1426, 'b', TRUE, NULL), (78, 418, 'c', TRUE, NULL),
 -- Instance 79
-(79, 803, 1, FALSE, 13), (79, 217, 2, TRUE, NULL), (79, 448, 3, TRUE, NULL),
-(79, 1076, 4, FALSE, 12), (79, 5405, 5, TRUE, NULL), (79, 1244, 6, TRUE, NULL),
-(79, 905, 7, FALSE, 14), (79, 79, 8, TRUE, NULL),
+(79, 803, 'V', FALSE, 13), (79, 217, 'W', TRUE, NULL), (79, 448, 'X', TRUE, NULL),
+(79, 1076, 'Y', FALSE, 12), (79, 5405, 'Z', TRUE, NULL), (79, 1244, 'a', TRUE, NULL),
+(79, 905, 'b', FALSE, 14), (79, 79, 'c', TRUE, NULL),
 -- Instance 80
-(80, 235, 1, FALSE, 12), (80, 228, 2, TRUE, NULL), (80, 793, 3, TRUE, NULL),
-(80, 361, 4, FALSE, 13), (80, 1316, 5, TRUE, NULL),
-(80, 52, 6, FALSE, 14), (80, 750, 7, TRUE, NULL),
+(80, 235, 'V', FALSE, 12), (80, 228, 'W', TRUE, NULL), (80, 793, 'X', TRUE, NULL),
+(80, 361, 'Y', FALSE, 13), (80, 1316, 'Z', TRUE, NULL),
+(80, 52, 'a', FALSE, 14), (80, 750, 'b', TRUE, NULL),
 -- Instance 81
-(81, 27, 1, FALSE, 13), (81, 138, 2, TRUE, NULL), (81, 1197, 3, TRUE, NULL),
-(81, 264, 4, FALSE, 12), (81, 829, 5, TRUE, NULL), (81, 67, 6, TRUE, NULL),
-(81, 6170, 7, FALSE, 14), (81, 4883, 8, TRUE, NULL);
+(81, 27, 'V', FALSE, 13), (81, 138, 'W', TRUE, NULL), (81, 1197, 'X', TRUE, NULL),
+(81, 264, 'Y', FALSE, 12), (81, 829, 'Z', TRUE, NULL), (81, 67, 'a', TRUE, NULL),
+(81, 6170, 'b', FALSE, 14), (81, 4883, 'c', TRUE, NULL);
 
 -- =============================================================================
 -- SESSION INSTANCE PERSON (attendance records)
@@ -2187,27 +2187,6 @@ SELECT setval('session_person_session_person_id_seq', (SELECT MAX(session_person
 SELECT setval('session_instance_person_session_instance_person_id_seq', (SELECT MAX(session_instance_person_id) FROM session_instance_person));
 SELECT setval('person_tune_person_tune_id_seq', (SELECT MAX(person_tune_id) FROM person_tune));
 
--- =============================================================================
--- Populate order_position for session_instance_tune
--- Uses base-62 fractional indexing: positions start at 'V' and increment
--- This matches the logic in migrate_to_fractional_indexing.sql
--- =============================================================================
-
-UPDATE session_instance_tune
-SET order_position = CASE
-    -- order_number 1-31: V through z (single char)
-    WHEN order_number BETWEEN 1 AND 31 THEN
-        SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + order_number FOR 1)
-    -- order_number 32-62: zV through zz (two chars)
-    WHEN order_number BETWEEN 32 AND 62 THEN
-        'z' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 31) FOR 1)
-    -- order_number 63-93: zzV through zzz (three chars)
-    WHEN order_number BETWEEN 63 AND 93 THEN
-        'zz' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 62) FOR 1)
-    ELSE
-        'zzz' || SUBSTRING('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' FROM 31 + (order_number - 93) FOR 1)
-END
-WHERE order_position IS NULL;
 
 -- =============================================================================
 -- Seed data complete

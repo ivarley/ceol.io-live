@@ -1,5 +1,21 @@
 import { AutoSaveTimer, AutoSaveManager, UserConfig } from '../../src/ts/components/autoSave';
-import { TunePillsData } from '../../src/ts/components/stateManager';
+import { TunePill, TunePillsData } from '../../src/ts/components/stateManager';
+
+function makePill(overrides: Partial<TunePill> & { id: string }): TunePill {
+    return {
+        tuneId: null,
+        tuneName: '',
+        setting: '',
+        tuneType: '',
+        state: 'unlinked',
+        startedByPersonId: null,
+        loggedByLastName: null,
+        loggedByFirstName: null,
+        orderPosition: null,
+        sessionInstanceTuneId: null,
+        ...overrides,
+    };
+}
 
 // Mock the global fetch function
 global.fetch = jest.fn();
@@ -207,7 +223,7 @@ describe('AutoSaveManager', () => {
     beforeEach(() => {
         mockTunePillsData = [
             [
-                { id: 'tune1', orderNumber: 1, tuneId: 123, tuneName: 'Test Tune', setting: 'A', tuneType: 'jig', state: 'linked' }
+                makePill({ id: 'tune1', tuneId: 123, tuneName: 'Test Tune', setting: 'A', tuneType: 'jig', state: 'linked' })
             ]
         ];
 

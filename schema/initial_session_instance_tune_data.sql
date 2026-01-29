@@ -1,2 +1,2 @@
 -- Initial session_instance_tune data
-INSERT INTO session_instance_tune (session_instance_id, tune_id,  name, order_number, continues_set, played_timestamp, key_override, setting_override) VALUES (1, 1, NULL, 1, FALSE, '2024-01-01 20:30:00', NULL, NULL);
+INSERT INTO session_instance_tune (session_instance_id, tune_id,  name, order_position, continues_set, played_timestamp, key_override, setting_override) VALUES (1, 1, NULL, 'V', FALSE, '2024-01-01 20:30:00', NULL, NULL);

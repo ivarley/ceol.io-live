@@ -274,7 +274,7 @@ class MockDatabaseResponses:
             1,  # session_instance_id
             1001,  # tune_id
             "The Butterfly",  # name
-            1,  # order_number
+            "V",  # order_position
             False,  # continues_set
             now_utc().replace(
                 year=2023, month=8, day=15, hour=20, minute=15, second=0, microsecond=0
