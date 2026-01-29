@@ -314,7 +314,7 @@
         {% if suggested_tune %}
         <div class="suggested-tune">
             <span class="label-text">{{ 'A' if (learning_count + want_to_learn_count) == 0 else 'Another' }} tune to learn:</span>
-            <a href="/tunes/{{ suggested_tune.tune_id }}">{{ suggested_tune.name }}</a>
+            <a href="/my-tunes/add?q={{ suggested_tune.name | urlencode }}">{{ suggested_tune.name }}</a>
             <span class="tune-type">({{ suggested_tune.tune_type }})</span>
         </div>
         {% endif %}

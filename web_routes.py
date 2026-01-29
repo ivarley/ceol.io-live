@@ -66,6 +66,7 @@ def home():
                 JOIN session_person sp ON si.session_id = sp.session_id AND sp.person_id = %s
                 JOIN tune t ON sit.tune_id = t.tune_id
                 WHERE sit.tune_id IS NOT NULL
+                  AND t.redirect_to_tune_id IS NULL
                   AND NOT EXISTS (
                     SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
                   )
