@@ -18,15 +18,41 @@
 
 <div style="margin-top: 20px; margin-bottom: 30px;">
     {% if current_user.is_authenticated %}
-        <a href="/my-tunes" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">View My Tunes</a>
-        <a href="/sessions" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">I'm At A Session</a>
+
+        <h5>Learn Tunes</h5>
+        <ul style="list-style: none; padding-left: 0;">
+            <li><em><a href="/my-tunes?learn_status=learning">{{ learning_count }} tune{{ 's' if learning_count != 1 else '' }} in progress</a></em></li>
+            <li><a href="/my-tunes?learn_status=want+to+learn">{{ want_to_learn_count }} tune{{ 's' if want_to_learn_count != 1 else '' }} to learn</a></li>
+            {% if suggested_tune %}
+                <li>{{ 'A' if (learning_count + want_to_learn_count) == 0 else 'Another' }} common tune you should learn: <a href="/tunes/{{ suggested_tune.tune_id }}">{{ suggested_tune.name }}</a> ({{ suggested_tune.tune_type }})</li>
+            {% endif %}
+        </ul>
+
+        <h5>Upcoming Sessions</h5>
+        {% if upcoming_sessions %}
+            <ul style="list-style: none; padding-left: 0;">
+                {% for s in upcoming_sessions %}
+                    <li>
+                        <a href="/sessions/{{ s.path }}/{{ s.date }}">{{ s.name }}</a>
+                        &mdash; {{ s.date.strftime('%A, %b %-d') }}
+                        {% if s.log_complete_date %}
+                            <span class="text-muted">(log complete)</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted">No sessions scheduled this week.</p>
+        {% endif %}
+
     {% else %}
-        <a href="/login" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">Log In or Register</a>
-        <a href="/sessions" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 10px; color: white;">Explore Session Logs</a>
+
+        <a href="/login" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 20px; color: white;">Log In or Register</a>
+        <p style="font-size: 1.15rem;">This app is for traditional Irish music sessions and tunes. Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play in your session.</p>
+        <p style="font-size: 1.15rem;">If you don't want to create an account, you can still <a href="/sessions">browse sessions</a>.</p>
+
     {% endif %}
 </div>
-
-<p>This app lets you track traditional Irish tunes you know (or want to learn). You can also log tunes you play at sessions. (If you're new to this kind of music, read <a href="https://www.ceol.io/help#whats-a-session">this</a>.)</p>
 
 <!-- end landing page -->
 </div>
