@@ -1,5 +1,279 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    .home-greeting {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 300;
+        font-size: 1.6rem;
+        margin-bottom: 1.5rem;
+        color: var(--text-color);
+    }
+    .home-greeting strong {
+        font-weight: 600;
+    }
+
+    .home-card {
+        background: var(--dropdown-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .home-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    [data-theme="dark"] .home-card:hover {
+        box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+    }
+
+    .home-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.9rem;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        font-size: 1.05rem;
+        color: var(--text-color);
+        letter-spacing: 0.01em;
+    }
+    .home-card-header .card-icon {
+        font-size: 1.2rem;
+        opacity: 0.85;
+        flex-shrink: 0;
+    }
+
+    /* Tune stats row */
+    .tune-stats {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .tune-stat {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.7rem 0.5rem;
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--text-color);
+        transition: border-color 0.2s ease, transform 0.15s ease;
+    }
+    .tune-stat:hover {
+        border-color: var(--primary);
+        transform: translateY(-1px);
+        text-decoration: none;
+        color: var(--text-color);
+    }
+    .tune-stat-number {
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.7rem;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--primary);
+    }
+    .tune-stat-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 0.3rem;
+        opacity: 0.7;
+        text-align: center;
+    }
+
+    /* Suggested tune */
+    .suggested-tune {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        font-size: 0.92rem;
+        color: var(--text-color);
+        opacity: 0.85;
+    }
+    .suggested-tune .label-text {
+        white-space: nowrap;
+    }
+    .suggested-tune a {
+        font-weight: 500;
+    }
+    .suggested-tune .tune-type {
+        opacity: 0.6;
+        font-size: 0.85rem;
+    }
+
+    /* Session list */
+    .session-item {
+        display: flex;
+        align-items: center;
+        padding: 0.6rem 0;
+        gap: 0.75rem;
+    }
+    .session-item + .session-item {
+        border-top: 1px solid var(--border-color);
+    }
+    .session-date {
+        flex-shrink: 0;
+        width: 3rem;
+        text-align: center;
+    }
+    .session-date-day {
+        font-family: 'Poppins', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        opacity: 0.6;
+        line-height: 1;
+    }
+    .session-date-num {
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.4rem;
+        font-weight: 600;
+        line-height: 1.1;
+        color: var(--primary);
+    }
+    .session-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .session-name a {
+        font-weight: 500;
+        font-size: 0.95rem;
+    }
+    .session-meta {
+        font-size: 0.8rem;
+        opacity: 0.6;
+    }
+    .badge-logged {
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 0.15rem 0.5rem;
+        border-radius: 3px;
+        background: var(--success);
+        color: #fff;
+        white-space: nowrap;
+        letter-spacing: 0.02em;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 1rem 0;
+        opacity: 0.5;
+        font-size: 0.92rem;
+    }
+
+    /* Anonymous landing */
+    .anon-hero {
+        text-align: center;
+        padding: 2.5rem 1rem 1rem;
+    }
+    .anon-hero h2 {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 300;
+        font-size: 1.6rem;
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    .anon-hero p {
+        font-size: 1.05rem;
+        line-height: 1.65;
+        max-width: 520px;
+        margin: 0 auto 1.5rem;
+        opacity: 0.8;
+    }
+    .anon-hero .btn-login {
+        display: inline-block;
+        padding: 0.65rem 2.2rem;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 500;
+        font-size: 1rem;
+        color: #fff;
+        background: var(--primary);
+        border: none;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: opacity 0.2s ease, transform 0.15s ease;
+        margin-bottom: 1.5rem;
+    }
+    .anon-hero .btn-login:hover {
+        opacity: 0.88;
+        transform: translateY(-1px);
+        text-decoration: none;
+        color: #fff;
+    }
+    .anon-browse {
+        font-size: 0.95rem;
+        opacity: 0.65;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 576px) {
+        .home-greeting {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+        }
+        .home-card {
+            padding: 1rem 1rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+        }
+        .home-card-header {
+            margin-bottom: 0.7rem;
+            font-size: 0.95rem;
+        }
+        .tune-stats {
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .tune-stat {
+            padding: 0.5rem 0.35rem;
+        }
+        .tune-stat-number {
+            font-size: 1.4rem;
+        }
+        .tune-stat-label {
+            font-size: 0.7rem;
+        }
+        .suggested-tune {
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+        }
+        .suggested-tune .label-text {
+            white-space: normal;
+        }
+        .session-item {
+            padding: 0.5rem 0;
+            gap: 0.5rem;
+        }
+        .session-date {
+            width: 2.5rem;
+        }
+        .session-date-num {
+            font-size: 1.2rem;
+        }
+        .session-date-day {
+            font-size: 0.6rem;
+        }
+        .session-name a {
+            font-size: 0.9rem;
+        }
+        .session-meta {
+            font-size: 0.75rem;
+        }
+        .badge-logged {
+            font-size: 0.65rem;
+            padding: 0.1rem 0.4rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="landing-page" style="display: block;">
 
@@ -16,44 +290,74 @@
     {% endif %}
 {% endwith %}
 
-<div style="margin-top: 20px; margin-bottom: 30px;">
-    {% if current_user.is_authenticated %}
+{% if current_user.is_authenticated %}
 
-        <h5>Learn Tunes</h5>
-        <ul style="list-style: none; padding-left: 0;">
-            <li><em><a href="/my-tunes?learn_status=learning">{{ learning_count }} tune{{ 's' if learning_count != 1 else '' }} in progress</a></em></li>
-            <li><a href="/my-tunes?learn_status=want+to+learn">{{ want_to_learn_count }} tune{{ 's' if want_to_learn_count != 1 else '' }} to learn</a></li>
-            {% if suggested_tune %}
-                <li>{{ 'A' if (learning_count + want_to_learn_count) == 0 else 'Another' }} common tune you should learn: <a href="/tunes/{{ suggested_tune.tune_id }}">{{ suggested_tune.name }}</a> ({{ suggested_tune.tune_type }})</li>
-            {% endif %}
-        </ul>
+<div style="margin-top: 1.2rem;">
+    <div class="home-greeting">Welcome back, <strong>{{ current_user.first_name }}</strong></div>
 
-        <h5>Upcoming Sessions</h5>
-        {% if upcoming_sessions %}
-            <ul style="list-style: none; padding-left: 0;">
-                {% for s in upcoming_sessions %}
-                    <li>
-                        <a href="/sessions/{{ s.path }}/{{ s.date }}">{{ s.name }}</a>
-                        &mdash; {{ s.date.strftime('%A, %b %-d') }}
-                        {% if s.log_complete_date %}
-                            <span class="text-muted">(log complete)</span>
-                        {% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p class="text-muted">No sessions scheduled this week.</p>
+    <!-- Learn Tunes Card -->
+    <div class="home-card">
+        <div class="home-card-header">
+            <span class="card-icon">&#9835;</span>
+            Learn Tunes
+        </div>
+        <div class="tune-stats">
+            <a href="/my-tunes?learn_status=learning" class="tune-stat">
+                <span class="tune-stat-number">{{ learning_count }}</span>
+                <span class="tune-stat-label">In Progress</span>
+            </a>
+            <a href="/my-tunes?learn_status=want+to+learn" class="tune-stat">
+                <span class="tune-stat-number">{{ want_to_learn_count }}</span>
+                <span class="tune-stat-label">To Learn</span>
+            </a>
+        </div>
+        {% if suggested_tune %}
+        <div class="suggested-tune">
+            <span class="label-text">{{ 'A' if (learning_count + want_to_learn_count) == 0 else 'Another' }} tune to learn:</span>
+            <a href="/tunes/{{ suggested_tune.tune_id }}">{{ suggested_tune.name }}</a>
+            <span class="tune-type">({{ suggested_tune.tune_type }})</span>
+        </div>
         {% endif %}
+    </div>
 
-    {% else %}
-
-        <a href="/login" class="btn btn-primary" style="display: block; width: 100%; max-width: 400px; margin-bottom: 20px; color: white;">Log In or Register</a>
-        <p style="font-size: 1.15rem;">This app is for traditional Irish music sessions and tunes. Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play in your session.</p>
-        <p style="font-size: 1.15rem;">If you don't want to create an account, you can still <a href="/sessions">browse sessions</a>.</p>
-
-    {% endif %}
+    <!-- Upcoming Sessions Card -->
+    <div class="home-card">
+        <div class="home-card-header">
+            <span class="card-icon">&#9834;</span>
+            This Week
+        </div>
+        {% if upcoming_sessions %}
+            {% for s in upcoming_sessions %}
+            <div class="session-item">
+                <div class="session-date">
+                    <div class="session-date-day">{{ s.date.strftime('%a') }}</div>
+                    <div class="session-date-num">{{ s.date.day }}</div>
+                </div>
+                <div class="session-info">
+                    <div class="session-name"><a href="/sessions/{{ s.path }}/{{ s.date }}">{{ s.name }}</a></div>
+                    <div class="session-meta">{{ s.date.strftime('%A, %b %-d') }}</div>
+                </div>
+                {% if s.log_complete_date %}
+                <span class="badge-logged">Logged</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">No sessions scheduled this week.</div>
+        {% endif %}
+    </div>
 </div>
 
-<!-- end landing page -->
+{% else %}
+
+<div class="anon-hero">
+    <h2>Track your tunes. Log your sessions.</h2>
+    <p>Keep track of tunes you know or want to learn, see what's popular in different sessions, and log what you play at your session.</p>
+    <a href="/login" class="btn-login">Log In or Register</a>
+    <p class="anon-browse">Don't want an account? You can still <a href="/sessions">browse sessions</a>.</p>
+</div>
+
+{% endif %}
+
 </div>
 {% endblock %}
