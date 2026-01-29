@@ -36,67 +36,98 @@ from recurrence_utils import to_human_readable
 
 def home():
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        if current_user.is_authenticated:
+            from timezone_utils import get_today_in_timezone
 
-        # Get active sessions (null or future termination dates)
-        cur.execute(
-            """
-            SELECT session_id, name, path, city, state, country
-            FROM session
-            WHERE termination_date IS NULL OR termination_date > CURRENT_DATE
-            ORDER BY name
-        """
-        )
-        active_sessions = cur.fetchall()
+            conn = get_db_connection()
+            cur = conn.cursor()
+            person_id = current_user.person_id
 
-        # For each active session, get the 3 most recent session instances and total count
-        sessions_with_instances = []
-        for session_row in active_sessions:
-            session_id, name, path, city, state, country = session_row
-
-            # Get total count of instances
+            # Learning counts
             cur.execute(
                 """
-                SELECT COUNT(*)
-                FROM session_instance
-                WHERE session_id = %s
-            """,
-                (session_id,),
+                SELECT learn_status, COUNT(*)
+                FROM person_tune
+                WHERE person_id = %s AND learn_status IN ('learning', 'want to learn')
+                GROUP BY learn_status
+                """,
+                (person_id,),
             )
-            result = cur.fetchone()
-            total_instances = result[0] if result else 0
+            learning_counts = dict(cur.fetchall())
+            learning_count = learning_counts.get("learning", 0)
+            want_to_learn_count = learning_counts.get("want to learn", 0)
 
-            # Get the 3 most recent instances
+            # Suggested tune: most played at user's sessions, not already in their list
             cur.execute(
                 """
-                SELECT date
-                FROM session_instance
-                WHERE session_id = %s
-                ORDER BY date DESC
-                LIMIT 3
-            """,
-                (session_id,),
+                SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
+                FROM session_instance_tune sit
+                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                JOIN session_person sp ON si.session_id = sp.session_id AND sp.person_id = %s
+                JOIN tune t ON sit.tune_id = t.tune_id
+                WHERE sit.tune_id IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
+                  )
+                GROUP BY t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+                ORDER BY play_count DESC, t.tunebook_count_cached DESC
+                LIMIT 1
+                """,
+                (person_id, person_id),
             )
-            recent_instances = cur.fetchall()
-
-            sessions_with_instances.append(
-                {
-                    "session_id": session_id,
-                    "name": name,
-                    "path": path,
-                    "city": city,
-                    "state": state,
-                    "country": country,
-                    "recent_instances": [instance[0] for instance in recent_instances],
-                    "total_instances": total_instances,
+            suggested_tune_row = cur.fetchone()
+            suggested_tune = None
+            if suggested_tune_row:
+                suggested_tune = {
+                    "tune_id": suggested_tune_row[0],
+                    "name": suggested_tune_row[1],
+                    "tune_type": suggested_tune_row[2],
                 }
+
+            # Upcoming sessions this week (Monday-Sunday in user's timezone)
+            today = get_today_in_timezone(current_user.timezone or "UTC")
+            monday = today - timedelta(days=today.weekday())
+            sunday = monday + timedelta(days=6)
+
+            cur.execute(
+                """
+                SELECT s.name, s.path, si.session_instance_id, si.date, si.start_time,
+                       si.log_complete_date
+                FROM session_person sp
+                JOIN session s ON sp.session_id = s.session_id
+                JOIN session_instance si ON s.session_id = si.session_id
+                WHERE sp.person_id = %s
+                  AND si.date BETWEEN %s AND %s
+                  AND si.is_cancelled = FALSE
+                ORDER BY si.date, si.start_time
+                """,
+                (person_id, monday, sunday),
             )
+            upcoming_rows = cur.fetchall()
+            upcoming_sessions = [
+                {
+                    "name": row[0],
+                    "path": row[1],
+                    "session_instance_id": row[2],
+                    "date": row[3],
+                    "start_time": row[4],
+                    "log_complete_date": row[5],
+                }
+                for row in upcoming_rows
+            ]
 
-        cur.close()
-        conn.close()
+            cur.close()
+            conn.close()
 
-        return render_template("home.html", active_sessions=sessions_with_instances)
+            return render_template(
+                "home.html",
+                learning_count=learning_count,
+                want_to_learn_count=want_to_learn_count,
+                suggested_tune=suggested_tune,
+                upcoming_sessions=upcoming_sessions,
+            )
+        else:
+            return render_template("home.html")
 
     except Exception as e:
         return f"Database connection failed: {str(e)}"
