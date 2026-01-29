@@ -411,7 +411,7 @@ app.add_url_rule(
     methods=["DELETE"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date>/link_tune",
+    "/api/sessions/<path:session_path>/<date_or_id>/link_tune",
     "link_tune_ajax",
     link_tune_ajax,
     methods=["POST"],

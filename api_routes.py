@@ -2951,7 +2951,11 @@ def delete_tune_by_order_ajax(session_path, date, order_number):
 
 
 @login_required
-def link_tune_ajax(session_path, date):
+def link_tune_ajax(session_path, date_or_id):
+    """
+    Link a tune to a thesession.org tune ID.
+    Accepts either date (YYYY-MM-DD) or session_instance_id as the second URL parameter.
+    """
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     tune_input = request.json.get("tune_id", "").strip()
@@ -2990,21 +2994,12 @@ def link_tune_ajax(session_path, date):
 
         session_id = session_result[0]
 
-        # Get session instance ID
-        cur.execute(
-            """
-            SELECT session_instance_id FROM session_instance
-            WHERE session_id = %s AND date = %s
-        """,
-            (session_id, date),
-        )
-        session_instance_result = cur.fetchone()
-        if not session_instance_result:
+        # Get session instance ID (works with both date and ID)
+        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
+        if not session_instance_id:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
-
-        session_instance_id = session_instance_result[0]
 
         # Check if tune is a redirect BEFORE any other processing
         cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
@@ -3028,7 +3023,21 @@ def link_tune_ajax(session_path, date):
         )
         session_tune_exists = cur.fetchone()
 
+        # Track tune metadata to return to frontend
+        tune_name_canonical = None
+        tune_type_result = None
+
         if session_tune_exists:
+            # Get tune metadata from tune table
+            cur.execute(
+                "SELECT name, tune_type FROM tune WHERE tune_id = %s",
+                (tune_id,),
+            )
+            tune_meta = cur.fetchone()
+            if tune_meta:
+                tune_name_canonical = tune_meta[0]
+                tune_type_result = tune_meta[1]
+
             # Get the session_instance_tune_id for history
             cur.execute(
                 """
@@ -3059,10 +3068,14 @@ def link_tune_ajax(session_path, date):
             message = f'Linked "{tune_name}" to existing tune in session{setting_msg}'
         else:
             # Check if tune exists in tune table (redirect already checked above)
-            cur.execute("SELECT name FROM tune WHERE tune_id = %s", (tune_id,))
+            cur.execute("SELECT name, tune_type FROM tune WHERE tune_id = %s", (tune_id,))
             tune_exists = cur.fetchone()
 
             if tune_exists:
+                # Extract tune metadata
+                tune_name_canonical = tune_exists[0]
+                tune_type_result = tune_exists[1]
+
                 # Add to session_tune with alias and setting_id
                 cur.execute(
                     """
@@ -3147,6 +3160,10 @@ def link_tune_ajax(session_path, date):
                         "tunebooks", 0
                     )  # Default to 0 if not present
 
+                    # Store for response
+                    tune_name_canonical = tune_name_from_api
+                    tune_type_result = tune_type
+
                     # Insert new tune into tune table
                     cur.execute(
                         """
@@ -3225,7 +3242,13 @@ def link_tune_ajax(session_path, date):
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "message": message})
+        return jsonify({
+            "success": True,
+            "message": message,
+            "tune_id": int(tune_id),
+            "tune_name": tune_name_canonical,
+            "tune_type": tune_type_result,
+        })
 
     except Exception as e:
         return jsonify({"success": False, "message": f"Failed to link tune: {str(e)}"})

@@ -1110,32 +1110,40 @@ async function confirmLink() {
     // Store the user-provided name before linking
     // This will be saved as an alias if it differs from the canonical name
     const userProvidedName = window.currentLinkingPill.tuneName;
+    const orderNumber = window.currentLinkingPill.orderNumber;
 
-    // Update the pill to loading state while fetching metadata
+    // Update the pill to loading state while calling the backend
     window.currentLinkingPill.state = 'loading';
     PillRenderer.updatePillAppearance(window.currentLinkingPill);
 
     try {
-        // Fetch tune metadata from thesession.org API
-        const response = await fetch(`https://thesession.org/tunes/${tuneId}?format=json`);
+        // Call the backend API to link the tune
+        // This ensures the tune is inserted into the database if it doesn't exist
+        const response = await fetch(`/api/sessions/${sessionPath}/${sessionInstanceId}/link_tune`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                tune_id: tuneId,
+                tune_name: userProvidedName,
+                order_number: orderNumber,
+            }),
+        });
 
-        if (!response.ok) {
-            if (response.status === 404) {
-                showMessage('Tune not found on thesession.org', 'error');
-            } else {
-                showMessage('Failed to fetch tune data', 'error');
-            }
+        const result = await response.json();
+
+        if (!result.success) {
+            showMessage(result.message || 'Failed to link tune', 'error');
             window.currentLinkingPill.state = 'unlinked';
             PillRenderer.updatePillAppearance(window.currentLinkingPill);
             return;
         }
 
-        const tuneData = await response.json();
-
-        // Update the pill with fetched metadata
-        window.currentLinkingPill.tuneId = parseInt(tuneId);
+        // Update the pill with metadata from the backend response
+        window.currentLinkingPill.tuneId = result.tune_id;
         window.currentLinkingPill.tuneName = userProvidedName; // Keep the user's name
-        window.currentLinkingPill.tuneType = tuneData.type ? tuneData.type.charAt(0).toUpperCase() + tuneData.type.slice(1) : null;
+        window.currentLinkingPill.tuneType = result.tune_type;
         window.currentLinkingPill.state = 'linked';
 
         // Update StateManager's data to trigger type label update
@@ -1143,12 +1151,12 @@ async function confirmLink() {
         if (pillPosition) {
             const tunePillsData = StateManager.getTunePillsData();
             const tuneSet = tunePillsData[pillPosition.setIndex];
-            if (tuneSet && pillPosition.pillIndex >= 0 && pillPosition.pillIndex < tuneSet.length) {
-                const actualPill = tuneSet[pillPosition.pillIndex];
+            if (tuneSet && pillPosition.tuneIndex >= 0 && pillPosition.tuneIndex < tuneSet.length) {
+                const actualPill = tuneSet[pillPosition.tuneIndex];
                 if (actualPill) {
-                    actualPill.tuneId = parseInt(tuneId);
+                    actualPill.tuneId = result.tune_id;
                     actualPill.tuneName = userProvidedName;
-                    actualPill.tuneType = window.currentLinkingPill.tuneType;
+                    actualPill.tuneType = result.tune_type;
                     actualPill.state = 'linked';
                 }
             }
@@ -1159,10 +1167,14 @@ async function confirmLink() {
         PillRenderer.renderTunePills();
         hideLinkModal();
 
+        // Force check changes to update dirty state
+        // The tune was saved to DB, but other changes may still be pending
+        AutoSaveManager.forceCheckChanges();
+
         showMessage('Tune linked successfully!', 'success');
     } catch (error) {
-        console.error('Error fetching tune metadata:', error);
-        showMessage('Failed to fetch tune metadata', 'error');
+        console.error('Error linking tune:', error);
+        showMessage('Failed to link tune', 'error');
         window.currentLinkingPill.state = 'unlinked';
         PillRenderer.updatePillAppearance(window.currentLinkingPill);
     }
