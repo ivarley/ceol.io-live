@@ -4,11 +4,13 @@
    BASE STYLES (Mobile & Desktop)
    ============================================ */
 
-/* Prevent page bounce/overscroll and pull-to-refresh on mobile */
-html, body {
-    overscroll-behavior-y: none; /* Prevent pull-to-refresh */
-    overscroll-behavior-x: none; /* Prevent horizontal bounce */
-    overflow-x: hidden; /* Prevent horizontal scroll when swiping cards */
+/* Prevent page bounce/overscroll and pull-to-refresh on mobile only */
+@media (max-width: 768px) {
+    html, body {
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh */
+        overscroll-behavior-x: none; /* Prevent horizontal bounce */
+        overflow-x: hidden; /* Prevent horizontal scroll when swiping cards */
+    }
 }
 
 /* Ensure header and hamburger menu stay fixed during swipe gestures */
@@ -246,6 +248,12 @@ html, body {
 .filter-status-btn.active + .filter-status-btn,
 .filter-sort-btn.active + .filter-sort-btn {
     border-left: 1px solid var(--primary);
+}
+
+.filter-sort-btn.active-secondary {
+    background-color: transparent;
+    color: var(--primary);
+    border-color: var(--primary);
 }
 
 .filter-sort-direction-btn {

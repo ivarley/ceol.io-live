@@ -304,30 +304,31 @@ let currentStatusFilterIndex = 0;
 // Sort state: type (alpha, popularity, heard) and direction (asc, desc)
 let currentSortType = 'alpha'; // 'alpha', 'popularity', 'heard'
 let currentSortDirection = 'asc'; // 'asc', 'desc' (alpha defaults to asc, others to desc)
+let currentSortType2 = null; // secondary sort (tiebreaker)
+let currentSortDirection2 = null;
 
-// Sort functions based on type and direction
-const sortFunctions = {
-    alpha: {
-        asc: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || ''),
-        desc: (a, b) => (b.tune_name || '').localeCompare(a.tune_name || '')
-    },
-    popularity: {
-        asc: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0),
-        desc: (a, b) => (b.tunebook_count || 0) - (a.tunebook_count || 0)
-    },
-    heard: {
-        asc: (a, b) => {
-            const heardDiff = (a.heard_count || 0) - (b.heard_count || 0);
-            if (heardDiff !== 0) return heardDiff;
-            return (a.tunebook_count || 0) - (b.tunebook_count || 0);
-        },
-        desc: (a, b) => {
-            const heardDiff = (b.heard_count || 0) - (a.heard_count || 0);
-            if (heardDiff !== 0) return heardDiff;
-            return (b.tunebook_count || 0) - (a.tunebook_count || 0);
-        }
-    }
+// Sort comparators - single-concern, no hardcoded tiebreakers
+const sortComparators = {
+    alpha: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || ''),
+    popularity: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0),
+    heard: (a, b) => (a.heard_count || 0) - (b.heard_count || 0)
 };
+
+// Build a composed sort function from primary + optional secondary
+function buildSortFunction() {
+    const primaryCmp = sortComparators[currentSortType];
+    if (!primaryCmp) return null;
+    const primaryDir = currentSortDirection === 'desc' ? -1 : 1;
+
+    const secondaryCmp = currentSortType2 ? sortComparators[currentSortType2] : null;
+    const secondaryDir = currentSortDirection2 === 'desc' ? -1 : 1;
+
+    return (a, b) => {
+        const result = primaryCmp(a, b) * primaryDir;
+        if (result !== 0 || !secondaryCmp) return result;
+        return secondaryCmp(a, b) * secondaryDir;
+    };
+}
 
 // Helper function to normalize strings by removing accents and normalizing quotes
 function normalizeString(str) {
@@ -748,10 +749,13 @@ function setSortMode(sortType) {
         return;
     }
 
+    // Move current primary to secondary (keeping its direction)
+    currentSortType2 = currentSortType;
+    currentSortDirection2 = currentSortDirection;
+
     currentSortType = sortType;
 
     // Set default direction based on sort type
-    // Alpha defaults to ascending (a-z, up arrow), but popularity and heard default to descending (highest first, down arrow)
     if (sortType === 'popularity' || sortType === 'heard') {
         currentSortDirection = 'desc';
     } else {
@@ -765,15 +769,20 @@ function setSortMode(sortType) {
     }
 
     // Update button active states
-    document.querySelectorAll('.filter-sort-btn').forEach(btn => {
-        if (btn.dataset.sort === sortType) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
+    updateSortButtonStyles();
 
     applyFilters();
+}
+
+function updateSortButtonStyles() {
+    document.querySelectorAll('.filter-sort-btn').forEach(btn => {
+        btn.classList.remove('active', 'active-secondary');
+        if (btn.dataset.sort === currentSortType) {
+            btn.classList.add('active');
+        } else if (btn.dataset.sort === currentSortType2) {
+            btn.classList.add('active-secondary');
+        }
+    });
 }
 
 function toggleSortDirection() {
@@ -846,15 +855,6 @@ function loadFiltersFromURL() {
 
     if (params.has('sortType')) {
         currentSortType = params.get('sortType');
-
-        // Update sort button states
-        document.querySelectorAll('.filter-sort-btn').forEach(btn => {
-            if (btn.dataset.sort === currentSortType) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
     }
 
     if (params.has('sortDir')) {
@@ -866,6 +866,17 @@ function loadFiltersFromURL() {
             icon.textContent = currentSortDirection === 'desc' ? '↓' : '↑';
         }
     }
+
+    if (params.has('sortType2')) {
+        currentSortType2 = params.get('sortType2');
+    }
+
+    if (params.has('sortDir2')) {
+        currentSortDirection2 = params.get('sortDir2');
+    }
+
+    // Update sort button styles (primary + secondary)
+    updateSortButtonStyles();
 }
 
 function updateURL() {
@@ -879,6 +890,12 @@ function updateURL() {
     if (currentSortType !== 'alpha' || currentSortDirection !== 'asc') {
         params.set('sortType', currentSortType);
         params.set('sortDir', currentSortDirection);
+    }
+
+    // Add secondary sort params if set
+    if (currentSortType2) {
+        params.set('sortType2', currentSortType2);
+        params.set('sortDir2', currentSortDirection2);
     }
 
     const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
@@ -1045,8 +1062,8 @@ function applyFilters() {
         return true;
     });
 
-    // Apply client-side sorting
-    const sortFn = sortFunctions[currentSortType]?.[currentSortDirection];
+    // Apply client-side sorting (primary + secondary)
+    const sortFn = buildSortFunction();
     if (sortFn) {
         filteredTunes.sort(sortFn);
     }
@@ -1469,6 +1486,10 @@ function clearFilters() {
         status: ''
     };
 
+    // Reset secondary sort
+    currentSortType2 = null;
+    currentSortDirection2 = null;
+
     // Don't clear the search input - keep it as is
     // Reset type filter
     document.getElementById('type-filter').value = '';
@@ -1481,6 +1502,9 @@ function clearFilters() {
             btn.classList.remove('active');
         }
     });
+
+    // Update sort button styles (remove secondary highlights)
+    updateSortButtonStyles();
 
     applyFilters();
 }
