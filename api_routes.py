@@ -866,36 +866,89 @@ def get_tune_incipit(tune_id):
     """
     GET /api/tunes/<tune_id>/incipit
 
-    Return the cached incipit image for a tune (from the first/default setting).
+    Return the incipit for a tune. Checks local cache first, then falls back
+    to fetching from thesession.org if not cached.
+
+    Query Parameters:
+        - setting_id (int, optional): Specific setting to fetch incipit for
 
     Returns:
-        JSON with incipit_image (base64) if available, or empty if not cached.
+        JSON with incipit_image (base64 PNG) and/or incipit_abc (text).
     """
     try:
+        setting_id = request.args.get('setting_id', type=int)
+
+        # First, check local cache
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                """SELECT incipit_image
-                   FROM tune_setting
-                   WHERE tune_id = %s
-                   ORDER BY setting_id ASC
-                   LIMIT 1""",
-                (tune_id,)
-            )
-            row = cur.fetchone()
-            if row and row[0]:
-                return jsonify({
-                    "success": True,
-                    "incipit_image": bytea_to_base64(row[0])
-                }), 200
+            if setting_id:
+                cur.execute(
+                    "SELECT incipit_image, incipit_abc FROM tune_setting WHERE setting_id = %s",
+                    (setting_id,)
+                )
             else:
-                return jsonify({
-                    "success": True,
-                    "incipit_image": None
-                }), 200
+                cur.execute(
+                    """SELECT incipit_image, incipit_abc
+                       FROM tune_setting
+                       WHERE tune_id = %s
+                       ORDER BY setting_id ASC
+                       LIMIT 1""",
+                    (tune_id,)
+                )
+            row = cur.fetchone()
+            if row and (row[0] or row[1]):
+                result = {"success": True, "incipit_image": None, "incipit_abc": None}
+                if row[0]:
+                    result["incipit_image"] = bytea_to_base64(row[0])
+                if row[1]:
+                    result["incipit_abc"] = row[1]
+                return jsonify(result), 200
         finally:
             conn.close()
+
+        # Not cached locally - fetch from thesession.org
+        from database import extract_abc_incipit
+        api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+        resp = requests.get(api_url, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        data = resp.json()
+        settings = data.get("settings", [])
+        if not settings:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        # Find the requested setting, or use the first one
+        setting = None
+        if setting_id:
+            setting = next((s for s in settings if s.get("id") == setting_id), None)
+        if not setting:
+            setting = settings[0]
+
+        abc = setting.get("abc", "")
+        key = setting.get("key", "")
+        tune_type = data.get("type", "").title()
+
+        # Replace "!" with newline (thesession.org line break marker)
+        abc = abc.replace("!", "\n")
+
+        incipit_abc = extract_abc_incipit(abc, tune_type)
+        if not incipit_abc:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        result = {"success": True, "incipit_image": None, "incipit_abc": incipit_abc}
+
+        # Try to render to PNG
+        incipit_with_headers = incipit_abc
+        if not incipit_abc.startswith('X:'):
+            incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+        incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
+        if incipit_image:
+            result["incipit_image"] = base64.b64encode(incipit_image).decode('utf-8')
+
+        return jsonify(result), 200
+
     except Exception as e:
         return jsonify({
             "success": False,

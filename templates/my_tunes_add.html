@@ -623,13 +623,23 @@ function showIncipitPreview(tune) {
     container.innerHTML = '<div style="padding: 10px; color: var(--text-muted, #6c757d); font-size: 13px;">Loading preview...</div>';
     preview.style.display = 'block';
 
-    fetch(`/api/tunes/${tune.tune_id}/incipit`)
+    // Include setting_id in request if available
+    let url = `/api/tunes/${tune.tune_id}/incipit`;
+    if (tune.settingId) {
+        url += `?setting_id=${tune.settingId}`;
+    }
+
+    fetch(url)
         .then(r => r.json())
         .then(data => {
             // Only update if this is still the selected tune
             if (currentPreviewTuneId !== tune.tune_id) return;
             if (data.success && data.incipit_image) {
                 container.innerHTML = `<img src="data:image/png;base64,${data.incipit_image}" alt="Incipit for ${escapeHtml(tune.name)}">`;
+            } else if (data.success && data.incipit_abc) {
+                // Fall back to ABC text display
+                const formatted = data.incipit_abc.replace(/!/g, '\n');
+                container.innerHTML = `<pre style="margin: 0; padding: 8px; font-size: 14px; line-height: 1.4; text-align: left; white-space: pre-wrap;">${escapeHtml(formatted)}</pre>`;
             } else {
                 // No incipit available - hide the preview
                 preview.style.display = 'none';
