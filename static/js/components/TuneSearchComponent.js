@@ -31,6 +31,7 @@ class TuneSearchComponent {
             onTuneSelected: null, // Callback: function(tuneData)
             onSearchStart: null, // Callback: function(query)
             onSearchComplete: null, // Callback: function(results, query)
+            onSelectionCleared: null, // Callback: function() - called when selection is cleared (user starts typing again)
             onTuneAlreadyAdded: null, // Callback: function(tuneData) - called when clicking already-added tune
             personId: null, // Optional: person ID for person_tune context
             sessionId: null, // Optional: session ID for session_tune context
@@ -44,6 +45,7 @@ class TuneSearchComponent {
         this.searchResults = [];
         this.lastSearchQuery = '';
         this.isSearchingTheSession = false;
+        this.pendingSettingId = null;
 
         // DOM elements
         this.searchInput = document.getElementById(this.config.searchInputId);
@@ -170,6 +172,8 @@ class TuneSearchComponent {
         if (this.config.enableTuneIdPaste) {
             const tuneId = this.extractTuneId(query);
             if (tuneId) {
+                // Also extract setting ID from URL if present
+                this.pendingSettingId = this.extractSettingId(query);
                 this.searchByTuneId(tuneId);
                 return;
             }
@@ -518,10 +522,16 @@ class TuneSearchComponent {
 
         // Call callback if provided
         if (this.config.onTuneSelected) {
-            this.config.onTuneSelected({
+            const callbackData = {
                 ...tune,
                 isFromTheSession: tune.isFromTheSession || this.isSearchingTheSession
-            });
+            };
+            // Include setting ID if one was extracted from a pasted URL
+            if (this.pendingSettingId) {
+                callbackData.settingId = this.pendingSettingId;
+                this.pendingSettingId = null;
+            }
+            this.config.onTuneSelected(callbackData);
         }
     }
 
@@ -531,6 +541,9 @@ class TuneSearchComponent {
             this.hiddenInput.value = '';
         }
         delete this.searchInput.dataset.theSessionTune;
+        if (this.config.onSelectionCleared) {
+            this.config.onSelectionCleared();
+        }
     }
 
     showAutocompleteLoading() {
@@ -571,6 +584,22 @@ class TuneSearchComponent {
             return parseInt(urlMatch[1]);
         }
 
+        return null;
+    }
+
+    /**
+     * Extract a setting ID from a thesession.org URL.
+     * Handles #setting52178 and ?setting=52178 formats.
+     */
+    extractSettingId(input) {
+        if (!input) return null;
+        const trimmed = input.trim();
+        // Try query param format: ?setting=123 or &setting=123
+        const queryMatch = trimmed.match(/[?&]setting=(\d+)/);
+        if (queryMatch) return parseInt(queryMatch[1]);
+        // Try hash format: #setting123
+        const hashMatch = trimmed.match(/#setting(\d+)/);
+        if (hashMatch) return parseInt(hashMatch[1]);
         return null;
     }
 
@@ -632,6 +661,26 @@ class TuneSearchComponent {
             return JSON.parse(this.searchInput.dataset.theSessionTune);
         }
         return null;
+    }
+
+    /**
+     * Re-open the autocomplete dropdown with a specific tune excluded.
+     * Used by "Not This One!" to let users pick a different tune.
+     */
+    reopenWithExclusion(excludeTuneId) {
+        this.clearSelection();
+        // Filter out the excluded tune from current results
+        this.searchResults = this.searchResults.filter(t => t.tune_id !== excludeTuneId);
+        if (this.searchResults.length > 0) {
+            this.displayResults(this.searchResults, this.lastSearchQuery);
+        } else {
+            // No results left - re-search
+            const query = this.searchInput.value.trim();
+            if (query.length >= this.config.minSearchLength) {
+                this.searchTunes(query);
+            }
+        }
+        this.searchInput.focus();
     }
 
     reset() {

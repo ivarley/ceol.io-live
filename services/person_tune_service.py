@@ -34,18 +34,20 @@ class PersonTuneService:
         tune_id: int,
         learn_status: str = PersonTune.DEFAULT_LEARN_STATUS,
         notes: Optional[str] = None,
+        setting_id: Optional[int] = None,
         user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
         """
         Create a new PersonTune record.
-        
+
         Args:
             person_id: ID of the person
             tune_id: ID of the tune
             learn_status: Initial learning status (defaults to 'want to learn')
             notes: Optional notes
+            setting_id: Optional thesession.org setting ID
             user_id: ID of user who created the record
-            
+
         Returns:
             Tuple of (success, message, person_tune_instance)
         """
@@ -54,13 +56,14 @@ class PersonTuneService:
             existing = PersonTune.get_by_person_and_tune(person_id, tune_id)
             if existing:
                 return False, f"PersonTune already exists for person {person_id} and tune {tune_id}", None
-            
+
             # Create new PersonTune
             person_tune = PersonTune(
                 person_id=person_id,
                 tune_id=tune_id,
                 learn_status=learn_status,
-                notes=notes
+                notes=notes,
+                setting_id=setting_id
             )
             
             # Save to database

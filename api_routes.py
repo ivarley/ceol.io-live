@@ -861,6 +861,48 @@ def cache_tune_setting_ajax(tune_id):
         })
 
 
+@login_required
+def get_tune_incipit(tune_id):
+    """
+    GET /api/tunes/<tune_id>/incipit
+
+    Return the cached incipit image for a tune (from the first/default setting).
+
+    Returns:
+        JSON with incipit_image (base64) if available, or empty if not cached.
+    """
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT incipit_image
+                   FROM tune_setting
+                   WHERE tune_id = %s
+                   ORDER BY setting_id ASC
+                   LIMIT 1""",
+                (tune_id,)
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                return jsonify({
+                    "success": True,
+                    "incipit_image": bytea_to_base64(row[0])
+                }), 200
+            else:
+                return jsonify({
+                    "success": True,
+                    "incipit_image": None
+                }), 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error fetching incipit: {str(e)}"
+        }), 500
+
+
 def get_session_tune_detail(session_path, tune_id):
     """Get detailed information about a tune in the context of a session"""
     try:

@@ -289,6 +289,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/tunes/<int:tune_id>/incipit",
+    "get_tune_incipit",
+    get_tune_incipit,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>",
     "get_session_tune_detail",
     get_session_tune_detail,

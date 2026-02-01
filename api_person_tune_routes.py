@@ -560,6 +560,7 @@ def add_my_tune():
 
         learn_status = data.get('learn_status', 'want to learn')
         notes = data.get('notes')
+        setting_id = data.get('setting_id')
 
         person_id = get_user_person_id()
         user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
@@ -570,6 +571,7 @@ def add_my_tune():
             tune_id=tune_id,
             learn_status=learn_status,
             notes=notes,
+            setting_id=setting_id,
             user_id=user_id
         )
 

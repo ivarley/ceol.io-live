@@ -171,6 +171,37 @@
         }
     }
 
+    /* Incipit preview */
+    .incipit-preview {
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .incipit-image-container {
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 6px;
+        margin-bottom: 4px;
+    }
+
+    .incipit-image-container img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .not-this-one-link {
+        font-size: 13px;
+        color: var(--text-muted, #6c757d);
+        text-decoration: none;
+    }
+
+    .not-this-one-link:hover {
+        color: var(--primary);
+        text-decoration: underline;
+    }
+
     /* Dark mode adjustments */
     [data-theme="dark"] .error-message {
         background-color: #5a1f1f;
@@ -209,6 +240,11 @@
                 label="Search for Tune",
                 required=True
             ) }}
+
+            <div id="incipit-preview" class="incipit-preview" style="display: none;">
+                <div id="incipit-image-container" class="incipit-image-container"></div>
+                <a href="#" id="not-this-one" class="not-this-one-link">Not This One!</a>
+            </div>
 
             <div class="form-group">
                 <label for="learn-status">Initial Learning Status</label>
@@ -421,6 +457,16 @@ document.addEventListener('DOMContentLoaded', function() {
         onTuneSelected: (tune) => {
             // Enable submit button when tune is selected
             submitBtn.disabled = false;
+            // Auto-populate setting ID if extracted from a pasted URL
+            if (tune.settingId && settingIdInput) {
+                settingIdInput.value = tune.settingId.toString();
+            }
+            // Fetch and show incipit preview
+            showIncipitPreview(tune);
+        },
+        onSelectionCleared: () => {
+            hideIncipitPreview();
+            submitBtn.disabled = true;
         },
         onTuneAlreadyAdded: (tune) => {
             // Tune already in person_tune - navigate with already parameter
@@ -564,6 +610,53 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Incipit preview
+let currentPreviewTuneId = null;
+
+function showIncipitPreview(tune) {
+    const preview = document.getElementById('incipit-preview');
+    const container = document.getElementById('incipit-image-container');
+    currentPreviewTuneId = tune.tune_id;
+
+    // Show loading state
+    container.innerHTML = '<div style="padding: 10px; color: var(--text-muted, #6c757d); font-size: 13px;">Loading preview...</div>';
+    preview.style.display = 'block';
+
+    fetch(`/api/tunes/${tune.tune_id}/incipit`)
+        .then(r => r.json())
+        .then(data => {
+            // Only update if this is still the selected tune
+            if (currentPreviewTuneId !== tune.tune_id) return;
+            if (data.success && data.incipit_image) {
+                container.innerHTML = `<img src="data:image/png;base64,${data.incipit_image}" alt="Incipit for ${escapeHtml(tune.name)}">`;
+            } else {
+                // No incipit available - hide the preview
+                preview.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            if (currentPreviewTuneId === tune.tune_id) {
+                preview.style.display = 'none';
+            }
+        });
+}
+
+function hideIncipitPreview() {
+    document.getElementById('incipit-preview').style.display = 'none';
+    currentPreviewTuneId = null;
+}
+
+// Wire up "Not This One!" link
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('not-this-one').addEventListener('click', function(e) {
+        e.preventDefault();
+        const excludeId = currentPreviewTuneId;
+        hideIncipitPreview();
+        submitBtn.disabled = true;
+        tuneSearch.reopenWithExclusion(excludeId);
+    });
+});
 </script>
 <script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
