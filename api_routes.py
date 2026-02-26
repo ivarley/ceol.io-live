@@ -196,9 +196,9 @@ def render_abc_to_png(abc_notation, is_incipit=False):
         return None
 
 
-def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
+def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_setting_id=None):
     """
-    Fetch and cache the default (first) setting for a tune from thesession.org.
+    Fetch and cache a setting for a tune from thesession.org.
     Creates the tune_setting record and generates PNG images for both full ABC and incipit.
 
     This function should be called whenever a new tune is added to the tune table
@@ -211,6 +211,7 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
                    If None, will fetch from thesession.org API.
         user_id: ID of user who triggered the operation (for audit trail)
         sync: If True, process synchronously. If False, skip processing (placeholder for future async).
+        target_setting_id: If provided, cache this specific setting instead of the default (first) one.
 
     Returns:
         Tuple of (success: bool, message: str, setting_id: int or None)
@@ -241,8 +242,12 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
         if "settings" not in tune_data or not tune_data["settings"]:
             return False, "No settings found for this tune", None
 
-        # Use the first setting as the default
-        setting = tune_data["settings"][0]
+        # Use the targeted setting if specified, otherwise the first (default)
+        setting = None
+        if target_setting_id:
+            setting = next((s for s in tune_data["settings"] if s["id"] == target_setting_id), None)
+        if not setting:
+            setting = tune_data["settings"][0]
         setting_id = setting["id"]
         key = setting.get("key", "")
         abc = setting.get("abc", "")
