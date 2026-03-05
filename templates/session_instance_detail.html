@@ -1314,6 +1314,72 @@
             border-color: #5cb85c;
             color: #7dda8b;
         }
+
+        /* Recording UI */
+        .recording-section {
+            margin: 16px 0;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color, #dee2e6);
+            border-radius: 8px;
+            background: var(--card-bg, #fff);
+        }
+        .recording-section h3 {
+            font-size: 1em;
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .recording-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--disabled-text, #999);
+        }
+        .recording-dot-active {
+            background: #dc3545;
+            animation: recording-pulse 1.2s ease-in-out infinite;
+        }
+        .recording-dot-paused {
+            background: #ffc107;
+        }
+        @keyframes recording-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        #recording-controls {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        #recording-controls button {
+            padding: 4px 12px;
+            font-size: 0.85em;
+        }
+        .recording-status-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        #recording-elapsed {
+            font-family: monospace;
+            font-size: 1.1em;
+        }
+        #recording-upload-status {
+            font-size: 0.8em;
+            color: var(--disabled-text, #999);
+        }
+        .recording-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        #recordings-list {
+            margin-top: 10px;
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
@@ -1341,6 +1407,37 @@
             {% endif %}
         {% endwith %}
     </div>
+
+    {% if current_user.is_authenticated and current_user.is_system_admin %}
+    <!-- Recording Section (admin only) -->
+    <div class="recording-section" id="recording-section">
+        <h3>
+            <span id="recording-status-dot" class="recording-dot"></span>
+            Audio Recording
+        </h3>
+        <div class="recording-status-line">
+            <span id="recording-status-text"></span>
+            <span id="recording-elapsed"></span>
+        </div>
+        <div id="recording-upload-status"></div>
+
+        <div class="recording-actions">
+            <button id="recording-start-btn" class="btn btn-sm btn-outline-danger" title="Start recording">
+                Record
+            </button>
+            <button id="recording-upload-btn" class="btn btn-sm btn-outline-secondary" title="Upload audio file">
+                Upload Audio
+            </button>
+        </div>
+
+        <div id="recording-controls">
+            <button id="recording-pause-btn" class="btn btn-sm btn-outline-warning">Pause</button>
+            <button id="recording-stop-btn" class="btn btn-sm btn-danger">Stop</button>
+        </div>
+
+        <div id="recordings-list"></div>
+    </div>
+    {% endif %}
 
     <!-- Link Tune Modal -->
     <div id="link-tune-modal" class="modal-overlay">
@@ -1651,6 +1748,9 @@ window.showTuneDetail = function(tuneId, tuneName, tuneType) {
 <script src="/static/js/pages/session_instance_detail.js"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
+{% if current_user.is_authenticated and current_user.is_system_admin %}
+<script src="{{ url_for('static', filename='js/dist/sessionRecorder.js') }}"></script>
+{% endif %}
 <script>
 // Initialize edit mode button
 document.addEventListener('DOMContentLoaded', function() {
