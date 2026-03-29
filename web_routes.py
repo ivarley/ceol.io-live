@@ -2987,6 +2987,8 @@ def person_details(person_id=None):
                     "location": session_location,
                     "regular_schedule": None,  # Would need to be added to query if available
                     "role": role,
+                    "is_admin": is_admin,
+                    "is_regular": is_regular,
                     "session_path": session_path,
                 }
             )
@@ -3076,6 +3078,7 @@ def person_details(person_id=None):
             user=user,
             sessions=sessions,
             is_user_profile=is_user_profile,
+            is_system_admin=current_user.is_authenticated and current_user.is_system_admin,
             timezone_options=timezone_options,
         )
 

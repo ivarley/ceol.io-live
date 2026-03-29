@@ -413,11 +413,11 @@
                             </div>
                             <div class="sessions-card-list">
                                 {% for session in sessions %}
-                                <div class="session-card card mb-2" data-session-path="{{ session.session_path }}">
+                                <div class="session-card card mb-2" data-session-path="{{ session.session_path }}" data-is-regular="{{ session.is_regular|lower }}">
                                     <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
                                         <div class="session-info">
                                             <a href="/sessions/{{ session.session_path }}" class="session-title h6 mb-0 d-block text-decoration-none">{{ session.session_name }}</a>
-                                            <small class="text-muted">{{ session.location }}{% if session.role %} &middot; {{ session.role }}{% endif %}</small>
+                                            <small class="text-muted">{{ session.location }}{% if session.role %} &middot; <span class="session-role-badge" data-session-path="{{ session.session_path }}">{{ session.role }}</span>{% endif %}</small>
                                         </div>
                                         {% if is_user_profile %}
                                         <button type="button" class="btn btn-link text-danger p-0 leave-session-btn"
@@ -426,6 +426,14 @@
                                                 title="Leave this session">
                                             <span class="leave-x">&times;</span>
                                         </button>
+                                        {% elif is_system_admin %}
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input admin-toggle"
+                                                   id="admin-toggle-{{ loop.index }}"
+                                                   data-session-path="{{ session.session_path }}"
+                                                   {% if session.is_admin %}checked{% endif %}>
+                                            <label class="custom-control-label" for="admin-toggle-{{ loop.index }}">Admin</label>
+                                        </div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -1685,6 +1693,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(error => {
                     showMessage('Error leaving session: ' + error.message, 'error');
+                });
+        });
+    });
+
+    // Toggle session admin status
+    document.querySelectorAll('.admin-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const sessionPath = this.dataset.sessionPath;
+            const isAdmin = this.checked;
+            const toggleEl = this;
+
+            fetch(`/api/admin/sessions/${sessionPath}/people/{{ person.id }}/admin`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_admin: isAdmin })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update the role badge
+                        const badge = document.querySelector(`.session-role-badge[data-session-path="${sessionPath}"]`);
+                        if (badge) {
+                            const card = toggleEl.closest('.session-card');
+                            const isRegular = card ? card.dataset.isRegular === 'true' : false;
+                            badge.textContent = isAdmin ? 'Admin' : (isRegular ? 'Regular' : 'Attendee');
+                        }
+                    } else {
+                        toggleEl.checked = !isAdmin;
+                        showMessage('Error: ' + (data.error || data.message), 'error');
+                    }
+                })
+                .catch(error => {
+                    toggleEl.checked = !isAdmin;
+                    showMessage('Error updating admin status: ' + error.message, 'error');
                 });
         });
     });
