@@ -2185,11 +2185,11 @@ INSERT INTO session_instance (session_instance_id, session_id, date, start_time,
 (91, 2, '2026-01-29', '20:00', '23:00', NULL, NULL);
 
 -- Tune log for Mueller Tuesday Jan 27 (instance 90)
-INSERT INTO session_instance_tune (session_instance_id, tune_id, order_number, continues_set, started_by_person_id) VALUES
-(90, 27, 1, FALSE, 1), (90, 1, 2, TRUE, NULL), (90, 74, 3, TRUE, NULL),
-(90, 55, 4, FALSE, 2), (90, 71, 5, TRUE, NULL),
-(90, 116, 6, FALSE, 3), (90, 138, 7, TRUE, NULL), (90, 64, 8, TRUE, NULL),
-(90, 441, 9, FALSE, 1), (90, 238, 10, TRUE, NULL);
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, continues_set, started_by_person_id) VALUES
+(90, 27, 'V', FALSE, 1), (90, 1, 'W', TRUE, NULL), (90, 74, 'X', TRUE, NULL),
+(90, 55, 'Y', FALSE, 2), (90, 71, 'Z', TRUE, NULL),
+(90, 116, 'a', FALSE, 3), (90, 138, 'b', TRUE, NULL), (90, 64, 'c', TRUE, NULL),
+(90, 441, 'd', FALSE, 1), (90, 238, 'e', TRUE, NULL);
 
 -- Attendance for current week instances
 INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
