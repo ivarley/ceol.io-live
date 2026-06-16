@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# =============================================================================
+# start — bring up the ceol.io app and everything it needs, from any state.
+#
+#   ./start            run the dev server (sets up anything missing first)
+#   ./start --reset-db drop & reseed the local database, then run
+#
+# Idempotent: safe to run repeatedly. On a fresh machine it provisions the
+# Python venv and the local Postgres database; on subsequent runs it just
+# starts the server.
+# =============================================================================
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# --- Locate Homebrew + Postgres binaries (Apple Silicon or Intel) ----------
+BREW="$(command -v brew || echo /opt/homebrew/bin/brew)"
+if [ ! -x "$BREW" ]; then
+  echo "Homebrew not found. Install it from https://brew.sh first." >&2
+  exit 1
+fi
+eval "$("$BREW" shellenv)"
+PG_PREFIX="$("$BREW" --prefix postgresql@16 2>/dev/null || true)"
+[ -n "$PG_PREFIX" ] && export PATH="$PG_PREFIX/bin:$PATH"
+
+PORT=5001
+DB_NAME=ceol_test
+DB_USER=test_user
+DB_PASS=test_password
+
+# --- 1. PostgreSQL ---------------------------------------------------------
+if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+  echo "→ Starting PostgreSQL…"
+  "$BREW" services start postgresql@16 >/dev/null
+  for _ in $(seq 1 30); do
+    pg_isready -h localhost -p 5432 >/dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+pg_isready -h localhost -p 5432 >/dev/null 2>&1 || { echo "PostgreSQL did not come up." >&2; exit 1; }
+
+# --- 2. Python virtualenv --------------------------------------------------
+if [ ! -x venv/bin/flask ]; then
+  echo "→ Creating virtualenv and installing dependencies…"
+  "$(command -v python3.11 || echo "$BREW" --prefix)/bin/python3.11" -m venv venv 2>/dev/null \
+    || python3.11 -m venv venv
+  ./venv/bin/pip install -q --upgrade pip
+  ./venv/bin/pip install -q -r requirements.txt
+fi
+
+# --- 3. .env ---------------------------------------------------------------
+if [ ! -f .env ]; then
+  echo "→ Writing .env (local defaults)…"
+  cat > .env <<'ENV'
+PGHOST=localhost
+PGDATABASE=ceol_test
+PGUSER=test_user
+PGPASSWORD=test_password
+PGPORT=5432
+FLASK_SESSION_SECRET_KEY=dev-secret-key-change-in-production
+ABC_RENDERER_URL=https://abc-renderer.onrender.com
+ENV
+fi
+
+# --- 4. Database (create + seed if missing, or on --reset-db) --------------
+reset_db=false
+[ "${1:-}" = "--reset-db" ] && reset_db=true
+
+db_ready() { PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; }
+
+if $reset_db || ! db_ready; then
+  ME="$(whoami)"
+  if $reset_db; then
+    echo "→ Dropping database $DB_NAME…"
+    psql -U "$ME" -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null
+  fi
+  echo "→ Setting up database $DB_NAME…"
+  # Homebrew makes the current macOS user the superuser, so connect via -d postgres.
+  psql -U "$ME" -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 \
+    || psql -U "$ME" -d postgres -c "CREATE ROLE $DB_USER LOGIN PASSWORD '$DB_PASS';" >/dev/null
+  psql -U "$ME" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 \
+    || psql -U "$ME" -d postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" >/dev/null
+  psql -U "$ME" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" >/dev/null
+  echo "  loading schema…"
+  PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q -f schema/full_schema.sql
+  echo "  loading seed data…"
+  PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q -f schema/seed_data.sql
+fi
+
+# --- 5. Run the app --------------------------------------------------------
+echo ""
+echo "→ ceol.io running at http://127.0.0.1:$PORT"
+echo "  login: ian / password123 (admin)  ·  sarah_fiddle / password123"
+echo "  (Ctrl+C to stop)"
+echo ""
+exec ./venv/bin/flask --app app run --port "$PORT" --debug
