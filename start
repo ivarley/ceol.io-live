@@ -47,6 +47,17 @@ if [ ! -x venv/bin/flask ]; then
   ./venv/bin/pip install -q -r requirements.txt
 fi
 
+# --- 2b. Frontend bundles (TypeScript → static/js/dist via webpack) --------
+if [ ! -d static/js/dist ]; then
+  echo "→ Building frontend bundles…"
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm not found. Install Node first:  brew install node" >&2
+    exit 1
+  fi
+  [ -d node_modules ] || npm install --silent
+  npm run build
+fi
+
 # --- 3. .env ---------------------------------------------------------------
 if [ ! -f .env ]; then
   echo "→ Writing .env (local defaults)…"
