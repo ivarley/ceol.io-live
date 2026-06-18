@@ -22,6 +22,7 @@ import qrcode
 from io import BytesIO
 from recurrence_utils import validate_recurrence_json, to_human_readable
 from fractional_indexing import generate_append_position, generate_position_between
+from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
 def api_login_required(f):
@@ -196,9 +197,9 @@ def render_abc_to_png(abc_notation, is_incipit=False):
         return None
 
 
-def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
+def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True, target_setting_id=None):
     """
-    Fetch and cache the default (first) setting for a tune from thesession.org.
+    Fetch and cache a setting for a tune from thesession.org.
     Creates the tune_setting record and generates PNG images for both full ABC and incipit.
 
     This function should be called whenever a new tune is added to the tune table
@@ -211,6 +212,7 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
                    If None, will fetch from thesession.org API.
         user_id: ID of user who triggered the operation (for audit trail)
         sync: If True, process synchronously. If False, skip processing (placeholder for future async).
+        target_setting_id: If provided, cache this specific setting instead of the default (first) one.
 
     Returns:
         Tuple of (success: bool, message: str, setting_id: int or None)
@@ -241,8 +243,12 @@ def cache_default_tune_setting(tune_id, tune_data, user_id, sync=True):
         if "settings" not in tune_data or not tune_data["settings"]:
             return False, "No settings found for this tune", None
 
-        # Use the first setting as the default
-        setting = tune_data["settings"][0]
+        # Use the targeted setting if specified, otherwise the first (default)
+        setting = None
+        if target_setting_id:
+            setting = next((s for s in tune_data["settings"] if s["id"] == target_setting_id), None)
+        if not setting:
+            setting = tune_data["settings"][0]
         setting_id = setting["id"]
         key = setting.get("key", "")
         abc = setting.get("abc", "")
@@ -859,6 +865,101 @@ def cache_tune_setting_ajax(tune_id):
             "success": False,
             "message": f"Error caching tune setting: {str(e)}"
         })
+
+
+@login_required
+def get_tune_incipit(tune_id):
+    """
+    GET /api/tunes/<tune_id>/incipit
+
+    Return the incipit for a tune. Checks local cache first, then falls back
+    to fetching from thesession.org if not cached.
+
+    Query Parameters:
+        - setting_id (int, optional): Specific setting to fetch incipit for
+
+    Returns:
+        JSON with incipit_image (base64 PNG) and/or incipit_abc (text).
+    """
+    try:
+        setting_id = request.args.get('setting_id', type=int)
+
+        # First, check local cache
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            if setting_id:
+                cur.execute(
+                    "SELECT incipit_image, incipit_abc FROM tune_setting WHERE setting_id = %s",
+                    (setting_id,)
+                )
+            else:
+                cur.execute(
+                    """SELECT incipit_image, incipit_abc
+                       FROM tune_setting
+                       WHERE tune_id = %s
+                       ORDER BY setting_id ASC
+                       LIMIT 1""",
+                    (tune_id,)
+                )
+            row = cur.fetchone()
+            if row and (row[0] or row[1]):
+                result = {"success": True, "incipit_image": None, "incipit_abc": None}
+                if row[0]:
+                    result["incipit_image"] = bytea_to_base64(row[0])
+                if row[1]:
+                    result["incipit_abc"] = row[1]
+                return jsonify(result), 200
+        finally:
+            conn.close()
+
+        # Not cached locally - fetch from thesession.org
+        from database import extract_abc_incipit
+        api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+        resp = requests.get(api_url, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        data = resp.json()
+        settings = data.get("settings", [])
+        if not settings:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        # Find the requested setting, or use the first one
+        setting = None
+        if setting_id:
+            setting = next((s for s in settings if s.get("id") == setting_id), None)
+        if not setting:
+            setting = settings[0]
+
+        abc = setting.get("abc", "")
+        key = setting.get("key", "")
+        tune_type = data.get("type", "").title()
+
+        # Replace "!" with newline (thesession.org line break marker)
+        abc = abc.replace("!", "\n")
+
+        incipit_abc = extract_abc_incipit(abc, tune_type)
+        if not incipit_abc:
+            return jsonify({"success": True, "incipit_image": None, "incipit_abc": None}), 200
+
+        result = {"success": True, "incipit_image": None, "incipit_abc": incipit_abc}
+
+        # Try to render to PNG
+        incipit_with_headers = incipit_abc
+        if not incipit_abc.startswith('X:'):
+            incipit_with_headers = f"X:1\nM:4/4\nL:1/8\nK:{key if key else 'D'}\n{incipit_abc}"
+        incipit_image = render_abc_to_png(incipit_with_headers, is_incipit=True)
+        if incipit_image:
+            result["incipit_image"] = base64.b64encode(incipit_image).decode('utf-8')
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Error fetching incipit: {str(e)}"
+        }), 500
 
 
 def get_session_tune_detail(session_path, tune_id):
@@ -11598,3 +11699,450 @@ def copy_tunes_to_destination():
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         conn.close()
+
+
+# =============================================================================
+# Recording endpoints (admin only)
+# =============================================================================
+
+def _require_system_admin():
+    """Check if current user is a system admin. Returns error response or None."""
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Admin access required"}), 403
+    return None
+
+
+def start_recording(session_instance_id):
+    """POST /api/session_instance/<id>/recordings — Start a new recording."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No JSON data provided"}), 400
+
+        cur = conn.cursor()
+
+        # Verify session instance exists
+        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
+                     (session_instance_id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        person_id = current_user.person_id
+        user_id = get_current_user_id()
+
+        cur.execute(
+            """
+            INSERT INTO recording (session_instance_id, person_id, source, status, device_info,
+                format, sample_rate, channels, bitrate, client_started_at,
+                created_by_user_id, last_modified_user_id)
+            VALUES (%s, %s, 'live', 'started', %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING recording_id
+            """,
+            (
+                session_instance_id,
+                person_id,
+                json.dumps(data.get("device_info")) if data.get("device_info") else None,
+                data.get("format"),
+                data.get("sample_rate"),
+                data.get("channels"),
+                data.get("bitrate"),
+                data.get("client_started_at"),
+                user_id,
+                user_id,
+            ),
+        )
+        recording_id = cur.fetchone()[0]
+
+        # Set the s3_prefix
+        s3_prefix = f"recordings/{recording_id}/"
+        cur.execute("UPDATE recording SET s3_prefix = %s WHERE recording_id = %s",
+                     (s3_prefix, recording_id))
+
+        # Log start event
+        cur.execute(
+            """
+            INSERT INTO recording_event (recording_id, event_type, client_timestamp)
+            VALUES (%s, 'start', %s)
+            """,
+            (recording_id, data.get("client_started_at")),
+        )
+
+        # Save to history
+        save_to_history(cur, "recording", "INSERT", recording_id, user_id=user_id)
+
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "recording_id": recording_id,
+            "s3_prefix": s3_prefix,
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+def upload_chunk(recording_id):
+    """POST /api/recordings/<id>/chunks — Upload an audio chunk."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    try:
+        audio_file = request.files.get("audio")
+        if not audio_file:
+            return jsonify({"success": False, "error": "No audio file provided"}), 400
+
+        sequence_number = request.form.get("sequence_number", type=int)
+        start_timestamp_ms = request.form.get("start_timestamp_ms", type=int)
+        end_timestamp_ms = request.form.get("end_timestamp_ms", type=int)
+        client_checksum = request.form.get("checksum")
+
+        if sequence_number is None or start_timestamp_ms is None or end_timestamp_ms is None:
+            return jsonify({"success": False, "error": "sequence_number, start_timestamp_ms, and end_timestamp_ms are required"}), 400
+
+        cur = conn.cursor()
+
+        # Verify recording exists
+        cur.execute("SELECT person_id, status FROM recording WHERE recording_id = %s", (recording_id,))
+        rec = cur.fetchone()
+        if not rec:
+            return jsonify({"success": False, "error": "Recording not found"}), 404
+
+        audio_data = audio_file.read()
+        file_size = len(audio_data)
+        checksum = compute_checksum(audio_data)
+
+        # Verify checksum if provided
+        if client_checksum and client_checksum != checksum:
+            return jsonify({"success": False, "error": "Checksum mismatch"}), 400
+
+        # Upload to S3
+        s3_key = upload_chunk_to_s3(recording_id, sequence_number, audio_data)
+
+        user_id = get_current_user_id()
+
+        # Insert chunk record (upsert in case of retry)
+        cur.execute(
+            """
+            INSERT INTO recording_chunk (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
+                s3_key, file_size_bytes, upload_status, checksum)
+            VALUES (%s, %s, %s, %s, %s, %s, 'uploaded', %s)
+            ON CONFLICT (recording_id, sequence_number)
+            DO UPDATE SET s3_key = EXCLUDED.s3_key, file_size_bytes = EXCLUDED.file_size_bytes,
+                upload_status = 'uploaded', checksum = EXCLUDED.checksum
+            RETURNING recording_chunk_id
+            """,
+            (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
+             s3_key, file_size, checksum),
+        )
+        chunk_id = cur.fetchone()[0]
+
+        # Update recording aggregates
+        cur.execute(
+            """
+            UPDATE recording SET
+                status = CASE WHEN status = 'started' THEN 'recording' ELSE status END,
+                total_chunks = (SELECT COUNT(*) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'),
+                total_duration_ms = COALESCE((SELECT MAX(end_timestamp_ms) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'), 0),
+                total_size_bytes = COALESCE((SELECT SUM(file_size_bytes) FROM recording_chunk WHERE recording_id = %s AND upload_status = 'uploaded'), 0),
+                last_modified_user_id = %s
+            WHERE recording_id = %s
+            """,
+            (recording_id, recording_id, recording_id, user_id, recording_id),
+        )
+
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "recording_chunk_id": chunk_id,
+            "s3_key": s3_key,
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+def update_recording_status(recording_id):
+    """PUT /api/recordings/<id>/status — Pause/resume/stop a recording."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No JSON data provided"}), 400
+
+        new_status = data.get("status")
+        if new_status not in ("recording", "paused", "stopped", "failed"):
+            return jsonify({"success": False, "error": "Invalid status. Must be: recording, paused, stopped, failed"}), 400
+
+        cur = conn.cursor()
+        user_id = get_current_user_id()
+
+        # Verify recording exists
+        cur.execute("SELECT status FROM recording WHERE recording_id = %s", (recording_id,))
+        rec = cur.fetchone()
+        if not rec:
+            return jsonify({"success": False, "error": "Recording not found"}), 404
+
+        old_status = rec[0]
+
+        # Save to history before update
+        save_to_history(cur, "recording", "UPDATE", recording_id, user_id=user_id)
+
+        cur.execute(
+            "UPDATE recording SET status = %s, last_modified_user_id = %s WHERE recording_id = %s",
+            (new_status, user_id, recording_id),
+        )
+
+        # Map status changes to event types
+        event_type_map = {
+            "paused": "pause",
+            "recording": "resume",
+            "stopped": "stop",
+            "failed": "error",
+        }
+        event_type = event_type_map.get(new_status, new_status)
+
+        cur.execute(
+            """
+            INSERT INTO recording_event (recording_id, event_type, event_data, client_timestamp)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                recording_id,
+                event_type,
+                json.dumps(data.get("event_data")) if data.get("event_data") else None,
+                data.get("client_timestamp"),
+            ),
+        )
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "recording_id": recording_id,
+            "old_status": old_status,
+            "new_status": new_status,
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+def list_recordings(session_instance_id):
+    """GET /api/session_instance/<id>/recordings — List recordings for a session instance."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Verify session instance exists
+        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
+                     (session_instance_id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        cur.execute(
+            """
+            SELECT r.recording_id, r.person_id, p.first_name, p.last_name, r.source, r.status,
+                   r.total_chunks, r.total_duration_ms, r.total_size_bytes, r.client_started_at,
+                   r.created_date, r.format
+            FROM recording r
+            JOIN person p ON p.person_id = r.person_id
+            WHERE r.session_instance_id = %s
+            ORDER BY r.created_date
+            """,
+            (session_instance_id,),
+        )
+
+        recordings = []
+        for row in cur.fetchall():
+            recordings.append({
+                "recording_id": row[0],
+                "person_id": row[1],
+                "person_name": f"{row[2] or ''} {row[3] or ''}".strip(),
+                "source": row[4],
+                "status": row[5],
+                "total_chunks": row[6],
+                "total_duration_ms": row[7],
+                "total_size_bytes": row[8],
+                "client_started_at": row[9].isoformat() if row[9] else None,
+                "created_date": row[10].isoformat() if row[10] else None,
+                "format": row[11],
+            })
+
+        return jsonify({"success": True, "recordings": recordings})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+def get_recording_playback(recording_id):
+    """GET /api/recordings/<id>/playback — Get presigned URLs for playback."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+
+        # Verify recording exists
+        cur.execute("SELECT recording_id, total_duration_ms FROM recording WHERE recording_id = %s",
+                     (recording_id,))
+        rec = cur.fetchone()
+        if not rec:
+            return jsonify({"success": False, "error": "Recording not found"}), 404
+
+        chunks = get_recording_timeline(cur, recording_id)
+
+        return jsonify({
+            "success": True,
+            "recording_id": recording_id,
+            "total_duration_ms": rec[1],
+            "chunks": chunks,
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+def upload_recording_file(session_instance_id):
+    """POST /api/session_instance/<id>/recordings/upload — Upload a complete audio file."""
+    admin_check = _require_system_admin()
+    if admin_check:
+        return admin_check
+
+    conn = get_db_connection()
+    tmp_path = None
+    try:
+        audio_file = request.files.get("audio")
+        if not audio_file:
+            return jsonify({"success": False, "error": "No audio file provided"}), 400
+
+        client_started_at = request.form.get("client_started_at")
+
+        cur = conn.cursor()
+
+        # Verify session instance exists
+        cur.execute("SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s",
+                     (session_instance_id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        person_id = current_user.person_id
+        user_id = get_current_user_id()
+
+        # Save uploaded file to temp location
+        ext = os.path.splitext(audio_file.filename)[1] if audio_file.filename else ".mp3"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp_path = tmp.name
+            audio_file.save(tmp)
+
+        # Create recording row
+        cur.execute(
+            """
+            INSERT INTO recording (session_instance_id, person_id, source, status,
+                format, channels, sample_rate, bitrate, client_started_at,
+                created_by_user_id, last_modified_user_id)
+            VALUES (%s, %s, 'upload', 'started', %s, 1, 48000, 64000, %s, %s, %s)
+            RETURNING recording_id
+            """,
+            (session_instance_id, person_id, "audio/webm;codecs=opus",
+             client_started_at, user_id, user_id),
+        )
+        recording_id = cur.fetchone()[0]
+
+        s3_prefix = f"recordings/{recording_id}/"
+        cur.execute("UPDATE recording SET s3_prefix = %s WHERE recording_id = %s",
+                     (s3_prefix, recording_id))
+
+        # Chunk the file
+        chunks = chunk_audio_file(tmp_path)
+
+        total_size = 0
+        total_duration = 0
+
+        for chunk in chunks:
+            s3_key = upload_chunk_to_s3(recording_id, chunk["sequence_number"], chunk["data"])
+            checksum = compute_checksum(chunk["data"])
+            file_size = len(chunk["data"])
+            total_size += file_size
+            total_duration = max(total_duration, chunk["end_ms"])
+
+            cur.execute(
+                """
+                INSERT INTO recording_chunk (recording_id, sequence_number, start_timestamp_ms, end_timestamp_ms,
+                    s3_key, file_size_bytes, upload_status, checksum)
+                VALUES (%s, %s, %s, %s, %s, %s, 'uploaded', %s)
+                """,
+                (recording_id, chunk["sequence_number"], chunk["start_ms"], chunk["end_ms"],
+                 s3_key, file_size, checksum),
+            )
+
+        # Update recording with final stats
+        cur.execute(
+            """
+            UPDATE recording SET status = 'stopped', total_chunks = %s,
+                total_duration_ms = %s, total_size_bytes = %s, last_modified_user_id = %s
+            WHERE recording_id = %s
+            """,
+            (len(chunks), total_duration, total_size, user_id, recording_id),
+        )
+
+        # Log events
+        cur.execute(
+            "INSERT INTO recording_event (recording_id, event_type) VALUES (%s, 'start')",
+            (recording_id,),
+        )
+        cur.execute(
+            "INSERT INTO recording_event (recording_id, event_type) VALUES (%s, 'stop')",
+            (recording_id,),
+        )
+
+        save_to_history(cur, "recording", "INSERT", recording_id, user_id=user_id)
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "recording_id": recording_id,
+            "total_chunks": len(chunks),
+            "total_duration_ms": total_duration,
+            "total_size_bytes": total_size,
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)

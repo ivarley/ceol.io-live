@@ -9,3 +9,5 @@ Flask-Login
 email-validator
 backports.zoneinfo; python_version < "3.9"
 qrcode[pil]
+boto3
+pydub

@@ -560,6 +560,7 @@ def add_my_tune():
 
         learn_status = data.get('learn_status', 'want to learn')
         notes = data.get('notes')
+        setting_id = data.get('setting_id')
 
         person_id = get_user_person_id()
         user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
@@ -570,6 +571,7 @@ def add_my_tune():
             tune_id=tune_id,
             learn_status=learn_status,
             notes=notes,
+            setting_id=setting_id,
             user_id=user_id
         )
 
@@ -584,6 +586,22 @@ def add_my_tune():
                     "success": False,
                     "error": message
                 }), 400
+
+        # If a specific setting_id was provided, ensure it's cached
+        if setting_id:
+            from api_routes import cache_default_tune_setting
+            conn_check = get_db_connection()
+            try:
+                cur_check = conn_check.cursor()
+                cur_check.execute(
+                    "SELECT setting_id FROM tune_setting WHERE setting_id = %s",
+                    (setting_id,)
+                )
+                if not cur_check.fetchone():
+                    # Setting not cached yet - cache it now
+                    cache_default_tune_setting(tune_id, None, user_id, sync=True, target_setting_id=setting_id)
+            finally:
+                conn_check.close()
 
         # Build response with tune details
         response_data = _build_person_tune_response(person_tune, include_tune_details=True)

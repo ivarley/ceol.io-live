@@ -289,6 +289,12 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/tunes/<int:tune_id>/incipit",
+    "get_tune_incipit",
+    get_tune_incipit,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>",
     "get_session_tune_detail",
     get_session_tune_detail,
@@ -916,6 +922,44 @@ app.add_url_rule(
     "/api/tunes/copy",
     "copy_tunes_to_destination",
     copy_tunes_to_destination,
+    methods=["POST"],
+)
+
+# Recording routes
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/recordings",
+    "start_recording",
+    start_recording,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/recordings",
+    "list_recordings",
+    list_recordings,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/chunks",
+    "upload_chunk",
+    upload_chunk,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/status",
+    "update_recording_status",
+    update_recording_status,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/playback",
+    "get_recording_playback",
+    get_recording_playback,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/session_instance/<int:session_instance_id>/recordings/upload",
+    "upload_recording_file",
+    upload_recording_file,
     methods=["POST"],
 )
 
