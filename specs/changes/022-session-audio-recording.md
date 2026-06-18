@@ -1,4 +1,4 @@
-# 021 Session Audio Recording
+# 022 Session Audio Recording
 
 Record audio at live Irish music sessions and store it in the cloud. This is Stage 1 of a longer-term goal of automated tune detection from recorded audio. This stage proves that audio can be reliably captured from multiple devices at a session and stored, with a data model that supports future analysis.
 

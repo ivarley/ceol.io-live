@@ -49,7 +49,7 @@ Internal services, microservices, background jobs
 - **Attendance (Feature 001)**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/attendance.md)
 - **Tune Management**: [Data](specs/current/data/tune-model.md) | [Logic](specs/current/logic/tune-logic.md)
 - **User System**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/auth.md)
-- **Audio Recording (Feature 021)**: [Spec](specs/changes/021-session-audio-recording.md)
+- **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
 
 ## Development
 
