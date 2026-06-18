@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Ceol · Session Logging</title>
+
+  <!-- PWA: installable to the home screen (standalone) for real keyboard behavior -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0e0e10" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Ceol Log" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+
+  <link rel="stylesheet" href="styles.css?v=11" />
+</head>
+<body>
+  <!-- Desktop shows a phone-ish frame; on a real phone it fills the screen -->
+  <div class="phone" id="phone">
+
+    <div class="appbar">
+      <a class="brand" href="#" aria-label="ceol.io home"><img src="logo3-1.png" alt="ceol" /></a>
+      <div class="appbar-actions">
+
+        <!-- PROTOTYPE-ONLY: simulate multi-user / audio events -->
+        <div class="hamburger" id="sim-menu">
+          <button class="sim-btn" id="sim-btn" type="button" aria-label="Simulate events">🧪</button>
+          <div class="hamburger-dropdown" id="sim-dropdown">
+            <div class="sim-label">Simulate (prototype)</div>
+            <a class="hamburger-item" data-sim="logTune">🎻 Sarah logs a tune</a>
+            <a class="hamburger-item" data-sim="newSet">🎶 Sarah starts a new set</a>
+            <a class="hamburger-item" data-sim="endSetRemote">🛑 Sarah ends the set</a>
+            <a class="hamburger-item" data-sim="audio">🎤 Sarah's mic logs a tune</a>
+            <a class="hamburger-item" data-sim="merge">🔀 You + Sarah log the same tune</a>
+            <a class="hamburger-item" data-sim="typing">✍️ Sarah is typing…</a>
+            <a class="hamburger-item" data-sim="typingMeabh">✍️ Méabh is typing…</a>
+            <a class="hamburger-item" data-sim="typingBoth">✍️ Sarah &amp; Méabh typing…</a>
+            <a class="hamburger-item" data-sim="join">➕ A player joins</a>
+            <a class="hamburger-item" data-sim="leave">➖ A player leaves</a>
+            <a class="hamburger-item" data-sim="offline">📴 Toggle offline (you)</a>
+            <a class="hamburger-item" data-sim="clear">🗑 Clear session (empty state)</a>
+          </div>
+        </div>
+
+        <div class="hamburger">
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="hamburger-dropdown" id="hamburger-dropdown">
+          <a class="hamburger-item">Ian V.</a>
+          <a class="hamburger-item">My Tunes</a>
+          <a class="hamburger-item">My Sessions</a>
+          <a class="hamburger-item">Add A Session</a>
+          <a class="hamburger-item">🌙 Dark Mode</a>
+          <a class="hamburger-item">Share</a>
+          <a class="hamburger-item">Help</a>
+          <a class="hamburger-item">Log Out</a>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <div class="topbar-row" id="header-toggle">
+        <div class="topbar-main">
+          <div class="session-name" id="session-name">O'Flaherty's Session</div>
+          <div class="session-date" id="session-date">Sun · Jun 14, 2026</div>
+          <div class="session-summary hidden" id="session-summary"></div>
+        </div>
+        <div class="topbar-presence" id="presence" title="Who's logging"></div>
+        <span class="header-chevron" id="header-chevron">▾</span>
+      </div>
+      <div class="header-expand hidden" id="header-expand">
+        <div class="header-stat" id="header-tunes"></div>
+        <div class="header-stat header-notes hidden" id="header-notes"></div>
+        <div class="header-stat" id="header-attend"></div>
+        <div class="header-loggers" id="header-loggers"></div>
+      </div>
+    </header>
+
+    <button class="offline-banner hidden" id="offline-banner" type="button"></button>
+
+    <main class="list" id="list" aria-label="Sets played">
+      <!-- sets render here -->
+      <div class="bottom-sentinel" id="bottom-sentinel"></div>
+    </main>
+
+    <div class="dock" id="dock">
+      <button class="goend-pill hidden" id="goend-pill" type="button"></button>
+
+      <!-- audio recorder controls (above the bar) -->
+      <div class="mic-panel hidden" id="mic-panel">
+        <div class="mic-left">
+          <span class="mic-rec" id="mic-rec"></span>
+          <div>
+            <div class="mic-time" id="mic-time">0:00</div>
+            <div class="mic-count" id="mic-count">0 tunes logged</div>
+          </div>
+        </div>
+        <div class="mic-actions">
+          <button id="mic-pause" type="button">Pause</button>
+          <button id="mic-stop" type="button">Stop</button>
+        </div>
+      </div>
+
+      <!-- the results sheet grows upward out of the bar while typing -->
+      <section class="entry-sheet hidden" id="entry-sheet" aria-label="Tune search">
+        <div class="entry-hint" id="entry-hint"></div>
+        <div class="results" id="results"></div>
+      </section>
+
+      <footer class="bar">
+        <input class="field" id="field" type="text" inputmode="text"
+               name="tune-entry" enterkeyhint="done"
+               autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+               data-lpignore="true" data-1p-ignore data-form-type="other"
+               placeholder="Type next tune…" />
+        <button class="iconbtn" id="mic" type="button" aria-label="Listen and identify">🎤</button>
+        <button class="endbtn" id="endset" type="button">End set</button>
+        <button class="endbtn donebtn hidden" id="view-toggle" type="button">Done</button>
+      </footer>
+
+      <footer class="viewbar hidden" id="viewbar">
+        <button class="editbtn" id="edit-toggle" type="button">✎ Edit log</button>
+      </footer>
+    </div>
+
+    <!-- toast for undo etc -->
+    <div class="toast hidden" id="toast">
+      <span id="toast-msg"></span>
+      <button id="toast-action" type="button">Undo</button>
+    </div>
+
+    <!-- "search deeper" modal stub -->
+    <div class="modal hidden" id="deep-modal">
+      <div class="modal-card">
+        <div class="modal-fixed">
+          <div class="modal-head">
+            <span>Find a tune</span>
+            <button id="deep-close" type="button" aria-label="Close">✕</button>
+          </div>
+          <input class="field modal-field" id="deep-field" type="text"
+                 autocomplete="off" autocorrect="off" spellcheck="false"
+                 placeholder="Name, ABC notation, or paste a thesession.org link…" />
+          <div class="modal-tabs">
+            <button class="tab active">By name</button>
+            <button class="tab">By ABC</button>
+            <button class="tab tab-icon" id="deep-filter-tab" title="Filters" type="button">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line>
+                <line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line>
+                <line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line>
+                <line x1="17" y1="16" x2="23" y2="16"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="deep-filters hidden" id="deep-filters"></div>
+          <button class="deep-asis hidden" id="deep-asis" type="button"></button>
+        </div>
+        <div class="deep-scroll">
+          <div id="deep-results"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- attendance editor: full-screen slide-down panel -->
+    <div class="attend-panel hidden" id="attend-panel">
+      <div class="attend-fixed">
+        <div class="attend-head">
+          <span>In Attendance</span>
+          <button id="attend-close" type="button" aria-label="Done">Done</button>
+        </div>
+        <input class="field" id="attend-add" type="text"
+               autocomplete="off" autocorrect="off" spellcheck="false"
+               placeholder="Add a person — type a name…" />
+        <div class="attend-results" id="attend-results"></div>
+      </div>
+      <div class="attend-scroll">
+        <div class="attend-listlabel" id="attend-listlabel">Currently here</div>
+        <div id="attend-list"></div>
+      </div>
+    </div>
+
+    <!-- add a brand-new person (not on the roster) -->
+    <div class="modal hidden" id="newperson-modal">
+      <div class="modal-card">
+        <div class="modal-fixed">
+          <div class="modal-head"><span>Add a new person</span><button id="np-cancel" type="button">Cancel</button></div>
+        </div>
+        <div class="deep-scroll np-scroll">
+          <label class="np-label">First name</label>
+          <input id="np-first" class="field" autocomplete="off" autocapitalize="words" />
+          <label class="np-label">Last name</label>
+          <input id="np-last" class="field" autocomplete="off" autocapitalize="words" />
+          <label class="np-label">Email <span class="np-opt">(optional)</span></label>
+          <input id="np-email" class="field" type="email" autocomplete="off" />
+          <label class="np-label">Instruments</label>
+          <div class="np-instruments" id="np-instruments"></div>
+          <input id="np-other" class="field" placeholder="Other instrument…" autocomplete="off" />
+          <button id="np-add" class="np-add" type="button">Add Person</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- session notes stub -->
+    <div class="modal hidden" id="notes-modal">
+      <div class="modal-card">
+        <div class="modal-fixed">
+          <div class="modal-head"><span>Session notes</span><button id="notes-close" type="button">Done</button></div>
+        </div>
+        <div class="deep-scroll">
+          <textarea id="notes-area" class="notes-area" placeholder="Notes about this session — guests, tune requests, anything worth remembering…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- tune details: slide-out drawer from the right -->
+    <div class="drawer-wrap hidden" id="tune-drawer">
+      <div class="drawer-scrim" id="drawer-scrim"></div>
+      <aside class="drawer" id="drawer-panel" aria-label="Tune details">
+        <div class="drawer-head">
+          <div class="drawer-titles">
+            <div class="drawer-title" id="d-name"></div>
+            <div class="drawer-sub" id="d-type"></div>
+          </div>
+          <button id="drawer-close" type="button" aria-label="Done">Done</button>
+        </div>
+        <div class="drawer-body" id="drawer-body"></div>
+      </aside>
+    </div>
+
+  </div>
+
+  <script src="app.js?v=11"></script>
+</body>
+</html>
