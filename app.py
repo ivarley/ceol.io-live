@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session
+from flask import Flask, render_template, request, session, send_from_directory, redirect
 from flask_login import LoginManager
 from werkzeug.routing import BaseConverter
 import os
@@ -57,6 +57,22 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(weeks=SESSION_LIFETIME_WEEK
 
 # Configure Flask to handle trailing slashes consistently
 app.url_map.strict_slashes = False
+
+# Serve static design mockups from the repo-root /mockups directory as
+# self-contained mini-sites, e.g. /mockups/logging/ -> mockups/logging/index.html
+MOCKUPS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mockups")
+
+def mockup_index(mockup):
+    # ensure a trailing slash so the page's relative asset paths resolve correctly
+    if not request.path.endswith("/"):
+        return redirect(request.path + "/")
+    return send_from_directory(MOCKUPS_DIR, os.path.join(mockup, "index.html"))
+
+def mockup_file(mockup, filename):
+    return send_from_directory(MOCKUPS_DIR, os.path.join(mockup, filename))
+
+app.add_url_rule("/mockups/<mockup>/", "mockup_index", mockup_index)
+app.add_url_rule("/mockups/<mockup>/<path:filename>", "mockup_file", mockup_file)
 
 # Configure Flask-Login
 login_manager = LoginManager()
