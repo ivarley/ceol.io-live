@@ -251,6 +251,7 @@ app.post('/api/render', async (req, res) => {
 
     // Convert SVG to PNG using Sharp
     const pngBuffer = await sharp(Buffer.from(svgString))
+      .flatten({ background: '#ffffff' })
       .png()
       .toBuffer();
 
