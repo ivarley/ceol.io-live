@@ -87,3 +87,24 @@ We're going to mock this up as pure HTML/Javascript/CSS with dummy data at first
 
 ## K. Out of scope for the prototype (real-implementation)
 - Real APIs / persistence / auth; genuine CRDT/fractional-index backend; real audio recognition; partial-overlap set-merge alignment; deep-search "By ABC" and filter panels; the conflict-notice UX; light mode; accessibility pass.
+
+## L. Rejected alternatives (and why)
+These were considered during the prototype and deliberately *not* taken — recorded so they aren't re-litigated:
+- **Drag-and-drop reordering of tunes** — rejected as too heavy/fiddly for mobile live use. Consequence: the "Case-4" wrong-interleaving (two people log different next-tunes in a different order) has *no* fix mechanism yet; if it matters, a lightweight "move up/down" in the tune action row is the intended fallback, not drag.
+- **Inline-chain tune display** ("Cooley's › Banshee › …" wrapping) — rejected vs. one-tune-per-row. Denser, but tiny/ambiguous tap targets and no clean place for the insert line; larger type erases the density win anyway.
+- **Every tune entry opening a full-screen find modal** — rejected vs. progressive (inline results, escalate to modal only for real disambiguation). Live, most tunes are trivially recognized; a takeover each time is too heavy.
+- **Folding the set-boundary into the next tune's commit** ("add as new set") — rejected vs. a dumb "End set" divider button; coupling two decisions into one control is confusing mid-entry.
+- **A persistent "● live" status dot** (left of the field) — rejected; the red dot collides with the mic/recording metaphor. Replaced by the contextual "↓ Go to end" pill.
+- **Preemptive keyboard glide / CSS transition** to smooth the iOS keyboard motion — tried and rejected; it made the header *travel further* (chasing iOS's instant offset jump). Snap is stillest. See §41.
+- **Partial-overlap set-merge on reconnect** — intentionally not built; naive append + manual cleanup is an acceptable real-world default, and the alignment logic is real-implementation, not a prototype feel-question.
+
+## M. Open questions for the real build (the technical agenda)
+The prototype fakes all collaboration/persistence. These are undecided and are the real engineering decisions to make before/while building:
+1. **Real-time transport** — the single biggest open question. WebSockets vs SSE vs polling for live presence + tune updates? And: roll-your-own server-side reconciliation, or adopt a CRDT library (Yjs/Automerge)? Everything in §H/§I assumes a sync layer that doesn't exist.
+2. **Position model in earnest** — §B says positions are relational keys (the existing `order_position` fractional index). Concurrent-insert tie-break, reservation holds, and offline set-merge need a concrete CRDT/fractional-index scheme + server rules, not just the field.
+3. **Data-model delta** — `session_instance_tune` today has `continues_set` / `order_position` / `started_by_person_id`. The prototype additionally needs: per-tune **logged-by**, **confidence** (revisable), **source** (human vs audio), client **timestamp(s)** (a–e model, §32), **corroborators**, and offline **pending/queued/pending-delete** states. Reservations/presence are *ephemeral* (a realtime channel), not DB rows.
+4. **Permissions for live multi-logging** — who may log into a live session? The prototype assumes everyone present. The app already has **session admins** — define the live-logging permission and whether merge/corroboration respects roles.
+5. **Audio pipeline integration** — Feature **022 (session audio recording)** already exists on prod. The prototype's mic auto-logging + confidence assumes a recognition pipeline: on-device vs server recognition, where the confidence number comes from, and how the recorder ties to 022's capture/storage.
+6. **Offline storage** — local persistence (IndexedDB/localStorage) for the offline queue and pending changes, plus the reconnect reconciliation that §I only mocks.
+7. **Conflict resolution server logic** — §31 last-write-wins + "Sarah removed the tune you were editing" notice and removal-beats-edit need server enforcement + a notify channel; only the UI shape is decided.
+8. **Native shell** — the iOS keyboard stillness (§41) and removing the soft-keyboard accessory bar both require a native wrapper (WKWebView) — decide if/when that's in scope.
