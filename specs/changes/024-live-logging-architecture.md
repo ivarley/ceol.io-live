@@ -336,6 +336,37 @@ exist in the codebase today) via a walking skeleton, then widen.
   pipeline: Svelte `POST` → referee assigns position + writes `session_event` + `NOTIFY`
   (one txn) → streaming service `LISTEN` → SSE → **a second browser sees it live (~100ms)**.
   Proves the scariest, newest integration on day one; multi-user is real immediately.
+
+  > **The streaming triangle is already spike-validated** (2026-06-21) against the real
+  > `ceol_test` Postgres on the real stack (asyncpg + Starlette): one-txn insert+`pg_notify`,
+  > id-only NOTIFY with row re-read, asyncpg `LISTEN` → SSE fan-out to already-connected
+  > clients, and `Last-Event-ID` replay-then-live with correct dedupe. Reference impls (throwaway):
+  > `spike/sse_spike_async.py` (real stack) and `spike/sse_spike.py` (threaded, has a browser UI).
+  > Phase 0 turns that proven triangle into the real `session_event` table + `add_tune` endpoint
+  > on sync-Flask, the streaming service with cookie **and** bearer-token auth, and the minimal
+  > Svelte shell. Deps `asyncpg`/`starlette`/`uvicorn` were pip-installed into `venv` for the
+  > spike but are **not yet pinned in requirements** — pin them when Phase 0 begins.
+  >
+  > **✅ Built & end-to-end validated (2026-06-21).** The full pipeline runs on the real stack:
+  > - `schema/024_session_event.sql` (+ mirrored into `full_schema.sql`) — the `session_event` feed.
+  > - `live_logging_routes.py` — the referee: `add_tune` op (one txn: `session_instance_tune` +
+  >   `session_event` + `pg_notify`, server-assigned `order_position` via fractional indexing) and a
+  >   `bootstrap` snapshot endpoint; both `@api_login_required`. Wired in `app.py`
+  >   (`/api/live/instances/<id>/ops/add_tune`, `/bootstrap`, `/live/instances/<id>` screen).
+  > - `streaming/service.py` — Starlette + asyncpg sidecar: per-instance `LISTEN session_instance_<id>`,
+  >   `Last-Event-ID` (header **or** `?last_event_id=` query) replay-then-live, **cookie** auth (decodes
+  >   the Flask-Login session cookie) **and** **bearer** auth (validates a `user_session` id), CORS for
+  >   cross-origin `EventSource(withCredentials)`.
+  > - `frontend/` — clean-slate Svelte 5 + Vite bundle → `static/live/`; thin shell
+  >   `templates/live_logging.html`. Idempotent upsert by `session_instance_tune_id`.
+  > - `requirements.txt` pins `asyncpg`/`starlette`/`uvicorn`; `render.yaml` adds the
+  >   `ceol-io-streaming` web service + the frontend build step.
+  > - E2E check `spike/test_phase0_e2e.py`: POST→referee→NOTIFY→SSE delivery in ~30ms; anon SSE 401;
+  >   bearer auth + replay verified.
+  >
+  > **Run locally:** `venv/bin/python -m streaming.service` (sidecar, :8080) + `flask --app app run`
+  > (:5001); build the client with `cd frontend && npm install && npm run build`; open
+  > `/live/instances/<id>` in two browsers.
 - **Phase 1 — Full op vocabulary + data delta.** The remaining ops, the schema columns,
   corroboration table, `arrival_seq`, `op_id` idempotency, token auth, the bootstrap shell.
 - **Phase 2 — Presence + typing + reconnect resume.** The ephemeral channel,

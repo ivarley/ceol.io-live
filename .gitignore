@@ -122,3 +122,6 @@ package-lock.json
 # TypeScript/Webpack build outputs
 static/js/dist/
 design/*
+
+# Live-logging Svelte/Vite build output (spec 024) -- built during deploy
+static/live/

@@ -24,6 +24,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
+from live_logging_routes import live_bootstrap, add_tune_op
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -54,6 +55,19 @@ app.secret_key = os.environ.get(
 # Configure permanent session lifetime to match database session expiration
 # This ensures Flask session cookies persist for the full session duration
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(weeks=SESSION_LIFETIME_WEEKS)
+
+# Share the session cookie across subdomains so the live-logging streaming sidecar
+# (e.g. streaming.ceol.io) receives it (spec 024 §H / §A4). Subdomains of one
+# registrable domain are same-site, so default SameSite=Lax still flows; we only
+# need to broaden the cookie's Domain and mark it Secure in prod. Both are
+# env-driven so local dev (env unset) keeps today's host-only, non-Secure cookie.
+_cookie_domain = os.environ.get("SESSION_COOKIE_DOMAIN")  # e.g. ".ceol.io" in prod
+if _cookie_domain:
+    app.config['SESSION_COOKIE_DOMAIN'] = _cookie_domain
+    app.config['REMEMBER_COOKIE_DOMAIN'] = _cookie_domain
+if os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes"):
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['REMEMBER_COOKIE_SECURE'] = True
 
 # Configure Flask to handle trailing slashes consistently
 app.url_map.strict_slashes = False
@@ -276,6 +290,25 @@ app.add_url_rule(
 )
 
 # Register API routes
+# Live logging (spec 024) -- referee op endpoints + screen shell (Phase 0)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/bootstrap",
+    "live_bootstrap",
+    live_bootstrap,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/ops/add_tune",
+    "live_add_tune_op",
+    add_tune_op,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/live/instances/<int:session_instance_id>",
+    "live_logging_screen",
+    live_logging_screen,
+)
+
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
 app.add_url_rule(
     "/api/sessions/<path:session_path>/logs",

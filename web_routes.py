@@ -3866,3 +3866,40 @@ def admin_activity():
 
     finally:
         conn.close()
+
+
+@login_required
+def live_logging_screen(session_instance_id):
+    """
+    Serve the clean-slate Svelte live-logging screen (spec 024 §H, Phase 0).
+
+    A thin shell: it passes the instance id, current person, and the streaming
+    service base URL to the bundle, which then fetches the bootstrap snapshot and
+    opens the SSE stream. The bundle is a self-contained Vite build under
+    /static/live, isolated to this screen (not the base layout).
+    """
+    import os
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
+        if not cur.fetchone():
+            return render_template("error.html", error_message="Session instance not found"), 404
+    finally:
+        conn.close()
+
+    streaming_base_url = os.environ.get("STREAMING_BASE_URL", "http://localhost:8080")
+    return render_template(
+        "live_logging.html",
+        session_instance_id=session_instance_id,
+        streaming_base_url=streaming_base_url,
+        current_person={
+            "person_id": current_user.person_id,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+        },
+    )

@@ -516,6 +516,23 @@ CREATE INDEX idx_user_session_expires ON user_session (expires_at);
 CREATE INDEX idx_user_session_last_accessed ON user_session (last_accessed);
 
 -- -----------------------------------------------------------------------------
+-- Session Event table (depends on session_instance) -- live logging feed, spec 024
+-- -----------------------------------------------------------------------------
+-- Append-only change feed driving real-time SSE fan-out. session_instance_tune
+-- remains canonical state; this is the ordered delivery/replay log. event_id is
+-- globally monotonic and doubles as the SSE Last-Event-ID cursor. See spec 024 §B.
+CREATE TABLE session_event (
+    event_id            BIGSERIAL PRIMARY KEY,
+    session_instance_id INTEGER NOT NULL REFERENCES session_instance(session_instance_id) ON DELETE CASCADE,
+    op_type             VARCHAR(32) NOT NULL,
+    payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_by_user_id  INTEGER,
+    server_ts           TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+CREATE INDEX idx_session_event_instance ON session_event (session_instance_id, event_id);
+
+-- -----------------------------------------------------------------------------
 -- Login History table (depends on user_account)
 -- -----------------------------------------------------------------------------
 CREATE TABLE login_history (

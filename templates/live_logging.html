@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Live Logging (beta)</title>
+  <!--
+    Spec 024 Phase 0 shell. Clean-slate: deliberately does NOT extend base.html.
+    Bootstrap config is inlined for the self-contained Svelte bundle to read.
+  -->
+  <script>
+    window.__LIVE_CONFIG__ = {
+      sessionInstanceId: {{ session_instance_id | tojson }},
+      streamingBaseUrl: {{ streaming_base_url | tojson }},
+      currentPerson: {{ current_person | tojson }}
+    };
+  </script>
+  <link rel="stylesheet" href="/static/live/app.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/static/live/app.js"></script>
+</body>
+</html>
