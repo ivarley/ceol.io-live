@@ -216,6 +216,7 @@ FROM session_instance_tune sit
 JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
 JOIN session s ON si.session_id = s.session_id
 WHERE sit.created_date IS NOT NULL
+  AND sit.record_type = 'tune'  -- exclude set-break records (spec 023)
 
 UNION ALL
 
@@ -234,6 +235,7 @@ JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
 JOIN session s ON si.session_id = s.session_id
 WHERE sit.last_modified_date IS NOT NULL
   AND sit.last_modified_date != sit.created_date
+  AND sit.record_type = 'tune'  -- exclude set-break records (spec 023)
 
 UNION ALL
 

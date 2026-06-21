@@ -4746,6 +4746,7 @@ def get_session_logs_ajax(session_path):
                 COUNT(DISTINCT sip.session_instance_person_id) as attendance_count
             FROM session_instance si
             LEFT JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
+                AND sit.record_type = 'tune'
             LEFT JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
                 AND sip.attendance = 'yes'
             WHERE si.session_id = %s
