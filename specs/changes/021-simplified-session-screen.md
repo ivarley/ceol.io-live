@@ -99,6 +99,9 @@ These were considered during the prototype and deliberately *not* taken — reco
 - **Partial-overlap set-merge on reconnect** — intentionally not built; naive append + manual cleanup is an acceptable real-world default, and the alignment logic is real-implementation, not a prototype feel-question.
 
 ## M. Open questions for the real build (the technical agenda)
+
+> **Resolved in [024-live-logging-architecture.md](024-live-logging-architecture.md).** The decisions below are now settled there (server-authoritative ops, SSE/POST, Python async streaming sidecar + Postgres LISTEN/NOTIFY, the `session_event` feed, relational-anchor positioning, soft-delete tombstones, person-attribution, any-authenticated-user permissions, IndexedDB offline + reconnect reconciliation, Svelte/Vite PWA, native deferred). Audio is split into its own future task. This section is kept as the original problem statement.
+
 The prototype fakes all collaboration/persistence. These are undecided and are the real engineering decisions to make before/while building:
 1. **Real-time transport** — the single biggest open question. WebSockets vs SSE vs polling for live presence + tune updates? And: roll-your-own server-side reconciliation, or adopt a CRDT library (Yjs/Automerge)? Everything in §H/§I assumes a sync layer that doesn't exist.
 2. **Position model in earnest** — §B says positions are relational keys (the existing `order_position` fractional index). Concurrent-insert tie-break, reservation holds, and offline set-merge need a concrete CRDT/fractional-index scheme + server rules, not just the field.
