@@ -16,6 +16,7 @@ import re
 
 # Import from local modules
 from database import get_db_connection, save_to_history, get_current_user_id
+from api_routes import segment_records_into_sets
 from timezone_utils import (
     now_utc,
     get_timezone_display_name,
@@ -361,7 +362,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 cur.execute(
                     """
                     SELECT
-                        sit.continues_set,
+                        sit.record_type,
                         sit.tune_id,
                         COALESCE(sit.name, st.alias, t.name) AS tune_name,
                         COALESCE(sit.setting_override, st.setting_id) AS setting,
@@ -430,18 +431,17 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 cur.close()
                 conn.close()
 
-                # Group tunes into sets
+                # Group tunes into sets by break records, then rebuild each tune row with a
+                # synthesized continues_set at index 0 (False for the first tune of a set) to
+                # preserve the structure the template/JS expects.
                 sets = []
-                current_set = []
-                for tune in tunes:
-                    if (
-                        not tune[0] and current_set
-                    ):  # continues_set is False and we have a current set
-                        sets.append(current_set)
-                        current_set = []
-                    current_set.append(tune)
-                if current_set:
-                    sets.append(current_set)
+                for tune_set in segment_records_into_sets(tunes, type_index=0):
+                    sets.append(
+                        [
+                            [tune_idx > 0] + list(row[1:])
+                            for tune_idx, row in enumerate(tune_set)
+                        ]
+                    )
 
                 # Check if current user is an admin of this session
                 is_session_admin = False

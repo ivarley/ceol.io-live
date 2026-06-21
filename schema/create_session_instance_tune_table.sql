@@ -5,14 +5,15 @@ CREATE TABLE session_instance_tune (
     tune_id INTEGER REFERENCES tune(tune_id),
     name VARCHAR(255),
     order_position VARCHAR(32) COLLATE "C",  -- Fractional index for CRDT-compatible ordering (base-62: 0-9, A-Z, a-z)
-    continues_set BOOLEAN DEFAULT FALSE,
+    record_type VARCHAR(16) NOT NULL DEFAULT 'tune',  -- 'tune' | 'break' (a 'break' row is an explicit set boundary, see spec 023)
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     key_override VARCHAR(10),
     setting_override INTEGER,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
-    CONSTRAINT session_instance_tune_name_or_id CHECK (tune_id IS NOT NULL OR name IS NOT NULL)
+    -- break rows carry neither tune_id nor name; tune rows still require one of them
+    CONSTRAINT session_instance_tune_name_or_id CHECK (record_type = 'break' OR tune_id IS NOT NULL OR name IS NOT NULL)
 );
 
 -- Create trigger function to automatically update last_modified_date

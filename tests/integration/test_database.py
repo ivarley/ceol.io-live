@@ -592,10 +592,10 @@ class TestComplexQueries:
             ):  # First 2 tunes per instance
                 db_cursor.execute(
                     """
-                    INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, continues_set)
+                    INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, record_type)
                     VALUES (%s, %s, %s, %s, %s)
                 """,
-                    (instance_id, tune_id, name, chr(ord('V') + j), j > 0),
+                    (instance_id, tune_id, name, chr(ord('V') + j), 'tune'),
                 )
 
         db_conn.commit()
@@ -836,9 +836,9 @@ class TestFractionalIndexingCollation:
         for i, (pos, name) in enumerate(test_positions):
             db_cursor.execute("""
                 INSERT INTO session_instance_tune
-                    (session_instance_id, name, order_position, continues_set)
+                    (session_instance_id, name, order_position, record_type)
                 VALUES (%s, %s, %s, %s)
-            """, (instance_id, name, pos, False))
+            """, (instance_id, name, pos, 'tune'))
 
         db_conn.commit()
 
@@ -885,9 +885,9 @@ class TestFractionalIndexingCollation:
         for i, pos in enumerate(test_positions):
             db_cursor.execute("""
                 INSERT INTO session_instance_tune
-                    (session_instance_id, name, order_position, continues_set)
+                    (session_instance_id, name, order_position, record_type)
                 VALUES (%s, %s, %s, %s)
-            """, (instance_id, f"tune_{pos}", pos, False))
+            """, (instance_id, f"tune_{pos}", pos, 'tune'))
 
         db_conn.commit()
 

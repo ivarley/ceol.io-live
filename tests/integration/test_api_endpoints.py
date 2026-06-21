@@ -407,7 +407,7 @@ class TestTuneAPI:
             (1,),  # successful insert_session_instance_tune call
         ]
 
-        tune_data = {"tune_name": "Test API Reel", "continues_set": False}
+        tune_data = {"tune_name": "Test API Reel"}
 
         response = client.post(
             "/api/sessions/test-session/2023-08-15/add_tune", json=tune_data
@@ -543,7 +543,7 @@ class TestTuneAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, continues_set)
+            INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, record_type)
             VALUES (%s, %s, %s, %s, %s), (%s, %s, %s, %s, %s)
         """,
             (
@@ -551,12 +551,12 @@ class TestTuneAPI:
                 tune_id_1,
                 f"First Reel {unique_id}",
                 'V',
-                False,
+                'tune',
                 session_instance_id,
                 tune_id_2,
                 f"Second Jig {unique_id}",
                 'W',
-                True,
+                'tune',
             ),
         )
         db_conn.commit()

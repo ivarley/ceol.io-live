@@ -340,9 +340,7 @@ class SessionInstanceTuneFactory(factory.Factory):
 
     name = factory.LazyFunction(lambda: random.choice(IRISH_TUNE_NAMES))
     order_position = factory.Sequence(lambda n: _order_position_for_sequence(n + 1))
-    continues_set = factory.LazyFunction(
-        lambda: random.choice([True, False, False])
-    )  # 33% continue sets
+    record_type = "tune"  # set boundaries are explicit 'break' records (spec 023)
 
     played_timestamp = factory.LazyFunction(
         lambda: fake.date_time_between(start_date="-6m", end_date="now")
@@ -448,11 +446,6 @@ def generate_sample_session_instance_tunes(
             tune_entry["session_instance_id"] = instance_id
             tune_entry["tune_id"] = tune_id
             tune_entry["order_position"] = _order_position_for_sequence(order)
-
-            # Adjust continues_set logic for first tune
-            if order == 1:
-                tune_entry["continues_set"] = False
-
             instance_tunes.append(tune_entry)
 
     return instance_tunes

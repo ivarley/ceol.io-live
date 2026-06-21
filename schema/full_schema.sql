@@ -446,7 +446,7 @@ CREATE TABLE session_instance_tune (
     tune_id INTEGER REFERENCES tune(tune_id),
     name VARCHAR(255),
     order_position VARCHAR(32) COLLATE "C",  -- Fractional index for CRDT-compatible ordering (base-62: 0-9, A-Z, a-z)
-    continues_set BOOLEAN DEFAULT FALSE,
+    record_type VARCHAR(16) NOT NULL DEFAULT 'tune',  -- 'tune' | 'break' (a 'break' row is an explicit set boundary, see spec 023)
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     key_override VARCHAR(20),
@@ -456,7 +456,8 @@ CREATE TABLE session_instance_tune (
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
     last_modified_user_id INTEGER,
-    CONSTRAINT session_instance_tune_name_or_id CHECK (tune_id IS NOT NULL OR name IS NOT NULL)
+    -- break rows carry neither tune_id nor name; tune rows still require one of them
+    CONSTRAINT session_instance_tune_name_or_id CHECK (record_type = 'break' OR tune_id IS NOT NULL OR name IS NOT NULL)
 );
 
 CREATE INDEX idx_session_instance_tune_started_by ON session_instance_tune (started_by_person_id) WHERE started_by_person_id IS NOT NULL;
@@ -752,7 +753,7 @@ CREATE TABLE session_instance_tune_history (
     name VARCHAR(255),
     order_number INTEGER,  -- historical only, no longer written
     order_position VARCHAR(32) COLLATE "C",
-    continues_set BOOLEAN,
+    record_type VARCHAR(16),
     played_timestamp TIMESTAMPTZ,
     inserted_timestamp TIMESTAMPTZ,
     key_override VARCHAR(20),

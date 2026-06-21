@@ -38,6 +38,84 @@ def api_login_required(f):
     return decorated_function
 
 
+def segment_records_into_sets(rows, type_index=None):
+    """Group ordered session_instance_tune rows into sets (spec 023).
+
+    `rows` must already be ordered by order_position. Each row is a tuple/list whose
+    element at `type_index` is the record_type ('tune' | 'break'). A 'break' row closes
+    the current set and is dropped from the output; 'tune' rows accumulate into the
+    current set. A trailing break leaves no empty set behind, and leading/consecutive
+    breaks are no-ops.
+
+    If `type_index` is None, every row is treated as a tune (no breaks present) -- this
+    lets callers reuse the function on legacy row shapes.
+
+    Returns a list of sets, where each set is a list of the original tune rows.
+    """
+    sets = []
+    current = []
+    for row in rows:
+        if type_index is not None and row[type_index] == "break":
+            if current:
+                sets.append(current)
+                current = []
+        else:
+            current.append(row)
+    if current:
+        sets.append(current)
+    return sets
+
+
+def reconcile_break_records(cur, session_instance_id, set_position_lists, audit_user_id=None):
+    """Delete all break rows for an instance and reinsert exactly one break per set (spec 023).
+
+    `set_position_lists` is the ordered list of sets, each given as the ordered list of its
+    tune order_position strings (their final positions). One break is placed in the gap
+    after each set -- between a set's last tune and the next set's first tune -- including a
+    trailing break after the final set. Net effect: one break per set.
+
+    Breaks have no stable client identity, so reconciling them by delete-and-reinsert is
+    simpler than diffing. When `audit_user_id` is supplied, each delete/insert is audited.
+    Returns the number of break rows inserted.
+    """
+    cur.execute(
+        """
+        SELECT session_instance_tune_id FROM session_instance_tune
+        WHERE session_instance_id = %s AND record_type = 'break'
+        """,
+        (session_instance_id,),
+    )
+    for (break_id,) in cur.fetchall():
+        if audit_user_id is not None:
+            save_to_history(cur, "session_instance_tune", "DELETE", break_id, user_id=audit_user_id)
+        cur.execute(
+            "DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (break_id,),
+        )
+
+    sets = [positions for positions in set_position_lists if positions]
+    for i, positions in enumerate(sets):
+        last_pos = positions[-1]
+        next_first = sets[i + 1][0] if i + 1 < len(sets) else None
+        if next_first is not None:
+            break_pos = generate_position_between(last_pos, next_first)
+        else:
+            break_pos = generate_append_position(last_pos)
+        cur.execute(
+            """
+            INSERT INTO session_instance_tune
+                (session_instance_id, order_position, record_type, created_date, last_modified_date, created_by_user_id)
+            VALUES (%s, %s, 'break', NOW(), NOW(), %s)
+            RETURNING session_instance_tune_id
+            """,
+            (session_instance_id, break_pos, audit_user_id),
+        )
+        new_id = cur.fetchone()[0]
+        if audit_user_id is not None:
+            save_to_history(cur, "session_instance_tune", "INSERT", new_id, user_id=audit_user_id)
+    return len(sets)
+
+
 def bytea_to_base64(data):
     """
     Convert PostgreSQL bytea data to base64 string.
@@ -112,17 +190,48 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             (session_id, tune_id, setting_id),
         )
 
-    # Get the last order_position
+    # Find the current last record in this instance (could be a tune or a break).
     cur.execute(
         """
-        SELECT MAX(order_position)
+        SELECT session_instance_tune_id, order_position, record_type
         FROM session_instance_tune
         WHERE session_instance_id = %s
+        ORDER BY order_position DESC
+        LIMIT 1
         """,
         (session_instance_id,),
     )
-    last_result = cur.fetchone()
-    last_order_position = last_result[0]
+    last_row = cur.fetchone()
+    last_order_position = last_row[1] if last_row else None
+    last_is_break = last_row is not None and last_row[2] == "break"
+
+    # Maintain set boundaries with explicit break records (spec 023).
+    if starts_set and last_row is not None and not last_is_break:
+        # Close the previous (open) set with a break before this new set's first tune.
+        break_position = generate_append_position(last_order_position)
+        cur.execute(
+            """
+            INSERT INTO session_instance_tune (
+                session_instance_id, order_position, record_type, inserted_timestamp
+            ) VALUES (%s, %s, 'break', CURRENT_TIMESTAMP)
+            """,
+            (session_instance_id, break_position),
+        )
+        last_order_position = break_position
+    elif not starts_set and last_is_break:
+        # Continuing the current set, but it was closed by a trailing break -- reopen it
+        # by removing that break so the new tune joins the last set.
+        cur.execute(
+            "DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (last_row[0],),
+        )
+        # Recompute the trailing position now that the break is gone.
+        cur.execute(
+            "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
+        last_order_position = cur.fetchone()[0]
+    # (starts_set with an existing trailing break reuses that break as the boundary.)
 
     # Generate new fractional position
     new_order_position = generate_append_position(last_order_position)
@@ -132,9 +241,9 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
         """
         INSERT INTO session_instance_tune (
             session_instance_id, tune_id, name, order_position,
-            continues_set, inserted_timestamp, setting_override
+            record_type, inserted_timestamp, setting_override
         ) VALUES (
-            %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s
+            %s, %s, %s, %s, 'tune', CURRENT_TIMESTAMP, %s
         )
         RETURNING session_instance_tune_id
         """,
@@ -143,7 +252,6 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             tune_id,
             name,
             new_order_position,
-            not starts_set,  # continues_set is opposite of starts_set
             setting_id,
         ),
     )
@@ -2141,14 +2249,14 @@ def get_session_tune_count_ajax(session_path, date):
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get tune count for this session instance
+        # Get tune count for this session instance (exclude break records)
         cur.execute(
             """
             SELECT COUNT(*)
             FROM session_instance_tune sit
             JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
             JOIN session s ON si.session_id = s.session_id
-            WHERE s.path = %s AND si.date = %s
+            WHERE s.path = %s AND si.date = %s AND sit.record_type = 'tune'
         """,
             (session_path, date),
         )
@@ -2905,7 +3013,8 @@ def add_tune_ajax(session_path, date):
 
             # Add all tunes in this set
             for i, (tune_id, name) in enumerate(tune_data):
-                # First tune in each set starts a new set (continues_set = False), subsequent tunes continue the set (continues_set = True)
+                # First tune in each set starts a new set (a break is inserted before it
+                # when the instance already has tunes); subsequent tunes continue the set.
                 starts_set = i == 0
 
                 # Insert tune with fractional indexing
@@ -2945,15 +3054,11 @@ def delete_tune_ajax(session_instance_tune_id):
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get the tune info for history and set boundary handling
+        # Get the tune info for the history record and the response message.
         cur.execute(
             """
             SELECT
-                COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                sit.continues_set,
-                sit.session_instance_id,
-                sit.tune_id,
-                sit.order_position
+                COALESCE(sit.name, st.alias, t.name) AS tune_name
             FROM session_instance_tune sit
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
             LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = (
@@ -2972,13 +3077,7 @@ def delete_tune_ajax(session_instance_tune_id):
             conn.close()
             return jsonify({"success": False, "message": "Tune not found"})
 
-        (
-            tune_name,
-            continues_set,
-            session_instance_id,
-            tune_id,
-            order_position,
-        ) = tune_info
+        (tune_name,) = tune_info
 
         # Save to history before making changes
         audit_user_id = get_current_user_id()
@@ -2986,34 +3085,10 @@ def delete_tune_ajax(session_instance_tune_id):
             cur, "session_instance_tune", "DELETE", session_instance_tune_id, user_id=audit_user_id
         )
 
-        # If this tune starts a set (continues_set = False) and there's a next tune,
-        # update the next tune to start the set
-        if not continues_set:
-            # Get the next tune by order_position (smallest position greater than current)
-            cur.execute(
-                """
-                SELECT session_instance_tune_id
-                FROM session_instance_tune
-                WHERE session_instance_id = %s AND order_position > %s
-                ORDER BY order_position
-                LIMIT 1
-            """,
-                (session_instance_id, order_position),
-            )
-            next_tune_result = cur.fetchone()
-
-            if next_tune_result:
-                next_tune_id = next_tune_result[0]
-                save_to_history(cur, "session_instance_tune", "UPDATE", next_tune_id, user_id=audit_user_id)
-
-                cur.execute(
-                    """
-                    UPDATE session_instance_tune
-                    SET continues_set = FALSE, last_modified_user_id = %s
-                    WHERE session_instance_tune_id = %s
-                """,
-                    (audit_user_id, next_tune_id),
-                )
+        # Set boundaries are explicit break records (spec 023), so deleting a tune no longer
+        # mutates a neighbour's flag. Any break left adjacent to another break (or at the
+        # start/end) is harmless -- segment_records_into_sets ignores it, and the next bulk
+        # save reconciles breaks fully.
 
         # Delete the tune by ID (reliable regardless of ordering scheme)
         cur.execute(
@@ -3350,7 +3425,7 @@ def get_session_tunes_ajax(session_path, date):
         cur.execute(
             """
             SELECT
-                sit.continues_set,
+                sit.record_type,
                 sit.tune_id,
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
                 COALESCE(sit.setting_override, st.setting_id) AS setting,
@@ -3373,18 +3448,16 @@ def get_session_tunes_ajax(session_path, date):
         cur.close()
         conn.close()
 
-        # Group tunes into sets
+        # Group tunes into sets by break records, then rebuild each tune tuple with a
+        # synthesized continues_set at index 0 to preserve the response shape.
         sets = []
-        current_set = []
-        for tune in tunes:
-            if (
-                not tune[1] and current_set
-            ):  # continues_set is False and we have a current set
-                sets.append(current_set)
-                current_set = []
-            current_set.append(tune)
-        if current_set:
-            sets.append(current_set)
+        for tune_set in segment_records_into_sets(tunes, type_index=0):
+            sets.append(
+                [
+                    [tune_idx > 0, row[1], row[2], row[3], row[4], row[5]]
+                    for tune_idx, row in enumerate(tune_set)
+                ]
+            )
 
         return jsonify({"success": True, "tune_sets": sets})
 
@@ -3983,10 +4056,10 @@ def move_set_ajax(session_path, date):
 
         session_instance_id = session_instance[0]
 
-        # Get all tunes ordered by order_position
+        # Get all records (tunes + breaks) ordered by order_position
         cur.execute(
             """
-            SELECT continues_set, session_instance_tune_id, order_position
+            SELECT record_type, session_instance_tune_id, order_position
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -3994,34 +4067,16 @@ def move_set_ajax(session_path, date):
             (session_instance_id,),
         )
 
-        all_tunes = cur.fetchall()
-        if not all_tunes:
+        all_records = cur.fetchall()
+        if not all_records:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "No tunes found"})
 
-        # Find the tune by session_instance_tune_id
-        target_tune_index = next(
-            (i for i, tune in enumerate(all_tunes) if tune[1] == session_instance_tune_id), -1
-        )
-        if target_tune_index == -1:
-            cur.close()
-            conn.close()
-            return jsonify({"success": False, "message": "Tune not found"})
-
-        # Group tunes into sets to identify set boundaries
-        # Each set entry is a list of (continues_set, session_instance_tune_id, order_position)
-        sets = []
-        current_set = []
-        for tune in all_tunes:
-            if (
-                not tune[0] and current_set
-            ):  # continues_set is False and we have a current set
-                sets.append(current_set)
-                current_set = []
-            current_set.append(tune)
-        if current_set:
-            sets.append(current_set)
+        # Group tunes into sets to identify set boundaries. Break records delimit sets and
+        # are dropped here; they are re-derived after the move (positions change).
+        # Each set entry is a list of (record_type, session_instance_tune_id, order_position).
+        sets = segment_records_into_sets(all_records, type_index=0)
 
         # Find which set the target tune belongs to
         target_set_index = -1
@@ -4117,6 +4172,34 @@ def move_set_ajax(session_path, date):
                 )
                 current_pos = new_position
 
+        # Reposition break records to match the new set order. Compute the new ordering of
+        # sets, look up each tune's final position, and re-derive one break per set.
+        new_order = list(sets)
+        if direction == "up":
+            new_order[target_set_index - 1], new_order[target_set_index] = (
+                new_order[target_set_index],
+                new_order[target_set_index - 1],
+            )
+        else:
+            new_order[target_set_index], new_order[target_set_index + 1] = (
+                new_order[target_set_index + 1],
+                new_order[target_set_index],
+            )
+
+        cur.execute(
+            """
+            SELECT session_instance_tune_id, order_position
+            FROM session_instance_tune
+            WHERE session_instance_id = %s AND record_type = 'tune'
+            """,
+            (session_instance_id,),
+        )
+        position_by_id = {row[0]: row[1] for row in cur.fetchall()}
+        set_position_lists = [
+            sorted(position_by_id[tune[1]] for tune in tune_set) for tune_set in new_order
+        ]
+        reconcile_break_records(cur, session_instance_id, set_position_lists, audit_user_id)
+
         conn.commit()
         cur.close()
         conn.close()
@@ -4161,10 +4244,12 @@ def move_tune_ajax(session_path, date):
 
         session_instance_id = session_instance[0]
 
-        # Get tune info and adjacent tunes
+        # Get all records (tunes + breaks) ordered by order_position. A tune moves within
+        # its set by swapping positions with the adjacent tune; an adjacent break record
+        # marks a set boundary the tune may not cross (spec 023).
         cur.execute(
             """
-            SELECT continues_set, session_instance_tune_id, order_position
+            SELECT record_type, session_instance_tune_id, order_position
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -4172,18 +4257,18 @@ def move_tune_ajax(session_path, date):
             (session_instance_id,),
         )
 
-        all_tunes = cur.fetchall()
+        all_records = cur.fetchall()
 
         # Find the target tune by session_instance_tune_id
         target_tune_index = next(
-            (i for i, tune in enumerate(all_tunes) if tune[1] == session_instance_tune_id), -1
+            (i for i, rec in enumerate(all_records) if rec[1] == session_instance_tune_id), -1
         )
         if target_tune_index == -1:
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Tune not found"})
 
-        target_tune = all_tunes[target_tune_index]
+        target_tune = all_records[target_tune_index]
 
         if direction == "left":
             # Move tune left within its set
@@ -4194,12 +4279,10 @@ def move_tune_ajax(session_path, date):
                     {"success": False, "message": "Cannot move first tune left"}
                 )
 
-            prev_tune = all_tunes[target_tune_index - 1]
+            prev_tune = all_records[target_tune_index - 1]
 
-            # Check if previous tune is in the same set (continues_set = True for target or prev is first tune)
-            if (
-                not target_tune[0] and prev_tune[0]
-            ):  # target starts set, prev continues set - different sets
+            # A break to the left means we're at the start of the set.
+            if prev_tune[0] == "break":
                 cur.close()
                 conn.close()
                 return jsonify(
@@ -4218,7 +4301,7 @@ def move_tune_ajax(session_path, date):
                 cur, "session_instance_tune", "UPDATE", prev_tune[1], user_id=audit_user_id
             )
 
-            # Swap order positions
+            # Swap order positions with the previous tune
             cur.execute(
                 """
                 UPDATE session_instance_tune
@@ -4237,39 +4320,19 @@ def move_tune_ajax(session_path, date):
                 (target_tune[2], audit_user_id, prev_tune[1]),
             )
 
-            # If target tune was starting a set and prev was continuing, swap continues_set values
-            if not target_tune[0] and prev_tune[0]:
-                cur.execute(
-                    """
-                    UPDATE session_instance_tune
-                    SET continues_set = FALSE, last_modified_user_id = %s
-                    WHERE session_instance_tune_id = %s
-                """,
-                    (audit_user_id, prev_tune[1]),
-                )
-
-                cur.execute(
-                    """
-                    UPDATE session_instance_tune
-                    SET continues_set = TRUE, last_modified_user_id = %s
-                    WHERE session_instance_tune_id = %s
-                """,
-                    (audit_user_id, target_tune[1]),
-                )
-
         else:  # direction == 'right'
             # Move tune right within its set
-            if target_tune_index == len(all_tunes) - 1:
+            if target_tune_index == len(all_records) - 1:
                 cur.close()
                 conn.close()
                 return jsonify(
                     {"success": False, "message": "Cannot move last tune right"}
                 )
 
-            next_tune = all_tunes[target_tune_index + 1]
+            next_tune = all_records[target_tune_index + 1]
 
-            # Check if next tune is in the same set
-            if not next_tune[0]:  # next tune starts a new set
+            # A break to the right means we're at the end of the set.
+            if next_tune[0] == "break":
                 cur.close()
                 conn.close()
                 return jsonify(
@@ -4288,7 +4351,7 @@ def move_tune_ajax(session_path, date):
                 cur, "session_instance_tune", "UPDATE", next_tune[1], user_id=audit_user_id
             )
 
-            # Swap order positions
+            # Swap order positions with the next tune
             cur.execute(
                 """
                 UPDATE session_instance_tune
@@ -4306,26 +4369,6 @@ def move_tune_ajax(session_path, date):
             """,
                 (target_tune[2], audit_user_id, next_tune[1]),
             )
-
-            # If target tune was starting a set, make next tune start the set
-            if not target_tune[0]:
-                cur.execute(
-                    """
-                    UPDATE session_instance_tune
-                    SET continues_set = FALSE, last_modified_user_id = %s
-                    WHERE session_instance_tune_id = %s
-                """,
-                    (audit_user_id, next_tune[1]),
-                )
-
-                cur.execute(
-                    """
-                    UPDATE session_instance_tune
-                    SET continues_set = TRUE, last_modified_user_id = %s
-                    WHERE session_instance_tune_id = %s
-                """,
-                    (audit_user_id, target_tune[1]),
-                )
 
         conn.commit()
         cur.close()
@@ -7000,12 +7043,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
 
-        # Get all existing tunes for this session instance
+        # Get all existing tunes for this session instance. Break records are reconciled
+        # separately (they have no stable client identity), so only diff tune rows here.
         cur.execute(
             """
-            SELECT session_instance_tune_id, tune_id, name, continues_set, started_by_person_id, order_position
+            SELECT session_instance_tune_id, tune_id, name, started_by_person_id, order_position
             FROM session_instance_tune
-            WHERE session_instance_id = %s
+            WHERE session_instance_id = %s AND record_type = 'tune'
             ORDER BY order_position
         """,
             (session_instance_id,),
@@ -7013,6 +7057,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
 
         existing_tunes = cur.fetchall()
         # Dict by session_instance_tune_id for identity-based matching
+        # Row shape: (sit_id, tune_id, name, started_by_person_id, order_position)
         existing_by_id = {row[0]: row for row in existing_tunes}
 
         # Build new tune list from the sets
@@ -7034,9 +7079,6 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 majority_started_by = value_counts.most_common(1)[0][0]
 
             for tune_idx, tune_data in enumerate(tune_set):
-                # Determine continues_set: false for first tune in set, true otherwise
-                continues_set = tune_idx > 0
-
                 # Extract tune data
                 tune_id = tune_data.get("tune_id")
                 tune_name = tune_data.get("name") or tune_data.get("tune_name")
@@ -7066,7 +7108,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     {
                         "tune_id": tune_id,
                         "name": tune_name,
-                        "continues_set": continues_set,
+                        "set_idx": set_idx,
                         "started_by_person_id": started_by_person_id,
                         "session_instance_tune_id": session_instance_tune_id,
                         "order_position": order_position,
@@ -7207,7 +7249,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     remaining_tune_ids.add(sit_id)
                     processed_tunes.append({
                         **new_tune,
-                        "order_position": existing[5],  # Get order_position from DB
+                        "order_position": existing[4],  # Get order_position from DB
                         "is_new": False,
                     })
                 else:
@@ -7288,15 +7330,14 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     cur.execute(
                         """
                         INSERT INTO session_instance_tune
-                        (session_instance_id, tune_id, name, continues_set, started_by_person_id, order_position, created_date, last_modified_date, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)
+                        (session_instance_id, tune_id, name, record_type, started_by_person_id, order_position, created_date, last_modified_date, created_by_user_id)
+                        VALUES (%s, %s, %s, 'tune', %s, %s, NOW(), NOW(), %s)
                         RETURNING session_instance_tune_id
                     """,
                         (
                             session_instance_id,
                             tune["tune_id"],
                             tune["name"],
-                            tune["continues_set"],
                             tune["started_by_person_id"],
                             tune["order_position"],
                             get_current_user_id(),
@@ -7311,13 +7352,12 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                 else:
                     # Existing tune - check what needs updating
                     existing = existing_by_id[sit_id]
-                    # existing: (sit_id, tune_id, name, continues_set, started_by_person_id, order_position)
+                    # existing: (sit_id, tune_id, name, started_by_person_id, order_position)
                     position_changed = tune.get("position_changed", False)
                     data_changed = (
                         existing[1] != tune["tune_id"]
                         or existing[2] != tune["name"]
-                        or existing[3] != tune["continues_set"]
-                        or existing[4] != tune["started_by_person_id"]
+                        or existing[3] != tune["started_by_person_id"]
                     )
 
                     if data_changed or position_changed:
@@ -7330,14 +7370,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                             cur.execute(
                                 """
                                 UPDATE session_instance_tune
-                                SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s,
+                                SET tune_id = %s, name = %s, started_by_person_id = %s,
                                     order_position = %s, last_modified_date = NOW(), last_modified_user_id = %s
                                 WHERE session_instance_tune_id = %s
                             """,
                                 (
                                     tune["tune_id"],
                                     tune["name"],
-                                    tune["continues_set"],
                                     tune["started_by_person_id"],
                                     tune["order_position"],
                                     get_current_user_id(),
@@ -7349,14 +7388,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                             cur.execute(
                                 """
                                 UPDATE session_instance_tune
-                                SET tune_id = %s, name = %s, continues_set = %s, started_by_person_id = %s,
+                                SET tune_id = %s, name = %s, started_by_person_id = %s,
                                     last_modified_date = NOW(), last_modified_user_id = %s
                                 WHERE session_instance_tune_id = %s
                             """,
                                 (
                                     tune["tune_id"],
                                     tune["name"],
-                                    tune["continues_set"],
                                     tune["started_by_person_id"],
                                     get_current_user_id(),
                                     sit_id,
@@ -7377,6 +7415,16 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
                     )
                     modifications += 1
 
+            # Reconcile break records: derive one break per set from the final tune
+            # positions (interior breaks plus a trailing break that closes the last set).
+            sets_positions = {}
+            for tune in processed_tunes:
+                sets_positions.setdefault(tune["set_idx"], []).append(tune["order_position"])
+            set_position_lists = [sorted(positions) for positions in sets_positions.values()]
+            reconcile_break_records(
+                cur, session_instance_id, set_position_lists, get_current_user_id()
+            )
+
             # Commit transaction
             cur.execute("COMMIT")
 
@@ -7385,7 +7433,7 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             cur.execute(
                 """
                 SELECT
-                    sit.continues_set,
+                    sit.record_type,
                     sit.tune_id,
                     COALESCE(sit.name, st.alias, t.name) AS tune_name,
                     COALESCE(sit.setting_override, st.setting_id) AS setting,
@@ -7406,35 +7454,28 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             )
             updated_tunes = cur.fetchall()
 
-            # Convert to tune_sets format (grouped by continues_set)
+            # Group by break records, then rebuild each tune row with a synthesized
+            # continues_set at index 0 (False for the first tune of a set) to preserve the
+            # response shape the frontend expects.
+            # row: (record_type, tune_id, tune_name, setting, tune_type,
+            #       started_by_person_id, last_name, first_name, order_position, session_instance_tune_id)
             tune_sets = []
-            current_set = []
-            for row in updated_tunes:
-                # row: (continues_set, tune_id, tune_name, setting, tune_type,
-                #       started_by_person_id, last_name, first_name, order_position, session_instance_tune_id)
-                continues_set = row[0]
-
-                if not continues_set and current_set:
-                    # Start of new set, save previous set
-                    tune_sets.append(current_set)
-                    current_set = []
-
-                # Add tune to current set (format matches RawTune type)
-                current_set.append([
-                    row[0],   # continues_set
-                    row[1],   # tune_id
-                    row[2],   # tune_name
-                    row[3] or '',   # setting
-                    row[4] or '',   # tune_type
-                    row[5],   # started_by_person_id
-                    row[6],   # last_name
-                    row[7],   # first_name
-                    row[8],   # order_position
-                    row[9],   # session_instance_tune_id
+            for tune_set in segment_records_into_sets(updated_tunes, type_index=0):
+                tune_sets.append([
+                    [
+                        tune_idx > 0,   # continues_set (synthesized)
+                        row[1],   # tune_id
+                        row[2],   # tune_name
+                        row[3] or '',   # setting
+                        row[4] or '',   # tune_type
+                        row[5],   # started_by_person_id
+                        row[6],   # last_name
+                        row[7],   # first_name
+                        row[8],   # order_position
+                        row[9],   # session_instance_tune_id
+                    ]
+                    for tune_idx, row in enumerate(tune_set)
                 ])
-
-            if current_set:
-                tune_sets.append(current_set)
 
             cur.close()
             conn.close()
@@ -10691,7 +10732,7 @@ def update_set_started_by(session_instance_id, set_index):
         # Get all tunes for this session instance ordered by order_position
         cur.execute(
             """
-            SELECT session_instance_tune_id, continues_set
+            SELECT session_instance_tune_id, record_type
             FROM session_instance_tune
             WHERE session_instance_id = %s
             ORDER BY order_position
@@ -10703,16 +10744,8 @@ def update_set_started_by(session_instance_id, set_index):
         if not tunes:
             return jsonify({"success": False, "message": "No tunes found"}), 404
 
-        # Group tunes into sets (same logic as frontend)
-        sets = []
-        current_set = []
-        for tune in tunes:
-            if not tune[1] and current_set:  # continues_set is False and we have a current set
-                sets.append(current_set)
-                current_set = []
-            current_set.append(tune)
-        if current_set:
-            sets.append(current_set)
+        # Group tunes into sets by break records
+        sets = segment_records_into_sets(tunes, type_index=1)
 
         # Validate set_index
         if set_index < 0 or set_index >= len(sets):

@@ -275,7 +275,7 @@ class MockDatabaseResponses:
             1001,  # tune_id
             "The Butterfly",  # name
             "V",  # order_position
-            False,  # continues_set
+            "tune",  # record_type
             now_utc().replace(
                 year=2023, month=8, day=15, hour=20, minute=15, second=0, microsecond=0
             ),  # played_timestamp

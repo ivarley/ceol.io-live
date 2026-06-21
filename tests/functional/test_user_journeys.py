@@ -370,7 +370,7 @@ class TestMusicianWorkflow:
             # Phase 2: Add first tune
             response = client.post(
                 "/api/sessions/test-session/2023-08-15/add_tune",
-                json={"tune_name": "The Butterfly", "continues_set": False},
+                json={"tune_name": "The Butterfly"},
             )
 
             assert response.status_code == 200
@@ -380,7 +380,7 @@ class TestMusicianWorkflow:
             # Phase 3: Add second tune (continues the set)
             response = client.post(
                 "/api/sessions/test-session/2023-08-15/add_tune",
-                json={"tune_name": "Out on the Ocean", "continues_set": True},
+                json={"tune_name": "Out on the Ocean"},
             )
 
             assert response.status_code == 200

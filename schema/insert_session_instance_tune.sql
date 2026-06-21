@@ -23,7 +23,6 @@ RETURNS INTEGER AS $$
 DECLARE
     v_session_instance_id INTEGER;
     v_order_number INTEGER;
-    v_continues_set BOOLEAN;
     v_new_id INTEGER;
     v_session_tune_exists BOOLEAN;
 BEGIN
@@ -67,16 +66,13 @@ BEGIN
     FROM session_instance_tune
     WHERE session_instance_id = v_session_instance_id;
     
-    -- Set continues_set as the negation of starts_set
-    v_continues_set := NOT p_starts_set;
-    
-    -- Insert the new record
+    -- Insert the new record (set boundaries are now explicit break records, spec 023)
     INSERT INTO session_instance_tune (
         session_instance_id,
         tune_id,
         name,
         order_number,
-        continues_set,
+        record_type,
         played_timestamp,
         inserted_timestamp,
         key_override,
@@ -86,7 +82,7 @@ BEGIN
         p_tune_id,
         p_name,
         v_order_number,
-        v_continues_set,
+        'tune',
         NULL, -- played_timestamp not set in this procedure
         CURRENT_TIMESTAMP,
         NULL, -- key_override not provided in parameters
