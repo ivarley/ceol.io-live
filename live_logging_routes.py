@@ -35,6 +35,8 @@ from database import (
     get_db_connection,
     get_current_user_id,
     save_to_history,
+    find_matching_tune,
+    normalize_apostrophes,
     check_in_person as db_check_in_person,
     remove_person_attendance as db_remove_person_attendance,
     create_person_with_instruments as db_create_person_with_instruments,
@@ -155,28 +157,47 @@ def _require_live_record(cur, session_instance_id, record_id, *, allow_break=Fal
     return rec
 
 
-def _find_corroboration_target(cur, session_instance_id, tune_id):
-    """The same linked tune already live in the *open set* (after the last break).
+# A record is in the "open set" if it sits after the last break (or there is no
+# break). One place to express it; the per-instance break subquery is appended.
+_OPEN_SET = """order_position > COALESCE(
+    (SELECT MAX(order_position) FROM session_instance_tune
+     WHERE session_instance_id = %s AND record_type = 'break'), '')"""
 
-    This is the realistic concurrency case (§H30): two loggers both append the
-    same tune at once. The second append collapses into the first rather than
-    duplicating — credit the earliest row, corroborate it. Scoped to appends of a
-    linked tune_id; raw-name adds and mid-set anchored inserts are not merged.
+
+def _find_corroboration_target(cur, session_instance_id, tune_id, name):
+    """The same tune already live in the *open set* (after the last break).
+
+    The realistic concurrency case (§H30): two loggers both append the same tune
+    at once; the second collapses into the first (credit the earliest row). Identity
+    is the resolved `tune_id` when linked; otherwise — when tune-matching fully
+    failed — an identical normalized raw name among the *also-unlinked* rows. Scoped
+    to appends; mid-set anchored inserts are not merged.
     """
-    cur.execute(
-        """
-        SELECT session_instance_tune_id, created_by_user_id
-        FROM session_instance_tune
-        WHERE session_instance_id = %s AND record_type = 'tune'
-          AND deleted = FALSE AND tune_id = %s
-          AND order_position > COALESCE(
-              (SELECT MAX(order_position) FROM session_instance_tune
-               WHERE session_instance_id = %s AND record_type = 'break'), '')
-        ORDER BY order_position
-        LIMIT 1
-        """,
-        (session_instance_id, tune_id, session_instance_id),
-    )
+    if tune_id is not None:
+        cur.execute(
+            f"""
+            SELECT session_instance_tune_id, created_by_user_id
+            FROM session_instance_tune
+            WHERE session_instance_id = %s AND record_type = 'tune'
+              AND deleted = FALSE AND tune_id = %s AND {_OPEN_SET}
+            ORDER BY order_position LIMIT 1
+            """,
+            (session_instance_id, tune_id, session_instance_id),
+        )
+    elif name:
+        cur.execute(
+            f"""
+            SELECT session_instance_tune_id, created_by_user_id
+            FROM session_instance_tune
+            WHERE session_instance_id = %s AND record_type = 'tune'
+              AND deleted = FALSE AND tune_id IS NULL
+              AND LOWER(unaccent(name)) = LOWER(unaccent(%s)) AND {_OPEN_SET}
+            ORDER BY order_position LIMIT 1
+            """,
+            (session_instance_id, name, session_instance_id),
+        )
+    else:
+        return None
     return cur.fetchone()
 
 
@@ -216,16 +237,29 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
     if name is not None:
-        name = str(name).strip() or None
+        name = normalize_apostrophes(str(name).strip()) or None
     if tune_id is None and not name:
         raise OpRejected("invalid", "add_tune requires tune_id or name.")
+
+    # Name -> tune matching takes priority. Tapping a typeahead result sends a
+    # tune_id directly; hitting Enter sends just the text, which we resolve here
+    # via the same matching the rest of the app uses. An ambiguous/unknown name
+    # stays unlinked (raw name, tune_id NULL).
+    if tune_id is None and name:
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if srow:
+            matched_id, final_name, err = find_matching_tune(cur, srow[0], name)
+            if matched_id and not err:
+                tune_id, name = matched_id, final_name
 
     source = data.get("source") or "human"
     confidence = data.get("confidence")
 
-    # Duplicate-in-open-set collapses into a corroboration of the earliest row.
-    if tune_id is not None and data.get("after_record_id") is None:
-        target = _find_corroboration_target(cur, session_instance_id, tune_id)
+    # Duplicate-in-open-set collapses into a corroboration of the earliest row:
+    # by tune_id when linked, else by identical raw name when matching fully failed.
+    if data.get("after_record_id") is None:
+        target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
             return _corroborate(cur, session_instance_id, target[0], data, user_id)
 

@@ -397,10 +397,15 @@ exist in the codebase today) via a walking skeleton, then widen.
   >   reuse the existing DB helpers (which carry the `active_session_manager` side effects); the
   >   attendance write commits on its own connection, then the feed event is appended (metadata,
   >   so the slight non-atomicity is fine; `op_id` still guards double-apply).
-  > - **Corroborate/merge detection** (§H30): `add_tune` of a linked `tune_id` already live in the
-  >   open set (an append, not an anchored insert) collapses into the earliest row — records a
-  >   corroboration, bumps confidence (two distinct corroborators → 100/verified), and emits a
-  >   server-generated `corroborate` event via an op_type override, instead of a duplicate row.
+  > - **Name→tune matching + corroborate/merge detection** (§H30): `add_tune` resolves a typed
+  >   name to a `tune_id` via the existing `find_matching_tune` (matching takes priority; tapping a
+  >   typeahead result instead sends `tune_id` directly; ambiguous/unknown names stay unlinked).
+  >   Then an append whose tune is already live in the open set collapses into the earliest row —
+  >   identity = the resolved `tune_id` when linked, else an identical normalized raw name among
+  >   the also-unlinked rows (so two people typing the same unmatched text still merge; mid-typing
+  >   never hits the stream, so only committed entries collide). Records a corroboration, bumps
+  >   confidence (two distinct corroborators → 100/verified), and emits a server-generated
+  >   `corroborate` event via an op_type override instead of a duplicate row.
   > - **Bearer-token issuance**: `POST /api/live/token` (cookie-authed) mints a `user_session`-id
   >   bearer the streaming service already accepts — round-trip verified.
   > - E2E `spike/test_phase1_tail.py` covers all three.

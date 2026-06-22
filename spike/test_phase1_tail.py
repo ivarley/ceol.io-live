@@ -60,8 +60,8 @@ def op(op_type, **payload):
 def main():
     conn = psycopg2.connect(host="localhost", dbname="ceol_test", user="test_user", password="test_password")
     cur = conn.cursor()
-    cur.execute("SELECT tune_id FROM tune WHERE redirect_to_tune_id IS NULL ORDER BY tune_id LIMIT 1")
-    tune_id = cur.fetchone()[0]
+    cur.execute("SELECT tune_id, name FROM tune WHERE redirect_to_tune_id IS NULL AND name IS NOT NULL ORDER BY tune_id LIMIT 1")
+    tune_id, tune_name = cur.fetchone()
     cur.execute("SELECT person_id FROM person ORDER BY person_id LIMIT 1")
     person_id = cur.fetchone()[0]
     conn.close()
@@ -112,8 +112,30 @@ def main():
     bearer.close()
     print("5. bearer-token issuance + streaming acceptance round-trip ✓")
 
+    # --- name -> tune matching (Enter resolves text to a tune_id) ---
+    op("set_break")  # fresh open set
+    r = op("add_tune", name=tune_name)  # by text only, no tune_id
+    assert r["record"]["tune_id"] == tune_id, f"typed name '{tune_name}' should link to tune {tune_id}, got {r['record']}"
+    wait_for(lambda x: x["op_type"] == "add_tune" and x["record"]["tune_id"] == tune_id, "name-matched add")
+    print(f"6. name->tune matching: '{tune_name}' linked to tune {tune_id} ✓")
+    # ...and a second identical name in the same set corroborates by the resolved id
+    r = op("add_tune", name=tune_name)
+    assert r["op_type"] == "corroborate" and r["record"]["tune_id"] == tune_id, r
+    print("7. matched-name duplicate corroborates by tune_id ✓")
+
+    # --- raw-name fallback: identical unmatched text collapses too ---
+    junk = f"Zzz Nontune {int(time.time())}"
+    op("set_break")
+    r1 = op("add_tune", name=junk)
+    assert r1["record"]["tune_id"] is None, "junk should not match any tune"
+    jrid = r1["record"]["session_instance_tune_id"]
+    wait_for(lambda x: x["op_type"] == "add_tune" and x["record"]["session_instance_tune_id"] == jrid, "junk add")
+    r2 = op("add_tune", name=junk.lower())  # different case -> still merges (normalized)
+    assert r2["op_type"] == "corroborate" and r2["record"]["session_instance_tune_id"] == jrid, r2
+    print("8. raw-name fallback: identical unmatched text collapses (case-insensitive) ✓")
+
     stop.set()
-    print("\nPHASE 1 TAIL (corroborate + attendance + token): PASS ✅")
+    print("\nPHASE 1 TAIL (corroborate + attendance + token + name-match): PASS ✅")
 
 
 if __name__ == "__main__":
