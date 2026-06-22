@@ -11,7 +11,7 @@ session_event + pg_notify) -> streaming service LISTEN -> SSE fan-out -> client.
 
 Usage: venv/bin/python spike/test_phase0_e2e.py [FLASK_PORT] [STREAM_PORT] [INSTANCE_ID]
 """
-import sys, json, time, threading, queue
+import sys, json, time, threading, queue, uuid
 import requests
 
 FLASK = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
@@ -71,7 +71,8 @@ def main():
 
     tune_name = f"Phase0 Skeleton Reel {int(time.time())}"
     t0 = time.time()
-    r = s.post(f"{FLASK}/api/live/instances/{INSTANCE}/ops/add_tune", json={"name": tune_name})
+    r = s.post(f"{FLASK}/api/live/instances/{INSTANCE}/ops",
+               json={"op_type": "add_tune", "op_id": str(uuid.uuid4()), "name": tune_name})
     assert r.status_code == 200 and r.json().get("success"), f"add_tune failed: {r.text[:200]}"
     posted = r.json()
     print(f"5. POST add_tune -> event_id={posted['event_id']}, record_id={posted['record']['session_instance_tune_id']}")
@@ -85,7 +86,7 @@ def main():
         except queue.Empty:
             continue
         payload = json.loads(data)
-        if event == "add_tune" and payload.get("record", {}).get("name") == tune_name:
+        if event == "op" and payload.get("op_type") == "add_tune" and payload.get("record", {}).get("name") == tune_name:
             got = payload
             break
     latency = (time.time() - t0) * 1000

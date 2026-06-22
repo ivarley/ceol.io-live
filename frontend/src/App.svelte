@@ -1,55 +1,99 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { bootstrap, addTune, openStream } from './client.js'
+  import { SvelteMap } from 'svelte/reactivity'
+  import { bootstrap, sendOp, openStream } from './client.js'
 
   let { config } = $props()
 
-  let records = $state([]) // canonical tune/break rows, sorted by order_position
+  // Canonical records keyed by id (tunes + break rows), applied idempotently.
+  // SvelteMap (not a plain Map) so .set/.delete are reactive in Svelte 5.
+  const byId = new SvelteMap()
   let status = $state('connecting')
   let input = $state('')
   let error = $state('')
+  let notice = $state('')
   let person = $state(config.currentPerson || {})
 
   let es = null
 
-  // Idempotent upsert keyed by session_instance_tune_id, so bootstrap state and
-  // any SSE replay overlap converge instead of duplicating (spec 024 §A2).
-  function upsert(record) {
-    const id = record.session_instance_tune_id
-    const i = records.findIndex((r) => r.session_instance_tune_id === id)
-    if (i === -1) records.push(record)
-    else records[i] = record
-    // order_position is a base-62 fractional string; ASCII code-unit sort matches
-    // the DB's COLLATE "C" byte order.
-    records.sort((a, b) => (a.order_position < b.order_position ? -1 : a.order_position > b.order_position ? 1 : 0))
+  function put(record) {
+    if (!record) return
+    byId.set(record.session_instance_tune_id, record)
   }
 
-  async function submit() {
-    const name = input.trim()
-    if (!name) return
-    input = ''
+  function drop(id) {
+    byId.delete(id)
+  }
+
+  // Ordered, non-deleted records (tunes + breaks), then segment into sets on breaks.
+  const ordered = $derived(
+    [...byId.values()]
+      .filter((r) => !r.deleted)
+      .sort((a, b) => (a.order_position < b.order_position ? -1 : a.order_position > b.order_position ? 1 : 0))
+  )
+  const sets = $derived.by(() => {
+    const out = []
+    let cur = []
+    for (const r of ordered) {
+      if (r.record_type === 'break') {
+        if (cur.length) out.push(cur)
+        cur = []
+      } else {
+        cur.push(r)
+      }
+    }
+    if (cur.length) out.push(cur)
+    return out
+  })
+  const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
+
+  // Apply one server-authoritative op (spec 024). Dispatch by op_type.
+  function applyOp(d) {
+    switch (d.op_type) {
+      case 'add_tune':
+      case 'change_tune':
+      case 'set_confidence':
+      case 'attribute_set_starter':
+        put(d.record)
+        break
+      case 'set_break':
+        if (d.removed) drop(d.record_id)
+        else put(d.record)
+        break
+      case 'remove_tune':
+        if (d.record) (d.record.deleted ? drop(d.record.session_instance_tune_id) : put(d.record))
+        break
+      case 'edit_notes':
+      case 'mark_complete':
+      case 'mark_incomplete':
+        break // metadata; header-only (not shown in this minimal Phase 1 UI)
+    }
+  }
+
+  async function op(op_type, payload, label) {
     error = ''
     try {
-      // Server-authoritative: the new row arrives (for every client, including
-      // this one) over SSE. Phase 0 keeps it simple — no optimistic row yet.
-      await addTune(config, { name })
+      const res = await sendOp(config, op_type, payload)
+      if (res.rejected) notice = res.message || `${label || op_type}: ${res.reason}`
     } catch (e) {
       error = e.message
     }
   }
 
-  function onKeydown(e) {
-    if (e.key === 'Enter') submit()
+  function submit() {
+    const name = input.trim()
+    if (!name) return
+    input = ''
+    op('add_tune', { name }) // server-authoritative: the row arrives over SSE
   }
 
   onMount(async () => {
     try {
       const snap = await bootstrap(config)
-      records = snap.records || []
-      records.sort((a, b) => (a.order_position < b.order_position ? -1 : 1))
+      for (const r of snap.records || []) put(r)
       if (snap.current_person) person = snap.current_person
       es = openStream(config, snap.last_event_id, {
-        onAddTune: (data) => data.record && upsert(data.record),
+        onOp: applyOp,
         onStatus: (s) => (status = s),
       })
     } catch (e) {
@@ -59,8 +103,6 @@
   })
 
   onDestroy(() => es && es.close())
-
-  const tunes = $derived(records.filter((r) => r.record_type === 'tune'))
 </script>
 
 <main>
@@ -72,23 +114,38 @@
     </div>
   </header>
 
-  <ul class="tunes">
-    {#each tunes as r (r.session_instance_tune_id)}
-      <li>{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</li>
+  {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
+
+  <div class="sets">
+    {#each sets as set, i (set[0].session_instance_tune_id)}
+      <ol class="set">
+        {#each set as r (r.session_instance_tune_id)}
+          <li class:low={r.confidence != null && r.confidence <= 70}>
+            <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
+            <span class="actions">
+              {#if r.confidence != null && r.confidence <= 70}
+                <button onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
+              {/if}
+              <button onclick={() => op('remove_tune', { record_id: r.session_instance_tune_id }, 'Remove')}>✕</button>
+            </span>
+          </li>
+        {/each}
+      </ol>
     {:else}
-      <li class="empty">No tunes yet — log one below.</li>
+      <p class="empty">No tunes yet — log one below.</p>
     {/each}
-  </ul>
+  </div>
 
   {#if error}<p class="error">{error}</p>{/if}
 
   <div class="composer">
-    <input
-      placeholder="Tune name…"
-      bind:value={input}
-      onkeydown={onKeydown}
-      autofocus
-    />
+    <input placeholder="Tune name…" bind:value={input} onkeydown={(e) => e.key === 'Enter' && submit()} />
     <button onclick={submit}>Log</button>
+    <button
+      class="endset"
+      title="End the current set"
+      disabled={!lastRecordId}
+      onclick={() => op('set_break', { after_record_id: lastRecordId }, 'End set')}
+    >End set</button>
   </div>
 </main>

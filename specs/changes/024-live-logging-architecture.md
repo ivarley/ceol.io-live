@@ -369,6 +369,33 @@ exist in the codebase today) via a walking skeleton, then widen.
   > `/live/instances/<id>` in two browsers.
 - **Phase 1 — Full op vocabulary + data delta.** The remaining ops, the schema columns,
   corroboration table, `arrival_seq`, `op_id` idempotency, token auth, the bootstrap shell.
+
+  > **✅ Built & end-to-end validated (2026-06-21).**
+  > - `schema/024_live_logging_delta.sql` (+ mirrored into `full_schema.sql`, `save_to_history`):
+  >   `source`/`confidence`/`played_*`/`logged_timestamp`/`client_device_id`/`deleted` on
+  >   `session_instance_tune`; `op_id` (UNIQUE) on `session_event`; new `corroboration` table;
+  >   `arrival_seq` (UNIQUE per instance) on `session_instance_person`. `full_schema.sql`
+  >   re-validated by a clean from-scratch load.
+  > - `live_logging_routes.py` rewritten as a **generic op endpoint**
+  >   (`POST /api/live/instances/<id>/ops`, body `{op_type, op_id, …}`) with a dispatch table,
+  >   one-txn atomic apply, and **`op_id` idempotency** (cached-ack dedup + UNIQUE-violation race
+  >   handling). Ops: `add_tune`, `remove_tune` (soft tombstone), `change_tune`
+  >   (relink/rename/unlink/key/setting), `set_confidence` (+ records a corroboration),
+  >   `attribute_set_starter`, `set_break` (insert/remove), `edit_notes`,
+  >   `mark_complete`/`mark_incomplete`. Rejections return a `{rejected, reason}` ack (§E;
+  >   `target_deleted` = removal-beats-edit). Bootstrap now returns segmented `sets`, notes,
+  >   and completion state.
+  > - Streaming service: all ops ride a single `event: op` (op_type folded into the data).
+  > - `frontend/`: generic `sendOp`, single SSE handler dispatching by `op_type`, set-segmented
+  >   render with per-tune remove/confirm + End-set controls.
+  > - E2E `spike/test_phase1_e2e.py`: every op over SSE, op_id dedup (no double-apply), and
+  >   removal-beats-edit rejection. Existing pytest suite unchanged (119 pre-existing failures,
+  >   same with/without this work).
+  >
+  > **Phase 1 tail still open:** attendance ops (`attendance_add/remove/create_person` — deferred
+  > because they carry `active_session_manager` side effects), server-generated corroborate/merge
+  > *detection* (§H30; the table + per-actor corroboration exist), and a dedicated bearer-token
+  > *issuance* path (the streaming side already accepts a `user_session` bearer).
 - **Phase 2 — Presence + typing + reconnect resume.** The ephemeral channel,
   color-from-`arrival_seq`, `Last-Event-ID` gap recovery, settle / go-to-end polish,
   conflict notices.

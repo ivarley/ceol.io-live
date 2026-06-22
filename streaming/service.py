@@ -24,6 +24,7 @@ Serves on STREAMING_PORT (default 8080).
 """
 
 import os
+import json
 import asyncio
 from contextlib import asynccontextmanager
 import asyncpg
@@ -218,8 +219,19 @@ async def events(request):
 
 
 def _sse(event_id, op_type, payload_json):
-    """Frame one SSE message. `id:` advances the client's Last-Event-ID cursor."""
-    return f"id: {event_id}\nevent: {op_type}\ndata: {payload_json}\n\n".encode()
+    """Frame one SSE message. `id:` advances the client's Last-Event-ID cursor.
+
+    All ops ride a single `op` event so the client needs one handler; op_type and
+    event_id are folded into the data alongside the referee's payload.
+    """
+    try:
+        data = json.loads(payload_json) if payload_json else {}
+    except (TypeError, ValueError):
+        data = {}
+    data["op_type"] = op_type
+    data["event_id"] = event_id
+    body = json.dumps(data)
+    return f"id: {event_id}\nevent: op\ndata: {body}\n\n".encode()
 
 
 # --- Lifespan / app -------------------------------------------------------
