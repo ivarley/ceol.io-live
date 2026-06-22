@@ -31,7 +31,15 @@ import psycopg2
 from flask import request, jsonify
 from flask_login import current_user
 
-from database import get_db_connection, get_current_user_id, save_to_history
+from database import (
+    get_db_connection,
+    get_current_user_id,
+    save_to_history,
+    check_in_person as db_check_in_person,
+    remove_person_attendance as db_remove_person_attendance,
+    create_person_with_instruments as db_create_person_with_instruments,
+)
+from auth import create_session
 from api_routes import api_login_required, segment_records_into_sets
 from fractional_indexing import generate_append_position, generate_position_between
 
@@ -147,6 +155,63 @@ def _require_live_record(cur, session_instance_id, record_id, *, allow_break=Fal
     return rec
 
 
+def _find_corroboration_target(cur, session_instance_id, tune_id):
+    """The same linked tune already live in the *open set* (after the last break).
+
+    This is the realistic concurrency case (§H30): two loggers both append the
+    same tune at once. The second append collapses into the first rather than
+    duplicating — credit the earliest row, corroborate it. Scoped to appends of a
+    linked tune_id; raw-name adds and mid-set anchored inserts are not merged.
+    """
+    cur.execute(
+        """
+        SELECT session_instance_tune_id, created_by_user_id
+        FROM session_instance_tune
+        WHERE session_instance_id = %s AND record_type = 'tune'
+          AND deleted = FALSE AND tune_id = %s
+          AND order_position > COALESCE(
+              (SELECT MAX(order_position) FROM session_instance_tune
+               WHERE session_instance_id = %s AND record_type = 'break'), '')
+        ORDER BY order_position
+        LIMIT 1
+        """,
+        (session_instance_id, tune_id, session_instance_id),
+    )
+    return cur.fetchone()
+
+
+def _corroborate(cur, session_instance_id, target_id, data, user_id):
+    """Record a corroboration on an existing record + bump its confidence (§H30).
+
+    Emits a server-generated `corroborate` event (op_type override) carrying the
+    updated record, instead of inserting a duplicate tune row."""
+    source = data.get("source") or "human"
+    cur.execute(
+        """
+        INSERT INTO corroboration (record_id, user_id, source, confidence, client_asserted_ts)
+        VALUES (%s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'))
+        ON CONFLICT (record_id, user_id)
+        DO UPDATE SET source = EXCLUDED.source, confidence = EXCLUDED.confidence,
+                      client_asserted_ts = EXCLUDED.client_asserted_ts
+        """,
+        (target_id, user_id, source, data.get("confidence")),
+    )
+    # Two distinct actors agreeing on the same tune/slot = human-verified.
+    cur.execute("SELECT COUNT(DISTINCT user_id) FROM corroboration WHERE record_id = %s", (target_id,))
+    distinct_corroborators = cur.fetchone()[0]
+    save_to_history(cur, "session_instance_tune", "UPDATE", target_id, user_id=user_id)
+    cur.execute(
+        "UPDATE session_instance_tune SET confidence = 100, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        (user_id, target_id),
+    )
+    return {
+        "_op_type": "corroborate",
+        "record": _reselect(cur, target_id),
+        "corroborated_by_user_id": user_id,
+        "corroborators": distinct_corroborators,
+    }
+
+
 def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
@@ -157,6 +222,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     source = data.get("source") or "human"
     confidence = data.get("confidence")
+
+    # Duplicate-in-open-set collapses into a corroboration of the earliest row.
+    if tune_id is not None and data.get("after_record_id") is None:
+        target = _find_corroboration_target(cur, session_instance_id, tune_id)
+        if target is not None:
+            return _corroborate(cur, session_instance_id, target[0], data, user_id)
+
     new_position = _position_for(cur, session_instance_id, data.get("after_record_id"))
 
     cur.execute(
@@ -326,8 +398,62 @@ def _handle_mark_incomplete(cur, session_instance_id, data, user_id):
     return _set_log_complete(cur, session_instance_id, user_id, False)
 
 
+def _person_brief(cur, person_id):
+    cur.execute("SELECT person_id, first_name, last_name FROM person WHERE person_id = %s", (person_id,))
+    row = cur.fetchone()
+    if not row:
+        return {"person_id": person_id}
+    return {"person_id": row[0], "first_name": row[1], "last_name": row[2],
+            "display_name": f"{row[1]} {row[2]}".strip()}
+
+
+# Attendance ops (§C). These reuse the existing DB helpers, which manage their own
+# transaction AND the active_session_manager side effects, so the attendance write
+# commits before this op's feed event (acceptable for metadata; a missed event is
+# self-healing on the next bootstrap). op_id still guards against double-apply.
+def _handle_attendance_add(cur, session_instance_id, data, user_id):
+    person_id = data.get("person_id")
+    if person_id is None:
+        raise OpRejected("invalid", "attendance_add requires person_id.")
+    attendance = data.get("attendance", "yes")
+    comment = data.get("comment", "")
+    ok, message, action = db_check_in_person(session_instance_id, person_id, attendance, comment, user_id=user_id)
+    if not ok:
+        raise OpRejected("attendance_failed", message)
+    return {"attendance": attendance, "comment": comment, "action": action, "person": _person_brief(cur, person_id)}
+
+
+def _handle_attendance_remove(cur, session_instance_id, data, user_id):
+    person_id = data.get("person_id")
+    if person_id is None:
+        raise OpRejected("invalid", "attendance_remove requires person_id.")
+    person = _person_brief(cur, person_id)  # capture name before the row goes
+    ok, message, _prev = db_remove_person_attendance(session_instance_id, person_id, user_id=user_id)
+    if not ok:
+        raise OpRejected("attendance_failed", message)
+    return {"removed": True, "person": person}
+
+
+def _handle_attendance_create_person(cur, session_instance_id, data, user_id):
+    first = (data.get("first_name") or "").strip()
+    last = (data.get("last_name") or "").strip()
+    if not first:
+        raise OpRejected("invalid", "attendance_create_person requires first_name.")
+    ok, message, person_id, display_name = db_create_person_with_instruments(
+        first, last, email=data.get("email"), instruments=data.get("instruments"), user_id=user_id)
+    if not ok:
+        raise OpRejected("create_failed", message)
+    attendance = data.get("attendance", "yes")
+    db_check_in_person(session_instance_id, person_id, attendance, data.get("comment", ""), user_id=user_id)
+    return {"created": True, "attendance": attendance,
+            "person": {"person_id": person_id, "first_name": first, "last_name": last, "display_name": display_name}}
+
+
 HANDLERS = {
     "add_tune": _handle_add_tune,
+    "attendance_add": _handle_attendance_add,
+    "attendance_remove": _handle_attendance_remove,
+    "attendance_create_person": _handle_attendance_create_person,
     "remove_tune": _handle_remove_tune,
     "change_tune": _handle_change_tune,
     "set_confidence": _handle_set_confidence,
@@ -385,6 +511,10 @@ def live_op(session_instance_id):
             return jsonify({"success": False, "rejected": True, "reason": r.reason,
                             "message": r.message, "op_id": op_id, "op_type": op_type})
 
+        # A handler may emit a different event type than the client requested
+        # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
+        event_op_type = payload.pop("_op_type", op_type)
+
         # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B).
         try:
             cur.execute(
@@ -392,7 +522,7 @@ def live_op(session_instance_id):
                 INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
                 VALUES (%s, %s, %s, %s, %s) RETURNING event_id
                 """,
-                (session_instance_id, op_type, json.dumps(payload), op_id, user_id),
+                (session_instance_id, event_op_type, json.dumps(payload), op_id, user_id),
             )
         except psycopg2.errors.UniqueViolation:
             # Concurrent retry of the same op_id won the race; discard ours, return theirs.
@@ -408,7 +538,7 @@ def live_op(session_instance_id):
         cur.execute("COMMIT")
 
         return jsonify({"success": True, "event_id": event_id, "op_id": op_id,
-                        "op_type": op_type, **payload})
+                        "op_type": event_op_type, **payload})
     except Exception as e:
         try:
             cur.execute("ROLLBACK")
@@ -417,6 +547,24 @@ def live_op(session_instance_id):
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
         conn.close()
+
+
+@api_login_required
+def live_issue_token():
+    """
+    Mint a bearer token for a non-cookie client (spec 024 §H).
+
+    A cookie-authenticated user exchanges their session for a bearer token (a
+    `user_session` id) that a future native/WKWebView client can present to the
+    streaming service and op endpoints instead of the web cookie. Same lifetime
+    and revocation as a web session.
+    """
+    ip = request.environ.get("HTTP_X_FORWARDED_FOR", request.environ.get("REMOTE_ADDR"))
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent")
+    token = create_session(current_user.user_id, ip_address=ip, user_agent=user_agent)
+    return jsonify({"success": True, "token": token, "token_type": "Bearer"})
 
 
 @api_login_required

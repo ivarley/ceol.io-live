@@ -54,6 +54,7 @@
       case 'change_tune':
       case 'set_confidence':
       case 'attribute_set_starter':
+      case 'corroborate': // server collapsed a duplicate into this record (§H30)
         put(d.record)
         break
       case 'set_break':

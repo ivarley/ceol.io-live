@@ -24,7 +24,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_op
+from live_logging_routes import live_bootstrap, live_op, live_issue_token
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -301,6 +301,12 @@ app.add_url_rule(
     "/api/live/instances/<int:session_instance_id>/ops",
     "live_op",
     live_op,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/live/token",
+    "live_issue_token",
+    live_issue_token,
     methods=["POST"],
 )
 app.add_url_rule(

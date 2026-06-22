@@ -392,10 +392,20 @@ exist in the codebase today) via a walking skeleton, then widen.
   >   removal-beats-edit rejection. Existing pytest suite unchanged (119 pre-existing failures,
   >   same with/without this work).
   >
-  > **Phase 1 tail still open:** attendance ops (`attendance_add/remove/create_person` — deferred
-  > because they carry `active_session_manager` side effects), server-generated corroborate/merge
-  > *detection* (§H30; the table + per-actor corroboration exist), and a dedicated bearer-token
-  > *issuance* path (the streaming side already accepts a `user_session` bearer).
+  > **Phase 1 tail — also built & validated (2026-06-22):**
+  > - **Attendance ops** `attendance_add` / `attendance_remove` / `attendance_create_person` —
+  >   reuse the existing DB helpers (which carry the `active_session_manager` side effects); the
+  >   attendance write commits on its own connection, then the feed event is appended (metadata,
+  >   so the slight non-atomicity is fine; `op_id` still guards double-apply).
+  > - **Corroborate/merge detection** (§H30): `add_tune` of a linked `tune_id` already live in the
+  >   open set (an append, not an anchored insert) collapses into the earliest row — records a
+  >   corroboration, bumps confidence (two distinct corroborators → 100/verified), and emits a
+  >   server-generated `corroborate` event via an op_type override, instead of a duplicate row.
+  > - **Bearer-token issuance**: `POST /api/live/token` (cookie-authed) mints a `user_session`-id
+  >   bearer the streaming service already accepts — round-trip verified.
+  > - E2E `spike/test_phase1_tail.py` covers all three.
+  >
+  > Genuinely out of Phase 1 (future): partial-overlap offline reconciliation, By-ABC search.
 - **Phase 2 — Presence + typing + reconnect resume.** The ephemeral channel,
   color-from-`arrival_seq`, `Last-Event-ID` gap recovery, settle / go-to-end polish,
   conflict notices.
