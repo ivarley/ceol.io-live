@@ -59,6 +59,25 @@
 
   let es = null
   let inputEl // the composer input element (for stay-hot refocus)
+  let setsEl // the scrolling list element
+  let atEnd = $state(true) // is the list scrolled to (near) the bottom?
+  let lastCount = 0 // tracks record count to auto-scroll only on additions
+
+  function onScroll() {
+    if (setsEl) atEnd = setsEl.scrollHeight - setsEl.scrollTop - setsEl.clientHeight < 80
+  }
+  function goToEnd() {
+    if (setsEl) setsEl.scrollTo({ top: setsEl.scrollHeight, behavior: 'smooth' })
+  }
+  // Stick to the bottom on new tunes (mine or others') — but only if already at the
+  // end, so a manual scroll-up isn't yanked away (the "Go to end" pill covers that).
+  $effect(() => {
+    const n = ordered.length
+    if (n > lastCount && atEnd && setsEl) {
+      requestAnimationFrame(() => { if (setsEl) setsEl.scrollTop = setsEl.scrollHeight })
+    }
+    lastCount = n
+  })
   let lastTypingSent = 0 // throttle the "still typing" refresh
   let highWater = 0 // max event_id seen; persisted with the snapshot for offline resume
   let snapTimer = null
@@ -66,6 +85,11 @@
   let syncMsg = $state(null) // transient "N synced · M added while away" on reconnect (§I36)
   let syncMsgSeq = 0
   let sessionId = null // for search ranking/flagging (set from bootstrap when online)
+  let sessionName = $state('')
+  let sessionDate = $state('')
+  let notesText = $state('')
+  let menuOpen = $state(false)
+  let expanded = $state(false)
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
   let searchTimer = null
@@ -86,7 +110,10 @@
     try {
       // JSON round-trip strips Svelte reactive proxies; IndexedDB can't
       // structured-clone a Proxy (DataCloneError), which would silently fail.
-      const value = JSON.parse(JSON.stringify({ records, last_event_id: highWater, person, ts: Date.now() }))
+      const value = JSON.parse(JSON.stringify({
+        records, last_event_id: highWater, person, ts: Date.now(),
+        session_name: sessionName, session_date: sessionDate, notes: notesText,
+      }))
       await snapshotPut(config.sessionInstanceId, value)
     } catch {
       /* IndexedDB unavailable — skip */
@@ -491,7 +518,8 @@
         // Offline: fall back to the cached snapshot so the screen still renders (§G).
         const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
         snap = cached
-          ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person }
+          ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
+              session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes }
           : { records: [], last_event_id: 0 }
         fromCache = true
       }
@@ -499,6 +527,9 @@
       byId.clear()
       for (const r of snap.records || []) put(r)
       if (snap.current_person) person = snap.current_person
+      if (snap.session_name) sessionName = snap.session_name
+      if (snap.session_date) sessionDate = snap.session_date
+      notesText = snap.notes || ''
       highWater = snap.last_event_id || 0
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
       await hydrateQueue() // re-apply still-queued ops' optimistic state onto these records
@@ -630,34 +661,71 @@
 </script>
 
 <main>
-  <header>
-    <h1>Live logging <span class="beta">beta</span></h1>
-    <div class="meta">
-      <span class="roster">
-        {#each roster as p (p.person_id)}
-          <span class="avatar" style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.devices > 1 ? ` (${p.devices} devices)` : ''}">
-            {initials(p.name)}{#if p.devices > 1}<sup>{p.devices}</sup>{/if}
-          </span>
-        {/each}
-      </span>
-      <span class="status status-{displayStatus}">{displayStatus}</span>
+  <div class="topnav">
+    <div class="appbar">
+      <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
+      <div class="appbar-actions">
+        <button class="hamburger-btn" aria-label="Menu" onclick={() => (menuOpen = !menuOpen)}>
+          <span></span><span></span><span></span>
+        </button>
+        {#if menuOpen}
+          <div class="hamburger-dropdown show">
+            {#if person.first_name}<span class="hamburger-item who">{person.first_name} {person.last_name || ''}</span>{/if}
+            <a class="hamburger-item" href="/my-tunes">My Tunes</a>
+            <a class="hamburger-item" href="/me">My Sessions</a>
+            <a class="hamburger-item" href="/add-session">Add A Session</a>
+            <a class="hamburger-item" href="/share">Share</a>
+            <a class="hamburger-item" href="/help">Help</a>
+            <a class="hamburger-item" href="/logout">Log Out</a>
+          </div>
+        {/if}
+      </div>
     </div>
-  </header>
 
-  {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
-  {#if activity}
-    <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
-  {/if}
-  {#if syncMsg}
-    <p class="sync-msg">↻ {syncMsg}</p>
-  {/if}
-  {#if queuedCount > 0}
-    <p class="offline-banner">
-      ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
-    </p>
-  {/if}
+    <header class="topbar">
+      <div class="topbar-row" onclick={() => (expanded = !expanded)}>
+        <div class="topbar-main">
+          <div class="session-name">{sessionName || 'Session'}</div>
+          <div class="session-date">{sessionDate}</div>
+        </div>
+        <span class="topbar-presence">
+          {#each roster as p (p.person_id)}
+            <span class="avatar" style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.devices > 1 ? ` (${p.devices} devices)` : ''}">
+              {initials(p.name)}{#if p.devices > 1}<sup>{p.devices}</sup>{/if}
+            </span>
+          {/each}
+        </span>
+        <span class="status status-{displayStatus}" title="connection">{displayStatus}</span>
+        <span class="header-chevron" class:up={expanded}>▾</span>
+      </div>
+      {#if expanded}
+        <div class="header-expand">
+          <div class="header-stat">{tunes.length} tune{tunes.length === 1 ? '' : 's'} in {sets.length} set{sets.length === 1 ? '' : 's'}</div>
+          {#if notesText}<div class="header-stat header-notes">{notesText}</div>{/if}
+          {#if roster.length}
+            <div class="header-stat">Currently logging: {roster.map((p) => p.name).join(', ')}</div>
+          {/if}
+        </div>
+      {/if}
+    </header>
+  </div>
 
-  <div class="sets">
+  <div class="feed-msgs">
+    {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
+    {#if activity}
+      <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
+    {/if}
+    {#if syncMsg}
+      <p class="sync-msg">↻ {syncMsg}</p>
+    {/if}
+    {#if queuedCount > 0}
+      <p class="offline-banner">
+        ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
+      </p>
+    {/if}
+  </div>
+
+  <div class="sets" bind:this={setsEl} onscroll={onScroll}>
     {#each displaySets as set, i (set[0].session_instance_tune_id)}
       <ol class="set">
         {#each set as r (r.session_instance_tune_id)}
@@ -699,6 +767,9 @@
   {/if}
 
   <div class="dock">
+    {#if !atEnd}
+      <button class="goend-pill" onclick={goToEnd}>↓ Go to end</button>
+    {/if}
     {#if results.length}
       <ul class="results">
         {#each results as t (t.tune_id)}
