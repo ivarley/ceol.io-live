@@ -12,12 +12,12 @@ export async function bootstrap(config) {
 
 // Generic op POST (spec 024 §C). Every op carries a client-generated op_id as the
 // universal idempotency key — a retried POST whose ack was lost dedupes server-side.
-export async function sendOp(config, op_type, payload = {}) {
+export async function sendOp(config, op_type, payload = {}, op_id = crypto.randomUUID()) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/ops`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ op_id: crypto.randomUUID(), op_type, ...payload }),
+    body: JSON.stringify({ op_id, op_type, ...payload }),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || `${op_type} failed: ${res.status}`)

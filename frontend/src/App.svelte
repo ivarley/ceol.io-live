@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, openStream } from './client.js'
 
   let { config } = $props()
@@ -8,6 +8,8 @@
   // Canonical records keyed by id (tunes + break rows), applied idempotently.
   // SvelteMap (not a plain Map) so .set/.delete are reactive in Svelte 5.
   const byId = new SvelteMap()
+  const pending = new SvelteMap() // op_id -> {tempId, name} optimistic, pre-ack (§A2)
+  const flashing = new SvelteSet() // record ids briefly highlighted on settle (§39)
   let status = $state('connecting')
   let input = $state('')
   let error = $state('')
@@ -33,6 +35,13 @@
     byId.delete(id)
   }
 
+  // Briefly highlight a record when it settles / changes (the §39 settle-flash).
+  function flashId(id) {
+    if (id == null) return
+    flashing.add(id)
+    setTimeout(() => flashing.delete(id), 700)
+  }
+
   // Ordered, non-deleted records (tunes + breaks), then segment into sets on breaks.
   const ordered = $derived(
     [...byId.values()]
@@ -54,9 +63,24 @@
     return out
   })
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
+  const openSet = $derived(ordered.length > 0 && ordered[ordered.length - 1].record_type !== 'break')
+
+  // Sets for display, with optimistic pending rows appended to the open set (or a
+  // new trailing set if the last record is a break / there are none yet).
+  const displaySets = $derived.by(() => {
+    const base = sets.map((s) => s.slice())
+    const pend = [...pending.values()].map((p) => ({
+      session_instance_tune_id: p.tempId, name: p.name, record_type: 'tune', pending: true,
+    }))
+    if (!pend.length) return base
+    if (base.length && openSet) base[base.length - 1].push(...pend)
+    else base.push(pend)
+    return base
+  })
 
   // Apply one server-authoritative op (spec 024). Dispatch by op_type.
   function applyOp(d) {
+    if (d.op_id && pending.has(d.op_id)) pending.delete(d.op_id) // settle our optimistic row
     switch (d.op_type) {
       case 'add_tune':
       case 'change_tune':
@@ -64,6 +88,7 @@
       case 'attribute_set_starter':
       case 'corroborate': // server collapsed a duplicate into this record (§H30)
         put(d.record)
+        flashId(d.record?.session_instance_tune_id)
         break
       case 'set_break':
         if (d.removed) drop(d.record_id)
@@ -89,13 +114,30 @@
     }
   }
 
-  function submit() {
+  async function submit() {
     const name = input.trim()
     if (!name) return
     input = ''
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
-    op('add_tune', { name }) // server-authoritative: the row arrives over SSE
+
+    // Optimistic: show the row immediately as pending, reconcile on the server's
+    // authoritative result (which arrives via op-ack and/or the SSE echo, by op_id).
+    const op_id = crypto.randomUUID()
+    pending.set(op_id, { tempId: `pending-${op_id}`, name })
+    error = ''
+    try {
+      const res = await sendOp(config, 'add_tune', { name }, op_id)
+      pending.delete(op_id)
+      if (res.rejected) notice = res.message || `Add: ${res.reason}`
+      else if (res.record) {
+        put(res.record) // settle now if the ack beat the SSE echo (idempotent)
+        flashId(res.record.session_instance_tune_id)
+      }
+    } catch (e) {
+      pending.delete(op_id)
+      error = e.message
+    }
   }
 
   // Refresh a typing reservation while composing (throttled); clear it when empty.
@@ -189,17 +231,25 @@
   {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
 
   <div class="sets">
-    {#each sets as set, i (set[0].session_instance_tune_id)}
+    {#each displaySets as set, i (set[0].session_instance_tune_id)}
       <ol class="set">
         {#each set as r (r.session_instance_tune_id)}
-          <li class:low={r.confidence != null && r.confidence <= 70}>
+          <li
+            class:low={!r.pending && r.confidence != null && r.confidence <= 70}
+            class:pending={r.pending}
+            class:flash={flashing.has(r.session_instance_tune_id)}
+          >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
-            <span class="actions">
-              {#if r.confidence != null && r.confidence <= 70}
-                <button onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
-              {/if}
-              <button onclick={() => op('remove_tune', { record_id: r.session_instance_tune_id }, 'Remove')}>✕</button>
-            </span>
+            {#if r.pending}
+              <span class="actions"><span class="hourglass" title="Sending…">⏳</span></span>
+            {:else}
+              <span class="actions">
+                {#if r.confidence != null && r.confidence <= 70}
+                  <button onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
+                {/if}
+                <button onclick={() => op('remove_tune', { record_id: r.session_instance_tune_id }, 'Remove')}>✕</button>
+              </span>
+            {/if}
           </li>
         {/each}
       </ol>

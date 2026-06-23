@@ -87,6 +87,15 @@ h1 { font-size: 18px; margin: 0; }
 }
 .set li .name { display: inline; }
 .set li.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
+.set li.pending { opacity: 0.55; }
+.set li.pending .name { border-bottom: 1px dashed var(--muted); }
+.hourglass { font-size: 12px; opacity: 0.8; }
+/* settle-flash when a record is confirmed/changed (§39) */
+.set li.flash { animation: settle 0.7s ease-out; border-radius: 6px; }
+@keyframes settle {
+  0% { background: rgba(79, 157, 255, 0.35); }
+  100% { background: transparent; }
+}
 .actions { display: inline-flex; gap: 6px; }
 .actions button {
   font: inherit;
