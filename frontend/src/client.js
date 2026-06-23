@@ -63,6 +63,21 @@ export async function sendTyping(config, typing, anchor = null) {
   }
 }
 
+// Type-ahead tune search (spec 021 §D). Public endpoint; session_id flags/ranks
+// tunes already in this session. Returns [] on failure (search is non-critical).
+export async function searchTunes(config, q, sessionId) {
+  const params = new URLSearchParams({ q, limit: '8' })
+  if (sessionId) params.set('session_id', String(sessionId))
+  try {
+    const res = await fetch(`/api/tunes/search?${params}`, { credentials: 'same-origin' })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.tunes || []
+  } catch {
+    return []
+  }
+}
+
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials

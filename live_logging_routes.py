@@ -639,7 +639,7 @@ def live_bootstrap(session_instance_id):
         # record_type is index 4 in _RECORD_COLS; segment into sets, dropping breaks.
         sets = [[_record_to_dict(r) for r in s] for s in segment_records_into_sets(rows, type_index=4)]
 
-        cur.execute("SELECT comments, log_complete_date FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        cur.execute("SELECT session_id, comments, log_complete_date FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
         meta = cur.fetchone()
 
         cur.execute("SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s", (session_instance_id,))
@@ -653,8 +653,9 @@ def live_bootstrap(session_instance_id):
                 "first_name": getattr(current_user, "first_name", ""),
                 "last_name": getattr(current_user, "last_name", ""),
             },
-            "notes": meta[0] if meta else None,
-            "log_complete": bool(meta[1]) if meta else False,
+            "session_id": meta[0] if meta else None,
+            "notes": meta[1] if meta else None,
+            "log_complete": bool(meta[2]) if meta else False,
             "records": records,
             "sets": sets,
             "last_event_id": high_water,

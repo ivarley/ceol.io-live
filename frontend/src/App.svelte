@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
 
   let { config } = $props()
@@ -58,12 +58,18 @@
   let activitySeq = 0
 
   let es = null
+  let inputEl // the composer input element (for stay-hot refocus)
   let lastTypingSent = 0 // throttle the "still typing" refresh
   let highWater = 0 // max event_id seen; persisted with the snapshot for offline resume
   let snapTimer = null
   let everConnected = false // distinguishes the first connect from a reconnect
   let syncMsg = $state(null) // transient "N synced · M added while away" on reconnect (§I36)
   let syncMsgSeq = 0
+  let sessionId = null // for search ranking/flagging (set from bootstrap when online)
+  let results = $state([]) // type-ahead search results shown above the composer (§D)
+  let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
+  let searchTimer = null
+  let searchSeq = 0
 
   function showSync(text) {
     const seq = ++syncMsgSeq
@@ -316,20 +322,83 @@
     }
   }
 
-  function submit() {
-    const name = input.trim()
-    if (!name) return
-    input = ''
-    lastTypingSent = 0
-    sendTyping(config, false) // clear-on-commit (§F)
-    error = ''
+  // Shared optimistic add: shows a temp row immediately, sends/queues the op.
+  function addOptimistic(payload, name) {
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
     byId.set(tempId, {
-      session_instance_tune_id: tempId, name, tune_id: null, record_type: 'tune',
+      session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, record_type: 'tune',
       order_position: nextTempPos(), deleted: false, _temp: true, _status: 'sending',
     })
-    trySend({ op_id, name, op_type: 'add_tune', payload: { name }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, name, op_type: 'add_tune', payload, status: 'sending', ts: Date.now(), tempId })
+  }
+
+  // Cancel a pending debounced search AND invalidate any in-flight one, so a late
+  // result can't repopulate the dropdown after we've committed/dismissed.
+  function cancelSearch() {
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null }
+    searchSeq++ // a search already awaiting will fail its seq check and be discarded
+  }
+
+  function clearEntry() {
+    input = ''
+    results = []
+    resultsQuery = ''
+    cancelSearch()
+    lastTypingSent = 0
+    sendTyping(config, false) // clear-on-commit (§F)
+    error = ''
+  }
+
+  // Enter: add by typed text (server matches it to a tune, §C).
+  function submit() {
+    const name = input.trim()
+    if (!name) return
+    clearEntry()
+    addOptimistic({ name }, name)
+  }
+
+  // Tap a search result: add the linked tune directly, then stay hot for the next
+  // (spec 021 §D13 burst entry).
+  function pickResult(t) {
+    clearEntry()
+    addOptimistic({ tune_id: t.tune_id, name: t.name }, t.name)
+    queueMicrotask(() => inputEl?.focus())
+  }
+
+  // Enter commits the top match: pick the top visible result (what the user sees
+  // ranked first) — covers partials like "humours" -> "The Humours of …". Only when
+  // there's truly no match does it fall back to adding the raw text (server still
+  // tries an exact match on that). Fast-typing fallback: do a quick lookup if the
+  // debounced results haven't landed yet.
+  async function commit() {
+    const q = input.trim()
+    if (!q) return
+    // Only trust the dropdown if it matches the CURRENT text (the debounced search
+    // may still be showing results for an earlier prefix); otherwise look up fresh.
+    if (resultsQuery === q && results.length) { pickResult(results[0]); return }
+    const r = await searchTunes(config, q, sessionId)
+    if (r.length) pickResult(r[0])
+    else submit()
+  }
+
+  // Progressive type-ahead search (debounced), shown above the composer.
+  function runSearch() {
+    const q = input.trim()
+    if (q.length < 2) {
+      results = []
+      resultsQuery = q
+      return
+    }
+    if (searchTimer) clearTimeout(searchTimer)
+    searchTimer = setTimeout(async () => {
+      const seq = ++searchSeq
+      const r = await searchTunes(config, q, sessionId)
+      if (seq === searchSeq) {
+        results = r
+        resultsQuery = q
+      }
+    }, 180)
   }
 
   // Remove (soft) — works offline: optimistically marks the row "⏳ removing"
@@ -372,8 +441,9 @@
 
   const queuedCount = $derived([...pending.values()].filter((e) => e.status === 'queued').length)
 
-  // Refresh a typing reservation while composing (throttled); clear it when empty.
+  // Refresh a typing reservation while composing (throttled), run search, clear when empty.
   function onInput() {
+    runSearch()
     if (input.trim()) {
       const now = Date.now()
       if (now - lastTypingSent > 3000) {
@@ -391,6 +461,11 @@
       lastTypingSent = 0
       sendTyping(config, false)
     }
+    // Result clicks use mousedown+preventDefault (no blur), so we can close
+    // immediately on a real blur and cancel any pending search.
+    cancelSearch()
+    results = []
+    resultsQuery = ''
   }
 
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
@@ -409,6 +484,7 @@
       try {
         snap = await bootstrap(config) // server truth + fresh high-water
         reachable = true // we just reached the server
+        if (snap.session_id) sessionId = snap.session_id
       } catch (e) {
         if (!e.networkError) throw e
         reachable = false // couldn't reach the server -> offline (not just "reconnecting")
@@ -622,20 +698,36 @@
     </div>
   {/if}
 
-  <div class="composer">
-    <input
-      placeholder="Tune name…"
-      bind:value={input}
-      oninput={onInput}
-      onblur={stopTyping}
-      onkeydown={(e) => e.key === 'Enter' && submit()}
-    />
-    <button onclick={submit}>Log</button>
-    <button
-      class="endset"
-      title="End the current set"
-      disabled={!lastRecordId}
-      onclick={endSet}
-    >End set</button>
+  <div class="dock">
+    {#if results.length}
+      <ul class="results">
+        {#each results as t (t.tune_id)}
+          <li onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
+            <span class="r-name">{t.name}</span>
+            <span class="r-meta">
+              {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    <div class="composer">
+      <input
+        placeholder="Search or type a tune…"
+        bind:value={input}
+        bind:this={inputEl}
+        oninput={onInput}
+        onblur={stopTyping}
+        onkeydown={(e) => e.key === 'Enter' && commit()}
+      />
+      <button onmousedown={(e) => e.preventDefault()} onclick={commit}>Log</button>
+      <button
+        class="endset"
+        title="End the current set"
+        disabled={!lastRecordId}
+        onclick={endSet}
+      >End set</button>
+    </div>
   </div>
 </main>

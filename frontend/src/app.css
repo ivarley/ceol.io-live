@@ -165,7 +165,41 @@ h1 { font-size: 18px; margin: 0; }
 .endset { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--border) !important; }
 .endset:disabled { opacity: 0.4; cursor: default; }
 
-.composer { display: flex; gap: 8px; position: sticky; bottom: 0; padding-top: 8px; }
+.dock { position: sticky; bottom: 0; }
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 45vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  /* float above the input rather than pushing the list */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 6px;
+  z-index: 20;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.45);
+}
+.results li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.results li:hover { background: rgba(79, 157, 255, 0.12); }
+.results .r-name { font-weight: 600; }
+.results .r-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.results .r-insession { color: var(--accent); }
+
+.composer { display: flex; gap: 8px; padding-top: 8px; background: var(--bg); }
 .composer input {
   flex: 1;
   font: inherit;
