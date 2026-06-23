@@ -61,6 +61,15 @@
   let lastTypingSent = 0 // throttle the "still typing" refresh
   let highWater = 0 // max event_id seen; persisted with the snapshot for offline resume
   let snapTimer = null
+  let everConnected = false // distinguishes the first connect from a reconnect
+  let syncMsg = $state(null) // transient "N synced · M added while away" on reconnect (§I36)
+  let syncMsgSeq = 0
+
+  function showSync(text) {
+    const seq = ++syncMsgSeq
+    syncMsg = text
+    setTimeout(() => { if (seq === syncMsgSeq) syncMsg = null }, 5000)
+  }
 
   // Persist a clean (server-truth) snapshot of the records so the screen can render
   // offline (§G): strip client-only optimistic flags and temp rows.
@@ -390,6 +399,9 @@
   async function connect() {
     const myGen = ++connSeq
     if (reconnectPoll) { clearTimeout(reconnectPoll); reconnectPoll = null }
+    // Snapshot pre-reconnect state for the §I36 "synced / added while away" summary.
+    const prevIds = new Set([...byId.values()].filter((r) => typeof r.session_instance_tune_id === 'number').map((r) => r.session_instance_tune_id))
+    const wasQueued = [...pending.values()].filter((e) => e.status === 'queued').length
     try {
       if (es) { es.close(); es = null }
       let snap
@@ -418,6 +430,7 @@
       if (fromCache) {
         // Offline: render from cache, don't open a doomed SSE that retries every ~3s.
         // Slow-poll a reconnect; the 'online' event also triggers one immediately.
+        everConnected = true // this counts as having connected, so the next (online) reconnect summarizes
         scheduleReconnect()
         return
       }
@@ -440,6 +453,16 @@
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
+
+      // On a reconnect (not the first connect), summarize what changed while away.
+      if (everConnected) {
+        const added = (snap.records || []).filter((r) => !prevIds.has(r.session_instance_tune_id)).length
+        const parts = []
+        if (wasQueued) parts.push(`${wasQueued} synced`)
+        if (added) parts.push(`${added} added while away`)
+        if (parts.length) showSync(parts.join(' · '))
+      }
+      everConnected = true
     } catch (e) {
       error = e.message
       sseStatus = 'error'
@@ -548,6 +571,9 @@
   {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
   {#if activity}
     <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
+  {/if}
+  {#if syncMsg}
+    <p class="sync-msg">↻ {syncMsg}</p>
   {/if}
   {#if queuedCount > 0}
     <p class="offline-banner">

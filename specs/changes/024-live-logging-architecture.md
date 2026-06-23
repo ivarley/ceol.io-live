@@ -509,9 +509,22 @@ exist in the codebase today) via a walking skeleton, then widen.
   > end-set → offline → reload → snapshot renders → offline remove+restore → offline end-set →
   > reconnect → queue drains, temps→real, no console errors.
   >
+  > **Chunk 6 — connectivity consistency + reconnect summary (2026-06-23, Playwright-verified).**
+  > Single source of truth for the pill AND banner (`!online || !reachable ? offline : sseStatus
+  > === live ? live : reconnecting`), so they can't disagree. Offline is inferred from three
+  > signals (navigator.onLine false, OR a failed bootstrap on load, OR an 8s reconnect timeout) —
+  > fixes the indefinite-"reconnecting" hang on offline reload where navigator.onLine lies. When
+  > unreachable, the client does NOT open an EventSource (no ~3s retry spam); it slow-polls a
+  > reconnect every 10s (+ the `online` event). Presence/typing clear when not live. **Reconnect
+  > summary toast (§I36):** on reconnect, "N synced · M added while away" (M = server records not
+  > previously known). The faithful test (`spike/pw_offline.py`, persistent profile) asserts:
+  > shell cached, offline reload renders + pill "offline" + banner agrees, 0 SSE requests while
+  > offline, and the synced/added-while-away summary (with a 2nd user adding server-side).
+  >
   > **Deferred (later chunks):** local→server id remapping for offline anchored *mid-set* inserts;
-  > offline tune-match cache (match names with no network); reconnect reconciliation review screen
-  > + post-completion diff (§G); offline confirm/attribution ops.
+  > offline tune-match cache (match names with no network); the full reconnect **reconciliation
+  > review screen** for major divergence / post-`log_complete` (§G; the lightweight toast above
+  > covers the clean case); offline confirm/attribution ops.
 
 (Audio = separate task, after the above; gated on finishing 022.)
 

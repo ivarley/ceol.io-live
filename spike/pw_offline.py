@@ -11,7 +11,8 @@ and render the cached tunes; then offline ops; then reconnect.
 Run: venv/bin/python spike/pw_offline.py [FLASK_PORT] [INSTANCE_ID]
 Pass a 3rd arg "keep" to reuse the profile dir across runs.
 """
-import sys, time, tempfile, os
+import sys, time, tempfile, os, uuid
+import requests
 from playwright.sync_api import sync_playwright
 
 FLASK = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
@@ -126,9 +127,23 @@ def main():
             if not (nm in last_set and len(last_set) == 1):
                 failures.append(f"end-set offline didn't start a new set; last set={last_set}")
 
+        # while still offline, ANOTHER user adds a tune server-side (Python requests
+        # isn't subject to the browser's offline mode) -> should show "added while away"
+        other = requests.Session()
+        other.post(f"{FLASK}/api/auth/login-password", json={"email": "sarah.oconnor@example.com", "password": "password123"})
+        other.post(f"{FLASK}/api/live/instances/{INSTANCE}/ops",
+                   json={"op_type": "add_tune", "op_id": str(uuid.uuid4()), "name": f"While Away {int(time.time())}"})
+
         # --- reconnect ---
         ctx.set_offline(False)
-        page.wait_for_timeout(4000)
+        page.wait_for_timeout(2000)
+        sync_msg = page.text_content(".sync-msg") if page.query_selector(".sync-msg") else ""
+        log(f"reconnect summary toast: {sync_msg.strip()!r}")
+        if "synced" not in sync_msg:
+            failures.append(f"expected a 'synced' reconnect summary, got {sync_msg.strip()!r}")
+        if "added while away" not in sync_msg:
+            failures.append(f"expected 'added while away' in summary, got {sync_msg.strip()!r}")
+        page.wait_for_timeout(2500)
         pill = page.text_content(".status").strip()
         temps = page.eval_on_selector_all(".set li.pending", "e => e.length")
         log(f"reconnect: pill={pill!r}, temp_rows={temps}, banner={bool(page.query_selector('.offline-banner'))}")
