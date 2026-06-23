@@ -24,6 +24,23 @@ export async function sendOp(config, op_type, payload = {}) {
   return json // {success, rejected?, reason?, event_id?, record?, ...}
 }
 
+// Ephemeral typing signal, POSTed straight to the streaming service (spec 024 §F):
+// no DB, no op feed. `typing:false` clears it (on submit/blur); the service also
+// times it out after ~10s of silence.
+export async function sendTyping(config, typing, anchor = null) {
+  const base = config.streamingBaseUrl.replace(/\/$/, '')
+  try {
+    await fetch(`${base}/live/instances/${config.sessionInstanceId}/typing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ typing, anchor }),
+    })
+  } catch {
+    /* best-effort; typing is non-critical */
+  }
+}
+
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials
@@ -48,6 +65,14 @@ export function openStream(config, lastEventId, handlers) {
   es.addEventListener('presence', (e) => {
     try {
       handlers.onPresence?.(JSON.parse(e.data).roster || [])
+    } catch {
+      /* ignore */
+    }
+  })
+
+  es.addEventListener('typing', (e) => {
+    try {
+      handlers.onTyping?.(JSON.parse(e.data).typing || [])
     } catch {
       /* ignore */
     }

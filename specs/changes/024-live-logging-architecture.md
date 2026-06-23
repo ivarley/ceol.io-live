@@ -433,9 +433,19 @@ exist in the codebase today) via a walking skeleton, then widen.
   > `Last-Event-ID`, never replayed). Client maps `arrival_seq` → color (`palette[seq mod N]`)
   > and renders avatars. E2E `spike/test_phase2_presence.py` (run against a browserless instance
   > — presence is real, so open browsers legitimately appear). Op-delivery suites still green.
+  > **Chunk 2 — typing indicators — built & validated (2026-06-22).** A typing signal is POSTed
+  > straight to the streaming service (`POST /live/instances/<id>/typing`, `{typing, anchor}`) —
+  > no DB, no NOTIFY (§F). Held in an in-memory `TYPING` registry, broadcast as `event: typing`
+  > (no `id:`). The service owns the **10s-inactivity timeout** (a 2s sweeper) and
+  > **clear-on-commit** (client sends `typing:false` on submit/blur; refreshes ~every 3s while
+  > composing). New connections receive the current typing snapshot. Client renders
+  > "X is typing…" above the composer in each person's color (self filtered out). E2E
+  > `spike/test_phase2_typing.py` (broadcast, clear, auto-expire).
+  >
   > **Deferred within Phase 2:** persisting `arrival_seq` to `session_instance_person` (color
   > stability across streaming restarts) + an attendance-view fix so presence-only rows don't
-  > surface as attendees; typing indicators; conflict notices; settle/go-to-end polish.
+  > surface as attendees; typing position-reservation re-anchoring (slide on insert); conflict
+  > notices; settle/go-to-end polish.
 - **Phase 3 — Offline.** IndexedDB stores, service worker, queue + pending UI, reconnect
   replay + reconciliation + the post-completion review screen.
 

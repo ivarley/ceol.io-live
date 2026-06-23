@@ -114,6 +114,11 @@ h1 { font-size: 18px; margin: 0; }
 
 .error { color: #e0594b; font-size: 14px; }
 
+.typing { font-size: 13px; color: var(--muted); padding: 2px 4px 6px; min-height: 18px; }
+.typing .t-name { font-weight: 600; }
+.typing .t-name:not(:last-of-type)::after { content: ', '; color: var(--muted); font-weight: 400; }
+.typing .t-verb { margin-left: 4px; }
+
 .endset { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--border) !important; }
 .endset:disabled { opacity: 0.4; cursor: default; }
 

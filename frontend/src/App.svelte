@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
-  import { bootstrap, sendOp, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, openStream } from './client.js'
 
   let { config } = $props()
 
@@ -14,8 +14,10 @@
   let notice = $state('')
   let person = $state(config.currentPerson || {})
   let roster = $state([]) // who's connected right now (ephemeral presence, §F)
+  let typers = $state([]) // who's currently composing (ephemeral typing, §F)
 
   let es = null
+  let lastTypingSent = 0 // throttle the "still typing" refresh
 
   // The UI infers a presence color from the arrival ordinal (spec 024 §F).
   const PALETTE = ['#4f9dff', '#46d27a', '#e0b341', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
@@ -91,8 +93,33 @@
     const name = input.trim()
     if (!name) return
     input = ''
+    lastTypingSent = 0
+    sendTyping(config, false) // clear-on-commit (§F)
     op('add_tune', { name }) // server-authoritative: the row arrives over SSE
   }
+
+  // Refresh a typing reservation while composing (throttled); clear it when empty.
+  function onInput() {
+    if (input.trim()) {
+      const now = Date.now()
+      if (now - lastTypingSent > 3000) {
+        lastTypingSent = now
+        sendTyping(config, true, lastRecordId)
+      }
+    } else if (lastTypingSent) {
+      lastTypingSent = 0
+      sendTyping(config, false)
+    }
+  }
+
+  function stopTyping() {
+    if (lastTypingSent) {
+      lastTypingSent = 0
+      sendTyping(config, false)
+    }
+  }
+
+  const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
 
   let connSeq = 0 // guards against overlapping connect() calls leaking a stream
   async function connect() {
@@ -107,6 +134,7 @@
       const stream = openStream(config, snap.last_event_id, {
         onOp: applyOp,
         onPresence: (r) => (roster = r),
+        onTyping: (l) => (typers = l),
         onStatus: (s) => (status = s),
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
@@ -182,8 +210,21 @@
 
   {#if error}<p class="error">{error}</p>{/if}
 
+  {#if othersTyping.length}
+    <div class="typing">
+      {#each othersTyping as t (t.person_id)}<span class="t-name" style="color:{colorFor(t.arrival_seq)}">{t.name}</span>{/each}
+      <span class="t-verb">{othersTyping.length === 1 ? 'is' : 'are'} typing…</span>
+    </div>
+  {/if}
+
   <div class="composer">
-    <input placeholder="Tune name…" bind:value={input} onkeydown={(e) => e.key === 'Enter' && submit()} />
+    <input
+      placeholder="Tune name…"
+      bind:value={input}
+      oninput={onInput}
+      onblur={stopTyping}
+      onkeydown={(e) => e.key === 'Enter' && submit()}
+    />
     <button onclick={submit}>Log</button>
     <button
       class="endset"

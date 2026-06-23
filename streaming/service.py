@@ -25,6 +25,7 @@ Serves on STREAMING_PORT (default 8080).
 
 import os
 import json
+import time
 import asyncio
 import itertools
 from contextlib import asynccontextmanager
@@ -193,6 +194,43 @@ def _broadcast_presence(instance_id):
         st["queue"].put_nowait(("presence", roster))
 
 
+# --- Typing (ephemeral, in memory; spec 024 §F) ----------------------------
+# A typing signal is a lightweight "X is composing here" reservation, POSTed
+# straight to this service (no DB, no NOTIFY). The service owns the 10s-inactivity
+# timeout and clear-on-commit; clients refresh it while typing and clear it on
+# submit/blur. Like presence, it rides SSE WITHOUT an id: and is never replayed.
+TYPING = {}  # instance_id -> { person_id: {name, arrival_seq, anchor, ts(monotonic)} }
+TYPING_TTL = 10  # seconds of inactivity before a typing signal expires
+
+
+def _typing_list(instance_id):
+    return sorted(
+        ({"person_id": pid, "name": e["name"], "arrival_seq": e["arrival_seq"], "anchor": e["anchor"]}
+         for pid, e in TYPING.get(instance_id, {}).items()),
+        key=lambda x: x["arrival_seq"],
+    )
+
+
+def _broadcast_typing(instance_id):
+    lst = _typing_list(instance_id)
+    for st in list(PRESENCE.get(instance_id, {}).values()):
+        st["queue"].put_nowait(("typing", lst))
+
+
+async def _typing_sweeper():
+    """Expire typing signals after TYPING_TTL of inactivity (the service is the
+    authority for the timeout, §F), re-broadcasting instances that changed."""
+    while True:
+        await asyncio.sleep(2)
+        now = time.monotonic()
+        for instance_id, t in list(TYPING.items()):
+            stale = [pid for pid, e in t.items() if now - e["ts"] > TYPING_TTL]
+            for pid in stale:
+                t.pop(pid, None)
+            if stale:
+                _broadcast_typing(instance_id)
+
+
 async def _resolve_person(user_id):
     async with pool.acquire() as c:
         row = await c.fetchrow(
@@ -214,9 +252,36 @@ async def health(request):
 
 async def cors_preflight(request):
     headers = _cors_headers(request)
-    headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    headers["Access-Control-Allow-Headers"] = "Authorization, Last-Event-ID"
+    headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    headers["Access-Control-Allow-Headers"] = "Authorization, Last-Event-ID, Content-Type"
     return Response(status_code=204, headers=headers)
+
+
+async def typing(request):
+    """Upstream ephemeral typing signal (spec 024 §F). POSTed straight here — no DB,
+    no NOTIFY. Body: {typing: bool, anchor: <after_record_id|null>}."""
+    uid = await authenticate(request)
+    if uid is None:
+        return JSONResponse({"error": "unauthorized"}, status_code=401, headers=_cors_headers(request))
+    instance_id = int(request.path_params["session_instance_id"])
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    person = await _resolve_person(uid)
+    pid = person["person_id"]
+    t = TYPING.setdefault(instance_id, {})
+    if body.get("typing"):
+        t[pid] = {
+            "name": person["name"],
+            "arrival_seq": _arrival_seq(instance_id, pid),
+            "anchor": body.get("anchor"),
+            "ts": time.monotonic(),
+        }
+    else:
+        t.pop(pid, None)
+    _broadcast_typing(instance_id)
+    return JSONResponse({"ok": True}, headers=_cors_headers(request))
 
 
 async def events(request):
@@ -278,8 +343,10 @@ async def events(request):
                 replayed_through = r["event_id"]
                 yield _sse(r["event_id"], r["op_type"], r["payload"])
 
-            # Announce arrival: a fresh roster to me + everyone else on this instance.
+            # Announce arrival: a fresh roster to me + everyone else on this instance,
+            # and hand the new client the current typing state.
             _broadcast_presence(session_instance_id)
+            queue.put_nowait(("typing", _typing_list(session_instance_id)))
 
             # 2) GO LIVE — drain the queue (ops + presence), skipping replayed ops.
             #    On client disconnect, Starlette cancels this generator (-> finally).
@@ -291,6 +358,8 @@ async def events(request):
                     continue
                 if msg[0] == "presence":
                     yield _presence_event(msg[1])  # no id: -> not a resume cursor
+                elif msg[0] == "typing":
+                    yield _typing_event(msg[1])     # no id: either
                 elif msg[0] == "op":
                     _, eid, op_type, payload = msg
                     if eid <= replayed_through:
@@ -308,6 +377,11 @@ async def events(request):
 def _presence_event(roster):
     """Frame a presence snapshot. No `id:` -> doesn't advance Last-Event-ID (§F)."""
     return f"event: presence\ndata: {json.dumps({'roster': roster})}\n\n".encode()
+
+
+def _typing_event(typers):
+    """Frame a typing snapshot. No `id:` either."""
+    return f"event: typing\ndata: {json.dumps({'typing': typers})}\n\n".encode()
 
 
 def _sse(event_id, op_type, payload_json):
@@ -337,10 +411,12 @@ async def lifespan(app):
     # committed event out to the in-memory client queues (spec 024 §A4).
     listener = await pool.acquire()
     await listener.add_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
+    sweeper = asyncio.create_task(_typing_sweeper())
     print(f"[streaming] live-logging SSE service up on :{PORT} (listening '{LIVE_EVENT_CHANNEL}')")
     try:
         yield
     finally:
+        sweeper.cancel()
         await listener.remove_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
         await pool.release(listener)
         await pool.close()
@@ -351,6 +427,8 @@ app = Starlette(
         Route("/health", health),
         Route("/live/instances/{session_instance_id:int}/events", events, methods=["GET"]),
         Route("/live/instances/{session_instance_id:int}/events", cors_preflight, methods=["OPTIONS"]),
+        Route("/live/instances/{session_instance_id:int}/typing", typing, methods=["POST"]),
+        Route("/live/instances/{session_instance_id:int}/typing", cors_preflight, methods=["OPTIONS"]),
     ],
     lifespan=lifespan,
 )
