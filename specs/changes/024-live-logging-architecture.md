@@ -463,6 +463,20 @@ exist in the codebase today) via a walking skeleton, then widen.
 - **Phase 3 — Offline.** IndexedDB stores, service worker, queue + pending UI, reconnect
   replay + reconciliation + the post-completion review screen.
 
+  > **Chunk 1 — offline op queue + replay — built (2026-06-22).** `frontend/src/offline.js` is a
+  > dependency-free IndexedDB wrapper (`ceol-live` DB, `ops` store keyed by `op_id`, ordered by
+  > `ts`). `sendOp` now flags a fetch failure as `networkError` (vs a server error). Submitting a
+  > tune goes through `trySend`: success settles; a network failure flips the optimistic row to
+  > **queued** (amber dashed) and persists it; a server error surfaces and drops. `flush()` replays
+  > queued ops oldest-first on reconnect (SSE → `live`) and on the `online` event, idempotent by
+  > `op_id` (server dedup verified). The queue is hydrated from IndexedDB on mount, so ops survive
+  > a reload/restart while offline. A banner shows the queued count + offline/syncing state.
+  > Server-level replay+idempotency covered by an inline check; client IndexedDB path is
+  > browser-verified. **Scope:** only `add_tune` queues offline (the core logging action); other
+  > ops still require connectivity. **Deferred (later chunks):** service worker / PWA install;
+  > local→server id remapping for offline anchored inserts; offline snapshot cache + tune-match
+  > cache; reconnect reconciliation review screen + post-completion diff (§G).
+
 (Audio = separate task, after the above; gated on finishing 022.)
 
 ## Open / deferred (not blockers)

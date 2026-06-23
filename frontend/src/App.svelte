@@ -2,13 +2,16 @@
   import { onMount, onDestroy } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, openStream } from './client.js'
+  import { queuePut, queueAll, queueDelete } from './offline.js'
 
   let { config } = $props()
 
   // Canonical records keyed by id (tunes + break rows), applied idempotently.
   // SvelteMap (not a plain Map) so .set/.delete are reactive in Svelte 5.
   const byId = new SvelteMap()
-  const pending = new SvelteMap() // op_id -> {tempId, name} optimistic, pre-ack (§A2)
+  // op_id -> {tempId, name, op_type, payload, status, ts}. status 'sending' = online
+  // optimistic in-flight (§A2); 'queued' = offline, persisted to IndexedDB (§G).
+  const pending = new SvelteMap()
   const flashing = new SvelteSet() // record ids briefly highlighted on settle (§39)
   let status = $state('connecting')
   let input = $state('')
@@ -71,9 +74,12 @@
   // new trailing set if the last record is a break / there are none yet).
   const displaySets = $derived.by(() => {
     const base = sets.map((s) => s.slice())
-    const pend = [...pending.values()].map((p) => ({
-      session_instance_tune_id: p.tempId, name: p.name, record_type: 'tune', pending: true,
-    }))
+    const pend = [...pending.values()]
+      .filter((p) => p.op_type === 'add_tune')
+      .map((p) => ({
+        session_instance_tune_id: p.tempId, name: p.name, record_type: 'tune',
+        pending: true, status: p.status,
+      }))
     if (!pend.length) return base
     if (base.length && openSet) base[base.length - 1].push(...pend)
     else base.push(pend)
@@ -111,7 +117,10 @@
 
   // Apply one server-authoritative op (spec 024). Dispatch by op_type.
   function applyOp(d) {
-    if (d.op_id && pending.has(d.op_id)) pending.delete(d.op_id) // settle our optimistic row
+    if (d.op_id && pending.has(d.op_id)) {
+      pending.delete(d.op_id) // settle our optimistic/queued row...
+      queueDelete(d.op_id) // ...and drop it from the persisted queue (already applied)
+    }
     noteRemote(d)
     switch (d.op_type) {
       case 'add_tune':
@@ -138,39 +147,90 @@
 
   async function op(op_type, payload, label) {
     error = ''
+    // Chunk 1 only queues add_tune offline; other ops need connectivity. Fail
+    // gracefully with a notice rather than a raw error (full offline support later).
+    if (!navigator.onLine) {
+      notice = `You're offline — ${label || op_type} isn't available offline yet.`
+      return
+    }
     try {
       const res = await sendOp(config, op_type, payload)
       if (res.rejected) notice = res.message || `${label || op_type}: ${res.reason}`
     } catch (e) {
-      error = e.message
+      if (e.networkError) notice = `You're offline — ${label || op_type} isn't available offline yet.`
+      else error = e.message
     }
   }
 
-  async function submit() {
-    const name = input.trim()
-    if (!name) return
-    input = ''
-    lastTypingSent = 0
-    sendTyping(config, false) // clear-on-commit (§F)
+  // Hold an op for reconnect replay (persisted to IndexedDB, §G).
+  async function markQueued(entry) {
+    entry.status = 'queued'
+    pending.set(entry.op_id, entry)
+    await queuePut({
+      op_id: entry.op_id, op_type: entry.op_type, payload: entry.payload,
+      name: entry.name, ts: entry.ts, session_instance_id: config.sessionInstanceId,
+    })
+  }
 
-    // Optimistic: show the row immediately as pending, reconcile on the server's
-    // authoritative result (which arrives via op-ack and/or the SSE echo, by op_id).
-    const op_id = crypto.randomUUID()
-    pending.set(op_id, { tempId: `pending-${op_id}`, name })
-    error = ''
+  // Try to send a pending op. Success -> settle; network failure -> queue it;
+  // server error -> surface and drop. Idempotent by op_id.
+  async function trySend(entry) {
+    entry.status = 'sending'
+    pending.set(entry.op_id, entry)
+    // Fast-path: if the browser knows it's offline, queue without a doomed fetch
+    // (the first such fetch would otherwise hang on a dead keep-alive socket).
+    if (!navigator.onLine) {
+      await markQueued(entry)
+      return
+    }
     try {
-      const res = await sendOp(config, 'add_tune', { name }, op_id)
-      pending.delete(op_id)
-      if (res.rejected) notice = res.message || `Add: ${res.reason}`
+      const res = await sendOp(config, entry.op_type, entry.payload, entry.op_id)
+      pending.delete(entry.op_id)
+      await queueDelete(entry.op_id)
+      if (res.rejected) notice = res.message || `${entry.op_type}: ${res.reason}`
       else if (res.record) {
         put(res.record) // settle now if the ack beat the SSE echo (idempotent)
         flashId(res.record.session_instance_tune_id)
       }
     } catch (e) {
-      pending.delete(op_id)
-      error = e.message
+      if (e.networkError) {
+        await markQueued(entry)
+      } else {
+        pending.delete(entry.op_id)
+        await queueDelete(entry.op_id)
+        error = e.message
+      }
     }
   }
+
+  // Replay queued ops in offline order; stop if we go offline again mid-drain.
+  let flushing = false
+  async function flush() {
+    if (flushing) return
+    flushing = true
+    try {
+      const queued = [...pending.values()].filter((e) => e.status === 'queued').sort((a, b) => a.ts - b.ts)
+      for (const entry of queued) {
+        await trySend(entry)
+        if (entry.status === 'queued') break // still offline
+      }
+    } finally {
+      flushing = false
+    }
+  }
+
+  function submit() {
+    const name = input.trim()
+    if (!name) return
+    input = ''
+    lastTypingSent = 0
+    sendTyping(config, false) // clear-on-commit (§F)
+    error = ''
+    const op_id = crypto.randomUUID()
+    trySend({ tempId: `pending-${op_id}`, name, op_id, op_type: 'add_tune', payload: { name }, status: 'sending', ts: Date.now() })
+  }
+
+  const queuedCount = $derived([...pending.values()].filter((e) => e.status === 'queued').length)
 
   // Refresh a typing reservation while composing (throttled); clear it when empty.
   function onInput() {
@@ -209,7 +269,10 @@
         onOp: applyOp,
         onPresence: (r) => (roster = r),
         onTyping: (l) => (typers = l),
-        onStatus: (s) => (status = s),
+        onStatus: (s) => {
+          status = s
+          if (s === 'live') flush() // back online -> replay anything queued (§G)
+        },
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
@@ -232,15 +295,33 @@
     if (e.persisted) connect()
   }
 
-  onMount(() => {
+  async function hydrateQueue() {
+    try {
+      for (const e of await queueAll(config.sessionInstanceId)) {
+        pending.set(e.op_id, {
+          tempId: `pending-${e.op_id}`, name: e.name, op_id: e.op_id,
+          op_type: e.op_type, payload: e.payload, status: 'queued', ts: e.ts,
+        })
+      }
+    } catch (err) {
+      /* IndexedDB unavailable (private mode etc.) — degrade to online-only */
+    }
+  }
+
+  const onOnline = () => flush()
+
+  onMount(async () => {
+    await hydrateQueue() // restore ops left queued from a previous offline session
     connect()
     window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
+    window.addEventListener('online', onOnline)
   })
 
   onDestroy(() => {
     window.removeEventListener('pagehide', onPageHide)
     window.removeEventListener('pageshow', onPageShow)
+    window.removeEventListener('online', onOnline)
     if (es) es.close()
   })
 </script>
@@ -264,6 +345,11 @@
   {#if activity}
     <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
   {/if}
+  {#if queuedCount > 0}
+    <p class="offline-banner">
+      ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{status === 'live' ? ', syncing…' : ' — offline'}
+    </p>
+  {/if}
 
   <div class="sets">
     {#each displaySets as set, i (set[0].session_instance_tune_id)}
@@ -272,11 +358,12 @@
           <li
             class:low={!r.pending && r.confidence != null && r.confidence <= 70}
             class:pending={r.pending}
+            class:queued={r.pending && r.status === 'queued'}
             class:flash={flashing.has(r.session_instance_tune_id)}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
             {#if r.pending}
-              <span class="actions"><span class="hourglass" title="Sending…">⏳</span></span>
+              <span class="actions"><span class="hourglass" title={r.status === 'queued' ? 'Queued (offline)' : 'Sending…'}>⏳</span></span>
             {:else}
               <span class="actions">
                 {#if r.confidence != null && r.confidence <= 70}

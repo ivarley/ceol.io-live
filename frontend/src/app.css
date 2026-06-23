@@ -89,6 +89,7 @@ h1 { font-size: 18px; margin: 0; }
 .set li.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
 .set li.pending { opacity: 0.55; }
 .set li.pending .name { border-bottom: 1px dashed var(--muted); }
+.set li.queued .name { border-bottom-color: #e0b341; color: #e8d28a; }
 .hourglass { font-size: 12px; opacity: 0.8; }
 /* settle-flash when a record is confirmed/changed (§39) */
 .set li.flash { animation: settle 0.7s ease-out; border-radius: 6px; }
@@ -133,6 +134,15 @@ h1 { font-size: 18px; margin: 0; }
   animation: settle 0.7s ease-out;
 }
 .activity .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+.offline-banner {
+  background: #2a2616;
+  border: 1px solid #e0b341;
+  color: #e8d28a;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
 
 .typing { font-size: 13px; color: var(--muted); padding: 2px 4px 6px; min-height: 18px; }
 .typing .t-name { font-weight: 600; }

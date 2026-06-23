@@ -13,12 +13,28 @@ export async function bootstrap(config) {
 // Generic op POST (spec 024 §C). Every op carries a client-generated op_id as the
 // universal idempotency key — a retried POST whose ack was lost dedupes server-side.
 export async function sendOp(config, op_type, payload = {}, op_id = crypto.randomUUID()) {
-  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/ops`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify({ op_id, op_type, ...payload }),
-  })
+  // Abort after 10s so a request that hangs on a dead keep-alive socket (common on
+  // the first request after going offline) gives up and is treated as a network
+  // failure, rather than spinning forever.
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 10000)
+  let res
+  try {
+    res = await fetch(`/api/live/instances/${config.sessionInstanceId}/ops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ op_id, op_type, ...payload }),
+      signal: ctrl.signal,
+    })
+  } catch (e) {
+    // Fetch failed or aborted (offline / unreachable / timed out) — distinct from a
+    // server error, so the caller can queue for replay instead of surfacing an error.
+    e.networkError = true
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || `${op_type} failed: ${res.status}`)
   return json // {success, rejected?, reason?, event_id?, record?, ...}
