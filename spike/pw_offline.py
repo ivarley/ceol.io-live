@@ -12,6 +12,7 @@ Run: venv/bin/python spike/pw_offline.py [FLASK_PORT] [INSTANCE_ID]
 Pass a 3rd arg "keep" to reuse the profile dir across runs.
 """
 import sys, time, tempfile, os, uuid
+from _dbclean import baseline, cleanup
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -26,7 +27,7 @@ def log(m):
 
 
 def tune_rows(page):
-    return page.eval_on_selector_all(".set li .name", "els => els.map(e => e.textContent.trim())")
+    return page.eval_on_selector_all(".tune-row .name", "els => els.map(e => e.textContent.trim())")
 
 
 def main():
@@ -108,13 +109,13 @@ def main():
             log(f"/events requests during 5s offline window: {ev_during}")
             if ev_during > 0:
                 failures.append(f"{ev_during} SSE requests fired while offline (should be 0)")
-            if page.query_selector(".set li:not(.pending):not(.removing) button.remove"):
-                page.click(".set li:not(.pending):not(.removing) button.remove")
+            if page.query_selector(".tune-row:not(.pending):not(.removing) button.remove"):
+                page.click(".tune-row:not(.pending):not(.removing) button.remove")
                 page.wait_for_timeout(300)
-                if len(page.query_selector_all(".set li.removing")) != 1:
+                if len(page.query_selector_all(".tune-row.removing")) != 1:
                     failures.append("offline remove did not mark a row removing")
                 else:
-                    page.click(".set li.removing button.restore")
+                    page.click(".tune-row.removing button.restore")
                     page.wait_for_timeout(300)
             sets_before = page.eval_on_selector_all(".set", "e => e.length")
             page.click("button.endset")
@@ -123,7 +124,11 @@ def main():
             page.fill(".composer input", nm)
             page.press(".composer input", "Enter")
             page.wait_for_timeout(500)
-            last_set = page.eval_on_selector_all(".set:last-child li .name", "e => e.map(x => x.textContent.trim())")
+            last_set = page.evaluate("""() => {
+              const sets = [...document.querySelectorAll('.set')]
+              const last = sets[sets.length - 1]
+              return last ? [...last.querySelectorAll('.tune-row .name')].map(e => e.textContent.trim()) : []
+            }""")
             if not (nm in last_set and len(last_set) == 1):
                 failures.append(f"end-set offline didn't start a new set; last set={last_set}")
 
@@ -145,7 +150,7 @@ def main():
             failures.append(f"expected 'added while away' in summary, got {sync_msg.strip()!r}")
         page.wait_for_timeout(2500)
         pill = page.text_content(".status").strip()
-        temps = page.eval_on_selector_all(".set li.pending", "e => e.length")
+        temps = page.eval_on_selector_all(".tune-row.pending", "e => e.length")
         log(f"reconnect: pill={pill!r}, temp_rows={temps}, banner={bool(page.query_selector('.offline-banner'))}")
         if pill != "live":
             failures.append(f"after reconnect pill should be 'live', got {pill!r}")
@@ -161,4 +166,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _base = baseline()
+    try:
+        main()
+    finally:
+        cleanup(_base)

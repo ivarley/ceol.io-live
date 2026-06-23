@@ -12,6 +12,7 @@ session_event + pg_notify) -> streaming service LISTEN -> SSE fan-out -> client.
 Usage: venv/bin/python spike/test_phase0_e2e.py [FLASK_PORT] [STREAM_PORT] [INSTANCE_ID]
 """
 import sys, json, time, threading, queue, uuid
+from _dbclean import baseline, cleanup
 import requests
 
 FLASK = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
@@ -99,4 +100,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _base = baseline()
+    try:
+        main()
+    finally:
+        cleanup(_base)

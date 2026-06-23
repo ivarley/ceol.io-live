@@ -6,6 +6,7 @@ and bearer-token issuance round-trip.
 Usage: venv/bin/python spike/test_phase1_tail.py [FLASK_PORT] [STREAM_PORT] [INSTANCE_ID]
 """
 import sys, json, time, threading, queue, uuid
+from _dbclean import baseline, cleanup
 import requests
 import psycopg2
 
@@ -139,4 +140,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _base = baseline()
+    try:
+        main()
+    finally:
+        cleanup(_base)

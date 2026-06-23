@@ -3,6 +3,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, searchTunes, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
+  import { generateAppend, generateBetween } from './fracindex.js'
 
   let { config } = $props()
 
@@ -67,6 +68,8 @@
     if (setsEl) atEnd = setsEl.scrollHeight - setsEl.scrollTop - setsEl.clientHeight < 80
   }
   function goToEnd() {
+    insertAfterId = null // move the insertion point to the end (append); server decides
+    // whether that continues the open set or starts a new one (if a trailing break exists)
     if (setsEl) setsEl.scrollTo({ top: setsEl.scrollHeight, behavior: 'smooth' })
   }
   // Stick to the bottom on new tunes (mine or others') — but only if already at the
@@ -173,6 +176,33 @@
   })
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
 
+  // Insertion point (spec 021 §B): null = append at the end (the 95% case); a
+  // record id = insert right after that record. The active seam shows the yellow line.
+  let insertAfterId = $state(null)
+  // Validated cursor for rendering (a removed target falls back to "end").
+  const cursorId = $derived(
+    insertAfterId != null && byId.has(insertAfterId) && !byId.get(insertAfterId).deleted ? insertAfterId : null
+  )
+
+  function maxPos() {
+    let m = ''
+    for (const r of byId.values()) if (r.order_position && r.order_position > m) m = r.order_position
+    return m
+  }
+  // The server anchor + optimistic order_position for the current cursor.
+  function cursorPos() {
+    if (insertAfterId == null) return { afterId: null, position: generateAppend(maxPos()) }
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === insertAfterId)
+    if (idx === -1) return { afterId: null, position: generateAppend(maxPos()) } // target gone -> append
+    const before = ordered[idx].order_position
+    const after = idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
+    return { afterId: insertAfterId, position: generateBetween(before, after) }
+  }
+  function setCursor(id) {
+    insertAfterId = id
+    queueMicrotask(() => inputEl?.focus())
+  }
+
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
   const displaySets = $derived(sets)
@@ -218,7 +248,10 @@
   function applyOp(d) {
     if (d.op_id && pending.has(d.op_id)) {
       const entry = pending.get(d.op_id) // settle our optimistic/queued op...
-      if (entry.tempId) byId.delete(entry.tempId) // ...drop its optimistic temp record
+      if (entry.tempId) {
+        if (insertAfterId === entry.tempId) insertAfterId = d.record?.session_instance_tune_id ?? null
+        byId.delete(entry.tempId) // ...drop its optimistic temp record
+      }
       pending.delete(d.op_id)
       queueDelete(d.op_id) // ...and drop it from the persisted queue (already applied)
     }
@@ -303,6 +336,7 @@
     }
     if (entry.tempId) byId.delete(entry.tempId) // drop optimistic temp; the real record arrives below / via SSE
     if (res.record) {
+      if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
       flashId(res.record.session_instance_tune_id)
     }
@@ -349,15 +383,18 @@
     }
   }
 
-  // Shared optimistic add: shows a temp row immediately, sends/queues the op.
+  // Shared optimistic add: place a temp row at the cursor, send/queue the op, and
+  // advance the cursor past it (so a burst logs a set in order). §B/§D13.
   function addOptimistic(payload, name) {
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
+    const { afterId, position } = cursorPos()
     byId.set(tempId, {
       session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, record_type: 'tune',
-      order_position: nextTempPos(), deleted: false, _temp: true, _status: 'sending',
+      order_position: position, deleted: false, _temp: true, _status: 'sending',
     })
-    trySend({ op_id, name, op_type: 'add_tune', payload, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId }, status: 'sending', ts: Date.now(), tempId })
+    if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
   }
 
   // Cancel a pending debounced search AND invalidate any in-flight one, so a late
@@ -726,10 +763,11 @@
   </div>
 
   <div class="sets" bind:this={setsEl} onscroll={onScroll}>
-    {#each displaySets as set, i (set[0].session_instance_tune_id)}
-      <ol class="set">
+    {#each displaySets as set (set[0].session_instance_tune_id)}
+      <div class="set">
         {#each set as r (r.session_instance_tune_id)}
-          <li
+          <div
+            class="tune-row"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
             class:pending={r._temp}
             class:queued={r._temp && r._status === 'queued'}
@@ -749,12 +787,22 @@
                 <button class="remove" onclick={() => removeTune(r.session_instance_tune_id)}>✕</button>
               </span>
             {/if}
-          </li>
+          </div>
+          {#if !r._temp}
+            <div class="seam" class:active={cursorId === r.session_instance_tune_id} onclick={() => setCursor(r.session_instance_tune_id)}>
+              {#if cursorId === r.session_instance_tune_id}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
+            </div>
+          {/if}
         {/each}
-      </ol>
+      </div>
     {:else}
       <p class="empty">No tunes yet — log one below.</p>
     {/each}
+    {#if ordered.length}
+      <div class="seam end-seam" class:active={cursorId === null} onclick={() => setCursor(null)}>
+        {#if cursorId === null}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ insert here</span>{/if}
+      </div>
+    {/if}
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}

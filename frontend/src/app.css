@@ -4,6 +4,7 @@
   --text: #ececef;
   --muted: #9a9aa3;
   --accent: #4f9dff;
+  --insert: #f5c518;
   --border: #2a2a30;
 }
 
@@ -101,33 +102,52 @@ main {
 
 .sets { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; }
 .set {
-  list-style: decimal inside;
   margin: 0 0 10px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
-.set li {
+.tune-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 2px;
+  padding: 5px 2px;
 }
-.set li .name { display: inline; }
-.set li.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
-.set li.pending { opacity: 0.55; }
-.set li.pending .name { border-bottom: 1px dashed var(--muted); }
-.set li.queued .name { border-bottom-color: #e0b341; color: #e8d28a; }
-.set li.removing .name { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
+.tune-row .name { display: inline; }
+.tune-row.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
+.tune-row.pending { opacity: 0.55; }
+.tune-row.pending .name { border-bottom: 1px dashed var(--muted); }
+.tune-row.queued .name { border-bottom-color: #e0b341; color: #e8d28a; }
+.tune-row.removing .name { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
 .actions .restore { color: var(--accent); border-color: var(--accent); }
 .hourglass { font-size: 12px; opacity: 0.8; }
 /* settle-flash when a record is confirmed/changed (§39) */
-.set li.flash { animation: settle 0.7s ease-out; border-radius: 6px; }
+.tune-row.flash { animation: settle 0.7s ease-out; border-radius: 6px; }
 @keyframes settle {
   0% { background: rgba(79, 157, 255, 0.35); }
   100% { background: transparent; }
 }
+
+/* ---------- seams: the insertion-point model (§B) ---------- */
+.seam {
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.seam-plus { font-size: 12px; color: var(--muted); opacity: 0; transition: opacity 0.12s; }
+.seam:hover .seam-plus { opacity: 0.7; }
+.seam-line {
+  height: 3px;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--insert);
+  box-shadow: 0 0 8px var(--insert);
+}
+.end-seam { height: 22px; margin-top: 2px; }
+.end-seam .seam-plus { font-size: 12px; }
 .actions { display: inline-flex; gap: 6px; }
 .actions button {
   font: inherit;

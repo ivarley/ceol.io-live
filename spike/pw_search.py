@@ -4,6 +4,7 @@ Playwright check for the type-ahead search + tap-to-add UI (spec 021 §D).
 Run: venv/bin/python spike/pw_search.py [FLASK_PORT] [INSTANCE_ID]
 """
 import sys, time
+from _dbclean import baseline, cleanup
 from playwright.sync_api import sync_playwright
 
 FLASK = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
@@ -15,7 +16,7 @@ def log(m):
 
 
 def rows(page):
-    return page.eval_on_selector_all(".set li .name", "e => e.map(x => x.textContent.trim())")
+    return page.eval_on_selector_all(".tune-row .name", "e => e.map(x => x.textContent.trim())")
 
 
 def main():
@@ -119,4 +120,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _base = baseline()
+    try:
+        main()
+    finally:
+        cleanup(_base)
