@@ -17,6 +17,8 @@
   let person = $state(config.currentPerson || {})
   let roster = $state([]) // who's connected right now (ephemeral presence, §F)
   let typers = $state([]) // who's currently composing (ephemeral typing, §F)
+  let activity = $state(null) // transient "X did Y" notice for others' changes (§E)
+  let activitySeq = 0
 
   let es = null
   let lastTypingSent = 0 // throttle the "still typing" refresh
@@ -78,9 +80,39 @@
     return base
   })
 
+  const colorForPerson = (pid) => {
+    const p = roster.find((r) => r.person_id === pid)
+    return p ? colorFor(p.arrival_seq) : 'var(--muted)'
+  }
+
+  function remoteLabel(d) {
+    const n = d.record?.name || (d.record?.tune_id ? `#${d.record.tune_id}` : 'a tune')
+    switch (d.op_type) {
+      case 'add_tune': return `added ${n}`
+      case 'corroborate': return `also logged ${n}`
+      case 'change_tune': return `edited ${n}`
+      case 'remove_tune': return `removed ${n}`
+      case 'set_break': return d.removed ? 'removed a break' : 'ended a set'
+      case 'attribute_set_starter': return `set who started ${n}`
+      case 'set_confidence': return `confirmed ${n}`
+      default: return null
+    }
+  }
+
+  // A change made by someone else — surface a brief, attributed activity notice (§E).
+  function noteRemote(d) {
+    if (!d.actor || d.actor.person_id == null || d.actor.person_id === person.person_id) return
+    const label = remoteLabel(d)
+    if (!label) return
+    const seq = ++activitySeq
+    activity = { text: `${d.actor.name || 'Someone'} ${label}`, color: colorForPerson(d.actor.person_id) }
+    setTimeout(() => { if (seq === activitySeq) activity = null }, 4000)
+  }
+
   // Apply one server-authoritative op (spec 024). Dispatch by op_type.
   function applyOp(d) {
     if (d.op_id && pending.has(d.op_id)) pending.delete(d.op_id) // settle our optimistic row
+    noteRemote(d)
     switch (d.op_type) {
       case 'add_tune':
       case 'change_tune':
@@ -229,6 +261,9 @@
   </header>
 
   {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
+  {#if activity}
+    <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
+  {/if}
 
   <div class="sets">
     {#each displaySets as set, i (set[0].session_instance_tune_id)}

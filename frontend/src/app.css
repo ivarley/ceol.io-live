@@ -123,6 +123,17 @@ h1 { font-size: 18px; margin: 0; }
 
 .error { color: #e0594b; font-size: 14px; }
 
+.activity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 4px 2px;
+  animation: settle 0.7s ease-out;
+}
+.activity .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
 .typing { font-size: 13px; color: var(--muted); padding: 2px 4px 6px; min-height: 18px; }
 .typing .t-name { font-weight: 600; }
 .typing .t-name:not(:last-of-type)::after { content: ', '; color: var(--muted); font-weight: 400; }

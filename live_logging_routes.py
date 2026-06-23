@@ -547,6 +547,14 @@ def live_op(session_instance_id):
             return jsonify({"success": False, "rejected": True, "reason": r.reason,
                             "message": r.message, "op_id": op_id, "op_type": op_type})
 
+        # Stamp the actor (person, per §D) so observers can render "Sarah added …"
+        # notices and, later, attribution colors. user_id is the audit fact; the
+        # person is what the UI shows.
+        payload["actor"] = {
+            "person_id": getattr(current_user, "person_id", None),
+            "name": (getattr(current_user, "first_name", "") or ""),
+        }
+
         # A handler may emit a different event type than the client requested
         # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
         event_op_type = payload.pop("_op_type", op_type)

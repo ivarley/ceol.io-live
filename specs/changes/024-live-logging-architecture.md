@@ -442,10 +442,24 @@ exist in the codebase today) via a walking skeleton, then widen.
   > "X is typing…" above the composer in each person's color (self filtered out). E2E
   > `spike/test_phase2_typing.py` (broadcast, clear, auto-expire).
   >
+  > **Chunk 3 — optimistic rendering + settle-flash — built (2026-06-22).** On submit the tune
+  > renders immediately as a dashed/dimmed pending row (⏳), reconciled by `op_id` against the
+  > server's authoritative result (via the op-ack and/or SSE echo, idempotently): the pending row
+  > is replaced and the real record gets a brief settle-flash (§39). A corroborated duplicate just
+  > clears the pending row (the existing row flashes); a rejected op clears it with a notice. The
+  > flash fires for all incoming records, so others' changes light up too. Frontend-only.
+  >
+  > **Chunk 4 — attributed conflict/activity notices — built (2026-06-22).** The referee stamps
+  > every event with the `actor` (person_id + name, per §D). Clients show a transient, color-coded
+  > "Sarah added/edited/removed …" notice for changes made by others (§E), complementing the
+  > existing rejected-ack notices (`target_deleted` = removal-beats-edit). Actor verified present
+  > in the event/ack.
+  >
   > **Deferred within Phase 2:** persisting `arrival_seq` to `session_instance_person` (color
-  > stability across streaming restarts) + an attendance-view fix so presence-only rows don't
-  > surface as attendees; typing position-reservation re-anchoring (slide on insert); conflict
-  > notices; settle/go-to-end polish.
+  > stability across streaming restarts — left in-memory; ~30 query sites assume a
+  > `session_instance_person` row = an attendee, so persisting needs an attendance-view audit not
+  > worth the payoff now); typing position-reservation re-anchoring (slide on insert);
+  > go-to-end scroll-on-append polish; last-write-wins "Sarah also changed this" notice.
 - **Phase 3 — Offline.** IndexedDB stores, service worker, queue + pending UI, reconnect
   replay + reconciliation + the post-completion review screen.
 
