@@ -68,6 +68,7 @@ h1 { font-size: 18px; margin: 0; }
 .status { text-transform: capitalize; }
 .status-live { color: #46d27a; }
 .status-connecting, .status-reconnecting { color: #e0b341; }
+.status-offline { color: #e0594b; }
 .status-error { color: #e0594b; }
 
 .sets { flex: 1; margin-bottom: 12px; }
@@ -90,6 +91,8 @@ h1 { font-size: 18px; margin: 0; }
 .set li.pending { opacity: 0.55; }
 .set li.pending .name { border-bottom: 1px dashed var(--muted); }
 .set li.queued .name { border-bottom-color: #e0b341; color: #e8d28a; }
+.set li.removing .name { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
+.actions .restore { color: var(--accent); border-color: var(--accent); }
 .hourglass { font-size: 12px; opacity: 0.8; }
 /* settle-flash when a record is confirmed/changed (§39) */
 .set li.flash { animation: settle 0.7s ease-out; border-radius: 6px; }

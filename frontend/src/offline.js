@@ -1,12 +1,14 @@
-// Spec 024 §G — the offline op queue, backed by IndexedDB so it survives reloads
-// and true app restarts. Each entry is a self-contained, idempotent op (keyed by
-// op_id) waiting to be POSTed; `ts` preserves the offline order for replay.
+// Spec 024 §G — offline storage in IndexedDB:
+//   - `ops`:       the op queue (pending ops, keyed by op_id, ordered by ts)
+//   - `snapshots`: a per-instance snapshot of the records so the screen can render
+//                  offline (bootstrap is network-only and fails with no connection)
 //
 // Dependency-free: a thin promise wrapper over the raw IndexedDB API.
 
 const DB_NAME = 'ceol-live'
-const DB_VERSION = 1
-const STORE = 'ops'
+const DB_VERSION = 2
+const OPS = 'ops'
+const SNAPS = 'snapshots'
 
 let dbPromise = null
 
@@ -16,9 +18,8 @@ function db() {
       const req = indexedDB.open(DB_NAME, DB_VERSION)
       req.onupgradeneeded = () => {
         const d = req.result
-        if (!d.objectStoreNames.contains(STORE)) {
-          d.createObjectStore(STORE, { keyPath: 'op_id' }) // ordered in JS by `ts`
-        }
+        if (!d.objectStoreNames.contains(OPS)) d.createObjectStore(OPS, { keyPath: 'op_id' })
+        if (!d.objectStoreNames.contains(SNAPS)) d.createObjectStore(SNAPS, { keyPath: 'session_instance_id' })
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
@@ -27,44 +28,59 @@ function db() {
   return dbPromise
 }
 
-function run(mode, fn) {
+function write(store, value) {
   return db().then(
     (d) =>
       new Promise((resolve, reject) => {
-        const tx = d.transaction(STORE, mode)
-        const store = tx.objectStore(STORE)
-        const result = fn(store)
-        tx.oncomplete = () => resolve(result && result.value !== undefined ? result.value : result)
+        const tx = d.transaction(store, 'readwrite')
+        tx.objectStore(store).put(value)
+        tx.oncomplete = () => resolve()
         tx.onerror = () => reject(tx.error)
         tx.onabort = () => reject(tx.error)
       })
   )
 }
 
-// Persist (or update) a queued op: {op_id, op_type, payload, name, ts}.
-export function queuePut(entry) {
-  return run('readwrite', (store) => store.put(entry))
-}
-
-// Queued ops for ONE instance, oldest first (offline replay order). Scoping by
-// instance is essential: an op must only ever replay to the instance it was made
-// for, never to whatever instance happens to be open next.
-export function queueAll(sessionInstanceId) {
+function del(store, key) {
   return db().then(
     (d) =>
       new Promise((resolve, reject) => {
-        const req = d.transaction(STORE, 'readonly').objectStore(STORE).getAll()
-        req.onsuccess = () =>
-          resolve(
-            (req.result || [])
-              .filter((e) => e.session_instance_id === sessionInstanceId)
-              .sort((a, b) => a.ts - b.ts)
-          )
+        const tx = d.transaction(store, 'readwrite')
+        tx.objectStore(store).delete(key)
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+      })
+  )
+}
+
+function read(store, key) {
+  return db().then(
+    (d) =>
+      new Promise((resolve, reject) => {
+        const req = d.transaction(store, 'readonly').objectStore(store)[key === undefined ? 'getAll' : 'get'](key)
+        req.onsuccess = () => resolve(req.result)
         req.onerror = () => reject(req.error)
       })
   )
 }
 
-export function queueDelete(op_id) {
-  return run('readwrite', (store) => store.delete(op_id))
+// --- Op queue --------------------------------------------------------------
+
+// Persist (or update) a queued op: {op_id, op_type, payload, name, ts, session_instance_id}.
+export const queuePut = (entry) => write(OPS, entry)
+export const queueDelete = (op_id) => del(OPS, op_id)
+
+// Queued ops for ONE instance, oldest first. Scoping by instance is essential: an
+// op must only ever replay to the instance it was made for.
+export function queueAll(sessionInstanceId) {
+  return read(OPS).then((all) =>
+    (all || []).filter((e) => e.session_instance_id === sessionInstanceId).sort((a, b) => a.ts - b.ts)
+  )
 }
+
+// --- Instance snapshot (for offline render) --------------------------------
+
+// data: {records, last_event_id, person, ts}
+export const snapshotPut = (sessionInstanceId, data) =>
+  write(SNAPS, { session_instance_id: sessionInstanceId, ...data })
+export const snapshotGet = (sessionInstanceId) => read(SNAPS, sessionInstanceId)

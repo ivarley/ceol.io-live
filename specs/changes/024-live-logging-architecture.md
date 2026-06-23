@@ -472,10 +472,46 @@ exist in the codebase today) via a walking skeleton, then widen.
   > `op_id` (server dedup verified). The queue is hydrated from IndexedDB on mount, so ops survive
   > a reload/restart while offline. A banner shows the queued count + offline/syncing state.
   > Server-level replay+idempotency covered by an inline check; client IndexedDB path is
-  > browser-verified. **Scope:** only `add_tune` queues offline (the core logging action); other
-  > ops still require connectivity. **Deferred (later chunks):** service worker / PWA install;
-  > local→server id remapping for offline anchored inserts; offline snapshot cache + tune-match
-  > cache; reconnect reconciliation review screen + post-completion diff (§G).
+  > browser-verified.
+  >
+  > **Chunk 2 — service worker (offline reload) — built (2026-06-22).** `static/live-sw.js`,
+  > served by Flask at `/live/sw.js` so its scope is `/live/` (controls the live page + its
+  > fetches) without touching the main app's `/static/`-scoped PWA shim. Policy (§H): shell assets
+  > (`/static/live/*`) stale-while-revalidate; the screen navigation network-first→cache fallback;
+  > `/api/*`, op-POST, and the cross-origin SSE are network-only (never cached/intercepted). Data
+  > stays in IndexedDB. Registered from `main.js`; manifest + theme-color linked in the shell.
+  >
+  > **Chunk 3 — offline for all ops — built (2026-06-22).** The send path is now generic
+  > (`trySend`/`settleOp`/`undoOp`): **remove** works offline (optimistic "⏳ removing"
+  > strike-through + **Restore** to cancel a not-yet-synced delete, §G) and **end-set** works
+  > offline (optimistic break that the set segmentation renders as a divider). Both queue + replay
+  > like add, reconciled by `op_id`; a server reject undoes the optimistic effect. Optimistic
+  > state is re-applied after each (re)bootstrap via `hydrateQueue` (which resets to server truth
+  > first). set_confidence/attribute_set_starter still need connectivity (graceful offline notice).
+  >
+  > **Chunk 4 — offline snapshot cache — built (2026-06-23).** Bootstrap is network-only, so an
+  > offline reload had nothing to render. Now a per-instance records snapshot is persisted to
+  > IndexedDB (`snapshots` store, `offline.js` DB v2), refreshed (debounced) on bootstrap and on
+  > every applied op, carrying the `last_event_id` high-water. `connect()` falls back to it when
+  > bootstrap fails offline, so the screen renders the last-known state; queued ops re-apply on
+  > top; on reconnect the SSE resumes from the cached high-water. `bootstrap()` now flags
+  > `networkError` like `sendOp`.
+  >
+  > **Chunk 5 — unify optimistic rendering + offline bug fixes (2026-06-23, Playwright-verified).**
+  > Optimistic add-tunes now live in `byId` as temp records (with a sortable `nextTempPos()`
+  > position + `_status`), same lane as optimistic breaks — so offline add → end-set → add
+  > segments into separate sets correctly (the old split pending-map/byId rendering couldn't
+  > interleave). Fixes: (a) offline reload showed nothing — snapshot writes silently failed
+  > because Svelte reactive **Proxies aren't structured-cloneable** (`DataCloneError`); now
+  > JSON-serialized before the IndexedDB put. (b) end-set "invalid input syntax for integer
+  > temp-…" — the temp break id leaked in as `after_record_id`; end-set now sends `null`
+  > (append). Driven by `spike/pw_offline.py` (Playwright/Chromium in venv): login → online add →
+  > end-set → offline → reload → snapshot renders → offline remove+restore → offline end-set →
+  > reconnect → queue drains, temps→real, no console errors.
+  >
+  > **Deferred (later chunks):** local→server id remapping for offline anchored *mid-set* inserts;
+  > offline tune-match cache (match names with no network); reconnect reconciliation review screen
+  > + post-completion diff (§G); offline confirm/attribution ops.
 
 (Audio = separate task, after the above; gated on finishing 022.)
 

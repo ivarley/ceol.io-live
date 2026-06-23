@@ -2,10 +2,16 @@
 // subscription. Kept framework-free so App.svelte owns only UI + state.
 
 export async function bootstrap(config) {
-  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/bootstrap`, {
-    headers: { Accept: 'application/json' },
-    credentials: 'same-origin',
-  })
+  let res
+  try {
+    res = await fetch(`/api/live/instances/${config.sessionInstanceId}/bootstrap`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+  } catch (e) {
+    e.networkError = true // offline — caller can fall back to the cached snapshot
+    throw e
+  }
   if (!res.ok) throw new Error(`bootstrap failed: ${res.status}`)
   return res.json()
 }

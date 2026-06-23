@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, openStream } from './client.js'
-  import { queuePut, queueAll, queueDelete } from './offline.js'
+  import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
 
   let { config } = $props()
 
@@ -13,7 +13,41 @@
   // optimistic in-flight (§A2); 'queued' = offline, persisted to IndexedDB (§G).
   const pending = new SvelteMap()
   const flashing = new SvelteSet() // record ids briefly highlighted on settle (§39)
-  let status = $state('connecting')
+  let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
+  let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
+  let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
+  // One source of truth for the pill + banner so they never disagree:
+  //   live           - stream is up
+  //   offline        - browser offline, OR bootstrap failed, OR reconnect timed out
+  //   reconnecting   - a transient stream blip we're still hopeful about
+  const displayStatus = $derived(
+    !online || !reachable ? 'offline' : sseStatus === 'live' ? 'live' : 'reconnecting'
+  )
+
+  // "reconnecting" is short-lived: if the stream doesn't come back within a few
+  // seconds, declare offline (covers reload-while-offline, where navigator.onLine
+  // can read true and no `offline` event fires, and server-down with network up).
+  let reconnectTimer = null
+  function noteSse(s) {
+    if (s === 'live') {
+      reachable = true
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+    } else if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => { reconnectTimer = null; reachable = false }, 8000)
+    }
+  }
+
+  // When we can't reach the server, don't keep an EventSource hammering every ~3s;
+  // slow-poll a full reconnect instead. navigator.onLine is unreliable, so we can't
+  // rely solely on the 'online' event to know when we're back.
+  let reconnectPoll = null
+  function scheduleReconnect() {
+    if (reconnectPoll) return
+    reconnectPoll = setTimeout(() => {
+      reconnectPoll = null
+      connect()
+    }, 10000)
+  }
   let input = $state('')
   let error = $state('')
   let notice = $state('')
@@ -25,6 +59,34 @@
 
   let es = null
   let lastTypingSent = 0 // throttle the "still typing" refresh
+  let highWater = 0 // max event_id seen; persisted with the snapshot for offline resume
+  let snapTimer = null
+
+  // Persist a clean (server-truth) snapshot of the records so the screen can render
+  // offline (§G): strip client-only optimistic flags and temp rows.
+  async function saveSnapshot() {
+    const records = [...byId.values()]
+      .filter((r) => !r._temp && typeof r.session_instance_tune_id === 'number')
+      .map(({ _removing, _temp, pending, status, ...rest }) => rest)
+    try {
+      // JSON round-trip strips Svelte reactive proxies; IndexedDB can't
+      // structured-clone a Proxy (DataCloneError), which would silently fail.
+      const value = JSON.parse(JSON.stringify({ records, last_event_id: highWater, person, ts: Date.now() }))
+      await snapshotPut(config.sessionInstanceId, value)
+    } catch {
+      /* IndexedDB unavailable — skip */
+    }
+  }
+
+  // Debounced save for incremental op updates (the full-set save after bootstrap is
+  // immediate, so a quick reload can't lose it).
+  function scheduleSnapshot() {
+    if (snapTimer) return
+    snapTimer = setTimeout(() => {
+      snapTimer = null
+      saveSnapshot()
+    }, 800)
+  }
 
   // The UI infers a presence color from the arrival ordinal (spec 024 §F).
   const PALETTE = ['#4f9dff', '#46d27a', '#e0b341', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
@@ -68,23 +130,18 @@
     return out
   })
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
-  const openSet = $derived(ordered.length > 0 && ordered[ordered.length - 1].record_type !== 'break')
 
-  // Sets for display, with optimistic pending rows appended to the open set (or a
-  // new trailing set if the last record is a break / there are none yet).
-  const displaySets = $derived.by(() => {
-    const base = sets.map((s) => s.slice())
-    const pend = [...pending.values()]
-      .filter((p) => p.op_type === 'add_tune')
-      .map((p) => ({
-        session_instance_tune_id: p.tempId, name: p.name, record_type: 'tune',
-        pending: true, status: p.status,
-      }))
-    if (!pend.length) return base
-    if (base.length && openSet) base[base.length - 1].push(...pend)
-    else base.push(pend)
-    return base
-  })
+  // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
+  // sortable position, so they segment into sets uniformly. Display = the sets.
+  const displaySets = $derived(sets)
+
+  // A position after everything currently present, so optimistic appends stay last
+  // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
+  function nextTempPos() {
+    let max = ''
+    for (const r of byId.values()) if (r.order_position && r.order_position > max) max = r.order_position
+    return max + 'z'
+  }
 
   const colorForPerson = (pid) => {
     const p = roster.find((r) => r.person_id === pid)
@@ -118,9 +175,12 @@
   // Apply one server-authoritative op (spec 024). Dispatch by op_type.
   function applyOp(d) {
     if (d.op_id && pending.has(d.op_id)) {
-      pending.delete(d.op_id) // settle our optimistic/queued row...
+      const entry = pending.get(d.op_id) // settle our optimistic/queued op...
+      if (entry.tempId) byId.delete(entry.tempId) // ...drop its optimistic temp record
+      pending.delete(d.op_id)
       queueDelete(d.op_id) // ...and drop it from the persisted queue (already applied)
     }
+    if (d.event_id && d.event_id > highWater) highWater = d.event_id
     noteRemote(d)
     switch (d.op_type) {
       case 'add_tune':
@@ -143,6 +203,7 @@
       case 'mark_incomplete':
         break // metadata; header-only (not shown in this minimal Phase 1 UI)
     }
+    scheduleSnapshot() // keep the offline snapshot fresh
   }
 
   async function op(op_type, payload, label) {
@@ -163,17 +224,50 @@
   }
 
   // Hold an op for reconnect replay (persisted to IndexedDB, §G).
+  // Reflect an op's status on its optimistic temp record (sending vs queued).
+  function markTempStatus(entry, st) {
+    if (entry.tempId && byId.has(entry.tempId)) byId.set(entry.tempId, { ...byId.get(entry.tempId), _status: st })
+  }
+
   async function markQueued(entry) {
     entry.status = 'queued'
     pending.set(entry.op_id, entry)
+    markTempStatus(entry, 'queued')
     await queuePut({
       op_id: entry.op_id, op_type: entry.op_type, payload: entry.payload,
       name: entry.name, ts: entry.ts, session_instance_id: config.sessionInstanceId,
     })
   }
 
-  // Try to send a pending op. Success -> settle; network failure -> queue it;
-  // server error -> surface and drop. Idempotent by op_id.
+  // Revert an op's optimistic effect when it fails/rejects.
+  function undoOp(entry) {
+    if (entry.op_type === 'remove_tune') {
+      const r = byId.get(entry.payload.record_id)
+      if (r && r._removing === entry.op_id) {
+        const { _removing, ...rest } = r
+        byId.set(r.session_instance_tune_id, rest)
+      }
+    }
+    if (entry.tempId) byId.delete(entry.tempId)
+  }
+
+  function settleOp(entry, res) {
+    pending.delete(entry.op_id)
+    queueDelete(entry.op_id)
+    if (res.rejected) {
+      undoOp(entry)
+      notice = res.message || `${entry.op_type}: ${res.reason}`
+      return
+    }
+    if (entry.tempId) byId.delete(entry.tempId) // drop optimistic temp; the real record arrives below / via SSE
+    if (res.record) {
+      put(res.record) // settle now if the ack beat the SSE echo (idempotent)
+      flashId(res.record.session_instance_tune_id)
+    }
+  }
+
+  // Send a pending op (any type). Success -> settle; network failure -> queue it
+  // (persisted for replay); server error -> undo + surface. Idempotent by op_id.
   async function trySend(entry) {
     entry.status = 'sending'
     pending.set(entry.op_id, entry)
@@ -185,17 +279,11 @@
     }
     try {
       const res = await sendOp(config, entry.op_type, entry.payload, entry.op_id)
-      pending.delete(entry.op_id)
-      await queueDelete(entry.op_id)
-      if (res.rejected) notice = res.message || `${entry.op_type}: ${res.reason}`
-      else if (res.record) {
-        put(res.record) // settle now if the ack beat the SSE echo (idempotent)
-        flashId(res.record.session_instance_tune_id)
-      }
+      settleOp(entry, res)
     } catch (e) {
-      if (e.networkError) {
-        await markQueued(entry)
-      } else {
+      if (e.networkError) await markQueued(entry)
+      else {
+        undoOp(entry)
         pending.delete(entry.op_id)
         await queueDelete(entry.op_id)
         error = e.message
@@ -227,7 +315,50 @@
     sendTyping(config, false) // clear-on-commit (§F)
     error = ''
     const op_id = crypto.randomUUID()
-    trySend({ tempId: `pending-${op_id}`, name, op_id, op_type: 'add_tune', payload: { name }, status: 'sending', ts: Date.now() })
+    const tempId = `temp-${op_id}`
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, name, tune_id: null, record_type: 'tune',
+      order_position: nextTempPos(), deleted: false, _temp: true, _status: 'sending',
+    })
+    trySend({ op_id, name, op_type: 'add_tune', payload: { name }, status: 'sending', ts: Date.now(), tempId })
+  }
+
+  // Remove (soft) — works offline: optimistically marks the row "⏳ removing"
+  // (struck-through, restorable), queues the op, settles on the server's delete (§G).
+  function removeTune(record_id) {
+    const r = byId.get(record_id)
+    if (!r || r.deleted || r._removing) return
+    error = ''
+    const op_id = crypto.randomUUID()
+    byId.set(record_id, { ...r, _removing: op_id })
+    trySend({ op_id, op_type: 'remove_tune', payload: { record_id }, status: 'sending', ts: Date.now() })
+  }
+
+  // Restore a not-yet-synced removal: cancel the queued op, clear the mark.
+  function restore(record_id) {
+    const r = byId.get(record_id)
+    if (!r || !r._removing) return
+    pending.delete(r._removing)
+    queueDelete(r._removing)
+    const { _removing, ...rest } = r
+    byId.set(record_id, rest)
+  }
+
+  // End the current set — works offline: optimistically appends a break (which the
+  // set segmentation renders as a divider), queues, settles on the real break.
+  function endSet() {
+    if (!ordered.length) return
+    error = ''
+    // "End set" = append a break at the very end. after_record_id: null so the
+    // server appends at replay time (correctly landing after any offline tunes that
+    // replay first by ts); avoids ever sending a temp id as the anchor.
+    const op_id = crypto.randomUUID()
+    const tempId = `temp-${op_id}`
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, record_type: 'break',
+      order_position: nextTempPos(), deleted: false, _temp: true,
+    })
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: null }, status: 'sending', ts: Date.now(), tempId })
   }
 
   const queuedCount = $derived([...pending.values()].filter((e) => e.status === 'queued').length)
@@ -258,27 +389,60 @@
   let connSeq = 0 // guards against overlapping connect() calls leaking a stream
   async function connect() {
     const myGen = ++connSeq
+    if (reconnectPoll) { clearTimeout(reconnectPoll); reconnectPoll = null }
     try {
       if (es) { es.close(); es = null }
-      const snap = await bootstrap(config) // resync records + fresh high-water on (re)connect
+      let snap
+      let fromCache = false
+      try {
+        snap = await bootstrap(config) // server truth + fresh high-water
+        reachable = true // we just reached the server
+      } catch (e) {
+        if (!e.networkError) throw e
+        reachable = false // couldn't reach the server -> offline (not just "reconnecting")
+        // Offline: fall back to the cached snapshot so the screen still renders (§G).
+        const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
+        snap = cached
+          ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person }
+          : { records: [], last_event_id: 0 }
+        fromCache = true
+      }
       if (myGen !== connSeq) return // a newer connect() superseded this one
       byId.clear()
       for (const r of snap.records || []) put(r)
       if (snap.current_person) person = snap.current_person
+      highWater = snap.last_event_id || 0
+      if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
+      await hydrateQueue() // re-apply still-queued ops' optimistic state onto these records
+
+      if (fromCache) {
+        // Offline: render from cache, don't open a doomed SSE that retries every ~3s.
+        // Slow-poll a reconnect; the 'online' event also triggers one immediately.
+        scheduleReconnect()
+        return
+      }
+
       const stream = openStream(config, snap.last_event_id, {
         onOp: applyOp,
         onPresence: (r) => (roster = r),
         onTyping: (l) => (typers = l),
         onStatus: (s) => {
-          status = s
+          sseStatus = s
+          noteSse(s)
+          // Not live = no trustworthy presence; clear the stale roster/typers
+          // (others have already seen us drop).
           if (s === 'live') flush() // back online -> replay anything queued (§G)
+          else {
+            roster = []
+            typers = []
+          }
         },
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
     } catch (e) {
       error = e.message
-      status = 'error'
+      sseStatus = 'error'
     }
   }
 
@@ -287,7 +451,8 @@
   // present); reconnect when the page is restored from bfcache.
   function onPageHide() {
     if (es) { es.close(); es = null }
-    status = 'reconnecting'
+    sseStatus = 'reconnecting'
+    saveSnapshot() // best-effort flush so the latest records are cached for offline
   }
   function onPageShow(e) {
     // Only reconnect on a bfcache restore; the initial load is handled by onMount
@@ -295,33 +460,72 @@
     if (e.persisted) connect()
   }
 
+  // Load persisted queued ops (if any) and re-apply their optimistic effect onto
+  // the current records. Runs after each (re)bootstrap, which resets byId to truth.
   async function hydrateQueue() {
+    let saved = []
     try {
-      for (const e of await queueAll(config.sessionInstanceId)) {
-        pending.set(e.op_id, {
-          tempId: `pending-${e.op_id}`, name: e.name, op_id: e.op_id,
-          op_type: e.op_type, payload: e.payload, status: 'queued', ts: e.ts,
-        })
-      }
+      saved = await queueAll(config.sessionInstanceId)
     } catch (err) {
-      /* IndexedDB unavailable (private mode etc.) — degrade to online-only */
+      return // IndexedDB unavailable (private mode etc.) — degrade to online-only
+    }
+    for (const e of saved) {
+      if (!pending.has(e.op_id)) {
+        pending.set(e.op_id, { op_id: e.op_id, op_type: e.op_type, payload: e.payload, name: e.name, status: 'queued', ts: e.ts })
+      }
+    }
+    // Re-apply optimistic state for everything still queued, in offline (ts) order
+    // so temp positions stack the same way they did originally.
+    const queued = [...pending.values()].filter((e) => e.status === 'queued').sort((a, b) => a.ts - b.ts)
+    for (const entry of queued) {
+      if (entry.op_type === 'add_tune') {
+        entry.tempId = `temp-${entry.op_id}`
+        byId.set(entry.tempId, {
+          session_instance_tune_id: entry.tempId, name: entry.name, tune_id: null, record_type: 'tune',
+          order_position: nextTempPos(), deleted: false, _temp: true, _status: 'queued',
+        })
+      } else if (entry.op_type === 'set_break') {
+        entry.tempId = `temp-${entry.op_id}`
+        byId.set(entry.tempId, {
+          session_instance_tune_id: entry.tempId, record_type: 'break',
+          order_position: nextTempPos(), deleted: false, _temp: true,
+        })
+      } else if (entry.op_type === 'remove_tune') {
+        const r = byId.get(entry.payload.record_id)
+        if (r && !r._removing) byId.set(r.session_instance_tune_id, { ...r, _removing: entry.op_id })
+      }
     }
   }
 
-  const onOnline = () => flush()
+  const onOnline = () => {
+    online = true
+    reachable = true // give the stream a fresh chance; noteSse re-arms the timeout
+    connect() // re-bootstrap + reopen the stream (which flushes the queue on 'live')
+  }
+  // Reflect offline immediately (the SSE onerror can lag): drop the stale presence and
+  // close the stream so EventSource stops its ~3s reconnect spam while we're offline.
+  const onOffline = () => {
+    online = false
+    roster = []
+    typers = []
+    if (es) { es.close(); es = null }
+  }
 
-  onMount(async () => {
-    await hydrateQueue() // restore ops left queued from a previous offline session
-    connect()
+  onMount(() => {
+    connect() // bootstraps records, then hydrateQueue() re-applies any queued ops
     window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
   })
 
   onDestroy(() => {
     window.removeEventListener('pagehide', onPageHide)
     window.removeEventListener('pageshow', onPageShow)
     window.removeEventListener('online', onOnline)
+    window.removeEventListener('offline', onOffline)
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    if (reconnectPoll) clearTimeout(reconnectPoll)
     if (es) es.close()
   })
 </script>
@@ -337,7 +541,7 @@
           </span>
         {/each}
       </span>
-      <span class="status status-{status}">{status}</span>
+      <span class="status status-{displayStatus}">{displayStatus}</span>
     </div>
   </header>
 
@@ -347,7 +551,7 @@
   {/if}
   {#if queuedCount > 0}
     <p class="offline-banner">
-      ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{status === 'live' ? ', syncing…' : ' — offline'}
+      ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
     </p>
   {/if}
 
@@ -356,20 +560,23 @@
       <ol class="set">
         {#each set as r (r.session_instance_tune_id)}
           <li
-            class:low={!r.pending && r.confidence != null && r.confidence <= 70}
-            class:pending={r.pending}
-            class:queued={r.pending && r.status === 'queued'}
+            class:low={!r._temp && r.confidence != null && r.confidence <= 70}
+            class:pending={r._temp}
+            class:queued={r._temp && r._status === 'queued'}
+            class:removing={r._removing}
             class:flash={flashing.has(r.session_instance_tune_id)}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
-            {#if r.pending}
-              <span class="actions"><span class="hourglass" title={r.status === 'queued' ? 'Queued (offline)' : 'Sending…'}>⏳</span></span>
+            {#if r._temp}
+              <span class="actions"><span class="hourglass" title={r._status === 'queued' ? 'Queued (offline)' : 'Sending…'}>⏳</span></span>
+            {:else if r._removing}
+              <span class="actions"><button class="restore" onclick={() => restore(r.session_instance_tune_id)}>Restore</button></span>
             {:else}
               <span class="actions">
                 {#if r.confidence != null && r.confidence <= 70}
-                  <button onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
+                  <button class="confirm" onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
                 {/if}
-                <button onclick={() => op('remove_tune', { record_id: r.session_instance_tune_id }, 'Remove')}>✕</button>
+                <button class="remove" onclick={() => removeTune(r.session_instance_tune_id)}>✕</button>
               </span>
             {/if}
           </li>
@@ -402,7 +609,7 @@
       class="endset"
       title="End the current set"
       disabled={!lastRecordId}
-      onclick={() => op('set_break', { after_record_id: lastRecordId }, 'End set')}
+      onclick={endSet}
     >End set</button>
   </div>
 </main>

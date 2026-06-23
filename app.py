@@ -315,6 +315,20 @@ app.add_url_rule(
     live_logging_screen,
 )
 
+# Serve the live-screen service worker at /live/sw.js so its scope is /live/
+# (it must control /live/instances/* navigations). Kept no-store so SW updates
+# are picked up promptly.
+def live_service_worker():
+    resp = send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"),
+        "live-sw.js",
+        mimetype="application/javascript",
+    )
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+app.add_url_rule("/live/sw.js", "live_service_worker", live_service_worker)
+
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
 app.add_url_rule(
     "/api/sessions/<path:session_path>/logs",
