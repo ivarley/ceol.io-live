@@ -13,8 +13,14 @@
   let error = $state('')
   let notice = $state('')
   let person = $state(config.currentPerson || {})
+  let roster = $state([]) // who's connected right now (ephemeral presence, §F)
 
   let es = null
+
+  // The UI infers a presence color from the arrival ordinal (spec 024 §F).
+  const PALETTE = ['#4f9dff', '#46d27a', '#e0b341', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
+  const colorFor = (seq) => PALETTE[((seq % PALETTE.length) + PALETTE.length) % PALETTE.length]
+  const initials = (name) => (name || '?').trim().slice(0, 2).toUpperCase()
 
   function put(record) {
     if (!record) return
@@ -88,29 +94,66 @@
     op('add_tune', { name }) // server-authoritative: the row arrives over SSE
   }
 
-  onMount(async () => {
+  let connSeq = 0 // guards against overlapping connect() calls leaking a stream
+  async function connect() {
+    const myGen = ++connSeq
     try {
-      const snap = await bootstrap(config)
+      if (es) { es.close(); es = null }
+      const snap = await bootstrap(config) // resync records + fresh high-water on (re)connect
+      if (myGen !== connSeq) return // a newer connect() superseded this one
+      byId.clear()
       for (const r of snap.records || []) put(r)
       if (snap.current_person) person = snap.current_person
-      es = openStream(config, snap.last_event_id, {
+      const stream = openStream(config, snap.last_event_id, {
         onOp: applyOp,
+        onPresence: (r) => (roster = r),
         onStatus: (s) => (status = s),
       })
+      if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
+      es = stream
     } catch (e) {
       error = e.message
       status = 'error'
     }
+  }
+
+  // Close the stream when the page is hidden/navigated/bfcached so the server sees
+  // us leave (an SSE socket kept alive in bfcache would otherwise leave a ghost
+  // present); reconnect when the page is restored from bfcache.
+  function onPageHide() {
+    if (es) { es.close(); es = null }
+    status = 'reconnecting'
+  }
+  function onPageShow(e) {
+    // Only reconnect on a bfcache restore; the initial load is handled by onMount
+    // (pageshow also fires then, which previously caused a duplicate connection).
+    if (e.persisted) connect()
+  }
+
+  onMount(() => {
+    connect()
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
   })
 
-  onDestroy(() => es && es.close())
+  onDestroy(() => {
+    window.removeEventListener('pagehide', onPageHide)
+    window.removeEventListener('pageshow', onPageShow)
+    if (es) es.close()
+  })
 </script>
 
 <main>
   <header>
     <h1>Live logging <span class="beta">beta</span></h1>
     <div class="meta">
-      <span class="who">{person.first_name || 'You'}</span>
+      <span class="roster">
+        {#each roster as p (p.person_id)}
+          <span class="avatar" style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.devices > 1 ? ` (${p.devices} devices)` : ''}">
+            {initials(p.name)}{#if p.devices > 1}<sup>{p.devices}</sup>{/if}
+          </span>
+        {/each}
+      </span>
       <span class="status status-{status}">{status}</span>
     </div>
   </header>

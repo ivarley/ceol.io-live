@@ -26,6 +26,7 @@ Serves on STREAMING_PORT (default 8080).
 import os
 import json
 import asyncio
+import itertools
 from contextlib import asynccontextmanager
 import asyncpg
 from dotenv import load_dotenv
@@ -46,6 +47,12 @@ KEEPALIVE_SECONDS = 15
 
 pool: asyncpg.Pool = None
 
+# One global LISTEN channel for the whole feed (must match live_logging_routes).
+# A single dedicated listener connection fans out to all clients via the in-memory
+# PRESENCE registry — so SSE clients never each hold a DB connection (which capped
+# concurrent clients at the pool size and caused new connects to hang on acquire).
+LIVE_EVENT_CHANNEL = "live_session_events"
+
 # A throwaway Flask app purely so we can reuse Flask's exact session-cookie
 # deserialization (itsdangerous signer + tagged-JSON serializer). We never run it.
 _cookie_app = Flask(__name__)
@@ -63,9 +70,29 @@ def _dsn():
     )
 
 
-def event_channel(session_instance_id):
-    """Must match live_logging_routes.event_channel on the Flask side."""
-    return f"session_instance_{int(session_instance_id)}"
+async def _dispatch_op(instance_id, event_id):
+    """Read a committed event once and fan it out to every connected client's queue.
+    Called from the single global NOTIFY listener — clients do no per-event DB read."""
+    async with pool.acquire() as c:
+        row = await c.fetchrow(
+            "SELECT op_type, payload::text AS payload FROM session_event WHERE event_id = $1",
+            event_id,
+        )
+    if row is None:
+        return
+    for st in list(PRESENCE.get(instance_id, {}).values()):
+        st["queue"].put_nowait(("op", event_id, row["op_type"], row["payload"]))
+
+
+def _on_global_notify(conn, pid, channel, payload):
+    """asyncpg NOTIFY callback (sync): payload is '<instance_id>:<event_id>'."""
+    try:
+        inst_s, eid_s = payload.split(":", 1)
+        instance_id, event_id = int(inst_s), int(eid_s)
+    except (ValueError, AttributeError):
+        return
+    if PRESENCE.get(instance_id):  # only bother if someone's listening
+        asyncio.create_task(_dispatch_op(instance_id, event_id))
 
 
 # --- Auth -----------------------------------------------------------------
@@ -124,6 +151,60 @@ def _cors_headers(request):
     return headers
 
 
+# --- Presence (ephemeral, in the streaming service's memory; spec 024 §F) ----
+# Presence ≡ an open authenticated SSE connection. It never touches the DB and is
+# never replayed (sent as `event: presence` WITHOUT an `id:`, so it doesn't advance
+# Last-Event-ID; a reconnect gets a fresh snapshot). Phase 2 chunk 1: arrival
+# ordinals (which the UI maps to a color) are kept in memory; persisting them to
+# session_instance_person.arrival_seq is a deliberate follow-up.
+
+# instance_id -> { conn_id: {queue, person_id, arrival_seq, name} }
+PRESENCE = {}
+# instance_id -> { person_id: arrival_seq }  (monotonic by first arrival; never shrinks)
+_ARRIVALS = {}
+_conn_ids = itertools.count(1)
+
+
+def _arrival_seq(instance_id, person_id):
+    arr = _ARRIVALS.setdefault(instance_id, {})
+    if person_id not in arr:
+        arr[person_id] = len(arr)  # next free ordinal; stable for the instance's life
+    return arr[person_id]
+
+
+def _roster(instance_id):
+    """One entry per present person (the same person on two devices = one entry)."""
+    by_person = {}
+    for st in PRESENCE.get(instance_id, {}).values():
+        e = by_person.get(st["person_id"])
+        if e is None:
+            by_person[st["person_id"]] = {
+                "person_id": st["person_id"], "arrival_seq": st["arrival_seq"],
+                "name": st["name"], "devices": 1,
+            }
+        else:
+            e["devices"] += 1
+    return sorted(by_person.values(), key=lambda e: e["arrival_seq"])
+
+
+def _broadcast_presence(instance_id):
+    roster = _roster(instance_id)
+    for st in list(PRESENCE.get(instance_id, {}).values()):
+        st["queue"].put_nowait(("presence", roster))
+
+
+async def _resolve_person(user_id):
+    async with pool.acquire() as c:
+        row = await c.fetchrow(
+            "SELECT p.person_id, p.first_name, p.last_name FROM user_account ua "
+            "JOIN person p ON ua.person_id = p.person_id WHERE ua.user_id = $1",
+            user_id,
+        )
+    if not row:
+        return {"person_id": None, "name": ""}
+    return {"person_id": row["person_id"], "name": (row["first_name"] or "").strip()}
+
+
 # --- Routes ---------------------------------------------------------------
 
 
@@ -145,7 +226,6 @@ async def events(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401, headers=_cors_headers(request))
 
     session_instance_id = int(request.path_params["session_instance_id"])
-    channel = event_channel(session_instance_id)
 
     # EventSource auto-sends Last-Event-ID on reconnect. On the FIRST connect it
     # can't set that header, so the bootstrap high-water mark rides in as a query
@@ -162,60 +242,72 @@ async def events(request):
     )
 
     async def gen():
+        # One in-memory queue per connection carries both message kinds:
+        #   ("op", eid, op_type, payload)  fanned out by the single global listener
+        #   ("presence", roster)           from the in-process presence broadcaster
+        # No per-connection DB connection is held — only a brief pool.acquire for the
+        # initial replay — so concurrent clients are bounded by memory, not the pool.
         queue: asyncio.Queue = asyncio.Queue()
-        listen_conn = await pool.acquire()
 
-        def on_notify(conn, pid, chan, payload):
-            try:
-                queue.put_nowait(int(payload))
-            except (TypeError, ValueError):
-                pass
-
-        await listen_conn.add_listener(channel, on_notify)
+        person = await _resolve_person(uid)
+        seq = _arrival_seq(session_instance_id, person["person_id"])
+        conn_id = next(_conn_ids)
+        PRESENCE.setdefault(session_instance_id, {})[conn_id] = {
+            "queue": queue, "person_id": person["person_id"],
+            "arrival_seq": seq, "name": person["name"],
+        }
         try:
             yield b": connected\n\n"
 
             # 1) REPLAY everything after the client's cursor; note the high-water mark.
-            rows = await listen_conn.fetch(
-                """
-                SELECT event_id, op_type, payload::text AS payload
-                FROM session_event
-                WHERE session_instance_id = $1 AND event_id > $2
-                ORDER BY event_id
-                """,
-                session_instance_id,
-                last,
-            )
+            #    Registered in PRESENCE *before* this, so live ops dispatched during
+            #    replay queue up and are de-duped below by replayed_through.
+            async with pool.acquire() as c:
+                rows = await c.fetch(
+                    """
+                    SELECT event_id, op_type, payload::text AS payload
+                    FROM session_event
+                    WHERE session_instance_id = $1 AND event_id > $2
+                    ORDER BY event_id
+                    """,
+                    session_instance_id,
+                    last,
+                )
             replayed_through = last
             for r in rows:
                 replayed_through = r["event_id"]
                 yield _sse(r["event_id"], r["op_type"], r["payload"])
 
-            # 2) GO LIVE — drain notifies, skipping anything already replayed.
+            # Announce arrival: a fresh roster to me + everyone else on this instance.
+            _broadcast_presence(session_instance_id)
+
+            # 2) GO LIVE — drain the queue (ops + presence), skipping replayed ops.
+            #    On client disconnect, Starlette cancels this generator (-> finally).
             while True:
                 try:
-                    eid = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
+                    msg = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
                 except asyncio.TimeoutError:
-                    yield b": ping\n\n"
-                    if await request.is_disconnected():
-                        break
+                    yield b": ping\n\n"  # idle keepalive
                     continue
-                if eid <= replayed_through:
-                    continue
-                row = await listen_conn.fetchrow(
-                    "SELECT op_type, payload::text AS payload FROM session_event WHERE event_id = $1",
-                    eid,
-                )
-                if row is None:
-                    continue
-                yield _sse(eid, row["op_type"], row["payload"])
-                if await request.is_disconnected():
-                    break
+                if msg[0] == "presence":
+                    yield _presence_event(msg[1])  # no id: -> not a resume cursor
+                elif msg[0] == "op":
+                    _, eid, op_type, payload = msg
+                    if eid <= replayed_through:
+                        continue
+                    yield _sse(eid, op_type, payload)
         finally:
-            await listen_conn.remove_listener(channel, on_notify)
-            await pool.release(listen_conn)
+            # Sync cleanup so a leave is always broadcast, even if the cancellation
+            # that got us here interrupts anything awaited.
+            PRESENCE.get(session_instance_id, {}).pop(conn_id, None)
+            _broadcast_presence(session_instance_id)  # tell the rest I left
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_cors_headers(request))
+
+
+def _presence_event(roster):
+    """Frame a presence snapshot. No `id:` -> doesn't advance Last-Event-ID (§F)."""
+    return f"event: presence\ndata: {json.dumps({'roster': roster})}\n\n".encode()
 
 
 def _sse(event_id, op_type, payload_json):
@@ -241,9 +333,17 @@ def _sse(event_id, op_type, payload_json):
 async def lifespan(app):
     global pool
     pool = await asyncpg.create_pool(_dsn(), min_size=1, max_size=10)
-    print(f"[streaming] live-logging SSE service up on :{PORT}")
-    yield
-    await pool.close()
+    # One dedicated, long-lived connection LISTENs the whole feed and fans every
+    # committed event out to the in-memory client queues (spec 024 §A4).
+    listener = await pool.acquire()
+    await listener.add_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
+    print(f"[streaming] live-logging SSE service up on :{PORT} (listening '{LIVE_EVENT_CHANNEL}')")
+    try:
+        yield
+    finally:
+        await listener.remove_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
+        await pool.release(listener)
+        await pool.close()
 
 
 app = Starlette(

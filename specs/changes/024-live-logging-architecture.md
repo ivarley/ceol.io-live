@@ -414,6 +414,28 @@ exist in the codebase today) via a walking skeleton, then widen.
 - **Phase 2 — Presence + typing + reconnect resume.** The ephemeral channel,
   color-from-`arrival_seq`, `Last-Event-ID` gap recovery, settle / go-to-end polish,
   conflict notices.
+
+  > **Chunk 1 — presence — built & validated (2026-06-22).** The streaming service now
+  > keeps an in-memory per-instance presence registry (`PRESENCE`); each connection has a
+  > unified in-memory queue carrying both `("op", eid, op_type, payload)` and
+  > `("presence", roster)`. **Fan-out is a single global `LISTEN`** (one dedicated connection
+  > on the `live_session_events` channel; the referee `NOTIFY`s `"<instance>:<event_id>"`),
+  > which reads each committed event once and pushes it to every connected client's queue.
+  > This replaced the original one-`LISTEN`-connection-per-SSE-client design, which capped
+  > concurrent clients at the DB pool size (10) and made the 11th client hang on `pool.acquire()`
+  > before it could send anything — found via two-browser testing; now 25 simultaneous clients
+  > connect instantly. Presence ≡ an open authenticated SSE
+  > connection: on connect it resolves the person, assigns an in-memory arrival ordinal
+  > (stable per person for the instance's life; same person on N devices = one roster entry
+  > with a device count), and broadcasts a fresh roster; on disconnect, Starlette cancels the
+  > generator and the `finally` block broadcasts the shrunk roster (sync cleanup runs first so
+  > a leave is never lost). Roster rides `event: presence` **without** an `id:` (never advances
+  > `Last-Event-ID`, never replayed). Client maps `arrival_seq` → color (`palette[seq mod N]`)
+  > and renders avatars. E2E `spike/test_phase2_presence.py` (run against a browserless instance
+  > — presence is real, so open browsers legitimately appear). Op-delivery suites still green.
+  > **Deferred within Phase 2:** persisting `arrival_seq` to `session_instance_person` (color
+  > stability across streaming restarts) + an attendance-view fix so presence-only rows don't
+  > surface as attendees; typing indicators; conflict notices; settle/go-to-end polish.
 - **Phase 3 — Offline.** IndexedDB stores, service worker, queue + pending UI, reconnect
   replay + reconciliation + the post-completion review screen.
 

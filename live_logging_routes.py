@@ -46,9 +46,11 @@ from api_routes import api_login_required, segment_records_into_sets
 from fractional_indexing import generate_append_position, generate_position_between
 
 
-def event_channel(session_instance_id):
-    """Postgres LISTEN/NOTIFY channel for one instance's feed (spec 024 §A4)."""
-    return f"session_instance_{int(session_instance_id)}"
+# One global LISTEN/NOTIFY channel for the whole feed (spec 024 §A4). The payload
+# is "<instance_id>:<event_id>"; the streaming service filters by instance. A single
+# channel means the streaming service holds ONE listener connection total, instead of
+# one per SSE client (which would cap concurrent clients at the DB pool size).
+LIVE_EVENT_CHANNEL = "live_session_events"
 
 
 class OpRejected(Exception):
@@ -568,7 +570,7 @@ def live_op(session_instance_id):
                                 "op_id": op_id, "op_type": row[1], **row[2]})
             raise
         event_id = cur.fetchone()[0]
-        cur.execute("SELECT pg_notify(%s, %s)", (event_channel(session_instance_id), str(event_id)))
+        cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
         cur.execute("COMMIT")
 
         return jsonify({"success": True, "event_id": event_id, "op_id": op_id,

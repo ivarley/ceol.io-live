@@ -44,6 +44,15 @@ export function openStream(config, lastEventId, handlers) {
     handlers.onOp?.(data)
   })
 
+  // Ephemeral presence (no id:, never advances Last-Event-ID).
+  es.addEventListener('presence', (e) => {
+    try {
+      handlers.onPresence?.(JSON.parse(e.data).roster || [])
+    } catch {
+      /* ignore */
+    }
+  })
+
   es.onopen = () => handlers.onStatus?.('live')
   es.onerror = () => handlers.onStatus?.('reconnecting')
   return es

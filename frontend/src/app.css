@@ -50,6 +50,21 @@ h1 { font-size: 18px; margin: 0; }
 .meta { display: flex; gap: 10px; align-items: center; font-size: 13px; }
 .who { color: var(--muted); }
 
+.roster { display: inline-flex; gap: 4px; }
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #04122b;
+}
+.avatar sup { font-size: 8px; margin-left: 1px; }
+
 .status { text-transform: capitalize; }
 .status-live { color: #46d27a; }
 .status-connecting, .status-reconnecting { color: #e0b341; }
