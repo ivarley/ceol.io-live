@@ -3884,11 +3884,17 @@ def live_logging_screen(session_instance_id):
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT 1 FROM session_instance WHERE session_instance_id = %s",
+            """
+            SELECT s.path FROM session_instance si
+            JOIN session s ON s.session_id = si.session_id
+            WHERE si.session_instance_id = %s
+            """,
             (session_instance_id,),
         )
-        if not cur.fetchone():
+        row = cur.fetchone()
+        if not row:
             return render_template("error.html", error_message="Session instance not found"), 404
+        session_path = row[0]
     finally:
         conn.close()
 
@@ -3896,6 +3902,7 @@ def live_logging_screen(session_instance_id):
     return render_template(
         "live_logging.html",
         session_instance_id=session_instance_id,
+        session_path=session_path,
         streaming_base_url=streaming_base_url,
         current_person={
             "person_id": current_user.person_id,

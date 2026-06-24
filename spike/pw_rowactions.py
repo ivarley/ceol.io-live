@@ -41,21 +41,26 @@ def main():
         print(f"2. After -> end_active {end_active_before}->{end_active_after}, mid-seam active={seam_active}")
         if not seam_active: fail.append("After did not activate a mid seam (cursor)")
 
-        # 3. ⓘ -> drawer with real stats
-        pg.eval_on_selector_all(".tune-row:not(.pending):not(.removing) .info-btn", "els => els[0].click()")
-        pg.wait_for_selector(".drawer", timeout=4000)
-        pg.wait_for_timeout(600)
-        title = pg.text_content(".drawer-title")
-        stats = pg.eval_on_selector_all(".d-statrow", "e => e.map(x => x.textContent.trim())")
-        has_unlinked = pg.query_selector(".d-note") is not None
-        print(f"3. drawer title={title!r}, stats={stats}, unlinked_note={has_unlinked}")
-        if not pg.query_selector(".drawer"): fail.append("drawer did not open")
-        if not stats and not has_unlinked: fail.append("drawer showed neither stats nor unlinked note")
+        # 3. ⓘ on a LINKED tune -> the legacy tune-detail modal (reused verbatim)
+        opened = pg.evaluate("""()=>{ const r=[...document.querySelectorAll('.tune-row')].find(x=>x.querySelector('.name').textContent.trim().includes('Silver Spear'));
+            if(!r) return false; const btn=r.querySelector('.info-btn'); if(!btn) return false; btn.click(); return true }""")
+        if not opened: fail.append("could not find a linked 'Silver Spear' row to open")
+        pg.wait_for_selector("#tune-detail-modal.show", timeout=4000)
+        pg.wait_for_timeout(700)
+        disp = pg.eval_on_selector("#tune-detail-modal", "e => getComputedStyle(e).display")
+        content = pg.eval_on_selector("#tune-detail-content", "e => e.innerText")
+        full_width = pg.eval_on_selector(".modal-dialog", "e => Math.round(e.getBoundingClientRect().width)")
+        print(f"3. legacy modal display={disp}, width={full_width}, has stats={'Popularity' in content}, name={'Silver Spear' in content}")
+        if disp == "none": fail.append("tune-detail modal did not open")
+        if "Silver Spear" not in content: fail.append("modal should show the tune name")
+        if "Popularity" not in content: fail.append("modal should show stats (legacy layout)")
+        if full_width < 440: fail.append(f"modal should be full-width (got {full_width})")
 
-        # 4. close drawer (Done button; the scrim's center is under the panel)
-        pg.click(".drawer-done"); pg.wait_for_timeout(300)
-        if pg.query_selector(".drawer"): fail.append("drawer did not close")
-        print(f"4. drawer closed={pg.query_selector('.drawer') is None}")
+        # 4. close (Escape)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
+        closed = pg.eval_on_selector("#tune-detail-modal", "e => getComputedStyle(e).display") == "none"
+        print(f"4. modal closed={closed}")
+        if not closed: fail.append("modal did not close on Escape")
 
         if errs: fail.append(f"errors: {errs[:4]}")
         b.close()

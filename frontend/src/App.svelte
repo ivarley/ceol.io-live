@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, peopleSearch, deepSearch, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, livePeople, peopleSearch, deepSearch, openStream } from './client.js'
   import Abc from './Abc.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -308,7 +308,6 @@
 
   // --- row selection + actions (spec 021 §E) ---
   let selectedId = $state(null) // the "opened" tune row (shows its action bar)
-  let drawer = $state(null) // tune-detail drawer: null | {loading|unlinked|error|detail}
   let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
   let editingName = $state('') // its name, for the editing banner label
   let openTrayId = $state(null) // set whose info tray (started-by / logged-by) is open
@@ -520,20 +519,21 @@
     sendChange(id, { name: q, unlink: true }, { name: q, tune_id: null, tune_type: null })
   }
 
-  async function openDrawer(r) {
+  // Reuse the legacy tune-detail modal (window.TuneDetailModal) so it matches the
+  // rest of the app exactly (same layout + cached incipit rendering, no custom code).
+  function openDrawer(r) {
     selectedId = null
     if (!r.tune_id) {
-      drawer = { unlinked: true, name: r.name }
+      notice = 'Logged as text — link it to a catalog tune to see details, notation, and stats.'
       return
     }
-    drawer = { loading: true, name: r.name }
-    try {
-      drawer = await tuneDetail(config, r.tune_id)
-    } catch (e) {
-      drawer = { error: e.message, name: r.name }
-    }
+    if (!window.TuneDetailModal) return
+    window.TuneDetailModal.show({
+      context: 'session_instance',
+      tuneId: r.tune_id,
+      apiEndpoint: `/api/sessions/${config.sessionPath}/${config.sessionInstanceId}/tunes/${r.tune_id}`,
+    })
   }
-  const closeDrawer = () => (drawer = null)
 
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
@@ -1394,6 +1394,7 @@
           </div>
           {#if selectedId === r.session_instance_tune_id}
             <div class="row-actions">
+              <button onclick={() => openDrawer(r)}>ⓘ Info</button>
               <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
               <button onclick={() => insertAfterRow(r.session_instance_tune_id)}>↓ After</button>
               {#if r.confidence != null && r.confidence <= 70}
@@ -1506,41 +1507,6 @@
       {/if}
     </div>
   </div>
-
-  {#if drawer}
-    <div class="drawer-scrim" onclick={closeDrawer}></div>
-    <aside class="drawer">
-      <div class="drawer-head">
-        <div class="drawer-title">{drawer.name}</div>
-        <button class="drawer-done" onclick={closeDrawer}>Done</button>
-      </div>
-      <div class="drawer-body">
-        {#if drawer.loading}
-          <p class="d-note">Loading…</p>
-        {:else if drawer.unlinked}
-          <p class="d-note">Logged as text — not linked to a catalog tune yet, so there's no detail to show. (Linking it later pulls in stats, notation, and the thesession.org page.)</p>
-        {:else if drawer.error}
-          <p class="error">{drawer.error}</p>
-        {:else}
-          <div class="d-sub">{drawer.tune_type || ''}</div>
-          <div class="d-links">
-            <a href={`https://thesession.org/tunes/${drawer.tune_id}`} target="_blank" rel="noopener">thesession.org ↗</a>
-          </div>
-          <div class="d-section">
-            <div class="d-statrow"><span>TheSession popularity</span><b>{drawer.tunebook_count ?? 0}</b></div>
-            <div class="d-statrow"><span>Played at this session</span><b>{drawer.played_here}×</b></div>
-            <div class="d-statrow"><span>Played globally</span><b>{drawer.played_global}×</b></div>
-          </div>
-          <div class="d-section">
-            <div class="d-label">History at this session</div>
-            <ul class="d-history">
-              {#each drawer.dates as d}<li>{d}</li>{:else}<li>—</li>{/each}
-            </ul>
-          </div>
-        {/if}
-      </div>
-    </aside>
-  {/if}
 
   {#if attendanceOpen}
     <div class="drawer-scrim" onclick={closeAttendance}></div>

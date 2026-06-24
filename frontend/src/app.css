@@ -443,6 +443,9 @@ main {
 .endset.hot { background: var(--insert) !important; color: #2a2008 !important; border: none !important; font-weight: 700; }
 /* small static hint on the closed-end seam ("new set") */
 .seam-hint { flex: none; font-size: 11px; font-weight: 600; color: var(--insert); text-transform: uppercase; letter-spacing: 0.04em; }
+/* the "new set at the end" indicator reads white, not the yellow insertion color */
+.new-set-end .seam-line { background: var(--text); box-shadow: 0 0 8px rgba(236, 236, 239, 0.5); }
+.new-set-end .seam-hint { color: var(--text); }
 .composer .done-btn {
   font: inherit; padding: 12px 18px; border: none; border-radius: 8px;
   background: var(--insert); color: #2a2008; font-weight: 700; cursor: pointer;
@@ -621,3 +624,40 @@ main {
 }
 .deep-badge.star { background: rgba(245, 197, 24, 0.16); color: #e8d28a; }
 .deep-books { color: var(--muted); margin-left: auto; }
+
+/* ---------- reused legacy tune-detail modal ---------- */
+/* The live shell doesn't load theme.css, so supply the legacy DARK-theme variables
+   (scoped to the modal) — otherwise its text/borders are undefined and wash out on
+   white. These mirror theme.css [data-theme="dark"] so it matches the legacy dark
+   drawer and sits naturally on the dark live screen. */
+#tune-detail-modal {
+  --bg-color: #1a1a1a;
+  --text-color: #e0e0e0;
+  --border-color: #444;
+  --hover-bg: #3d3d3d;
+  --primary: #4da6ff;
+  --primary-color: #4da6ff;
+  --secondary-text: #9a9aa3;
+  --link-color: #4da6ff;
+  --input-bg: #2a2a2a;
+  --modal-bg: #1a1a1a;
+  --modal-bg-secondary: #2a2a2a;
+  --modal-text-muted: #9a9aa3;
+  --modal-primary-dark: #3385cc;
+}
+/* The legacy modal is already a full-width right-slide drawer at <=768px; force
+   that at all widths on the live screen (this stylesheet loads after the modal's),
+   capped to the app's column so it lines up. */
+#tune-detail-modal .modal-dialog {
+  width: 100%;
+  max-width: 640px;
+  height: calc(100vh - 40px);
+  margin: 0;
+  border-radius: 0;
+  position: fixed;
+  right: 0;
+  top: 40px;
+  transform: translateX(100%);
+  transition: transform 0.3s ease-out;
+}
+#tune-detail-modal.show .modal-dialog { transform: translateX(0); }

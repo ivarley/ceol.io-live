@@ -11,6 +11,7 @@
   <script>
     window.__LIVE_CONFIG__ = {
       sessionInstanceId: {{ session_instance_id | tojson }},
+      sessionPath: {{ session_path | tojson }},
       streamingBaseUrl: {{ streaming_base_url | tojson }},
       currentPerson: {{ current_person | tojson }}
     };
@@ -18,10 +19,16 @@
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#0e0e10">
   <link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
+  <!-- Reuse the legacy tune-detail drawer verbatim (same module + styles + incipit
+       rendering) so it matches the rest of the app exactly. -->
+  <link rel="stylesheet" href="/static/css/tune_detail_modal.css">
   <link rel="stylesheet" href="/static/live/app.css">
 </head>
 <body>
   <div id="app"></div>
+  {% include 'tune_detail_modal.html' %}
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+  <script src="/static/js/tune_detail_modal.js"></script>
   <script type="module" src="/static/live/app.js"></script>
 </body>
 </html>
