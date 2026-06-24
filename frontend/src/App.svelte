@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
@@ -202,6 +202,50 @@
     insertAfterId = id
     queueMicrotask(() => inputEl?.focus())
   }
+
+  // --- row selection + actions (spec 021 §E) ---
+  let selectedId = $state(null) // the "opened" tune row (shows its action bar)
+  let drawer = $state(null) // tune-detail drawer: null | {loading|unlinked|error|detail}
+
+  function selectRow(id) {
+    selectedId = selectedId === id ? null : id
+  }
+  function predecessorId(id) {
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === id)
+    return idx > 0 ? ordered[idx - 1].session_instance_tune_id : null
+  }
+  function insertAfterRow(id) {
+    setCursor(id) // cursor right after this tune; focuses composer
+    selectedId = null
+  }
+  function insertBeforeRow(id) {
+    const pid = predecessorId(id) // "before X" = after X's predecessor
+    if (pid != null) setCursor(pid)
+    selectedId = null
+  }
+  function confirmRow(id) {
+    op('set_confidence', { record_id: id, confidence: 100 }, 'Confirm')
+    selectedId = null
+  }
+  function removeRow(id) {
+    removeTune(id)
+    selectedId = null
+  }
+
+  async function openDrawer(r) {
+    selectedId = null
+    if (!r.tune_id) {
+      drawer = { unlinked: true, name: r.name }
+      return
+    }
+    drawer = { loading: true, name: r.name }
+    try {
+      drawer = await tuneDetail(config, r.tune_id)
+    } catch (e) {
+      drawer = { error: e.message, name: r.name }
+    }
+  }
+  const closeDrawer = () => (drawer = null)
 
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
@@ -772,22 +816,31 @@
             class:pending={r._temp}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
+            class:selected={selectedId === r.session_instance_tune_id}
             class:flash={flashing.has(r.session_instance_tune_id)}
+            onclick={() => !r._temp && !r._removing && selectRow(r.session_instance_tune_id)}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
             {#if r._temp}
               <span class="actions"><span class="hourglass" title={r._status === 'queued' ? 'Queued (offline)' : 'Sending…'}>⏳</span></span>
             {:else if r._removing}
-              <span class="actions"><button class="restore" onclick={() => restore(r.session_instance_tune_id)}>Restore</button></span>
+              <span class="actions"><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
-              <span class="actions">
-                {#if r.confidence != null && r.confidence <= 70}
-                  <button class="confirm" onclick={() => op('set_confidence', { record_id: r.session_instance_tune_id, confidence: 100 }, 'Confirm')}>✓</button>
-                {/if}
-                <button class="remove" onclick={() => removeTune(r.session_instance_tune_id)}>✕</button>
-              </span>
+              <button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
             {/if}
           </div>
+          {#if selectedId === r.session_instance_tune_id}
+            <div class="row-actions">
+              {#if predecessorId(r.session_instance_tune_id) != null}
+                <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
+              {/if}
+              <button onclick={() => insertAfterRow(r.session_instance_tune_id)}>↓ After</button>
+              {#if r.confidence != null && r.confidence <= 70}
+                <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ Confirm</button>
+              {/if}
+              <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 Remove</button>
+            </div>
+          {/if}
           {#if !r._temp}
             <div class="seam" class:active={cursorId === r.session_instance_tune_id} onclick={() => setCursor(r.session_instance_tune_id)}>
               {#if cursorId === r.session_instance_tune_id}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
@@ -849,4 +902,39 @@
       >End set</button>
     </div>
   </div>
+
+  {#if drawer}
+    <div class="drawer-scrim" onclick={closeDrawer}></div>
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div class="drawer-title">{drawer.name}</div>
+        <button class="drawer-done" onclick={closeDrawer}>Done</button>
+      </div>
+      <div class="drawer-body">
+        {#if drawer.loading}
+          <p class="d-note">Loading…</p>
+        {:else if drawer.unlinked}
+          <p class="d-note">Logged as text — not linked to a catalog tune yet, so there's no detail to show. (Linking it later pulls in stats, notation, and the thesession.org page.)</p>
+        {:else if drawer.error}
+          <p class="error">{drawer.error}</p>
+        {:else}
+          <div class="d-sub">{drawer.tune_type || ''}</div>
+          <div class="d-links">
+            <a href={`https://thesession.org/tunes/${drawer.tune_id}`} target="_blank" rel="noopener">thesession.org ↗</a>
+          </div>
+          <div class="d-section">
+            <div class="d-statrow"><span>TheSession popularity</span><b>{drawer.tunebook_count ?? 0}</b></div>
+            <div class="d-statrow"><span>Played at this session</span><b>{drawer.played_here}×</b></div>
+            <div class="d-statrow"><span>Played globally</span><b>{drawer.played_global}×</b></div>
+          </div>
+          <div class="d-section">
+            <div class="d-label">History at this session</div>
+            <ul class="d-history">
+              {#each drawer.dates as d}<li>{d}</li>{:else}<li>—</li>{/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+    </aside>
+  {/if}
 </main>

@@ -594,6 +594,64 @@ def live_op(session_instance_id):
 
 
 @api_login_required
+def live_tune_detail(session_instance_id, tune_id):
+    """Detail for the tune-info drawer (spec 021 §18): catalog info + real stats."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if not srow:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        session_id = srow[0]
+
+        cur.execute("SELECT name, tune_type, tunebook_count_cached FROM tune WHERE tune_id = %s", (tune_id,))
+        t = cur.fetchone()
+        if not t:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+            """,
+            (session_id, tune_id),
+        )
+        played_here = cur.fetchone()[0]
+
+        cur.execute(
+            "SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s AND record_type = 'tune' AND deleted = FALSE",
+            (tune_id,),
+        )
+        played_global = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            SELECT DISTINCT si.date FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+            ORDER BY si.date DESC LIMIT 6
+            """,
+            (session_id, tune_id),
+        )
+        dates = [str(r[0]) for r in cur.fetchall()]
+
+        return jsonify({
+            "success": True,
+            "tune_id": tune_id,
+            "name": t[0],
+            "tune_type": t[1],
+            "tunebook_count": t[2],
+            "played_here": played_here,
+            "played_global": played_global,
+            "dates": dates,
+        })
+    finally:
+        conn.close()
+
+
+@api_login_required
 def live_issue_token():
     """
     Mint a bearer token for a non-cookie client (spec 024 §H).

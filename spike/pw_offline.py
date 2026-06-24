@@ -109,8 +109,11 @@ def main():
             log(f"/events requests during 5s offline window: {ev_during}")
             if ev_during > 0:
                 failures.append(f"{ev_during} SSE requests fired while offline (should be 0)")
-            if page.query_selector(".tune-row:not(.pending):not(.removing) button.remove"):
-                page.click(".tune-row:not(.pending):not(.removing) button.remove")
+            # select a row, then Remove from its action bar (offline)
+            page.eval_on_selector_all(".tune-row:not(.pending):not(.removing)", "els => els[0].click()")
+            page.wait_for_timeout(150)
+            if page.query_selector(".row-actions button.danger"):
+                page.click(".row-actions button.danger")
                 page.wait_for_timeout(300)
                 if len(page.query_selector_all(".tune-row.removing")) != 1:
                     failures.append("offline remove did not mark a row removing")

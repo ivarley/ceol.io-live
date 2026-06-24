@@ -78,6 +78,16 @@ export async function searchTunes(config, q, sessionId) {
   }
 }
 
+// Tune detail for the info drawer (spec 021 §18).
+export async function tuneDetail(config, tuneId) {
+  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/tune/${tuneId}`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  if (!res.ok) throw new Error(`tune detail failed: ${res.status}`)
+  return res.json()
+}
+
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials
