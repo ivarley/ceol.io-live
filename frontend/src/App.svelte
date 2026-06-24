@@ -61,6 +61,8 @@
   let activities = $state([]) // transient "X did Y" toasts for others' changes (§E); stack up to MAX
   let activityId = 0
   const MAX_TOASTS = 3 // cap concurrent toasts; oldest drops off
+  let mergeNudge = $state(null) // {name, payload} when my append merged into a dup (§D16)
+  let mergeNudgeSeq = 0
 
   let es = null
   let headerH = $state(0) // measured header height, so floating toasts hover just below it
@@ -671,6 +673,7 @@
 
   async function markQueued(entry) {
     entry.status = 'queued'
+    entry._queued = true // so a later corroborate-on-flush doesn't pop the merge nudge
     pending.set(entry.op_id, entry)
     markTempStatus(entry, 'queued')
     await queuePut({
@@ -708,6 +711,13 @@
       if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
       flashId(res.record.session_instance_tune_id)
+    }
+    // My append collapsed into an existing tune (§H30/§D16). Surface a gentle nudge so
+    // the merge is visible and reversible ("keep both"), rather than silent.
+    if (entry.op_type === 'add_tune' && res.op_type === 'corroborate' && !entry._queued) {
+      const seq = ++mergeNudgeSeq
+      mergeNudge = { name: entry.name || res.record?.name || 'that tune', payload: entry.payload }
+      setTimeout(() => { if (seq === mergeNudgeSeq) mergeNudge = null }, 7000)
     }
   }
 
@@ -770,6 +780,22 @@
     trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: Date.now(), tempId })
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
   }
+
+  // "Keep both" (§D16): re-log the just-merged tune as a DISTINCT row at the end,
+  // bypassing corroboration (no_merge). Dismisses the nudge.
+  function keepBoth() {
+    const n = mergeNudge
+    mergeNudge = null
+    if (!n) return
+    const op_id = crypto.randomUUID()
+    const tempId = `temp-${op_id}`
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, name: n.name, tune_id: n.payload.tune_id ?? null, tune_type: n.payload.tune_type ?? null,
+      record_type: 'tune', order_position: generateAppend(maxPos()), deleted: false, _temp: true, _status: 'sending',
+    })
+    trySend({ op_id, name: n.name, op_type: 'add_tune', payload: { ...n.payload, after_record_id: null, before_record_id: null, no_merge: true }, status: 'sending', ts: Date.now(), tempId })
+  }
+  const dismissMerge = () => { mergeNudge = null }
 
   // Start a NEW set in the gap before `nextFirstId` (the between-sets seam): drop a
   // tune there plus a trailing break that separates it from the next set. The break
@@ -1479,6 +1505,14 @@
           </li>
         {/if}
       </ul>
+    {/if}
+
+    {#if mergeNudge}
+      <div class="merge-nudge" transition:fly={{ y: 8, duration: 160 }}>
+        <span class="mn-text"><b>{mergeNudge.name}</b> is already in this set — merged.</span>
+        <button class="mn-keep" onclick={keepBoth}>Keep both</button>
+        <button class="mn-ok" onclick={dismissMerge} aria-label="Dismiss">✕</button>
+      </div>
     {/if}
 
     {#if editingId != null}

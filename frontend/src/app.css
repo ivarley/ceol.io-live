@@ -506,6 +506,23 @@ main {
 .results .r-insession { color: var(--accent); }
 .results .r-abc { color: #9a8f6a; }
 
+/* "already logged — merged" nudge with a Keep-both escape (§D16) */
+.merge-nudge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; margin-bottom: 6px;
+  background: rgba(79, 157, 255, 0.1); border: 1px solid var(--accent);
+  border-radius: 8px; font-size: 13px; color: var(--text);
+}
+.merge-nudge .mn-text { flex: 1; min-width: 0; }
+.merge-nudge .mn-keep {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px;
+  border-radius: 6px; cursor: pointer; background: var(--accent); border: none; color: #04122b;
+}
+.merge-nudge .mn-ok {
+  flex: none; font: inherit; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+
 .edit-banner {
   display: flex;
   align-items: center;

@@ -303,8 +303,10 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     # Duplicate-in-open-set collapses into a corroboration of the earliest row:
     # by tune_id when linked, else by identical raw name when matching fully failed.
-    # Only for a pure append (a positioned insert is an explicit placement).
-    if data.get("after_record_id") is None and data.get("before_record_id") is None:
+    # Only for a pure append (a positioned insert is an explicit placement), and not
+    # when the actor explicitly chose "keep both" (no_merge, §D16).
+    if (data.get("after_record_id") is None and data.get("before_record_id") is None
+            and not data.get("no_merge")):
         target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
             return _corroborate(cur, session_instance_id, target[0], data, user_id)
