@@ -70,16 +70,24 @@ class OpRejected(Exception):
 _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
-    "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name"
+    "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
+    "sp.first_name, sp.last_name"
 )
-# LEFT JOIN tune (type), and the creating user -> person (who logged it, for the
-# per-set "Logged by X · time" tray; spec 021 §19/§F).
+# LEFT JOIN tune (type), the creating user -> person (who logged it, for the per-set
+# "Logged by X · time" tray), and the started-by person (the set starter; §19/§F).
 _RECORD_FROM = (
     "FROM session_instance_tune sit "
     "LEFT JOIN tune t ON t.tune_id = sit.tune_id "
     "LEFT JOIN user_account cu ON cu.user_id = sit.created_by_user_id "
-    "LEFT JOIN person cp ON cp.person_id = cu.person_id"
+    "LEFT JOIN person cp ON cp.person_id = cu.person_id "
+    "LEFT JOIN person sp ON sp.person_id = sit.started_by_person_id"
 )
+
+
+def _display_name(first, last):
+    if not first:
+        return None
+    return f"{first} {last[0]}" if last else first
 
 
 def _record_to_dict(row):
@@ -100,6 +108,7 @@ def _record_to_dict(row):
         # the client can new Date() it.
         "logged_at": row[12].isoformat() if row[12] else None,
         "logged_by": row[13],
+        "started_by_name": _display_name(row[14], row[15]),
     }
 
 
@@ -388,16 +397,45 @@ def _handle_set_confidence(cur, session_instance_id, data, user_id):
 
 
 def _handle_attribute_set_starter(cur, session_instance_id, data, user_id):
-    """Set/clear the person who started this set's tune (§C; stays per-tune, 023)."""
+    """Set/clear who started this SET (§19; started_by is per-tune in 023 but means
+    the whole set). Applies to every tune in the set containing record_id — the run
+    of tunes between the surrounding breaks — in one txn/event, so all clients agree.
+    """
     record_id = data.get("record_id")
-    _require_live_record(cur, session_instance_id, record_id)
+    rec = _require_live_record(cur, session_instance_id, record_id)
     person_id = data.get("person_id")  # None clears it
-    save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
+    pos = rec[3]  # order_position (index 3 in _RECORD_COLS)
+
+    # Bounds of this set: between the nearest break below and the nearest break above.
     cur.execute(
-        "UPDATE session_instance_tune SET started_by_person_id = %s, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
-        (person_id, user_id, record_id),
+        "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND record_type = 'break' AND order_position < %s",
+        (session_instance_id, pos),
     )
-    return {"record": _reselect(cur, record_id)}
+    lower = cur.fetchone()[0] or ""
+    cur.execute(
+        "SELECT MIN(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND record_type = 'break' AND order_position > %s",
+        (session_instance_id, pos),
+    )
+    upper = cur.fetchone()[0]  # None if no break after (open/last set)
+
+    cur.execute(
+        """
+        SELECT session_instance_tune_id FROM session_instance_tune
+        WHERE session_instance_id = %s AND record_type = 'tune' AND deleted = FALSE
+          AND order_position > %s AND (%s IS NULL OR order_position < %s)
+        ORDER BY order_position
+        """,
+        (session_instance_id, lower, upper, upper),
+    )
+    ids = [r[0] for r in cur.fetchall()]
+    for rid in ids:
+        save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
+    cur.execute(
+        "UPDATE session_instance_tune SET started_by_person_id = %s, last_modified_user_id = %s WHERE session_instance_tune_id = ANY(%s)",
+        (person_id, user_id, ids),
+    )
+    return {"records": [_reselect(cur, rid) for rid in ids],
+            "person": _person_brief(cur, person_id) if person_id else None}
 
 
 def _handle_set_break(cur, session_instance_id, data, user_id):
@@ -683,6 +721,37 @@ def live_tune_detail(session_instance_id, tune_id):
             "played_global": played_global,
             "dates": dates,
         })
+    finally:
+        conn.close()
+
+
+@api_login_required
+def live_people(session_instance_id):
+    """Candidate people for the 'started by' picker (§19): who's checked in to this
+    instance, with disambiguated display names."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT DISTINCT p.person_id, p.first_name, p.last_name
+            FROM person p JOIN session_instance_person sip ON p.person_id = sip.person_id
+            WHERE sip.session_instance_id = %s
+            ORDER BY p.first_name, p.last_name
+            """,
+            (session_instance_id,),
+        )
+        rows = cur.fetchall()
+        people = [{"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}"} for r in rows]
+        # disambiguate identical display names by appending (#id)
+        seen = {}
+        for pp in people:
+            seen.setdefault(pp["display_name"], []).append(pp)
+        for dn, group in seen.items():
+            if len(group) > 1:
+                for pp in group:
+                    pp["display_name"] = f"{dn} (#{pp['person_id']})"
+        return jsonify({"success": True, "people": people})
     finally:
         conn.close()
 

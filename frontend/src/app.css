@@ -171,10 +171,45 @@ main {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.set-tray .tray-row { display: flex; gap: 10px; font-size: 13px; padding: 2px 0; }
+.set-tray .tray-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 2px 0; }
 .set-tray .tray-k { flex: none; width: 76px; color: var(--muted); }
 .set-tray .tray-v { color: var(--text); }
 .set-tray .tray-v.muted { color: var(--muted); font-style: italic; }
+/* the starter value IS the toggle (one click opens the droplist) */
+.starter-value {
+  flex: none; font: inherit; font-size: 13px; font-weight: 600;
+  padding: 3px 12px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--muted);
+}
+.starter-value.set { color: var(--accent); }
+.starter-value:hover { border-color: var(--accent); color: var(--text); }
+.starter-value.open { border-color: var(--accent); color: var(--text); }
+/* right-aligned "started by" pill on the set card (mirrors the type label) */
+.starter-pill {
+  position: absolute; top: -10px; right: 12px;
+  font: inherit; font-size: 11px; font-weight: 700;
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: var(--bg); color: var(--accent);
+  border: 1px solid var(--border); border-radius: 10px; padding: 1px 9px; cursor: pointer;
+}
+.starter-pill:hover { color: var(--text); }
+/* the player picker inside the tray */
+.starter-picker { margin: 4px 0 6px; }
+.starter-filter {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
+  padding: 7px 10px; margin-bottom: 6px; border-radius: 7px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+}
+.starter-list { display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto; }
+.starter-item {
+  text-align: left; font: inherit; font-size: 13px; padding: 7px 10px;
+  border-radius: 7px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--text);
+}
+.starter-item:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--border); }
+.starter-item.clear { color: var(--muted); }
+.starter-item.add-player { color: var(--accent); font-weight: 600; border-top: 1px solid var(--border); border-radius: 0 0 7px 7px; margin-top: 2px; }
+.starter-empty { color: var(--muted); font-size: 13px; font-style: italic; padding: 4px 2px; }
 .tune-row {
   display: flex;
   align-items: center;

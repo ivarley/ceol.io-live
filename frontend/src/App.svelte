@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
@@ -301,7 +301,51 @@
   let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
   let editingName = $state('') // its name, for the editing banner label
   let openTrayId = $state(null) // set whose info tray (started-by / logged-by) is open
-  function toggleTray(id) { openTrayId = openTrayId === id ? null : id }
+  function toggleTray(id) { openTrayId = openTrayId === id ? null : id; starterPickerSet = null }
+
+  // "Started by" picker (§19): which set's picker is open, + cached attendee list.
+  let starterPickerSet = $state(null) // first-tune id of the set being attributed
+  let starterFilter = $state('')
+  let attendees = $state([]) // [{person_id, display_name}] for this instance
+  let attendeesLoaded = false
+  // the set's recorded starter name (first tune that carries one)
+  function setStarterName(seg) {
+    for (const t of seg.tunes) if (t.started_by_name) return t.started_by_name
+    return null
+  }
+  const filteredAttendees = $derived.by(() => {
+    const f = starterFilter.trim().toLowerCase()
+    return f ? attendees.filter((p) => p.display_name.toLowerCase().includes(f)) : attendees
+  })
+  async function openStarterPicker(firstId) {
+    starterPickerSet = starterPickerSet === firstId ? null : firstId
+    starterFilter = ''
+    if (starterPickerSet && !attendeesLoaded) {
+      try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep empty */ }
+    }
+  }
+  // "＋ Add a player" → will open the attendance editor (§F, not built yet).
+  // Placeholder until that view exists, so the affordance is present now.
+  function addPlayer() {
+    notice = 'Adding players from here is coming soon — check people in from the session page for now.'
+  }
+
+  // Attribute (or clear) the set's starter: optimistic across all its tunes, one op.
+  function setStarter(seg, personOrNull) {
+    const firstId = seg.tunes[0].session_instance_tune_id
+    const prevRecords = seg.tunes.map((t) => byId.get(t.session_instance_tune_id)).filter(Boolean)
+    for (const r of prevRecords) {
+      byId.set(r.session_instance_tune_id, {
+        ...r,
+        started_by_person_id: personOrNull?.person_id ?? null,
+        started_by_name: personOrNull?.display_name ?? null,
+      })
+    }
+    const op_id = crypto.randomUUID()
+    flashId(firstId)
+    trySend({ op_id, op_type: 'attribute_set_starter', payload: { record_id: firstId, person_id: personOrNull?.person_id ?? null }, status: 'sending', ts: Date.now(), prevRecords })
+    starterPickerSet = null
+  }
 
   function selectRow(id) {
     selectedId = selectedId === id ? null : id
@@ -427,7 +471,7 @@
       case 'change_tune': return `edited ${n}`
       case 'remove_tune': return `removed ${n}`
       case 'set_break': return d.removed ? 'removed a break' : 'ended a set'
-      case 'attribute_set_starter': return `set who started ${n}`
+      case 'attribute_set_starter': return d.person ? `set ${d.person.display_name} as starting a set` : 'cleared a set starter'
       case 'set_confidence': return `confirmed ${n}`
       default: return null
     }
@@ -459,10 +503,13 @@
     if (d.event_id && d.event_id > highWater) highWater = d.event_id
     noteRemote(d)
     switch (d.op_type) {
+      case 'attribute_set_starter': // applies to the whole set -> many records
+        for (const r of d.records || []) put(r)
+        flashId(d.records?.[0]?.session_instance_tune_id)
+        break
       case 'add_tune':
       case 'change_tune':
       case 'set_confidence':
-      case 'attribute_set_starter':
       case 'corroborate': // server collapsed a duplicate into this record (§H30)
         put(d.record)
         flashId(d.record?.session_instance_tune_id)
@@ -527,6 +574,7 @@
     if (entry.tempId) byId.delete(entry.tempId)
     if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
     if (entry.op_type === 'change_tune' && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit
+    if (entry.prevRecords) for (const r of entry.prevRecords) byId.set(r.session_instance_tune_id, r) // revert set-starter
   }
 
   function settleOp(entry, res) {
@@ -538,6 +586,7 @@
       return
     }
     if (entry.tempId) byId.delete(entry.tempId) // drop optimistic temp; the real record arrives below / via SSE
+    if (res.records) for (const r of res.records) put(r) // multi-record ops (set-starter)
     if (res.record) {
       if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
@@ -1028,9 +1077,36 @@
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
+        {#if setStarterName(seg)}
+          <button class="starter-pill" title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id; starterPickerSet = null }}>▸ {setStarterName(seg)}</button>
+        {/if}
         {#if openTrayId === seg.tunes[0].session_instance_tune_id}
           <div class="set-tray">
-            <div class="tray-row"><span class="tray-k">Started by</span><span class="tray-v muted">— not recorded yet</span></div>
+            <div class="tray-row">
+              <span class="tray-k">Started by</span>
+              <button
+                class="starter-value"
+                class:set={setStarterName(seg)}
+                class:open={starterPickerSet === seg.tunes[0].session_instance_tune_id}
+                onclick={() => openStarterPicker(seg.tunes[0].session_instance_tune_id)}
+              >{setStarterName(seg) || 'Not set'}</button>
+            </div>
+            {#if starterPickerSet === seg.tunes[0].session_instance_tune_id}
+              <div class="starter-picker">
+                <input class="starter-filter" placeholder="Filter players…" bind:value={starterFilter} />
+                <div class="starter-list">
+                  {#if setStarterName(seg)}
+                    <button class="starter-item clear" onclick={() => setStarter(seg, null)}>— Clear —</button>
+                  {/if}
+                  {#each filteredAttendees as p (p.person_id)}
+                    <button class="starter-item" onclick={() => setStarter(seg, p)}>{p.display_name}</button>
+                  {:else}
+                    {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else}<p class="starter-empty">Loading…</p>{/if}
+                  {/each}
+                  <button class="starter-item add-player" onclick={() => addPlayer()}>＋ Add a player</button>
+                </div>
+              </div>
+            {/if}
             {#if loggedInfo(seg.tunes)}
               {@const li = loggedInfo(seg.tunes)}
               <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>

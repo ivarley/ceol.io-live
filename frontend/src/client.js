@@ -88,6 +88,17 @@ export async function tuneDetail(config, tuneId) {
   return res.json()
 }
 
+// Candidate people for the "started by" picker (§19): instance attendees.
+export async function livePeople(config) {
+  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  if (!res.ok) throw new Error(`people failed: ${res.status}`)
+  const json = await res.json()
+  return json.people || []
+}
+
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials
