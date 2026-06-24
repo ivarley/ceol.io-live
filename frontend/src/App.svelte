@@ -96,7 +96,8 @@
   let sessionName = $state('')
   let sessionDate = $state('')
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
-  let notesText = $state('')
+  let notesText = $state('') // server-truth session notes
+  let notesDraft = $state('') // editable buffer in the expanded header
   let menuOpen = $state(false)
   let expanded = $state(false)
   let results = $state([]) // type-ahead search results shown above the composer (§D)
@@ -187,6 +188,8 @@
   })
   const sets = $derived(segments.map((s) => s.tunes))
   const tunes = $derived(ordered.filter((r) => r.record_type !== 'break'))
+  // "61 tunes in 26 sets" — shown in the header-expand and (collapsed) on the date line.
+  const tuneSummary = $derived(`${tunes.length} tune${tunes.length === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
 
   // Pluralize a tune type for display ("Reel"→"Reels", "Waltz"→"Waltzes", "March"→"Marches").
   function pluralType(ty) {
@@ -390,6 +393,26 @@
     }, 180)
   }
 
+  // --- session notes (header §F) ---
+  function toggleExpand() {
+    expanded = !expanded
+    if (expanded) notesDraft = notesText // sync the editable buffer on open
+  }
+  // Save the edited notes (online-only op; optimistic, reconciled by SSE echo).
+  async function saveNotes() {
+    const text = notesDraft
+    error = ''
+    if (!navigator.onLine) { notice = "You're offline — notes need a connection."; return }
+    notesText = text // optimistic; dirty clears
+    try {
+      const res = await sendOp(config, 'edit_notes', { notes: text })
+      if (res.rejected) notice = res.message || res.reason
+    } catch (e) {
+      if (e.networkError) notice = "You're offline — notes need a connection."
+      else error = e.message
+    }
+  }
+
   // Attribute (or clear) the set's starter: optimistic across all its tunes, one op.
   function setStarter(seg, personOrNull) {
     const firstId = seg.tunes[0].session_instance_tune_id
@@ -542,6 +565,7 @@
       case 'attendance_add': return d.person ? `checked in ${d.person.display_name}` : 'updated attendance'
       case 'attendance_create_person': return d.person ? `added ${d.person.display_name}` : 'added a player'
       case 'attendance_remove': return d.person ? `checked out ${d.person.display_name}` : 'updated attendance'
+      case 'edit_notes': return 'edited the notes'
       default: return null
     }
   }
@@ -606,7 +630,12 @@
       case 'attendance_create_person':
         refreshAttendees() // keep the roster/picker list current across clients
         break
-      case 'edit_notes':
+      case 'edit_notes': {
+        const wasClean = notesDraft === notesText
+        notesText = d.notes || ''
+        if (wasClean) notesDraft = notesText // don't clobber an in-progress local edit
+        break
+      }
       case 'mark_complete':
       case 'mark_incomplete':
         break // metadata; header-only (not shown in this minimal Phase 1 UI)
@@ -1226,10 +1255,10 @@
     </div>
 
     <header class="topbar">
-      <div class="topbar-row" onclick={() => (expanded = !expanded)}>
+      <div class="topbar-row" onclick={toggleExpand}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}</div>
-          <div class="session-date">{sessionDate}</div>
+          <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
         </div>
         <span class="topbar-presence">
           {#each roster as p (p.person_id)}
@@ -1243,8 +1272,23 @@
       </div>
       {#if expanded}
         <div class="header-expand">
-          <div class="header-stat">{tunes.length} tune{tunes.length === 1 ? '' : 's'} in {sets.length} set{sets.length === 1 ? '' : 's'}</div>
-          {#if notesText}<div class="header-stat header-notes">{notesText}</div>{/if}
+          <div class="header-stat">{tuneSummary}</div>
+          <div class="header-notes-edit">
+            <span class="hn-label">Notes</span>
+            <textarea
+              class="hn-area"
+              rows="2"
+              placeholder="Add notes for this session…"
+              bind:value={notesDraft}
+              onclick={(e) => e.stopPropagation()}
+            ></textarea>
+            {#if notesDraft !== notesText}
+              <div class="hn-actions">
+                <button class="hn-save" onclick={(e) => { e.stopPropagation(); saveNotes() }}>Save</button>
+                <button class="hn-cancel" onclick={(e) => { e.stopPropagation(); notesDraft = notesText }}>Cancel</button>
+              </div>
+            {/if}
+          </div>
           <div class="header-stat header-attend">
             <span class="ha-text">
               <span class="ha-label">Attendance ({attendees.length}):</span>

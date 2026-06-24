@@ -107,6 +107,22 @@ main {
 .header-expand { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .header-stat { font-size: 13px; color: var(--muted); }
 .header-notes { font-style: italic; }
+.header-notes-edit { display: flex; flex-direction: column; gap: 6px; }
+.header-notes-edit .hn-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.hn-area {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.4;
+  padding: 8px 10px; border-radius: 8px; resize: vertical;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+}
+.hn-actions { display: flex; gap: 6px; }
+.hn-save {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 6px; cursor: pointer;
+  background: var(--accent); border: none; color: #04122b;
+}
+.hn-cancel {
+  font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
 .header-attend { display: flex; align-items: baseline; gap: 8px; }
 .header-attend .ha-text { flex: 1; min-width: 0; }
 .header-attend .ha-label { color: var(--text); font-weight: 600; }
