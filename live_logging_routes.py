@@ -40,6 +40,7 @@ from database import (
     check_in_person as db_check_in_person,
     remove_person_attendance as db_remove_person_attendance,
     create_person_with_instruments as db_create_person_with_instruments,
+    extract_abc_incipit,
 )
 from auth import create_session
 from api_routes import api_login_required, segment_records_into_sets
@@ -791,6 +792,125 @@ def live_people_search(session_instance_id):
             for r in rows
         ])
         return jsonify({"success": True, "people": people})
+    finally:
+        conn.close()
+
+
+# Default meter per tune type, so the incipit ABC bars correctly for abcjs (§D deep search).
+_TYPE_METER = {
+    "Jig": "6/8", "Slip Jig": "9/8", "Hop Jig": "9/8", "Reel": "4/4",
+    "Hornpipe": "4/4", "Barndance": "4/4", "Strathspey": "4/4", "Polka": "2/4",
+    "Slide": "12/8", "Waltz": "3/4", "Mazurka": "3/4", "March": "4/4",
+    "Three-Two": "3/2", "Set Dance": "4/4", "Air": "4/4",
+}
+
+
+def _build_incipit_abc(incipit_abc, full_abc, key, tune_type):
+    """A complete, renderable incipit ABC (headers + first bars) for abcjs, or None.
+    Prefer the cached incipit; else derive it from the full ABC."""
+    notes = (incipit_abc or "").strip()
+    if not notes and full_abc:
+        notes = (extract_abc_incipit(full_abc, tune_type) or "").strip()
+    if not notes:
+        return None
+    meter = _TYPE_METER.get(tune_type, "4/4")
+    return f"X:1\nM:{meter}\nL:1/8\nK:{key or 'D'}\n{notes}"
+
+
+@api_login_required
+def live_deep_search(session_instance_id):
+    """Deep catalog search for the live screen (spec 021 §D "search deeper").
+
+    Modes: by name (default) or by ABC (`mode=abc` — matches the notation text).
+    `type` is a hard tune-type filter (the popout); `prefer_type` is a soft sort
+    preference (the set you're logging into) so matching-type tunes sort first.
+    Returns rich cards: popularity, "on your list" / "in this session" flags, plays
+    at this session, and a ready-to-render incipit ABC (client renders with abcjs).
+    q may be empty to browse by type/popularity.
+    """
+    q = (request.args.get("q") or "").strip()
+    tune_type = (request.args.get("type") or "").strip() or None
+    prefer_type = (request.args.get("prefer_type") or "").strip() or None
+    mode = "abc" if (request.args.get("mode") or "").strip().lower() == "abc" else "name"
+    try:
+        limit = min(40, max(1, int(request.args.get("limit", 25))))
+    except (ValueError, TypeError):
+        limit = 25
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if not srow:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        session_id = srow[0]
+        person_id = getattr(current_user, "person_id", None)
+
+        # SELECT-clause params first (subqueries + type_pref), then rank, then WHERE, then LIMIT.
+        params = [person_id, session_id, session_id, prefer_type]
+        rank = "0"
+        order = "type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        if q and mode == "name":
+            rank = """CASE WHEN LOWER(unaccent(t.name)) = LOWER(unaccent(%s)) THEN 1
+                           WHEN LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
+            params += [q, f"{q}%"]
+            order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+
+        where = ["t.redirect_to_tune_id IS NULL"]
+        if q and mode == "abc":
+            # match the notation text (ignoring spaces, so "GED" finds "G E D")
+            where.append("EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REPLACE(ts.abc, ' ', '') ILIKE %s)")
+            params.append(f"%{q.replace(' ', '')}%")
+        elif q:
+            where.append("LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s))")
+            params.append(f"%{q}%")
+        if tune_type:
+            where.append("t.tune_type = %s")
+            params.append(tune_type)
+        params.append(limit)
+
+        sql = f"""
+            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+                   EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
+                   EXISTS(SELECT 1 FROM session_tune st WHERE st.tune_id = t.tune_id AND st.session_id = %s) AS in_session,
+                   (SELECT COUNT(*) FROM session_instance_tune sit
+                      JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                      WHERE si.session_id = %s AND sit.tune_id = t.tune_id
+                        AND sit.record_type = 'tune' AND sit.deleted = FALSE) AS played_here,
+                   CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+                   {rank} AS rank
+            FROM tune t
+            WHERE {' AND '.join(where)}
+            ORDER BY {order}
+            LIMIT %s
+        """
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+        results = [
+            {"tune_id": r[0], "name": r[1], "tune_type": r[2], "tunebook_count": r[3],
+             "on_list": r[4], "in_session": r[5], "played_here": r[6]}
+            for r in rows
+        ]
+
+        # one pass to fetch the best cached setting (incipit/abc/key) for these tunes
+        if results:
+            ids = [r["tune_id"] for r in results]
+            cur.execute(
+                """
+                SELECT DISTINCT ON (tune_id) tune_id, incipit_abc, abc, key
+                FROM tune_setting WHERE tune_id = ANY(%s)
+                ORDER BY tune_id, (incipit_abc IS NULL OR incipit_abc = ''), setting_id
+                """,
+                (ids,),
+            )
+            settings = {row[0]: row for row in cur.fetchall()}
+            for r in results:
+                s = settings.get(r["tune_id"])
+                r["incipit_abc"] = _build_incipit_abc(s[1], s[2], s[3], r["tune_type"]) if s else None
+
+        return jsonify({"success": True, "results": results})
     finally:
         conn.close()
 

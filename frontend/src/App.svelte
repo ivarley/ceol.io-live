@@ -3,7 +3,8 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, peopleSearch, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, peopleSearch, deepSearch, openStream } from './client.js'
+  import Abc from './Abc.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
@@ -100,6 +101,7 @@
   let expanded = $state(false)
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
+  let noMatch = $state(false) // a completed search returned nothing (show the empty + deeper prompt)
   let searchTimer = null
   let searchSeq = 0
 
@@ -186,6 +188,13 @@
   const sets = $derived(segments.map((s) => s.tunes))
   const tunes = $derived(ordered.filter((r) => r.record_type !== 'break'))
 
+  // Pluralize a tune type for display ("Reel"→"Reels", "Waltz"→"Waltzes", "March"→"Marches").
+  function pluralType(ty) {
+    if (!ty) return ty
+    if (/(s|z|ch|sh|x)$/i.test(ty)) return ty + 'es'
+    return ty + 's'
+  }
+
   // Per-set type label (prototype setLabel): the shared tune type pluralized
   // ("Reels"), "Mixed" if the set spans types, "Unknown" when no tune is matched.
   // Every set gets a pill.
@@ -193,8 +202,7 @@
     const types = new Set(setTunes.map((t) => t.tune_type).filter(Boolean))
     if (types.size === 0) return 'Unknown'
     if (types.size > 1) return 'Mixed'
-    const ty = [...types][0]
-    return ty.charAt(0).toUpperCase() + ty.slice(1) + 's'
+    return pluralType([...types][0])
   }
 
   // "Logged by X · 8:42 PM" for a set — from the most recently added tune in it
@@ -774,6 +782,7 @@
     input = ''
     results = []
     resultsQuery = ''
+    noMatch = false
     cancelSearch()
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
@@ -809,9 +818,120 @@
     // Only trust the dropdown if it matches the CURRENT text (the debounced search
     // may still be showing results for an earlier prefix); otherwise look up fresh.
     if (resultsQuery === q && results.length) { pickResult(results[0]); return }
-    const r = await searchTunes(config, q, sessionId)
+    const r = await searchWithAbcFallback(q)
     if (r.length) pickResult(r[0])
     else submit()
+  }
+
+  // --- deep catalog search (§D "search deeper") ---
+  const DEEP_TYPES = ['Reel', 'Jig', 'Slip Jig', 'Hornpipe', 'Polka', 'Slide', 'Waltz', 'Barndance', 'Mazurka', 'March', 'Strathspey', 'Three-Two']
+  let deepOpen = $state(false)
+  let deepQuery = $state('')
+  let deepType = $state(null) // hard tune-type filter (the popout)
+  let deepMode = $state('name') // 'name' | 'abc' search mode
+  let deepModeManual = false // true once the user clicks a mode tab (stops auto-detect)
+  let deepFilterOpen = $state(false) // type-filter popout visible
+  let deepResults = $state([])
+  let deepLoading = $state(false)
+  let deepTimer = null
+  let deepSeq = 0
+  let deepPrefer = null // the set's type, passed as a sort preference (not a filter)
+
+  // The single tune type of the set the cursor currently points into (preset filter).
+  function cursorSetType() {
+    const c = insertAfterId
+    let seg = null
+    if (c == null) {
+      if (endIsOpen && segments.length) seg = segments[segments.length - 1]
+    } else if (typeof c === 'object') {
+      if (c.newSet != null) return null
+      const id = c.before
+      seg = segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === id))
+    } else {
+      seg = segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c))
+    }
+    if (!seg) return null
+    const types = new Set(seg.tunes.map((t) => t.tune_type).filter(Boolean))
+    return types.size === 1 ? [...types][0] : null
+  }
+
+  // ABC-ish input (only note letters a–g / A–G and numbers, short) → default to ABC
+  // search. Stops once the user manually picks a mode tab.
+  const looksLikeAbc = (q) => /^[a-gA-G0-9]+$/.test(q) && q.length > 0 && q.length < 6
+
+  function openDeep() {
+    deepQuery = input.trim()
+    deepType = null // no hard filter; the set's type is a soft preference instead
+    deepModeManual = false
+    deepMode = looksLikeAbc(deepQuery) ? 'abc' : 'name'
+    deepFilterOpen = false
+    deepPrefer = cursorSetType()
+    deepOpen = true
+    runDeep()
+  }
+  const closeDeep = () => { deepOpen = false }
+  // Typing in the field: auto-pick the mode (unless the user overrode it), then search.
+  function onDeepInput() {
+    if (!deepModeManual) deepMode = looksLikeAbc(deepQuery.trim()) ? 'abc' : 'name'
+    runDeep()
+  }
+  function setDeepMode(m) {
+    deepModeManual = true
+    if (deepMode !== m) { deepMode = m; runDeep() }
+  }
+  const toggleDeepFilters = () => { deepFilterOpen = !deepFilterOpen }
+  function setDeepType(t) {
+    deepType = deepType === t ? null : t
+    deepFilterOpen = false
+    runDeep()
+  }
+  function runDeep() {
+    if (deepTimer) clearTimeout(deepTimer)
+    deepLoading = true
+    deepTimer = setTimeout(async () => {
+      const seq = ++deepSeq
+      const r = await deepSearch(config, deepQuery.trim(), deepType, deepPrefer, deepMode)
+      if (seq === deepSeq) { deepResults = r; deepLoading = false }
+    }, 160)
+  }
+  // Tap a deep result → log that catalog tune at the cursor, then close.
+  function pickDeep(r) {
+    closeDeep()
+    clearEntry()
+    addOptimistic({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name)
+    queueMicrotask(() => inputEl?.focus())
+  }
+  // Log the typed text as an unlinked tune (the "as-is" escape lives here).
+  function deepLogAsIs() {
+    const name = deepQuery.trim()
+    if (!name) return
+    closeDeep()
+    clearEntry()
+    addOptimistic({ name }, name)
+    queueMicrotask(() => inputEl?.focus())
+  }
+  // Keyboard: Esc closes; Enter logs the top result (or as-is if none, like type-ahead).
+  function deepKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeDeep() }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (deepResults.length) pickDeep(deepResults[0])
+      else if (deepQuery.trim()) deepLogAsIs()
+    }
+  }
+
+  // Name search, with an ABC fallback: if a short note-only query (looksLikeAbc)
+  // finds no tunes by name, search the notation instead (reusing deep ABC mode), so
+  // typing "ged" surfaces tunes whose notation starts with those notes.
+  async function searchWithAbcFallback(q) {
+    let r = await searchTunes(config, q, sessionId, cursorSetType())
+    if (!r.length && looksLikeAbc(q)) {
+      const abc = await deepSearch(config, q, null, cursorSetType(), 'abc')
+      r = abc.slice(0, 8).map((t) => ({
+        tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true,
+      }))
+    }
+    return r
   }
 
   // Progressive type-ahead search (debounced), shown above the composer.
@@ -820,15 +940,17 @@
     if (q.length < 2) {
       results = []
       resultsQuery = q
+      noMatch = false
       return
     }
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(async () => {
       const seq = ++searchSeq
-      const r = await searchTunes(config, q, sessionId)
+      const r = await searchWithAbcFallback(q)
       if (seq === searchSeq) {
         results = r
         resultsQuery = q
+        noMatch = r.length === 0 // no matches at all -> show "no tunes match" + deeper search
       }
     }, 180)
   }
@@ -898,6 +1020,7 @@
     cancelSearch()
     results = []
     resultsQuery = ''
+    noMatch = false
   }
 
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
@@ -1090,6 +1213,7 @@
         {#if menuOpen}
           <div class="hamburger-dropdown show">
             {#if person.first_name}<span class="hamburger-item who">{person.first_name} {person.last_name || ''}</span>{/if}
+            <button class="hamburger-item" onclick={() => { menuOpen = false; openDeep() }}>🔍 Find a tune</button>
             <a class="hamburger-item" href="/my-tunes">My Tunes</a>
             <a class="hamburger-item" href="/me">My Sessions</a>
             <a class="hamburger-item" href="/add-session">Add A Session</a>
@@ -1288,16 +1412,24 @@
     {#if !atEnd}
       <button class="goend-pill" onclick={goToEnd}>↓ Go to end</button>
     {/if}
-    {#if results.length}
+    {#if results.length || (noMatch && editingId == null)}
       <ul class="results">
         {#each results as t (t.tune_id)}
           <li onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
             <span class="r-name">{t.name}</span>
             <span class="r-meta">
-              {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}
+              {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}{#if t.abc}<span class="r-abc"> · ♪ notation</span>{/if}
             </span>
           </li>
         {/each}
+        {#if noMatch && !results.length}
+          <li class="result-empty">No tunes match your search</li>
+        {/if}
+        {#if editingId == null}
+          <li class="result-deeper" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
+            <span class="r-name">🔍 Search …</span>
+          </li>
+        {/if}
       </ul>
     {/if}
 
@@ -1410,5 +1542,73 @@
         {/if}
       </div>
     </aside>
+  {/if}
+
+  {#if deepOpen}
+    <div class="deep-modal" transition:fly={{ y: 24, duration: 200 }}>
+      <div class="deep-head">
+        <span class="deep-title">Find a tune</span>
+        <button class="deep-done" onclick={closeDeep}>Done</button>
+      </div>
+      <input
+        class="deep-field"
+        placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : 'Search by name…'}
+        bind:value={deepQuery}
+        oninput={onDeepInput}
+        onkeydown={deepKey}
+        autofocus
+      />
+      <div class="deep-tabs">
+        <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
+        <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>By ABC</button>
+        <button class="deep-tab deep-filter-tab" class:active={deepType || deepFilterOpen} title="Filter by type" aria-label="Filter by type" onclick={toggleDeepFilters}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+        </button>
+      </div>
+      {#if deepFilterOpen}
+        <div class="deep-filters">
+          {#each DEEP_TYPES as t}
+            <button class="deep-type-chip" class:active={deepType === t} onclick={() => setDeepType(t)}>{pluralType(t)}</button>
+          {/each}
+        </div>
+      {:else if deepType}
+        <div class="deep-filters">
+          <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
+        </div>
+      {/if}
+      {#if deepMode === 'name' && deepQuery.trim()}
+        <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
+      {/if}
+      <div class="deep-results">
+        {#if deepLoading && !deepResults.length}
+          <p class="deep-empty">Searching…</p>
+        {:else if !deepResults.length}
+          <p class="deep-empty">No{deepType ? ` ${deepType.toLowerCase()}` : ''} tunes match{deepQuery.trim() ? ` “${deepQuery.trim()}”` : ''}.</p>
+        {:else}
+          {#each deepResults as r (r.tune_id)}
+            <button class="deep-card" onclick={() => pickDeep(r)}>
+              <div class="deep-card-head">
+                <span class="deep-name">{r.name}</span>
+                <span class="deep-type">{r.tune_type || ''}</span>
+              </div>
+              <div class="deep-staff">
+                {#if r.incipit_abc}<Abc abc={r.incipit_abc} />{:else}<span class="deep-noabc">♪ no notation cached</span>{/if}
+              </div>
+              <div class="deep-meta">
+                {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+                {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
+                {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
+                <span class="deep-books">{r.tunebook_count ?? 0} tunebooks</span>
+              </div>
+            </button>
+          {/each}
+        {/if}
+      </div>
+    </div>
   {/if}
 </main>

@@ -65,9 +65,10 @@ export async function sendTyping(config, typing, anchor = null) {
 
 // Type-ahead tune search (spec 021 §D). Public endpoint; session_id flags/ranks
 // tunes already in this session. Returns [] on failure (search is non-critical).
-export async function searchTunes(config, q, sessionId) {
+export async function searchTunes(config, q, sessionId, preferType) {
   const params = new URLSearchParams({ q, limit: '8' })
   if (sessionId) params.set('session_id', String(sessionId))
+  if (preferType) params.set('prefer_type', preferType)
   try {
     const res = await fetch(`/api/tunes/search?${params}`, { credentials: 'same-origin' })
     if (!res.ok) return []
@@ -97,6 +98,26 @@ export async function livePeople(config) {
   if (!res.ok) throw new Error(`people failed: ${res.status}`)
   const json = await res.json()
   return json.people || []
+}
+
+// Deep catalog search (§D "search deeper"): rich cards + incipit ABC, optional type filter.
+export async function deepSearch(config, q, type, preferType, mode) {
+  const params = new URLSearchParams({ limit: '30' })
+  if (q) params.set('q', q)
+  if (type) params.set('type', type)
+  if (preferType) params.set('prefer_type', preferType)
+  if (mode === 'abc') params.set('mode', 'abc')
+  try {
+    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/deep-search?${params}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.results || []
+  } catch {
+    return []
+  }
 }
 
 // Search people to add to attendance (§F editor); flags who's already checked in.

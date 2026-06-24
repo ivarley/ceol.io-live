@@ -103,6 +103,36 @@ def main():
             failures.append("input not cleared after fast Enter")
         log(f"post-fast-Enter: results_open={bool(page.query_selector('.results li'))}, input={page.input_value('.composer input')!r}")
 
+        # ABC fallback: a short note-only query with no NAME matches falls back to a
+        # notation search (results flagged "♪ notation"). 'GED' matches no names.
+        page.fill(".composer input", "GED")
+        page.wait_for_timeout(1000)
+        abc_badges = page.eval_on_selector_all(".results .r-abc", "e => e.length")
+        names = [n for n in page.eval_on_selector_all(".results li .r-name", "e => e.map(x => x.textContent.trim())") if "Search" not in n]
+        log(f"ABC fallback 'GED': {len(names)} results, ♪ badges={abc_badges}")
+        if not names or abc_badges == 0:
+            failures.append("ABC-pattern query with no name match should fall back to notation results")
+        page.fill(".composer input", "")
+
+        # No quick matches -> the dropdown still shows "No tunes match" + a deeper-search
+        # option (which opens the deep modal carrying the query).
+        page.fill(".composer input", "zzxqwvk")
+        page.wait_for_timeout(900)
+        empty = page.text_content(".result-empty") if page.query_selector(".result-empty") else None
+        deeper = page.query_selector(".result-deeper") is not None
+        log(f"no-match: empty msg={empty!r}, deeper option={deeper}")
+        if not empty or "No tunes match" not in empty:
+            failures.append("no-match should show a 'No tunes match your search' message")
+        if not deeper:
+            failures.append("no-match should still offer the deeper-search option")
+        else:
+            page.eval_on_selector_all(".result-deeper", "els => els[0].click()")
+            page.wait_for_selector(".deep-modal", timeout=4000)
+            if page.eval_on_selector(".deep-field", "e => e.value") != "zzxqwvk":
+                failures.append("deeper search should open carrying the typed query")
+            page.press(".deep-field", "Escape"); page.wait_for_timeout(200)
+        page.fill(".composer input", "")  # clear so the next step is clean
+
         # Enter with no match -> adds raw (server still attempts exact match)
         raw = f"PW NoMatch {int(time.time())}"
         page.fill(".composer input", raw)
