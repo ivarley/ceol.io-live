@@ -200,6 +200,8 @@ main {
 }
 .end-seam { height: 22px; margin-top: 2px; }
 .end-seam .seam-plus { font-size: 12px; }
+.start-seam { height: 16px; }
+.start-seam .seam-plus { font-size: 11px; }
 .actions { display: inline-flex; gap: 6px; }
 .actions button {
   font: inherit;

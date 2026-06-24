@@ -176,27 +176,42 @@
   })
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
 
-  // Insertion point (spec 021 §B): null = append at the end (the 95% case); a
-  // record id = insert right after that record. The active seam shows the yellow line.
+  // Insertion point (spec 021 §B): null = append at the end (the 95% case); a record
+  // id = insert after it; {before:id} = insert before it (enables insert-at-start).
   let insertAfterId = $state(null)
-  // Validated cursor for rendering (a removed target falls back to "end").
-  const cursorId = $derived(
-    insertAfterId != null && byId.has(insertAfterId) && !byId.get(insertAfterId).deleted ? insertAfterId : null
-  )
+  // Which seam shows the yellow line: 'end' | `start:<firstTuneId>` (a set's start
+  // seam) | `after:<recordId>` (a tune's trailing seam).
+  const activeSeam = $derived.by(() => {
+    const c = insertAfterId
+    if (c == null) return 'end'
+    if (typeof c === 'object' && c.before != null) {
+      return byId.has(c.before) && !byId.get(c.before).deleted ? `start:${c.before}` : 'end'
+    }
+    return byId.has(c) && !byId.get(c).deleted ? `after:${c}` : 'end'
+  })
 
   function maxPos() {
     let m = ''
     for (const r of byId.values()) if (r.order_position && r.order_position > m) m = r.order_position
     return m
   }
-  // The server anchor + optimistic order_position for the current cursor.
+  // The server anchors + optimistic order_position for the current cursor.
   function cursorPos() {
-    if (insertAfterId == null) return { afterId: null, position: generateAppend(maxPos()) }
-    const idx = ordered.findIndex((r) => r.session_instance_tune_id === insertAfterId)
-    if (idx === -1) return { afterId: null, position: generateAppend(maxPos()) } // target gone -> append
+    const append = () => ({ afterId: null, beforeId: null, position: generateAppend(maxPos()) })
+    const c = insertAfterId
+    if (c == null) return append()
+    if (typeof c === 'object' && c.before != null) {
+      const idx = ordered.findIndex((r) => r.session_instance_tune_id === c.before)
+      if (idx === -1) return append()
+      const x = ordered[idx].order_position
+      const prev = idx > 0 ? ordered[idx - 1].order_position : null
+      return { afterId: null, beforeId: c.before, position: generateBetween(prev, x) }
+    }
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === c)
+    if (idx === -1) return append()
     const before = ordered[idx].order_position
     const after = idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
-    return { afterId: insertAfterId, position: generateBetween(before, after) }
+    return { afterId: c, beforeId: null, position: generateBetween(before, after) }
   }
   function setCursor(id) {
     insertAfterId = id
@@ -219,8 +234,12 @@
     selectedId = null
   }
   function insertBeforeRow(id) {
-    const pid = predecessorId(id) // "before X" = after X's predecessor
-    if (pid != null) setCursor(pid)
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === id)
+    const pred = idx > 0 ? ordered[idx - 1] : null
+    // mid-set: cursor after the previous tune. start-of-set (pred is a break) or
+    // start-of-session (no pred): use the before-anchor so it lands at the set's front.
+    if (pred && pred.record_type !== 'break') setCursor(pred.session_instance_tune_id)
+    else setCursor({ before: id })
     selectedId = null
   }
   function confirmRow(id) {
@@ -432,12 +451,12 @@
   function addOptimistic(payload, name) {
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
-    const { afterId, position } = cursorPos()
+    const { afterId, beforeId, position } = cursorPos()
     byId.set(tempId, {
       session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, record_type: 'tune',
       order_position: position, deleted: false, _temp: true, _status: 'sending',
     })
-    trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: Date.now(), tempId })
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
   }
 
@@ -809,6 +828,9 @@
   <div class="sets" bind:this={setsEl} onscroll={onScroll}>
     {#each displaySets as set (set[0].session_instance_tune_id)}
       <div class="set">
+        <div class="seam start-seam" class:active={activeSeam === `start:${set[0].session_instance_tune_id}`} onclick={() => setCursor({ before: set[0].session_instance_tune_id })}>
+          {#if activeSeam === `start:${set[0].session_instance_tune_id}`}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ start of set</span>{/if}
+        </div>
         {#each set as r (r.session_instance_tune_id)}
           <div
             class="tune-row"
@@ -831,9 +853,7 @@
           </div>
           {#if selectedId === r.session_instance_tune_id}
             <div class="row-actions">
-              {#if predecessorId(r.session_instance_tune_id) != null}
-                <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
-              {/if}
+              <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
               <button onclick={() => insertAfterRow(r.session_instance_tune_id)}>↓ After</button>
               {#if r.confidence != null && r.confidence <= 70}
                 <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ Confirm</button>
@@ -842,8 +862,8 @@
             </div>
           {/if}
           {#if !r._temp}
-            <div class="seam" class:active={cursorId === r.session_instance_tune_id} onclick={() => setCursor(r.session_instance_tune_id)}>
-              {#if cursorId === r.session_instance_tune_id}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
+            <div class="seam" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)}>
+              {#if activeSeam === `after:${r.session_instance_tune_id}`}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
             </div>
           {/if}
         {/each}
@@ -852,8 +872,8 @@
       <p class="empty">No tunes yet — log one below.</p>
     {/each}
     {#if ordered.length}
-      <div class="seam end-seam" class:active={cursorId === null} onclick={() => setCursor(null)}>
-        {#if cursorId === null}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ insert here</span>{/if}
+      <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
+        {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ insert here</span>{/if}
       </div>
     {/if}
   </div>

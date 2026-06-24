@@ -38,7 +38,7 @@ def main():
         # place cursor on the seam after the FIRST tune
         before_rows = rows(pg)
         first_name = before_rows[0]
-        pg.eval_on_selector_all(".seam:not(.end-seam)", "els => els[0].click()")
+        pg.eval_on_selector_all(".seam:not(.end-seam):not(.start-seam)", "els => els[0].click()")
         pg.wait_for_timeout(200)
         # add a uniquely-named tune there
         mark = f"INS {int(time.time())}"
@@ -61,6 +61,32 @@ def main():
         print(f"  burst: {mark!r}@{i1}, {mark2!r}@{i2} (expect consecutive)")
         if i2 != i1 + 1:
             failures.append(f"burst insert should be consecutive ({i1},{i2})")
+
+        # insert at start of the SESSION (first set's start seam) -> lands at index 0
+        pg.eval_on_selector_all(".set:first-child .start-seam", "els => els[0] && els[0].click()")
+        pg.wait_for_timeout(150)
+        markS = f"START {int(time.time())}"
+        pg.fill(".composer input", markS); pg.press(".composer input", "Enter")
+        pg.wait_for_timeout(1500)
+        r0 = rows(pg)
+        print(f"  session-start: START@index={r0.index(markS) if markS in r0 else -1}")
+        if not r0 or r0[0] != markS:
+            failures.append(f"insert-at-session-start should land at index 0; rows start: {r0[:2]}")
+
+        # insert at the start of the SECOND set -> becomes that set's first tune
+        nsets = pg.eval_on_selector_all(".set", "e => e.length")
+        if nsets >= 2:
+            markB = f"SETSTART {int(time.time())}"
+            pg.evaluate("() => document.querySelectorAll('.set')[1].querySelector('.start-seam').click()")
+            pg.wait_for_timeout(150)
+            pg.fill(".composer input", markB); pg.press(".composer input", "Enter")
+            pg.wait_for_timeout(1500)
+            set2_first = pg.evaluate("() => { const s=document.querySelectorAll('.set')[1]; const r=s.querySelector('.tune-row .name'); return r? r.textContent.trim():null }")
+            print(f"  set-2-start: first tune of set 2 = {set2_first!r}")
+            if set2_first != markB:
+                failures.append(f"insert-at-set-start should be set 2's first tune, got {set2_first!r}")
+        else:
+            print("  (only one set; skipped set-start test)")
 
         if errs:
             failures.append(f"errors: {errs[:4]}")

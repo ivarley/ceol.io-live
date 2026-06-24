@@ -114,12 +114,29 @@ def _instance_exists(cur, session_instance_id):
 # --- Positioning (relational anchor -> authoritative order_position, §C) ---
 
 
-def _position_for(cur, session_instance_id, after_record_id):
-    """Insert right after `after_record_id`; if it's gone/None, append to the end.
-
-    Anchor fallback (spec 024 positioning rule): a vanished neighbor degrades to
-    append rather than dropping the op silently.
+def _position_for(cur, session_instance_id, after_record_id, before_record_id=None):
+    """Authoritative order_position from a relational anchor (§C):
+      - before_record_id: insert just before that record (enables insert-at-start);
+      - else after_record_id: insert just after it;
+      - else append to the end.
+    A vanished anchor degrades to append rather than dropping the op silently.
     """
+    if before_record_id is not None:
+        cur.execute(
+            "SELECT order_position FROM session_instance_tune WHERE session_instance_tune_id = %s AND session_instance_id = %s",
+            (before_record_id, session_instance_id),
+        )
+        row = cur.fetchone()
+        if row:
+            before_position = row[0]
+            cur.execute(
+                "SELECT MAX(order_position) FROM session_instance_tune WHERE session_instance_id = %s AND order_position < %s",
+                (session_instance_id, before_position),
+            )
+            pred = cur.fetchone()[0]  # None if before_record is the very first
+            return generate_position_between(pred, before_position)
+        # before-anchor vanished -> fall through to after/append
+
     after_position = None
     if after_record_id is not None:
         cur.execute(
@@ -260,12 +277,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
 
     # Duplicate-in-open-set collapses into a corroboration of the earliest row:
     # by tune_id when linked, else by identical raw name when matching fully failed.
-    if data.get("after_record_id") is None:
+    # Only for a pure append (a positioned insert is an explicit placement).
+    if data.get("after_record_id") is None and data.get("before_record_id") is None:
         target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
             return _corroborate(cur, session_instance_id, target[0], data, user_id)
 
-    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"))
+    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"), data.get("before_record_id"))
 
     cur.execute(
         """
