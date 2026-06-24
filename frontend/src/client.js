@@ -99,6 +99,17 @@ export async function livePeople(config) {
   return json.people || []
 }
 
+// Search people to add to attendance (§F editor); flags who's already checked in.
+export async function peopleSearch(config, q) {
+  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people/search?q=${encodeURIComponent(q)}`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  return json.people || []
+}
+
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials

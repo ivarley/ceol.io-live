@@ -725,10 +725,22 @@ def live_tune_detail(session_instance_id, tune_id):
         conn.close()
 
 
+def _disambiguate(people):
+    """Append (#id) to any display names shared by >1 person."""
+    seen = {}
+    for pp in people:
+        seen.setdefault(pp["display_name"], []).append(pp)
+    for dn, group in seen.items():
+        if len(group) > 1:
+            for pp in group:
+                pp["display_name"] = f"{dn} (#{pp['person_id']})"
+    return people
+
+
 @api_login_required
 def live_people(session_instance_id):
-    """Candidate people for the 'started by' picker (§19): who's checked in to this
-    instance, with disambiguated display names."""
+    """Who's checked in to this instance (attendance='yes') — the 'started by' picker
+    candidates and the header attendance list, with disambiguated display names."""
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -736,21 +748,48 @@ def live_people(session_instance_id):
             """
             SELECT DISTINCT p.person_id, p.first_name, p.last_name
             FROM person p JOIN session_instance_person sip ON p.person_id = sip.person_id
-            WHERE sip.session_instance_id = %s
+            WHERE sip.session_instance_id = %s AND sip.attendance = 'yes'
             ORDER BY p.first_name, p.last_name
             """,
             (session_instance_id,),
         )
         rows = cur.fetchall()
-        people = [{"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}"} for r in rows]
-        # disambiguate identical display names by appending (#id)
-        seen = {}
-        for pp in people:
-            seen.setdefault(pp["display_name"], []).append(pp)
-        for dn, group in seen.items():
-            if len(group) > 1:
-                for pp in group:
-                    pp["display_name"] = f"{dn} (#{pp['person_id']})"
+        people = _disambiguate([{"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}"} for r in rows])
+        return jsonify({"success": True, "people": people})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def live_people_search(session_instance_id):
+    """Search people to add to attendance (§F editor). Matches active people by name;
+    flags who's already checked in to this instance. Empty q -> []."""
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"success": True, "people": []})
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        like = f"%{q}%"
+        cur.execute(
+            """
+            SELECT p.person_id, p.first_name, p.last_name,
+                   COALESCE((SELECT sip.attendance = 'yes' FROM session_instance_person sip
+                             WHERE sip.person_id = p.person_id AND sip.session_instance_id = %s), FALSE) AS attending
+            FROM person p
+            WHERE p.active = TRUE
+              AND (p.first_name ILIKE %s OR p.last_name ILIKE %s
+                   OR (COALESCE(p.first_name,'') || ' ' || COALESCE(p.last_name,'')) ILIKE %s)
+            ORDER BY attending DESC, p.first_name, p.last_name
+            LIMIT 15
+            """,
+            (session_instance_id, like, like, like),
+        )
+        rows = cur.fetchall()
+        people = _disambiguate([
+            {"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}", "attending": r[3]}
+            for r in rows
+        ])
         return jsonify({"success": True, "people": people})
     finally:
         conn.close()

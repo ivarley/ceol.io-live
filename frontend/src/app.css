@@ -106,6 +106,15 @@ main {
 .header-expand { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 .header-stat { font-size: 13px; color: var(--muted); }
 .header-notes { font-style: italic; }
+.header-attend { display: flex; align-items: baseline; gap: 8px; }
+.header-attend .ha-text { flex: 1; min-width: 0; }
+.header-attend .ha-label { color: var(--text); font-weight: 600; }
+.ha-manage {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--accent);
+}
+.ha-manage:hover { border-color: var(--accent); color: var(--text); }
 
 .avatar {
   display: inline-flex;
@@ -193,6 +202,11 @@ main {
   border: 1px solid var(--border); border-radius: 10px; padding: 1px 9px; cursor: pointer;
 }
 .starter-pill:hover { color: var(--text); }
+.starter-pill.flash { animation: starter-flash 0.8s ease-out; }
+@keyframes starter-flash {
+  0% { background: var(--accent); color: #04122b; box-shadow: 0 0 0 3px rgba(79, 157, 255, 0.45); }
+  100% { background: var(--bg); color: var(--accent); box-shadow: 0 0 0 0 rgba(79, 157, 255, 0); }
+}
 /* the player picker inside the tray */
 .starter-picker { margin: 4px 0 6px; }
 .starter-filter {
@@ -269,6 +283,45 @@ main {
 .d-statrow b { color: var(--text); }
 .d-history { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
 .d-history li { padding: 2px 0; }
+
+/* attendance editor (§F) */
+.att-list, .att-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.att-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+}
+.att-name { flex: 1; min-width: 0; font-size: 14px; color: var(--text); text-align: left; }
+.att-empty { color: var(--muted); font-size: 13px; font-style: italic; }
+.att-x {
+  flex: none; font: inherit; font-size: 13px; line-height: 1; padding: 5px 8px;
+  background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer;
+}
+.att-x:hover { color: #e0594b; border-color: #e0594b; }
+.att-in { flex: none; font-size: 12px; color: #46d27a; font-weight: 600; }
+/* search result row: the whole row is the tap target (tap name to check in) */
+.att-result {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); color: var(--text); cursor: pointer; text-align: left;
+}
+.att-result:hover:not(:disabled) { border-color: var(--accent); background: rgba(79, 157, 255, 0.08); }
+.att-result:disabled { opacity: 0.45; cursor: default; }
+.att-result:disabled .att-name { color: var(--muted); }
+.att-add {
+  flex: none; font: inherit; font-size: 13px; font-weight: 600; padding: 5px 12px;
+  background: var(--accent); border: none; border-radius: 6px; color: #04122b; cursor: pointer;
+}
+.att-add:disabled { opacity: 0.4; cursor: default; }
+.att-search, .att-create input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 9px 10px;
+  border-radius: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+}
+.att-create-toggle {
+  align-self: flex-start; font: inherit; font-size: 13px; font-weight: 600;
+  background: transparent; border: none; color: var(--accent); cursor: pointer; padding: 2px 0;
+}
+.att-create { display: flex; gap: 6px; align-items: center; }
+.att-create input { flex: 1; }
 .tune-row .name { display: inline; }
 .tune-row.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
 .tune-row.pending { opacity: 0.55; }

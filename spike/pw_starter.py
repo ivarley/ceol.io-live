@@ -31,6 +31,14 @@ def text_in_set(pg, name, sel):
     return pg.evaluate("(args)=>{ const el=(" + _SET_EL + ")(args); return el? el.textContent.trim():null }", [name, sel])
 
 
+def ensure_picker(pg, name):
+    """Make sure the set's tray AND starter picker are open (the tray closes after a pick)."""
+    if text_in_set(pg, name, ".set-tray") is None:
+        click_in_set(pg, name, ".set-label"); pg.wait_for_timeout(250)
+    if text_in_set(pg, name, ".starter-picker") is None:
+        click_in_set(pg, name, ".starter-value"); pg.wait_for_timeout(500)
+
+
 def main():
     fail = []
     with sync_playwright() as p:
@@ -62,31 +70,28 @@ def main():
         if not any("Aoife" in t for t in items): fail.append("picker should list attendees (Aoife)")
         if not any("Add a player" in t for t in items): fail.append("picker should have '+ Add a player' at the bottom")
 
-        # pick Aoife
+        # pick Aoife — picking now CLOSES the tray and flashes the pill
         pg.fill(".starter-filter", "Aoife"); pg.wait_for_timeout(300)
         pg.eval_on_selector_all(".starter-picker .starter-item", "els=>{const a=els.find(x=>x.textContent.includes('Aoife')); if(a)a.click()}")
         pg.wait_for_timeout(1200)
+        tray_closed = text_in_set(pg, nm, ".set-tray") is None
         pill = text_in_set(pg, nm, ".starter-pill")
-        val = text_in_set(pg, nm, ".starter-value")
-        print(f"2. set-card pill={pill!r}, tray value={val!r}")
+        print(f"2. tray closed={tray_closed}, set-card pill={pill!r}")
+        if not tray_closed: fail.append("tray should close immediately after choosing a starter")
         if not pill or "Aoife" not in pill: fail.append(f"set card should show starter pill with Aoife, got {pill!r}")
-        if not val or "Aoife" not in val: fail.append(f"tray value should show Aoife, got {val!r}")
 
-        # "Add a player" → placeholder notice (attendance view not built yet)
-        click_in_set(pg, nm, ".starter-value")  # picker may have closed; reopen
-        pg.wait_for_timeout(400)
-        if not text_in_set(pg, nm, ".starter-item.add-player"):
-            click_in_set(pg, nm, ".starter-value"); pg.wait_for_timeout(300)
+        # "Add a player" opens the attendance editor (§F) — reopen tray+picker first
+        ensure_picker(pg, nm)
         pg.eval_on_selector_all(".starter-item.add-player", "els=>els[0] && els[0].click()")
+        pg.wait_for_timeout(400)
+        editor = pg.query_selector(".drawer .att-list") is not None
+        print(f"3. Add-a-player opened attendance editor={editor}")
+        if not editor: fail.append("Add a player should open the attendance editor")
+        if pg.query_selector(".drawer-done"): pg.click(".drawer-done")  # close it
         pg.wait_for_timeout(300)
-        notice = pg.text_content(".notice") if pg.query_selector(".notice") else ""
-        print(f"3. Add-a-player notice={notice.strip()!r}")
-        if "coming soon" not in notice: fail.append(f"Add a player should show a placeholder notice, got {notice!r}")
 
-        # clear it (the picker is still open from the add-player step)
-        if pg.query_selector(".notice"): pg.click(".notice")  # dismiss
-        if not pg.query_selector(".starter-item.clear"):
-            click_in_set(pg, nm, ".starter-value"); pg.wait_for_timeout(400)
+        # clear it — reopen tray+picker
+        ensure_picker(pg, nm)
         pg.eval_on_selector_all(".starter-item.clear", "els=>els[0] && els[0].click()")
         pg.wait_for_timeout(1100)
         pill2 = text_in_set(pg, nm, ".starter-pill")

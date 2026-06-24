@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, livePeople, peopleSearch, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
@@ -301,6 +301,7 @@
   let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
   let editingName = $state('') // its name, for the editing banner label
   let openTrayId = $state(null) // set whose info tray (started-by / logged-by) is open
+  let starterFlashId = $state(null) // set whose starter pill is briefly flashing (confirm)
   function toggleTray(id) { openTrayId = openTrayId === id ? null : id; starterPickerSet = null }
 
   // "Started by" picker (§19): which set's picker is open, + cached attendee list.
@@ -324,10 +325,61 @@
       try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep empty */ }
     }
   }
-  // "＋ Add a player" → will open the attendance editor (§F, not built yet).
-  // Placeholder until that view exists, so the affordance is present now.
-  function addPlayer() {
-    notice = 'Adding players from here is coming soon — check people in from the session page for now.'
+  // --- attendance editor (§F) ---
+  let attendanceOpen = $state(false)
+  let personQuery = $state('')
+  let personResults = $state([])
+  let personSearchTimer = null
+  let showCreate = $state(false)
+  let newFirst = $state('')
+  let newLast = $state('')
+
+  async function refreshAttendees() {
+    try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
+  }
+  function openAttendance() {
+    starterPickerSet = null
+    attendanceOpen = true
+    personQuery = ''; personResults = []; showCreate = false; newFirst = ''; newLast = ''
+    if (!attendeesLoaded) refreshAttendees()
+  }
+  const closeAttendance = () => (attendanceOpen = false)
+  // "＋ Add a player" in the starter picker opens the attendance editor.
+  function addPlayer() { openAttendance() }
+
+  // Attendance ops need a connection (not in the offline op model); surface rejections.
+  async function attendanceOp(op_type, payload, label) {
+    error = ''
+    if (!navigator.onLine) { notice = `You're offline — ${label} needs a connection.`; return false }
+    try {
+      const res = await sendOp(config, op_type, payload)
+      if (res.rejected) { notice = res.message || `${label}: ${res.reason}`; return false }
+      await refreshAttendees()
+      return true
+    } catch (e) {
+      if (e.networkError) notice = `You're offline — ${label} needs a connection.`
+      else error = e.message
+      return false
+    }
+  }
+  async function checkIn(p) {
+    if (await attendanceOp('attendance_add', { person_id: p.person_id }, 'Check in')) searchPeople() // refresh "in" flags
+  }
+  function checkOut(p) { attendanceOp('attendance_remove', { person_id: p.person_id }, 'Remove') }
+  async function createPerson() {
+    const first = newFirst.trim()
+    if (!first) return
+    if (await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim() }, 'Add person')) {
+      newFirst = ''; newLast = ''; showCreate = false; personQuery = ''; personResults = []
+    }
+  }
+  function searchPeople() {
+    const q = personQuery.trim()
+    if (q.length < 2) { personResults = []; return }
+    if (personSearchTimer) clearTimeout(personSearchTimer)
+    personSearchTimer = setTimeout(async () => {
+      try { personResults = await peopleSearch(config, q) } catch { personResults = [] }
+    }, 180)
   }
 
   // Attribute (or clear) the set's starter: optimistic across all its tunes, one op.
@@ -342,9 +394,15 @@
       })
     }
     const op_id = crypto.randomUUID()
-    flashId(firstId)
     trySend({ op_id, op_type: 'attribute_set_starter', payload: { record_id: firstId, person_id: personOrNull?.person_id ?? null }, status: 'sending', ts: Date.now(), prevRecords })
+    // Close the whole tray immediately; flash the new starter pill (top-right) as
+    // confirmation (only when one was set, not on clear).
     starterPickerSet = null
+    openTrayId = null
+    if (personOrNull) {
+      starterFlashId = firstId
+      setTimeout(() => { if (starterFlashId === firstId) starterFlashId = null }, 800)
+    }
   }
 
   function selectRow(id) {
@@ -473,6 +531,9 @@
       case 'set_break': return d.removed ? 'removed a break' : 'ended a set'
       case 'attribute_set_starter': return d.person ? `set ${d.person.display_name} as starting a set` : 'cleared a set starter'
       case 'set_confidence': return `confirmed ${n}`
+      case 'attendance_add': return d.person ? `checked in ${d.person.display_name}` : 'updated attendance'
+      case 'attendance_create_person': return d.person ? `added ${d.person.display_name}` : 'added a player'
+      case 'attendance_remove': return d.person ? `checked out ${d.person.display_name}` : 'updated attendance'
       default: return null
     }
   }
@@ -505,7 +566,7 @@
     switch (d.op_type) {
       case 'attribute_set_starter': // applies to the whole set -> many records
         for (const r of d.records || []) put(r)
-        flashId(d.records?.[0]?.session_instance_tune_id)
+        // no tune-row flash here — the starter pill flash is the confirmation
         break
       case 'add_tune':
       case 'change_tune':
@@ -520,6 +581,11 @@
         break
       case 'remove_tune':
         if (d.record) (d.record.deleted ? drop(d.record.session_instance_tune_id) : put(d.record))
+        break
+      case 'attendance_add':
+      case 'attendance_remove':
+      case 'attendance_create_person':
+        refreshAttendees() // keep the roster/picker list current across clients
         break
       case 'edit_notes':
       case 'mark_complete':
@@ -871,6 +937,7 @@
         scheduleReconnect()
         return
       }
+      refreshAttendees() // load the attendance list (header + starter picker) — online only
 
       const stream = openStream(config, snap.last_event_id, {
         onOp: applyOp,
@@ -1043,6 +1110,13 @@
         <div class="header-expand">
           <div class="header-stat">{tunes.length} tune{tunes.length === 1 ? '' : 's'} in {sets.length} set{sets.length === 1 ? '' : 's'}</div>
           {#if notesText}<div class="header-stat header-notes">{notesText}</div>{/if}
+          <div class="header-stat header-attend">
+            <span class="ha-text">
+              <span class="ha-label">Attendance ({attendees.length}):</span>
+              {attendees.length ? attendees.map((a) => a.display_name).join(', ') : 'no one checked in yet'}
+            </span>
+            <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
+          </div>
           {#if roster.length}
             <div class="header-stat">Currently logging: {roster.map((p) => p.name).join(', ')}</div>
           {/if}
@@ -1078,7 +1152,7 @@
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
         {#if setStarterName(seg)}
-          <button class="starter-pill" title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id; starterPickerSet = null }}>▸ {setStarterName(seg)}</button>
+          <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id; starterPickerSet = null }}>▸ {setStarterName(seg)}</button>
         {/if}
         {#if openTrayId === seg.tunes[0].session_instance_tune_id}
           <div class="set-tray">
@@ -1275,6 +1349,52 @@
             <ul class="d-history">
               {#each drawer.dates as d}<li>{d}</li>{:else}<li>—</li>{/each}
             </ul>
+          </div>
+        {/if}
+      </div>
+    </aside>
+  {/if}
+
+  {#if attendanceOpen}
+    <div class="drawer-scrim" onclick={closeAttendance}></div>
+    <aside class="drawer">
+      <div class="drawer-head">
+        <div class="drawer-title">Attendance</div>
+        <button class="drawer-done" onclick={closeAttendance}>Done</button>
+      </div>
+      <div class="drawer-body">
+        <div class="d-label">Checked in ({attendees.length})</div>
+        <ul class="att-list">
+          {#each attendees as a (a.person_id)}
+            <li><span class="att-name">{a.display_name}</span><button class="att-x" title="Check out" onclick={() => checkOut(a)}>✕</button></li>
+          {:else}
+            <li class="att-empty">No one checked in yet.</li>
+          {/each}
+        </ul>
+
+        <div class="d-label">Add someone</div>
+        <input class="att-search" placeholder="Search people…" bind:value={personQuery} oninput={searchPeople} />
+        {#if personResults.length}
+          <ul class="att-results">
+            {#each personResults as r (r.person_id)}
+              <li>
+                <button class="att-result" class:attending={r.attending} disabled={r.attending} onclick={() => checkIn(r)} title={r.attending ? 'Already checked in' : 'Tap to check in'}>
+                  <span class="att-name">{r.display_name}</span>
+                  {#if r.attending}<span class="att-in">✓ in</span>{/if}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else if personQuery.trim().length >= 2}
+          <p class="att-empty">No matches — create them below.</p>
+        {/if}
+
+        <button class="att-create-toggle" onclick={() => (showCreate = !showCreate)}>{showCreate ? '× Cancel' : '＋ Create new person'}</button>
+        {#if showCreate}
+          <div class="att-create">
+            <input placeholder="First name" bind:value={newFirst} />
+            <input placeholder="Last name" bind:value={newLast} />
+            <button class="att-add" disabled={!newFirst.trim()} onclick={createPerson}>Add</button>
           </div>
         {/if}
       </div>
