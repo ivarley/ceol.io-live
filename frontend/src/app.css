@@ -191,17 +191,34 @@ main {
 }
 .seam-plus { font-size: 12px; color: var(--muted); opacity: 0; transition: opacity 0.12s; }
 .seam:hover .seam-plus { opacity: 0.7; }
+.seam.active { gap: 8px; }
 .seam-line {
   height: 3px;
-  width: 100%;
+  flex: 1;
   border-radius: 2px;
   background: var(--insert);
   box-shadow: 0 0 8px var(--insert);
+}
+.seam-pill {
+  flex: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: var(--insert);
+  color: #2a2008;
 }
 .end-seam { height: 22px; margin-top: 2px; }
 .end-seam .seam-plus { font-size: 12px; }
 .start-seam { height: 16px; }
 .start-seam .seam-plus { font-size: 11px; }
+/* the between-sets gap seam: a new set lands here; carries Join */
+.inter-seam { height: 20px; margin: 2px 0; }
+.inter-seam .seam-plus { font-size: 11px; }
 .actions { display: inline-flex; gap: 6px; }
 .actions button {
   font: inherit;
@@ -266,6 +283,10 @@ main {
 
 .endset { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--border) !important; }
 .endset:disabled { opacity: 0.4; cursor: default; }
+.composer .done-btn {
+  font: inherit; padding: 12px 18px; border: none; border-radius: 8px;
+  background: var(--insert); color: #2a2008; font-weight: 700; cursor: pointer;
+}
 
 .dock { position: relative; flex: 0 0 auto; padding: 0 16px 16px; background: var(--bg); }
 

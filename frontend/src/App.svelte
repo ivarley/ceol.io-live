@@ -160,20 +160,25 @@
       .filter((r) => !r.deleted)
       .sort((a, b) => (a.order_position < b.order_position ? -1 : a.order_position > b.order_position ? 1 : 0))
   )
-  const sets = $derived.by(() => {
+  // Segment into sets, remembering the break record that *ends* each set (its
+  // boundary with the next). The between-sets ("inter") seam renders in that gap
+  // and carries Join, which removes exactly that break (spec 021 §C; prototype).
+  const segments = $derived.by(() => {
     const out = []
     let cur = []
     for (const r of ordered) {
       if (r.record_type === 'break') {
-        if (cur.length) out.push(cur)
-        cur = []
+        if (cur.length) { out.push({ tunes: cur, breakAfter: r.session_instance_tune_id }); cur = [] }
+        // a leading/empty-set break carries no set to attach to — ignore it
       } else {
         cur.push(r)
       }
     }
-    if (cur.length) out.push(cur)
+    if (cur.length) out.push({ tunes: cur, breakAfter: null })
     return out
   })
+  const sets = $derived(segments.map((s) => s.tunes))
+  const tunes = $derived(ordered.filter((r) => r.record_type !== 'break'))
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
 
   // Insertion point (spec 021 §B): null = append at the end (the 95% case); a record
@@ -184,6 +189,10 @@
   const activeSeam = $derived.by(() => {
     const c = insertAfterId
     if (c == null) return 'end'
+    if (typeof c === 'object' && c.newSet != null) {
+      // a new set in the gap before this set (the between-sets seam)
+      return byId.has(c.newSet) && !byId.get(c.newSet).deleted ? `inter:${c.newSet}` : 'end'
+    }
     if (typeof c === 'object' && c.before != null) {
       return byId.has(c.before) && !byId.get(c.before).deleted ? `start:${c.before}` : 'end'
     }
@@ -216,6 +225,36 @@
   function setCursor(id) {
     insertAfterId = id
     queueMicrotask(() => inputEl?.focus())
+  }
+  // Arm the between-sets seam: the next tune starts a NEW set in this gap, before
+  // the set whose first tune is `nextFirstId` (spec 021 §C; prototype "new-set-after").
+  function setNewSetCursor(nextFirstId) {
+    insertAfterId = { newSet: nextFirstId }
+    queueMicrotask(() => inputEl?.focus())
+  }
+
+  // Split: drop a break after this tune (intra-set seam) -> two sets (§C).
+  function splitAt(afterTuneId) {
+    const op_id = crypto.randomUUID()
+    const tempId = `temp-${op_id}`
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === afterTuneId)
+    const before = idx >= 0 ? ordered[idx].order_position : maxPos()
+    const after = idx >= 0 && idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, record_type: 'break',
+      order_position: generateBetween(before, after), deleted: false, _temp: true,
+    })
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: afterTuneId }, status: 'sending', ts: Date.now(), tempId })
+    setCursor(null) // split leaves edit mode (§C10)
+  }
+
+  // Join: remove the boundary break (between-sets seam) -> merge the two sets (§C).
+  function joinAt(breakId) {
+    const brk = byId.get(breakId)
+    byId.delete(breakId) // optimistic merge
+    const op_id = crypto.randomUUID()
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'remove', record_id: breakId }, status: 'sending', ts: Date.now(), restoreRecord: brk })
+    setCursor(null)
   }
 
   // --- row selection + actions (spec 021 §E) ---
@@ -268,7 +307,7 @@
 
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
-  const displaySets = $derived(sets)
+  const displaySegments = $derived(segments)
 
   // A position after everything currently present, so optimistic appends stay last
   // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
@@ -387,6 +426,7 @@
       }
     }
     if (entry.tempId) byId.delete(entry.tempId)
+    if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
   }
 
   function settleOp(entry, res) {
@@ -449,6 +489,11 @@
   // Shared optimistic add: place a temp row at the cursor, send/queue the op, and
   // advance the cursor past it (so a burst logs a set in order). §B/§D13.
   function addOptimistic(payload, name) {
+    const c = insertAfterId
+    if (c && typeof c === 'object' && c.newSet != null) {
+      addNewSetTune(payload, name, c.newSet)
+      return
+    }
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
     const { afterId, beforeId, position } = cursorPos()
@@ -458,6 +503,38 @@
     })
     trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: Date.now(), tempId })
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
+  }
+
+  // Start a NEW set in the gap before `nextFirstId` (the between-sets seam): drop a
+  // tune there plus a trailing break that separates it from the next set. The break
+  // is sent AFTER the tune resolves (awaited) and anchored before the same next tune,
+  // so it always lands *after* our tune — both online (committed) and on offline
+  // replay (flush awaits each op in turn). §C / prototype "new-set-after".
+  async function addNewSetTune(payload, name, nextFirstId) {
+    if (typeof nextFirstId !== 'number') { setCursor(null); addOptimistic(payload, name); return }
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === nextFirstId)
+    if (idx === -1) { setCursor(null); addOptimistic(payload, name); return }
+    const nextPos = ordered[idx].order_position
+    const predPos = idx > 0 ? ordered[idx - 1].order_position : null
+    const tunePos = generateBetween(predPos, nextPos)
+    const breakPos = generateBetween(tunePos, nextPos)
+
+    const op_id = crypto.randomUUID()
+    const tempId = `temp-${op_id}`
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, record_type: 'tune',
+      order_position: tunePos, deleted: false, _temp: true, _status: 'sending',
+    })
+    const bid = crypto.randomUUID()
+    const btmp = `temp-${bid}`
+    byId.set(btmp, {
+      session_instance_tune_id: btmp, record_type: 'break',
+      order_position: breakPos, deleted: false, _temp: true,
+    })
+    insertAfterId = tempId // burst continues inside the new set (before its trailing break)
+
+    await trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, before_record_id: nextFirstId }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id: bid, op_type: 'set_break', payload: { action: 'insert', before_record_id: nextFirstId }, status: 'sending', ts: Date.now() + 1, tempId: btmp })
   }
 
   // Cancel a pending debounced search AND invalidate any in-flight one, so a late
@@ -714,6 +791,8 @@
           session_instance_tune_id: entry.tempId, name: entry.name, tune_id: null, record_type: 'tune',
           order_position: nextTempPos(), deleted: false, _temp: true, _status: 'queued',
         })
+      } else if (entry.op_type === 'set_break' && entry.payload?.action === 'remove') {
+        byId.delete(entry.payload.record_id) // re-apply an offline join
       } else if (entry.op_type === 'set_break') {
         entry.tempId = `temp-${entry.op_id}`
         byId.set(entry.tempId, {
@@ -826,12 +905,14 @@
   </div>
 
   <div class="sets" bind:this={setsEl} onscroll={onScroll}>
-    {#each displaySets as set (set[0].session_instance_tune_id)}
+    {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
-        <div class="seam start-seam" class:active={activeSeam === `start:${set[0].session_instance_tune_id}`} onclick={() => setCursor({ before: set[0].session_instance_tune_id })}>
-          {#if activeSeam === `start:${set[0].session_instance_tune_id}`}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ start of set</span>{/if}
+        <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
+          {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
+            <span class="seam-line"></span>
+          {:else}<span class="seam-plus">＋ start of set</span>{/if}
         </div>
-        {#each set as r (r.session_instance_tune_id)}
+        {#each seg.tunes as r, ti (r.session_instance_tune_id)}
           <div
             class="tune-row"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
@@ -863,11 +944,24 @@
           {/if}
           {#if !r._temp}
             <div class="seam" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)}>
-              {#if activeSeam === `after:${r.session_instance_tune_id}`}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
+              {#if activeSeam === `after:${r.session_instance_tune_id}`}
+                <span class="seam-line"></span>
+                {#if ti < seg.tunes.length - 1}
+                  <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>Split</button>
+                {/if}
+              {:else}<span class="seam-plus">＋</span>{/if}
             </div>
           {/if}
         {/each}
       </div>
+      {#if si < displaySegments.length - 1 && seg.breakAfter != null}
+        <div class="seam inter-seam" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)}>
+          {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
+            <span class="seam-line"></span>
+            <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>Join</button>
+          {:else}<span class="seam-plus">＋ new set</span>{/if}
+        </div>
+      {/if}
     {:else}
       <p class="empty">No tunes yet — log one below.</p>
     {/each}
@@ -914,12 +1008,11 @@
         onkeydown={(e) => e.key === 'Enter' && commit()}
       />
       <button onmousedown={(e) => e.preventDefault()} onclick={commit}>Log</button>
-      <button
-        class="endset"
-        title="End the current set"
-        disabled={!lastRecordId}
-        onclick={endSet}
-      >End set</button>
+      {#if activeSeam === 'end'}
+        <button class="endset" title="End the current set" disabled={!lastRecordId} onclick={endSet}>End set</button>
+      {:else}
+        <button class="done-btn" title="Back to the end" onclick={goToEnd}>Done</button>
+      {/if}
     </div>
   </div>
 

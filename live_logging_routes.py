@@ -402,7 +402,9 @@ def _handle_set_break(cur, session_instance_id, data, user_id):
 
     if action != "insert":
         raise OpRejected("invalid", f"unknown set_break action '{action}'.")
-    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"))
+    # before_record_id supports the between-sets "new set" gap insert (§C): a break
+    # placed just before the next set's first tune, after the new tune we just added.
+    new_position = _position_for(cur, session_instance_id, data.get("after_record_id"), data.get("before_record_id"))
     cur.execute(
         """
         INSERT INTO session_instance_tune (
