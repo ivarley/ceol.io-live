@@ -231,6 +231,12 @@ def get_db_connection():
         user=os.environ.get("PGUSER"),
         password=os.environ.get("PGPASSWORD"),
         port=int(os.environ.get("PGPORT", 5432)),
+        # Pin the session to UTC so timestamps are stored/read as UTC everywhere
+        # (the app's convention; timezone_utils converts to the viewer's tz for
+        # display). Production Postgres already defaults to UTC; this makes local
+        # dev match it, so `NOW() AT TIME ZONE 'UTC'` writes aren't skewed by a
+        # non-UTC server timezone.
+        options="-c timezone=utc",
     )
     return conn
 

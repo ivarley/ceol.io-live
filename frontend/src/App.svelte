@@ -90,6 +90,7 @@
   let sessionId = null // for search ranking/flagging (set from bootstrap when online)
   let sessionName = $state('')
   let sessionDate = $state('')
+  let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('')
   let menuOpen = $state(false)
   let expanded = $state(false)
@@ -116,6 +117,7 @@
       const value = JSON.parse(JSON.stringify({
         records, last_event_id: highWater, person, ts: Date.now(),
         session_name: sessionName, session_date: sessionDate, notes: notesText,
+        display_tz: displayTz,
       }))
       await snapshotPut(config.sessionInstanceId, value)
     } catch {
@@ -179,7 +181,39 @@
   })
   const sets = $derived(segments.map((s) => s.tunes))
   const tunes = $derived(ordered.filter((r) => r.record_type !== 'break'))
+
+  // Per-set type label (prototype setLabel): the shared tune type pluralized
+  // ("Reels"), "Mixed" if the set spans types, "Unknown" when no tune is matched.
+  // Every set gets a pill.
+  function setLabel(setTunes) {
+    const types = new Set(setTunes.map((t) => t.tune_type).filter(Boolean))
+    if (types.size === 0) return 'Unknown'
+    if (types.size > 1) return 'Mixed'
+    const ty = [...types][0]
+    return ty.charAt(0).toUpperCase() + ty.slice(1) + 's'
+  }
+
+  // "Logged by X · 8:42 PM" for a set — from the most recently added tune in it
+  // (records carry logged_by/logged_at from the server). null if unknown.
+  function loggedInfo(setTunes) {
+    let latest = null
+    for (const t of setTunes) {
+      if (!t.logged_at) continue
+      if (!latest || new Date(t.logged_at) > new Date(latest.logged_at)) latest = t
+    }
+    if (!latest) return null
+    const opts = { hour: 'numeric', minute: '2-digit' }
+    if (displayTz) opts.timeZone = displayTz
+    return {
+      who: latest.logged_by || null,
+      when: new Date(latest.logged_at).toLocaleTimeString('en-US', opts),
+    }
+  }
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
+  // Is there an OPEN set at the end? (last record is a tune, not a break) — i.e. a
+  // set in progress that "End set" would close. A trailing break (or empty list)
+  // means the end is closed and appending starts a NEW set (§B/§C).
+  const endIsOpen = $derived(ordered.length > 0 && ordered[ordered.length - 1].record_type !== 'break')
 
   // Insertion point (spec 021 §B): null = append at the end (the 95% case); a record
   // id = insert after it; {before:id} = insert before it (enables insert-at-start).
@@ -260,6 +294,10 @@
   // --- row selection + actions (spec 021 §E) ---
   let selectedId = $state(null) // the "opened" tune row (shows its action bar)
   let drawer = $state(null) // tune-detail drawer: null | {loading|unlinked|error|detail}
+  let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
+  let editingName = $state('') // its name, for the editing banner label
+  let openTrayId = $state(null) // set whose info tray (started-by / logged-by) is open
+  function toggleTray(id) { openTrayId = openTrayId === id ? null : id }
 
   function selectRow(id) {
     selectedId = selectedId === id ? null : id
@@ -288,6 +326,61 @@
   function removeRow(id) {
     removeTune(id)
     selectedId = null
+  }
+
+  // --- edit / relink (spec 021 §E; change_tune op) ---
+  // Edit re-opens the composer pre-filled with the tune's name: pick a search
+  // result to relink, Enter to rename/re-match, or Unlink to drop the catalog link.
+  function startEdit(id) {
+    const r = byId.get(id)
+    if (!r || r._temp) return
+    editingId = id
+    editingName = r.name || ''
+    selectedId = null
+    insertAfterId = null // editing isn't an insertion point
+    input = r.name || ''
+    runSearch()
+    queueMicrotask(() => { inputEl?.focus(); inputEl?.select() })
+  }
+  function cancelEdit() {
+    editingId = null
+    editingName = ''
+    clearEntry()
+  }
+
+  // Apply a change_tune optimistically (patch the record now; reconcile on ack/SSE),
+  // stashing the prior record so a rejection can roll it back.
+  function sendChange(record_id, payload, patch) {
+    const prev = byId.get(record_id)
+    if (prev) byId.set(record_id, { ...prev, ...patch })
+    const op_id = crypto.randomUUID()
+    flashId(record_id)
+    trySend({ op_id, op_type: 'change_tune', payload: { record_id, ...payload }, status: 'sending', ts: Date.now(), prev })
+  }
+
+  // Relink the edited record to a catalog tune (from a tapped/Enter-picked result).
+  function relinkTo(t) {
+    const id = editingId
+    cancelEdit()
+    sendChange(id, { tune_id: t.tune_id, name: t.name }, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null, confidence: 100 })
+  }
+  // Unlink: keep the text, drop the catalog link (becomes a raw name).
+  function unlinkEdit() {
+    const id = editingId
+    cancelEdit()
+    sendChange(id, { unlink: true }, { tune_id: null, tune_type: null })
+  }
+  // Enter while editing: mirror add's commit — pick the top match if one fits the
+  // current text (relink), else rename in place to the typed text (unlinked).
+  async function commitEdit() {
+    const id = editingId
+    const q = input.trim()
+    if (!q) { cancelEdit(); return }
+    if (resultsQuery === q && results.length) { relinkTo(results[0]); return }
+    const r = await searchTunes(config, q, sessionId)
+    if (r.length) { relinkTo(r[0]); return }
+    cancelEdit()
+    sendChange(id, { name: q, unlink: true }, { name: q, tune_id: null, tune_type: null })
   }
 
   async function openDrawer(r) {
@@ -427,6 +520,7 @@
     }
     if (entry.tempId) byId.delete(entry.tempId)
     if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
+    if (entry.op_type === 'change_tune' && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit
   }
 
   function settleOp(entry, res) {
@@ -498,8 +592,8 @@
     const tempId = `temp-${op_id}`
     const { afterId, beforeId, position } = cursorPos()
     byId.set(tempId, {
-      session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, record_type: 'tune',
-      order_position: position, deleted: false, _temp: true, _status: 'sending',
+      session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, tune_type: payload.tune_type ?? null,
+      record_type: 'tune', order_position: position, deleted: false, _temp: true, _status: 'sending',
     })
     trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: Date.now(), tempId })
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
@@ -565,8 +659,9 @@
   // Tap a search result: add the linked tune directly, then stay hot for the next
   // (spec 021 §D13 burst entry).
   function pickResult(t) {
+    if (editingId != null) { relinkTo(t); return }
     clearEntry()
-    addOptimistic({ tune_id: t.tune_id, name: t.name }, t.name)
+    addOptimistic({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name)
     queueMicrotask(() => inputEl?.focus())
   }
 
@@ -576,6 +671,7 @@
   // tries an exact match on that). Fast-typing fallback: do a quick lookup if the
   // debounced results haven't landed yet.
   async function commit() {
+    if (editingId != null) { commitEdit(); return }
     const q = input.trim()
     if (!q) return
     // Only trust the dropdown if it matches the CURRENT text (the debounced search
@@ -696,7 +792,8 @@
         const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
         snap = cached
           ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
-              session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes }
+              session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
+              user_timezone: cached.display_tz }
           : { records: [], last_event_id: 0 }
         fromCache = true
       }
@@ -706,6 +803,7 @@
       if (snap.current_person) person = snap.current_person
       if (snap.session_name) sessionName = snap.session_name
       if (snap.session_date) sessionDate = snap.session_date
+      displayTz = snap.user_timezone || snap.session_timezone || undefined
       notesText = snap.notes || ''
       highWater = snap.last_event_id || 0
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
@@ -802,6 +900,15 @@
       } else if (entry.op_type === 'remove_tune') {
         const r = byId.get(entry.payload.record_id)
         if (r && !r._removing) byId.set(r.session_instance_tune_id, { ...r, _removing: entry.op_id })
+      } else if (entry.op_type === 'change_tune') {
+        const r = byId.get(entry.payload.record_id)
+        if (r) {
+          const patch = {}
+          if (entry.payload.unlink) patch.tune_id = null
+          else if ('tune_id' in entry.payload) patch.tune_id = entry.payload.tune_id
+          if ('name' in entry.payload) patch.name = entry.payload.name
+          byId.set(r.session_instance_tune_id, { ...r, ...patch })
+        }
       }
     }
   }
@@ -907,6 +1014,16 @@
   <div class="sets" bind:this={setsEl} onscroll={onScroll}>
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
+        <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
+        {#if openTrayId === seg.tunes[0].session_instance_tune_id}
+          <div class="set-tray">
+            <div class="tray-row"><span class="tray-k">Started by</span><span class="tray-v muted">— not recorded yet</span></div>
+            {#if loggedInfo(seg.tunes)}
+              {@const li = loggedInfo(seg.tunes)}
+              <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>
+            {/if}
+          </div>
+        {/if}
         <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
           {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
@@ -920,6 +1037,7 @@
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
             class:selected={selectedId === r.session_instance_tune_id}
+            class:editing={editingId === r.session_instance_tune_id}
             class:flash={flashing.has(r.session_instance_tune_id)}
             onclick={() => !r._temp && !r._removing && selectRow(r.session_instance_tune_id)}
           >
@@ -939,18 +1057,26 @@
               {#if r.confidence != null && r.confidence <= 70}
                 <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ Confirm</button>
               {/if}
+              <button onclick={() => startEdit(r.session_instance_tune_id)}>✎ Edit</button>
               <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 Remove</button>
             </div>
           {/if}
           {#if !r._temp}
-            <div class="seam" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)}>
-              {#if activeSeam === `after:${r.session_instance_tune_id}`}
-                <span class="seam-line"></span>
-                {#if ti < seg.tunes.length - 1}
-                  <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>Split</button>
-                {/if}
-              {:else}<span class="seam-plus">＋</span>{/if}
-            </div>
+            {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
+              <!-- last tune of the open set: this seam IS the end (append) point -->
+              <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
+                {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
+              </div>
+            {:else}
+              <div class="seam" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)}>
+                {#if activeSeam === `after:${r.session_instance_tune_id}`}
+                  <span class="seam-line"></span>
+                  {#if ti < seg.tunes.length - 1}
+                    <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>Split</button>
+                  {/if}
+                {:else}<span class="seam-plus">＋</span>{/if}
+              </div>
+            {/if}
           {/if}
         {/each}
       </div>
@@ -965,9 +1091,12 @@
     {:else}
       <p class="empty">No tunes yet — log one below.</p>
     {/each}
-    {#if ordered.length}
-      <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
-        {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋ insert here</span>{/if}
+    {#if ordered.length && !endIsOpen}
+      <!-- closed end (trailing break): the end cursor starts a NEW set here -->
+      <div class="seam end-seam new-set-end" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
+        {#if activeSeam === 'end'}
+          <span class="seam-line"></span><span class="seam-hint">new set</span>
+        {:else}<span class="seam-plus">＋ new set</span>{/if}
       </div>
     {/if}
   </div>
@@ -998,18 +1127,30 @@
       </ul>
     {/if}
 
+    {#if editingId != null}
+      <div class="edit-banner">
+        <span class="edit-label">Editing <b>{editingName}</b> — pick a match, or type a new name</span>
+        <button class="edit-unlink" onclick={unlinkEdit} title="Drop the catalog link, keep the text">Unlink</button>
+      </div>
+    {/if}
+
     <div class="composer">
       <input
-        placeholder="Search or type a tune…"
+        placeholder={editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…'}
         bind:value={input}
         bind:this={inputEl}
         oninput={onInput}
         onblur={stopTyping}
         onkeydown={(e) => e.key === 'Enter' && commit()}
       />
-      <button onmousedown={(e) => e.preventDefault()} onclick={commit}>Log</button>
-      {#if activeSeam === 'end'}
-        <button class="endset" title="End the current set" disabled={!lastRecordId} onclick={endSet}>End set</button>
+      <button onmousedown={(e) => e.preventDefault()} onclick={commit}>{editingId != null ? 'Save' : 'Log'}</button>
+      {#if editingId != null}
+        <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>
+      {:else if activeSeam === 'end'}
+        <!-- open set at the end: offer to close it (yellow). closed end: nothing to end. -->
+        {#if endIsOpen}
+          <button class="endset hot" title="End the current set" onclick={endSet}>End set</button>
+        {/if}
       {:else}
         <button class="done-btn" title="Back to the end" onclick={goToEnd}>Done</button>
       {/if}

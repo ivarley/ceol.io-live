@@ -65,9 +65,20 @@ class OpRejected(Exception):
 # --- Serialization --------------------------------------------------------
 
 # Column order for the record SELECTs below; one place to keep them in sync.
+# Aliased to `sit` because every SELECT LEFT JOINs `tune t` to surface tune_type
+# (the catalog type drives the per-set "Reels/Jigs/Mixed" label in the UI).
 _RECORD_COLS = (
-    "session_instance_tune_id, tune_id, name, order_position, record_type, "
-    "source, confidence, deleted, started_by_person_id, key_override, setting_override"
+    "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
+    "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
+    "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name"
+)
+# LEFT JOIN tune (type), and the creating user -> person (who logged it, for the
+# per-set "Logged by X · time" tray; spec 021 §19/§F).
+_RECORD_FROM = (
+    "FROM session_instance_tune sit "
+    "LEFT JOIN tune t ON t.tune_id = sit.tune_id "
+    "LEFT JOIN user_account cu ON cu.user_id = sit.created_by_user_id "
+    "LEFT JOIN person cp ON cp.person_id = cu.person_id"
 )
 
 
@@ -84,14 +95,19 @@ def _record_to_dict(row):
         "started_by_person_id": row[8],
         "key_override": row[9],
         "setting_override": row[10],
+        "tune_type": row[11],
+        # ISO string (not a datetime) so the event payload is json.dumps-able and
+        # the client can new Date() it.
+        "logged_at": row[12].isoformat() if row[12] else None,
+        "logged_by": row[13],
     }
 
 
 def _load_record(cur, session_instance_id, record_id):
     cur.execute(
         f"""
-        SELECT {_RECORD_COLS} FROM session_instance_tune
-        WHERE session_instance_tune_id = %s AND session_instance_id = %s
+        SELECT {_RECORD_COLS} {_RECORD_FROM}
+        WHERE sit.session_instance_tune_id = %s AND sit.session_instance_id = %s
         """,
         (record_id, session_instance_id),
     )
@@ -100,7 +116,7 @@ def _load_record(cur, session_instance_id, record_id):
 
 def _reselect(cur, record_id):
     cur.execute(
-        f"SELECT {_RECORD_COLS} FROM session_instance_tune WHERE session_instance_tune_id = %s",
+        f"SELECT {_RECORD_COLS} {_RECORD_FROM} WHERE sit.session_instance_tune_id = %s",
         (record_id,),
     )
     return _record_to_dict(cur.fetchone())
@@ -706,9 +722,9 @@ def live_bootstrap(session_instance_id):
 
         cur.execute(
             f"""
-            SELECT {_RECORD_COLS} FROM session_instance_tune
-            WHERE session_instance_id = %s AND deleted = FALSE
-            ORDER BY order_position
+            SELECT {_RECORD_COLS} {_RECORD_FROM}
+            WHERE sit.session_instance_id = %s AND sit.deleted = FALSE
+            ORDER BY sit.order_position
             """,
             (session_instance_id,),
         )
@@ -719,7 +735,7 @@ def live_bootstrap(session_instance_id):
 
         cur.execute(
             """
-            SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path
+            SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path, s.timezone
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -739,6 +755,10 @@ def live_bootstrap(session_instance_id):
                 "first_name": getattr(current_user, "first_name", ""),
                 "last_name": getattr(current_user, "last_name", ""),
             },
+            # Display tz for "logged at" times: viewer's own tz wins, session tz is
+            # the fallback (mirrors the app's format_datetime_tz precedence).
+            "user_timezone": getattr(current_user, "timezone", None),
+            "session_timezone": meta[6] if meta else None,
             "session_id": meta[0] if meta else None,
             "notes": meta[1] if meta else None,
             "log_complete": bool(meta[2]) if meta else False,
