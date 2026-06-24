@@ -614,8 +614,8 @@ main {
   background: #fbfbf6; border-radius: 6px; padding: 4px 8px; min-height: 56px;
   display: flex; align-items: center; overflow: hidden;
 }
-.deep-staff .abc-render { width: 100%; }
-.deep-staff .abc-render svg { display: block; width: 100%; height: auto; }
+.deep-staff .incipit { width: 100%; display: flex; align-items: center; justify-content: center; }
+.deep-staff .incipit-img { display: block; width: 100%; height: auto; }
 .deep-noabc { color: #9a8f6a; font-size: 13px; font-style: italic; margin: 0 auto; }
 .deep-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .deep-badge {

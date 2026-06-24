@@ -43,7 +43,7 @@ from database import (
     extract_abc_incipit,
 )
 from auth import create_session
-from api_routes import api_login_required, segment_records_into_sets
+from api_routes import api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64
 from fractional_indexing import generate_append_position, generate_position_between
 
 
@@ -805,16 +805,61 @@ _TYPE_METER = {
 }
 
 
-def _build_incipit_abc(incipit_abc, full_abc, key, tune_type):
-    """A complete, renderable incipit ABC (headers + first bars) for abcjs, or None.
-    Prefer the cached incipit; else derive it from the full ABC."""
-    notes = (incipit_abc or "").strip()
-    if not notes and full_abc:
-        notes = (extract_abc_incipit(full_abc, tune_type) or "").strip()
+def _wrap_abc(notes, key, tune_type):
+    """Wrap bare ABC notes with the headers the renderer needs."""
+    notes = (notes or "").strip()
     if not notes:
         return None
+    if notes.startswith("X:"):
+        return notes
     meter = _TYPE_METER.get(tune_type, "4/4")
     return f"X:1\nM:{meter}\nL:1/8\nK:{key or 'D'}\n{notes}"
+
+
+def _ensure_incipit(cur, tune_id, want_full=False):
+    """Return the cached incipit image (base64), rendering it from ABC via the
+    abc-renderer service and caching it if missing (notation is always the service's
+    job — the app never renders client-side). Optionally also render+cache the full
+    image (for the drawer's incipit/full toggle). None if there's no ABC to render."""
+    cur.execute(
+        """
+        SELECT ts.setting_id, ts.key, ts.incipit_abc, ts.abc, ts.incipit_image, ts.image, t.tune_type
+        FROM tune_setting ts JOIN tune t ON t.tune_id = ts.tune_id
+        WHERE ts.tune_id = %s ORDER BY (ts.incipit_image IS NULL), ts.setting_id LIMIT 1
+        """,
+        (tune_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    setting_id, key, incipit_abc, abc, incipit_image, image, tune_type = row
+    need_inc = incipit_image is None
+    need_full = want_full and image is None
+    if not need_inc and not need_full:
+        return bytea_to_base64(incipit_image)
+
+    inc_text = (incipit_abc or "").strip() or (extract_abc_incipit(abc, tune_type) if abc else "")
+    inc_png = None
+    if need_inc and inc_text:
+        inc_png = render_abc_to_png(_wrap_abc(inc_text, key, tune_type), is_incipit=True)
+    full_png = None
+    if need_full and abc:
+        full_png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=False)
+
+    sets, params = [], []
+    if inc_png:
+        sets.append("incipit_image = %s"); params.append(psycopg2.Binary(inc_png))
+    if full_png:
+        sets.append("image = %s"); params.append(psycopg2.Binary(full_png))
+    if sets:
+        sets.append("cache_updated_date = (NOW() AT TIME ZONE 'UTC')")
+        params.append(setting_id)
+        cur.execute(f"UPDATE tune_setting SET {', '.join(sets)} WHERE setting_id = %s", params)
+
+    if inc_png:
+        import base64
+        return base64.b64encode(inc_png).decode()
+    return bytea_to_base64(incipit_image)
 
 
 @api_login_required
@@ -894,23 +939,52 @@ def live_deep_search(session_instance_id):
             for r in rows
         ]
 
-        # one pass to fetch the best cached setting (incipit/abc/key) for these tunes
+        # one pass for the cached incipit IMAGE + whether the tune is renderable (has
+        # ABC). Notation is rendered server-side by the abc-renderer service; the card
+        # shows the cached image inline, or lazily asks the incipit endpoint to render
+        # + cache it (no client-side rendering).
         if results:
             ids = [r["tune_id"] for r in results]
             cur.execute(
                 """
-                SELECT DISTINCT ON (tune_id) tune_id, incipit_abc, abc, key
+                SELECT DISTINCT ON (tune_id) tune_id, incipit_image,
+                       ((incipit_abc IS NOT NULL AND incipit_abc <> '') OR abc IS NOT NULL) AS can_render
                 FROM tune_setting WHERE tune_id = ANY(%s)
-                ORDER BY tune_id, (incipit_abc IS NULL OR incipit_abc = ''), setting_id
+                ORDER BY tune_id, (incipit_image IS NULL), setting_id
                 """,
                 (ids,),
             )
             settings = {row[0]: row for row in cur.fetchall()}
             for r in results:
                 s = settings.get(r["tune_id"])
-                r["incipit_abc"] = _build_incipit_abc(s[1], s[2], s[3], r["tune_type"]) if s else None
+                r["incipit_image"] = bytea_to_base64(s[1]) if (s and s[1]) else None
+                r["can_render"] = bool(s[2]) if s else False
 
         return jsonify({"success": True, "results": results})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def live_incipit(session_instance_id, tune_id):
+    """Incipit image (base64) for a tune, rendered+cached on demand via the renderer
+    service if missing. `?kind=both` also renders the full image (drawer toggle).
+    Used by the deep-search cards (lazy, background) so notation is always service-
+    rendered, never client-side."""
+    kind = (request.args.get("kind") or "").strip().lower()
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            img = _ensure_incipit(cur, tune_id, want_full=(kind == "both"))
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            img = None
+        return jsonify({"success": True, "image": img})
     finally:
         conn.close()
 

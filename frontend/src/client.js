@@ -120,6 +120,23 @@ export async function deepSearch(config, q, type, preferType, mode) {
   }
 }
 
+// Incipit image (base64) for a tune — rendered+cached server-side on demand if
+// missing. `kind='both'` also renders the full image. Returns null if no notation.
+export async function fetchIncipit(config, tuneId, kind) {
+  const q = kind ? `?kind=${kind}` : ''
+  try {
+    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/incipit/${tuneId}${q}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.image || null
+  } catch {
+    return null
+  }
+}
+
 // Search people to add to attendance (§F editor); flags who's already checked in.
 export async function peopleSearch(config, q) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people/search?q=${encodeURIComponent(q)}`, {

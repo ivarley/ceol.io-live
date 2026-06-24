@@ -3,8 +3,8 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, livePeople, peopleSearch, deepSearch, openStream } from './client.js'
-  import Abc from './Abc.svelte'
+  import { bootstrap, sendOp, sendTyping, searchTunes, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream } from './client.js'
+  import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
@@ -533,6 +533,9 @@
       tuneId: r.tune_id,
       apiEndpoint: `/api/sessions/${config.sessionPath}/${config.sessionInstanceId}/tunes/${r.tune_id}`,
     })
+    // background-render+cache the notation (incipit + full) so the drawer shows dots
+    // next time (the abc-renderer service does the rendering, never the client)
+    fetchIncipit(config, r.tune_id, 'both')
   }
 
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
@@ -1607,7 +1610,7 @@
                 <span class="deep-type">{r.tune_type || ''}</span>
               </div>
               <div class="deep-staff">
-                {#if r.incipit_abc}<Abc abc={r.incipit_abc} />{:else}<span class="deep-noabc">♪ no notation cached</span>{/if}
+                <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
               </div>
               <div class="deep-meta">
                 {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}

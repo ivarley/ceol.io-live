@@ -57,10 +57,12 @@ def main():
         print(f"2. results for 'silver': {cards[:5]} ({len(cards)})")
         if not cards: fail.append("deep search 'silver' should return results")
         if not any("Silver" in c for c in cards): fail.append(f"expected a Silver match; got {cards[:5]}")
-        # notation rendered (abcjs svg) on at least one card
-        svgs = pg.eval_on_selector_all(".deep-staff .abc-render svg", "e=>e.length")
-        print(f"   notation SVGs rendered: {svgs}")
-        if svgs == 0: fail.append("expected at least one rendered notation (abcjs svg)")
+        # notation shows as a server-rendered image (Silver Spear is cached); lazy
+        # ones render on scroll, so give them a moment
+        pg.wait_for_timeout(1500)
+        imgs = pg.eval_on_selector_all(".deep-staff .incipit-img", "e=>e.length")
+        print(f"   notation images shown: {imgs}")
+        if imgs == 0: fail.append("expected at least one server-rendered notation image")
 
         # open the filter popout, click "Reels" -> results reels only + removable pill
         pg.click(".deep-filter-tab"); pg.wait_for_selector(".deep-filters .deep-type-chip", timeout=3000)
