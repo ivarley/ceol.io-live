@@ -1,5 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
+  import { fly } from 'svelte/transition'
+  import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, searchTunes, tuneDetail, openStream } from './client.js'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
@@ -55,10 +57,12 @@
   let person = $state(config.currentPerson || {})
   let roster = $state([]) // who's connected right now (ephemeral presence, §F)
   let typers = $state([]) // who's currently composing (ephemeral typing, §F)
-  let activity = $state(null) // transient "X did Y" notice for others' changes (§E)
-  let activitySeq = 0
+  let activities = $state([]) // transient "X did Y" toasts for others' changes (§E); stack up to MAX
+  let activityId = 0
+  const MAX_TOASTS = 3 // cap concurrent toasts; oldest drops off
 
   let es = null
+  let headerH = $state(0) // measured header height, so floating toasts hover just below it
   let inputEl // the composer input element (for stay-hot refocus)
   let setsEl // the scrolling list element
   let atEnd = $state(true) // is the list scrolled to (near) the bottom?
@@ -434,9 +438,11 @@
     if (!d.actor || d.actor.person_id == null || d.actor.person_id === person.person_id) return
     const label = remoteLabel(d)
     if (!label) return
-    const seq = ++activitySeq
-    activity = { text: `${d.actor.name || 'Someone'} ${label}`, color: colorForPerson(d.actor.person_id) }
-    setTimeout(() => { if (seq === activitySeq) activity = null }, 4000)
+    const id = ++activityId
+    // Append; keep only the most recent MAX_TOASTS so a burst from several people
+    // stacks (newest at the bottom) instead of one clobbering the last.
+    activities = [...activities, { id, text: `${d.actor.name || 'Someone'} ${label}`, color: colorForPerson(d.actor.person_id) }].slice(-MAX_TOASTS)
+    setTimeout(() => { activities = activities.filter((a) => a.id !== id) }, 4000)
   }
 
   // Apply one server-authoritative op (spec 024). Dispatch by op_type.
@@ -947,7 +953,7 @@
 </script>
 
 <main>
-  <div class="topnav">
+  <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
       <div class="appbar-actions">
@@ -996,14 +1002,21 @@
     </header>
   </div>
 
+  <!-- Transient toasts (other users' activity, reconnect summary) hover just below
+       the fixed header, sliding in from / out to the top, under the header. -->
+  <div class="toasts" style="top:{headerH}px">
+    {#each activities as a (a.id)}
+      <p class="toast activity" style="background:{a.color}" transition:fly={{ y: -24, duration: 240 }} animate:flip={{ duration: 180 }}>
+        {a.text}
+      </p>
+    {/each}
+    {#if syncMsg}
+      <p class="toast sync-msg" transition:fly={{ y: -24, duration: 240 }}>↻ {syncMsg}</p>
+    {/if}
+  </div>
+
   <div class="feed-msgs">
     {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
-    {#if activity}
-      <p class="activity"><span class="dot" style="background:{activity.color}"></span>{activity.text}</p>
-    {/if}
-    {#if syncMsg}
-      <p class="sync-msg">↻ {syncMsg}</p>
-    {/if}
     {#if queuedCount > 0}
       <p class="offline-banner">
         ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
