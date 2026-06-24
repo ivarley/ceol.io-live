@@ -234,27 +234,8 @@ export class PillRenderer {
                     labelText = tuneType;
                 }
             } else if (types.length > 1) {
-                // Multiple types - find the majority
-                let maxCount = 0;
-                let majorityType = '';
-                for (const type in typeCounts) {
-                    if (typeCounts[type]! > maxCount) {
-                        maxCount = typeCounts[type]!;
-                        majorityType = type;
-                    }
-                }
-
-                // Check if there's a clear majority (more than 50%)
-                if (maxCount > linkedCount / 2) {
-                    // Pluralize the majority type if there's more than one tune
-                    if (tuneSet.length > 1) {
-                        labelText = this.pluralizeTuneType(majorityType);
-                    } else {
-                        labelText = majorityType;
-                    }
-                } else {
-                    labelText = 'Mixed';
-                }
+                // Multiple distinct types - the set is mixed
+                labelText = 'Mixed';
             }
         }
 
