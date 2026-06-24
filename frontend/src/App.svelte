@@ -563,6 +563,7 @@
     }
     if (d.event_id && d.event_id > highWater) highWater = d.event_id
     noteRemote(d)
+    const prevLastId = lastRecordId // before applying, to detect an append at the end
     switch (d.op_type) {
       case 'attribute_set_starter': // applies to the whole set -> many records
         for (const r of d.records || []) put(r)
@@ -574,6 +575,16 @@
       case 'corroborate': // server collapsed a duplicate into this record (§H30)
         put(d.record)
         flashId(d.record?.session_instance_tune_id)
+        // Live-logging follow-the-end (§E): if my cursor was parked right after the
+        // previously-last tune and someone's tune just landed at the very end, move
+        // my cursor to the end so my next add goes AFTER theirs, not before.
+        if (
+          typeof insertAfterId === 'number' && insertAfterId === prevLastId &&
+          d.record?.record_type === 'tune' &&
+          lastRecordId === d.record.session_instance_tune_id
+        ) {
+          insertAfterId = null
+        }
         break
       case 'set_break':
         if (d.removed) drop(d.record_id)
