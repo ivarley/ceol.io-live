@@ -7,6 +7,11 @@ services:
     startCommand: "flask --app app run --host=0.0.0.0"
     plan: free
     envVars:
+      # Pin Python explicitly — without this Render falls back to its legacy 3.7
+      # default, where the spec-024 streaming deps (asyncpg/starlette/uvicorn) won't
+      # install. Must match the streaming + cron services.
+      - key: PYTHON_VERSION
+        value: "3.11.0"
       - key: NODE_VERSION
         value: "18"
       # Public URL of the streaming sidecar (below), e.g. https://streaming.ceol.io

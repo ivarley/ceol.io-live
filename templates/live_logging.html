@@ -18,7 +18,11 @@
   </script>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#0e0e10">
-  <link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
+  <!-- Favicons (the live shell doesn't extend base.html, so mirror its icon links). -->
+  <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/images/android-chrome-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/images/android-chrome-512x512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/images/apple-touch-icon.png">
   <!-- Reuse the legacy tune-detail drawer verbatim (same module + styles + incipit
        rendering) so it matches the rest of the app exactly. -->
   <link rel="stylesheet" href="/static/css/tune_detail_modal.css">
