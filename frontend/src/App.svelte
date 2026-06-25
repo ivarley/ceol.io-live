@@ -5,7 +5,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream } from './client.js'
   import Incipit from './Incipit.svelte'
-  import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
+  import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
 
   let { config } = $props()
@@ -16,6 +16,11 @@
   // op_id -> {tempId, name, op_type, payload, status, ts}. status 'sending' = online
   // optimistic in-flight (§A2); 'queued' = offline, persisted to IndexedDB (§G).
   const pending = new SvelteMap()
+  // temp record id ("temp-<op_id>") -> real server id, learned as ops settle. Lets a
+  // queued op whose anchor (after/before/record_id) points at a still-temp record be
+  // remapped to the real id at send time, so offline mid-set inserts don't send
+  // "temp-..." to the server (#5b).
+  const tempToReal = new Map()
   const flashing = new SvelteMap() // record id -> {kind:'mine'|'remote'|'merge', color, tok} (§39/§E)
   let flashSeq = 0
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
@@ -64,6 +69,7 @@
   const MAX_TOASTS = 3 // cap concurrent toasts; oldest drops off
   let mergeNudge = $state(null) // {name, payload} when my append merged into a dup (§D16)
   let mergeNudgeSeq = 0
+  let reconcile = $state(null) // {items:[{op_type,name,reason,message}]} reconnect review (§G)
 
   let es = null
   let headerH = $state(0) // measured header height, so floating toasts hover just below it
@@ -497,7 +503,13 @@
     selectedId = null
   }
   function confirmRow(id) {
-    op('set_confidence', { record_id: id, confidence: 100 }, 'Confirm')
+    // Optimistic + offline-queued (like change/remove/set-starter): patch confidence,
+    // reconcile by op_id, undo on reject. Works offline via trySend's queue (§G).
+    const prev = byId.get(id)
+    if (prev) byId.set(id, { ...prev, confidence: 100 })
+    const op_id = crypto.randomUUID()
+    flashId(id)
+    trySend({ op_id, op_type: 'set_confidence', payload: { record_id: id, confidence: 100 }, status: 'sending', ts: Date.now(), prev })
     selectedId = null
   }
   function removeRow(id) {
@@ -637,6 +649,7 @@
     if (d.op_id && pending.has(d.op_id)) {
       const entry = pending.get(d.op_id) // settle our optimistic/queued op...
       if (entry.tempId) {
+        if (d.record) tempToReal.set(entry.tempId, d.record.session_instance_tune_id) // anchor remap (#5b)
         if (insertAfterId === entry.tempId) insertAfterId = d.record?.session_instance_tune_id ?? null
         byId.delete(entry.tempId) // ...drop its optimistic temp record
       }
@@ -698,23 +711,6 @@
     scheduleSnapshot() // keep the offline snapshot fresh
   }
 
-  async function op(op_type, payload, label) {
-    error = ''
-    // Chunk 1 only queues add_tune offline; other ops need connectivity. Fail
-    // gracefully with a notice rather than a raw error (full offline support later).
-    if (!navigator.onLine) {
-      notice = `You're offline — ${label || op_type} isn't available offline yet.`
-      return
-    }
-    try {
-      const res = await sendOp(config, op_type, payload)
-      if (res.rejected) notice = res.message || `${label || op_type}: ${res.reason}`
-    } catch (e) {
-      if (e.networkError) notice = `You're offline — ${label || op_type} isn't available offline yet.`
-      else error = e.message
-    }
-  }
-
   // Hold an op for reconnect replay (persisted to IndexedDB, §G).
   // Reflect an op's status on its optimistic temp record (sending vs queued).
   function markTempStatus(entry, st) {
@@ -743,7 +739,7 @@
     }
     if (entry.tempId) byId.delete(entry.tempId)
     if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
-    if (entry.op_type === 'change_tune' && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit
+    if ((entry.op_type === 'change_tune' || entry.op_type === 'set_confidence') && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit / confirm
     if (entry.prevRecords) for (const r of entry.prevRecords) byId.set(r.session_instance_tune_id, r) // revert set-starter
   }
 
@@ -752,10 +748,18 @@
     queueDelete(entry.op_id)
     if (res.rejected) {
       undoOp(entry)
-      notice = res.message || `${entry.op_type}: ${res.reason}`
+      // An offline-originated op that the server rejected on flush is collected for the
+      // reconciliation review (§G) — losing offline work to a transient toast is too easy
+      // to miss. Online rejections stay a quick inline notice.
+      if (entry._queued && flushingNow) {
+        flushRejects.push({ op_type: entry.op_type, name: entry.name || entry.payload?.name || null, reason: res.reason, message: res.message })
+      } else {
+        notice = res.message || `${entry.op_type}: ${res.reason}`
+      }
       return
     }
     if (entry.tempId) byId.delete(entry.tempId) // drop optimistic temp; the real record arrives below / via SSE
+    if (entry.tempId && res.record) tempToReal.set(entry.tempId, res.record.session_instance_tune_id) // for anchor remap (#5b)
     if (res.records) for (const r of res.records) put(r) // multi-record ops (set-starter)
     if (res.record) {
       if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
@@ -771,6 +775,25 @@
     }
   }
 
+  // Replace temp anchor/target ids in an op's payload with their real server ids
+  // (#5b). Anchors (after/before_record_id) that are still unresolved fall back to
+  // null (append) rather than erroring; an unresolved record_id target means the row
+  // never persisted, so the op is skipped. Returns a COPY (entry.payload is kept for
+  // local byId lookups, which are still keyed by the temp id until settle).
+  function remapAnchors(entry) {
+    const p = { ...entry.payload }
+    const isTemp = (v) => typeof v === 'string' && v.startsWith('temp-')
+    const fixAnchor = (v) => (isTemp(v) ? (tempToReal.get(v) ?? null) : v)
+    if ('after_record_id' in p) p.after_record_id = fixAnchor(p.after_record_id)
+    if ('before_record_id' in p) p.before_record_id = fixAnchor(p.before_record_id)
+    if (isTemp(p.record_id)) {
+      const real = tempToReal.get(p.record_id)
+      if (real == null) return { payload: p, skip: true } // target never reached the server
+      p.record_id = real
+    }
+    return { payload: p, skip: false }
+  }
+
   // Send a pending op (any type). Success -> settle; network failure -> queue it
   // (persisted for replay); server error -> undo + surface. Idempotent by op_id.
   async function trySend(entry) {
@@ -782,8 +805,16 @@
       await markQueued(entry)
       return
     }
+    // Remap any temp anchor/target ids to their real server ids (an offline mid-set
+    // insert / burst can reference a record that hadn't settled yet, #5b).
+    const { payload, skip } = remapAnchors(entry)
+    if (skip) { // the target record never reached the server -> drop this orphaned op
+      pending.delete(entry.op_id); await queueDelete(entry.op_id)
+      if (entry.tempId) byId.delete(entry.tempId)
+      return
+    }
     try {
-      const res = await sendOp(config, entry.op_type, entry.payload, entry.op_id)
+      const res = await sendOp(config, entry.op_type, payload, entry.op_id)
       settleOp(entry, res)
     } catch (e) {
       if (e.networkError) await markQueued(entry)
@@ -798,9 +829,14 @@
 
   // Replay queued ops in offline order; stop if we go offline again mid-drain.
   let flushing = false
+  let flushingNow = false // true only while draining the queue (gates reconcile collection)
+  let flushRejects = []   // offline ops the server rejected this flush -> reconciliation review (§G)
   async function flush() {
     if (flushing) return
     flushing = true
+    flushingNow = true
+    flushRejects = []
+    const hadQueued = [...pending.values()].some((e) => e.status === 'queued')
     try {
       const queued = [...pending.values()].filter((e) => e.status === 'queued').sort((a, b) => a.ts - b.ts)
       for (const entry of queued) {
@@ -809,6 +845,14 @@
       }
     } finally {
       flushing = false
+      flushingNow = false
+    }
+    // Major-divergence review (§G): if offline work couldn't be applied (e.g. someone
+    // removed a tune you edited), surface a review of exactly what was dropped rather
+    // than a fleeting toast. The clean case (all flushed) stays the lightweight summary.
+    if (hadQueued && flushRejects.length) {
+      reconcile = { items: flushRejects.slice() }
+      notice = '' // the modal supersedes the inline notice
     }
   }
 
@@ -846,6 +890,25 @@
     trySend({ op_id, name: n.name, op_type: 'add_tune', payload: { ...n.payload, after_record_id: null, before_record_id: null, no_merge: true }, status: 'sending', ts: Date.now(), tempId })
   }
   const dismissMerge = () => { mergeNudge = null }
+
+  // --- reconnect reconciliation review (§G) ---
+  const RECONCILE_VERB = {
+    add_tune: 'Add', change_tune: 'Edit', remove_tune: 'Remove', set_break: 'Set break',
+    set_confidence: 'Confirm', attribute_set_starter: 'Set starter', edit_notes: 'Edit notes',
+  }
+  const RECONCILE_REASON = {
+    target_deleted: 'it had already been removed',
+    not_found: 'it no longer exists',
+    target_removed: 'it had already been removed',
+  }
+  function reconcileDesc(item) {
+    const verb = RECONCILE_VERB[item.op_type] || item.op_type
+    return item.name ? `${verb} “${item.name}”` : verb
+  }
+  function reconcileWhy(item) {
+    return RECONCILE_REASON[item.reason] || item.message || item.reason || 'a conflict'
+  }
+  const dismissReconcile = () => { reconcile = null }
 
   // Start a NEW set in the gap before `nextFirstId` (the between-sets seam): drop a
   // tune there plus a trailing break that separates it from the next set. The break
@@ -1043,7 +1106,17 @@
   // so typing "ged" surfaces tunes whose notation starts with those notes.
   async function matchFor(q) {
     const m = await liveMatch(config, q, cursorSetType())
-    if (m.results.length) return m
+    if (m.results.length) {
+      matchCachePut(config.sessionInstanceId, q, m) // remember for offline linking (#5c)
+      return m
+    }
+    // Offline (server unreachable): fall back to the match cache so typing can still
+    // LINK a previously-seen tune instead of always logging unlinked. Only when offline
+    // — an online empty result is the authoritative "no match".
+    if (!navigator.onLine || !reachable) {
+      const cached = await matchCacheGet(config.sessionInstanceId, q).catch(() => null)
+      if (cached && cached.results.length) return cached
+    }
     if (looksLikeAbc(q)) {
       const abc = await deepSearch(config, q, null, cursorSetType(), 'abc')
       return {
@@ -1213,6 +1286,9 @@
             typers = []
           }
         },
+        // Silent half-open stream detected by the watchdog -> full reconnect (re-bootstrap
+        // closes any gap of events missed while the socket was dead).
+        onDead: () => { if (myGen === connSeq) connect() },
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
@@ -1290,8 +1366,30 @@
           if ('name' in entry.payload) patch.name = entry.payload.name
           byId.set(r.session_instance_tune_id, { ...r, ...patch })
         }
+      } else if (entry.op_type === 'set_confidence') {
+        const r = byId.get(entry.payload.record_id)
+        if (r) byId.set(r.session_instance_tune_id, { ...r, confidence: entry.payload.confidence })
+      } else if (entry.op_type === 'attribute_set_starter') {
+        // Re-apply across the set containing the anchor tune (server applies to the whole
+        // set; offline we approximate from the current ordering). started_by_name will
+        // refresh from the SSE echo once the op flushes on reconnect.
+        for (const tid of setTuneIdsContaining(entry.payload.record_id)) {
+          const r = byId.get(tid)
+          if (r) byId.set(tid, { ...r, started_by_person_id: entry.payload.person_id ?? null })
+        }
       }
     }
+  }
+
+  // Tune ids in the same set as a record (run of tunes between surrounding breaks),
+  // from the current ordering — mirrors the server's set bounds for offline re-apply.
+  function setTuneIdsContaining(recordId) {
+    const idx = ordered.findIndex((r) => r.session_instance_tune_id === recordId)
+    if (idx < 0) return []
+    let lo = idx, hi = idx
+    while (lo > 0 && ordered[lo - 1].record_type !== 'break') lo--
+    while (hi < ordered.length - 1 && ordered[hi + 1].record_type !== 'break') hi++
+    return ordered.slice(lo, hi + 1).filter((r) => r.record_type === 'tune').map((r) => r.session_instance_tune_id)
   }
 
   const onOnline = () => {
@@ -1412,6 +1510,25 @@
       <p class="toast sync-msg" transition:fly={{ y: -24, duration: 240 }}>↻ {syncMsg}</p>
     {/if}
   </div>
+
+  <!-- Reconnect reconciliation review (§G): offline changes the server couldn't apply. -->
+  {#if reconcile}
+    <div class="reconcile-scrim" onclick={dismissReconcile}></div>
+    <div class="reconcile" role="dialog" aria-modal="true">
+      <div class="reconcile-head">Some offline changes didn’t stick</div>
+      <p class="reconcile-sub">
+        {reconcile.items.length} change{reconcile.items.length === 1 ? '' : 's'} you made offline couldn’t be applied when you reconnected — usually because someone else changed the same tune first.
+      </p>
+      <ul class="reconcile-list">
+        {#each reconcile.items as it, i (i)}
+          <li><span class="rc-what">{reconcileDesc(it)}</span><span class="rc-why">— {reconcileWhy(it)}</span></li>
+        {/each}
+      </ul>
+      <div class="reconcile-actions">
+        <button class="rc-ok" onclick={dismissReconcile}>Got it</button>
+      </div>
+    </div>
+  {/if}
 
   <div class="feed-msgs">
     {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}

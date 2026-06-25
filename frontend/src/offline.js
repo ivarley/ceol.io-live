@@ -6,9 +6,10 @@
 // Dependency-free: a thin promise wrapper over the raw IndexedDB API.
 
 const DB_NAME = 'ceol-live'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const OPS = 'ops'
 const SNAPS = 'snapshots'
+const MATCH = 'matchcache' // recent name->tune match results, so offline typing can still link (#5c)
 
 let dbPromise = null
 
@@ -20,6 +21,7 @@ function db() {
         const d = req.result
         if (!d.objectStoreNames.contains(OPS)) d.createObjectStore(OPS, { keyPath: 'op_id' })
         if (!d.objectStoreNames.contains(SNAPS)) d.createObjectStore(SNAPS, { keyPath: 'session_instance_id' })
+        if (!d.objectStoreNames.contains(MATCH)) d.createObjectStore(MATCH, { keyPath: 'key' })
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
@@ -84,3 +86,37 @@ export function queueAll(sessionInstanceId) {
 export const snapshotPut = (sessionInstanceId, data) =>
   write(SNAPS, { session_instance_id: sessionInstanceId, ...data })
 export const snapshotGet = (sessionInstanceId) => read(SNAPS, sessionInstanceId)
+
+// --- Match cache (#5c) -----------------------------------------------------
+// Remember online match results so offline typing can still LINK a tune instead of
+// always logging unlinked. Keyed per (instance, query) AND per (instance, tune name)
+// so an offline exact-name match works even for a query string not typed verbatim
+// before. Match results are session-specific (aliases/preferences), hence per-instance.
+
+const _normq = (s) => (s || '').replace(/[‘’‛`´]/g, "'").trim().toLowerCase().replace(/^the\s+/, '')
+
+// Cache a verdict ({exact_match, results:[{tune_id,name,tune_type,...}]}) for a query,
+// plus each linked result tune by its normalized name. Best-effort (never throws).
+export function matchCachePut(sessionInstanceId, q, verdict) {
+  const now = Date.now()
+  const writes = [write(MATCH, { key: `${sessionInstanceId}|q|${_normq(q)}`, verdict, ts: now })]
+  for (const t of verdict.results || []) {
+    if (t.tune_id && t.name) {
+      writes.push(write(MATCH, {
+        key: `${sessionInstanceId}|n|${_normq(t.name)}`,
+        tune: { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null }, ts: now,
+      }))
+    }
+  }
+  return Promise.all(writes).catch(() => {})
+}
+
+// Look up a query offline: exact query-string hit returns the stored verdict; else an
+// exact normalized-name hit returns a single exact match. null if nothing cached.
+export async function matchCacheGet(sessionInstanceId, q) {
+  const byQ = await read(MATCH, `${sessionInstanceId}|q|${_normq(q)}`).catch(() => null)
+  if (byQ && byQ.verdict && (byQ.verdict.results || []).length) return byQ.verdict
+  const byN = await read(MATCH, `${sessionInstanceId}|n|${_normq(q)}`).catch(() => null)
+  if (byN && byN.tune) return { exact_match: true, results: [byN.tune], fromCache: true }
+  return null
+}

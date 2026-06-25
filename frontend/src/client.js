@@ -173,13 +173,36 @@ export async function peopleSearch(config, q) {
 // query param so the first connect only streams the delta; EventSource sends the
 // Last-Event-ID header automatically on reconnect (spec 024 §B). withCredentials
 // lets the Flask-Login cookie flow to the streaming sidecar.
+// The server emits an observable `event: ping` on every idle keepalive (~15s) and,
+// of course, real ops/presence/typing when active. If NOTHING arrives for this long,
+// the socket is silently half-open (a dead connection EventSource didn't error on) —
+// force a full reconnect via onDead. 45s tolerates ~2 missed pings without false alarms.
+const SSE_WATCHDOG_MS = 45000
+
 export function openStream(config, lastEventId, handlers) {
   const base = config.streamingBaseUrl.replace(/\/$/, '')
   const url = `${base}/live/instances/${config.sessionInstanceId}/events?last_event_id=${lastEventId || 0}`
   const es = new EventSource(url, { withCredentials: true })
 
+  // Liveness watchdog: reset on any byte we observe from the server; if it ever
+  // fires, the stream is dead-but-not-errored — close it and ask for a reconnect.
+  let watchdog = null
+  const kick = () => {
+    if (watchdog) clearTimeout(watchdog)
+    watchdog = setTimeout(() => {
+      handlers.onStatus?.('reconnecting')
+      es.close() // clears the watchdog (overridden below) and stops this dead stream
+      handlers.onDead?.()
+    }, SSE_WATCHDOG_MS)
+  }
+  // Ensure the timer never outlives the stream (the app calls es.close() on pagehide/
+  // supersede; the watchdog also calls it).
+  const origClose = es.close.bind(es)
+  es.close = () => { if (watchdog) { clearTimeout(watchdog); watchdog = null }; origClose() }
+
   // All ops arrive as a single 'op' event; op_type is inside the data.
   es.addEventListener('op', (e) => {
+    kick()
     let data
     try {
       data = JSON.parse(e.data)
@@ -191,6 +214,7 @@ export function openStream(config, lastEventId, handlers) {
 
   // Ephemeral presence (no id:, never advances Last-Event-ID).
   es.addEventListener('presence', (e) => {
+    kick()
     try {
       handlers.onPresence?.(JSON.parse(e.data).roster || [])
     } catch {
@@ -199,6 +223,7 @@ export function openStream(config, lastEventId, handlers) {
   })
 
   es.addEventListener('typing', (e) => {
+    kick()
     try {
       handlers.onTyping?.(JSON.parse(e.data).typing || [])
     } catch {
@@ -206,7 +231,10 @@ export function openStream(config, lastEventId, handlers) {
     }
   })
 
-  es.onopen = () => handlers.onStatus?.('live')
+  // Observable keepalive — no payload to handle, just proof the stream is alive.
+  es.addEventListener('ping', () => kick())
+
+  es.onopen = () => { kick(); handlers.onStatus?.('live') }
   es.onerror = () => handlers.onStatus?.('reconnecting')
   return es
 }

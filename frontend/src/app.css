@@ -283,6 +283,30 @@ main {
 .row-actions button.danger { color: #e0594b; }
 .row-actions button.danger:hover { border-color: #e0594b; }
 
+/* ---------- reconnect reconciliation review (§G) ---------- */
+.reconcile-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 100; }
+.reconcile {
+  position: fixed; z-index: 101; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(420px, 92vw); max-height: 80vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.reconcile-head { font-size: 17px; font-weight: 700; color: var(--text); }
+.reconcile-sub { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 8px 0 12px; }
+.reconcile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.reconcile-list li {
+  display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline;
+  padding: 9px 11px; border: 1px solid var(--border); border-left: 3px solid var(--attention);
+  border-radius: 8px; background: var(--bg); font-size: 14px;
+}
+.reconcile-list .rc-what { font-weight: 600; color: var(--text); }
+.reconcile-list .rc-why { color: var(--muted); font-size: 13px; }
+.reconcile-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.reconcile-actions .rc-ok {
+  font: inherit; font-weight: 600; padding: 9px 18px; border: none; border-radius: 8px;
+  background: var(--accent); color: #04122b; cursor: pointer;
+}
+
 /* ---------- tune-detail drawer (slide-out from right, §18) ---------- */
 .drawer-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 90; }
 .drawer {

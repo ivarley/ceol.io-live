@@ -46,6 +46,16 @@ PORT = int(os.environ.get("STREAMING_PORT", 8080))
 SECRET_KEY = os.environ.get("FLASK_SESSION_SECRET_KEY", "dev-secret-key-change-in-production")
 KEEPALIVE_SECONDS = 15
 
+# CORS origin allowlist. The SSE/typing endpoints send credentials (the login
+# cookie), so an unrestricted Access-Control-Allow-Origin + Allow-Credentials would
+# let any site read a logged-in user's live feed. In PROD set STREAMING_ALLOWED_ORIGINS
+# (comma-separated, e.g. "https://ceol.io,https://www.ceol.io") to lock it down. When
+# unset (local dev), we fall back to echoing the request origin so the dev cross-origin
+# setup keeps working. Set to "*" to explicitly keep the permissive behavior.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("STREAMING_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
+
 pool: asyncpg.Pool = None
 
 # One global LISTEN channel for the whole feed (must match live_logging_routes).
@@ -141,11 +151,21 @@ async def authenticate(request):
     return await _user_id_from_bearer(request)
 
 
+def _origin_allowed(origin):
+    """Allow an origin if no allowlist is configured (dev), it's the wildcard, or it's
+    explicitly listed. With credentials we must echo a specific origin (never '*')."""
+    if not ALLOWED_ORIGINS:
+        return True  # dev default: echo the request origin
+    return "*" in ALLOWED_ORIGINS or origin in ALLOWED_ORIGINS
+
+
 def _cors_headers(request):
-    """Echo the request Origin so EventSource(withCredentials) works cross-origin."""
+    """Echo the request Origin (if allowed) so EventSource(withCredentials) works
+    cross-origin. In prod, STREAMING_ALLOWED_ORIGINS restricts which origins get the
+    credentialed CORS grant."""
     origin = request.headers.get("origin")
     headers = {"Cache-Control": "no-cache"}
-    if origin:
+    if origin and _origin_allowed(origin):
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
         headers["Vary"] = "Origin"
@@ -414,7 +434,10 @@ async def events(request):
                 try:
                     msg = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
                 except asyncio.TimeoutError:
-                    yield b": ping\n\n"  # idle keepalive
+                    # Observable keepalive (an `event:`, not a `:` comment) so the client
+                    # can run a liveness watchdog and force a reconnect on a silent
+                    # half-open socket. No `id:` -> doesn't advance Last-Event-ID.
+                    yield b"event: ping\ndata: {}\n\n"
                     continue
                 if msg[0] == "presence":
                     yield _presence_event(msg[1])  # no id: -> not a resume cursor
