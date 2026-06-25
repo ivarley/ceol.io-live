@@ -146,7 +146,9 @@
   }
 
   // The UI infers a presence color from the arrival ordinal (spec 024 §F).
-  const PALETTE = ['#4f9dff', '#46d27a', '#e0b341', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
+  // Player colors. Avoid yellow/gold — that's reserved for the seam / insertion point
+  // / End-set (var(--insert)); a player tinted the same would read as the cursor.
+  const PALETTE = ['#4f9dff', '#46d27a', '#ef8b3d', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
   const colorFor = (seq) => PALETTE[((seq % PALETTE.length) + PALETTE.length) % PALETTE.length]
   const initials = (name) => (name || '?').trim().slice(0, 2).toUpperCase()
 
@@ -239,20 +241,26 @@
     return pluralType([...types][0])
   }
 
-  // "Logged by X · 8:42 PM" for a set — from the most recently added tune in it
-  // (records carry logged_by/logged_at from the server). null if unknown.
+  // "Logged by X, Y · 8:42 PM" for a set — every distinct person who logged a tune in
+  // it (in order of first appearance), with the latest log time. null if unknown.
   function loggedInfo(setTunes) {
+    const seen = new Set()
+    const names = []
     let latest = null
     for (const t of setTunes) {
-      if (!t.logged_at) continue
-      if (!latest || new Date(t.logged_at) > new Date(latest.logged_at)) latest = t
+      if (t.record_type !== 'tune') continue
+      if (t.logged_by) {
+        const key = t.logged_by_person_id ?? t.logged_by
+        if (!seen.has(key)) { seen.add(key); names.push(t.logged_by) }
+      }
+      if (t.logged_at && (!latest || new Date(t.logged_at) > new Date(latest))) latest = t.logged_at
     }
-    if (!latest) return null
+    if (!names.length && !latest) return null
     const opts = { hour: 'numeric', minute: '2-digit' }
     if (displayTz) opts.timeZone = displayTz
     return {
-      who: latest.logged_by || null,
-      when: new Date(latest.logged_at).toLocaleTimeString('en-US', opts),
+      who: names.length ? names.join(', ') : null,
+      when: latest ? new Date(latest).toLocaleTimeString('en-US', opts) : null,
     }
   }
   const lastRecordId = $derived(ordered.length ? ordered[ordered.length - 1].session_instance_tune_id : null)
