@@ -312,7 +312,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     """
                     SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
                            si.location_override, s.location_name, si.log_complete_date, s.session_id,
-                           si.start_time, si.end_time, s.path, si.is_active
+                           si.start_time, si.end_time, s.path, si.is_active, si.logging_mode
                     FROM session_instance si
                     JOIN session s ON si.session_id = s.session_id
                     WHERE s.path = %s AND si.date = %s
@@ -329,7 +329,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     """
                     SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
                            si.location_override, s.location_name, si.log_complete_date, s.session_id,
-                           si.start_time, si.end_time, s.path, si.is_active
+                           si.start_time, si.end_time, s.path, si.is_active, si.logging_mode
                     FROM session_instance si
                     JOIN session s ON si.session_id = s.session_id
                     WHERE si.session_instance_id = %s AND s.path = %s
@@ -340,6 +340,12 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             session_instance = cur.fetchone()
 
             if session_instance:
+                # Beta rollout (spec 024): users opted into the new live editor go straight
+                # to it for any session instance. Everyone else stays on the classic editor.
+                if current_user.is_authenticated and getattr(current_user, "beta_live_logging", False):
+                    cur.close(); conn.close()
+                    return redirect(url_for("live_logging_screen", session_instance_id=session_instance[3]))
+                logging_mode = session_instance[13]
                 # Use s.path from database (index 11) for consistency
                 session_path_from_db = session_instance[11]
                 session_instance_dict = {
@@ -470,6 +476,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     is_session_admin=is_session_admin,
                     is_session_regular=is_regular,
                     attendees=attendees_list,
+                    logging_mode=logging_mode,
                 )
             else:
                 cur.close()
@@ -2885,7 +2892,7 @@ def person_details(person_id=None):
         # Get user account details if exists
         cur.execute(
             """
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password, beta_live_logging
             FROM user_account
             WHERE person_id = %s
         """,
@@ -2905,6 +2912,7 @@ def person_details(person_id=None):
                 created_date,
                 timezone,
                 hashed_password,
+                beta_live_logging,
             ) = user_row
 
             # Get last login from user_session table
@@ -2933,6 +2941,7 @@ def person_details(person_id=None):
                 "timezone": timezone,
                 "timezone_display": get_timezone_display_name(timezone or "UTC"),
                 "has_password": hashed_password is not None and hashed_password != "",
+                "beta_live_logging": beta_live_logging,
             }
 
         # Get sessions this person is associated with

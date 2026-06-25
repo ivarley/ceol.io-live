@@ -569,6 +569,18 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/admin/users/<int:user_id>/beta-logging",
+    "admin_set_beta_logging",
+    admin_set_beta_logging,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/instances/<int:session_instance_id>/logging-mode",
+    "admin_reset_logging_mode",
+    admin_reset_logging_mode,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/save_tunes",
     "save_session_instance_tunes_ajax",
     save_session_instance_tunes_ajax,

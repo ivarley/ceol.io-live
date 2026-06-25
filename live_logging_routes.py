@@ -694,6 +694,13 @@ def live_op(session_instance_id):
                                 "op_id": op_id, "op_type": row[1], **row[2]})
             raise
         event_id = cur.fetchone()[0]
+        # Claim this instance for the live editor (one-way lock): once a live op lands,
+        # the legacy editor is read-only for it (spec 024 beta rollout). No-op after the
+        # first claim; an admin can reset logging_mode back to 'legacy'.
+        cur.execute(
+            "UPDATE session_instance SET logging_mode = 'live' WHERE session_instance_id = %s AND logging_mode <> 'live'",
+            (session_instance_id,),
+        )
         cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
         cur.execute("COMMIT")
 

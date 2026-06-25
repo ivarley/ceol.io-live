@@ -183,6 +183,9 @@ CREATE TABLE session_instance (
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
     comments TEXT,
     log_complete_date TIMESTAMPTZ DEFAULT NULL,
+    -- 'legacy' (classic pill editor) | 'live' (new SSE editor, spec 024). Set 'live' on the
+    -- first live op; the legacy editor is read-only for a 'live' instance (one-way lock).
+    logging_mode VARCHAR(10) NOT NULL DEFAULT 'legacy',
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -228,6 +231,7 @@ CREATE TABLE user_account (
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
+    beta_live_logging BOOLEAN NOT NULL DEFAULT FALSE,  -- opt-in to the new live logger (admin-set, spec 024)
     email_verified BOOLEAN DEFAULT FALSE,
     auto_save_tunes BOOLEAN DEFAULT FALSE,
     auto_save_interval INTEGER DEFAULT 60 CHECK (auto_save_interval IN (10, 30, 60)),

@@ -38,6 +38,72 @@ def api_login_required(f):
     return decorated_function
 
 
+# One-way editor lock (spec 024 beta rollout): once the new live editor has claimed an
+# instance (session_instance.logging_mode='live'), the classic editor is read-only for it.
+LEGACY_LOCKED_MSG = (
+    "This session is being logged in the new (beta) live editor, so the classic editor "
+    "is read-only for it. Open the live editor to make changes, or ask a system admin to "
+    "reset this session to the classic editor."
+)
+
+
+def instance_logging_locked(cur, session_instance_id):
+    """True if the live editor owns this instance (logging_mode='live'); the classic
+    editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
+    cur.execute(
+        "SELECT logging_mode FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    return bool(row) and row[0] == "live"
+
+
+@api_login_required
+def admin_set_beta_logging(user_id):
+    """System-admin only: turn the new live editor on/off for a user (beta rollout).
+    POST /api/admin/users/<user_id>/beta-logging  body {enabled: bool}"""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE user_account SET beta_live_logging = %s WHERE user_id = %s",
+            (enabled, user_id),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "User not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "user_id": user_id, "beta_live_logging": enabled})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def admin_reset_logging_mode(session_instance_id):
+    """System-admin only: reset an instance to the classic editor (undo the one-way lock).
+    POST /api/admin/instances/<id>/logging-mode  body {mode: 'legacy'|'live'}"""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    mode = (request.get_json(silent=True) or {}).get("mode", "legacy")
+    if mode not in ("legacy", "live"):
+        return jsonify({"success": False, "error": "mode must be 'legacy' or 'live'"}), 400
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE session_instance SET logging_mode = %s WHERE session_instance_id = %s",
+            (mode, session_instance_id),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "session_instance_id": session_instance_id, "logging_mode": mode})
+    finally:
+        conn.close()
+
+
 def segment_records_into_sets(rows, type_index=None):
     """Group ordered session_instance_tune rows into sets (spec 023).
 
@@ -3078,6 +3144,16 @@ def delete_tune_ajax(session_instance_tune_id):
             return jsonify({"success": False, "message": "Tune not found"})
 
         (tune_name,) = tune_info
+
+        # One-way lock (spec 024 beta): refuse if the live editor owns this instance.
+        cur.execute(
+            "SELECT session_instance_id FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (session_instance_tune_id,),
+        )
+        _sii_row = cur.fetchone()
+        if _sii_row and instance_logging_locked(cur, _sii_row[0]):
+            cur.close(); conn.close()
+            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
 
         # Save to history before making changes
         audit_user_id = get_current_user_id()
@@ -7004,6 +7080,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
+
+        # One-way lock (spec 024 beta): refuse if the live editor owns this instance —
+        # this bulk save hard-deletes rows absent from its set and emits no events, which
+        # would silently destroy live-editor data.
+        if instance_logging_locked(cur, session_instance_id):
+            cur.close(); conn.close()
+            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
 
         # Get all existing tunes for this session instance. Break records are reconciled
         # separately (they have no stable client identity), so only diff tune rows here.

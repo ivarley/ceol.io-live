@@ -282,6 +282,19 @@
                                                         {% endif %}
                                                     {% endif %}
                                                 </dd>
+
+                                                <dt class="col-sm-4">Live editor (beta):</dt>
+                                                <dd class="col-sm-8">
+                                                    <span id="beta-logging-status">
+                                                        {% if user.beta_live_logging %}<span class="text-success">✓ On</span>{% else %}<span class="text-muted">Off</span>{% endif %}
+                                                    </span>
+                                                    {% if not is_user_profile %}
+                                                        <button id="beta-logging-btn" class="btn btn-sm btn-outline-primary ms-2"
+                                                                data-user-id="{{ user.user_id }}" data-enabled="{{ 'true' if user.beta_live_logging else 'false' }}">
+                                                            {% if user.beta_live_logging %}Turn off{% else %}Turn on{% endif %}
+                                                        </button>
+                                                    {% endif %}
+                                                </dd>
                                             </dl>
                                         </div>
                                         <div class="col-md-6">
@@ -660,6 +673,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.disabled = false;
                 this.textContent = originalText;
             });
+        });
+    }
+
+    // Beta live-editor toggle (system admin only)
+    const betaBtn = document.getElementById('beta-logging-btn');
+    if (betaBtn) {
+        betaBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const userId = this.dataset.userId;
+            const enable = this.dataset.enabled !== 'true'; // flip
+            this.disabled = true;
+            fetch(`/api/admin/users/${userId}/beta-logging`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enable })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('Live editor (beta) ' + (enable ? 'enabled' : 'disabled') + ' for this user.', 'success');
+                    setTimeout(() => window.location.reload(), 800);
+                } else {
+                    showMessage('Error: ' + (data.error || 'failed'), 'error');
+                    this.disabled = false;
+                }
+            })
+            .catch(err => { showMessage('Error: ' + err.message, 'error'); this.disabled = false; });
         });
     }
 
