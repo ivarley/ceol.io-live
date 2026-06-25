@@ -10647,6 +10647,22 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                 tuple(update_values),
             )
 
+            # Broadcast the edit to any live-logging clients watching this instance
+            # (spec 024): emit a change_tune feed event per affected record + NOTIFY,
+            # in the same transaction, so they update in real time. Best-effort — a
+            # failure here must not block the edit itself.
+            try:
+                from live_logging_routes import emit_change_tune
+                cur.execute(
+                    "SELECT session_instance_tune_id FROM session_instance_tune "
+                    "WHERE session_instance_id = %s AND tune_id = %s AND record_type = 'tune' AND deleted = FALSE",
+                    (session_instance_id, tune_id),
+                )
+                for (rid,) in cur.fetchall():
+                    emit_change_tune(cur, session_instance_id, rid, get_current_user_id())
+            except Exception as e:
+                print(f"live broadcast (change_tune) failed: {e}")
+
         conn.commit()
         conn.close()
 

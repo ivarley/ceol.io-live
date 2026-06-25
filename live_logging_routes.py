@@ -137,6 +137,36 @@ def _instance_exists(cur, session_instance_id):
     return cur.fetchone() is not None
 
 
+def emit_change_tune(cur, session_instance_id, record_id, user_id):
+    """Append a `change_tune` feed event for a record + NOTIFY, so connected SSE
+    clients update in real time. Use this when a session_instance_tune row is edited
+    OUTSIDE the op endpoint (e.g. the shared tune-detail modal's REST save) so the
+    live screen still stays in sync. Must run inside the editing transaction (so the
+    event and the row change commit atomically). No-op if the record vanished.
+    Returns the event_id, or None.
+    """
+    record = _reselect(cur, record_id)
+    if not record:
+        return None
+    payload = {
+        "record": record,
+        "actor": {
+            "person_id": getattr(current_user, "person_id", None),
+            "name": (getattr(current_user, "first_name", "") or ""),
+        },
+    }
+    cur.execute(
+        """
+        INSERT INTO session_event (session_instance_id, op_type, payload, op_id, created_by_user_id)
+        VALUES (%s, 'change_tune', %s, NULL, %s) RETURNING event_id
+        """,
+        (session_instance_id, json.dumps(payload), user_id),
+    )
+    event_id = cur.fetchone()[0]
+    cur.execute("SELECT pg_notify(%s, %s)", (LIVE_EVENT_CHANNEL, f"{session_instance_id}:{event_id}"))
+    return event_id
+
+
 # --- Positioning (relational anchor -> authoritative order_position, §C) ---
 
 
