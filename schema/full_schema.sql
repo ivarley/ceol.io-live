@@ -433,6 +433,18 @@ CREATE INDEX idx_session_person_person_id ON session_person (person_id);
 CREATE INDEX idx_session_person_is_regular ON session_person (is_regular);
 CREATE INDEX idx_session_person_is_admin ON session_person (is_admin);
 
+-- Live-logging color (spec 024 §F): a person's stable palette color at a session,
+-- assigned on first appearance and persistent across instances/weeks/restarts.
+-- Deliberately its OWN table (not session_person): a color is not membership and
+-- not attendance, so assigning one must never imply either.
+CREATE TABLE session_logger_color (
+    session_id  INTEGER NOT NULL REFERENCES session(session_id) ON DELETE CASCADE,
+    person_id   INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
+    color       SMALLINT NOT NULL,   -- palette index (0..N-1); UI maps index -> color
+    created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    PRIMARY KEY (session_id, person_id)
+);
+
 -- =============================================================================
 -- DEPENDENT TABLES (Level 2 - depend on level 1 tables)
 -- =============================================================================

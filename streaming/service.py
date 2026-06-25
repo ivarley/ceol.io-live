@@ -155,22 +155,77 @@ def _cors_headers(request):
 # --- Presence (ephemeral, in the streaming service's memory; spec 024 §F) ----
 # Presence ≡ an open authenticated SSE connection. It never touches the DB and is
 # never replayed (sent as `event: presence` WITHOUT an `id:`, so it doesn't advance
-# Last-Event-ID; a reconnect gets a fresh snapshot). Phase 2 chunk 1: arrival
-# ordinals (which the UI maps to a color) are kept in memory; persisting them to
-# session_instance_person.arrival_seq is a deliberate follow-up.
+# Last-Event-ID; a reconnect gets a fresh snapshot).
+#
+# A person's COLOR, however, IS persisted — per (session, person), not per instance
+# — in session_logger_color (spec 024 §F). On first appearance at any instance of a
+# session, a person is assigned the least-used palette index among everyone who's
+# logged at that session; that index is permanent, so a regular is the same color
+# week to week and colors survive streaming restarts / deploys. The roster still
+# ships the index in the `arrival_seq` field, so the client (palette[idx]) is
+# unchanged. (Color != attendance != membership: the color row is its own table, so
+# assigning it never mints a session_person/attendance row — see the migration.)
+
+# Must match the client's PALETTE length in App.svelte (8 colors).
+PALETTE_SIZE = 8
 
 # instance_id -> { conn_id: {queue, person_id, arrival_seq, name} }
 PRESENCE = {}
-# instance_id -> { person_id: arrival_seq }  (monotonic by first arrival; never shrinks)
-_ARRIVALS = {}
+# instance_id -> { person_id: color_idx }  (cache of the persisted color; avoids a DB
+# hit on every typing signal / roster build; populated on connect, never shrinks)
+_COLORS = {}
 _conn_ids = itertools.count(1)
 
 
-def _arrival_seq(instance_id, person_id):
-    arr = _ARRIVALS.setdefault(instance_id, {})
-    if person_id not in arr:
-        arr[person_id] = len(arr)  # next free ordinal; stable for the instance's life
-    return arr[person_id]
+async def _session_color(instance_id, person_id):
+    """Stable per-(session, person) palette index, get-or-assign. Persisted so it's
+    consistent across instances (weeks) and survives restarts. The DB is authoritative:
+    a plain SELECT covers the common already-assigned path (no lock), and only a first
+    assignment takes a per-session advisory lock so concurrent first-time joiners can't
+    both grab the same "least-used" index. The in-memory cache (_COLORS) is refreshed
+    here but never short-circuits this, so it can't drift from the DB on connect."""
+    if person_id is None:
+        return 0
+    async with pool.acquire() as c:
+        sid = await c.fetchval(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = $1",
+            instance_id,
+        )
+        if sid is None:
+            return 0
+        idx = await c.fetchval(
+            "SELECT color FROM session_logger_color WHERE session_id = $1 AND person_id = $2",
+            sid, person_id,
+        )
+        if idx is None:
+            async with c.transaction():
+                # Serialize assignment per session so two simultaneous joiners don't both
+                # compute the same "least-used" index before either has inserted.
+                await c.execute("SELECT pg_advisory_xact_lock($1)", sid)
+                idx = await c.fetchval(
+                    "SELECT color FROM session_logger_color WHERE session_id = $1 AND person_id = $2",
+                    sid, person_id,
+                )
+                if idx is None:
+                    rows = await c.fetch(
+                        "SELECT color FROM session_logger_color WHERE session_id = $1", sid
+                    )
+                    counts = [0] * PALETTE_SIZE
+                    for r in rows:
+                        counts[r["color"] % PALETTE_SIZE] += 1
+                    idx = min(range(PALETTE_SIZE), key=lambda i: counts[i])
+                    await c.execute(
+                        "INSERT INTO session_logger_color (session_id, person_id, color) "
+                        "VALUES ($1, $2, $3) ON CONFLICT (session_id, person_id) DO NOTHING",
+                        sid, person_id, idx,
+                    )
+                    # Re-read in case we lost a race despite the lock (defensive).
+                    idx = await c.fetchval(
+                        "SELECT color FROM session_logger_color WHERE session_id = $1 AND person_id = $2",
+                        sid, person_id,
+                    )
+    _COLORS.setdefault(instance_id, {})[person_id] = idx
+    return idx
 
 
 def _roster(instance_id):
@@ -272,9 +327,14 @@ async def typing(request):
     pid = person["person_id"]
     t = TYPING.setdefault(instance_id, {})
     if body.get("typing"):
+        # A typer is by definition connected, so their color is already cached from
+        # connect; fall back to a lookup only on the rare miss.
+        seq = _COLORS.get(instance_id, {}).get(pid)
+        if seq is None:
+            seq = await _session_color(instance_id, pid)
         t[pid] = {
             "name": person["name"],
-            "arrival_seq": _arrival_seq(instance_id, pid),
+            "arrival_seq": seq,
             "anchor": body.get("anchor"),
             "ts": time.monotonic(),
         }
@@ -315,7 +375,7 @@ async def events(request):
         queue: asyncio.Queue = asyncio.Queue()
 
         person = await _resolve_person(uid)
-        seq = _arrival_seq(session_instance_id, person["person_id"])
+        seq = await _session_color(session_instance_id, person["person_id"])
         conn_id = next(_conn_ids)
         PRESENCE.setdefault(session_instance_id, {})[conn_id] = {
             "queue": queue, "person_id": person["person_id"],

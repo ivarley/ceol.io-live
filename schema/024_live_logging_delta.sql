@@ -66,10 +66,35 @@ CREATE TABLE IF NOT EXISTS corroboration (
 CREATE INDEX IF NOT EXISTS idx_corroboration_record ON corroboration (record_id);
 
 -- 4. session_instance_person.arrival_seq (color ordinal, §F) ---------------
--- Monotonic per-instance by first arrival; the UI infers color from the ordinal
--- (palette[seq mod N]). Claimed on first SSE connect via ON CONFLICT DO NOTHING.
+-- SUPERSEDED by section 5 (live_logger_order on session_instance). Left in place
+-- (harmless, unused) so the migration stays additive; the live service no longer
+-- writes it. See section 5 for why presence-driven arrival order moved off
+-- session_instance_person.
 ALTER TABLE session_instance_person
     ADD COLUMN IF NOT EXISTS arrival_seq INTEGER;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_session_instance_person_arrival
     ON session_instance_person (session_instance_id, arrival_seq)
     WHERE arrival_seq IS NOT NULL;
+
+-- 5. session_logger_color (persisted per-session color, §F) ----------------
+-- A person's palette color at a session, keyed by (session_id, person_id) and
+-- PERMANENT: assigned on first appearance (the least-used palette index among
+-- everyone who's logged at that session, so colors are distinct), then reused for
+-- every future instance. This gives week-to-week visual identity ("Sarah is always
+-- blue here") and survives streaming restarts / deploys for free.
+--
+-- Its OWN table, deliberately. A color is neither membership nor attendance:
+--   * session_person rows imply membership (drive "My Sessions", suggested tunes,
+--     people lists) — minting one to hold a color would make casual loggers look
+--     like members.
+--   * session_instance_person rows imply attendance — same inflation problem.
+-- A standalone table assigns color without touching either, keyed the same way, so
+-- it needs no schema change to session_person and triggers no attendance audit.
+-- (Manual color override, when built, writes the same row.)
+CREATE TABLE IF NOT EXISTS session_logger_color (
+    session_id  INTEGER NOT NULL REFERENCES session(session_id) ON DELETE CASCADE,
+    person_id   INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
+    color       SMALLINT NOT NULL,   -- palette index (0..N-1); UI maps index -> color
+    created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    PRIMARY KEY (session_id, person_id)
+);

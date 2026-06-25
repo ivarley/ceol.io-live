@@ -6,10 +6,33 @@ sees a live roster; arrival ordinals are distinct + stable; leaving updates othe
 Run against an instance with NO browser windows attached (presence is real — open
 browsers legitimately show up). Default instance 2.
 
+NOTE: arrival_seq in the roster is now the PERSISTED per-session color index
+(session_logger_color), not an in-memory ordinal. It's still 0/1 here because this
+test clears its persons' color rows first (deterministic) and ian connects before
+sarah, so least-used assignment hands out 0 then 1. See spike/test_color.py for the
+color-specific assertions. This test cleans up its color rows in a finally.
+
 Usage: venv/bin/python spike/test_phase2_presence.py [FLASK_PORT] [STREAM_PORT] [INSTANCE_ID]
 """
-import sys, json, time, threading, queue
+import sys, os, json, time, threading, queue
 import requests
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from dotenv import load_dotenv; load_dotenv()
+from database import get_db_connection
+
+_TEST_PERSONS = (77128, 2)  # ian, sarah
+
+
+def _clear_colors():
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM session_logger_color WHERE session_id = "
+        "(SELECT session_id FROM session_instance WHERE session_instance_id = %s) "
+        "AND person_id IN %s",
+        (INSTANCE, _TEST_PERSONS),
+    )
+    conn.commit(); conn.close()
 
 FLASK = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
 STREAM = f"http://localhost:{sys.argv[2] if len(sys.argv) > 2 else 8080}"
@@ -58,6 +81,7 @@ def latest(q, timeout=5):
 
 
 def main():
+    _clear_colors()  # deterministic 0/1 assignment regardless of prior runs
     ian = login("ian@ceol.io")
     sarah = login("sarah.oconnor@example.com")
 
@@ -115,4 +139,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        _clear_colors()

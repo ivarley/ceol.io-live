@@ -640,7 +640,7 @@ ${abcBody}`;
         return `
             <div class="tunebook-status-section ${statusClass}">
                 This tune is on your list as
-                <select id="tunebook-status-select" class="tunebook-status-select" onchange="TuneDetailModal.onFieldChange()">
+                <select id="tunebook-status-select" class="tunebook-status-select" onchange="TuneDetailModal.updateTunebookStatus()">
                     <option value="want to learn" ${learnStatus === 'want to learn' ? 'selected' : ''}>Want To Learn</option>
                     <option value="learning" ${learnStatus === 'learning' ? 'selected' : ''}>Learning</option>
                     <option value="learned" ${learnStatus === 'learned' ? 'selected' : ''}>Learned</option>
@@ -1927,8 +1927,63 @@ ${abcBody}`;
      * Status changes now go through the save() function via dirty tracking.
      */
     function updateTunebookStatus() {
-        // This function is deprecated - status changes now use the Save button
-        console.log('updateTunebookStatus called but is deprecated - use Save button instead');
+        // Auto-save the learn-status droplist on change (spec 006), then refresh the
+        // status color + heard-count section IN PLACE (no full re-render, so unsaved
+        // Configure edits aren't clobbered).
+        const sel = document.getElementById('tunebook-status-select');
+        if (!sel) return;
+        const newStatus = sel.value;
+        if (newStatus === originalValues.learn_status) return;
+
+        // Endpoint differs by context: my_tunes updates the person_tune row directly;
+        // session / session_instance use the per-tune status endpoint.
+        let endpoint;
+        if (currentContext === 'my_tunes') {
+            const personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
+            endpoint = `/api/my-tunes/${personTuneId}`;
+        } else {
+            endpoint = `/api/person/tunes/${currentTuneData.tune_id}/status`;
+        }
+
+        sel.disabled = true;
+        fetch(endpoint, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ learn_status: newStatus }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            sel.disabled = false;
+            if (!data.success) {
+                sel.value = originalValues.learn_status; // revert on failure
+                return;
+            }
+            originalValues.learn_status = newStatus;
+            currentTuneData.learn_status = newStatus;
+            if (currentTuneData.person_tune_status) {
+                currentTuneData.person_tune_status.learn_status = newStatus;
+            }
+            // recolor the status container
+            const section = sel.closest('.tunebook-status-section');
+            if (section) {
+                section.className = 'tunebook-status-section tunebook-status-' + newStatus.replace(/ /g, '-');
+            }
+            // refresh heard-count visibility in place (shown for want-to-learn/learning)
+            const heardHtml = buildHeardCountSection(currentTuneData, currentConfig);
+            const existingHeard = document.querySelector('.heard-count-section');
+            if (existingHeard) {
+                if (heardHtml) existingHeard.outerHTML = heardHtml;
+                else existingHeard.remove();
+            } else if (heardHtml && section) {
+                section.insertAdjacentHTML('afterend', heardHtml);
+            }
+            // keep the Save button's dirty-check in sync (no longer dirty from status)
+            onFieldChange();
+        })
+        .catch(() => {
+            sel.disabled = false;
+            sel.value = originalValues.learn_status;
+        });
     }
 
     /**
