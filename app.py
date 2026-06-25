@@ -569,6 +569,12 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/tunes/<int:tune_id>/detail",
+    "get_tune_detail_global",
+    get_tune_detail_global,
+    methods=["GET"],
+)
+app.add_url_rule(
     "/api/admin/users/<int:user_id>/beta-logging",
     "admin_set_beta_logging",
     admin_set_beta_logging,

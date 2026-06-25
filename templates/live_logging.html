@@ -23,9 +23,24 @@
        rendering) so it matches the rest of the app exactly. -->
   <link rel="stylesheet" href="/static/css/tune_detail_modal.css">
   <link rel="stylesheet" href="/static/live/app.css">
+  <!-- The SAME app hamburger menu (shared partial/CSS/JS), rendered here and floated
+       top-right over the Svelte header. Theme vars map the shared menu onto the live
+       editor's always-dark palette. -->
+  <link rel="stylesheet" href="/static/css/hamburger_menu.css">
+  <script src="/static/js/hamburger_menu.js"></script>
+  <style>
+    .live-menu {
+      --hamburger-line-color: #ececef;
+      --dropdown-bg: #18181b; --dropdown-border: #2a2a30; --dropdown-shadow: rgba(0,0,0,0.55);
+      --text-color: #ececef; --border-color: #2a2a30; --hover-bg: #23232c;
+      --disabled-text: #9a9aa3; --bg-color: #0e0e10;
+      position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 8px; z-index: 50;
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
+  <div class="live-menu">{% with hide_dark_mode = True %}{% include 'hamburger_menu.html' %}{% endwith %}</div>
   {% include 'tune_detail_modal.html' %}
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <script src="/static/js/tune_detail_modal.js"></script>

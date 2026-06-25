@@ -75,23 +75,8 @@ main {
 }
 .brand img { height: 26px; display: block; }
 .appbar-actions { display: flex; align-items: center; gap: 6px; position: relative; }
-.hamburger-btn {
-  background: none; border: none; cursor: pointer;
-  display: flex; flex-direction: column; gap: 5px; padding: 8px;
-}
-.hamburger-btn span { width: 24px; height: 2px; border-radius: 2px; background: var(--text); display: block; }
-.hamburger-dropdown {
-  position: absolute; top: calc(100% + 4px); right: 0; min-width: 200px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); padding: 6px; z-index: 60;
-}
-.hamburger-item {
-  display: block; width: 100%; text-align: left; box-sizing: border-box;
-  padding: 11px 14px; color: var(--text); text-decoration: none;
-  font: inherit; font-size: 15px; border: none; background: none; border-radius: 8px; cursor: pointer;
-}
-.hamburger-item:hover { background: #23232c; }
-.hamburger-item.who { color: var(--muted); font-weight: 600; cursor: default; }
+/* The hamburger menu is now the SHARED app menu (static/css/hamburger_menu.css),
+   rendered server-side in the live shell and floated top-right via .live-menu. */
 
 .topbar {
   padding: 12px 16px;

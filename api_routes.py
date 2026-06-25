@@ -59,6 +59,65 @@ def instance_logging_locked(cur, session_instance_id):
 
 
 @api_login_required
+def get_tune_detail_global(tune_id):
+    """Session-agnostic tune detail for the app-wide 'Find a tune' (spec 024). Returns the
+    `session_tune` shape the tune-detail modal renders (used with context 'session_instance'),
+    with no session/instance overrides — just the tune, a default setting's notation,
+    popularity, and the current user's list status."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date FROM tune WHERE tune_id = %s",
+            (tune_id,),
+        )
+        t = cur.fetchone()
+        if not t:
+            return jsonify({"success": False, "message": "Tune not found"}), 404
+        tune_name, tune_type, tunebook_count, tbc_date = t
+
+        # A default setting's notation (lowest setting_id) for the rendered incipit/full.
+        cur.execute(
+            "SELECT setting_id, abc, incipit_abc, image, incipit_image FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
+            (tune_id,),
+        )
+        s = cur.fetchone()
+        setting_id, abc_notation, incipit_abc, abc_image, incipit_image = s if s else (None, None, None, None, None)
+
+        person_tune_status = None
+        if current_user.is_authenticated:
+            cur.execute("SELECT person_id FROM user_account WHERE user_id = %s", (current_user.user_id,))
+            pr = cur.fetchone()
+            if pr:
+                cur.execute(
+                    "SELECT person_tune_id, learn_status, heard_count FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (pr[0], tune_id),
+                )
+                tr = cur.fetchone()
+                person_tune_status = {
+                    "on_list": bool(tr), "person_tune_id": tr[0] if tr else None,
+                    "learn_status": tr[1] if tr else None, "heard_count": tr[2] if tr else None,
+                }
+
+        cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
+        global_play_count = cur.fetchone()[0]
+
+        return jsonify({"success": True, "session_tune": {
+            "tune_id": tune_id, "tune_name": tune_name, "tune_type": tune_type,
+            "alias": None, "setting_id": setting_id, "key": None, "setting_key": None,
+            "name": None, "key_override": None, "setting_override": None,
+            "abc": abc_notation, "incipit_abc": incipit_abc,
+            "image": bytea_to_base64(abc_image), "incipit_image": bytea_to_base64(incipit_image),
+            "tunebook_count": tunebook_count,
+            "tunebook_count_cached_date": tbc_date.isoformat() if tbc_date else None,
+            "times_played": 0, "global_play_count": global_play_count, "play_instances": [],
+            "person_tune_status": person_tune_status,
+        }})
+    finally:
+        conn.close()
+
+
+@api_login_required
 def admin_set_beta_logging(user_id):
     """System-admin only: turn the new live editor on/off for a user (beta rollout).
     POST /api/admin/users/<user_id>/beta-logging  body {enabled: bool}"""

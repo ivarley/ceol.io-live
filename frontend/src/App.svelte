@@ -107,7 +107,6 @@
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
-  let menuOpen = $state(false)
   let expanded = $state(false)
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
@@ -1411,6 +1410,8 @@
 
   onMount(() => {
     connect() // bootstraps records, then hydrateQueue() re-applies any queued ops
+    // The shared app menu's 'Find a tune' calls this in the live context -> insert.
+    window.__liveFindTune = () => openDeep()
     window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
@@ -1432,23 +1433,9 @@
   <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
-      <div class="appbar-actions">
-        <button class="hamburger-btn" aria-label="Menu" onclick={() => (menuOpen = !menuOpen)}>
-          <span></span><span></span><span></span>
-        </button>
-        {#if menuOpen}
-          <div class="hamburger-dropdown show">
-            {#if person.first_name}<span class="hamburger-item who">{person.first_name} {person.last_name || ''}</span>{/if}
-            <button class="hamburger-item" onclick={() => { menuOpen = false; openDeep() }}>🔍 Find a tune</button>
-            <a class="hamburger-item" href="/my-tunes">My Tunes</a>
-            <a class="hamburger-item" href="/me">My Sessions</a>
-            <a class="hamburger-item" href="/add-session">Add A Session</a>
-            <a class="hamburger-item" href="/share">Share</a>
-            <a class="hamburger-item" href="/help">Help</a>
-            <a class="hamburger-item" href="/logout">Log Out</a>
-          </div>
-        {/if}
-      </div>
+      <!-- The hamburger menu is the SHARED app menu, rendered server-side in the live
+           shell (templates/hamburger_menu.html) and floated top-right. 'Find a tune'
+           routes to openDeep() here via window.__liveFindTune (set in onMount). -->
     </div>
 
     <header class="topbar">

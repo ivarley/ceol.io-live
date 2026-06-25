@@ -183,12 +183,17 @@
      */
     function buildModalHTML(tuneData, config) {
         const sections = [];
+        // Global (app-wide "Find a tune") view: a read-only lookup, no session-instance
+        // "this time we played…" overrides or Save (there's no session to save to).
+        const isGlobal = !!config.additionalData?.global;
 
         // Header section with tune type, title, logo, and close button
         sections.push(buildHeaderSection(tuneData, config));
 
-        // Configure section (collapsible except on admin)
-        sections.push(buildConfigureSection(tuneData, config));
+        // Configure section (collapsible except on admin; not in the global lookup view)
+        if (!isGlobal) {
+            sections.push(buildConfigureSection(tuneData, config));
+        }
 
         // Tunebook status section (not on admin)
         if (config.context !== 'admin') {
@@ -208,8 +213,10 @@
             sections.push(buildNotesSection(tuneData, config));
         }
 
-        // Action buttons
-        sections.push(buildActionButtons(config));
+        // Action buttons (Save/Cancel) — none in the read-only global lookup view
+        if (!isGlobal) {
+            sections.push(buildActionButtons(config));
+        }
 
         // Additional links
         sections.push(buildAdditionalLinks(config));
@@ -226,7 +233,7 @@
     function buildHeaderSection(tuneData, config) {
         const displayName = getDisplayName(tuneData, config);
         const tuneType = tuneData.tune_type || config.additionalData?.tuneType || '';
-        const isClickable = config.context !== 'admin';
+        const isClickable = config.context !== 'admin' && !config.additionalData?.global;
         const clickHandler = isClickable ? ' onclick="TuneDetailModal.toggleConfigSection()"' : '';
         const clickableClass = isClickable ? ' modal-tune-title-clickable' : '';
 
@@ -733,7 +740,7 @@ ${abcBody}`;
             links.push(`<a href="#" class="remove-link" onclick="TuneDetailModal.removeFromMyTunes(); return false;">Remove From My Tunes</a>`);
         }
 
-        if (config.context !== 'admin') {
+        if (config.context !== 'admin' && !config.additionalData?.global) {
             links.push(`<a href="#" onclick="TuneDetailModal.toggleConfigSection(); return false;">Configure This Tune</a>`);
         }
 
@@ -805,11 +812,16 @@ ${abcBody}`;
                 </div>
             `);
         } else if (config.context === 'session' || config.context === 'session_instance') {
+            // The global lookup view has no "this session" — show only the global count.
+            if (!config.additionalData?.global) {
+                stats.push(`
+                    <div class="stat-item">
+                        <div class="stat-label">Times Played At This Session:</div>
+                        <div class="stat-value">${tuneData.times_played || 0}</div>
+                    </div>
+                `);
+            }
             stats.push(`
-                <div class="stat-item">
-                    <div class="stat-label">Times Played At This Session:</div>
-                    <div class="stat-value">${tuneData.times_played || 0}</div>
-                </div>
                 <div class="stat-item">
                     <div class="stat-label">Times Played Globally:</div>
                     <div class="stat-value">${tuneData.global_play_count || 0}</div>
