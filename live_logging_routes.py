@@ -72,12 +72,14 @@ _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
     "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
-    "sp.first_name, sp.last_name, cp.person_id, slc.color"
+    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name"
 )
-# LEFT JOIN tune (type), the creating user -> person (who logged it, for the per-set
+# LEFT JOIN tune (type/name), the creating user -> person (who logged it, for the per-set
 # "Logged by X · time" tray AND the per-row logger color tint), the started-by person
-# (the set starter; §19/§F), and that logger's persisted per-session color (so a row
-# carries its logger's color even when they're not currently present; §F).
+# (the set starter; §19/§F), that logger's persisted per-session color (so a row carries
+# its logger's color even when they're not currently present; §F), and the session_tune
+# alias — so the display name falls back COALESCE(sit.name, st.alias, t.name) like the
+# legacy editor (older rows store only tune_id, with sit.name NULL).
 _RECORD_FROM = (
     "FROM session_instance_tune sit "
     "LEFT JOIN tune t ON t.tune_id = sit.tune_id "
@@ -85,7 +87,8 @@ _RECORD_FROM = (
     "LEFT JOIN person cp ON cp.person_id = cu.person_id "
     "LEFT JOIN person sp ON sp.person_id = sit.started_by_person_id "
     "LEFT JOIN session_instance si ON si.session_instance_id = sit.session_instance_id "
-    "LEFT JOIN session_logger_color slc ON slc.session_id = si.session_id AND slc.person_id = cp.person_id"
+    "LEFT JOIN session_logger_color slc ON slc.session_id = si.session_id AND slc.person_id = cp.person_id "
+    "LEFT JOIN session_tune st ON st.session_id = si.session_id AND st.tune_id = sit.tune_id"
 )
 
 
@@ -99,7 +102,9 @@ def _record_to_dict(row):
     return {
         "session_instance_tune_id": row[0],
         "tune_id": row[1],
-        "name": row[2],
+        # Display name: per-record override, else session alias, else catalog name
+        # (older rows store only tune_id with sit.name NULL — matches the legacy editor).
+        "name": row[2] or row[18] or row[19],
         "order_position": row[3],
         "record_type": row[4],
         "source": row[5],
