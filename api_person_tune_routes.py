@@ -1037,6 +1037,9 @@ def search_tunes():
         # Get optional context parameters
         person_id = request.args.get('person_id', type=int)
         session_id = request.args.get('session_id', type=int)
+        # Soft type preference (the type of the set you're logging into): matching-type
+        # tunes sort above other types. None => no effect.
+        prefer_type = (request.args.get('prefer_type') or '').strip() or None
 
         conn = get_db_connection()
         try:
@@ -1074,13 +1077,16 @@ def search_tunes():
                            WHEN LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s)) THEN 2
                            ELSE 3
                        END AS match_priority""")
+            # Soft type preference (matching the set's type sorts first)
+            select_fields.append("CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref")
 
             # Build final query
             join_clause = " ".join(joins) if joins else ""
             select_clause = ", ".join(select_fields)
 
-            # Construct ORDER BY: existing priority first, then match priority, then tunebook count, then name
-            order_by_parts = order_by_fields + ["match_priority", "t.tunebook_count_cached DESC NULLS LAST", "t.name"]
+            # Construct ORDER BY: matching type first (soft preference), then existing
+            # person/session priority, match priority, tunebook count, name
+            order_by_parts = ["type_pref"] + order_by_fields + ["match_priority", "t.tunebook_count_cached DESC NULLS LAST", "t.name"]
             order_by_clause = ", ".join(order_by_parts)
 
             sql = f"""
@@ -1098,7 +1104,7 @@ def search_tunes():
             # 2. query_params for JOINs (person_id, session_id)
             # 3. query param for WHERE clause
             # 4. limit param
-            final_params = [query, f"{query}%"] + query_params + [f"%{query}%", limit]
+            final_params = [query, f"{query}%", prefer_type] + query_params + [f"%{query}%", limit]
             cur.execute(sql, final_params)
 
             rows = cur.fetchall()

@@ -183,6 +183,9 @@ CREATE TABLE session_instance (
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
     comments TEXT,
     log_complete_date TIMESTAMPTZ DEFAULT NULL,
+    -- 'legacy' (classic pill editor) | 'live' (new SSE editor, spec 024). Set 'live' on the
+    -- first live op; the legacy editor is read-only for a 'live' instance (one-way lock).
+    logging_mode VARCHAR(10) NOT NULL DEFAULT 'legacy',
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -228,6 +231,7 @@ CREATE TABLE user_account (
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
+    beta_live_logging BOOLEAN NOT NULL DEFAULT FALSE,  -- opt-in to the new live logger (admin-set, spec 024)
     email_verified BOOLEAN DEFAULT FALSE,
     auto_save_tunes BOOLEAN DEFAULT FALSE,
     auto_save_interval INTEGER DEFAULT 60 CHECK (auto_save_interval IN (10, 30, 60)),
@@ -433,6 +437,18 @@ CREATE INDEX idx_session_person_person_id ON session_person (person_id);
 CREATE INDEX idx_session_person_is_regular ON session_person (is_regular);
 CREATE INDEX idx_session_person_is_admin ON session_person (is_admin);
 
+-- Live-logging color (spec 024 §F): a person's stable palette color at a session,
+-- assigned on first appearance and persistent across instances/weeks/restarts.
+-- Deliberately its OWN table (not session_person): a color is not membership and
+-- not attendance, so assigning one must never imply either.
+CREATE TABLE session_logger_color (
+    session_id  INTEGER NOT NULL REFERENCES session(session_id) ON DELETE CASCADE,
+    person_id   INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
+    color       SMALLINT NOT NULL,   -- palette index (0..N-1); UI maps index -> color
+    created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    PRIMARY KEY (session_id, person_id)
+);
+
 -- =============================================================================
 -- DEPENDENT TABLES (Level 2 - depend on level 1 tables)
 -- =============================================================================
@@ -452,6 +468,16 @@ CREATE TABLE session_instance_tune (
     key_override VARCHAR(20),
     setting_override INTEGER,
     started_by_person_id INTEGER REFERENCES person(person_id),
+    -- live logging (spec 024 §I): provenance + soft-delete tombstone. Audio-only
+    -- columns (source/confidence/played_*) exist now so the audio task plugs in
+    -- with no later migration; human ops never write played_*.
+    source VARCHAR(16) NOT NULL DEFAULT 'human',
+    confidence SMALLINT,            -- 0..100; NULL = definite human entry
+    played_start TIMESTAMPTZ,       -- audio-only
+    played_end TIMESTAMPTZ,         -- audio-only
+    logged_timestamp TIMESTAMPTZ,   -- client-asserted log time
+    client_device_id VARCHAR(64),
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -462,6 +488,8 @@ CREATE TABLE session_instance_tune (
 
 CREATE INDEX idx_session_instance_tune_started_by ON session_instance_tune (started_by_person_id) WHERE started_by_person_id IS NOT NULL;
 CREATE INDEX idx_session_instance_tune_order_position ON session_instance_tune (session_instance_id, order_position);
+-- Live reads skip tombstoned rows (spec 024).
+CREATE INDEX idx_session_instance_tune_live ON session_instance_tune (session_instance_id, order_position) WHERE deleted = FALSE;
 
 CREATE OR REPLACE FUNCTION update_session_instance_tune_last_modified_date()
 RETURNS TRIGGER AS $$
@@ -485,6 +513,9 @@ CREATE TABLE session_instance_person (
     person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
     attendance VARCHAR(5) CHECK (attendance IN ('yes', 'maybe', 'no')) DEFAULT NULL,
     comment TEXT,
+    -- live logging (spec 024 §F): monotonic per-instance arrival ordinal; the UI
+    -- infers a presence color from it (palette[seq mod N]). Claimed on first SSE connect.
+    arrival_seq INTEGER,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -495,6 +526,7 @@ ALTER TABLE session_instance_person ADD CONSTRAINT uk_session_instance_person UN
 CREATE INDEX idx_session_instance_person_session_instance_id ON session_instance_person (session_instance_id);
 CREATE INDEX idx_session_instance_person_person_id ON session_instance_person (person_id);
 CREATE INDEX idx_session_instance_person_attendance ON session_instance_person (attendance);
+CREATE UNIQUE INDEX uq_session_instance_person_arrival ON session_instance_person (session_instance_id, arrival_seq) WHERE arrival_seq IS NOT NULL;
 
 -- -----------------------------------------------------------------------------
 -- User Session table (depends on user_account)
@@ -514,6 +546,42 @@ CREATE TABLE user_session (
 CREATE INDEX idx_user_session_user_id ON user_session (user_id);
 CREATE INDEX idx_user_session_expires ON user_session (expires_at);
 CREATE INDEX idx_user_session_last_accessed ON user_session (last_accessed);
+
+-- -----------------------------------------------------------------------------
+-- Session Event table (depends on session_instance) -- live logging feed, spec 024
+-- -----------------------------------------------------------------------------
+-- Append-only change feed driving real-time SSE fan-out. session_instance_tune
+-- remains canonical state; this is the ordered delivery/replay log. event_id is
+-- globally monotonic and doubles as the SSE Last-Event-ID cursor. See spec 024 §B.
+CREATE TABLE session_event (
+    event_id            BIGSERIAL PRIMARY KEY,
+    session_instance_id INTEGER NOT NULL REFERENCES session_instance(session_instance_id) ON DELETE CASCADE,
+    op_type             VARCHAR(32) NOT NULL,
+    payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
+    op_id               UUID,                 -- client idempotency key (spec 024 §C); NULL for server-generated events
+    created_by_user_id  INTEGER,
+    server_ts           TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+CREATE INDEX idx_session_event_instance ON session_event (session_instance_id, event_id);
+CREATE UNIQUE INDEX uq_session_event_op_id ON session_event (op_id) WHERE op_id IS NOT NULL;
+
+-- -----------------------------------------------------------------------------
+-- Corroboration table (depends on session_instance_tune) -- spec 024 §H30/§I
+-- -----------------------------------------------------------------------------
+-- Per-user assertions about a tune record (who else logged/heard the same tune
+-- in the same slot, with what source/confidence). Keyed by user; person derived.
+CREATE TABLE corroboration (
+    corroboration_id    SERIAL PRIMARY KEY,
+    record_id           INTEGER NOT NULL REFERENCES session_instance_tune(session_instance_tune_id) ON DELETE CASCADE,
+    user_id             INTEGER,
+    source              VARCHAR(16) NOT NULL DEFAULT 'human',
+    confidence          SMALLINT,
+    client_asserted_ts  TIMESTAMPTZ,
+    created_date        TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    CONSTRAINT uq_corroboration_record_user UNIQUE (record_id, user_id)
+);
+CREATE INDEX idx_corroboration_record ON corroboration (record_id);
 
 -- -----------------------------------------------------------------------------
 -- Login History table (depends on user_account)
@@ -759,6 +827,13 @@ CREATE TABLE session_instance_tune_history (
     key_override VARCHAR(20),
     setting_override INTEGER,
     started_by_person_id INTEGER,
+    source VARCHAR(16),
+    confidence SMALLINT,
+    played_start TIMESTAMPTZ,
+    played_end TIMESTAMPTZ,
+    logged_timestamp TIMESTAMPTZ,
+    client_device_id VARCHAR(64),
+    deleted BOOLEAN,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,

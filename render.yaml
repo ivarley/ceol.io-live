@@ -2,12 +2,48 @@ services:
   - type: web
     name: ceol-io
     env: python
-    buildCommand: "pip install -r requirements.txt && npm install && npm run build"
+    # Also builds the spec-024 live-logging Svelte bundle into static/live.
+    buildCommand: "pip install -r requirements.txt && npm install && npm run build && cd frontend && npm install && npm run build"
     startCommand: "flask --app app run --host=0.0.0.0"
     plan: free
     envVars:
       - key: NODE_VERSION
         value: "18"
+      # Public URL of the streaming sidecar (below), e.g. https://streaming.ceol.io
+      - key: STREAMING_BASE_URL
+        sync: false
+      # Share the session cookie with the streaming subdomain (spec 024 §H).
+      - key: SESSION_COOKIE_DOMAIN
+        sync: false   # e.g. ".ceol.io"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+  # Live-logging SSE streaming sidecar (spec 024 §A4). Separate async service
+  # (Starlette + asyncpg) holding the long-lived SSE connections; shares the DB
+  # and the Flask session secret (cookie auth) with the main app.
+  - type: web
+    name: ceol-io-streaming
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    # Bounded graceful drain: SIGTERM (deploy/restart) must not hang on the
+    # infinite in-flight SSE streams. After 5s, drop them; clients auto-reconnect.
+    startCommand: "uvicorn streaming.service:app --host 0.0.0.0 --port $PORT --timeout-graceful-shutdown 5"
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGPORT
+        value: "5432"
+      - key: FLASK_SESSION_SECRET_KEY
+        sync: false
 
   - type: cron
     name: ceol-io-active-sessions

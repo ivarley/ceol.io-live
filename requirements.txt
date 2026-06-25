@@ -11,3 +11,8 @@ backports.zoneinfo; python_version < "3.9"
 qrcode[pil]
 boto3
 pydub
+
+# Live logging streaming sidecar (spec 024) -- async SSE service
+asyncpg==0.31.0
+starlette==1.3.1
+uvicorn==0.49.0

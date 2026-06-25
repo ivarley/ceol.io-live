@@ -38,6 +38,131 @@ def api_login_required(f):
     return decorated_function
 
 
+# One-way editor lock (spec 024 beta rollout): once the new live editor has claimed an
+# instance (session_instance.logging_mode='live'), the classic editor is read-only for it.
+LEGACY_LOCKED_MSG = (
+    "This session is being logged in the new (beta) live editor, so the classic editor "
+    "is read-only for it. Open the live editor to make changes, or ask a system admin to "
+    "reset this session to the classic editor."
+)
+
+
+def instance_logging_locked(cur, session_instance_id):
+    """True if the live editor owns this instance (logging_mode='live'); the classic
+    editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
+    cur.execute(
+        "SELECT logging_mode FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    return bool(row) and row[0] == "live"
+
+
+@api_login_required
+def get_tune_detail_global(tune_id):
+    """Session-agnostic tune detail for the app-wide 'Find a tune' (spec 024). Returns the
+    `session_tune` shape the tune-detail modal renders (used with context 'session_instance'),
+    with no session/instance overrides — just the tune, a default setting's notation,
+    popularity, and the current user's list status."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date FROM tune WHERE tune_id = %s",
+            (tune_id,),
+        )
+        t = cur.fetchone()
+        if not t:
+            return jsonify({"success": False, "message": "Tune not found"}), 404
+        tune_name, tune_type, tunebook_count, tbc_date = t
+
+        # A default setting's notation (lowest setting_id) for the rendered incipit/full.
+        cur.execute(
+            "SELECT setting_id, abc, incipit_abc, image, incipit_image FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
+            (tune_id,),
+        )
+        s = cur.fetchone()
+        setting_id, abc_notation, incipit_abc, abc_image, incipit_image = s if s else (None, None, None, None, None)
+
+        person_tune_status = None
+        if current_user.is_authenticated:
+            cur.execute("SELECT person_id FROM user_account WHERE user_id = %s", (current_user.user_id,))
+            pr = cur.fetchone()
+            if pr:
+                cur.execute(
+                    "SELECT person_tune_id, learn_status, heard_count FROM person_tune WHERE person_id = %s AND tune_id = %s",
+                    (pr[0], tune_id),
+                )
+                tr = cur.fetchone()
+                person_tune_status = {
+                    "on_list": bool(tr), "person_tune_id": tr[0] if tr else None,
+                    "learn_status": tr[1] if tr else None, "heard_count": tr[2] if tr else None,
+                }
+
+        cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
+        global_play_count = cur.fetchone()[0]
+
+        return jsonify({"success": True, "session_tune": {
+            "tune_id": tune_id, "tune_name": tune_name, "tune_type": tune_type,
+            "alias": None, "setting_id": setting_id, "key": None, "setting_key": None,
+            "name": None, "key_override": None, "setting_override": None,
+            "abc": abc_notation, "incipit_abc": incipit_abc,
+            "image": bytea_to_base64(abc_image), "incipit_image": bytea_to_base64(incipit_image),
+            "tunebook_count": tunebook_count,
+            "tunebook_count_cached_date": tbc_date.isoformat() if tbc_date else None,
+            "times_played": 0, "global_play_count": global_play_count, "play_instances": [],
+            "person_tune_status": person_tune_status,
+        }})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def admin_set_beta_logging(user_id):
+    """System-admin only: turn the new live editor on/off for a user (beta rollout).
+    POST /api/admin/users/<user_id>/beta-logging  body {enabled: bool}"""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE user_account SET beta_live_logging = %s WHERE user_id = %s",
+            (enabled, user_id),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "User not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "user_id": user_id, "beta_live_logging": enabled})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def admin_reset_logging_mode(session_instance_id):
+    """System-admin only: reset an instance to the classic editor (undo the one-way lock).
+    POST /api/admin/instances/<id>/logging-mode  body {mode: 'legacy'|'live'}"""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    mode = (request.get_json(silent=True) or {}).get("mode", "legacy")
+    if mode not in ("legacy", "live"):
+        return jsonify({"success": False, "error": "mode must be 'legacy' or 'live'"}), 400
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE session_instance SET logging_mode = %s WHERE session_instance_id = %s",
+            (mode, session_instance_id),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        conn.commit()
+        return jsonify({"success": True, "session_instance_id": session_instance_id, "logging_mode": mode})
+    finally:
+        conn.close()
+
+
 def segment_records_into_sets(rows, type_index=None):
     """Group ordered session_instance_tune rows into sets (spec 023).
 
@@ -3078,6 +3203,16 @@ def delete_tune_ajax(session_instance_tune_id):
             return jsonify({"success": False, "message": "Tune not found"})
 
         (tune_name,) = tune_info
+
+        # One-way lock (spec 024 beta): refuse if the live editor owns this instance.
+        cur.execute(
+            "SELECT session_instance_id FROM session_instance_tune WHERE session_instance_tune_id = %s",
+            (session_instance_tune_id,),
+        )
+        _sii_row = cur.fetchone()
+        if _sii_row and instance_logging_locked(cur, _sii_row[0]):
+            cur.close(); conn.close()
+            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
 
         # Save to history before making changes
         audit_user_id = get_current_user_id()
@@ -6737,6 +6872,71 @@ def reactivate_session(session_path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5):
+    """Shared tune-name matcher used by BOTH the legacy pill editor (match_tune_ajax)
+    and the live logger (live_match), so a typed string resolves IDENTICALLY in both.
+
+    Returns: {matched, exact_match, results:[{tune_id, tune_name, tune_type, in_session_tune}]}.
+      - exact_match=True with one result when find_matching_tune resolves a unique exact
+        match (session aliases -> session_tune_alias -> tune name w/ "The", accent-insensitive).
+      - otherwise a wildcard candidate list ranked by preferred type, this session's
+        play-count, then tunebook count (the "pick one" / red state on the client).
+    """
+    tune_name = normalize_apostrophes((tune_name or "").strip())
+    if not tune_name:
+        return {"matched": False, "exact_match": False, "results": []}
+
+    tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
+    if tune_id and not error_message:
+        cur.execute(
+            "SELECT t.tune_type, (st.session_id IS NOT NULL) "
+            "FROM tune t LEFT JOIN session_tune st ON st.tune_id = t.tune_id AND st.session_id = %s "
+            "WHERE t.tune_id = %s",
+            (session_id, tune_id),
+        )
+        row = cur.fetchone()
+        return {
+            "matched": True,
+            "exact_match": True,
+            "results": [{
+                "tune_id": tune_id,
+                "tune_name": final_name,
+                "tune_type": row[0] if row else None,
+                "in_session_tune": bool(row[1]) if row else False,
+            }],
+        }
+
+    cur.execute(
+        """
+        SELECT t.tune_id, COALESCE(st.alias, t.name) AS display_name, t.tune_type,
+               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS preferred_tune_type,
+               playcounts.plays, (st.session_id IS NOT NULL) AS in_session
+        FROM tune t
+        LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s
+        LEFT OUTER JOIN (
+            SELECT sit.tune_id, COUNT(*) AS plays
+            FROM session_instance si
+            INNER JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s
+            GROUP BY sit.tune_id
+        ) playcounts ON t.tune_id = playcounts.tune_id
+        WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
+          AND t.redirect_to_tune_id IS NULL
+        ORDER BY preferred_tune_type ASC,
+                 playcounts.plays DESC NULLS LAST,
+                 t.tunebook_count_cached DESC NULLS LAST,
+                 LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
+        LIMIT %s
+        """,
+        (previous_tune_type, session_id, session_id, f"%{tune_name.lower()}%", limit),
+    )
+    results = [
+        {"tune_id": m[0], "tune_name": m[1], "tune_type": m[2], "in_session_tune": bool(m[5])}
+        for m in cur.fetchall()
+    ]
+    return {"matched": len(results) == 1, "exact_match": False, "results": results}
+
+
 @api_login_required
 def match_tune_ajax(session_path, date_or_id):
     """
@@ -6768,115 +6968,11 @@ def match_tune_ajax(session_path, date_or_id):
             conn.close()
             return jsonify({"success": False, "message": "Session not found"})
 
-        session_id = session_result[0]
-
-        # First, try to find an exact match using the existing function
-        tune_id, final_name, error_message = find_matching_tune(
-            cur, session_id, tune_name
-        )
-
-        # If we found exactly one match, return it
-        if tune_id and not error_message:
-            # Get the tune type for the matched tune
-            cur.execute("SELECT tune_type FROM tune WHERE tune_id = %s", (tune_id,))
-            tune_type_result = cur.fetchone()
-            tune_type = tune_type_result[0] if tune_type_result else None
-
-            cur.close()
-            conn.close()
-
-            return jsonify(
-                {
-                    "success": True,
-                    "matched": True,
-                    "exact_match": True,
-                    "results": [
-                        {
-                            "tune_id": tune_id,
-                            "tune_name": final_name,
-                            "tune_type": tune_type,
-                        }
-                    ],
-                }
-            )
-
-        # If no exact match or multiple matches, do wildcard search
-        # Build the wildcard query with proper ordering
-        wildcard_pattern = f"%{tune_name.lower()}%"
-
-        # Debug logging
-        print(
-            f"Wildcard search for '{tune_name}' with previous_tune_type='{previous_tune_type}'"
-        )
-
-        # Query with all the ordering criteria (accent insensitive)
-        # Exclude redirected tunes - they should not appear in search results
-        query = """
-            SELECT
-                t.tune_id,
-                COALESCE(st.alias, t.name) as display_name,
-                t.tune_type,
-                CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END as preferred_tune_type,
-                playcounts.plays
-            FROM tune t
-            LEFT OUTER JOIN session_tune st
-                ON t.tune_id = st.tune_id AND st.session_id = %s
-            LEFT OUTER JOIN (
-                SELECT sit.tune_id, COUNT(*) as plays
-                FROM session_instance si
-                INNER JOIN session_instance_tune sit
-                    ON si.session_instance_id = sit.session_instance_id
-                WHERE si.session_id = %s
-                GROUP BY sit.tune_id
-            ) playcounts
-                ON t.tune_id = playcounts.tune_id
-            WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
-              AND t.redirect_to_tune_id IS NULL
-            ORDER BY
-                preferred_tune_type ASC,
-                playcounts.plays DESC NULLS LAST,
-                t.tunebook_count_cached DESC NULLS LAST,
-                LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
-            LIMIT 5
-        """
-
-        cur.execute(
-            query, (previous_tune_type, session_id, session_id, wildcard_pattern)
-        )
-        matches = cur.fetchall()
-
-        # Debug logging of results
-        print(f"Found {len(matches)} matches:")
-        for match in matches:
-            print(
-                f"  - {match[1]} ({match[2]}) - preferred={match[3]}, plays={match[4]}"
-            )
-
+        # Shared matcher (also used by the live logger) so results are identical.
+        result = match_tune_core(cur, session_result[0], tune_name, previous_tune_type, limit=5)
         cur.close()
         conn.close()
-
-        if not matches:
-            # No matches found at all
-            return jsonify(
-                {"success": True, "matched": False, "exact_match": False, "results": []}
-            )
-
-        # Format the results
-        results = []
-        for match in matches:
-            results.append(
-                {"tune_id": match[0], "tune_name": match[1], "tune_type": match[2]}
-            )
-
-        return jsonify(
-            {
-                "success": True,
-                "matched": len(results)
-                == 1,  # Only considered "matched" if exactly one result
-                "exact_match": False,
-                "results": results,
-            }
-        )
+        return jsonify({"success": True, **result})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -7043,6 +7139,13 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Session instance not found"})
+
+        # One-way lock (spec 024 beta): refuse if the live editor owns this instance —
+        # this bulk save hard-deletes rows absent from its set and emits no events, which
+        # would silently destroy live-editor data.
+        if instance_logging_locked(cur, session_instance_id):
+            cur.close(); conn.close()
+            return jsonify({"success": False, "locked": True, "message": LEGACY_LOCKED_MSG}), 409
 
         # Get all existing tunes for this session instance. Break records are reconciled
         # separately (they have no stable client identity), so only diff tune rows here.
@@ -10646,6 +10749,22 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             """,
                 tuple(update_values),
             )
+
+            # Broadcast the edit to any live-logging clients watching this instance
+            # (spec 024): emit a change_tune feed event per affected record + NOTIFY,
+            # in the same transaction, so they update in real time. Best-effort — a
+            # failure here must not block the edit itself.
+            try:
+                from live_logging_routes import emit_change_tune
+                cur.execute(
+                    "SELECT session_instance_tune_id FROM session_instance_tune "
+                    "WHERE session_instance_id = %s AND tune_id = %s AND record_type = 'tune' AND deleted = FALSE",
+                    (session_instance_id, tune_id),
+                )
+                for (rid,) in cur.fetchall():
+                    emit_change_tune(cur, session_instance_id, rid, get_current_user_id())
+            except Exception as e:
+                print(f"live broadcast (change_tune) failed: {e}")
 
         conn.commit()
         conn.close()

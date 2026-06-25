@@ -312,7 +312,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     """
                     SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
                            si.location_override, s.location_name, si.log_complete_date, s.session_id,
-                           si.start_time, si.end_time, s.path, si.is_active
+                           si.start_time, si.end_time, s.path, si.is_active, si.logging_mode
                     FROM session_instance si
                     JOIN session s ON si.session_id = s.session_id
                     WHERE s.path = %s AND si.date = %s
@@ -329,7 +329,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     """
                     SELECT s.name, si.date, si.comments, si.session_instance_id, si.is_cancelled,
                            si.location_override, s.location_name, si.log_complete_date, s.session_id,
-                           si.start_time, si.end_time, s.path, si.is_active
+                           si.start_time, si.end_time, s.path, si.is_active, si.logging_mode
                     FROM session_instance si
                     JOIN session s ON si.session_id = s.session_id
                     WHERE si.session_instance_id = %s AND s.path = %s
@@ -340,6 +340,12 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             session_instance = cur.fetchone()
 
             if session_instance:
+                # Beta rollout (spec 024): users opted into the new live editor go straight
+                # to it for any session instance. Everyone else stays on the classic editor.
+                if current_user.is_authenticated and getattr(current_user, "beta_live_logging", False):
+                    cur.close(); conn.close()
+                    return redirect(url_for("live_logging_screen", session_instance_id=session_instance[3]))
+                logging_mode = session_instance[13]
                 # Use s.path from database (index 11) for consistency
                 session_path_from_db = session_instance[11]
                 session_instance_dict = {
@@ -470,6 +476,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     is_session_admin=is_session_admin,
                     is_session_regular=is_regular,
                     attendees=attendees_list,
+                    logging_mode=logging_mode,
                 )
             else:
                 cur.close()
@@ -2885,7 +2892,7 @@ def person_details(person_id=None):
         # Get user account details if exists
         cur.execute(
             """
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password, beta_live_logging
             FROM user_account
             WHERE person_id = %s
         """,
@@ -2905,6 +2912,7 @@ def person_details(person_id=None):
                 created_date,
                 timezone,
                 hashed_password,
+                beta_live_logging,
             ) = user_row
 
             # Get last login from user_session table
@@ -2933,6 +2941,7 @@ def person_details(person_id=None):
                 "timezone": timezone,
                 "timezone_display": get_timezone_display_name(timezone or "UTC"),
                 "has_password": hashed_password is not None and hashed_password != "",
+                "beta_live_logging": beta_live_logging,
             }
 
         # Get sessions this person is associated with
@@ -3866,3 +3875,47 @@ def admin_activity():
 
     finally:
         conn.close()
+
+
+@login_required
+def live_logging_screen(session_instance_id):
+    """
+    Serve the clean-slate Svelte live-logging screen (spec 024 §H, Phase 0).
+
+    A thin shell: it passes the instance id, current person, and the streaming
+    service base URL to the bundle, which then fetches the bootstrap snapshot and
+    opens the SSE stream. The bundle is a self-contained Vite build under
+    /static/live, isolated to this screen (not the base layout).
+    """
+    import os
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.path FROM session_instance si
+            JOIN session s ON s.session_id = si.session_id
+            WHERE si.session_instance_id = %s
+            """,
+            (session_instance_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return render_template("error.html", error_message="Session instance not found"), 404
+        session_path = row[0]
+    finally:
+        conn.close()
+
+    streaming_base_url = os.environ.get("STREAMING_BASE_URL", "http://localhost:8080")
+    return render_template(
+        "live_logging.html",
+        session_instance_id=session_instance_id,
+        session_path=session_path,
+        streaming_base_url=streaming_base_url,
+        current_person={
+            "person_id": current_user.person_id,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+        },
+    )

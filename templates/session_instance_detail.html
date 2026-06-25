@@ -1387,6 +1387,30 @@
 {% block content %}
 <div class="landing-page" style="display: block;">
 
+    {% if logging_mode == 'live' %}
+    <div class="live-locked-banner" style="margin: 10px 0; padding: 10px 14px; border: 1px solid #e0b341; border-radius: 8px; background: rgba(224,179,65,0.12); color: #8a6d1f; font-size: 14px;">
+        🔒 This session is being logged in the new <strong>live editor</strong>. The classic editor is <strong>read-only</strong> here — editing is disabled. {% if is_session_admin %}<a href="#" id="reset-to-classic" data-instance-id="{{ session_instance.session_instance_id }}">Reset this session to the classic editor</a> (admin).{% else %}Ask a system admin to reset it if needed.{% endif %}
+    </div>
+    {% if is_session_admin %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('reset-to-classic');
+        if (!btn) return;
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (!confirm('Reset this session to the classic editor? Anyone using the live editor should stop first.')) return;
+          fetch('/api/admin/instances/' + btn.dataset.instanceId + '/logging-mode', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin', body: JSON.stringify({ mode: 'legacy' }),
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.success) location.reload(); else alert(d.error || 'Reset failed');
+          }).catch(function () { alert('Reset failed'); });
+        });
+      });
+    </script>
+    {% endif %}
+    {% endif %}
+
     <h1>{{ session_instance.session_name }} <a href="/sessions/{{ session_instance.session_path }}" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a></h1>
     <h2 class="editable-header{% if session_instance.is_cancelled %} cancelled-date{% endif %}">{{ session_instance.date }}{% if session_instance.is_active %}<span class="badge on-now-badge">On Now</span>{% endif %}<span class="edit-link" id="edit-date-btn">Edit</span></h2>
 
@@ -1568,8 +1592,9 @@
             <!-- Tune pills will be rendered here -->
         </div>
 
-        <!-- Edit Button (shown in view mode for logged-in users, hidden when log is complete) -->
-        {% if current_user.is_authenticated and not session_instance.log_complete_date %}
+        <!-- Edit Button (shown in view mode for logged-in users, hidden when log is complete
+             or when the live editor owns this instance — one-way lock, spec 024). -->
+        {% if current_user.is_authenticated and not session_instance.log_complete_date and logging_mode != 'live' %}
         <div id="edit-mode-button-container" style="margin-top: 15px; text-align: center;">
             <button id="enter-edit-mode-btn" class="btn-primary" style="padding: 10px 30px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
                 Edit

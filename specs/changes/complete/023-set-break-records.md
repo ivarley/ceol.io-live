@@ -1,8 +1,8 @@
 # 023: Set Breaks as Records
 
 **Date:** 2026-06-20
-**Status:** Implemented — prerequisite refactor for [021-simplified-session-screen.md](021-simplified-session-screen.md)
-**Related:** [015-fractional-indexing.md](015-fractional-indexing.md), [009-person-set-tracking.md](009-person-set-tracking.md)
+**Status:** Implemented — prerequisite refactor for [021-simplified-session-screen.md](../021-simplified-session-screen.md)
+**Related:** [015-fractional-indexing.md](../015-fractional-indexing.md), [009-person-set-tracking.md](../009-person-set-tracking.md)
 
 ## Overview
 

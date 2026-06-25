@@ -44,6 +44,10 @@
     <!-- Theme CSS -->
     <link id="theme-style" rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 
+    <!-- Shared hamburger menu (also used by the live editor) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
+    <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
+
     <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
     <script>
         (function() {
@@ -146,75 +150,8 @@
         }
 
         /* Hamburger Menu Styles */
-        .hamburger-menu {
-            position: relative;
-        }
-
-        .hamburger-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            width: 32px;
-            height: 32px;
-        }
-
-        .hamburger-line {
-            width: 24px;
-            height: 4px;
-            background-color: var(--hamburger-line-color);
-            margin: 0;
-            transition: 0.3s;
-            align-self: center;
-        }
-
-        .hamburger-dropdown {
-            position: absolute;
-            top: 100%;
-            right: -16px;
-            background-color: var(--dropdown-bg);
-            border: 1px solid var(--dropdown-border);
-            border-radius: 4px;
-            box-shadow: 0 4px 12px var(--dropdown-shadow);
-            min-width: 160px;
-            z-index: 2010;
-            display: none;
-        }
-
-        .hamburger-dropdown.show {
-            display: block;
-        }
-
-        .hamburger-item {
-            display: block;
-            padding: 12px 16px;
-            text-decoration: none;
-            color: var(--text-color);
-            border-bottom: 1px solid var(--border-color);
-            transition: background-color 0.2s;
-        }
-
-        .hamburger-item:last-child {
-            border-bottom: none;
-        }
-
-        .hamburger-item:hover {
-            background-color: var(--hover-bg);
-            text-decoration: none;
-            color: var(--text-color);
-        }
-
-        .hamburger-item.disabled {
-            color: var(--disabled-text);
-            cursor: not-allowed;
-        }
-
-        .hamburger-item.disabled:hover {
-            background-color: transparent;
-        }
+        /* Hamburger menu styles moved to static/css/hamburger_menu.css (shared with the
+           live editor). Linked in <head>. */
 
         /* In Session Badge */
         .in-session-badge {
@@ -336,38 +273,7 @@
                 {% endif %}
 
                 <!-- Hamburger Menu -->
-                <div class="hamburger-menu">
-                    <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Toggle menu">
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                    </button>
-                    <div class="hamburger-dropdown" id="hamburgerDropdown">
-                        {% if current_user.is_authenticated %}
-                            <a href="/me" class="hamburger-item">{{ current_user.first_name }} {{ current_user.last_name[0] }}.</a>
-                            {% if current_user.is_system_admin %}
-                            <a href="/admin" class="hamburger-item">Admin</a>
-                            {% endif %}
-                            <a href="/my-tunes" class="hamburger-item">My Tunes</a>
-                            <a href="/sessions" class="hamburger-item">My Sessions</a>
-                            <a href="/add-session" class="hamburger-item">Add A Session</a>
-                            <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
-                                <span id="dark-mode-text">🌙 Dark Mode</span>
-                            </a>
-                            <a href="/logout" class="hamburger-item">Log Out</a>
-                            <a href="#" class="hamburger-item share-link" onclick="shareCurrentPage(); return false;">Share</a>
-                            <a href="/help" class="hamburger-item">Help</a>
-                        {% else %}
-                            <a href="/login" class="hamburger-item">Log In or Register</a>
-                            <a href="/sessions" class="hamburger-item">Session Logs</a>
-                            <a href="#" class="hamburger-item" onclick="toggleDarkMode(); return false;">
-                                <span id="dark-mode-text">🌙 Dark Mode</span>
-                            </a>
-                            <a href="#" class="hamburger-item share-link" onclick="shareCurrentPage(); return false;">Share</a>
-                            <a href="/help" class="hamburger-item">Help</a>
-                        {% endif %}
-                    </div>
-                </div>
+                {% include 'hamburger_menu.html' %}
                 
             </div><!--//docs-top-utilities-->
         </div><!--//container-->
@@ -384,74 +290,11 @@
     </div>
 
 <script>
-function toggleHamburgerMenu() {
-    const dropdown = document.getElementById('hamburgerDropdown');
-    dropdown.classList.toggle('show');
-}
+// Hamburger menu + dark mode + share + 'Find a tune' moved to
+// static/js/hamburger_menu.js (shared with the live editor). Loaded in <head>.
 
-// Close dropdown when clicking outside
-document.addEventListener('click', function(event) {
-    const hamburgerMenu = document.querySelector('.hamburger-menu');
-    const dropdown = document.getElementById('hamburgerDropdown');
-    
-    if (!hamburgerMenu.contains(event.target)) {
-        dropdown.classList.remove('show');
-    }
-});
-
-// Prevent clicks on disabled items
-document.addEventListener('click', function(event) {
-    if (event.target.classList.contains('disabled')) {
-        event.preventDefault();
-    }
-});
-
-// Dark mode functionality
-function toggleDarkMode() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    updateDarkModeText(newTheme);
-    updateLogo(newTheme);
-}
-
-function updateLogo(theme) {
-    const logoImg = document.getElementById('logo-img');
-    if (logoImg) {
-        if (theme === 'dark') {
-            logoImg.src = logoImg.src.replace('logo3-1.png', 'logo3-1.png');
-        } else {
-            logoImg.src = logoImg.src.replace('logo3-1.png', 'logo3-1.png');
-        }
-    }
-}
-
-function updateDarkModeText(theme) {
-    const darkModeText = document.getElementById('dark-mode-text');
-    if (theme === 'dark') {
-        darkModeText.textContent = '☀️ Light Mode';
-    } else {
-        darkModeText.textContent = '🌙 Dark Mode';
-    }
-}
-
-function shareCurrentPage() {
-    // Get the current page URL
-    const currentUrl = window.location.href;
-    // Navigate to share page with current URL as parameter
-    window.location.href = '/share?url=' + encodeURIComponent(currentUrl);
-}
-
-// Initialize theme toggle text and logo on page load
+// Show any server-side flash messages as ephemeral messages on load.
 document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    updateDarkModeText(savedTheme);
-    updateLogo(savedTheme);
-
-    // Show any server-side flash messages as ephemeral messages
     showServerFlashMessages();
 });
 
