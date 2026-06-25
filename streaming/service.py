@@ -191,6 +191,11 @@ PALETTE_SIZE = 8
 
 # instance_id -> { conn_id: {queue, person_id, arrival_seq, name} }
 PRESENCE = {}
+# instance_id -> { person_id: {name, arrival_seq, ts} }  — people who just disconnected.
+# They linger as DIMMED avatars (and their rows stay colored) so a brief drop doesn't
+# erase them, until AWAY_TTL passes and they're truly removed from the view (§F).
+AWAY = {}
+AWAY_TTL = 3600  # seconds (1h) a disconnected person stays visible as "away"
 # instance_id -> { person_id: color_idx }  (cache of the persisted color; avoids a DB
 # hit on every typing signal / roster build; populated on connect, never shrinks)
 _COLORS = {}
@@ -249,17 +254,25 @@ async def _session_color(instance_id, person_id):
 
 
 def _roster(instance_id):
-    """One entry per present person (the same person on two devices = one entry)."""
+    """One entry per person who is present OR recently away. Same person on two devices
+    = one entry. Present people have devices>=1 & away=False; recently-disconnected
+    people have devices=0 & away=True (rendered dimmed) until AWAY_TTL elapses."""
     by_person = {}
     for st in PRESENCE.get(instance_id, {}).values():
         e = by_person.get(st["person_id"])
         if e is None:
             by_person[st["person_id"]] = {
                 "person_id": st["person_id"], "arrival_seq": st["arrival_seq"],
-                "name": st["name"], "devices": 1,
+                "name": st["name"], "devices": 1, "away": False,
             }
         else:
             e["devices"] += 1
+    for pid, a in AWAY.get(instance_id, {}).items():
+        if pid not in by_person:  # present beats away
+            by_person[pid] = {
+                "person_id": pid, "arrival_seq": a["arrival_seq"],
+                "name": a["name"], "devices": 0, "away": True,
+            }
     return sorted(by_person.values(), key=lambda e: e["arrival_seq"])
 
 
@@ -304,6 +317,20 @@ async def _typing_sweeper():
                 t.pop(pid, None)
             if stale:
                 _broadcast_typing(instance_id)
+
+
+async def _away_sweeper():
+    """Drop AWAY people after AWAY_TTL (1h), re-broadcasting instances that changed so
+    a long-gone person finally disappears from the roster (§F)."""
+    while True:
+        await asyncio.sleep(60)
+        now = time.monotonic()
+        for instance_id, a in list(AWAY.items()):
+            expired = [pid for pid, e in a.items() if now - e["ts"] > AWAY_TTL]
+            for pid in expired:
+                a.pop(pid, None)
+            if expired:
+                _broadcast_presence(instance_id)
 
 
 async def _resolve_person(user_id):
@@ -401,6 +428,7 @@ async def events(request):
             "queue": queue, "person_id": person["person_id"],
             "arrival_seq": seq, "name": person["name"],
         }
+        AWAY.get(session_instance_id, {}).pop(person["person_id"], None)  # they're back
         try:
             yield b": connected\n\n"
 
@@ -451,8 +479,16 @@ async def events(request):
         finally:
             # Sync cleanup so a leave is always broadcast, even if the cancellation
             # that got us here interrupts anything awaited.
-            PRESENCE.get(session_instance_id, {}).pop(conn_id, None)
-            _broadcast_presence(session_instance_id)  # tell the rest I left
+            st = PRESENCE.get(session_instance_id, {}).pop(conn_id, None)
+            # If that was the person's LAST device, don't vanish them — mark them AWAY
+            # (dimmed avatar, rows stay colored) until the sweeper drops them after an hour.
+            if st and st["person_id"] is not None:
+                still_here = any(s["person_id"] == st["person_id"] for s in PRESENCE.get(session_instance_id, {}).values())
+                if not still_here:
+                    AWAY.setdefault(session_instance_id, {})[st["person_id"]] = {
+                        "name": st["name"], "arrival_seq": st["arrival_seq"], "ts": time.monotonic(),
+                    }
+            _broadcast_presence(session_instance_id)  # tell the rest I went away
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_cors_headers(request))
 
@@ -495,11 +531,13 @@ async def lifespan(app):
     listener = await pool.acquire()
     await listener.add_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
     sweeper = asyncio.create_task(_typing_sweeper())
+    away_sweeper = asyncio.create_task(_away_sweeper())
     print(f"[streaming] live-logging SSE service up on :{PORT} (listening '{LIVE_EVENT_CHANNEL}')")
     try:
         yield
     finally:
         sweeper.cancel()
+        away_sweeper.cancel()
         await listener.remove_listener(LIVE_EVENT_CHANNEL, _on_global_notify)
         await pool.release(listener)
         await pool.close()

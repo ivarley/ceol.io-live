@@ -147,6 +147,9 @@ main {
   color: #04122b;
 }
 .avatar sup { font-size: 8px; margin-left: 1px; }
+/* recently-disconnected person: dimmed + hollow until the 1h away-TTL drops them */
+.avatar.away { opacity: 0.4; filter: grayscale(0.35); }
+.header-away { color: var(--muted); opacity: 0.75; }
 
 .status { text-transform: capitalize; }
 .status-live { color: #46d27a; }

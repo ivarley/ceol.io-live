@@ -185,6 +185,9 @@
   // whose color row didn't join — e.g. just assigned, or a freshly-settled add) — so
   // a row colors as soon as its logger is known, not only after a reload.
   function loggerColorIdx(r) {
+    // Only tint OTHER people's rows — never my own. Solo session => nothing tinted
+    // (clean); multi-logger => color reads as "someone else logged this" (§F).
+    if (r.logged_by_person_id != null && person && r.logged_by_person_id === person.person_id) return null
     if (r.logged_by_color != null) return r.logged_by_color
     if (r.logged_by_person_id != null) {
       const p = roster.find((x) => x.person_id === r.logged_by_person_id)
@@ -1456,8 +1459,8 @@
         </div>
         <span class="topbar-presence">
           {#each roster as p (p.person_id)}
-            <span class="avatar" style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.devices > 1 ? ` (${p.devices} devices)` : ''}">
-              {initials(p.name)}{#if p.devices > 1}<sup>{p.devices}</sup>{/if}
+            <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.away ? ' (away)' : p.devices > 1 ? ` (${p.devices} devices)` : ''}">
+              {initials(p.name)}{#if !p.away && p.devices > 1}<sup>{p.devices}</sup>{/if}
             </span>
           {/each}
         </span>
@@ -1490,8 +1493,11 @@
             </span>
             <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
           </div>
-          {#if roster.length}
-            <div class="header-stat">Currently logging: {roster.map((p) => p.name).join(', ')}</div>
+          {#if roster.some((p) => !p.away)}
+            <div class="header-stat">Currently logging: {roster.filter((p) => !p.away).map((p) => p.name).join(', ')}</div>
+          {/if}
+          {#if roster.some((p) => p.away)}
+            <div class="header-stat header-away">Away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</div>
           {/if}
         </div>
       {/if}
