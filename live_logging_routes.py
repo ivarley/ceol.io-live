@@ -43,7 +43,7 @@ from database import (
     extract_abc_incipit,
 )
 from auth import create_session
-from api_routes import api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64
+from api_routes import api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64, match_tune_core
 from fractional_indexing import generate_append_position, generate_position_between
 
 
@@ -1002,6 +1002,37 @@ def live_deep_search(session_instance_id):
                 r["can_render"] = bool(s[2]) if s else False
 
         return jsonify({"success": True, "results": results})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def live_match(session_instance_id):
+    """Type-ahead + Enter-gate matching for the live screen, IDENTICAL to the legacy
+    pill editor (shares `match_tune_core` -> find_matching_tune + wildcard), so a typed
+    string resolves the same way in both UIs.
+
+    GET ?q=&prefer_type=&limit= -> {success, matched, exact_match, results:[...]}.
+    `prefer_type` is the type of the set being logged into (soft sort preference).
+    """
+    q = (request.args.get("q") or "").strip()
+    prefer_type = (request.args.get("prefer_type") or "").strip() or None
+    try:
+        limit = min(20, max(1, int(request.args.get("limit", 8))))
+    except (ValueError, TypeError):
+        limit = 8
+    if len(q) < 2:
+        return jsonify({"success": True, "matched": False, "exact_match": False, "results": []})
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if not srow:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        result = match_tune_core(cur, srow[0], q, prefer_type, limit)
+        return jsonify({"success": True, **result})
     finally:
         conn.close()
 

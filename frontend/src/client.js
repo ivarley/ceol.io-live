@@ -79,6 +79,27 @@ export async function searchTunes(config, q, sessionId, preferType) {
   }
 }
 
+// Type-ahead + Enter-gate matching — the SAME server matcher the legacy pill editor
+// uses (find_matching_tune + wildcard), so a string resolves identically in both UIs.
+// Returns {exact_match, results:[{tune_id, name, tune_type, in_session_tune}]}.
+export async function liveMatch(config, q, preferType) {
+  const params = new URLSearchParams({ q, limit: '8' })
+  if (preferType) params.set('prefer_type', preferType)
+  try {
+    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/match?${params}`, { credentials: 'same-origin' })
+    if (!res.ok) return { exact_match: false, results: [] }
+    const j = await res.json()
+    return {
+      exact_match: !!j.exact_match,
+      results: (j.results || []).map((r) => ({
+        tune_id: r.tune_id, name: r.tune_name, tune_type: r.tune_type, in_session_tune: r.in_session_tune,
+      })),
+    }
+  } catch {
+    return { exact_match: false, results: [] }
+  }
+}
+
 // Tune detail for the info drawer (spec 021 §18).
 export async function tuneDetail(config, tuneId) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/tune/${tuneId}`, {

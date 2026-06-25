@@ -550,6 +550,15 @@ main {
   background: transparent; border: 1px solid var(--border); color: var(--muted);
 }
 
+/* ambiguous Enter (matches several tunes, no unique exact) — local "red" gate */
+.ambig-hint {
+  padding: 8px 12px; margin-bottom: 6px;
+  background: rgba(224, 89, 75, 0.12); border: 1px solid #e0594b;
+  border-radius: 8px; font-size: 13px; color: #f0b3ab;
+}
+.ambig-hint b { color: var(--text); }
+.composer input.ambiguous { border-color: #e0594b; box-shadow: 0 0 0 1px #e0594b; }
+
 .edit-banner {
   display: flex;
   align-items: center;

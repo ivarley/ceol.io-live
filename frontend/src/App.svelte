@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, searchTunes, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream } from './client.js'
   import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -106,6 +106,8 @@
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
   let noMatch = $state(false) // a completed search returned nothing (show the empty + deeper prompt)
+  let ambiguous = $state(false) // Enter hit a fragment matching several tunes, no unique exact (local "red" state)
+  let lastMatchExact = false // whether `results` (for resultsQuery) was a unique exact match (gate decision)
   let searchTimer = null
   let searchSeq = 0
 
@@ -552,8 +554,8 @@
     const q = input.trim()
     if (!q) { cancelEdit(); return }
     if (resultsQuery === q && results.length) { relinkTo(results[0]); return }
-    const r = await searchTunes(config, q, sessionId)
-    if (r.length) { relinkTo(r[0]); return }
+    const m = await matchFor(q)
+    if (m.results.length) { relinkTo(m.results[0]); return }
     cancelEdit()
     sendChange(id, { name: q, unlink: true }, { name: q, tune_id: null, tune_type: null })
   }
@@ -889,6 +891,7 @@
     results = []
     resultsQuery = ''
     noMatch = false
+    ambiguous = false
     cancelSearch()
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
@@ -912,21 +915,29 @@
     queueMicrotask(() => inputEl?.focus())
   }
 
-  // Enter commits the top match: pick the top visible result (what the user sees
-  // ranked first) — covers partials like "humours" -> "The Humours of …". Only when
-  // there's truly no match does it fall back to adding the raw text (server still
-  // tries an exact match on that). Fast-typing fallback: do a quick lookup if the
-  // debounced results haven't landed yet.
+  // Enter behavior (spec 021-style matching, NOT in 024): uses the SAME server matcher
+  // as the legacy pill editor (find_matching_tune + wildcard, via /match) so a string
+  // resolves identically in both. Only AUTO-LINK when unambiguous — a unique exact
+  // match, or a single candidate. If a fragment matches several tunes with no unique
+  // exact ("Humours"), do NOT guess: drop into a local "red" ambiguous state (dropdown
+  // stays open to disambiguate); a 2nd Enter logs it as typed (unlinked). No match at
+  // all logs unlinked immediately. The ambiguous state is purely client-side/pre-commit
+  // — a logged row is only ever linked or unlinked.
   async function commit() {
     if (editingId != null) { commitEdit(); return }
     const q = input.trim()
     if (!q) return
-    // Only trust the dropdown if it matches the CURRENT text (the debounced search
-    // may still be showing results for an earlier prefix); otherwise look up fresh.
-    if (resultsQuery === q && results.length) { pickResult(results[0]); return }
-    const r = await searchWithAbcFallback(q)
-    if (r.length) pickResult(r[0])
-    else submit()
+    if (ambiguous) { ambiguous = false; submit(); return } // 2nd Enter -> log as typed (the escape)
+    // Trust the dropdown only if it matches the CURRENT text; else look up fresh.
+    const m = (resultsQuery === q && (results.length || noMatch))
+      ? { exact_match: lastMatchExact, results }
+      : await matchFor(q)
+    if (!m.results.length) { submit(); return }              // no match -> unlinked now
+    if (m.exact_match) { pickResult(m.results[0]); return }  // unique exact -> link
+    if (m.results.length === 1) { pickResult(m.results[0]); return } // single candidate -> link
+    // ambiguous (multiple candidates, no unique exact): gate, surface candidates.
+    results = m.results.slice(0, 8); resultsQuery = q; noMatch = false
+    ambiguous = true
   }
 
   // --- deep catalog search (§D "search deeper") ---
@@ -1026,18 +1037,23 @@
     }
   }
 
-  // Name search, with an ABC fallback: if a short note-only query (looksLikeAbc)
-  // finds no tunes by name, search the notation instead (reusing deep ABC mode), so
-  // typing "ged" surfaces tunes whose notation starts with those notes.
-  async function searchWithAbcFallback(q) {
-    let r = await searchTunes(config, q, sessionId, cursorSetType())
-    if (!r.length && looksLikeAbc(q)) {
+  // The shared matcher (same as the legacy pill editor: find_matching_tune + wildcard),
+  // returning {exact_match, results}. ABC fallback: if a short note-only query
+  // (looksLikeAbc) finds no tunes by name, search the notation instead (deep ABC mode),
+  // so typing "ged" surfaces tunes whose notation starts with those notes.
+  async function matchFor(q) {
+    const m = await liveMatch(config, q, cursorSetType())
+    if (m.results.length) return m
+    if (looksLikeAbc(q)) {
       const abc = await deepSearch(config, q, null, cursorSetType(), 'abc')
-      r = abc.slice(0, 8).map((t) => ({
-        tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true,
-      }))
+      return {
+        exact_match: false,
+        results: abc.slice(0, 8).map((t) => ({
+          tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true,
+        })),
+      }
     }
-    return r
+    return m
   }
 
   // Progressive type-ahead search (debounced), shown above the composer.
@@ -1052,11 +1068,12 @@
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(async () => {
       const seq = ++searchSeq
-      const r = await searchWithAbcFallback(q)
+      const m = await matchFor(q)
       if (seq === searchSeq) {
-        results = r
+        results = m.results
         resultsQuery = q
-        noMatch = r.length === 0 // no matches at all -> show "no tunes match" + deeper search
+        lastMatchExact = m.exact_match
+        noMatch = m.results.length === 0 // no matches at all -> show "no tunes match" + deeper search
       }
     }, 180)
   }
@@ -1103,6 +1120,7 @@
 
   // Refresh a typing reservation while composing (throttled), run search, clear when empty.
   function onInput() {
+    ambiguous = false // editing the text re-opens the question; next Enter re-evaluates
     runSearch()
     if (input.trim()) {
       const now = Date.now()
@@ -1127,6 +1145,7 @@
     results = []
     resultsQuery = ''
     noMatch = false
+    ambiguous = false
   }
 
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
@@ -1561,6 +1580,12 @@
       </ul>
     {/if}
 
+    {#if ambiguous}
+      <div class="ambig-hint" transition:fly={{ y: 8, duration: 160 }}>
+        <span><b>“{input.trim()}”</b> matches several tunes — pick one above, or press Enter again to log as typed.</span>
+      </div>
+    {/if}
+
     {#if mergeNudge}
       <div class="merge-nudge" transition:fly={{ y: 8, duration: 160 }}>
         <span class="mn-text"><b>{mergeNudge.name}</b> is already in this set — merged.</span>
@@ -1578,6 +1603,7 @@
 
     <div class="composer">
       <input
+        class:ambiguous={ambiguous}
         placeholder={editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…'}
         bind:value={input}
         bind:this={inputEl}

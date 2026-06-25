@@ -6737,6 +6737,71 @@ def reactivate_session(session_path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5):
+    """Shared tune-name matcher used by BOTH the legacy pill editor (match_tune_ajax)
+    and the live logger (live_match), so a typed string resolves IDENTICALLY in both.
+
+    Returns: {matched, exact_match, results:[{tune_id, tune_name, tune_type, in_session_tune}]}.
+      - exact_match=True with one result when find_matching_tune resolves a unique exact
+        match (session aliases -> session_tune_alias -> tune name w/ "The", accent-insensitive).
+      - otherwise a wildcard candidate list ranked by preferred type, this session's
+        play-count, then tunebook count (the "pick one" / red state on the client).
+    """
+    tune_name = normalize_apostrophes((tune_name or "").strip())
+    if not tune_name:
+        return {"matched": False, "exact_match": False, "results": []}
+
+    tune_id, final_name, error_message = find_matching_tune(cur, session_id, tune_name)
+    if tune_id and not error_message:
+        cur.execute(
+            "SELECT t.tune_type, (st.session_id IS NOT NULL) "
+            "FROM tune t LEFT JOIN session_tune st ON st.tune_id = t.tune_id AND st.session_id = %s "
+            "WHERE t.tune_id = %s",
+            (session_id, tune_id),
+        )
+        row = cur.fetchone()
+        return {
+            "matched": True,
+            "exact_match": True,
+            "results": [{
+                "tune_id": tune_id,
+                "tune_name": final_name,
+                "tune_type": row[0] if row else None,
+                "in_session_tune": bool(row[1]) if row else False,
+            }],
+        }
+
+    cur.execute(
+        """
+        SELECT t.tune_id, COALESCE(st.alias, t.name) AS display_name, t.tune_type,
+               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS preferred_tune_type,
+               playcounts.plays, (st.session_id IS NOT NULL) AS in_session
+        FROM tune t
+        LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s
+        LEFT OUTER JOIN (
+            SELECT sit.tune_id, COUNT(*) AS plays
+            FROM session_instance si
+            INNER JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s
+            GROUP BY sit.tune_id
+        ) playcounts ON t.tune_id = playcounts.tune_id
+        WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
+          AND t.redirect_to_tune_id IS NULL
+        ORDER BY preferred_tune_type ASC,
+                 playcounts.plays DESC NULLS LAST,
+                 t.tunebook_count_cached DESC NULLS LAST,
+                 LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
+        LIMIT %s
+        """,
+        (previous_tune_type, session_id, session_id, f"%{tune_name.lower()}%", limit),
+    )
+    results = [
+        {"tune_id": m[0], "tune_name": m[1], "tune_type": m[2], "in_session_tune": bool(m[5])}
+        for m in cur.fetchall()
+    ]
+    return {"matched": len(results) == 1, "exact_match": False, "results": results}
+
+
 @api_login_required
 def match_tune_ajax(session_path, date_or_id):
     """
@@ -6768,115 +6833,11 @@ def match_tune_ajax(session_path, date_or_id):
             conn.close()
             return jsonify({"success": False, "message": "Session not found"})
 
-        session_id = session_result[0]
-
-        # First, try to find an exact match using the existing function
-        tune_id, final_name, error_message = find_matching_tune(
-            cur, session_id, tune_name
-        )
-
-        # If we found exactly one match, return it
-        if tune_id and not error_message:
-            # Get the tune type for the matched tune
-            cur.execute("SELECT tune_type FROM tune WHERE tune_id = %s", (tune_id,))
-            tune_type_result = cur.fetchone()
-            tune_type = tune_type_result[0] if tune_type_result else None
-
-            cur.close()
-            conn.close()
-
-            return jsonify(
-                {
-                    "success": True,
-                    "matched": True,
-                    "exact_match": True,
-                    "results": [
-                        {
-                            "tune_id": tune_id,
-                            "tune_name": final_name,
-                            "tune_type": tune_type,
-                        }
-                    ],
-                }
-            )
-
-        # If no exact match or multiple matches, do wildcard search
-        # Build the wildcard query with proper ordering
-        wildcard_pattern = f"%{tune_name.lower()}%"
-
-        # Debug logging
-        print(
-            f"Wildcard search for '{tune_name}' with previous_tune_type='{previous_tune_type}'"
-        )
-
-        # Query with all the ordering criteria (accent insensitive)
-        # Exclude redirected tunes - they should not appear in search results
-        query = """
-            SELECT
-                t.tune_id,
-                COALESCE(st.alias, t.name) as display_name,
-                t.tune_type,
-                CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END as preferred_tune_type,
-                playcounts.plays
-            FROM tune t
-            LEFT OUTER JOIN session_tune st
-                ON t.tune_id = st.tune_id AND st.session_id = %s
-            LEFT OUTER JOIN (
-                SELECT sit.tune_id, COUNT(*) as plays
-                FROM session_instance si
-                INNER JOIN session_instance_tune sit
-                    ON si.session_instance_id = sit.session_instance_id
-                WHERE si.session_id = %s
-                GROUP BY sit.tune_id
-            ) playcounts
-                ON t.tune_id = playcounts.tune_id
-            WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
-              AND t.redirect_to_tune_id IS NULL
-            ORDER BY
-                preferred_tune_type ASC,
-                playcounts.plays DESC NULLS LAST,
-                t.tunebook_count_cached DESC NULLS LAST,
-                LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
-            LIMIT 5
-        """
-
-        cur.execute(
-            query, (previous_tune_type, session_id, session_id, wildcard_pattern)
-        )
-        matches = cur.fetchall()
-
-        # Debug logging of results
-        print(f"Found {len(matches)} matches:")
-        for match in matches:
-            print(
-                f"  - {match[1]} ({match[2]}) - preferred={match[3]}, plays={match[4]}"
-            )
-
+        # Shared matcher (also used by the live logger) so results are identical.
+        result = match_tune_core(cur, session_result[0], tune_name, previous_tune_type, limit=5)
         cur.close()
         conn.close()
-
-        if not matches:
-            # No matches found at all
-            return jsonify(
-                {"success": True, "matched": False, "exact_match": False, "results": []}
-            )
-
-        # Format the results
-        results = []
-        for match in matches:
-            results.append(
-                {"tune_id": match[0], "tune_name": match[1], "tune_type": match[2]}
-            )
-
-        return jsonify(
-            {
-                "success": True,
-                "matched": len(results)
-                == 1,  # Only considered "matched" if exactly one result
-                "exact_match": False,
-                "results": results,
-            }
-        )
+        return jsonify({"success": True, **result})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
