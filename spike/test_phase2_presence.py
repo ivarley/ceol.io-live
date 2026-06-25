@@ -99,7 +99,10 @@ def main():
     ri = latest(qi)
     seqs = {p["person_id"]: p["arrival_seq"] for p in ri}
     assert len(ri) == 2, f"ian should now see 2 present, got {ri}"
-    assert sorted(seqs.values()) == [0, 1], f"arrival ordinals should be distinct 0,1; got {seqs}"
+    # Color ordinals must be DISTINCT (the invariant). Exact values are no longer 0,1:
+    # they're persisted per-session palette indices (session_logger_color), so if other
+    # people at this session already hold colors the new joiners get the next free ones.
+    assert len(set(seqs.values())) == 2, f"arrival ordinals should be distinct; got {seqs}"
     print(f"2. sarah joins -> ian sees both {[(p['name'], p['arrival_seq']) for p in ri]} ✓")
 
     rs = latest(qs)
@@ -114,15 +117,16 @@ def main():
     assert r and len(r) == 1, f"after sarah leaves, ian should see 1, got {r}"
     print(f"4. sarah disconnects -> ian's roster shrinks to {[(p['name'], p['arrival_seq']) for p in r]} ✓")
 
-    # ordinal stability: ian reconnecting keeps seq 0 (monotonic by first arrival)
+    # ordinal stability: ian reconnecting keeps the SAME persisted color index
+    ian_seq0 = seqs[77128]
     ian2 = login("ian@ceol.io")
     q2 = queue.Queue()
     threading.Thread(target=presence_reader, args=(ian2, q2), daemon=True).start()
     time.sleep(0.8)
     r = latest(q2)
     ian_seq = next((p["arrival_seq"] for p in r if p["person_id"] == 77128), None)
-    assert ian_seq == 0, f"ian's arrival ordinal should stay 0, got {ian_seq} ({r})"
-    print("5. ian's arrival ordinal stable across reconnect (still 0) ✓")
+    assert ian_seq == ian_seq0, f"ian's color index should stay {ian_seq0}, got {ian_seq} ({r})"
+    print(f"5. ian's color index stable across reconnect (still {ian_seq}) ✓")
 
     # the reopen case the user hit: sarah rejoins -> ian (still connected) sees her return
     sarah2 = login("sarah.oconnor@example.com")

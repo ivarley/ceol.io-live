@@ -16,7 +16,8 @@
   // op_id -> {tempId, name, op_type, payload, status, ts}. status 'sending' = online
   // optimistic in-flight (§A2); 'queued' = offline, persisted to IndexedDB (§G).
   const pending = new SvelteMap()
-  const flashing = new SvelteSet() // record ids briefly highlighted on settle (§39)
+  const flashing = new SvelteMap() // record id -> {kind:'mine'|'remote'|'merge', color, tok} (§39/§E)
+  let flashSeq = 0
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
   let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
@@ -158,11 +159,39 @@
     byId.delete(id)
   }
 
-  // Briefly highlight a record when it settles / changes (the §39 settle-flash).
-  function flashId(id) {
+  // Briefly highlight a record when it settles / changes (the §39 settle-flash),
+  // personalized: 'mine' = a soft accent flare (my own settle), 'remote' = a ring
+  // pulse in the actor's color (someone else changed it), 'merge' = a purple bounce
+  // when an append collapsed into an existing tune (§E/§H30).
+  function flashId(id, kind = 'mine', color = null) {
     if (id == null) return
-    flashing.add(id)
-    setTimeout(() => flashing.delete(id), 700)
+    const tok = ++flashSeq
+    flashing.set(id, { kind, color, tok })
+    setTimeout(() => { const e = flashing.get(id); if (e && e.tok === tok) flashing.delete(id) }, kind === 'mine' ? 700 : 1400)
+  }
+
+  // Resolve a row's logger color index: the persisted per-session color (joined at
+  // insert), else the live roster keyed on the logger's person_id (a present logger
+  // whose color row didn't join — e.g. just assigned, or a freshly-settled add) — so
+  // a row colors as soon as its logger is known, not only after a reload.
+  function loggerColorIdx(r) {
+    if (r.logged_by_color != null) return r.logged_by_color
+    if (r.logged_by_person_id != null) {
+      const p = roster.find((x) => x.person_id === r.logged_by_person_id)
+      if (p) return p.arrival_seq
+    }
+    return null
+  }
+
+  // Inline per-row style: the logger's persisted color drives a subtle attribution
+  // tint (--by), and an active flash carries the actor's color (--flash).
+  function rowStyle(r) {
+    const parts = []
+    const idx = loggerColorIdx(r)
+    if (idx != null) parts.push(`--by:${colorFor(idx)}`)
+    const f = flashing.get(r.session_instance_tune_id)
+    if (f && f.color) parts.push(`--flash:${f.color}`)
+    return parts.join(';')
   }
 
   // Ordered, non-deleted records (tunes + breaks), then segment into sets on breaks.
@@ -617,7 +646,12 @@
       case 'set_confidence':
       case 'corroborate': // server collapsed a duplicate into this record (§H30)
         put(d.record)
-        flashId(d.record?.session_instance_tune_id)
+        {
+          const rid = d.record?.session_instance_tune_id
+          if (d.op_type === 'corroborate') flashId(rid, 'merge')
+          else if (d.actor && d.actor.person_id === person.person_id) flashId(rid, 'mine')
+          else flashId(rid, 'remote', d.actor ? colorForPerson(d.actor.person_id) : null)
+        }
         // Live-logging follow-the-end (§E): if my cursor was parked right after the
         // previously-last tune and someone's tune just landed at the very end, move
         // my cursor to the end so my next add goes AFTER theirs, not before.
@@ -716,7 +750,7 @@
     if (res.record) {
       if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
-      flashId(res.record.session_instance_tune_id)
+      flashId(res.record.session_instance_tune_id, res.op_type === 'corroborate' ? 'merge' : 'mine')
     }
     // My append collapsed into an existing tune (§H30/§D16). Surface a gentle nudge so
     // the merge is visible and reversible ("keep both"), rather than silent.
@@ -1410,20 +1444,26 @@
           <div
             class="tune-row"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
+            class:unlinked={!r._temp && !r.tune_id && r.record_type === 'tune'}
+            class:has-by={!r._temp && r.tune_id && loggerColorIdx(r) != null}
             class:pending={r._temp}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
             class:selected={selectedId === r.session_instance_tune_id}
             class:editing={editingId === r.session_instance_tune_id}
-            class:flash={flashing.has(r.session_instance_tune_id)}
+            class:flash-mine={flashing.get(r.session_instance_tune_id)?.kind === 'mine'}
+            class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
+            class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
+            style={rowStyle(r)}
             onclick={() => !r._temp && !r._removing && selectRow(r.session_instance_tune_id)}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
             {#if r._temp}
-              <span class="actions"><span class="hourglass" title={r._status === 'queued' ? 'Queued (offline)' : 'Sending…'}>⏳</span></span>
+              <span class="actions"><span class="pend-label">{r._status === 'queued' ? '⏳ queued' : '⏳ sending…'}</span></span>
             {:else if r._removing}
-              <span class="actions"><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
+              <span class="actions"><span class="pend-label">⏳ removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
+              {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
               <button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
             {/if}
           </div>

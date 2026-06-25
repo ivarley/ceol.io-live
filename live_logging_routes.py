@@ -72,16 +72,20 @@ _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
     "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
-    "sp.first_name, sp.last_name"
+    "sp.first_name, sp.last_name, cp.person_id, slc.color"
 )
 # LEFT JOIN tune (type), the creating user -> person (who logged it, for the per-set
-# "Logged by X · time" tray), and the started-by person (the set starter; §19/§F).
+# "Logged by X · time" tray AND the per-row logger color tint), the started-by person
+# (the set starter; §19/§F), and that logger's persisted per-session color (so a row
+# carries its logger's color even when they're not currently present; §F).
 _RECORD_FROM = (
     "FROM session_instance_tune sit "
     "LEFT JOIN tune t ON t.tune_id = sit.tune_id "
     "LEFT JOIN user_account cu ON cu.user_id = sit.created_by_user_id "
     "LEFT JOIN person cp ON cp.person_id = cu.person_id "
-    "LEFT JOIN person sp ON sp.person_id = sit.started_by_person_id"
+    "LEFT JOIN person sp ON sp.person_id = sit.started_by_person_id "
+    "LEFT JOIN session_instance si ON si.session_instance_id = sit.session_instance_id "
+    "LEFT JOIN session_logger_color slc ON slc.session_id = si.session_id AND slc.person_id = cp.person_id"
 )
 
 
@@ -110,6 +114,11 @@ def _record_to_dict(row):
         "logged_at": row[12].isoformat() if row[12] else None,
         "logged_by": row[13],
         "started_by_name": _display_name(row[14], row[15]),
+        "logged_by_person_id": row[16],
+        # Persisted palette index of the logger's per-session color (NULL if they have
+        # no color yet, e.g. logged via the legacy UI); the client maps index -> color
+        # for the subtle per-row attribution tint.
+        "logged_by_color": row[17],
     }
 
 

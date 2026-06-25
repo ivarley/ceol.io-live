@@ -6,6 +6,7 @@
   --accent: #4f9dff;
   --insert: #f5c518;
   --border: #2a2a30;
+  --attention: #e0b341; /* amber: unlinked / needs-attention */
 }
 
 * { box-sizing: border-box; }
@@ -248,9 +249,22 @@ main {
   padding: 7px 4px;
   border-radius: 6px;
   cursor: pointer;
+  /* transparent 1px border reserved so the logger tint (below) causes no layout shift */
+  border: 1px solid transparent;
 }
+/* subtle per-logger attribution tint on linked rows (§F): a thin border in a darker,
+   desaturated variant of the logger's color (mixed toward the panel bg), with the ⓘ
+   icon kept at the full color as the legible accent. */
+.tune-row.has-by { border-color: color-mix(in srgb, var(--by) 30%, var(--panel)); }
+.tune-row.has-by .info-btn { color: var(--by); }
+.tune-row.has-by .info-btn:hover { color: var(--accent); }
+/* unlinked (raw-text) tunes read as hollow/amber so they're scannable at a glance */
+.tune-row.unlinked { border: 1px dashed var(--attention); background: transparent; }
+.tune-row.unlinked .name { color: var(--attention); }
+.row-warn { flex: none; color: var(--attention); font-size: 12px; font-weight: 600; margin-left: 6px; white-space: nowrap; }
 .tune-row:hover { background: rgba(255, 255, 255, 0.03); }
-.tune-row.selected { background: rgba(79, 157, 255, 0.12); }
+/* selected row uses the same yellow as the insertion point (active editing) */
+.tune-row.selected { background: rgba(245, 197, 24, 0.14); box-shadow: inset 0 0 0 1px var(--insert), 0 0 12px rgba(245, 197, 24, 0.18); }
 .tune-row.editing { background: rgba(245, 197, 24, 0.14); box-shadow: inset 0 0 0 1px var(--insert); }
 .tune-row .name { flex: 1; min-width: 0; }
 .info-btn {
@@ -341,17 +355,30 @@ main {
 .att-create input { flex: 1; }
 .tune-row .name { display: inline; }
 .tune-row.low .name { color: #e0b341; } /* low-confidence (audio, ≤70) */
-.tune-row.pending { opacity: 0.55; }
-.tune-row.pending .name { border-bottom: 1px dashed var(--muted); }
-.tune-row.queued .name { border-bottom-color: #e0b341; color: #e8d28a; }
+/* pending/queued (offline) rows: dimmed with a dashed outline + a status label */
+.tune-row.pending { opacity: 0.72; border: 1px dashed var(--border); }
+.tune-row.queued { border-color: var(--attention); }
 .tune-row.removing .name { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
+.pend-label { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tune-row.queued .pend-label { color: #e8d28a; }
+.actions { display: inline-flex; align-items: center; gap: 6px; }
 .actions .restore { color: var(--accent); border-color: var(--accent); }
-.hourglass { font-size: 12px; opacity: 0.8; }
-/* settle-flash when a record is confirmed/changed (§39) */
-.tune-row.flash { animation: settle 0.7s ease-out; border-radius: 6px; }
-@keyframes settle {
-  0% { background: rgba(79, 157, 255, 0.35); }
+/* settle-flash, personalized by who changed the row (§39/§E) */
+.tune-row.flash-mine { animation: flash-mine 0.7s ease-out; }
+@keyframes flash-mine {
+  0% { background: rgba(79, 157, 255, 0.30); }
   100% { background: transparent; }
+}
+.tune-row.flash-remote { animation: flash-remote 1.4s ease-out; }
+@keyframes flash-remote {
+  0% { box-shadow: 0 0 0 3px var(--flash, var(--accent)); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.tune-row.flash-merge { animation: flash-merge 0.9s ease-out; }
+@keyframes flash-merge {
+  0%   { box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.6); transform: scale(1); }
+  40%  { transform: scale(1.015); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
 }
 
 /* ---------- seams: the insertion-point model (§B) ---------- */
