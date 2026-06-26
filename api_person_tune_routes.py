@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 from functools import wraps
 from services.person_tune_service import PersonTuneService, UNSET
 from services.thesession_sync_service import ThesessionSyncService
-from database import get_db_connection, get_current_user_id
+from database import get_db_connection, get_current_user_id, normalize_apostrophes, apostrophe_norm_sql
 import base64
 
 
@@ -1014,7 +1014,7 @@ def search_tunes():
     Requirements: 5.1
     """
     try:
-        query = request.args.get('q', '').strip()
+        query = normalize_apostrophes(request.args.get('q', '').strip())
 
         if not query:
             return jsonify({
@@ -1071,10 +1071,11 @@ def search_tunes():
                 if not person_id:  # Only add if not already prioritizing by person_tune
                     order_by_fields.append("CASE WHEN st.session_id IS NOT NULL THEN 1 ELSE 0 END")
 
-            # Build match priority case (accent insensitive)
-            select_fields.append("""CASE
-                           WHEN LOWER(unaccent(t.name)) = LOWER(unaccent(%s)) THEN 1
-                           WHEN LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s)) THEN 2
+            # Build match priority case (accent + smart-quote insensitive)
+            _nm = f"LOWER(unaccent({apostrophe_norm_sql('t.name')}))"
+            select_fields.append(f"""CASE
+                           WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
                            ELSE 3
                        END AS match_priority""")
             # Soft type preference (matching the set's type sorts first)
@@ -1093,7 +1094,7 @@ def search_tunes():
                 SELECT {select_clause}
                 FROM tune t
                 {join_clause}
-                WHERE LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s))
+                WHERE LOWER(unaccent({apostrophe_norm_sql('t.name')})) LIKE LOWER(unaccent(%s))
                   AND t.redirect_to_tune_id IS NULL
                 ORDER BY {order_by_clause}
                 LIMIT %s

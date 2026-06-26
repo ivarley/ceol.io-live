@@ -12,6 +12,7 @@ from database import (
     save_to_history,
     find_matching_tune,
     normalize_apostrophes,
+    apostrophe_norm_sql,
     check_in_person as db_check_in_person,
 )
 from email_utils import send_email_via_sendgrid
@@ -6907,7 +6908,7 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
         }
 
     cur.execute(
-        """
+        f"""
         SELECT t.tune_id, COALESCE(st.alias, t.name) AS display_name, t.tune_type,
                CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS preferred_tune_type,
                playcounts.plays, (st.session_id IS NOT NULL) AS in_session
@@ -6920,7 +6921,7 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
             WHERE si.session_id = %s
             GROUP BY sit.tune_id
         ) playcounts ON t.tune_id = playcounts.tune_id
-        WHERE LOWER(unaccent(COALESCE(st.alias, t.name))) LIKE %s
+        WHERE LOWER(unaccent({apostrophe_norm_sql('COALESCE(st.alias, t.name)')})) LIKE %s
           AND t.redirect_to_tune_id IS NULL
         ORDER BY preferred_tune_type ASC,
                  playcounts.plays DESC NULLS LAST,

@@ -32,6 +32,17 @@ def normalize_apostrophes(text):
     return text.replace("'", "'").replace("'", "'").replace(""", '"').replace(""", '"')
 
 
+def apostrophe_norm_sql(col):
+    """SQL expression that normalizes smart single-quotes / backtick / acute in `col` to a
+    straight ASCII apostrophe, so name matching is quote-insensitive (iPhones type ’, while
+    catalog data may use either). Pair with a normalize_apostrophes()'d query so both sides
+    use straight quotes. chr: 8216=‘ 8217=’ 96=` 180=´ -> 39='."""
+    return (
+        f"translate({col}, chr(8216)||chr(8217)||chr(96)||chr(180), "
+        f"chr(39)||chr(39)||chr(39)||chr(39))"
+    )
+
+
 # Mapping of tune types to expected eighth notes per bar
 # Used for detecting pickup notes (anacrusis) in ABC notation
 TUNE_TYPE_BEATS = {
@@ -468,10 +479,10 @@ def find_matching_tune(
     normalized_tune_name = normalize_apostrophes(tune_name.strip())
     # First, search session_tune table for alias match (case and accent insensitive)
     cur.execute(
-        """
+        f"""
         SELECT tune_id
         FROM session_tune
-        WHERE session_id = %s AND LOWER(unaccent(alias)) = LOWER(unaccent(%s))
+        WHERE session_id = %s AND LOWER(unaccent({apostrophe_norm_sql('alias')})) = LOWER(unaccent(%s))
     """,
         (session_id, normalized_tune_name),
     )
@@ -489,10 +500,10 @@ def find_matching_tune(
     elif len(session_tune_matches) == 0:
         # No session_tune alias match, search session_tune_alias table (accent insensitive)
         cur.execute(
-            """
+            f"""
             SELECT tune_id
             FROM session_tune_alias
-            WHERE session_id = %s AND LOWER(unaccent(alias)) = LOWER(unaccent(%s))
+            WHERE session_id = %s AND LOWER(unaccent({apostrophe_norm_sql('alias')})) = LOWER(unaccent(%s))
         """,
             (session_id, normalized_tune_name),
         )
@@ -511,12 +522,12 @@ def find_matching_tune(
             # No alias match in either table, search tune table by name with flexible "The " matching (accent insensitive)
             # Exclude redirected tunes - they should not match
             cur.execute(
-                """
+                f"""
                 SELECT tune_id, name
                 FROM tune
-                WHERE (LOWER(unaccent(name)) = LOWER(unaccent(%s))
-                OR LOWER(unaccent(name)) = LOWER(unaccent('The ' || %s))
-                OR LOWER(unaccent('The ' || name)) = LOWER(unaccent(%s)))
+                WHERE (LOWER(unaccent({apostrophe_norm_sql('name')})) = LOWER(unaccent(%s))
+                OR LOWER(unaccent({apostrophe_norm_sql('name')})) = LOWER(unaccent('The ' || %s))
+                OR LOWER(unaccent('The ' || {apostrophe_norm_sql('name')})) = LOWER(unaccent(%s)))
                 AND redirect_to_tune_id IS NULL
             """,
                 (normalized_tune_name, normalized_tune_name, normalized_tune_name),
