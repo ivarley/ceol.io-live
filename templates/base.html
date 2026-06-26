@@ -515,6 +515,10 @@ if ('serviceWorker' in navigator) {
     };
     {% endif %}
 
+    // Expose the active session globally so the shared tune-detail modal can offer
+    // a "Log to current session" action (spec 024). Kept in sync below on refresh.
+    window.activeSession = activeSession;
+
     // Fetch active session info from server (used for dynamic updates)
     function fetchActiveSession() {
         fetch(`/api/person/${personId}/active_session`)
@@ -522,6 +526,7 @@ if ('serviceWorker' in navigator) {
             .then(data => {
                 if (data.success) {
                     activeSession = data.active_session;
+                    window.activeSession = activeSession;
 
                     if (activeSession) {
                         badge.classList.add('active');

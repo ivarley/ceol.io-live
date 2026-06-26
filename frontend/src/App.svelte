@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream } from './client.js'
+  import { bootstrap, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
   import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -878,6 +878,27 @@
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
   }
 
+  // Auto-log a tune arriving via ?tune=<id> ("Log to current session" from a tune-detail
+  // page elsewhere in the app, §024). Append to the very end — which continues the trailing
+  // open set if there is one, else starts a new set. We resolve the name/type for the
+  // optimistic row; the server re-resolves canonically on the add_tune op.
+  async function autoLogTune(rawId) {
+    const tune_id = parseInt(rawId, 10)
+    if (!Number.isFinite(tune_id)) return
+    let name = '', tune_type = null
+    try {
+      const d = await tuneDetail(config, tune_id)
+      if (d && d.success) { name = d.name || ''; tune_type = d.tune_type || null }
+    } catch { /* offline / not found: fall through with a bare add */ }
+    if (!name) name = '#' + tune_id
+    setCursor(null) // append at the end of the session instance
+    addOptimistic({ tune_id, name, tune_type }, name)
+    requestAnimationFrame(() => {
+      const sets = mainEl?.querySelector('.sets')
+      if (sets) sets.scrollTop = sets.scrollHeight
+    })
+  }
+
   // "Keep both" (§D16): re-log the just-merged tune as a DISTINCT row at the end,
   // bypassing corroboration (no_merge). Dismisses the nudge.
   function keepBoth() {
@@ -1410,7 +1431,17 @@
   }
 
   onMount(() => {
-    connect() // bootstraps records, then hydrateQueue() re-applies any queued ops
+    // "Log to current session" from a tune-detail page elsewhere in the app lands here
+    // with ?tune=<id>. Capture it and strip it from the URL up front so a reload/back
+    // can't re-add the tune; append it once the first bootstrap has loaded truth (§024).
+    const params = new URLSearchParams(window.location.search)
+    const autoTuneId = params.get('tune')
+    if (autoTuneId) {
+      params.delete('tune')
+      const qs = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''))
+    }
+    connect().then(() => { if (autoTuneId) autoLogTune(autoTuneId) }) // bootstraps records, then hydrateQueue() re-applies any queued ops
     // The shared app menu's 'Find a tune' calls this in the live context -> insert.
     window.__liveFindTune = () => openDeep()
     window.addEventListener('pagehide', onPageHide)

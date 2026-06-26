@@ -271,6 +271,48 @@
 }
 
 /* Tunebook status section */
+/* "Log to current session" action (spec 024) — shown when a session is in progress. */
+.active-session-log-section {
+    margin: 4px 0 8px;
+}
+
+.active-session-log-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 6px;
+    background-color: #28a745;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.active-session-log-btn:hover {
+    background-color: #218838;
+}
+
+.active-session-log-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .active-session-log-btn {
+    background-color: #2ea043;
+}
+
+[data-theme="dark"] .active-session-log-btn:hover {
+    background-color: #3fb950;
+}
+
 .tunebook-status-section {
     padding: 12px 16px;
     border-radius: 6px;

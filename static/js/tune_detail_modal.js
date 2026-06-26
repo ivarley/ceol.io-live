@@ -190,6 +190,10 @@
         // Header section with tune type, title, logo, and close button
         sections.push(buildHeaderSection(tuneData, config));
 
+        // "Log to current session" action — only when a session is in progress (the
+        // green dot). Navigates to the live editor and appends this tune (spec 024).
+        sections.push(buildActiveSessionSection(tuneData, config));
+
         // Configure section (collapsible except on admin; not in the global lookup view)
         if (!isGlobal) {
             sections.push(buildConfigureSection(tuneData, config));
@@ -254,6 +258,45 @@
                 </tr>
             </table>
         `;
+    }
+
+    /**
+     * Build "Log to current session" action section.
+     * Shown only when the user has an active session in progress (window.activeSession,
+     * the header's green dot). Clicking navigates to the live editor with the tune id
+     * in the querystring; the live editor appends it to the end of the session (spec 024).
+     */
+    function buildActiveSessionSection(tuneData, config) {
+        const active = window.activeSession;
+        if (!active || !active.session_instance_id) return '';
+
+        const tuneId = config.tuneId || tuneData.tune_id;
+        if (!tuneId) return '';
+
+        const sessionName = active.session_name || 'the current session';
+        return `
+            <div class="active-session-log-section">
+                <button class="active-session-log-btn" onclick="TuneDetailModal.logToActiveSession()">
+                    <span class="active-session-log-dot"></span>
+                    Log to ${escapeHtml(sessionName)}
+                </button>
+            </div>
+        `;
+    }
+
+    /**
+     * Navigate to the live editor for the active session, appending this tune.
+     */
+    function logToActiveSession() {
+        const active = window.activeSession;
+        if (!active || !active.session_instance_id) return;
+
+        const tuneId = (currentConfig && currentConfig.tuneId) || (currentTuneData && currentTuneData.tune_id);
+        if (!tuneId) return;
+
+        // Clean the modal's tune param off the URL so the back button is sane.
+        removeUrlTuneParam();
+        window.location.href = `/live/instances/${active.session_instance_id}?tune=${tuneId}`;
     }
 
     /**
@@ -2395,7 +2438,8 @@ ${abcBody}`;
         removeFromSession: removeFromSession,
         refreshTunebookCount: refreshTunebookCount,
         fetchSetting: fetchSetting,
-        getTuneIdFromUrl: getTuneIdFromUrl
+        getTuneIdFromUrl: getTuneIdFromUrl,
+        logToActiveSession: logToActiveSession
     };
 
     // Auto-initialize when DOM is ready
