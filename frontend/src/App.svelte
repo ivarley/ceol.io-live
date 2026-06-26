@@ -74,6 +74,7 @@
   let es = null
   let headerH = $state(0) // measured header height, so floating toasts hover just below it
   let inputEl // the composer input element (for stay-hot refocus)
+  let mainEl // the app container — visualViewport keyboard compensation (§41, mobile)
   let setsEl // the scrolling list element
   let atEnd = $state(true) // is the list scrolled to (near) the bottom?
   let lastCount = 0 // tracks record count to auto-scroll only on additions
@@ -1416,20 +1417,54 @@
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+    // iOS keyboard / address-bar compensation (§41, exactly like the prototype): on a
+    // narrow screen, pin the app container to the VISUAL viewport (height + translateY)
+    // so the on-screen keyboard or URL-bar shift can't push the fixed header off-screen.
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onViewportChange)
+      window.visualViewport.addEventListener('scroll', onViewportChange)
+      fitToViewport()
+    }
   })
+
+  // Match the app container to the visual viewport (mobile). On desktop / no
+  // visualViewport, clear the overrides so the CSS 100dvh layout governs.
+  function fitToViewport() {
+    const vv = window.visualViewport
+    if (!mainEl) return
+    if (!vv || window.innerWidth >= 480) {
+      mainEl.style.height = ''
+      mainEl.style.transform = ''
+      return
+    }
+    mainEl.style.height = vv.height + 'px'
+    mainEl.style.transform = 'translateY(' + vv.offsetTop + 'px)'
+  }
+  function onViewportChange() {
+    fitToViewport()
+    // keep the insertion point / end of the list visible as it resizes under the keyboard
+    requestAnimationFrame(() => {
+      const sets = mainEl?.querySelector('.sets')
+      if (sets && insertAfterId == null) sets.scrollTop = sets.scrollHeight
+    })
+  }
 
   onDestroy(() => {
     window.removeEventListener('pagehide', onPageHide)
     window.removeEventListener('pageshow', onPageShow)
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', onViewportChange)
+      window.visualViewport.removeEventListener('scroll', onViewportChange)
+    }
     if (reconnectTimer) clearTimeout(reconnectTimer)
     if (reconnectPoll) clearTimeout(reconnectPoll)
     if (es) es.close()
   })
 </script>
 
-<main>
+<main bind:this={mainEl}>
   <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
