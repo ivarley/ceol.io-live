@@ -3108,7 +3108,9 @@ def _get_session_data(session_path):
                    location_street, city, state, country, comments, unlisted_address,
                    initiation_date, termination_date, recurrence, timezone,
                    COALESCE(auto_create_instances, FALSE) as auto_create_instances,
-                   COALESCE(auto_create_hours_ahead, 24) as auto_create_hours_ahead
+                   COALESCE(auto_create_hours_ahead, 24) as auto_create_hours_ahead,
+                   COALESCE(live_cache_session_limit, 200) as live_cache_session_limit,
+                   COALESCE(live_cache_global_limit, 25) as live_cache_global_limit
             FROM session
             WHERE path = %s
         """,
@@ -3139,6 +3141,8 @@ def _get_session_data(session_path):
             "timezone_display": get_timezone_display_name(session_row[15] or "UTC"),
             "auto_create_instances": session_row[16],
             "auto_create_hours_ahead": session_row[17],
+            "live_cache_session_limit": session_row[18],
+            "live_cache_global_limit": session_row[19],
         }
 
         # Add human-readable recurrence if JSON format
@@ -3325,6 +3329,28 @@ def session_admin_logs(session_path):
         session=session_data,
         session_path=session_path,
         active_tab="logs",
+    )
+
+
+@login_required
+def session_admin_cache(session_path):
+    """Session admin "Local Cache" page — view/tune the live-logging fast-match
+    vocabulary (N most-played session tunes + M globally-popular tunes; spec 024)."""
+    if not _check_session_admin_access(session_path):
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    session_data = _get_session_data(session_path)
+    if not session_data:
+        from app import render_error_page
+
+        return render_error_page("Session not found", 404)
+
+    return render_template(
+        "session_admin.html",
+        session=session_data,
+        session_path=session_path,
+        active_tab="cache",
     )
 
 

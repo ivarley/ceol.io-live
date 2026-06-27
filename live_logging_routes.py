@@ -1176,17 +1176,112 @@ def live_bootstrap(session_instance_id):
         conn.close()
 
 
+def get_session_cache_limits(cur, session_id):
+    """Return (N, M) — this session's local-cache size limits — falling back to the
+    LOCAL_VOCAB_* module defaults when the columns are NULL/absent (older rows)."""
+    n = m = None
+    try:
+        cur.execute(
+            "SELECT live_cache_session_limit, live_cache_global_limit FROM session WHERE session_id = %s",
+            (session_id,),
+        )
+        row = cur.fetchone()
+        if row:
+            n, m = row[0], row[1]
+    except psycopg2.Error:
+        pass  # column not yet migrated -> defaults
+    n = LOCAL_VOCAB_SESSION_LIMIT if n is None else n
+    m = LOCAL_VOCAB_GLOBAL_LIMIT if m is None else m
+    return n, m
+
+
+def compute_session_vocabulary(cur, session_id, n, m, include_meta=False):
+    """The two-tier local-match vocabulary for a session (§024). Returns
+    (known_tunes, known_aliases).
+
+    Tier A = the session's repertoire, most-played-here first, capped at N; tier B =
+    globally-popular tunes (by tunebook count) NOT already in tier A, capped at M.
+    Aliases are scoped to the tier-A tunes actually included (tier B isn't in the
+    session, so has no session aliases). With include_meta, each tune dict also carries
+    a `tier` ('session'/'global') and its ranking number (`plays` / `tunebook_count`) —
+    used by the session-admin preview; the client index ignores those extra fields.
+    """
+    # Tier A — most-played-here first (then global popularity, then name as
+    # deterministic tiebreakers).
+    cur.execute(
+        """
+        SELECT st.tune_id, t.name, st.alias, t.tune_type, COALESCE(pc.plays, 0) AS plays
+        FROM session_tune st
+        JOIN tune t ON t.tune_id = st.tune_id
+        LEFT JOIN (
+            SELECT sit.tune_id, COUNT(*) AS plays
+            FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+            GROUP BY sit.tune_id
+        ) pc ON pc.tune_id = st.tune_id
+        WHERE st.session_id = %s AND t.redirect_to_tune_id IS NULL
+        ORDER BY COALESCE(pc.plays, 0) DESC,
+                 t.tunebook_count_cached DESC NULLS LAST, t.name
+        LIMIT %s
+        """,
+        (session_id, session_id, n),
+    )
+    known_tunes = []
+    for r in cur.fetchall():
+        d = {"tune_id": r[0], "name": r[1], "alias": r[2], "tune_type": r[3]}
+        if include_meta:
+            d["tier"] = "session"
+            d["plays"] = r[4]
+        known_tunes.append(d)
+    session_tune_ids = [t["tune_id"] for t in known_tunes]
+
+    # Tier B — globally-popular tunes (by tunebook count) not already in tier A.
+    cur.execute(
+        """
+        SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached
+        FROM tune t
+        WHERE t.redirect_to_tune_id IS NULL
+          AND NOT (t.tune_id = ANY(%s::int[]))
+        ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name
+        LIMIT %s
+        """,
+        (session_tune_ids, m),
+    )
+    for r in cur.fetchall():
+        d = {"tune_id": r[0], "name": r[1], "alias": None, "tune_type": r[2]}
+        if include_meta:
+            d["tier"] = "global"
+            d["tunebook_count"] = r[3]
+        known_tunes.append(d)
+
+    # Aliases for the included session tunes (tier A) only.
+    known_aliases = []
+    if session_tune_ids:
+        cur.execute(
+            """
+            SELECT sta.tune_id, sta.alias, t.name, t.tune_type
+            FROM session_tune_alias sta JOIN tune t ON t.tune_id = sta.tune_id
+            WHERE sta.session_id = %s AND t.redirect_to_tune_id IS NULL
+              AND sta.tune_id = ANY(%s::int[])
+            """,
+            (session_id, session_tune_ids),
+        )
+        known_aliases = [
+            {"tune_id": r[0], "alias": r[1], "name": r[2], "tune_type": r[3]}
+            for r in cur.fetchall()
+        ]
+
+    return known_tunes, known_aliases
+
+
 @api_login_required
 def live_vocabulary(session_instance_id):
     """Session vocabulary for the client's local exact-match index (§024 fast path /
     offline). Split OUT of the bootstrap so it never blocks initial render: the client
     fetches this in the background once the screen is up, then builds its local index
-    and persists it into the offline snapshot.
-
-    Two tiers (see LOCAL_VOCAB_* above): tier A = this session's repertoire, most-played
-    here first; tier B = globally-popular tunes (by tunebook count) the session hasn't
-    played, so a well-known tune still resolves/links. Aliases are scoped to the tier-A
-    tunes actually included (tier B isn't in the session, so has no session aliases).
+    and persists it into the offline snapshot. Sizes (N/M) are per-session, tunable from
+    the session-admin "Local Cache" tab (defaults = LOCAL_VOCAB_*).
     """
     conn = get_db_connection()
     try:
@@ -1196,68 +1291,8 @@ def live_vocabulary(session_instance_id):
         if not srow:
             return jsonify({"success": False, "error": "Session instance not found"}), 404
         session_id = srow[0]
-
-        # Tier A — this session's repertoire, most-played-here first (then global
-        # popularity, then name as deterministic tiebreakers).
-        cur.execute(
-            """
-            SELECT st.tune_id, t.name, st.alias, t.tune_type
-            FROM session_tune st
-            JOIN tune t ON t.tune_id = st.tune_id
-            LEFT JOIN (
-                SELECT sit.tune_id, COUNT(*) AS plays
-                FROM session_instance_tune sit
-                JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
-                WHERE si.session_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
-                GROUP BY sit.tune_id
-            ) pc ON pc.tune_id = st.tune_id
-            WHERE st.session_id = %s AND t.redirect_to_tune_id IS NULL
-            ORDER BY COALESCE(pc.plays, 0) DESC,
-                     t.tunebook_count_cached DESC NULLS LAST, t.name
-            LIMIT %s
-            """,
-            (session_id, session_id, LOCAL_VOCAB_SESSION_LIMIT),
-        )
-        known_tunes = [
-            {"tune_id": r[0], "name": r[1], "alias": r[2], "tune_type": r[3]}
-            for r in cur.fetchall()
-        ]
-        session_tune_ids = [t["tune_id"] for t in known_tunes]
-
-        # Tier B — globally-popular tunes (by tunebook count) not already in tier A.
-        cur.execute(
-            """
-            SELECT t.tune_id, t.name, t.tune_type
-            FROM tune t
-            WHERE t.redirect_to_tune_id IS NULL
-              AND NOT (t.tune_id = ANY(%s::int[]))
-            ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name
-            LIMIT %s
-            """,
-            (session_tune_ids, LOCAL_VOCAB_GLOBAL_LIMIT),
-        )
-        known_tunes.extend(
-            {"tune_id": r[0], "name": r[1], "alias": None, "tune_type": r[2]}
-            for r in cur.fetchall()
-        )
-
-        # Aliases for the included session tunes (tier A) only.
-        known_aliases = []
-        if session_tune_ids:
-            cur.execute(
-                """
-                SELECT sta.tune_id, sta.alias, t.name, t.tune_type
-                FROM session_tune_alias sta JOIN tune t ON t.tune_id = sta.tune_id
-                WHERE sta.session_id = %s AND t.redirect_to_tune_id IS NULL
-                  AND sta.tune_id = ANY(%s::int[])
-                """,
-                (session_id, session_tune_ids),
-            )
-            known_aliases = [
-                {"tune_id": r[0], "alias": r[1], "name": r[2], "tune_type": r[3]}
-                for r in cur.fetchall()
-            ]
-
+        n, m = get_session_cache_limits(cur, session_id)
+        known_tunes, known_aliases = compute_session_vocabulary(cur, session_id, n, m)
         return jsonify({"success": True, "known_tunes": known_tunes, "known_aliases": known_aliases})
     finally:
         conn.close()

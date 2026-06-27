@@ -45,6 +45,14 @@ CREATE TABLE session (
     session_type VARCHAR(50) NOT NULL DEFAULT 'regular' CHECK (session_type IN ('regular', 'festival')),
     active_buffer_minutes_before INTEGER NOT NULL DEFAULT 60,
     active_buffer_minutes_after INTEGER NOT NULL DEFAULT 60,
+    -- Auto-create upcoming instances from the recurrence (see add_auto_create_instances.sql).
+    auto_create_instances BOOLEAN NOT NULL DEFAULT FALSE,
+    auto_create_hours_ahead INTEGER NOT NULL DEFAULT 24
+        CHECK (auto_create_hours_ahead >= 1 AND auto_create_hours_ahead <= 168),
+    -- Per-session live-logging local-cache sizes (spec 024): N most-played tunes of this
+    -- session + M globally-popular tunes not already in N (see migration 025).
+    live_cache_session_limit INTEGER NOT NULL DEFAULT 200,
+    live_cache_global_limit INTEGER NOT NULL DEFAULT 25,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -730,6 +738,8 @@ CREATE TABLE session_history (
     termination_date DATE,
     recurrence TEXT,
     session_type VARCHAR(50),
+    auto_create_instances BOOLEAN,
+    auto_create_hours_ahead INTEGER,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,

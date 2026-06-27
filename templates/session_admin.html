@@ -55,6 +55,10 @@
                        href="/admin/sessions/{{ session.path }}/logs">
                         Logs
                     </a>
+                    <a class="nav-link {{ 'active' if active_tab == 'cache' else '' }}"
+                       href="/admin/sessions/{{ session.path }}/cache">
+                        Local Cache
+                    </a>
                 </div>
 
                 <!-- Mobile Dropdown Navigation -->
@@ -64,6 +68,7 @@
                         <option value="tunes" {{ 'selected' if active_tab == 'tunes' else '' }}>Tunes</option>
                         <option value="people" {{ 'selected' if active_tab == 'people' else '' }}>Members</option>
                         <option value="logs" {{ 'selected' if active_tab == 'logs' else '' }}>Logs</option>
+                        <option value="cache" {{ 'selected' if active_tab == 'cache' else '' }}>Local Cache</option>
                     </select>
                 </div>
             </nav>
@@ -321,6 +326,38 @@
                         <div id="logs-content">
                             <p class="text-muted">Loading session history...</p>
                         </div>
+                    </section>
+                </div>
+
+                <!-- Local Cache Tab -->
+                <div class="tab-pane fade {{ 'show active' if active_tab == 'cache' else '' }}" id="cache" role="tabpanel">
+                    <section class="docs-section">
+                        <h2 class="section-heading">Local Tune Cache</h2>
+                        <p class="text-muted">
+                            The live-logging screen preloads a list of tunes onto each device so typed
+                            tune names match instantly &mdash; even offline. It holds the
+                            <strong>N</strong> most-played tunes from <em>this</em> session, plus the
+                            <strong>M</strong> most globally-popular tunes not already in that set.
+                            Bigger numbers match more tunes without a network call, but make each
+                            device download a little more.
+                        </p>
+
+                        <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+                            <div>
+                                <label for="cache-session-limit" class="form-label mb-1">N &mdash; this session's top tunes</label>
+                                <input type="number" class="form-control" id="cache-session-limit"
+                                       value="{{ session.live_cache_session_limit }}" min="0" max="2000" style="width: 120px;">
+                            </div>
+                            <div>
+                                <label for="cache-global-limit" class="form-label mb-1">M &mdash; globally-popular extras</label>
+                                <input type="number" class="form-control" id="cache-global-limit"
+                                       value="{{ session.live_cache_global_limit }}" min="0" max="1000" style="width: 120px;">
+                            </div>
+                            <button type="button" class="btn btn-primary" id="cache-save-btn">Save</button>
+                        </div>
+
+                        <div id="cache-summary" class="mb-3 text-muted">Loading preview&hellip;</div>
+                        <div id="cache-content"></div>
                     </section>
                 </div>
             </div>
@@ -872,6 +909,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loadLogsContent();
     } else if (activeTab === 'tunes') {
         loadTunesContent();
+    } else if (activeTab === 'cache') {
+        initCacheTab();
     }
 
     // Mobile dropdown functionality
@@ -889,6 +928,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 url = `/admin/sessions/${sessionPath}/people`;
             } else if (this.value === 'logs') {
                 url = `/admin/sessions/${sessionPath}/logs`;
+            } else if (this.value === 'cache') {
+                url = `/admin/sessions/${sessionPath}/cache`;
             }
 
             if (url) {
@@ -1669,6 +1710,109 @@ function saveSessionDetails() {
     .catch(error => {
         console.error('Error saving session details:', error);
         showMessage('An error occurred while saving session details', 'error');
+    });
+}
+
+// --- Local Cache tab (spec 024 fast-match vocabulary) ---
+let cachePreviewTimer = null;
+
+function initCacheTab() {
+    const onEdit = () => {
+        clearTimeout(cachePreviewTimer);
+        cachePreviewTimer = setTimeout(loadCachePreview, 300); // debounce live preview
+    };
+    document.getElementById('cache-session-limit').addEventListener('input', onEdit);
+    document.getElementById('cache-global-limit').addEventListener('input', onEdit);
+    document.getElementById('cache-save-btn').addEventListener('click', saveCacheLimits);
+    loadCachePreview();
+}
+
+function loadCachePreview() {
+    const sessionPath = {{ session_path|tojson|safe }};
+    const n = document.getElementById('cache-session-limit').value;
+    const m = document.getElementById('cache-global-limit').value;
+    document.getElementById('cache-summary').textContent = 'Computing preview…';
+
+    fetch(`/api/admin/sessions/${sessionPath}/tune-cache?n=${encodeURIComponent(n)}&m=${encodeURIComponent(m)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                document.getElementById('cache-summary').textContent = '';
+                document.getElementById('cache-content').innerHTML =
+                    `<div class="alert alert-danger">${data.error || 'Failed to load preview'}</div>`;
+                return;
+            }
+            renderCachePreview(data);
+        })
+        .catch(error => {
+            document.getElementById('cache-content').innerHTML =
+                `<div class="alert alert-danger">Failed to load preview: ${error}</div>`;
+        });
+}
+
+function renderCachePreview(data) {
+    const sessionPath = {{ session_path|tojson|safe }};
+    // Estimate the real download size from the LEAN fields the client actually receives
+    // (the preview adds tier/plays/tunebook_count, which the vocabulary endpoint strips).
+    const lean = data.tunes.map(t => ({ tune_id: t.tune_id, name: t.name, alias: t.alias, tune_type: t.tune_type }));
+    const kb = (new Blob([JSON.stringify(lean)]).size / 1024).toFixed(1);
+
+    document.getElementById('cache-summary').innerHTML =
+        `Caching <strong>${data.session_count}</strong> session tune${data.session_count === 1 ? '' : 's'} ` +
+        `+ <strong>${data.global_count}</strong> globally-popular ` +
+        `= <strong>${data.tunes.length}</strong> total (~${kb} KB per device).`;
+
+    if (!data.tunes.length) {
+        document.getElementById('cache-content').innerHTML =
+            '<div class="alert alert-info">No tunes would be cached with these settings.</div>';
+        return;
+    }
+
+    let html = `<table class="table table-sm" id="cache-table"><thead><tr>
+            <th style="width:3rem;">#</th><th>Tune</th><th>Type</th><th>Tier</th><th>Popularity</th>
+        </tr></thead><tbody>`;
+    data.tunes.forEach((t, i) => {
+        const badge = t.tier === 'session'
+            ? '<span class="badge badge-primary">session</span>'
+            : '<span class="badge badge-secondary">global</span>';
+        const popularity = t.tier === 'session'
+            ? `${t.plays} play${t.plays === 1 ? '' : 's'} here`
+            : `${(t.tunebook_count || 0).toLocaleString()} tunebooks`;
+        html += `<tr>
+            <td class="text-muted">${i + 1}</td>
+            <td><a href="/sessions/${sessionPath}/tunes/${t.tune_id}" class="tune-link">${t.name}</a></td>
+            <td>${t.tune_type || '<span class="text-muted">-</span>'}</td>
+            <td>${badge}</td>
+            <td class="text-muted">${popularity}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('cache-content').innerHTML = html;
+}
+
+function saveCacheLimits() {
+    const sessionPath = {{ session_path|tojson|safe }};
+    const payload = {
+        live_cache_session_limit: parseInt(document.getElementById('cache-session-limit').value) || 0,
+        live_cache_global_limit: parseInt(document.getElementById('cache-global-limit').value) || 0,
+    };
+    fetch(`/api/sessions/${sessionPath}/admin-update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('Local cache settings saved', 'success');
+            loadCachePreview(); // reflect the now-saved values
+        } else {
+            showMessage(data.error || 'Failed to save cache settings', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving cache settings:', error);
+        showMessage('An error occurred while saving cache settings', 'error');
     });
 }
 

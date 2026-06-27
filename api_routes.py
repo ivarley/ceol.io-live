@@ -727,6 +727,8 @@ def update_session_ajax(session_path):
             "comments": "comments",
             "auto_create_instances": "auto_create_instances",
             "auto_create_hours_ahead": "auto_create_hours_ahead",
+            "live_cache_session_limit": "live_cache_session_limit",
+            "live_cache_global_limit": "live_cache_global_limit",
         }
 
         # Build update query dynamically based on provided fields
@@ -748,6 +750,10 @@ def update_session_ajax(session_path):
                     value = bool(value)
                 elif form_field == "auto_create_hours_ahead":
                     value = int(value) if value else 24
+                elif form_field == "live_cache_session_limit":
+                    value = max(0, min(2000, int(value))) if value not in (None, "") else 200
+                elif form_field == "live_cache_global_limit":
+                    value = max(0, min(1000, int(value))) if value not in (None, "") else 25
 
                 update_fields.append(f"{db_field} = %s")
                 update_values.append(value)
@@ -778,6 +784,75 @@ def update_session_ajax(session_path):
 
     except Exception as e:
         return jsonify({"success": False, "error": f"Error updating session: {str(e)}"})
+
+
+def session_tune_cache_preview(session_path):
+    """Preview the live-logging local-cache vocabulary for a session at given N/M sizes,
+    for the session-admin "Local Cache" tab (spec 024). Read-only — does NOT change the
+    saved limits (the form's Save does that via update_session_ajax). Returns the full
+    tune list (each with `tier` and its ranking number) plus tier counts, so the leader
+    sees exactly what will be cached as they tune N/M.
+
+    `?n=` / `?m=` override the saved limits for a live preview (clamped to the same
+    bounds as the save path); omitted, the saved values are used. Session-admin gated.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Authentication required"}), 401
+    # Imported lazily: live_logging_routes imports from this module, so a top-level
+    # import would be circular.
+    from live_logging_routes import compute_session_vocabulary, get_session_cache_limits
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
+            (current_user.user_id,),
+        )
+        urow = cur.fetchone()
+        is_system_admin = urow and urow[0]
+
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        srow = cur.fetchone()
+        if not srow:
+            return jsonify({"success": False, "error": "Session not found"}), 404
+        session_id = srow[0]
+
+        if not is_system_admin:
+            cur.execute(
+                "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+                (session_id, current_user.person_id),
+            )
+            arow = cur.fetchone()
+            if not (arow and arow[0]):
+                return jsonify({"success": False, "error": "Insufficient permissions"}), 403
+
+        saved_n, saved_m = get_session_cache_limits(cur, session_id)
+
+        def _clamp(v, default, hi):
+            try:
+                return max(0, min(hi, int(v)))
+            except (TypeError, ValueError):
+                return default
+
+        n = _clamp(request.args.get("n"), saved_n, 2000)
+        m = _clamp(request.args.get("m"), saved_m, 1000)
+
+        tunes, aliases = compute_session_vocabulary(cur, session_id, n, m, include_meta=True)
+        session_count = sum(1 for t in tunes if t["tier"] == "session")
+        return jsonify({
+            "success": True,
+            "n": n,
+            "m": m,
+            "saved_n": saved_n,
+            "saved_m": saved_m,
+            "session_count": session_count,
+            "global_count": len(tunes) - session_count,
+            "alias_count": len(aliases),
+            "tunes": tunes,
+        })
+    finally:
+        conn.close()
 
 
 def sessions_data():

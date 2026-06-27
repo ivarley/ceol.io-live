@@ -284,6 +284,9 @@ app.add_url_rule(
     "/admin/sessions/<path:session_path>/logs", "session_admin_logs", session_admin_logs
 )
 app.add_url_rule(
+    "/admin/sessions/<path:session_path>/cache", "session_admin_cache", session_admin_cache
+)
+app.add_url_rule(
     "/admin/sessions/<path:session_path>/bulk-import",
     "session_admin_bulk_import",
     session_admin_bulk_import,
@@ -452,6 +455,12 @@ app.add_url_rule(
     "update_session_ajax",
     update_session_ajax,
     methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/admin/sessions/<path:session_path>/tune-cache",
+    "session_tune_cache_preview",
+    session_tune_cache_preview,
+    methods=["GET"],
 )
 app.add_url_rule(
     "/api/sessions/<path:session_path>/add_instance",
