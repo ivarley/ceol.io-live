@@ -16,6 +16,24 @@ export async function bootstrap(config) {
   return res.json()
 }
 
+// Session vocabulary for the local exact-match index (§024). Fetched in the BACKGROUND
+// after bootstrap so it never blocks first render. Marks network failures so the caller
+// can quietly fall back to the cached snapshot's vocabulary.
+export async function vocabulary(config) {
+  let res
+  try {
+    res = await fetch(`/api/live/instances/${config.sessionInstanceId}/vocabulary`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+  } catch (e) {
+    e.networkError = true
+    throw e
+  }
+  if (!res.ok) throw new Error(`vocabulary failed: ${res.status}`)
+  return res.json()
+}
+
 // Generic op POST (spec 024 §C). Every op carries a client-generated op_id as the
 // universal idempotency key — a retried POST whose ack was lost dedupes server-side.
 export async function sendOp(config, op_type, payload = {}, op_id = crypto.randomUUID()) {

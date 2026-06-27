@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
   import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -1187,6 +1187,23 @@
     return null
   }
 
+  // Background vocabulary load (online): fetch the session vocabulary AFTER first render,
+  // build the local fast-match index, and persist it into the offline snapshot. Deferred
+  // so it never blocks bootstrap. Until it lands, resolveLocal() returns null and typing
+  // simply falls through to the server matcher — the fast path just "warms up" a moment
+  // later. A network failure is swallowed (the cached/previous index stands); the next
+  // connect() retries.
+  async function loadVocabulary(gen) {
+    try {
+      const v = await vocabulary(config)
+      if (gen !== connSeq) return // a newer connect() superseded this one
+      buildLocalIndex(v.known_tunes, v.known_aliases)
+      await saveSnapshot() // persist the vocabulary into the offline snapshot
+    } catch {
+      // leave the existing index as-is; server match still works, retried next connect()
+    }
+  }
+
   // returning {exact_match, results}. ABC fallback: if a short note-only query
   // (looksLikeAbc) finds no tunes by name, search the notation instead (deep ABC mode),
   // so typing "ged" surfaces tunes whose notation starts with those notes.
@@ -1340,7 +1357,10 @@
       if (myGen !== connSeq) return // a newer connect() superseded this one
       byId.clear()
       for (const r of snap.records || []) put(r)
-      buildLocalIndex(snap.known_tunes, snap.known_aliases) // local exact-match fast path
+      // Local fast-match vocabulary: rendering from the OFFLINE cache rebuilds the index
+      // immediately from the cached copy; ONLINE it's fetched in the background after
+      // render (loadVocabulary, below) so it never blocks bootstrap.
+      if (fromCache) buildLocalIndex(snap.known_tunes, snap.known_aliases)
       if (snap.current_person) person = snap.current_person
       if (snap.session_name) sessionName = snap.session_name
       if (snap.session_date) sessionDate = snap.session_date
@@ -1380,6 +1400,7 @@
       })
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
+      loadVocabulary(myGen) // background: warm the local fast-match index, then persist it
 
       // On a reconnect (not the first connect), summarize what changed while away.
       if (everConnected) {
