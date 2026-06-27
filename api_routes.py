@@ -11,8 +11,8 @@ from database import (
     get_current_user_id,
     save_to_history,
     find_matching_tune,
-    normalize_apostrophes,
-    apostrophe_norm_sql,
+    normalize_quotes,
+    normalize_quotes_sql,
     check_in_person as db_check_in_person,
 )
 from email_utils import send_email_via_sendgrid
@@ -1850,7 +1850,7 @@ def add_session_tune_alias(session_path, tune_id):
         return jsonify({"success": False, "message": "Please enter an alias"})
 
     # Normalize the alias
-    normalized_alias = normalize_apostrophes(alias)
+    normalized_alias = normalize_quotes(alias)
 
     try:
         conn = get_db_connection()
@@ -3047,7 +3047,7 @@ def add_tune_ajax(session_path, date):
                 all_tune_names = []
                 for line in lines:
                     tune_names_in_line = [
-                        normalize_apostrophes(name.strip())
+                        normalize_quotes(name.strip())
                         for name in re.split("[,;/]", line)
                         if name.strip()
                     ]
@@ -3099,7 +3099,7 @@ def add_tune_ajax(session_path, date):
 
             # Split by comma, semicolon, or forward slash
             tune_names_in_set = [
-                normalize_apostrophes(name.strip())
+                normalize_quotes(name.strip())
                 for name in re.split("[,;/]", line)
                 if name.strip()
             ]
@@ -3261,7 +3261,7 @@ def link_tune_ajax(session_path, date_or_id):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     tune_input = request.json.get("tune_id", "").strip()
-    tune_name = normalize_apostrophes(request.json.get("tune_name", "").strip())
+    tune_name = normalize_quotes(request.json.get("tune_name", "").strip())
     session_instance_tune_id = request.json.get("session_instance_tune_id")
 
     if not tune_input or not tune_name or session_instance_tune_id is None:
@@ -4529,7 +4529,7 @@ def add_tunes_to_set_ajax(session_path, date):
 
     # Parse comma-separated tune names
     tune_names = [
-        normalize_apostrophes(name.strip())
+        normalize_quotes(name.strip())
         for name in re.split("[,;/]", tune_names_input)
         if name.strip()
     ]
@@ -4597,7 +4597,7 @@ def edit_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
     session_instance_tune_id = request.json.get("session_instance_tune_id")
-    new_name = normalize_apostrophes(request.json.get("new_name", "").strip())
+    new_name = normalize_quotes(request.json.get("new_name", "").strip())
     original_name = request.json.get("original_name", "").strip()
     tune_id = request.json.get("tune_id")
     setting_id = request.json.get("setting_id")
@@ -6883,7 +6883,7 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
       - otherwise a wildcard candidate list ranked by preferred type, this session's
         play-count, then tunebook count (the "pick one" / red state on the client).
     """
-    tune_name = normalize_apostrophes((tune_name or "").strip())
+    tune_name = normalize_quotes((tune_name or "").strip())
     if not tune_name:
         return {"matched": False, "exact_match": False, "results": []}
 
@@ -6921,7 +6921,7 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
             WHERE si.session_id = %s
             GROUP BY sit.tune_id
         ) playcounts ON t.tune_id = playcounts.tune_id
-        WHERE LOWER(unaccent({apostrophe_norm_sql('COALESCE(st.alias, t.name)')})) LIKE %s
+        WHERE LOWER(unaccent({normalize_quotes_sql('COALESCE(st.alias, t.name)')})) LIKE %s
           AND t.redirect_to_tune_id IS NULL
         ORDER BY preferred_tune_type ASC,
                  playcounts.plays DESC NULLS LAST,
@@ -6950,7 +6950,7 @@ def match_tune_ajax(session_path, date_or_id):
     """
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
-    tune_name = normalize_apostrophes(request.json.get("tune_name", "").strip())
+    tune_name = normalize_quotes(request.json.get("tune_name", "").strip())
     previous_tune_type = request.json.get(
         "previous_tune_type", None
     )  # For preferencing matching tune types in sets
@@ -6985,7 +6985,7 @@ def test_match_tune_ajax(session_path, date):
     Test endpoint for the enhanced match_tune functionality.
     Accepts GET requests with query parameters for easier testing.
     """
-    tune_name = normalize_apostrophes(request.args.get("tune_name", "").strip())
+    tune_name = normalize_quotes(request.args.get("tune_name", "").strip())
     previous_tune_type = request.args.get("previous_tune_type", None)
 
     if not tune_name:

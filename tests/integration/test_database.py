@@ -16,7 +16,7 @@ from database import (
     get_db_connection,
     save_to_history,
     find_matching_tune,
-    normalize_apostrophes,
+    normalize_quotes,
 )
 from auth import User, create_session
 from timezone_utils import now_utc
@@ -490,7 +490,7 @@ class TestTuneMatching:
         assert final_name == "Nonexistent Tune"
         assert error is None
 
-    def test_normalize_apostrophes_in_tune_search(self, db_conn, db_cursor):
+    def test_normalize_quotes_in_tune_search(self, db_conn, db_cursor):
         """Test that apostrophes are normalized in tune searches."""
         # Create test session and tune with unique identifiers
         unique_id = str(uuid.uuid4())[:8]

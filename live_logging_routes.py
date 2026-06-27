@@ -36,7 +36,8 @@ from database import (
     get_current_user_id,
     save_to_history,
     find_matching_tune,
-    normalize_apostrophes,
+    normalize_quotes,
+    normalize_quotes_sql,
     check_in_person as db_check_in_person,
     remove_person_attendance as db_remove_person_attendance,
     create_person_with_instruments as db_create_person_with_instruments,
@@ -326,7 +327,7 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
     if name is not None:
-        name = normalize_apostrophes(str(name).strip()) or None
+        name = normalize_quotes(str(name).strip()) or None
     if tune_id is None and not name:
         raise OpRejected("invalid", "add_tune requires tune_id or name.")
 
@@ -926,7 +927,7 @@ def live_deep_search(session_instance_id):
     at this session, and a ready-to-render incipit ABC (client renders with abcjs).
     q may be empty to browse by type/popularity.
     """
-    q = (request.args.get("q") or "").strip()
+    q = normalize_quotes((request.args.get("q") or "").strip())
     tune_type = (request.args.get("type") or "").strip() or None
     prefer_type = (request.args.get("prefer_type") or "").strip() or None
     mode = "abc" if (request.args.get("mode") or "").strip().lower() == "abc" else "name"
@@ -950,8 +951,9 @@ def live_deep_search(session_instance_id):
         rank = "0"
         order = "type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
         if q and mode == "name":
-            rank = """CASE WHEN LOWER(unaccent(t.name)) = LOWER(unaccent(%s)) THEN 1
-                           WHEN LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
+            _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
+            rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
             params += [q, f"{q}%"]
             order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
 
@@ -961,7 +963,7 @@ def live_deep_search(session_instance_id):
             where.append("EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REPLACE(ts.abc, ' ', '') ILIKE %s)")
             params.append(f"%{q.replace(' ', '')}%")
         elif q:
-            where.append("LOWER(unaccent(t.name)) LIKE LOWER(unaccent(%s))")
+            where.append(f"LOWER(unaccent({normalize_quotes_sql('t.name')})) LIKE LOWER(unaccent(%s))")
             params.append(f"%{q}%")
         if tune_type:
             where.append("t.tune_type = %s")

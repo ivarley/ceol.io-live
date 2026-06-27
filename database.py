@@ -24,23 +24,37 @@ def get_current_user_id():
     return None
 
 
-def normalize_apostrophes(text):
-    """Normalize smart apostrophes and quotes to standard ASCII characters."""
+# Canonical smart-quote folding, SHARED by the Python (normalize_quotes) and the
+# SQL (normalize_quotes_sql) paths so a typed query and a stored name always normalize to
+# the SAME straight-ASCII form -- that symmetry is what makes name matching quote-insensitive.
+# Defined as Unicode code points (not literal smart-quote characters) on purpose: editors
+# silently auto-correct literal smart quotes back into straight ASCII, which turns the fold
+# into a no-op -- the original bug. These two lists are the single source of truth.
+#   singles -> '  : 2018 left, 2019 right, 02bc modifier-apostrophe, 2032 prime, 0060 grave, 00b4 acute
+#   doubles -> "  : 201c left, 201d right, 201e low-9, 2033 double-prime, 00ab guillemet-open, 00bb close
+_SMART_SINGLES = (0x2018, 0x2019, 0x02BC, 0x2032, 0x0060, 0x00B4)
+_SMART_DOUBLES = (0x201C, 0x201D, 0x201E, 0x2033, 0x00AB, 0x00BB)
+
+
+def normalize_quotes(text):
+    """Normalize smart single/double quotes (and look-alikes) to straight ASCII ' and \"."""
     if not text:
         return text
-    # Replace various smart apostrophes and quotes with standard apostrophe
-    return text.replace("'", "'").replace("'", "'").replace(""", '"').replace(""", '"')
+    for cp in _SMART_SINGLES:
+        text = text.replace(chr(cp), "'")
+    for cp in _SMART_DOUBLES:
+        text = text.replace(chr(cp), '"')
+    return text
 
 
-def apostrophe_norm_sql(col):
-    """SQL expression that normalizes smart single-quotes / backtick / acute in `col` to a
-    straight ASCII apostrophe, so name matching is quote-insensitive (iPhones type ’, while
-    catalog data may use either). Pair with a normalize_apostrophes()'d query so both sides
-    use straight quotes. chr: 8216=‘ 8217=’ 96=` 180=´ -> 39='."""
-    return (
-        f"translate({col}, chr(8216)||chr(8217)||chr(96)||chr(180), "
-        f"chr(39)||chr(39)||chr(39)||chr(39))"
-    )
+def normalize_quotes_sql(col):
+    """SQL expression that folds smart single/double quotes in `col` to straight ASCII
+    ' and ", so name matching is quote-insensitive (iPhones type a smart apostrophe, while
+    catalog data may use either). Mirrors normalize_quotes() exactly; pair with a
+    normalize_quotes()'d query so BOTH sides use straight quotes."""
+    src = "||".join(f"chr({cp})" for cp in _SMART_SINGLES + _SMART_DOUBLES)
+    dst = "||".join(["chr(39)"] * len(_SMART_SINGLES) + ["chr(34)"] * len(_SMART_DOUBLES))
+    return f"translate({col}, {src}, {dst})"
 
 
 # Mapping of tune types to expected eighth notes per bar
@@ -476,13 +490,13 @@ def find_matching_tune(
         - error_message: Error message if multiple matches found, None otherwise
     """
     # Normalize the search string the same way we normalize input
-    normalized_tune_name = normalize_apostrophes(tune_name.strip())
+    normalized_tune_name = normalize_quotes(tune_name.strip())
     # First, search session_tune table for alias match (case and accent insensitive)
     cur.execute(
         f"""
         SELECT tune_id
         FROM session_tune
-        WHERE session_id = %s AND LOWER(unaccent({apostrophe_norm_sql('alias')})) = LOWER(unaccent(%s))
+        WHERE session_id = %s AND LOWER(unaccent({normalize_quotes_sql('alias')})) = LOWER(unaccent(%s))
     """,
         (session_id, normalized_tune_name),
     )
@@ -503,7 +517,7 @@ def find_matching_tune(
             f"""
             SELECT tune_id
             FROM session_tune_alias
-            WHERE session_id = %s AND LOWER(unaccent({apostrophe_norm_sql('alias')})) = LOWER(unaccent(%s))
+            WHERE session_id = %s AND LOWER(unaccent({normalize_quotes_sql('alias')})) = LOWER(unaccent(%s))
         """,
             (session_id, normalized_tune_name),
         )
@@ -525,9 +539,9 @@ def find_matching_tune(
                 f"""
                 SELECT tune_id, name
                 FROM tune
-                WHERE (LOWER(unaccent({apostrophe_norm_sql('name')})) = LOWER(unaccent(%s))
-                OR LOWER(unaccent({apostrophe_norm_sql('name')})) = LOWER(unaccent('The ' || %s))
-                OR LOWER(unaccent('The ' || {apostrophe_norm_sql('name')})) = LOWER(unaccent(%s)))
+                WHERE (LOWER(unaccent({normalize_quotes_sql('name')})) = LOWER(unaccent(%s))
+                OR LOWER(unaccent({normalize_quotes_sql('name')})) = LOWER(unaccent('The ' || %s))
+                OR LOWER(unaccent('The ' || {normalize_quotes_sql('name')})) = LOWER(unaccent(%s)))
                 AND redirect_to_tune_id IS NULL
             """,
                 (normalized_tune_name, normalized_tune_name, normalized_tune_name),

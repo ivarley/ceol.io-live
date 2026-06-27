@@ -9,7 +9,7 @@ import pytest
 import bcrypt
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta
-from database import normalize_apostrophes, save_to_history, find_matching_tune
+from database import normalize_quotes, save_to_history, find_matching_tune
 from timezone_utils import now_utc
 
 from auth import (
@@ -249,7 +249,7 @@ class TestAuthUtilities:
 class TestDatabaseUtilities:
     """Test database utility functions."""
 
-    def test_normalize_apostrophes(self):
+    def test_normalize_quotes(self):
         """Test apostrophe normalization function."""
         # Test with various smart quotes and apostrophes
         test_cases = [
@@ -263,7 +263,7 @@ class TestDatabaseUtilities:
         ]
 
         for input_text, expected in test_cases:
-            result = normalize_apostrophes(input_text)
+            result = normalize_quotes(input_text)
             assert result == expected, f"Failed for input: {input_text}"
 
     def test_save_to_history_session(self, mock_db_connection):
@@ -383,7 +383,7 @@ class TestDatabaseUtilities:
         assert final_name == "Nonexistent Tune"
         assert error is None
 
-    def test_find_matching_tune_normalize_apostrophes(self, mock_db_connection):
+    def test_find_matching_tune_normalize_quotes(self, mock_db_connection):
         """Test that apostrophes are normalized in tune search."""
         cursor = mock_db_connection["cursor"]
         cursor.fetchall.side_effect = [
