@@ -54,6 +54,16 @@ from fractional_indexing import generate_append_position, generate_position_betw
 # one per SSE client (which would cap concurrent clients at the DB pool size).
 LIVE_EVENT_CHANNEL = "live_session_events"
 
+# Size of the local vocabulary shipped in the bootstrap for the §024 offline / fast-match
+# index (resolved client-side with NO network in the hot path). Two tiers:
+#   N = the most-played tunes of THIS session (the names most likely to be typed)
+#   M = globally-popular tunes (by tunebook count) NOT already in the session tier, so a
+#       well-known tune the session hasn't played yet still resolves/links (incl. offline)
+# Tune these as we learn the real byte / bootstrap-latency cost; the vocabulary rides the
+# (blocking) bootstrap today, so very large N would argue for a deferred background fetch.
+LOCAL_VOCAB_SESSION_LIMIT = 200  # N
+LOCAL_VOCAB_GLOBAL_LIMIT = 25    # M
+
 
 class OpRejected(Exception):
     """A processed-but-rejected op (§E): no-op, with a machine reason for the actor."""
@@ -1135,6 +1145,75 @@ def live_bootstrap(session_instance_id):
         cur.execute("SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s", (session_instance_id,))
         high_water = cur.fetchone()[0]
 
+        # Session vocabulary for the client's local exact-match index (§024 fast path /
+        # offline): a typed name matching a known tune EXACTLY resolves with no network.
+        # Two tiers (see LOCAL_VOCAB_* above): the session's own most-played tunes first,
+        # then globally-popular tunes it hasn't played, so a well-known tune still resolves.
+        # Aliases are scoped to the session tunes we actually include (tier B isn't in the
+        # session, so has no session aliases).
+        session_id = meta[0] if meta else None
+        known_tunes, known_aliases = [], []
+        if session_id is not None:
+            # Tier A — this session's repertoire, most-played-here first (then global
+            # popularity, then name as deterministic tiebreakers).
+            cur.execute(
+                """
+                SELECT st.tune_id, t.name, st.alias, t.tune_type
+                FROM session_tune st
+                JOIN tune t ON t.tune_id = st.tune_id
+                LEFT JOIN (
+                    SELECT sit.tune_id, COUNT(*) AS plays
+                    FROM session_instance_tune sit
+                    JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                    WHERE si.session_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+                    GROUP BY sit.tune_id
+                ) pc ON pc.tune_id = st.tune_id
+                WHERE st.session_id = %s AND t.redirect_to_tune_id IS NULL
+                ORDER BY COALESCE(pc.plays, 0) DESC,
+                         t.tunebook_count_cached DESC NULLS LAST, t.name
+                LIMIT %s
+                """,
+                (session_id, session_id, LOCAL_VOCAB_SESSION_LIMIT),
+            )
+            known_tunes = [
+                {"tune_id": r[0], "name": r[1], "alias": r[2], "tune_type": r[3]}
+                for r in cur.fetchall()
+            ]
+            session_tune_ids = [t["tune_id"] for t in known_tunes]
+
+            # Tier B — globally-popular tunes (by tunebook count) not already in tier A.
+            cur.execute(
+                """
+                SELECT t.tune_id, t.name, t.tune_type
+                FROM tune t
+                WHERE t.redirect_to_tune_id IS NULL
+                  AND NOT (t.tune_id = ANY(%s::int[]))
+                ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name
+                LIMIT %s
+                """,
+                (session_tune_ids, LOCAL_VOCAB_GLOBAL_LIMIT),
+            )
+            known_tunes.extend(
+                {"tune_id": r[0], "name": r[1], "alias": None, "tune_type": r[2]}
+                for r in cur.fetchall()
+            )
+
+            # Aliases for the included session tunes (tier A) only.
+            if session_tune_ids:
+                cur.execute(
+                    """
+                    SELECT sta.tune_id, sta.alias, t.name, t.tune_type
+                    FROM session_tune_alias sta JOIN tune t ON t.tune_id = sta.tune_id
+                    WHERE sta.session_id = %s AND t.redirect_to_tune_id IS NULL
+                      AND sta.tune_id = ANY(%s::int[])
+                    """,
+                    (session_id, session_tune_ids),
+                )
+                known_aliases = [
+                    {"tune_id": r[0], "alias": r[1], "name": r[2], "tune_type": r[3]}
+                    for r in cur.fetchall()
+                ]
+
         return jsonify({
             "success": True,
             "session_instance_id": int(session_instance_id),
@@ -1155,6 +1234,8 @@ def live_bootstrap(session_instance_id):
             "session_date": session_date,
             "records": records,
             "sets": sets,
+            "known_tunes": known_tunes,
+            "known_aliases": known_aliases,
             "last_event_id": high_water,
         })
     finally:

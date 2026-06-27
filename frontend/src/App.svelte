@@ -136,6 +136,9 @@
         records, last_event_id: highWater, person, ts: Date.now(),
         session_name: sessionName, session_date: sessionDate, notes: notesText,
         display_tz: displayTz,
+        // Persist the session vocabulary so the offline-render path keeps the local
+        // exact-match fast path working without a fresh bootstrap (§024 / §G).
+        known_tunes: vocabKnown, known_aliases: vocabAliases,
       }))
       await snapshotPut(config.sessionInstanceId, value)
     } catch {
@@ -1015,6 +1018,11 @@
     const q = input.trim()
     if (!q) return
     if (ambiguous) { ambiguous = false; submit(); return } // 2nd Enter -> log as typed (the escape)
+    // Fast path (§024): a UNIQUE exact match in the session's local vocabulary logs
+    // instantly — no network search/resolve. Common tunes have zero perceived latency.
+    // Anything ambiguous or unknown returns null here and falls through to the server.
+    const local = resolveLocal(q)
+    if (local) { pickResult(local); return }
     // Trust the dropdown only if it matches the CURRENT text; else look up fresh.
     const m = (resultsQuery === q && (results.length || noMatch))
       ? { exact_match: lastMatchExact, results }
@@ -1125,6 +1133,60 @@
   }
 
   // The shared matcher (same as the legacy pill editor: find_matching_tune + wildcard),
+  // --- local exact-match fast path (§024) -----------------------------------
+  // The session's repertoire (known_tunes/known_aliases from bootstrap) is indexed
+  // locally so a typed name matching a known tune EXACTLY logs with no network in the
+  // hot path. Normalization mirrors the server matcher (find_matching_tune): apostrophe
+  // fold, unaccent, lower; "The" prefix flexibility on the tune-name tier only.
+  let localIndex = null
+  let vocabKnown = [], vocabAliases = [] // raw bootstrap vocabulary, kept for offline persistence
+  const stripThe = (s) => s.replace(/^the\s+/, '')
+  function normName(s) {
+    return (s || '')
+      .replace(/[‘’‛`´]/g, "'") // smart quotes / backtick / acute -> '
+      .normalize('NFD').replace(/[̀-ͯ]/g, '') // unaccent (strip diacritics)
+      .trim().toLowerCase()
+  }
+  function buildLocalIndex(known, aliases) {
+    if (!known && !aliases) { localIndex = null; vocabKnown = []; vocabAliases = []; return }
+    vocabKnown = known || []
+    vocabAliases = aliases || []
+    const aliasMap = new Map(), nameMap = new Map(), byId = new Map()
+    const add = (map, key, id) => { if (!key) return; let s = map.get(key); if (!s) map.set(key, (s = new Set())); s.add(id) }
+    for (const t of known || []) {
+      if (!t.tune_id) continue
+      byId.set(t.tune_id, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null })
+      const n = normName(t.name)
+      add(nameMap, n, t.tune_id)
+      add(nameMap, stripThe(n), t.tune_id) // "The X" <-> "X" flexibility (both directions)
+      if (t.alias) add(aliasMap, normName(t.alias), t.tune_id)
+    }
+    for (const a of aliases || []) {
+      if (!a.tune_id || !a.alias) continue
+      add(aliasMap, normName(a.alias), a.tune_id)
+      if (!byId.has(a.tune_id)) byId.set(a.tune_id, { tune_id: a.tune_id, name: a.name || a.alias, tune_type: a.tune_type ?? null })
+    }
+    localIndex = { aliasMap, nameMap, byId }
+  }
+  // Resolve a typed string to a UNIQUE exact known tune, or null (no match OR ambiguous
+  // -> defer to the server path, which never guesses). Alias tier wins, exactly as the
+  // server does, and only returns when there's a single candidate.
+  function resolveLocal(q) {
+    if (!localIndex) return null
+    const qn = normName(q)
+    if (!qn) return null
+    const aIds = localIndex.aliasMap.get(qn)
+    if (aIds && aIds.size === 1) return localIndex.byId.get([...aIds][0]) || null
+    if (aIds && aIds.size > 1) return null // ambiguous alias -> let the gate handle it
+    const ids = new Set()
+    for (const key of new Set([qn, stripThe(qn)])) {
+      const s = localIndex.nameMap.get(key)
+      if (s) for (const id of s) ids.add(id)
+    }
+    if (ids.size === 1) return localIndex.byId.get([...ids][0]) || null
+    return null
+  }
+
   // returning {exact_match, results}. ABC fallback: if a short note-only query
   // (looksLikeAbc) finds no tunes by name, search the notation instead (deep ABC mode),
   // so typing "ged" surfaces tunes whose notation starts with those notes.
@@ -1270,13 +1332,15 @@
         snap = cached
           ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
               session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
-              user_timezone: cached.display_tz }
+              user_timezone: cached.display_tz,
+              known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [] }
           : { records: [], last_event_id: 0 }
         fromCache = true
       }
       if (myGen !== connSeq) return // a newer connect() superseded this one
       byId.clear()
       for (const r of snap.records || []) put(r)
+      buildLocalIndex(snap.known_tunes, snap.known_aliases) // local exact-match fast path
       if (snap.current_person) person = snap.current_person
       if (snap.session_name) sessionName = snap.session_name
       if (snap.session_date) sessionDate = snap.session_date
