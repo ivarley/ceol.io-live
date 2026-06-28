@@ -14,7 +14,7 @@
 // (app.js) — cache-first would strand users on a stale build until a later load.
 // Online always gets the latest; the cache is purely the offline fallback.
 
-const CACHE = 'ceol-live-shell-v4'
+const CACHE = 'ceol-live-shell-v5'
 // The Svelte bundle PLUS the shared shell assets the live page pulls in directly
 // (the floated hamburger menu + the tune-detail modal). Without these in the cache,
 // an offline reload renders the menu unstyled (no CSS) and inert (no JS).
@@ -31,8 +31,16 @@ const ASSETS = [
 const SHELL_ASSETS = new Set(ASSETS.filter((p) => !p.startsWith('/static/live/')))
 
 self.addEventListener('install', (event) => {
+  // Precache with {cache:'reload'} so we seed FRESH copies, not whatever the HTTP cache
+  // happens to hold (c.addAll() would honor the 4h max-age and could cache a stale build).
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((c) => Promise.all(ASSETS.map((url) =>
+        fetch(url, { cache: 'reload', credentials: 'same-origin' })
+          .then((res) => { if (res && res.ok) return c.put(url, res) })
+          .catch(() => {}) // a single missing asset must not abort the whole install
+      )))
+      .then(() => self.skipWaiting())
   )
 })
 
@@ -82,7 +90,14 @@ self.addEventListener('fetch', (event) => {
 async function networkFirst(req) {
   const cache = await caches.open(CACHE)
   try {
-    const res = await fetch(req)
+    // For our fixed-filename shell assets (app.js etc.), {cache:'reload'} bypasses the
+    // HTTP cache so they're ALWAYS revalidated against the server when online — otherwise
+    // the asset's Cache-Control: max-age (4h in prod) lets plain fetch() return a stale
+    // build, defeating the whole point of network-first. Navigation requests can't be
+    // reconstructed (new Request throws on mode:'navigate'), so they keep plain fetch().
+    const res = req.mode === 'navigate'
+      ? await fetch(req)
+      : await fetch(req.url, { cache: 'reload', credentials: 'same-origin' })
     if (res && res.ok) cache.put(req, res.clone())
     return res
   } catch (e) {
