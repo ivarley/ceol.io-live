@@ -1284,6 +1284,54 @@ def compute_session_vocabulary(cur, session_id, n, m, include_meta=False):
         known_tunes.append(d)
     session_tune_ids = [t["tune_id"] for t in known_tunes]
 
+    # "Likely next tune": for each anchor tune, the single successor that follows it
+    # WITHIN A SET (no break between, not end-of-instance) more than 50% of the time and
+    # at least 3 times, across all instances of this session. The >50% rule guarantees at
+    # most one qualifying successor per anchor. Linked tunes only (transitions key on
+    # tune_id; name-only rows can't be matched). Breaks are kept in the window so a
+    # tune->break boundary correctly yields no successor (sets are delimited by
+    # record_type='break'; continues_set was dropped in migration 023). The successor's
+    # display name is denormalized in so the client can render it even when the successor
+    # falls outside the vocabulary cap.
+    cur.execute(
+        """
+        WITH seq AS (
+            SELECT sit.tune_id,
+                   sit.record_type,
+                   LEAD(sit.tune_id)     OVER w AS next_tune_id,
+                   LEAD(sit.record_type) OVER w AS next_record_type
+            FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %s AND sit.deleted = FALSE
+            WINDOW w AS (PARTITION BY sit.session_instance_id ORDER BY sit.order_position)
+        ),
+        trans AS (
+            SELECT tune_id AS from_id, next_tune_id AS to_id
+            FROM seq
+            WHERE record_type = 'tune' AND next_record_type = 'tune'
+              AND tune_id IS NOT NULL AND next_tune_id IS NOT NULL
+        ),
+        counts AS (
+            SELECT from_id, to_id, COUNT(*) AS c,
+                   SUM(COUNT(*)) OVER (PARTITION BY from_id) AS total
+            FROM trans GROUP BY from_id, to_id
+        )
+        SELECT c.from_id, c.to_id, COALESCE(st.alias, t.name) AS to_name, t.tune_type
+        FROM counts c
+        JOIN tune t ON t.tune_id = c.to_id
+        LEFT JOIN session_tune st ON st.tune_id = c.to_id AND st.session_id = %s
+        WHERE c.c >= 3 AND c.c::float / c.total > 0.5
+        """,
+        (session_id, session_id),
+    )
+    next_map = {
+        r[0]: {"tune_id": r[1], "name": r[2], "tune_type": r[3]} for r in cur.fetchall()
+    }
+    for d in known_tunes:
+        nxt = next_map.get(d["tune_id"])
+        if nxt:
+            d["next"] = nxt
+
     # Tier B — globally-popular tunes (by tunebook count) not already in tier A.
     cur.execute(
         """

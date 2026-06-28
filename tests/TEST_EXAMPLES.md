@@ -174,8 +174,7 @@ def test_add_tune_to_session_workflow(self, client, authenticated_user):
         # Act
         response = client.post('/api/sessions/test-session/2023-08-15/add_tune',
                               json={
-                                  'name': 'Test Reel',
-                                  'continues_set': False
+                                  'name': 'Test Reel'
                               })
         
         # Assert

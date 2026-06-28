@@ -23,6 +23,11 @@
   const tempToReal = new Map()
   const flashing = new SvelteMap() // record id -> {kind:'mine'|'remote'|'merge', color, tok} (§39/§E)
   let flashSeq = 0
+  // "Likely next tune": anchor tune_id -> {tune_id, name, tune_type} of the successor that
+  // follows it within a set >50% of the time at this session (precomputed server-side and
+  // carried on each vocab entry's `next`). SvelteMap so the suggestion derived recomputes
+  // when the background vocabulary load fills it in.
+  const nextByTuneId = new SvelteMap()
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
   let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
@@ -177,6 +182,7 @@
   let searchTimer = null
   let searchSeq = 0
   let searching = $state(false) // a server search is in flight for the typed text (input spinner)
+  let composerFocused = $state(false) // input has focus — gates the "likely next tune" suggestion row
   // A placeholder tune row whose match is still resolving (Enter was hit faster than the
   // search returned). While set, the composer is locked; the row settles to linked/unlinked
   // or — if ambiguous — waits for the user to pick. null when nothing is resolving. (§D)
@@ -738,8 +744,49 @@
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
   const displaySegments = $derived(segments)
+  // "Likely next tune" (§ likely-next): when the composer sits at the END of a non-empty
+  // set, the tune that follows that set's last tune >50% of the time at this session (from
+  // nextByTuneId). At most one. Null mid-set, at a set start, while editing/resolving, in
+  // view mode, or when the successor is already in the set (a redundant pick).
+  const nextSuggestion = $derived.by(() => {
+    if (viewing || logComplete || editingId != null || resolving) return null
+    if (insertAfterId && typeof insertAfterId === 'object') return null // before/new-set: not end-of-set
+    const seg = cursorSegment()
+    if (!seg || !seg.tunes.length) return null
+    const last = seg.tunes[seg.tunes.length - 1]
+    // anchor = the tune just before the cursor, only when the cursor is at the set's end
+    if (insertAfterId != null && last.session_instance_tune_id !== insertAfterId) return null
+    if (last.record_type === 'break' || last.tune_id == null) return null
+    const nx = nextByTuneId.get(last.tune_id)
+    if (!nx) return null
+    if (currentSetTuneIds().has(nx.tune_id)) return null // already in this set -> suppress
+    return nx
+  })
+  // The suggestion stays pinned while the typed text is an (accent-insensitive) substring of
+  // its name — you may simply not have noticed it was already there. Empty box -> always show.
+  const nextMatches = $derived.by(() => {
+    if (!nextSuggestion) return false
+    const q = normName(input)
+    return !q || normName(nextSuggestion.name).includes(q)
+  })
+  const showNext = $derived(!viewing && !composerLocked && composerFocused && nextMatches)
+  // Don't list the suggested tune twice (pinned row + a normal result below it).
+  const visibleResults = $derived(
+    showNext && nextSuggestion ? results.filter((r) => r.tune_id !== nextSuggestion.tune_id) : results
+  )
+  // Split the suggestion name around the typed substring so it can be bolded. Raw
+  // case-insensitive match (not normName) so the slice indices line up with the display
+  // string; an accent-only match just renders unbolded.
+  function suggestionParts(name, q) {
+    const raw = (q || '').trim()
+    if (!raw) return { pre: name, mid: '', post: '' }
+    const i = name.toLowerCase().indexOf(raw.toLowerCase())
+    if (i < 0) return { pre: name, mid: '', post: '' }
+    return { pre: name.slice(0, i), mid: name.slice(i, i + raw.length), post: name.slice(i + raw.length) }
+  }
+
   // Is the type-ahead dropdown currently rendered? (gates the bottom spacer + band calc)
-  const dropdownOpen = $derived(!viewing && (results.length > 0 || (noMatch && editingId == null)))
+  const dropdownOpen = $derived(!viewing && (showNext || results.length > 0 || (noMatch && editingId == null)))
 
   // A position after everything currently present, so optimistic appends stay last
   // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
@@ -1472,9 +1519,11 @@
       .trim().toLowerCase()
   }
   function buildLocalIndex(known, aliases) {
+    nextByTuneId.clear()
     if (!known && !aliases) { localIndex = null; vocabKnown = []; vocabAliases = []; return }
     vocabKnown = known || []
     vocabAliases = aliases || []
+    for (const t of known || []) if (t.tune_id && t.next) nextByTuneId.set(t.tune_id, t.next)
     const aliasMap = new Map(), nameMap = new Map(), byId = new Map()
     const add = (map, key, id) => { if (!key) return; let s = map.get(key); if (!s) map.set(key, (s = new Set())); s.add(id) }
     // `list` is the flat, vocab-ordered set of entries scanned for SUBSTRING matches (the
@@ -1704,6 +1753,7 @@
   }
 
   function stopTyping() {
+    composerFocused = false // closes the "likely next tune" pinned row
     if (resolving) return // keep the resolution dropdown open while a placeholder is pending
     if (lastTypingSent) {
       lastTypingSent = 0
@@ -2276,9 +2326,17 @@
         {/if}
       </footer>
     {:else}
-    {#if results.length || (noMatch && editingId == null)}
+    {#if showNext || results.length || (noMatch && editingId == null)}
       <ul class="results" bind:clientHeight={resultsH}>
-        {#each results as t (t.tune_id)}
+        {#if showNext && nextSuggestion}
+          {@const parts = suggestionParts(nextSuggestion.name, input)}
+          <li class="result-next" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
+            <span class="r-arrow" aria-hidden="true">→</span>
+            <span class="r-name">{parts.pre}<strong>{parts.mid}</strong>{parts.post}</span>
+            <span class="r-meta">{nextSuggestion.tune_type || ''}<span class="r-next-label"> · usually next</span></span>
+          </li>
+        {/if}
+        {#each visibleResults as t (t.tune_id)}
           <li onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
             <span class="r-name">{t.name}</span>
             <span class="r-meta">
@@ -2293,7 +2351,7 @@
           <li class="result-asis" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
             <span class="r-name">Log “{resolving.text}” as-is</span>
           </li>
-        {:else if editingId == null}
+        {:else if editingId == null && (results.length || noMatch)}
           <li class="result-deeper" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
             <span class="r-name">🔍 Search …</span>
           </li>
@@ -2332,9 +2390,9 @@
           bind:value={input}
           bind:this={inputEl}
           oninput={onInput}
-          onfocus={scheduleSeam}
+          onfocus={() => { composerFocused = true; scheduleSeam() }}
           onblur={stopTyping}
-          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit() } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) } }}
+          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!input.trim() && nextSuggestion) pickResult(nextSuggestion); else commit() } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) } }}
         />
         {#if searching}<span class="spinner input-spin"></span>{/if}
       </div>

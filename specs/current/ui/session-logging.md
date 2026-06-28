@@ -72,7 +72,7 @@ A **set** is a group of tunes played consecutively without pause.
 
 ### Data Model
 
-- `session_instance_tune.continues_set` - Boolean indicating tune continues previous tune in a set
+- Set boundaries are explicit **break records**: `session_instance_tune` rows with `record_type = 'break'` sit in the gap between sets (one break per set, including a trailing break). Tunes between two breaks form a set (spec 023; the former `continues_set` boolean was dropped in migration 023).
 - `session_instance_tune.order_position` - Fractional index for ordering (VARCHAR(32) base-62 string)
 - `session_instance_tune.started_by_person_id` - FK to person who started the set
 
@@ -89,10 +89,9 @@ Clicking the set label (e.g., "Set 3") opens a popout overlay showing:
 
 ### Operations
 
-- **Create set**: Mark tune as `continues_set = true`
-- **Break set**: Mark tune as `continues_set = false`
-- **Add to set**: Drag tune into set visual grouping
-- **Remove from set**: Drag out or toggle `continues_set`
+- **Break set**: Insert a `record_type = 'break'` record at the split point (closes the current set; the next tune starts a new one)
+- **Join sets**: Remove the break record between two sets to merge them
+- **Add to set**: Place/move a tune between the breaks bounding that set
 - **Set Started By**: Click set label, select person from dropdown
 
 ## Permissions
