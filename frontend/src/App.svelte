@@ -475,6 +475,7 @@
   let showCreate = $state(false)
   let newFirst = $state('')
   let newLast = $state('')
+  let pendingStarterFirstId = null // set we were attributing when the drawer was opened from the starter picker
 
   async function refreshAttendees() {
     try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
@@ -485,9 +486,20 @@
     personQuery = ''; personResults = []; showCreate = false; newFirst = ''; newLast = ''
     if (!attendeesLoaded) refreshAttendees()
   }
-  const closeAttendance = () => (attendanceOpen = false)
-  // "＋ Add a player" in the starter picker opens the attendance editor.
-  function addPlayer() { openAttendance() }
+  const closeAttendance = () => { attendanceOpen = false; pendingStarterFirstId = null }
+  // "＋ Add a player" in the starter picker opens the attendance editor. Remember which
+  // set's picker we came from (before openAttendance clears it) so the person we add
+  // gets logged as that set's starter.
+  function addPlayer() { pendingStarterFirstId = starterPickerSet; openAttendance() }
+  // If the drawer was opened from a set's starter picker, log this person as that set's
+  // starter and close everything. Returns true if it acted.
+  function applyPendingStarter(person) {
+    if (pendingStarterFirstId == null) return false
+    const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === pendingStarterFirstId)
+    if (seg) setStarter(seg, { person_id: person.person_id, display_name: person.display_name })
+    closeAttendance() // also nulls pendingStarterFirstId
+    return true
+  }
 
   // Attendance ops need a connection (not in the offline op model); surface rejections.
   async function attendanceOp(op_type, payload, label) {
@@ -497,7 +509,7 @@
       const res = await sendOp(config, op_type, payload)
       if (res.rejected) { notice = res.message || `${label}: ${res.reason}`; return false }
       await refreshAttendees()
-      return true
+      return res
     } catch (e) {
       if (e.networkError) notice = `You're offline — ${label} needs a connection.`
       else error = e.message
@@ -505,14 +517,18 @@
     }
   }
   async function checkIn(p) {
-    if (await attendanceOp('attendance_add', { person_id: p.person_id }, 'Check in')) searchPeople() // refresh "in" flags
+    if (await attendanceOp('attendance_add', { person_id: p.person_id }, 'Check in')) {
+      if (!applyPendingStarter(p)) searchPeople() // refresh "in" flags
+    }
   }
   function checkOut(p) { attendanceOp('attendance_remove', { person_id: p.person_id }, 'Remove') }
   async function createPerson() {
     const first = newFirst.trim()
     if (!first) return
-    if (await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim() }, 'Add person')) {
+    const res = await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim() }, 'Add person')
+    if (res) {
       newFirst = ''; newLast = ''; showCreate = false; personQuery = ''; personResults = []
+      if (res.person) applyPendingStarter(res.person)
     }
   }
   function searchPeople() {
