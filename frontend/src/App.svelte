@@ -2409,6 +2409,7 @@
     <div class="composer">
       <div class="composer-field">
         <input
+          size="1"
           class:ambiguous={ambiguous}
           class:locked={composerLocked}
           readonly={composerLocked}
