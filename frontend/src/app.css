@@ -474,14 +474,6 @@ main {
 }
 .actions button:hover { color: var(--text); border-color: var(--accent); }
 
-/* TEMP DIAGNOSTIC overlay — remove when the composer-cutoff issue is solved */
-.dbg {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-  background: rgba(180, 0, 0, 0.92); color: #fff;
-  font: 11px/1.35 ui-monospace, Menlo, monospace;
-  padding: 4px 6px; word-break: break-all;
-}
-
 .empty { color: var(--muted); font-style: italic; }
 
 /* first-load skeleton — tune-sized placeholder rows with a shimmer sweeping across */
