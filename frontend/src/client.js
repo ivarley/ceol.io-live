@@ -145,7 +145,7 @@ export async function deepSearch(config, q, type, preferType, mode) {
   if (q) params.set('q', q)
   if (type) params.set('type', type)
   if (preferType) params.set('prefer_type', preferType)
-  if (mode === 'abc') params.set('mode', 'abc')
+  if (mode) params.set('mode', mode)
   try {
     const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/deep-search?${params}`, {
       headers: { Accept: 'application/json' },

@@ -25,6 +25,7 @@ effects), server-generated corroborate/merge detection (§H30), presence (§F).
 """
 
 import json
+import re
 import uuid
 
 import psycopg2
@@ -930,7 +931,11 @@ def _ensure_incipit(cur, tune_id, want_full=False):
 def live_deep_search(session_instance_id):
     """Deep catalog search for the live screen (spec 021 §D "search deeper").
 
-    Modes: by name (default) or by ABC (`mode=abc` — matches the notation text).
+    Modes (`mode=`): `mixed` (default) blends name + ABC-notation matches into one
+    ranked list (name matches first, then ABC-only); `name` and `abc` narrow to a
+    single kind (the modal's filter tabs). In `mixed`, the ABC clause only joins in
+    when the query is ABC-friendly (note letters / digits only) — ordinary name
+    queries are unaffected.
     `type` is a hard tune-type filter (the popout); `prefer_type` is a soft sort
     preference (the set you're logging into) so matching-type tunes sort first.
     Returns rich cards: popularity, "on your list" / "in this session" flags, plays
@@ -940,7 +945,9 @@ def live_deep_search(session_instance_id):
     q = normalize_quotes((request.args.get("q") or "").strip())
     tune_type = (request.args.get("type") or "").strip() or None
     prefer_type = (request.args.get("prefer_type") or "").strip() or None
-    mode = "abc" if (request.args.get("mode") or "").strip().lower() == "abc" else "name"
+    mode = (request.args.get("mode") or "").strip().lower()
+    if mode not in ("name", "abc", "mixed"):
+        mode = "mixed"
     try:
         limit = min(40, max(1, int(request.args.get("limit", 25))))
     except (ValueError, TypeError):
@@ -956,25 +963,59 @@ def live_deep_search(session_instance_id):
         session_id = srow[0]
         person_id = getattr(current_user, "person_id", None)
 
-        # SELECT-clause params first (subqueries + type_pref), then rank, then WHERE, then LIMIT.
+        # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
+        # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
+        # (note letters, accidentals, bar/octave marks, etc.) — except the explicit `abc`
+        # filter tab, which forces notation search on whatever was typed.
+        q_abc = re.sub(r"\s", "", q)
+        abc_friendly = bool(q_abc) and re.fullmatch(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+", q_abc) is not None
+        use_name = bool(q) and mode in ("name", "mixed")
+        use_abc = bool(q_abc) and (mode == "abc" or (mode == "mixed" and abc_friendly))
+
+        _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
+        # match the notation text with all whitespace ignored, so "fdd cAA | B" finds a
+        # tune whose body contains "fdd cAA|BAG..." ("My Darling Asleep").
+        _abc_exists = "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REGEXP_REPLACE(ts.abc, '\\s', '', 'g') ILIKE %s)"
+
+        # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
+        # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
         params = [person_id, session_id, session_id, prefer_type]
-        rank = "0"
-        order = "type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
-        if q and mode == "name":
-            _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
+
+        # abc_only flag: row matched notation but NOT name (so the card can badge it).
+        if use_abc and use_name:
+            abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
+            params += [f"%{q_abc}%", f"%{q}%"]
+        elif use_abc:  # abc-only mode: every match is a notation match
+            abc_only_sql = "TRUE"
+        else:
+            abc_only_sql = "FALSE"
+
+        # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
+        if use_name and use_abc:
+            rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
+                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3 ELSE 4 END"""
+            params += [q, f"{q}%", f"%{q}%"]
+            order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        elif use_name:
             rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
                            WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
             params += [q, f"{q}%"]
             order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+        else:
+            rank = "0"
+            order = "type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
 
         where = ["t.redirect_to_tune_id IS NULL"]
-        if q and mode == "abc":
-            # match the notation text (ignoring spaces, so "GED" finds "G E D")
-            where.append("EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REPLACE(ts.abc, ' ', '') ILIKE %s)")
-            params.append(f"%{q.replace(' ', '')}%")
-        elif q:
-            where.append(f"LOWER(unaccent({normalize_quotes_sql('t.name')})) LIKE LOWER(unaccent(%s))")
+        clauses = []
+        if use_name:
+            clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
             params.append(f"%{q}%")
+        if use_abc:
+            clauses.append(_abc_exists)
+            params.append(f"%{q_abc}%")
+        if clauses:
+            where.append("(" + " OR ".join(clauses) + ")")
         if tune_type:
             where.append("t.tune_type = %s")
             params.append(tune_type)
@@ -989,6 +1030,7 @@ def live_deep_search(session_instance_id):
                       WHERE si.session_id = %s AND sit.tune_id = t.tune_id
                         AND sit.record_type = 'tune' AND sit.deleted = FALSE) AS played_here,
                    CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+                   {abc_only_sql} AS abc_only,
                    {rank} AS rank
             FROM tune t
             WHERE {' AND '.join(where)}
@@ -1000,7 +1042,7 @@ def live_deep_search(session_instance_id):
 
         results = [
             {"tune_id": r[0], "name": r[1], "tune_type": r[2], "tunebook_count": r[3],
-             "on_list": r[4], "in_session": r[5], "played_here": r[6]}
+             "on_list": r[4], "in_session": r[5], "played_here": r[6], "abc_only": bool(r[8])}
             for r in rows
         ]
 

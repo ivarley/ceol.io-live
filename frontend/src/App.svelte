@@ -1073,8 +1073,7 @@
   let deepOpen = $state(false)
   let deepQuery = $state('')
   let deepType = $state(null) // hard tune-type filter (the popout)
-  let deepMode = $state('name') // 'name' | 'abc' search mode
-  let deepModeManual = false // true once the user clicks a mode tab (stops auto-detect)
+  let deepMode = $state('mixed') // 'mixed' (name + ABC) | 'name' | 'abc' search mode
   let deepFilterOpen = $state(false) // type-filter popout visible
   let deepResults = $state([])
   let deepLoading = $state(false)
@@ -1100,29 +1099,34 @@
     return types.size === 1 ? [...types][0] : null
   }
 
-  // ABC-ish input (only note letters a–g / A–G and numbers, short) → default to ABC
-  // search. Stops once the user manually picks a mode tab.
-  const looksLikeAbc = (q) => /^[a-gA-G0-9]+$/.test(q) && q.length > 0 && q.length < 6
+  // ABC-ish input: legal ABC melody characters — note letters, accidentals (^ _ =),
+  // octave/bar/repeat marks (' , | : [ ]), durations, etc. — with whitespace ignored
+  // (it's meaningless in ABC). Such a query gets its notation matches blended in alongside
+  // name matches, so e.g. "fdd cAA | B" finds "My Darling Asleep".
+  const looksLikeAbc = (q) => {
+    const s = (q || '').replace(/\s+/g, '')
+    return s.length > 0 && /^[A-Ga-gxz0-9|^_=,'\/()\[\]:<>~-]+$/.test(s)
+  }
 
   function openDeep() {
     deepQuery = input.trim()
     deepType = null // no hard filter; the set's type is a soft preference instead
-    deepModeManual = false
-    deepMode = looksLikeAbc(deepQuery) ? 'abc' : 'name'
+    deepMode = 'mixed' // blended by default; the tabs narrow to name-only / ABC-only
     deepFilterOpen = false
     deepPrefer = cursorSetType()
     deepOpen = true
     runDeep()
   }
   const closeDeep = () => { deepOpen = false }
-  // Typing in the field: auto-pick the mode (unless the user overrode it), then search.
+  // Typing in the field: blended results (mixed) unless the user narrowed with a tab.
   function onDeepInput() {
-    if (!deepModeManual) deepMode = looksLikeAbc(deepQuery.trim()) ? 'abc' : 'name'
     runDeep()
   }
+  // Tabs act as filters: click to narrow to that mode; click the active tab to clear
+  // back to the blended (mixed) list.
   function setDeepMode(m) {
-    deepModeManual = true
-    if (deepMode !== m) { deepMode = m; runDeep() }
+    const next = deepMode === m ? 'mixed' : m
+    if (deepMode !== next) { deepMode = next; runDeep() }
   }
   const toggleDeepFilters = () => { deepFilterOpen = !deepFilterOpen }
   function setDeepType(t) {
@@ -1237,29 +1241,31 @@
     }
   }
 
-  // returning {exact_match, results}. ABC fallback: if a short note-only query
-  // (looksLikeAbc) finds no tunes by name, search the notation instead (deep ABC mode),
-  // so typing "ged" surfaces tunes whose notation starts with those notes.
+  // returning {exact_match, results}. ABC blend: for a note-only query (looksLikeAbc, any
+  // length) we ALSO search the notation and append those matches (marked abc:true) after
+  // the name matches, so typing "gabaged" surfaces tunes by name AND by notation at once.
   async function matchFor(q) {
+    // Fire the notation search concurrently with the name match (server returns [] offline).
+    const abcPromise = looksLikeAbc(q) ? deepSearch(config, q, null, cursorSetType(), 'abc') : null
     const m = await liveMatch(config, q, cursorSetType())
     if (m.results.length) {
       matchCachePut(config.sessionInstanceId, q, m) // remember for offline linking (#5c)
-      return m
-    }
-    // Offline (server unreachable): fall back to the match cache so typing can still
-    // LINK a previously-seen tune instead of always logging unlinked. Only when offline
-    // — an online empty result is the authoritative "no match".
-    if (!navigator.onLine || !reachable) {
+    } else if (!navigator.onLine || !reachable) {
+      // Offline (server unreachable): fall back to the match cache so typing can still
+      // LINK a previously-seen tune instead of always logging unlinked. Only when offline
+      // — an online empty result is the authoritative "no match".
       const cached = await matchCacheGet(config.sessionInstanceId, q).catch(() => null)
       if (cached && cached.results.length) return cached
     }
-    if (looksLikeAbc(q)) {
-      const abc = await deepSearch(config, q, null, cursorSetType(), 'abc')
-      return {
-        exact_match: false,
-        results: abc.slice(0, 8).map((t) => ({
-          tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true,
-        })),
+    if (abcPromise) {
+      const abc = await abcPromise
+      const seen = new Set(m.results.map((r) => r.tune_id))
+      const extra = abc
+        .filter((t) => t.tune_id != null && !seen.has(t.tune_id))
+        .map((t) => ({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session_tune: t.in_session, abc: true }))
+      if (extra.length) {
+        // Name matches first, then notation-only; exact_match stays the name match's verdict.
+        return { exact_match: m.exact_match, results: [...m.results, ...extra].slice(0, 8) }
       }
     }
     return m
@@ -1988,7 +1994,7 @@
       </div>
       <input
         class="deep-field"
-        placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : 'Search by name…'}
+        placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
         bind:value={deepQuery}
         oninput={onDeepInput}
         onkeydown={deepKey}
@@ -2017,7 +2023,7 @@
           <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
         </div>
       {/if}
-      {#if deepMode === 'name' && deepQuery.trim()}
+      {#if deepMode !== 'abc' && deepQuery.trim()}
         <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
       {/if}
       <div class="deep-results">
@@ -2036,6 +2042,7 @@
                 <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
               </div>
               <div class="deep-meta">
+                {#if r.abc_only}<span class="deep-badge">♪ notation</span>{/if}
                 {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
                 {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
                 {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
