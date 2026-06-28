@@ -30,6 +30,44 @@
   const nextByTuneId = new SvelteMap()
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
   let loaded = $state(false) // first bootstrap has populated records — gates the loading skeleton vs "no tunes yet"
+
+  // TEMP DIAGNOSTIC (composer cutoff in standalone PWA) — remove once solved.
+  let dbg = $state(null)
+  function measureDbg() {
+    const vv = window.visualViewport
+    const de = document.documentElement
+    const composer = document.querySelector('.composer')
+    const field = document.querySelector('.composer-field')
+    const inp = document.querySelector('.composer input')
+    const dock = document.querySelector('.dock')
+    const mainE = document.querySelector('main')
+    // read the safe-area insets off a probe so we see what the env() vars resolve to
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;' +
+      'padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);' +
+      'padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);'
+    document.body.appendChild(probe)
+    const cs = getComputedStyle(probe)
+    const safe = `L${parseFloat(cs.paddingLeft)||0} R${parseFloat(cs.paddingRight)||0} T${parseFloat(cs.paddingTop)||0} B${parseFloat(cs.paddingBottom)||0}`
+    probe.remove()
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+    dbg = {
+      standalone,
+      innerW: window.innerWidth,
+      clientW: de.clientWidth,
+      vvW: vv ? Math.round(vv.width) : '-',
+      vvScale: vv ? (Math.round(vv.scale * 100) / 100) : '-',
+      vvOffL: vv ? Math.round(vv.offsetLeft) : '-',
+      safe,
+      mainW: mainE ? mainE.offsetWidth : '-',
+      dockOff: dock ? dock.offsetWidth : '-',
+      dockScroll: dock ? dock.scrollWidth : '-',
+      compOff: composer ? composer.offsetWidth : '-',
+      compScroll: composer ? composer.scrollWidth : '-',
+      fieldW: field ? field.offsetWidth : '-',
+      inpW: inp ? inp.offsetWidth : '-',
+    }
+  }
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
   let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
   // One source of truth for the pill + banner so they never disagree:
@@ -2017,6 +2055,13 @@
       window.visualViewport.addEventListener('scroll', onViewportChange)
       fitToViewport()
     }
+    // TEMP DIAGNOSTIC — measure after layout settles, and on every viewport/resize change.
+    requestAnimationFrame(() => requestAnimationFrame(measureDbg))
+    window.addEventListener('resize', measureDbg)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', measureDbg)
+      window.visualViewport.addEventListener('scroll', measureDbg)
+    }
   })
 
   // Match the app container to the visual viewport (mobile). On desktop / no
@@ -2058,6 +2103,13 @@
 </script>
 
 <main bind:this={mainEl} class:view-mode={viewing}>
+  {#if dbg}
+    <!-- TEMP DIAGNOSTIC overlay (composer cutoff). Tap to re-measure; remove when solved. -->
+    <div class="dbg" onclick={measureDbg}>
+      pwa:{dbg.standalone ? 'Y' : 'n'} inner:{dbg.innerW} client:{dbg.clientW} vv:{dbg.vvW}@{dbg.vvScale} offL:{dbg.vvOffL} safe[{dbg.safe}]
+      · main:{dbg.mainW} dock:{dbg.dockOff}/{dbg.dockScroll} comp:{dbg.compOff}/{dbg.compScroll} field:{dbg.fieldW} inp:{dbg.inpW}
+    </div>
+  {/if}
   <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
