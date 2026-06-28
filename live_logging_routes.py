@@ -692,6 +692,12 @@ def live_op(session_instance_id):
         # (e.g. add_tune that collapsed into a server-generated `corroborate`, §H30).
         event_op_type = payload.pop("_op_type", op_type)
 
+        # Carry op_id in the event payload (not just the column) so the SSE echo lets the
+        # ORIGINATING client reconcile this op against its optimistic row and replace it
+        # immediately — instead of leaving a duplicate until the (possibly slow) POST ack
+        # lands. Other clients simply don't have this op_id pending, so they just apply it.
+        payload["op_id"] = op_id
+
         # Feed write (same txn) + NOTIFY. Truth and feed cannot diverge (§B).
         try:
             cur.execute(

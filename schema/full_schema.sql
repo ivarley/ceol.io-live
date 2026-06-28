@@ -17,6 +17,10 @@
 -- Enable unaccent extension for accent-insensitive text searches
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
+-- Enable pg_trgm for index-backed substring tune-name search (see migration 026 and
+-- the idx_tune_name_trgm index below).
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- =============================================================================
 -- BASE TABLES (no foreign key dependencies)
 -- =============================================================================
@@ -129,6 +133,28 @@ CREATE TABLE tune (
 
 CREATE INDEX idx_tune_created_by ON tune(created_by_user_id);
 CREATE INDEX idx_tune_redirect_to ON tune(redirect_to_tune_id) WHERE redirect_to_tune_id IS NOT NULL;
+
+-- Index-backed tune-name search (see migration 026). One IMMUTABLE normalization
+-- function (fold smart quotes -> ASCII, strip accents, lowercase) shared by both the
+-- index expressions and the matching queries (api_routes.match_tune_core,
+-- database.find_matching_tune), so the planner uses the indexes.
+CREATE OR REPLACE FUNCTION tune_search_key(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE STRICT PARALLEL SAFE
+AS $$
+    SELECT lower(unaccent('unaccent', translate($1,
+        chr(8216)||chr(8217)||chr(700)||chr(8242)||chr(96)||chr(180)
+        ||chr(8220)||chr(8221)||chr(8222)||chr(8243)||chr(171)||chr(187),
+        chr(39)||chr(39)||chr(39)||chr(39)||chr(39)||chr(39)
+        ||chr(34)||chr(34)||chr(34)||chr(34)||chr(34)||chr(34))))
+$$;
+
+-- Substring (wildcard candidate list) and exact ("The "-flexible) name search.
+CREATE INDEX idx_tune_name_trgm ON tune USING gin (tune_search_key(name) gin_trgm_ops)
+    WHERE redirect_to_tune_id IS NULL;
+CREATE INDEX idx_tune_name_key ON tune (tune_search_key(name))
+    WHERE redirect_to_tune_id IS NULL;
 
 -- Prevent redirect chains: a tune cannot redirect to another redirect
 CREATE OR REPLACE FUNCTION check_tune_redirect_chain()

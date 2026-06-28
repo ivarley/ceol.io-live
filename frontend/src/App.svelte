@@ -96,6 +96,65 @@
     }
     lastCount = n
   })
+
+  // Measured height of the type-ahead dropdown (it floats UP from the dock and covers the
+  // lower part of the list). Drives both the bottom spacer (scroll room past the end) and
+  // the visible-band calc below. (§D smart scroll)
+  let resultsH = $state(0)
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
+  // Keep the active insertion point (the yellow seam / a resolving placeholder) within the
+  // VISIBLE BAND — below the header, above the dropdown's top edge — parked as high as the
+  // content allows, but only scroll when it's actually occluded/off-screen (no gratuitous
+  // jumps). The bottom spacer (rendered in .sets) gives the end-of-list seam room to rise
+  // above the dropdown. (§D smart scroll)
+  function ensureSeamVisible() {
+    if (!setsEl) return
+    const seam = setsEl.querySelector('.seam.active')
+    if (!seam) return
+    const sets = setsEl.getBoundingClientRect()
+    const r = seam.getBoundingClientRect()
+    const dropH = dropdownOpen && resultsH ? resultsH + 6 : 0 // dropdown height + its margin
+    const bandTop = sets.top + 4
+    const bandBottom = sets.bottom - dropH - 8
+    if (r.top >= bandTop && r.bottom <= bandBottom) return // already comfortably visible
+    const target = clamp(setsEl.scrollTop + (r.top - bandTop), 0, setsEl.scrollHeight - setsEl.clientHeight)
+    animateScroll(setsEl, target)
+  }
+
+  // Custom eased scroll (slower / calmer than the browser's `behavior:'smooth'`, which
+  // restarts and jumps when retriggered). A new target supersedes any in-flight animation.
+  let seamScrollRAF = null
+  function animateScroll(el, to, duration = 520) {
+    if (seamScrollRAF) cancelAnimationFrame(seamScrollRAF)
+    const from = el.scrollTop
+    const dist = to - from
+    if (Math.abs(dist) < 1) { el.scrollTop = to; return }
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) // easeInOutCubic
+    let start = null
+    const step = (ts) => {
+      if (start == null) start = ts
+      const p = Math.min(1, (ts - start) / duration)
+      el.scrollTop = from + dist * ease(p)
+      seamScrollRAF = p < 1 ? requestAnimationFrame(step) : null
+    }
+    seamScrollRAF = requestAnimationFrame(step)
+  }
+
+  // Re-park whenever what's displayed changes: the dropdown appearing / growing / shrinking
+  // (resultsH), the results set, the ambiguous gate, or a placeholder resolving — any of
+  // which can newly cover the seam. Debounced so the instant result updates (local, then the
+  // server merge, then height settling) coalesce into ONE calm move with a slight lag, rather
+  // than a burst of competing scrolls. Results themselves still update instantly. (§D)
+  let seamTimer = null
+  function scheduleSeam() {
+    if (seamTimer) clearTimeout(seamTimer)
+    seamTimer = setTimeout(() => requestAnimationFrame(ensureSeamVisible), 140)
+  }
+  $effect(() => {
+    resultsH; results.length; ambiguous; resolving // deps
+    scheduleSeam()
+  })
   let lastTypingSent = 0 // throttle the "still typing" refresh
   let highWater = 0 // max event_id seen; persisted with the snapshot for offline resume
   let snapTimer = null
@@ -117,6 +176,13 @@
   let lastMatchExact = false // whether `results` (for resultsQuery) was a unique exact match (gate decision)
   let searchTimer = null
   let searchSeq = 0
+  let searching = $state(false) // a server search is in flight for the typed text (input spinner)
+  // A placeholder tune row whose match is still resolving (Enter was hit faster than the
+  // search returned). While set, the composer is locked; the row settles to linked/unlinked
+  // or — if ambiguous — waits for the user to pick. null when nothing is resolving. (§D)
+  let resolving = $state(null) // {tempId, breakTempId, text, addAnchors, breakOp, advance, seq}
+  let resolvingSeq = 0
+  const composerLocked = $derived(resolving != null)
 
   function showSync(text) {
     const seq = ++syncMsgSeq
@@ -672,6 +738,8 @@
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
   // sortable position, so they segment into sets uniformly. Display = the sets.
   const displaySegments = $derived(segments)
+  // Is the type-ahead dropdown currently rendered? (gates the bottom spacer + band calc)
+  const dropdownOpen = $derived(!viewing && (results.length > 0 || (noMatch && editingId == null)))
 
   // A position after everything currently present, so optimistic appends stay last
   // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
@@ -936,6 +1004,38 @@
     }
   }
 
+  // The existing tune a PURE APPEND would collapse into, mirroring the server's merge rule
+  // (_find_corroboration_target §H30): same tune already live in the OPEN set (after the last
+  // break) — by tune_id when linked, else by identical normalized name when unlinked. Skips
+  // optimistic/temp rows. Returns the target record or null. Used so one log action never
+  // momentarily shows two copies of the same tune: we corroborate the existing row instead.
+  function openSetMergeTarget(payload) {
+    let start = 0
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].record_type === 'break') { start = i + 1; break }
+    }
+    const wantId = payload.tune_id ?? null
+    const wantName = wantId == null ? normName(payload.name || '') : null
+    for (let i = start; i < ordered.length; i++) {
+      const r = ordered[i]
+      if (r.record_type !== 'tune' || r.deleted || r._temp) continue
+      if (wantId != null) { if (r.tune_id === wantId) return r }
+      else if (wantName && !r.tune_id && normName(r.name || '') === wantName) return r
+    }
+    return null
+  }
+
+  // Optimistic corroboration: an append of a tune already in the open set merges into the
+  // existing row (flash + "keep both" nudge) instead of adding a second copy. The op is still
+  // sent (no tempId, so no transient row) so the server records the corroboration. §H30/§D16.
+  function corroborateLocally(target, payload, name) {
+    flashId(target.session_instance_tune_id, 'merge')
+    const seq = ++mergeNudgeSeq
+    mergeNudge = { name: name || payload.name || 'that tune', payload }
+    setTimeout(() => { if (seq === mergeNudgeSeq) mergeNudge = null }, 7000)
+    trySend({ op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, after_record_id: null, before_record_id: null }, status: 'sending', ts: Date.now(), _localMerged: true })
+  }
+
   // Shared optimistic add: place a temp row at the cursor, send/queue the op, and
   // advance the cursor past it (so a burst logs a set in order). §B/§D13.
   function addOptimistic(payload, name) {
@@ -947,6 +1047,11 @@
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
     const { afterId, beforeId, position } = cursorPos()
+    // Pure append of a duplicate -> corroborate the existing row, never a second copy.
+    if (afterId == null && beforeId == null) {
+      const target = openSetMergeTarget(payload)
+      if (target) { corroborateLocally(target, payload, name); return }
+    }
     byId.set(tempId, {
       session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, tune_type: payload.tune_type ?? null,
       record_type: 'tune', order_position: position, deleted: false, _temp: true, _status: 'sending',
@@ -1051,11 +1156,13 @@
   }
 
   function clearEntry() {
+    if (resolving) cancelResolving(false)
     input = ''
     results = []
     resultsQuery = ''
     noMatch = false
     ambiguous = false
+    searching = false
     cancelSearch()
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
@@ -1071,42 +1178,166 @@
   }
 
   // Tap a search result: add the linked tune directly, then stay hot for the next
-  // (spec 021 §D13 burst entry).
+  // (spec 021 §D13 burst entry). If a placeholder is resolving, settle IT instead.
   function pickResult(t) {
     if (editingId != null) { relinkTo(t); return }
+    if (resolving) { settleResolving({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name); return }
     clearEntry()
     addOptimistic({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name)
     queueMicrotask(() => inputEl?.focus())
   }
 
-  // Enter behavior (spec 021-style matching, NOT in 024): uses the SAME server matcher
-  // as the legacy pill editor (find_matching_tune + wildcard, via /match) so a string
-  // resolves identically in both. Only AUTO-LINK when unambiguous — a unique exact
-  // match, or a single candidate. If a fragment matches several tunes with no unique
-  // exact ("Humours"), do NOT guess: drop into a local "red" ambiguous state (dropdown
-  // stays open to disambiguate); a 2nd Enter logs it as typed (unlinked). No match at
-  // all logs unlinked immediately. The ambiguous state is purely client-side/pre-commit
-  // — a logged row is only ever linked or unlinked.
+  // --- Enter / placeholder resolution (§D) -----------------------------------------
+  // Hitting Enter asserts "this text is enough to find the tune." If the answer is known
+  // synchronously (a unique exact local match, or the dropdown already resolved this exact
+  // text), we log the real row instantly. Otherwise the text LEAVES the input and becomes a
+  // placeholder "resolving" row at the seam with a spinner; the input locks. When the match
+  // lands it settles to a linked or unlinked row — or, if several tunes match, the row waits
+  // (input still locked) while the dropdown offers the choices. Failures (no match / offline /
+  // error) settle as an unlinked "as-is" log: a committed entry is NEVER silently lost.
   async function commit() {
     if (editingId != null) { commitEdit(); return }
+    if (resolving) {
+      // Enter while a placeholder is pending: if ambiguous, pick the top match.
+      if (ambiguous && results.length) {
+        const t = results[0]
+        settleResolving({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name)
+      }
+      return
+    }
     const q = input.trim()
     if (!q) return
-    if (ambiguous) { ambiguous = false; submit(); return } // 2nd Enter -> log as typed (the escape)
-    // Fast path (§024): a UNIQUE exact match in the session's local vocabulary logs
-    // instantly — no network search/resolve. Common tunes have zero perceived latency.
-    // Anything ambiguous or unknown returns null here and falls through to the server.
+    // Fast path: a UNIQUE exact match in the session's local vocabulary logs instantly.
     const local = resolveLocal(q)
     if (local) { pickResult(local); return }
-    // Trust the dropdown only if it matches the CURRENT text; else look up fresh.
-    const m = (resultsQuery === q && (results.length || noMatch))
-      ? { exact_match: lastMatchExact, results }
-      : await matchFor(q)
-    if (!m.results.length) { submit(); return }              // no match -> unlinked now
-    if (m.exact_match) { pickResult(m.results[0]); return }  // unique exact -> link
-    if (m.results.length === 1) { pickResult(m.results[0]); return } // single candidate -> link
-    // ambiguous (multiple candidates, no unique exact): gate, surface candidates.
-    results = m.results.slice(0, 8); resultsQuery = q; noMatch = false
-    ambiguous = true
+    // A single candidate is already on screen for this exact text -> use it immediately, even
+    // if the server search is still in flight. The user sees one option and Enter means "that
+    // one"; no reason to drop their raw text into a placeholder first. (Covers the common case
+    // the exact matchers miss — e.g. "kesh" -> the sole "Kesh, The" comma-form, found only by
+    // substring.)
+    if (resultsQuery === q && results.length === 1) { pickResult(results[0]); return }
+    // If the server already answered for this exact text, decide synchronously (no placeholder).
+    if (!searching && resultsQuery === q && (results.length || noMatch)) {
+      const m = { exact_match: lastMatchExact, results }
+      if (!m.results.length) { submit(); return }                          // no match -> unlinked
+      if (m.exact_match) { pickResult(m.results[0]); return }              // unique exact among several
+      startResolving(q); applyResolution(m); return                        // multiple -> placeholder + dropdown
+    }
+    // Out-typed the search: drop a resolving placeholder NOW, then settle when the match lands.
+    startResolving(q)
+    const seq = resolving.seq
+    const m = await matchFor(q)
+    if (!resolving || resolving.seq !== seq) return // settled / cancelled / edited meanwhile
+    applyResolution(m)
+  }
+
+  // Apply a server verdict to the pending placeholder: settle it (linked / unlinked) or,
+  // when several tunes match, keep it pending and surface the choices in the dropdown.
+  function applyResolution(m) {
+    if (!resolving) return
+    if (!m.results.length) { settleResolving({ name: resolving.text }, resolving.text); return }
+    if (m.exact_match || m.results.length === 1) {
+      const t = m.results[0]
+      settleResolving({ tune_id: t.tune_id, name: t.name, tune_type: t.tune_type }, t.name); return
+    }
+    results = m.results.slice(0, 8); resultsQuery = resolving.text; noMatch = false; ambiguous = true
+  }
+
+  // Drop a placeholder "resolving" row at the cursor and lock the composer. Captures the
+  // op anchors now (cursor can't move while locked); the add_tune op fires only on settle.
+  // Handles the between-sets ("new set") seam too — a tune plus a trailing break.
+  function startResolving(q) {
+    const tempId = `temp-${crypto.randomUUID()}`
+    const c = insertAfterId
+    const nextFirstId = c && typeof c === 'object' && c.newSet != null ? c.newSet : null
+    const nsIdx = typeof nextFirstId === 'number' ? ordered.findIndex((r) => r.session_instance_tune_id === nextFirstId) : -1
+    let position, addAnchors, breakTempId = null, breakOp = null, advance
+    if (nsIdx !== -1) {
+      const nextPos = ordered[nsIdx].order_position
+      const predPos = nsIdx > 0 ? ordered[nsIdx - 1].order_position : null
+      position = generateBetween(predPos, nextPos)
+      const breakPos = generateBetween(position, nextPos)
+      breakTempId = `temp-${crypto.randomUUID()}`
+      byId.set(breakTempId, { session_instance_tune_id: breakTempId, record_type: 'break', order_position: breakPos, deleted: false, _temp: true })
+      addAnchors = { before_record_id: nextFirstId }
+      breakOp = { op_type: 'set_break', payload: { action: 'insert', before_record_id: nextFirstId } }
+      advance = true
+    } else {
+      const cp = cursorPos()
+      position = cp.position
+      addAnchors = { after_record_id: cp.afterId, before_record_id: cp.beforeId }
+      advance = insertAfterId != null
+    }
+    byId.set(tempId, {
+      session_instance_tune_id: tempId, name: q, tune_id: null, tune_type: null,
+      record_type: 'tune', order_position: position, deleted: false, _temp: true, _resolving: true,
+    })
+    resolving = { tempId, breakTempId, text: q, addAnchors, breakOp, advance, seq: ++resolvingSeq }
+    // clear & lock the composer (the text now lives in the placeholder row)
+    input = ''
+    results = []; resultsQuery = ''; noMatch = false; ambiguous = false; searching = false
+    cancelSearch()
+    lastTypingSent = 0; sendTyping(config, false)
+    queueMicrotask(() => inputEl?.focus())
+    scheduleSeam() // keep the new placeholder row in view
+  }
+
+  // Settle the placeholder into a real (linked or unlinked) row and fire the add_tune op
+  // now — reusing the SAME temp id so the row never jumps. payload: {tune_id?, name, tune_type?}.
+  async function settleResolving(payload, name) {
+    const rs = resolving
+    if (!rs) return
+    // Pure append that resolved to a duplicate -> drop the placeholder and corroborate the
+    // existing row, so the action never leaves a second copy behind. §H30
+    if (!rs.breakOp && rs.addAnchors.after_record_id == null && rs.addAnchors.before_record_id == null) {
+      const target = openSetMergeTarget(payload)
+      if (target) {
+        byId.delete(rs.tempId)
+        resolving = null
+        results = []; resultsQuery = ''; noMatch = false; ambiguous = false
+        queueMicrotask(() => inputEl?.focus())
+        corroborateLocally(target, payload, name)
+        return
+      }
+    }
+    const row = byId.get(rs.tempId)
+    if (row) byId.set(rs.tempId, { ...row, name, tune_id: payload.tune_id ?? null, tune_type: payload.tune_type ?? null, _resolving: false, _status: 'sending' })
+    if (rs.advance) insertAfterId = rs.tempId // burst continues after this tune
+    resolving = null
+    results = []; resultsQuery = ''; noMatch = false; ambiguous = false
+    queueMicrotask(() => inputEl?.focus())
+    const addEntry = { op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, ...rs.addAnchors }, status: 'sending', ts: Date.now(), tempId: rs.tempId }
+    if (rs.breakOp) {
+      // new-set seam: send the break only AFTER the tune resolves, anchored before the same
+      // next tune, so it always lands after our tune (mirrors addNewSetTune).
+      await trySend(addEntry)
+      trySend({ op_id: crypto.randomUUID(), op_type: rs.breakOp.op_type, payload: rs.breakOp.payload, status: 'sending', ts: Date.now() + 1, tempId: rs.breakTempId })
+    } else {
+      trySend(addEntry)
+    }
+  }
+
+  // Abandon a pending placeholder. returnText=true ("Edit"/Escape) puts the text back in the
+  // input to fix; false ("Remove") just discards it. Cancels any in-flight match (seq bump).
+  function cancelResolving(returnText) {
+    const rs = resolving
+    if (!rs) return
+    byId.delete(rs.tempId)
+    if (rs.breakTempId) byId.delete(rs.breakTempId)
+    resolving = null
+    resolvingSeq++ // invalidate an in-flight commit() await
+    results = []; resultsQuery = ''; noMatch = false; ambiguous = false
+    if (returnText) {
+      input = rs.text
+      queueMicrotask(() => { inputEl?.focus(); runSearch() })
+    } else {
+      queueMicrotask(() => inputEl?.focus())
+    }
+  }
+
+  // The droplist "Log "<text>" as-is" escape: settle the pending placeholder as unlinked text.
+  function logAsIs() {
+    if (resolving) settleResolving({ name: resolving.text }, resolving.text)
   }
 
   // --- deep catalog search (§D "search deeper") ---
@@ -1123,21 +1354,32 @@
   let deepPrefer = null // the set's type, passed as a sort preference (not a filter)
 
   // The single tune type of the set the cursor currently points into (preset filter).
-  function cursorSetType() {
+  // The set (segment) the cursor is appending/inserting into, or null (new set / unknown).
+  function cursorSegment() {
     const c = insertAfterId
-    let seg = null
-    if (c == null) {
-      if (endIsOpen && segments.length) seg = segments[segments.length - 1]
-    } else if (typeof c === 'object') {
+    if (c == null) return endIsOpen && segments.length ? segments[segments.length - 1] : null
+    if (typeof c === 'object') {
       if (c.newSet != null) return null
-      const id = c.before
-      seg = segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === id))
-    } else {
-      seg = segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c))
+      return segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c.before)) || null
     }
+    return segments.find((s) => s.tunes.some((t) => t.session_instance_tune_id === c)) || null
+  }
+
+  function cursorSetType() {
+    const seg = cursorSegment()
     if (!seg) return null
     const types = new Set(seg.tunes.map((t) => t.tune_type).filter(Boolean))
     return types.size === 1 ? [...types][0] : null
+  }
+
+  // tune_ids already logged into the set the cursor is building. They're DEMOTED in the
+  // suggestion ranking — a tune you just added shouldn't be the top "log again" pick — but
+  // kept in the list (a set can legitimately repeat a tune).
+  function currentSetTuneIds() {
+    const seg = cursorSegment()
+    const ids = new Set()
+    if (seg) for (const t of seg.tunes) if (t.tune_id != null) ids.add(t.tune_id)
+    return ids
   }
 
   // ABC-ish input: legal ABC melody characters — note letters, accidentals (^ _ =),
@@ -1219,10 +1461,14 @@
   let localIndex = null
   let vocabKnown = [], vocabAliases = [] // raw bootstrap vocabulary, kept for offline persistence
   const stripThe = (s) => s.replace(/^the\s+/, '')
+  // Mirror the server matcher (database.normalize_quotes + unaccent + lower). Smart-quote
+  // code points are \u-escaped, never written literally — editors silently auto-correct
+  // literal smart quotes back to ASCII, which would turn the fold into a no-op.
   function normName(s) {
     return (s || '')
-      .replace(/[‘’‛`´]/g, "'") // smart quotes / backtick / acute -> '
-      .normalize('NFD').replace(/[̀-ͯ]/g, '') // unaccent (strip diacritics)
+      .replace(/[\u2018\u2019\u201b\u02bc\u2032\u0060\u00b4]/g, "'") // smart singles -> '
+      .replace(/[\u201c\u201d\u201e\u2033\u00ab\u00bb]/g, '"')        // smart doubles -> "
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')              // unaccent (strip diacritics)
       .trim().toLowerCase()
   }
   function buildLocalIndex(known, aliases) {
@@ -1231,20 +1477,33 @@
     vocabAliases = aliases || []
     const aliasMap = new Map(), nameMap = new Map(), byId = new Map()
     const add = (map, key, id) => { if (!key) return; let s = map.get(key); if (!s) map.set(key, (s = new Set())); s.add(id) }
+    // `list` is the flat, vocab-ordered set of entries scanned for SUBSTRING matches (the
+    // type-ahead dropdown). Vocabulary order already encodes ranking — this session's
+    // top-N by plays first, then globally-popular tunes — so an entry's index is a good
+    // relevance proxy. Deduped by tune_id; first occurrence keeps the better (earlier) rank.
+    const list = [], listById = new Map()
+    const ensure = (id, name, tune_type) => {
+      let e = listById.get(id)
+      if (!e) { e = { tune_id: id, name, tune_type: tune_type ?? null, nn: normName(name), aliases: [] }; listById.set(id, e); list.push(e) }
+      return e
+    }
     for (const t of known || []) {
       if (!t.tune_id) continue
       byId.set(t.tune_id, { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type ?? null })
       const n = normName(t.name)
       add(nameMap, n, t.tune_id)
       add(nameMap, stripThe(n), t.tune_id) // "The X" <-> "X" flexibility (both directions)
-      if (t.alias) add(aliasMap, normName(t.alias), t.tune_id)
+      const e = ensure(t.tune_id, t.name, t.tune_type)
+      if (t.alias) { add(aliasMap, normName(t.alias), t.tune_id); e.aliases.push(normName(t.alias)) }
     }
     for (const a of aliases || []) {
       if (!a.tune_id || !a.alias) continue
       add(aliasMap, normName(a.alias), a.tune_id)
       if (!byId.has(a.tune_id)) byId.set(a.tune_id, { tune_id: a.tune_id, name: a.name || a.alias, tune_type: a.tune_type ?? null })
+      ensure(a.tune_id, a.name || a.alias, a.tune_type).aliases.push(normName(a.alias))
     }
-    localIndex = { aliasMap, nameMap, byId }
+    list.forEach((e, i) => { e.idx = i })
+    localIndex = { aliasMap, nameMap, byId, list }
   }
   // Resolve a typed string to a UNIQUE exact known tune, or null (no match OR ambiguous
   // -> defer to the server path, which never guesses). Alias tier wins, exactly as the
@@ -1263,6 +1522,46 @@
     }
     if (ids.size === 1) return localIndex.byId.get([...ids][0]) || null
     return null
+  }
+
+  // Substring matches from the local vocabulary — the INSTANT type-ahead list (zero network).
+  // Mirrors the server wildcard: plain substring over name+alias, ranked by the set's type
+  // preference, then vocabulary order (session plays -> global popularity), then name.
+  function resolveLocalMany(q, limit = 8) {
+    if (!localIndex) return []
+    const qn = normName(q)
+    if (qn.length < 2) return []
+    const prefer = cursorSetType() // the set's tune type (soft sort preference), or null
+    const inSet = currentSetTuneIds() // already in this set -> demote below fresh suggestions
+    const hits = []
+    for (const e of localIndex.list) {
+      if (e.nn.includes(qn) || e.aliases.some((a) => a.includes(qn))) hits.push(e)
+    }
+    hits.sort((a, b) => {
+      const ia = inSet.has(a.tune_id) ? 1 : 0
+      const ib = inSet.has(b.tune_id) ? 1 : 0
+      if (ia !== ib) return ia - ib // a tune already in this set sinks beneath everything else
+      const pa = prefer && a.tune_type === prefer ? 0 : 1
+      const pb = prefer && b.tune_type === prefer ? 0 : 1
+      if (pa !== pb) return pa - pb
+      if (a.idx !== b.idx) return a.idx - b.idx
+      return a.nn < b.nn ? -1 : a.nn > b.nn ? 1 : 0
+    })
+    return hits.slice(0, limit).map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type }))
+  }
+
+  // Stable-append merge (§D): keep every already-shown LOCAL result pinned in place (so
+  // nothing the user is about to tap moves), enrich it with the server's richer fields
+  // (in-session badge / notation), and append only the server-ONLY tunes below.
+  function mergeStable(localList, serverList) {
+    const sById = new Map(serverList.filter((r) => r.tune_id != null).map((r) => [r.tune_id, r]))
+    const seen = new Set(localList.map((r) => r.tune_id))
+    const merged = localList.map((r) => {
+      const s = sById.get(r.tune_id)
+      return s ? { ...r, in_session_tune: s.in_session_tune, abc: s.abc ?? r.abc } : r
+    })
+    const extra = serverList.filter((r) => r.tune_id != null && !seen.has(r.tune_id))
+    return [...merged, ...extra].slice(0, 8)
   }
 
   // Background vocabulary load (online): fetch the session vocabulary AFTER first render,
@@ -1312,24 +1611,36 @@
     return m
   }
 
-  // Progressive type-ahead search (debounced), shown above the composer.
+  // Progressive type-ahead search, shown above the composer. The local vocabulary is
+  // matched INSTANTLY (zero network) so common/known tunes appear with no delay; the
+  // server search fires in parallel (debounced) and its long-tail results stable-append
+  // below. The spinner stays lit until the server answers. (§D)
   function runSearch() {
+    if (resolving) return // composer is locked while a placeholder resolves
     const q = input.trim()
     if (q.length < 2) {
       results = []
       resultsQuery = q
       noMatch = false
+      searching = false
+      cancelSearch()
       return
     }
+    const local = resolveLocalMany(q, 8) // instant
+    results = local
+    resultsQuery = q
+    noMatch = false
+    searching = true
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(async () => {
       const seq = ++searchSeq
       const m = await matchFor(q)
       if (seq === searchSeq) {
-        results = m.results
+        results = mergeStable(local, m.results)
         resultsQuery = q
         lastMatchExact = m.exact_match
-        noMatch = m.results.length === 0 // no matches at all -> show "no tunes match" + deeper search
+        noMatch = results.length === 0 // nothing at all -> show "no tunes match" + deeper search
+        searching = false
       }
     }, 180)
   }
@@ -1377,6 +1688,7 @@
   // Refresh a typing reservation while composing (throttled), run search, clear when empty.
   function onInput() {
     if (viewing) return // no composer in view mode; never broadcast typing as a viewer
+    if (resolving) return // composer is locked while a placeholder resolves
     ambiguous = false // editing the text re-opens the question; next Enter re-evaluates
     runSearch()
     if (input.trim()) {
@@ -1392,6 +1704,7 @@
   }
 
   function stopTyping() {
+    if (resolving) return // keep the resolution dropdown open while a placeholder is pending
     if (lastTypingSent) {
       lastTypingSent = 0
       sendTyping(config, false)
@@ -1403,6 +1716,7 @@
     resultsQuery = ''
     noMatch = false
     ambiguous = false
+    searching = false
   }
 
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
@@ -1657,6 +1971,7 @@
     requestAnimationFrame(() => {
       const sets = mainEl?.querySelector('.sets')
       if (sets && insertAfterId == null) sets.scrollTop = sets.scrollHeight
+      ensureSeamVisible()
     })
   }
 
@@ -1846,9 +2161,9 @@
           <div
             class="tune-row"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
-            class:unlinked={!r._temp && !r.tune_id && r.record_type === 'tune'}
+            class:unlinked={!r._resolving && !r.tune_id && r.record_type === 'tune'}
             class:has-by={!viewing && !r._temp && r.tune_id && loggerColorIdx(r) != null}
-            class:pending={r._temp}
+            class:pending={r._resolving}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
             class:selected={!viewing && selectedId === r.session_instance_tune_id}
@@ -1857,19 +2172,34 @@
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
             style={viewing ? '' : rowStyle(r)}
-            onclick={() => r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)}
+            onclick={() => r._resolving ? (!viewing && selectRow(r.session_instance_tune_id)) : (r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id))}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
             {#if r._temp}
-              <span class="actions"><span class="pend-label">{r._status === 'queued' ? '⏳ queued' : '⏳ sending…'}</span></span>
+              {#if r._resolving}
+                <!-- match still resolving: the one case worth a spinner (what got logged is unknown) -->
+                <span class="actions"><span class="spinner"></span><span class="pend-label">resolving…</span></span>
+              {:else}
+                <!-- confident add: reads as fully logged; the op syncs transparently in the
+                     background. Only an offline-queued op gets a marker (§D). -->
+                {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
+                {#if r._status === 'queued'}<span class="pend-label offline" title="Saved offline — syncs when you reconnect">offline</span>{/if}
+              {/if}
             {:else if r._removing}
-              <span class="actions"><span class="pend-label">⏳ removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
+              <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
               {#if !viewing}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
             {/if}
           </div>
           {#if !viewing && selectedId === r.session_instance_tune_id}
+            {#if r._resolving}
+              <!-- pending placeholder: bail out of the in-flight match -->
+              <div class="row-actions">
+                <button onclick={() => { selectedId = null; cancelResolving(true) }}>✎ Edit</button>
+                <button class="danger" onclick={() => { selectedId = null; cancelResolving(false) }}>🗑 Remove</button>
+              </div>
+            {:else}
             <div class="row-actions">
               <button onclick={() => openDrawer(r)}>ⓘ Info</button>
               <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
@@ -1880,6 +2210,7 @@
               <button onclick={() => startEdit(r.session_instance_tune_id)}>✎ Edit</button>
               <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 Remove</button>
             </div>
+            {/if}
           {/if}
           {#if !r._temp && !viewing}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
@@ -1919,6 +2250,8 @@
         {:else}<span class="seam-plus">＋ new set</span>{/if}
       </div>
     {/if}
+    <!-- scroll room so the end-of-list seam can rise ABOVE the upward dropdown (§D) -->
+    {#if dropdownOpen}<div class="drop-spacer" style="height:{resultsH}px" aria-hidden="true"></div>{/if}
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
@@ -1944,7 +2277,7 @@
       </footer>
     {:else}
     {#if results.length || (noMatch && editingId == null)}
-      <ul class="results">
+      <ul class="results" bind:clientHeight={resultsH}>
         {#each results as t (t.tune_id)}
           <li onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
             <span class="r-name">{t.name}</span>
@@ -1956,7 +2289,11 @@
         {#if noMatch && !results.length}
           <li class="result-empty">No tunes match your search</li>
         {/if}
-        {#if editingId == null}
+        {#if resolving}
+          <li class="result-asis" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
+            <span class="r-name">Log “{resolving.text}” as-is</span>
+          </li>
+        {:else if editingId == null}
           <li class="result-deeper" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
             <span class="r-name">🔍 Search …</span>
           </li>
@@ -1966,7 +2303,7 @@
 
     {#if ambiguous}
       <div class="ambig-hint" transition:fly={{ y: 8, duration: 160 }}>
-        <span><b>“{input.trim()}”</b> matches several tunes — pick one above, or press Enter again to log as typed.</span>
+        <span><b>“{resolving ? resolving.text : input.trim()}”</b> matches several tunes — tap one, press Enter for the top match, or “Log as-is”.</span>
       </div>
     {/if}
 
@@ -1986,15 +2323,21 @@
     {/if}
 
     <div class="composer">
-      <input
-        class:ambiguous={ambiguous}
-        placeholder={editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…'}
-        bind:value={input}
-        bind:this={inputEl}
-        oninput={onInput}
-        onblur={stopTyping}
-        onkeydown={(e) => e.key === 'Enter' && commit()}
-      />
+      <div class="composer-field">
+        <input
+          class:ambiguous={ambiguous}
+          class:locked={composerLocked}
+          readonly={composerLocked}
+          placeholder={composerLocked ? 'Resolving…' : (editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…')}
+          bind:value={input}
+          bind:this={inputEl}
+          oninput={onInput}
+          onfocus={scheduleSeam}
+          onblur={stopTyping}
+          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit() } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) } }}
+        />
+        {#if searching}<span class="spinner input-spin"></span>{/if}
+      </div>
       <button onmousedown={(e) => e.preventDefault()} onclick={commit}>{editingId != null ? 'Save' : 'Log'}</button>
       {#if editingId != null}
         <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>

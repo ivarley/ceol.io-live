@@ -6982,29 +6982,52 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
             }],
         }
 
+    # Wildcard candidate list. Split into two branches so the catalog-wide name search is
+    # index-backed (idx_tune_name_trgm via tune_search_key) instead of a full scan; session
+    # aliases (small, session-scoped) are matched separately. This preserves the original
+    # COALESCE(st.alias, t.name) semantics exactly: a tune with a session alias is searched
+    # by its alias, a tune without one by its name.
+    like_pattern = f"%{tune_name.lower()}%"
     cur.execute(
-        f"""
-        SELECT t.tune_id, COALESCE(st.alias, t.name) AS display_name, t.tune_type,
-               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS preferred_tune_type,
-               playcounts.plays, (st.session_id IS NOT NULL) AS in_session
-        FROM tune t
-        LEFT OUTER JOIN session_tune st ON t.tune_id = st.tune_id AND st.session_id = %s
-        LEFT OUTER JOIN (
+        """
+        WITH cand AS (
+            -- name branch: effective search target is the tune name (no session alias)
+            SELECT t.tune_id, t.name AS display_name, t.tune_type, t.tunebook_count_cached
+            FROM tune t
+            LEFT JOIN session_tune st ON st.tune_id = t.tune_id AND st.session_id = %s
+            WHERE t.redirect_to_tune_id IS NULL
+              AND st.alias IS NULL
+              AND tune_search_key(t.name) LIKE %s
+            UNION
+            -- alias branch: session-scoped, small
+            SELECT t.tune_id, st.alias AS display_name, t.tune_type, t.tunebook_count_cached
+            FROM session_tune st
+            JOIN tune t ON t.tune_id = st.tune_id
+            WHERE st.session_id = %s
+              AND st.alias IS NOT NULL
+              AND t.redirect_to_tune_id IS NULL
+              AND tune_search_key(st.alias) LIKE %s
+        )
+        SELECT c.tune_id, c.display_name, c.tune_type,
+               CASE WHEN c.tune_type = %s THEN 0 ELSE 1 END AS preferred_tune_type,
+               pc.plays, (st2.session_id IS NOT NULL) AS in_session
+        FROM cand c
+        LEFT JOIN session_tune st2 ON st2.tune_id = c.tune_id AND st2.session_id = %s
+        LEFT JOIN (
             SELECT sit.tune_id, COUNT(*) AS plays
             FROM session_instance si
             INNER JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
             WHERE si.session_id = %s
             GROUP BY sit.tune_id
-        ) playcounts ON t.tune_id = playcounts.tune_id
-        WHERE LOWER(unaccent({normalize_quotes_sql('COALESCE(st.alias, t.name)')})) LIKE %s
-          AND t.redirect_to_tune_id IS NULL
+        ) pc ON pc.tune_id = c.tune_id
         ORDER BY preferred_tune_type ASC,
-                 playcounts.plays DESC NULLS LAST,
-                 t.tunebook_count_cached DESC NULLS LAST,
-                 LOWER(unaccent(COALESCE(st.alias, t.name))) ASC
+                 pc.plays DESC NULLS LAST,
+                 c.tunebook_count_cached DESC NULLS LAST,
+                 LOWER(unaccent(c.display_name)) ASC
         LIMIT %s
         """,
-        (previous_tune_type, session_id, session_id, f"%{tune_name.lower()}%", limit),
+        (session_id, like_pattern, session_id, like_pattern,
+         previous_tune_type, session_id, session_id, limit),
     )
     results = [
         {"tune_id": m[0], "tune_name": m[1], "tune_type": m[2], "in_session_tune": bool(m[5])}

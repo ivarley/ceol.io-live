@@ -1,4 +1,5 @@
 import os
+import re
 import psycopg2
 
 
@@ -534,17 +535,25 @@ def find_matching_tune(
             return alias_matches[0][0], tune_name, None
         elif len(alias_matches) == 0:
             # No alias match in either table, search tune table by name with flexible "The " matching (accent insensitive)
-            # Exclude redirected tunes - they should not match
+            # Exclude redirected tunes - they should not match.
+            # Index-backed (idx_tune_name_key): the three original "The "-flexible
+            # comparisons all reduce to equality against tune_search_key(name), so the
+            # B-tree is used instead of a full scan. The original third branch
+            # ("The " || name = query) is equivalent to matching the query with a
+            # leading "The " stripped.
+            de_the = re.sub(r"(?i)^the\s+", "", normalized_tune_name)
             cur.execute(
-                f"""
+                """
                 SELECT tune_id, name
                 FROM tune
-                WHERE (LOWER(unaccent({normalize_quotes_sql('name')})) = LOWER(unaccent(%s))
-                OR LOWER(unaccent({normalize_quotes_sql('name')})) = LOWER(unaccent('The ' || %s))
-                OR LOWER(unaccent('The ' || {normalize_quotes_sql('name')})) = LOWER(unaccent(%s)))
-                AND redirect_to_tune_id IS NULL
+                WHERE tune_search_key(name) = ANY (ARRAY[
+                        tune_search_key(%s),
+                        tune_search_key('The ' || %s),
+                        tune_search_key(%s)
+                      ])
+                  AND redirect_to_tune_id IS NULL
             """,
-                (normalized_tune_name, normalized_tune_name, normalized_tune_name),
+                (normalized_tune_name, normalized_tune_name, de_the),
             )
 
             tune_matches = cur.fetchall()

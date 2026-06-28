@@ -400,6 +400,8 @@ main {
 .tune-row.removing .name { text-decoration: line-through; color: var(--muted); opacity: 0.7; }
 .pend-label { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .tune-row.queued .pend-label { color: #e8d28a; }
+/* offline-pending marker on a confidently-logged row (waiting only on connectivity) */
+.pend-label.offline { margin-left: 6px; color: var(--attention); font-weight: 600; }
 .actions { display: inline-flex; align-items: center; gap: 6px; }
 .actions .restore { color: var(--accent); border-color: var(--accent); }
 /* settle-flash, personalized by who changed the row (§39/§E) */
@@ -583,6 +585,11 @@ main {
   margin-bottom: 6px;
   z-index: 20;
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.45);
+  /* Render bottom-up: the best match (results[0], the one Enter picks) sits nearest the
+     input/finger, and slower server results stream in ABOVE the instant cache hits — so the
+     rows under the user's finger never shift when the server response merges in. (§D) */
+  display: flex;
+  flex-direction: column-reverse;
 }
 .results li {
   display: flex;
@@ -597,8 +604,10 @@ main {
 /* "No tunes match your search" — informational, not a tappable row */
 .results .result-empty { color: var(--muted); font-style: italic; cursor: default; }
 .results .result-empty:hover { background: none; }
-.results .r-name { font-weight: 600; }
-.results .r-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* name takes the slack and truncates with an ellipsis; meta stays fixed — so a row is ALWAYS
+   one line and never re-wraps/resizes when "· in session" / "· notation" appears (§D) */
+.results .r-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.results .r-meta { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .results .r-insession { color: var(--accent); }
 .results .r-abc { color: #9a8f6a; }
 
@@ -671,7 +680,28 @@ main {
   cursor: pointer;
 }
 /* "Search …" footer in the type-ahead results (deep search also lives in the menu) */
-.results .result-deeper { color: var(--accent); font-weight: 600; border-top: 1px solid var(--border); }
+/* footer rows sit at the TOP of the column-reverse list, so the divider goes on their bottom */
+.results .result-deeper { color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
+/* "Log <text> as-is" — the unlinked escape shown while a placeholder is being disambiguated */
+.results .result-asis { color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
+
+/* unified "thinking" spinner — in the input (search in flight) and on a resolving/sending row */
+.spinner {
+  display: inline-block; flex: none;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* the composer input + its trailing spinner (right edge); padding-right reserves room so
+   text never slides under the spinner */
+.composer-field { position: relative; flex: 1; display: flex; }
+.composer-field input { flex: 1; padding-right: 34px; }
+.composer-field .input-spin { position: absolute; right: 12px; top: 50%; margin-top: -9px; pointer-events: none; }
+/* input is read-only while a placeholder resolves (the text has moved into the row) */
+.composer input.locked { opacity: 0.6; cursor: default; }
 
 /* ---------- deep catalog search modal (§D) ---------- */
 .deep-modal {
