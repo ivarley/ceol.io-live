@@ -360,6 +360,12 @@
   }
 
   // --- row selection + actions (spec 021 §E) ---
+  // Read-only View (default) vs full Edit (logging), toggled on this same screen
+  // (spec 021 §A2–3). View is the common case — most people read a logged session
+  // rather than log one — so a logger taps "✎ Edit log" to start.
+  let mode = $state('view')
+  const viewing = $derived(mode === 'view')
+
   let selectedId = $state(null) // the "opened" tune row (shows its action bar)
   let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
   let editingName = $state('') // its name, for the editing banner label
@@ -490,6 +496,29 @@
 
   function selectRow(id) {
     selectedId = selectedId === id ? null : id
+  }
+
+  // Toggle View <-> Edit (spec 021 §A2–3). Leaving edit drops every transient editing
+  // affordance; the SSE then reconnects so the server learns this connection's new
+  // presence intent — a viewer asserts nothing (spec 024 §presence).
+  function setMode(m) {
+    if (mode === m) return
+    mode = m
+    if (m === 'view') {
+      if (editingId != null) cancelEdit()
+      else clearEntry()
+      selectedId = null
+      insertAfterId = null
+      starterPickerSet = null
+      openTrayId = null
+      expanded = false
+    }
+    if (!fromCacheOnly()) connect() // re-open the stream with the new mode= flag
+  }
+  // Reconnecting requires the server; while offline we just flip the UI (presence is
+  // already dropped offline) and let the next reconnect carry the current mode.
+  function fromCacheOnly() {
+    return !online || !reachable
   }
   function predecessorId(id) {
     const idx = ordered.findIndex((r) => r.session_instance_tune_id === id)
@@ -639,8 +668,12 @@
   }
 
   // A change made by someone else — surface a brief, attributed activity notice (§E).
+  // In edit mode we skip your own changes (you just made them). In view mode this
+  // window authors nothing, so every incoming change is "remote" worth showing — even
+  // one from your own account logging in another window.
   function noteRemote(d) {
-    if (!d.actor || d.actor.person_id == null || d.actor.person_id === person.person_id) return
+    if (!d.actor || d.actor.person_id == null) return
+    if (!viewing && d.actor.person_id === person.person_id) return
     const label = remoteLabel(d)
     if (!label) return
     const id = ++activityId
@@ -1296,6 +1329,7 @@
 
   // Refresh a typing reservation while composing (throttled), run search, clear when empty.
   function onInput() {
+    if (viewing) return // no composer in view mode; never broadcast typing as a viewer
     ambiguous = false // editing the text re-opens the question; next Enter re-evaluates
     runSearch()
     if (input.trim()) {
@@ -1397,7 +1431,7 @@
         // Silent half-open stream detected by the watchdog -> full reconnect (re-bootstrap
         // closes any gap of events missed while the socket was dead).
         onDead: () => { if (myGen === connSeq) connect() },
-      })
+      }, mode)
       if (myGen !== connSeq) { stream.close(); return } // superseded after we opened
       es = stream
       loadVocabulary(myGen) // background: warm the local fast-match index, then persist it
@@ -1580,7 +1614,7 @@
   })
 </script>
 
-<main bind:this={mainEl}>
+<main bind:this={mainEl} class:view-mode={viewing}>
   <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
@@ -1694,14 +1728,18 @@
           <div class="set-tray">
             <div class="tray-row">
               <span class="tray-k">Started by</span>
-              <button
-                class="starter-value"
-                class:set={setStarterName(seg)}
-                class:open={starterPickerSet === seg.tunes[0].session_instance_tune_id}
-                onclick={() => openStarterPicker(seg.tunes[0].session_instance_tune_id)}
-              >{setStarterName(seg) || 'Not set'}</button>
+              {#if viewing}
+                <span class="starter-value" class:set={setStarterName(seg)}>{setStarterName(seg) || 'Not set'}</span>
+              {:else}
+                <button
+                  class="starter-value"
+                  class:set={setStarterName(seg)}
+                  class:open={starterPickerSet === seg.tunes[0].session_instance_tune_id}
+                  onclick={() => openStarterPicker(seg.tunes[0].session_instance_tune_id)}
+                >{setStarterName(seg) || 'Not set'}</button>
+              {/if}
             </div>
-            {#if starterPickerSet === seg.tunes[0].session_instance_tune_id}
+            {#if !viewing && starterPickerSet === seg.tunes[0].session_instance_tune_id}
               <div class="starter-picker">
                 <input class="starter-filter" placeholder="Filter players…" bind:value={starterFilter} />
                 <div class="starter-list">
@@ -1723,27 +1761,29 @@
             {/if}
           </div>
         {/if}
-        <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
-          {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
-            <span class="seam-line"></span>
-          {:else}<span class="seam-plus">＋ start of set</span>{/if}
-        </div>
+        {#if !viewing}
+          <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
+            {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
+              <span class="seam-line"></span>
+            {:else}<span class="seam-plus">＋ start of set</span>{/if}
+          </div>
+        {/if}
         {#each seg.tunes as r, ti (r.session_instance_tune_id)}
           <div
             class="tune-row"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
             class:unlinked={!r._temp && !r.tune_id && r.record_type === 'tune'}
-            class:has-by={!r._temp && r.tune_id && loggerColorIdx(r) != null}
+            class:has-by={!viewing && !r._temp && r.tune_id && loggerColorIdx(r) != null}
             class:pending={r._temp}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
-            class:selected={selectedId === r.session_instance_tune_id}
+            class:selected={!viewing && selectedId === r.session_instance_tune_id}
             class:editing={editingId === r.session_instance_tune_id}
             class:flash-mine={flashing.get(r.session_instance_tune_id)?.kind === 'mine'}
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
-            style={rowStyle(r)}
-            onclick={() => !r._temp && !r._removing && selectRow(r.session_instance_tune_id)}
+            style={viewing ? '' : rowStyle(r)}
+            onclick={() => r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)}
           >
             <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
             {#if r._temp}
@@ -1752,10 +1792,10 @@
               <span class="actions"><span class="pend-label">⏳ removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
-              <button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>
+              {#if !viewing}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
             {/if}
           </div>
-          {#if selectedId === r.session_instance_tune_id}
+          {#if !viewing && selectedId === r.session_instance_tune_id}
             <div class="row-actions">
               <button onclick={() => openDrawer(r)}>ⓘ Info</button>
               <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
@@ -1767,7 +1807,7 @@
               <button class="danger" onclick={() => removeRow(r.session_instance_tune_id)}>🗑 Remove</button>
             </div>
           {/if}
-          {#if !r._temp}
+          {#if !r._temp && !viewing}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
               <!-- last tune of the open set: this seam IS the end (append) point -->
               <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
@@ -1786,7 +1826,7 @@
           {/if}
         {/each}
       </div>
-      {#if si < displaySegments.length - 1 && seg.breakAfter != null}
+      {#if !viewing && si < displaySegments.length - 1 && seg.breakAfter != null}
         <div class="seam inter-seam" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)}>
           {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
@@ -1797,7 +1837,7 @@
     {:else}
       <p class="empty">No tunes yet — log one below.</p>
     {/each}
-    {#if ordered.length && !endIsOpen}
+    {#if ordered.length && !endIsOpen && !viewing}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
       <div class="seam end-seam new-set-end" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
         {#if activeSeam === 'end'}
@@ -1809,7 +1849,7 @@
 
   {#if error}<p class="error">{error}</p>{/if}
 
-  {#if othersTyping.length}
+  {#if !viewing && othersTyping.length}
     <div class="typing">
       {#each othersTyping as t (t.person_id)}<span class="t-name" style="color:{colorFor(t.arrival_seq)}">{t.name}</span>{/each}
       <span class="t-verb">{othersTyping.length === 1 ? 'is' : 'are'} typing…</span>
@@ -1820,6 +1860,11 @@
     {#if !atEnd}
       <button class="goend-pill" onclick={goToEnd}>↓ Go to end</button>
     {/if}
+    {#if viewing}
+      <footer class="viewbar">
+        <button class="editbtn" onclick={() => setMode('edit')}>✎ Edit log</button>
+      </footer>
+    {:else}
     {#if results.length || (noMatch && editingId == null)}
       <ul class="results">
         {#each results as t (t.tune_id)}
@@ -1876,14 +1921,17 @@
       {#if editingId != null}
         <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>
       {:else if activeSeam === 'end'}
-        <!-- open set at the end: offer to close it (yellow). closed end: nothing to end. -->
+        <!-- At the live end: open set -> close it (yellow "End set"); closed end with
+             nothing selected -> the subtle grey "Done" leaves edit mode for read-only
+             View (spec 021 §A3). Hidden while seam-editing or with a row selected. -->
         {#if endIsOpen}
           <button class="endset hot" title="End the current set" onclick={endSet}>End set</button>
+        {:else if selectedId == null}
+          <button class="done-btn" title="Done logging — switch to read-only view" onclick={() => setMode('view')}>Done</button>
         {/if}
-      {:else}
-        <button class="done-btn" title="Back to the end" onclick={goToEnd}>Done</button>
       {/if}
     </div>
+    {/if}
   </div>
 
   {#if attendanceOpen}

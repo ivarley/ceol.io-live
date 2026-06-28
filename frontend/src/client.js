@@ -197,9 +197,13 @@ export async function peopleSearch(config, q) {
 // force a full reconnect via onDead. 45s tolerates ~2 missed pings without false alarms.
 const SSE_WATCHDOG_MS = 45000
 
-export function openStream(config, lastEventId, handlers) {
+// `mode` ('view' | 'edit') tells the server whether this connection asserts presence:
+// a view-only connection still receives ops/presence but is left out of the roster
+// (spec 024 §presence — connecting to read touches nothing).
+export function openStream(config, lastEventId, handlers, mode) {
   const base = config.streamingBaseUrl.replace(/\/$/, '')
-  const url = `${base}/live/instances/${config.sessionInstanceId}/events?last_event_id=${lastEventId || 0}`
+  const m = mode === 'view' ? 'view' : 'edit'
+  const url = `${base}/live/instances/${config.sessionInstanceId}/events?last_event_id=${lastEventId || 0}&mode=${m}`
   const es = new EventSource(url, { withCredentials: true })
 
   // Liveness watchdog: reset on any byte we observe from the server; if it ever

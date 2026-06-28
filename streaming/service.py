@@ -259,6 +259,8 @@ def _roster(instance_id):
     people have devices=0 & away=True (rendered dimmed) until AWAY_TTL elapses."""
     by_person = {}
     for st in PRESENCE.get(instance_id, {}).values():
+        if st.get("view_mode"):
+            continue  # viewers stream but don't appear as present (spec 024 §presence)
         e = by_person.get(st["person_id"])
         if e is None:
             by_person[st["person_id"]] = {
@@ -399,6 +401,11 @@ async def events(request):
 
     session_instance_id = int(request.path_params["session_instance_id"])
 
+    # A view-only (read-only) client still streams ops/presence but asserts no presence
+    # of its own — it's left out of the roster so reading a session never shows you as
+    # "currently logging" (spec 024 §presence). Edit clients (or no flag) assert normally.
+    view_mode = request.query_params.get("mode") == "view"
+
     # EventSource auto-sends Last-Event-ID on reconnect. On the FIRST connect it
     # can't set that header, so the bootstrap high-water mark rides in as a query
     # param. Use the max so reconnects (header) and first connect (query) both work.
@@ -426,9 +433,12 @@ async def events(request):
         conn_id = next(_conn_ids)
         PRESENCE.setdefault(session_instance_id, {})[conn_id] = {
             "queue": queue, "person_id": person["person_id"],
-            "arrival_seq": seq, "name": person["name"],
+            "arrival_seq": seq, "name": person["name"], "view_mode": view_mode,
         }
-        AWAY.get(session_instance_id, {}).pop(person["person_id"], None)  # they're back
+        # A viewer arriving doesn't cancel their AWAY entry — they're not "back" as a
+        # logger; an edit connection (if they have one) is what clears it.
+        if not view_mode:
+            AWAY.get(session_instance_id, {}).pop(person["person_id"], None)  # they're back
         try:
             yield b": connected\n\n"
 
@@ -480,10 +490,15 @@ async def events(request):
             # Sync cleanup so a leave is always broadcast, even if the cancellation
             # that got us here interrupts anything awaited.
             st = PRESENCE.get(session_instance_id, {}).pop(conn_id, None)
-            # If that was the person's LAST device, don't vanish them — mark them AWAY
-            # (dimmed avatar, rows stay colored) until the sweeper drops them after an hour.
-            if st and st["person_id"] is not None:
-                still_here = any(s["person_id"] == st["person_id"] for s in PRESENCE.get(session_instance_id, {}).values())
+            # A viewer was never in the roster, so its leave changes nothing. For an edit
+            # connection: if that was the person's LAST editing device, don't vanish them —
+            # mark them AWAY (dimmed avatar, rows stay colored) until the sweeper drops them
+            # after an hour. Other view-only connections don't count as "still here".
+            if st and st["person_id"] is not None and not st.get("view_mode"):
+                still_here = any(
+                    s["person_id"] == st["person_id"] and not s.get("view_mode")
+                    for s in PRESENCE.get(session_instance_id, {}).values()
+                )
                 if not still_here:
                     AWAY.setdefault(session_instance_id, {})[st["person_id"]] = {
                         "name": st["name"], "arrival_seq": st["arrival_seq"], "ts": time.monotonic(),

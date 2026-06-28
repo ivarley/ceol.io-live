@@ -7,6 +7,7 @@
   --insert: #f5c518;
   --border: #2a2a30;
   --attention: #e0b341; /* amber: unlinked / needs-attention */
+  --set-bg: #222227; /* set card — a hair lighter than --panel for contrast vs --bg */
 }
 
 * { box-sizing: border-box; }
@@ -152,7 +153,7 @@ main {
   position: relative;
   margin: 12px 0 10px;
   padding: 9px 10px 6px;
-  background: var(--panel);
+  background: var(--set-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -490,12 +491,37 @@ main {
 /* the "new set at the end" indicator reads white, not the yellow insertion color */
 .new-set-end .seam-line { background: var(--text); box-shadow: 0 0 8px rgba(236, 236, 239, 0.5); }
 .new-set-end .seam-hint { color: var(--text); }
+/* subtle grey "Done" -> read-only View (spec 021 §A3); deliberately NOT the yellow of
+   "End set" beside it, so the two aren't confused */
 .composer .done-btn {
-  font: inherit; padding: 12px 18px; border: none; border-radius: 8px;
-  background: var(--insert); color: #2a2008; font-weight: 700; cursor: pointer;
+  font: inherit; padding: 12px 18px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); font-weight: 600; cursor: pointer;
 }
+.composer .done-btn:hover { color: var(--text); border-color: var(--muted); }
 
 .dock { position: relative; flex: 0 0 auto; padding: 0 16px 16px; background: var(--bg); }
+
+/* ---------- read-only View mode (spec 021 §A2–3) ---------- */
+/* footer replacing the composer: one button back to logging */
+.viewbar {
+  display: flex; align-items: center; justify-content: center;
+  padding-top: 10px;
+}
+.editbtn {
+  font: inherit; padding: 11px 26px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.editbtn:hover { border-color: var(--muted); }
+/* compact, fewer-affordance list when reading: larger tune text, a bit more air
+   between sets, no per-row attribution tint (who logged it doesn't matter while
+   reading), and logger/starter names in quiet grey rather than the edit-mode accent */
+.view-mode .set { margin: 16px 0 14px; padding: 6px 10px 5px; }
+.view-mode .tune-row { padding: 9px 6px; font-size: 17px; cursor: pointer; }
+.view-mode .tune-row.has-by { border-color: transparent; }
+.view-mode .starter-pill,
+.view-mode .starter-value.set { color: var(--muted); }
 
 .goend-pill {
   position: absolute;
