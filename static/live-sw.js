@@ -14,8 +14,21 @@
 // (app.js) — cache-first would strand users on a stale build until a later load.
 // Online always gets the latest; the cache is purely the offline fallback.
 
-const CACHE = 'ceol-live-shell-v2'
-const ASSETS = ['/static/live/app.js', '/static/live/app.css']
+const CACHE = 'ceol-live-shell-v4'
+// The Svelte bundle PLUS the shared shell assets the live page pulls in directly
+// (the floated hamburger menu + the tune-detail modal). Without these in the cache,
+// an offline reload renders the menu unstyled (no CSS) and inert (no JS).
+const ASSETS = [
+  '/static/live/app.js',
+  '/static/live/app.css',
+  '/static/css/hamburger_menu.css',
+  '/static/js/hamburger_menu.js',
+  '/static/js/tune_detail_modal.js',
+  '/static/images/logo3-1.png', // the brand logo in the Svelte header — else a broken-image icon offline
+]
+// Same-origin shell assets outside /static/live/ that we still own offline (precached
+// above). Matched exactly in the fetch handler so they get network-first + cache fallback.
+const SHELL_ASSETS = new Set(ASSETS.filter((p) => !p.startsWith('/static/live/')))
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -58,6 +71,7 @@ self.addEventListener('fetch', (event) => {
 
   if (
     url.pathname.startsWith('/static/live/') ||
+    SHELL_ASSETS.has(url.pathname) ||
     (req.mode === 'navigate' && url.pathname.startsWith('/live/instances/'))
   ) {
     event.respondWith(networkFirst(req))

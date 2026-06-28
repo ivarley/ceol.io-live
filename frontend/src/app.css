@@ -475,6 +475,32 @@ main {
 .actions button:hover { color: var(--text); border-color: var(--accent); }
 
 .empty { color: var(--muted); font-style: italic; }
+
+/* first-load skeleton — tune-sized placeholder rows with a shimmer sweeping across */
+.skeleton { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.sk-row {
+  height: 22px;
+  border-radius: 6px;
+  background: var(--panel);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text) 8%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+.sk-row:nth-child(2) { animation-delay: 0.15s; }
+.sk-row:nth-child(3) { animation-delay: 0.3s; }
+@keyframes sk-shimmer {
+  0% { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-row { animation: none; }
+}
 .notice {
   background: #2a2616;
   border: 1px solid #e0b341;
@@ -666,9 +692,10 @@ main {
 }
 .edit-unlink:hover { border-color: var(--insert); color: var(--text); }
 
-.composer { display: flex; gap: 8px; padding-top: 8px; background: var(--bg); }
+.composer { display: flex; gap: 8px; padding-top: 8px; background: var(--bg); width: 100%; box-sizing: border-box; }
 .composer input {
   flex: 1;
+  min-width: 0; /* allow the field to shrink so trailing buttons (End set / Done) stay visible on narrow screens */
   font: inherit;
   padding: 12px;
   background: var(--panel);
@@ -676,6 +703,8 @@ main {
   border-radius: 8px;
   color: var(--text);
 }
+/* trailing buttons never collapse — the input absorbs the squeeze instead */
+.composer > button, .composer .endset, .composer .done-btn { flex: none; }
 .composer button {
   font: inherit;
   padding: 12px 18px;
@@ -704,7 +733,7 @@ main {
 @keyframes spin { to { transform: rotate(360deg); } }
 /* the composer input + its trailing spinner (right edge); padding-right reserves room so
    text never slides under the spinner */
-.composer-field { position: relative; flex: 1; display: flex; }
+.composer-field { position: relative; flex: 1; min-width: 0; display: flex; }
 .composer-field input { flex: 1; padding-right: 34px; }
 .composer-field .input-spin { position: absolute; right: 12px; top: 50%; margin-top: -9px; pointer-events: none; }
 /* input is read-only while a placeholder resolves (the text has moved into the row) */

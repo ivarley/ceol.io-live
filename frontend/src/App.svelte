@@ -29,6 +29,7 @@
   // when the background vocabulary load fills it in.
   const nextByTuneId = new SvelteMap()
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
+  let loaded = $state(false) // first bootstrap has populated records — gates the loading skeleton vs "no tunes yet"
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
   let reachable = $state(true) // have we reached the server recently? (navigator.onLine lies)
   // One source of truth for the pill + banner so they never disagree:
@@ -2001,7 +2002,7 @@
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''))
     }
-    connect().then(() => { if (autoTuneId) autoLogTune(autoTuneId) }) // bootstraps records, then hydrateQueue() re-applies any queued ops
+    connect().then(() => { loaded = true; if (autoTuneId) autoLogTune(autoTuneId) }) // bootstraps records, then hydrateQueue() re-applies any queued ops
     // The shared app menu's 'Find a tune' calls this in the live context -> insert.
     window.__liveFindTune = () => openDeep()
     window.addEventListener('pagehide', onPageHide)
@@ -2070,7 +2071,7 @@
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}</div>
           <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
-          {#if notesText && !expanded}
+          {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
         </div>
@@ -2306,7 +2307,16 @@
         </div>
       {/if}
     {:else}
-      <p class="empty">No tunes yet — log one below.</p>
+      {#if loaded}
+        <p class="empty">No tunes yet — log one below.</p>
+      {:else}
+        <!-- first-load skeleton: tune-sized rows with a shimmer sweeping across them -->
+        <div class="skeleton" aria-hidden="true">
+          <div class="sk-row" style="width: 62%"></div>
+          <div class="sk-row" style="width: 78%"></div>
+          <div class="sk-row" style="width: 45%"></div>
+        </div>
+      {/if}
     {/each}
     {#if ordered.length && !endIsOpen && !viewing}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
@@ -2402,6 +2412,10 @@
           class:ambiguous={ambiguous}
           class:locked={composerLocked}
           readonly={composerLocked}
+          autocorrect="off"
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck="false"
           placeholder={composerLocked ? 'Resolving…' : (editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…')}
           bind:value={input}
           bind:this={inputEl}
