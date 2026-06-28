@@ -43,6 +43,14 @@ Attendance records for specific instances.
 - (session_instance_id, person_id) composite PK
 - attendance - "yes", "maybe", or "no"
 - checked_in_at timestamp
+- arrival_seq - (Feature 024) superseded and unused; per-person live-logging color now lives in `session_logger_color`
+
+### session_logger_color
+Permanent per-session palette color for the live logger (Feature 024).
+- (session_id, person_id) composite PK
+- color - SMALLINT palette index, assigned on first appearance and reused every instance
+- Deliberately its own table: holding a color in `session_person`/`session_instance_person`
+  would inflate a casual logger into a member/attendee. See [Live Logging](../logic/live-logging.md).
 
 ### person_instrument
 Instruments a person plays (many-to-many).

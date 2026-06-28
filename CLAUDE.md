@@ -35,6 +35,7 @@ Business logic, services, external integrations
 - [Session Management](specs/current/logic/session-logic.md) - Auto-creation, recurrence handling
 - [Tune Services](specs/current/logic/tune-logic.md) - Search, linking, popularity tracking
 - [Attendance System](specs/current/logic/attendance.md) - Check-in, roles, permissions (Feature 001)
+- [Live Logging](specs/current/logic/live-logging.md) - Real-time multi-user session logging (Feature 024)
 - [External APIs](specs/current/logic/external-apis.md) - thesession.org, SendGrid
 - [Active Sessions](specs/current/logic/active-sessions.md) - Real-time session tracking
 
@@ -42,6 +43,7 @@ Business logic, services, external integrations
 Internal services, microservices, background jobs
 - [ABC Renderer](specs/current/services/abc-renderer.md) - Node.js microservice for ABC → PNG
 - [Active Sessions Cron](specs/current/services/active-sessions-cron.md) - 15-min job tracking live sessions
+- [Streaming Service](specs/current/logic/live-logging.md) - Async SSE sidecar for live logging (Feature 024)
 
 ## Feature Index
 
@@ -50,6 +52,7 @@ Internal services, microservices, background jobs
 - **Tune Management**: [Data](specs/current/data/tune-model.md) | [Logic](specs/current/logic/tune-logic.md)
 - **User System**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/auth.md)
 - **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
+- **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 
 ## Development
 

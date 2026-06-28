@@ -2,6 +2,11 @@
 
 Word-processor-style interface for logging tunes played during sessions.
 
+> **Note:** This documents the original **single-user, bulk-save desktop logger**.
+> The newer **real-time multi-user live logger** (Feature 024 — incremental ops, no
+> explicit save, Svelte 5 PWA) is a separate screen documented in
+> [Live Logging](../logic/live-logging.md).
+
 ## Overview
 
 **Template**: `templates/session_instance_detail.html`

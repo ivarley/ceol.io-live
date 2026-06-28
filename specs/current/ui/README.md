@@ -15,7 +15,10 @@ Frontend presentation, user interactions, visual design.
 HTML structure, base layouts, page-specific templates
 
 ### [Session Logging UI](session-logging.md)
-Word-processor-style tune logging with drag-and-drop, undo/redo, ABC notation display
+Word-processor-style tune logging with drag-and-drop, undo/redo, ABC notation display (original single-user, bulk-save logger)
+
+### [Live Logging](../logic/live-logging.md)
+Real-time multi-user logger (Feature 024) — Svelte 5 PWA, incremental ops over SSE, no explicit save. Bundle under `static/live/`, source in `frontend/`
 
 ### [Dark Mode & Theming](theming.md)
 CSS custom properties, theme switching, FOUC prevention

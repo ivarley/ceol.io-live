@@ -1,6 +1,6 @@
 # Database Schema Reference
 
-28 tables organized into core domain, tunes, people, and audit tracking.
+31 tables organized into core domain, tunes, people, live logging, and audit tracking.
 
 ## Tables by Category
 
@@ -24,6 +24,13 @@
 - `user_account` - Login credentials | `schema/create_user_table.sql:2`
 - `person_instrument` - Instruments played | `schema/create_person_instrument_table.sql:3`
 
+### Live Logging (3) — Feature 024
+- `session_event` - Append-only per-instance change feed; drives SSE fan-out | `schema/024_session_event.sql`
+- `corroboration` - Per-user assertions about a tune record | `schema/024_live_logging_delta.sql`
+- `session_logger_color` - Permanent per-session palette color (session_id, person_id) | `schema/024_live_logging_delta.sql`
+
+See [Live Logging](../logic/live-logging.md). Also adds columns to `session_instance_tune` (`source`, `confidence`, `played_start`/`played_end`, `logged_timestamp`, `client_device_id`, `deleted`) and `session` (`live_cache_session_limit`, `live_cache_global_limit`).
+
 ### Audit (13)
 All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [History](history.md).
 
@@ -37,6 +44,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `timezone` VARCHAR(50) - IANA timezone for local times
 - `recurrence` TEXT - JSON pattern (parsed by `recurrence_utils.py`)
 - `initiation_date` / `termination_date` - Active date range
+- `live_cache_session_limit` / `live_cache_global_limit` - Live-logging local vocabulary sizes (Feature 024; defaults 200 / 25)
 
 ### session_instance
 - `date` DATE - Occurrence date
@@ -49,6 +57,10 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `name` VARCHAR(255) - Tune name as played
 - `order_position` VARCHAR(32) - Fractional index for ordering (base-62 CRDT string)
 - `continues_set` BOOLEAN - Set continuation flag
+- `source` VARCHAR(16) - 'human' (default) or 'audio' (Feature 024)
+- `confidence` SMALLINT (nullable) - 0..100; NULL = definite human entry
+- `deleted` BOOLEAN - Soft tombstone for live ops (Feature 024)
+- `logged_timestamp`, `client_device_id`, `played_start`/`played_end` - Live-logging metadata (audio columns nullable)
 
 ### tune
 - `tune_id` INTEGER PK - thesession.org ID
@@ -101,6 +113,7 @@ All core tables have `*_history` tables tracking INSERT/UPDATE/DELETE. See [Hist
 - `add_active_session_tracking.sql` - Active session tracking
 - `expand_key_field_length.sql` - Key field VARCHAR(10) → VARCHAR(20)
 - `optimize_session_tune_performance.sql` - Performance indexes
+- `024_session_event.sql` / `024_live_logging_delta.sql` / `025_session_local_cache_limits.sql` - Live logging (Feature 024)
 
 ## Procedures
 

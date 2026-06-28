@@ -29,6 +29,9 @@ thesession.org integration, SendGrid email service
 ### [Active Sessions](active-sessions.md)
 Real-time tracking of currently happening sessions (see also [Active Sessions Cron](../services/active-sessions-cron.md))
 
+### [Live Logging](live-logging.md)
+Real-time multi-user session logging — incremental ops, SSE down / POST up, `session_event` feed, presence/typing (Feature 024; see also the [Streaming Service](../services/README.md))
+
 ## Key Locations
 
 - `web_routes.py` - All HTML page handlers
@@ -37,3 +40,5 @@ Real-time tracking of currently happening sessions (see also [Active Sessions Cr
 - `session_instance_auto_create.py` - Recurrence handling
 - `active_session_manager.py` - Active session tracking
 - `api_person_tune_routes.py` - Person/tune relationship endpoints
+- `live_logging_routes.py` - Live-logging referee op endpoints (Feature 024)
+- `streaming/service.py` - Async SSE streaming sidecar (Feature 024)

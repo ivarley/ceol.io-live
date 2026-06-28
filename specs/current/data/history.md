@@ -2,6 +2,13 @@
 
 Every change to core tables automatically logged to `*_history` tables before modification.
 
+> **Not the same as `session_event`:** the `*_history` tables here are the permanent,
+> column-level audit trail. `session_event` (Feature 024) is a transient append-only
+> *delivery* feed for the live logger — kept for the instance's lifetime to drive SSE
+> fan-out and replay, not for auditing. See [Live Logging](../logic/live-logging.md).
+> The live-logging columns added to `session_instance_tune` are mirrored into
+> `session_instance_tune_history` like any other audited column.
+
 ## Implementation
 
 **Core Function**: `database.py:238+` (`save_to_history()`)

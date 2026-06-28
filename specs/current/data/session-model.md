@@ -62,9 +62,25 @@ Individual tunes played during a session instance.
 - `setting_override` - Specific thesession.org setting ID
 - `created_date`, `last_modified_date` - Audit timestamps
 
+**Live-logging columns** (Feature 024, `schema/024_live_logging_delta.sql`):
+- `source` - 'human' (default) or 'audio'
+- `confidence` - SMALLINT 0..100; NULL = definite human entry
+- `deleted` - Soft tombstone (live `remove_tune` op never hard-deletes)
+- `logged_timestamp` - Client-asserted log time
+- `client_device_id` - Originating device
+- `played_start` / `played_end` - Audio-only timing (nullable; human ops never write these)
+
 **Constraint**: `tune_id IS NOT NULL OR name IS NOT NULL` (must have one)
 
 **Location**: `schema/create_session_instance_tune_table.sql`
+
+### `session_event` - Live Logging Change Feed
+Append-only, per-instance delivery/replay log for the real-time logger (Feature 024).
+`session_instance_tune` stays canonical state; `session_event` is the ordered feed that
+drives SSE fan-out (`event_id` doubles as the `Last-Event-ID` cursor). Not an audit table —
+see [Live Logging](../logic/live-logging.md) and [History](history.md).
+
+**Location**: `schema/024_session_event.sql`
 
 ## Relationships
 
@@ -101,6 +117,7 @@ Stored as JSON in `session.recurrence` field. Schema in `schema/recurrence_schem
 ### Log Tunes
 - Standard UI: `web_routes.py:session_instance_detail()` + `api_routes.py:/api/session_instance/<id>/tunes`
 - Beta UI: `web_routes.py:session_instance_detail_beta()`
+- Live (real-time, multi-user): `live_logging_routes.py` ops at `POST /api/live/instances/<id>/ops` — see [Live Logging](../logic/live-logging.md) (Feature 024)
 
 ### Set Management
 - Group tunes: Set `continues_set = TRUE` to continue previous tune
@@ -133,3 +150,4 @@ ORDER BY sit.order_position
 - [People & Attendance](people-model.md) - Who attends sessions
 - [Session Management Logic](../logic/session-logic.md) - Business rules
 - [Session Logging UI](../ui/session-logging.md) - User interface
+- [Live Logging](../logic/live-logging.md) - Real-time multi-user logging (Feature 024)
