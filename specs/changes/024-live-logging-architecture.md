@@ -455,6 +455,21 @@ exist in the codebase today) via a walking skeleton, then widen.
   > existing rejected-ack notices (`target_deleted` = removal-beats-edit). Actor verified present
   > in the event/ack.
   >
+  > **Chunk 5 — read-only View mode + view-only presence — built & validated (2026-06-28).**
+  > Ported the spec 021 §A2–3 two-mode design (previously only in `mockups/logging/`) into the
+  > real app. `App.svelte` has a `mode` (`'view'` | `'edit'`) defaulting to **View** — most
+  > people read a logged session rather than log one. View hides all editing chrome (seams,
+  > composer, row action menus, ⓘ icons, per-row attribution colors) and renders a compact
+  > list; tapping a tune opens its details drawer; a single "✎ Edit log" footer button enters
+  > edit. In edit mode the resting bottom-right slot is a grey "Done" → View. **View-only
+  > presence (§F / the §A4 note above):** a viewer's SSE carries `?mode=view`; the streaming
+  > service still registers the connection (it needs the op/presence queue) but flags it and
+  > **excludes it from `_roster()` and `AWAY`**, so reading never shows you as "currently
+  > logging." Toggling mode reconnects the stream so presence intent (assert vs. not) updates.
+  > Change/activity toasts (Chunk 4) also fire in View — and there, unlike edit, they surface
+  > your own account's changes from another window (this window authors nothing). Frontend +
+  > a small `streaming/service.py` presence change; `_roster` exclusion unit-checked.
+  >
   > **Deferred within Phase 2:** persisting `arrival_seq` to `session_instance_person` (color
   > stability across streaming restarts — left in-memory; ~30 query sites assume a
   > `session_instance_person` row = an attendee, so persisting needs an attendance-view audit not
