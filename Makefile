@@ -63,6 +63,9 @@ test-functional:
 test-smoke:
 	pytest tests/functional/test_smoke.py -v -m functional
 
+test-e2e:
+	npx playwright test
+
 test-fast:
 	pytest -v -m "not slow"
 

@@ -49,6 +49,13 @@ coverage.xml
 TEST_OUTPUT.txt
 test-results.xml
 
+# Playwright e2e
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/.auth/
+.playwright/
+
 # Translations
 *.mo
 *.pot
