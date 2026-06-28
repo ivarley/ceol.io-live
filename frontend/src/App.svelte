@@ -108,6 +108,7 @@
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
+  let logComplete = $state(false) // session marked "completely logged" — hides editing (§024)
   let expanded = $state(false)
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
@@ -135,7 +136,7 @@
       const value = JSON.parse(JSON.stringify({
         records, last_event_id: highWater, person, ts: Date.now(),
         session_name: sessionName, session_date: sessionDate, notes: notesText,
-        display_tz: displayTz,
+        log_complete: logComplete, display_tz: displayTz,
         // Persist the session vocabulary so the offline-render path keeps the local
         // exact-match fast path working without a fresh bootstrap (§024 / §G).
         known_tunes: vocabKnown, known_aliases: vocabAliases,
@@ -471,6 +472,42 @@
     }
   }
 
+  // Mark this session "completely logged" (§024): hides the editing affordances for
+  // everyone (the SSE echo flips other clients via applyOp). Online-only metadata op,
+  // like notes. Drops us to read-only view; the next reload takes the render-only path.
+  async function markComplete() {
+    error = ''
+    if (!navigator.onLine) { notice = "You're offline — marking complete needs a connection."; return }
+    if (!confirm('Mark this session log as completely logged? This hides the editing controls.')) return
+    logComplete = true // optimistic footer/header feedback; the SSE echo reconciles
+    try {
+      const res = await sendOp(config, 'mark_complete', {})
+      if (res.rejected) { logComplete = false; notice = res.message || res.reason; return }
+      if (mode === 'edit') setMode('view') // leave editing; re-bootstrap now sees it complete
+    } catch (e) {
+      logComplete = false
+      if (e.networkError) notice = "You're offline — marking complete needs a connection."
+      else error = e.message
+    }
+  }
+  // Re-open a completed log for editing. After it sticks, connect() rewires the full live
+  // session (re-bootstrap returns log_complete=false -> normal path: SSE + vocabulary),
+  // so a session opened via the render-only fast-path becomes editable without a reload.
+  async function markIncomplete() {
+    error = ''
+    if (!navigator.onLine) { notice = "You're offline — this needs a connection."; return }
+    if (!confirm('Re-open this session log for editing?')) return
+    try {
+      const res = await sendOp(config, 'mark_incomplete', {})
+      if (res.rejected) { notice = res.message || res.reason; return }
+      logComplete = false
+      connect() // rewire live editing (stream + vocabulary)
+    } catch (e) {
+      if (e.networkError) notice = "You're offline — this needs a connection."
+      else error = e.message
+    }
+  }
+
   // Attribute (or clear) the set's starter: optimistic across all its tunes, one op.
   function setStarter(seg, personOrNull) {
     const firstId = seg.tunes[0].session_instance_tune_id
@@ -744,8 +781,12 @@
         break
       }
       case 'mark_complete':
+        logComplete = true
+        if (mode === 'edit') setMode('view') // completion locks editing for everyone
+        break
       case 'mark_incomplete':
-        break // metadata; header-only (not shown in this minimal Phase 1 UI)
+        logComplete = false
+        break
     }
     scheduleSnapshot() // keep the offline snapshot fresh
   }
@@ -1367,8 +1408,10 @@
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
 
   let connSeq = 0 // guards against overlapping connect() calls leaking a stream
+  let renderOnly = $state(false) // completed-log fast-path: rendered, no stream (hide status pill)
   async function connect() {
     const myGen = ++connSeq
+    renderOnly = false
     if (reconnectPoll) { clearTimeout(reconnectPoll); reconnectPoll = null }
     // Snapshot pre-reconnect state for the §I36 "synced / added while away" summary.
     const prevIds = new Set([...byId.values()].filter((r) => typeof r.session_instance_tune_id === 'number').map((r) => r.session_instance_tune_id))
@@ -1389,7 +1432,7 @@
         snap = cached
           ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
               session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
-              user_timezone: cached.display_tz,
+              log_complete: cached.log_complete, user_timezone: cached.display_tz,
               known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [] }
           : { records: [], last_event_id: 0 }
         fromCache = true
@@ -1406,8 +1449,20 @@
       if (snap.session_date) sessionDate = snap.session_date
       displayTz = snap.user_timezone || snap.session_timezone || undefined
       notesText = snap.notes || ''
+      logComplete = !!snap.log_complete
       highWater = snap.last_event_id || 0
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
+
+      // Completed log = read-only. Render the records and stop — skip the offline-queue
+      // replay, attendance prefetch, SSE stream (presence/typing/live), and vocabulary
+      // index; none are needed to *read* a finished log. A remote un-complete won't reflect
+      // without a reload (rare; accepted, §024). Exception: if we still hold queued offline
+      // ops for this instance, take the full path so they can flush.
+      if (logComplete && !fromCache) {
+        const queued = await queueAll(config.sessionInstanceId).catch(() => [])
+        if (!queued.length) { everConnected = true; renderOnly = true; return }
+      }
+
       await hydrateQueue() // re-apply still-queued ops' optimistic state onto these records
 
       if (fromCache) {
@@ -1634,6 +1689,9 @@
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}</div>
           <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
+          {#if notesText && !expanded}
+            <div class="session-notes">{notesText}</div>
+          {/if}
         </div>
         <span class="topbar-presence">
           {#each roster as p (p.person_id)}
@@ -1642,7 +1700,9 @@
             </span>
           {/each}
         </span>
-        <span class="status status-{displayStatus}" title="connection">{displayStatus}</span>
+        {#if !renderOnly}
+          <span class="status status-{displayStatus}" title="connection">{displayStatus}</span>
+        {/if}
         <span class="header-chevron" class:up={expanded}>▾</span>
       </div>
       {#if expanded}
@@ -1677,6 +1737,14 @@
           {#if roster.some((p) => p.away)}
             <div class="header-stat header-away">Away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</div>
           {/if}
+          <div class="header-stat header-complete">
+            {#if logComplete}
+              <span class="hc-done">✓ This log is marked complete.</span>
+              <button class="hc-link" onclick={(e) => { e.stopPropagation(); markIncomplete() }}>Mark as not complete</button>
+            {:else}
+              <button class="hc-mark" onclick={(e) => { e.stopPropagation(); markComplete() }}>Mark this log complete</button>
+            {/if}
+          </div>
         </div>
       {/if}
     </header>
@@ -1868,7 +1936,11 @@
     {/if}
     {#if viewing}
       <footer class="viewbar">
-        <button class="editbtn" onclick={() => setMode('edit')}>✎ Edit log</button>
+        {#if logComplete}
+          <span class="logdone">✓ This session has been fully logged</span>
+        {:else}
+          <button class="editbtn" onclick={() => setMode('edit')}>✎ Edit log</button>
+        {/if}
       </footer>
     {:else}
     {#if results.length || (noMatch && editingId == null)}

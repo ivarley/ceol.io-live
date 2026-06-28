@@ -93,6 +93,11 @@ main {
 .topbar-main { flex: 1; min-width: 0; }
 .session-name { font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
 .session-date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+/* read-only session notes shown under the date/count line (collapsed header) */
+.session-notes {
+  font-size: 13px; color: var(--muted); font-style: italic; margin-top: 3px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .topbar-presence { display: flex; gap: 4px; }
 .header-chevron { color: var(--muted); font-size: 14px; transition: transform 0.18s ease; }
 .header-chevron.up { transform: rotate(180deg); }
@@ -141,6 +146,22 @@ main {
 /* recently-disconnected person: dimmed + hollow until the 1h away-TTL drops them */
 .avatar.away { opacity: 0.4; filter: grayscale(0.35); }
 .header-away { color: var(--muted); opacity: 0.75; }
+
+/* "completely logged" controls (§024): the deliberate mark, and the tucked-away
+   un-complete link (only reachable in the expanded header). */
+.header-complete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.header-complete .hc-done { color: var(--text); font-weight: 600; }
+.hc-mark {
+  font: inherit; font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--accent);
+}
+.hc-mark:hover { border-color: var(--accent); color: var(--text); }
+.hc-link {
+  font: inherit; font-size: 12px; padding: 0; cursor: pointer;
+  background: none; border: none; color: var(--muted); text-decoration: underline;
+}
+.hc-link:hover { color: var(--text); }
 
 .status { text-transform: capitalize; }
 .status-live { color: #46d27a; }
@@ -514,6 +535,11 @@ main {
   color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer;
 }
 .editbtn:hover { border-color: var(--muted); }
+/* completed log: read-only, the Edit button is replaced by this muted marker */
+.viewbar .logdone {
+  font-size: 14px; font-weight: 600; color: var(--muted);
+  padding: 11px 26px;
+}
 /* compact, fewer-affordance list when reading: larger tune text, a bit more air
    between sets, no per-row attribution tint (who logged it doesn't matter while
    reading), and logger/starter names in quiet grey rather than the edit-mode accent */
