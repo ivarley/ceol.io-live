@@ -875,6 +875,98 @@ def decrement_tune_heard_count(person_tune_id):
 
 
 @person_tune_login_required
+def my_tunes_op():
+    """
+    POST /api/my-tunes/ops
+
+    Idempotent, tune_id-keyed My-Tunes mutation endpoint for the offline op-queue
+    (Tier 2). One op per request:
+
+        {op_id, type, tune_id, ...}
+
+    Every op type is *naturally idempotent* against the UNIQUE(person_id, tune_id)
+    row, so a client may replay queued ops after reconnecting without a dedup table:
+      - add        -> INSERT ... ON CONFLICT DO NOTHING (never clobbers existing state)
+      - set_status -> UPDATE learn_status            (absolute set)
+      - set_heard  -> UPDATE heard_count = <count>   (absolute set; client sends the
+                       target count, NOT a delta, so a replayed +1 can't double-count)
+      - set_notes  -> UPDATE notes
+      - remove     -> DELETE
+
+    Keyed by tune_id (not the server-assigned person_tune_id) so an offline
+    add->heard->status sequence composes without a server round-trip.
+    """
+    try:
+        person_id = get_user_person_id()
+        data = request.get_json(silent=True) or {}
+        op_type = data.get("type")
+        tune_id = data.get("tune_id")
+        if not op_type or tune_id is None:
+            return jsonify({"success": False, "error": "type and tune_id are required"}), 400
+        user_id = getattr(current_user, "user_id", None)
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        heard_count = None
+        try:
+            if op_type == "add":
+                learn_status = data.get("learn_status") or "want to learn"
+                if learn_status not in ("want to learn", "learning", "learned"):
+                    return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                cur.execute(
+                    """INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, created_by_user_id)
+                       VALUES (%s, %s, %s, 0, %s)
+                       ON CONFLICT (person_id, tune_id) DO NOTHING""",
+                    (person_id, tune_id, learn_status, user_id),
+                )
+            elif op_type == "set_status":
+                learn_status = data.get("learn_status")
+                if learn_status not in ("want to learn", "learning", "learned"):
+                    return jsonify({"success": False, "error": "invalid learn_status"}), 400
+                cur.execute(
+                    """UPDATE person_tune SET learn_status=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s""",
+                    (learn_status, user_id, person_id, tune_id),
+                )
+            elif op_type == "set_heard":
+                hc = data.get("heard_count")
+                if not isinstance(hc, int) or hc < 0:
+                    return jsonify({"success": False, "error": "heard_count must be a non-negative integer"}), 400
+                cur.execute(
+                    """UPDATE person_tune SET heard_count=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s RETURNING heard_count""",
+                    (hc, user_id, person_id, tune_id),
+                )
+                row = cur.fetchone()
+                heard_count = row[0] if row else None
+            elif op_type == "set_notes":
+                cur.execute(
+                    """UPDATE person_tune SET notes=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s""",
+                    (data.get("notes"), user_id, person_id, tune_id),
+                )
+            elif op_type == "remove":
+                cur.execute(
+                    "DELETE FROM person_tune WHERE person_id=%s AND tune_id=%s",
+                    (person_id, tune_id),
+                )
+            else:
+                return jsonify({"success": False, "error": f"unknown op type: {op_type}"}), 400
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+
+        resp = {"success": True, "op_id": data.get("op_id"), "type": op_type, "tune_id": tune_id}
+        if heard_count is not None:
+            resp["heard_count"] = heard_count
+        return jsonify(resp), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error applying my-tunes op: {str(e)}"}), 500
+
+
+@person_tune_login_required
 @require_person_tune_ownership
 def delete_person_tune(person_tune_id):
     """

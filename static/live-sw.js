@@ -14,7 +14,7 @@
 // (app.js) — cache-first would strand users on a stale build until a later load.
 // Online always gets the latest; the cache is purely the offline fallback.
 
-const CACHE = 'ceol-live-shell-v5'
+const CACHE = 'ceol-live-shell-v6'
 // The Svelte bundle PLUS the shared shell assets the live page pulls in directly
 // (the floated hamburger menu + the tune-detail modal). Without these in the cache,
 // an offline reload renders the menu unstyled (no CSS) and inert (no JS).
@@ -24,6 +24,7 @@ const ASSETS = [
   '/static/css/hamburger_menu.css',
   '/static/js/hamburger_menu.js',
   '/static/js/tune_detail_modal.js',
+  '/static/js/mytunes_offline.js', // offline queue for the modal's add-to-my-tunes / heard ops
   '/static/images/logo3-1.png', // the brand logo in the Svelte header — else a broken-image icon offline
 ]
 // Same-origin shell assets outside /static/live/ that we still own offline (precached

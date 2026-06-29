@@ -42,6 +42,7 @@ const PRECACHE = [
   '/static/js/hamburger_menu.js',
   '/static/js/utils/unaccent.js',
   '/static/js/tune_detail_modal.js',
+  '/static/js/mytunes_offline.js',
   '/static/manifest.json',
   '/static/images/logo3-1.png',
   '/static/images/favicon.ico',

@@ -1527,37 +1527,38 @@ function incrementHeardCountWithToast(personTuneId, oldCount) {
         applyFilters(); // Re-render
     }
 
-    // Send update to server in background
-    fetchWithRetry(`/api/my-tunes/${personTuneId}/heard`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            const errorInfo = handleApiError(null, response);
-            throw new Error(errorInfo.message);
-        }
-        return response.json();
-    })
-    .then(data => {
-        // Silently sync the actual count from server
-        if (tune && data.heard_count !== newCount) {
-            tune.heard_count = data.heard_count;
-            applyFilters(); // Re-render with actual count
-        }
-    })
-    .catch(error => {
-        console.error('Error incrementing heard count:', error);
-        // Revert the optimistic update on error
-        if (tune) {
-            tune.heard_count = oldCount;
-            applyFilters();
-        }
-        const errorInfo = handleApiError(error);
-        showMessage(errorInfo.message, 'error');
-    });
+    // Send update through the offline op-queue (Tier 2): keyed by tune_id and sent as
+    // an ABSOLUTE count so a queued op replayed after reconnect can't double-count.
+    // Queues automatically when offline (keeping the optimistic UI); reverts only on a
+    // server rejection.
+    const op = { type: 'set_heard', tune_id: tune ? tune.tune_id : null, heard_count: newCount };
+    if (!op.tune_id) return;
+    const submit = window.MyTunesOffline
+        ? window.MyTunesOffline.submit(op)
+        : fetchWithRetry('/api/my-tunes/ops', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(op),
+          })
+              .then(r => r.json())
+              .then(d => { if (!d.success) throw new Error(d.error || 'op failed'); return { online: true, data: d }; });
+    submit
+        .then(res => {
+            // Online: sync the authoritative count. Offline (queued): keep optimistic UI.
+            if (res && res.data && tune && typeof res.data.heard_count === 'number' && res.data.heard_count !== newCount) {
+                tune.heard_count = res.data.heard_count;
+                applyFilters();
+            }
+        })
+        .catch(error => {
+            console.error('Error incrementing heard count:', error);
+            if (tune) {
+                tune.heard_count = oldCount;
+                applyFilters();
+            }
+            const errorInfo = handleApiError(error);
+            showMessage(errorInfo.message, 'error');
+        });
 }
 
 // Wait for tunes to load, then open modal for specific tune
@@ -2321,5 +2322,6 @@ function handleAddTuneClick(event) {
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/swipe-listener.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 {% endblock %}

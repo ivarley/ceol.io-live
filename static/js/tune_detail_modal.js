@@ -1699,6 +1699,25 @@ ${abcBody}`;
     }
 
     /**
+     * Submit a My-Tunes op through the offline queue if present (queues when offline),
+     * else POST it straight to the idempotent ops endpoint. Resolves on success OR
+     * offline-queue; rejects only when the server rejects the op (caller reverts).
+     */
+    function submitMyTunesOp(op) {
+        if (window.MyTunesOffline) return window.MyTunesOffline.submit(op);
+        return fetch('/api/my-tunes/ops', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(op),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'op failed');
+                return { online: true, data: d };
+            });
+    }
+
+    /**
      * Increment heard count (all contexts except admin)
      */
     function incrementHeardCount() {
@@ -1742,75 +1761,34 @@ ${abcBody}`;
             labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${newCount}</span> time${plural}`;
         }
 
-        // Get person_tune_id for API call
-        let personTuneId = null;
-        if (currentContext === 'my_tunes') {
-            personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
-        } else if (currentTuneData.person_tune_status?.person_tune_id) {
-            personTuneId = currentTuneData.person_tune_status.person_tune_id;
-        }
-
-        if (!personTuneId) {
-            console.error('Cannot increment: person_tune_id not available');
-            // Revert optimistic update
-            if (countValueSpan) countValueSpan.textContent = currentCount;
-            if (currentContext === 'my_tunes') {
-                currentTuneData.heard_count = currentCount;
-            } else if (currentTuneData.person_tune_status) {
-                currentTuneData.person_tune_status.heard_count = currentCount;
+        // Heard count is keyed by catalog tune_id and sent as an ABSOLUTE target so a
+        // replayed offline op can never double-count. Requires the tune to be in the
+        // user's collection (a person_tune row must exist for the set to land).
+        const tuneId = currentTuneData.tune_id;
+        const inCollection = currentContext === 'my_tunes' || !!currentTuneData.person_tune_status;
+        const revertHeard = () => {
+            if (currentContext === 'my_tunes') currentTuneData.heard_count = currentCount;
+            else if (currentTuneData.person_tune_status) currentTuneData.person_tune_status.heard_count = currentCount;
+            const span = document.getElementById('heard-count-value');
+            if (span) span.textContent = currentCount;
+            if (minusBtn) minusBtn.disabled = currentCount === 0;
+            const lbl = span?.parentElement;
+            if (lbl) {
+                const plural = currentCount !== 1 ? 's' : '';
+                lbl.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
             }
+        };
+
+        if (!tuneId || !inCollection) {
+            console.error('Cannot set heard count: tune is not in your collection');
+            revertHeard();
             return;
         }
 
-        // Start tracking API request and show spinner
         startHeardCountRequest();
-
-        // Make async API call
-        fetch(`/api/my-tunes/${personTuneId}/heard`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                console.error('Error incrementing heard count:', data.error);
-                // Revert optimistic update on error
-                if (countValueSpan) countValueSpan.textContent = currentCount;
-                if (currentContext === 'my_tunes') {
-                    currentTuneData.heard_count = currentCount;
-                } else if (currentTuneData.person_tune_status) {
-                    currentTuneData.person_tune_status.heard_count = currentCount;
-                }
-                if (minusBtn) minusBtn.disabled = currentCount === 0;
-                // Update plural text back
-                if (labelDiv) {
-                    const plural = currentCount !== 1 ? 's' : '';
-                    labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
-                }
-            }
-            // End tracking API request and hide spinner if no more pending
-            endHeardCountRequest();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            // Revert optimistic update on error
-            if (countValueSpan) countValueSpan.textContent = currentCount;
-            if (currentContext === 'my_tunes') {
-                currentTuneData.heard_count = currentCount;
-            } else if (currentTuneData.person_tune_status) {
-                currentTuneData.person_tune_status.heard_count = currentCount;
-            }
-            if (minusBtn) minusBtn.disabled = currentCount === 0;
-            // Update plural text back
-            if (labelDiv) {
-                const plural = currentCount !== 1 ? 's' : '';
-                labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
-            }
-            // End tracking API request and hide spinner if no more pending
-            endHeardCountRequest();
-        });
+        submitMyTunesOp({ type: 'set_heard', tune_id: tuneId, heard_count: newCount })
+            .then(() => { endHeardCountRequest(); }) // success OR queued offline: keep optimistic UI
+            .catch(error => { console.error('Error setting heard count:', error); revertHeard(); endHeardCountRequest(); });
     }
 
     /**
@@ -1860,76 +1838,32 @@ ${abcBody}`;
             labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${newCount}</span> time${plural}`;
         }
 
-        // Get person_tune_id for API call
-        let personTuneId = null;
-        if (currentContext === 'my_tunes') {
-            personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
-        } else if (currentTuneData.person_tune_status?.person_tune_id) {
-            personTuneId = currentTuneData.person_tune_status.person_tune_id;
-        }
-
-        if (!personTuneId) {
-            console.error('Cannot decrement: person_tune_id not available');
-            // Revert optimistic update
-            if (countValueSpan) countValueSpan.textContent = currentCount;
-            if (currentContext === 'my_tunes') {
-                currentTuneData.heard_count = currentCount;
-            } else if (currentTuneData.person_tune_status) {
-                currentTuneData.person_tune_status.heard_count = currentCount;
-            }
+        // Absolute set keyed by tune_id (see incrementHeardCount).
+        const tuneId = currentTuneData.tune_id;
+        const inCollection = currentContext === 'my_tunes' || !!currentTuneData.person_tune_status;
+        const revertHeard = () => {
+            if (currentContext === 'my_tunes') currentTuneData.heard_count = currentCount;
+            else if (currentTuneData.person_tune_status) currentTuneData.person_tune_status.heard_count = currentCount;
+            const span = document.getElementById('heard-count-value');
+            if (span) span.textContent = currentCount;
             if (minusBtn) minusBtn.disabled = currentCount === 0;
+            const lbl = span?.parentElement;
+            if (lbl) {
+                const plural = currentCount !== 1 ? 's' : '';
+                lbl.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
+            }
+        };
+
+        if (!tuneId || !inCollection) {
+            console.error('Cannot set heard count: tune is not in your collection');
+            revertHeard();
             return;
         }
 
-        // Start tracking API request and show spinner
         startHeardCountRequest();
-
-        // Make async API call to atomically decrement on server
-        fetch(`/api/my-tunes/${personTuneId}/heard`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                console.error('Error decrementing heard count:', data.error);
-                // Revert optimistic update on error
-                if (countValueSpan) countValueSpan.textContent = currentCount;
-                if (currentContext === 'my_tunes') {
-                    currentTuneData.heard_count = currentCount;
-                } else if (currentTuneData.person_tune_status) {
-                    currentTuneData.person_tune_status.heard_count = currentCount;
-                }
-                if (minusBtn) minusBtn.disabled = currentCount === 0;
-                // Update plural text back
-                if (labelDiv) {
-                    const plural = currentCount !== 1 ? 's' : '';
-                    labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
-                }
-            }
-            // End tracking API request and hide spinner if no more pending
-            endHeardCountRequest();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            // Revert optimistic update on error
-            if (countValueSpan) countValueSpan.textContent = currentCount;
-            if (currentContext === 'my_tunes') {
-                currentTuneData.heard_count = currentCount;
-            } else if (currentTuneData.person_tune_status) {
-                currentTuneData.person_tune_status.heard_count = currentCount;
-            }
-            if (minusBtn) minusBtn.disabled = currentCount === 0;
-            // Update plural text back
-            if (labelDiv) {
-                const plural = currentCount !== 1 ? 's' : '';
-                labelDiv.innerHTML = `You've heard this <span id="heard-count-value">${currentCount}</span> time${plural}`;
-            }
-            // End tracking API request and hide spinner if no more pending
-            endHeardCountRequest();
-        });
+        submitMyTunesOp({ type: 'set_heard', tune_id: tuneId, heard_count: newCount })
+            .then(() => { endHeardCountRequest(); }) // success OR queued offline: keep optimistic UI
+            .catch(error => { console.error('Error setting heard count:', error); revertHeard(); endHeardCountRequest(); });
     }
 
     /**
@@ -1938,23 +1872,15 @@ ${abcBody}`;
     function addToTunebook() {
         const tuneId = currentTuneData.tune_id;
 
-        fetch('/api/person/tunes', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                tune_id: tuneId,
-                learn_status: 'want to learn',
-                heard_count: 0
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Reload the modal to show updated state
+        submitMyTunesOp({ type: 'add', tune_id: tuneId, learn_status: 'want to learn' })
+            .then(res => {
+                if (res && res.queued) {
+                    // Offline: can't re-fetch the modal, so just acknowledge the queued add.
+                    alert('Added to your tunes. It will sync when you are back online.');
+                    return;
+                }
+                // Online: reload the modal to show the updated (in-collection) state.
                 if (currentConfig && currentConfig.apiEndpoint) {
-                    // Re-fetch and render
                     fetch(currentConfig.apiEndpoint)
                         .then(response => response.json())
                         .then(data => {
@@ -1965,15 +1891,11 @@ ${abcBody}`;
                             }
                         });
                 }
-            } else {
-                console.error('Error adding to tunebook:', data.error);
+            })
+            .catch(error => {
+                console.error('Error adding to tunebook:', error);
                 alert('Failed to add tune to your list');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to add tune to your list');
-        });
+            });
     }
 
     /**

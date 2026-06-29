@@ -63,3 +63,58 @@ test.describe("offline data (Tier 1)", () => {
     }
   });
 });
+
+/**
+ * Tier 2: My-Tunes writes queue offline and replay idempotently on reconnect via the
+ * shared op-queue (window.MyTunesOffline) + POST /api/my-tunes/ops. This is the same
+ * path the tune-detail modal uses, including inside the live logger.
+ */
+test.describe("offline writes (Tier 2)", () => {
+  test.use({ storageState: STORAGE.regular });
+
+  test("add + heard queue offline and replay on reconnect (no double-count)", async ({ page, context }) => {
+    await page.goto("/my-tunes");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+
+    // Find a real catalog tune the user does NOT already have. Read via page.request so
+    // it bypasses the service worker (Tier 1 caches GET /api/* and could serve stale).
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
+    let tid: number | null = null;
+    for (const q of ["reel", "jig", "the", "a", "e"]) {
+      const r = await (await page.request.get("/api/tunes/search?q=" + q)).json();
+      const hit = (r.tunes || []).find((t: any) => !owned.has(t.tune_id));
+      if (hit) { tid = hit.tune_id; break; }
+    }
+    expect(tid, "need a real un-owned tune for the test").toBeTruthy();
+
+    // Offline: an add followed by two heard bumps should queue (not hit the server).
+    await context.setOffline(true);
+    const queued = await page.evaluate(async (tid) => {
+      const a = await (window as any).MyTunesOffline.submit({ type: "add", tune_id: tid, learn_status: "learning" });
+      await (window as any).MyTunesOffline.submit({ type: "set_heard", tune_id: tid, heard_count: 1 });
+      await (window as any).MyTunesOffline.submit({ type: "set_heard", tune_id: tid, heard_count: 2 });
+      return { queuedFlag: a.queued, pending: (await (window as any).MyTunesOffline.pending()).length };
+    }, tid);
+    expect(queued.queuedFlag).toBe(true);
+    expect(queued.pending).toBe(3);
+
+    // Reconnect: the queue drains.
+    await context.setOffline(false);
+    await page.evaluate(() => (window as any).MyTunesOffline.flush());
+    await expect
+      .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
+      .toBe(0);
+
+    // Server reflects the replay exactly once: added, learning, heard_count == 2.
+    // Read via page.request (bypasses the SW cache) for a true server read.
+    const fresh = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const state = (fresh.tunes || []).find((t: any) => t.tune_id === tid) || null;
+    expect(state, "tune added on the server after replay").toBeTruthy();
+    expect(state.learn_status).toBe("learning");
+    expect(state.heard_count, "absolute set_heard, not a double-counted delta").toBe(2);
+
+    // Cleanup so the run is repeatable.
+    await page.evaluate(async (tid) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: tid }); }, tid);
+  });
+});
