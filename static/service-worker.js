@@ -24,6 +24,7 @@
 const VERSION = 'v1'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 const pagesCache = (uid) => `ceol-io-pages-${uid}` // per-user HTML snapshots (no cross-user leak)
+const apiCache = (uid) => `ceol-io-api-${uid}` // per-user GET /api/* responses (Tier 1)
 const UID_MARKER = '/__ceol_uid__'
 
 // Non-personalized shell, precached (from the 'init' message) best-effort.
@@ -120,11 +121,16 @@ self.addEventListener('message', (event) => {
       (async () => {
         const shell = await caches.open(SHELL)
         await shell.put(UID_MARKER, new Response(uid))
-        // Drop every other user's cached pages so a shared device can't leak them.
+        // Drop every other user's cached pages AND api responses so a shared device
+        // can't leak one user's personalized data (e.g. /api/my-tunes) to the next.
         const keys = await caches.keys()
         await Promise.all(
           keys
-            .filter((k) => k.startsWith('ceol-io-pages-') && k !== pagesCache(uid))
+            .filter(
+              (k) =>
+                (k.startsWith('ceol-io-pages-') && k !== pagesCache(uid)) ||
+                (k.startsWith('ceol-io-api-') && k !== apiCache(uid))
+            )
             .map((k) => caches.delete(k))
         )
       })()
@@ -138,11 +144,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
 
   if (url.origin === self.location.origin) {
-    // Straight to network, never cached/intercepted.
-    if (url.pathname.startsWith('/api/')) return
+    // The live logger owns its own data + worker — never touch it.
+    if (url.pathname.startsWith('/api/live/')) return
     if (url.pathname.startsWith('/live/')) return
     if (url.pathname.startsWith('/admin')) return
     if (url.pathname === '/logout') return
+
+    // Tier 1: GET /api/* — network-first into a per-user cache so the AJAX-driven
+    // pages (My Tunes, Common Tunes, session-detail tabs) have data offline. Writes
+    // are POST/PUT/DELETE and already bypassed above (method !== GET).
+    if (url.pathname.startsWith('/api/')) {
+      event.respondWith(handleApi(req))
+      return
+    }
 
     if (req.mode === 'navigate') {
       event.respondWith(handleNav(req))
@@ -179,6 +193,23 @@ async function handleNav(req) {
       (await cache.match(req)) ||
       (await (await caches.open(SHELL)).match(req)) ||
       (await caches.match('/offline'))
+    if (hit) return hit
+    throw e
+  }
+}
+
+// GET /api/* — network-first into the per-user API cache. Online always returns fresh
+// (so a page never shows stale data while connected); offline returns the last response
+// seen for that exact URL. Only successful, non-redirected responses are cached.
+async function handleApi(req) {
+  const uid = await currentUid()
+  const cache = await caches.open(apiCache(uid))
+  try {
+    const res = await fetch(req)
+    if (res && res.ok && !res.redirected) cache.put(req, res.clone())
+    return res
+  } catch (e) {
+    const hit = await cache.match(req)
     if (hit) return hit
     throw e
   }
