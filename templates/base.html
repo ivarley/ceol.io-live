@@ -368,20 +368,34 @@ function showServerFlashMessages() {
     });
 }
 
-// Service Worker Registration
+// Service Worker Registration — root-scoped (/sw.js) for app-wide offline resilience.
 if ('serviceWorker' in navigator) {
+    // Tell the worker who's logged in so it scopes (and purges) per-user page caches.
+    const CEOL_UID = {{ (current_user.id if current_user.is_authenticated else None) | tojson }};
+    // Whether a SW already controlled this page at load. The first install claims an
+    // uncontrolled page (controllerchange fires) — we must NOT reload then, only on a
+    // genuine update (when we already had a controller). Without this guard the first
+    // visit double-loads and interrupts in-flight interactions.
+    const hadController = !!navigator.serviceWorker.controller;
+    let refreshing = false;
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/service-worker.js')
+        navigator.serviceWorker.register('/sw.js')
             .then((registration) => {
+                navigator.serviceWorker.ready.then((reg) => {
+                    const sw = reg.active || navigator.serviceWorker.controller;
+                    // Tells the worker who's logged in (for per-user cache scoping) and
+                    // triggers shell precache off the activation critical path.
+                    if (sw) sw.postMessage({ type: 'init', uid: CEOL_UID });
+                });
                 // Handle service worker updates
                 registration.addEventListener('updatefound', () => {
                     const newWorker = registration.installing;
                     newWorker.addEventListener('statechange', () => {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            // New service worker available, show update notification
+                            // New service worker available — activate it; the resulting
+                            // controllerchange (guarded below) performs the single reload.
                             if (confirm('A new version is available! Reload to update?')) {
                                 newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                window.location.reload();
                             }
                         }
                     });
@@ -391,8 +405,17 @@ if ('serviceWorker' in navigator) {
                 // Service Worker registration failed silently
             });
 
-        // Handle controller change (when new service worker takes over)
+        // Retire the old /static/-scoped shim worker if it's still registered.
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+            regs.forEach((r) => {
+                if (r.active && r.active.scriptURL.endsWith('/static/service-worker.js')) r.unregister();
+            });
+        });
+
+        // Reload only when an UPDATED worker takes over — never on the first-install claim.
         navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing || !hadController) return;
+            refreshing = true;
             window.location.reload();
         });
     });

@@ -374,6 +374,30 @@ def live_service_worker():
 
 app.add_url_rule("/live/sw.js", "live_service_worker", live_service_worker)
 
+
+# Serve the main-app service worker at /sw.js so its scope is the whole origin
+# (it must control all navigations except /live/, which has its own worker). Kept
+# no-store so SW updates are picked up promptly.
+def app_service_worker():
+    resp = send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"),
+        "service-worker.js",
+        mimetype="application/javascript",
+    )
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+app.add_url_rule("/sw.js", "app_service_worker", app_service_worker)
+
+
+# Minimal, self-contained offline fallback shown by the service worker when an
+# uncached page is requested with no connection. No template inheritance so it has
+# zero asset dependencies.
+def offline_page():
+    return render_template("offline.html")
+
+app.add_url_rule("/offline", "offline_page", offline_page)
+
 app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
 app.add_url_rule(
     "/api/sessions/<path:session_path>/logs",

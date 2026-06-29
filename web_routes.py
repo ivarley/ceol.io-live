@@ -6,6 +6,7 @@ from flask import (
     flash,
     session,
     jsonify,
+    make_response,
 )
 import random
 import bcrypt
@@ -469,15 +470,21 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                     if user_person_id:
                         is_regular = is_session_regular(user_person_id, session_instance[8])
 
-                return render_template(
-                    "session_instance_detail.html",
-                    session_instance=session_instance_dict,
-                    tune_sets=sets,
-                    is_session_admin=is_session_admin,
-                    is_session_regular=is_regular,
-                    attendees=attendees_list,
-                    logging_mode=logging_mode,
+                resp = make_response(
+                    render_template(
+                        "session_instance_detail.html",
+                        session_instance=session_instance_dict,
+                        tune_sets=sets,
+                        is_session_admin=is_session_admin,
+                        is_session_regular=is_regular,
+                        attendees=attendees_list,
+                        logging_mode=logging_mode,
+                    )
                 )
+                # Legacy word-processor editor (being deprecated): the service worker
+                # must never cache it for offline use.
+                resp.headers["X-Offline-Exclude"] = "1"
+                return resp
             else:
                 cur.close()
                 conn.close()
