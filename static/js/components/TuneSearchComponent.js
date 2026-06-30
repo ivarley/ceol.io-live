@@ -205,6 +205,22 @@ class TuneSearchComponent {
             })
             .catch(error => {
                 console.error('Search error:', error);
+                // Offline fallback: search the locally-cached popular tunes so the user
+                // can still find and add common tunes without a connection (Tier 2).
+                if (window.MyTunesOffline && window.MyTunesOffline.searchPopular) {
+                    window.MyTunesOffline.searchPopular(query)
+                        .then(results => {
+                            if (results && results.length) {
+                                this.searchResults = results;
+                                this.displayResults(results, query);
+                                if (this.config.onSearchComplete) this.config.onSearchComplete(results, query);
+                            } else {
+                                this.showError("You're offline - no matching tunes are cached for offline adding.");
+                            }
+                        })
+                        .catch(() => this.showError('Error searching tunes. Please try again.'));
+                    return;
+                }
                 this.showError('Error searching tunes. Please try again.');
             });
     }

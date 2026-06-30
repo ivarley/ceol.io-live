@@ -1122,7 +1122,7 @@
     .tune-type {
         font-size: 12px;
         padding: 2px 6px;
-        margin-left: 0;
+        margin-left: auto; /* push the type to the right so name + pending badge group left */
         flex-shrink: 0;
         white-space: nowrap;
     }

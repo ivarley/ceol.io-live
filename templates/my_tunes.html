@@ -367,6 +367,69 @@ function extractTuneId(input) {
     return null;
 }
 
+// Cache the most popular tunes + pre-snapshot the add page so a user who has visited
+// My Tunes can search for and add popular tunes while offline (Tier 2).
+function cachePopularForOffline() {
+    if (!window.MyTunesOffline) return;
+    fetch('/api/tunes/popular?limit=100')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d && d.tunes) window.MyTunesOffline.savePopular(d.tunes); })
+        .catch(function () { /* offline / best-effort */ });
+    // Ask the worker to snapshot the add page so it's reachable offline. Use ready()
+    // (not controller, which is null on the first, uncontrolled load).
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.ready
+            .then(function (reg) {
+                var sw = reg.active || navigator.serviceWorker.controller;
+                if (sw) sw.postMessage({ type: 'cache-page', url: '/my-tunes/add' });
+            })
+            .catch(function () {});
+    }
+}
+
+// Overlay not-yet-synced offline ops (queued in MyTunesOffline) onto the server tune
+// list so an offline add/edit/remove is reflected immediately, before it syncs. Add ops
+// carry name/tune_type for display. Returns a Promise of the merged list.
+function overlayPendingOps(serverTunes) {
+    if (!window.MyTunesOffline || !window.MyTunesOffline.pending) return Promise.resolve(serverTunes);
+    return window.MyTunesOffline.pending()
+        .then(function (ops) {
+            if (!ops || !ops.length) return serverTunes;
+            var byId = {};
+            var out = serverTunes.slice();
+            out.forEach(function (t) { byId[t.tune_id] = t; });
+            ops.slice().sort(function (a, b) { return a.ts - b.ts; }).forEach(function (op) {
+                var t = byId[op.tune_id];
+                if (op.type === 'add') {
+                    if (!t) {
+                        t = {
+                            tune_id: op.tune_id,
+                            tune_name: op.name || ('Tune #' + op.tune_id),
+                            tune_type: op.tune_type || null,
+                            learn_status: op.learn_status || 'want to learn',
+                            heard_count: 0, notes: null,
+                            person_tune_id: 'pending-' + op.tune_id,
+                            tunebook_count: op.tunebook_count || 0,
+                            pending_sync: true,
+                        };
+                        byId[op.tune_id] = t;
+                        out.push(t);
+                    } else { t.pending_sync = true; }
+                } else if (op.type === 'remove') {
+                    if (t) t._removed = true;
+                } else if (op.type === 'set_status' && t) {
+                    t.learn_status = op.learn_status; t.pending_sync = true;
+                } else if (op.type === 'set_heard' && t) {
+                    t.heard_count = op.heard_count; t.pending_sync = true;
+                } else if (op.type === 'set_notes' && t) {
+                    t.notes = op.notes; t.pending_sync = true;
+                }
+            });
+            return out.filter(function (t) { return !t._removed; });
+        })
+        .catch(function () { return serverTunes; });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
@@ -376,6 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkForCopyMessage();
     scrollToAndHighlightTune();
     setupScrollDetection();
+    cachePopularForOffline();
 
     // Check for tune parameter in URL and open modal if present
     const tuneId = TuneDetailModal.getTuneIdFromUrl();
@@ -383,6 +447,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Wait for tunes to load before opening modal
         waitForTuneAndOpen(tuneId);
     }
+
+    // When queued offline ops finish syncing (on reconnect), re-fetch the list so the
+    // newly-synced tunes lose their "pending" marker without needing a manual reload.
+    window.addEventListener('mytunes-synced', function () { loadTunes(); });
 });
 
 function setupScrollDetection() {
@@ -933,15 +1001,18 @@ function loadTunes() {
             // Only update if we don't already have the full tune list
             // This prevents the 20-tune response from overwriting the 2000-tune response
             if (!fullTunesLoaded) {
-                allTunes = data.tunes || [];
-                populateTuneTypes();
-                applyFilters();
-
-                // If we got fewer than 20, we have all tunes
-                if (allTunes.length < 20) {
-                    fullTunesLoaded = true;
-                    isLoadingFullTunes = false;
-                }
+                const serverTunes = data.tunes || [];
+                overlayPendingOps(serverTunes).then(function (merged) {
+                    if (fullTunesLoaded) return; // the 2000 fetch already won
+                    allTunes = merged;
+                    populateTuneTypes();
+                    applyFilters();
+                    // If we got fewer than 20, we have all tunes
+                    if (serverTunes.length < 20) {
+                        fullTunesLoaded = true;
+                        isLoadingFullTunes = false;
+                    }
+                });
             }
         })
         .catch(error => {
@@ -969,15 +1040,17 @@ function loadTunes() {
         })
         .then(data => {
             // Replace with full tune list - this should always take precedence
-            allTunes = data.tunes || [];
-            fullTunesLoaded = true;
-            isLoadingFullTunes = false;
+            overlayPendingOps(data.tunes || []).then(function (merged) {
+                allTunes = merged;
+                fullTunesLoaded = true;
+                isLoadingFullTunes = false;
 
-            // Hide loading-more indicator
-            document.getElementById('loading-more').classList.remove('visible');
+                // Hide loading-more indicator
+                document.getElementById('loading-more').classList.remove('visible');
 
-            populateTuneTypes();
-            applyFilters();
+                populateTuneTypes();
+                applyFilters();
+            });
         })
         .catch(error => {
             console.error('Error loading full tune list:', error);
@@ -1420,6 +1493,13 @@ function createTuneCard(tune) {
         ? (tune.heard_count || 0).toString()
         : tune.tune_type || '';
 
+    // Offline-queued tunes (not yet synced) get a subtle "pending" marker. It sits
+    // OUTSIDE the tune-name so the name (not the badge) is what truncates with an
+    // ellipsis when it's too long.
+    const pendingBadge = tune.pending_sync
+        ? '<span class="pending-sync-badge" title="Queued - will sync when you are back online" style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;">pending</span>'
+        : '';
+
     // Add data attributes for swipe functionality and highlighting
     const swipeAttr = `data-person-tune-id="${tune.person_tune_id}" data-tune-id="${tune.tune_id}"`;
 
@@ -1439,6 +1519,7 @@ function createTuneCard(tune) {
                 <div class="tune-card tune-card-swipeable" onclick="showTuneDetail(${tune.person_tune_id}, event)">
                     <div class="tune-card-header">
                         <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
+                        ${pendingBadge}
                         ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
                     </div>
                     <div class="tune-meta">
@@ -1459,6 +1540,7 @@ function createTuneCard(tune) {
             <div class="tune-card" ${swipeAttr} onclick="showTuneDetail(${tune.person_tune_id}, event)">
                 <div class="tune-card-header">
                     <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
+                    ${pendingBadge}
                     ${typeLabel ? `<span class="tune-type">${typeLabel}</span>` : ''}
                 </div>
                 <div class="tune-meta">

@@ -1241,10 +1241,59 @@ def search_tunes():
 
 
 @person_tune_login_required
+def get_popular_tunes():
+    """
+    GET /api/tunes/popular?limit=100
+
+    The most-bookmarked catalog tunes (by tunebook_count_cached). The My Tunes page
+    caches this client-side so a user can search for and add popular tunes while
+    offline (the offline op-queue handles the add).
+    """
+    try:
+        try:
+            limit = min(200, max(1, int(request.args.get("limit", 100))))
+        except (ValueError, TypeError):
+            limit = 100
+        person_id = get_user_person_id()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+                       pt.person_tune_id IS NOT NULL AS in_person_tune, pt.learn_status
+                FROM tune t
+                LEFT OUTER JOIN person_tune pt
+                       ON pt.tune_id = t.tune_id AND pt.person_id = %s
+                WHERE t.redirect_to_tune_id IS NULL
+                ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
+                LIMIT %s
+                """,
+                (person_id, limit),
+            )
+            tunes = [
+                {
+                    "tune_id": r[0],
+                    "name": r[1],
+                    "tune_type": r[2],
+                    "tunebook_count": r[3] or 0,
+                    "in_person_tune": bool(r[4]),
+                    "learn_status": r[5] if r[4] else None,
+                }
+                for r in cur.fetchall()
+            ]
+            return jsonify({"success": True, "tunes": tunes, "count": len(tunes)}), 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error fetching popular tunes: {str(e)}"}), 500
+
+
+@person_tune_login_required
 def sync_my_tunes():
     """
     POST /api/my-tunes/sync
-    
+
     Sync the current user's tune collection from thesession.org.
     
     Request Body:

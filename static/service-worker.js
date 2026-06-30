@@ -21,10 +21,12 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v2'
+const VERSION = 'v6'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
-const pagesCache = (uid) => `ceol-io-pages-${uid}` // per-user HTML snapshots (no cross-user leak)
-const apiCache = (uid) => `ceol-io-api-${uid}` // per-user GET /api/* responses (Tier 1)
+// Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
+// stale page snapshots + cached API data, not just the shell.
+const pagesCache = (uid) => `ceol-io-pages-${VERSION}-${uid}` // per-user HTML snapshots (no cross-user leak)
+const apiCache = (uid) => `ceol-io-api-${VERSION}-${uid}` // per-user GET /api/* responses (Tier 1)
 const UID_MARKER = '/__ceol_uid__'
 
 // Non-personalized shell, precached (from the 'init' message) best-effort.
@@ -39,10 +41,12 @@ const PRECACHE = [
   '/static/css/theme.css',
   '/static/css/hamburger_menu.css',
   '/static/css/tune_detail_modal.css',
+  '/static/css/tune-search.css',
   '/static/js/hamburger_menu.js',
   '/static/js/utils/unaccent.js',
   '/static/js/tune_detail_modal.js',
   '/static/js/mytunes_offline.js',
+  '/static/js/components/TuneSearchComponent.js',
   '/static/manifest.json',
   '/static/images/logo3-1.png',
   '/static/images/favicon.ico',
@@ -69,7 +73,10 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((k) => k.startsWith('ceol-io-shell-') && k !== SHELL).map((k) => caches.delete(k))
+          // Delete every ceol-io-* cache from a previous VERSION (shell, pages, api).
+          keys
+            .filter((k) => k.startsWith('ceol-io-') && k !== SHELL && !k.includes(`-${VERSION}-`))
+            .map((k) => caches.delete(k))
         )
       )
       .then(() => self.clients.claim())
@@ -112,6 +119,27 @@ self.addEventListener('message', (event) => {
   const data = event.data || {}
   if (data.type === 'SKIP_WAITING') {
     self.skipWaiting()
+    return
+  }
+  if (data.type === 'cache-page' && data.url) {
+    // Snapshot another same-origin page into this user's page cache so it's reachable
+    // offline even if never directly visited (e.g. /my-tunes pre-caching /my-tunes/add).
+    // Uses the worker's own credentialed fetch, so it stores the authed page, not a
+    // login redirect.
+    event.waitUntil(
+      (async () => {
+        try {
+          const u = new URL(data.url, self.location.origin)
+          if (u.origin !== self.location.origin) return
+          const res = await fetch(u.href, { credentials: 'same-origin' })
+          if (!res || !res.ok || res.redirected || res.headers.get('X-Offline-Exclude') != null) return
+          const cache = await caches.open(pagesCache(await currentUid()))
+          await cache.put(u.href, res)
+        } catch (e) {
+          /* best-effort */
+        }
+      })()
+    )
     return
   }
   if (data.type === 'init') {
@@ -222,7 +250,12 @@ async function handleApi(req) {
       hit = await cache.match(req, { ignoreSearch: true })
     }
     if (hit) return hit
-    throw e
+    // Nothing cached and offline: resolve with a 503 (not a thrown network error) so the
+    // page's own catch handles it cleanly and the SW doesn't log an uncaught rejection.
+    return new Response(JSON.stringify({ success: false, error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }
 

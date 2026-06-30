@@ -1872,7 +1872,12 @@ ${abcBody}`;
     function addToTunebook() {
         const tuneId = currentTuneData.tune_id;
 
-        submitMyTunesOp({ type: 'add', tune_id: tuneId, learn_status: 'want to learn' })
+        // name/tune_type ride along so an offline add shows in the My Tunes list while queued.
+        submitMyTunesOp({
+            type: 'add', tune_id: tuneId, learn_status: 'want to learn',
+            name: currentTuneData.name || currentTuneData.tune_name,
+            tune_type: currentTuneData.tune_type,
+        })
             .then(res => {
                 if (res && res.queued) {
                     // Offline: can't re-fetch the modal, so just acknowledge the queued add.

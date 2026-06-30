@@ -444,6 +444,7 @@ const settingIdInput = document.getElementById('setting-id');
 
 // Initialize tune search component
 let tuneSearch;
+let selectedTuneData = null; // the currently-selected tune (for offline op display)
 document.addEventListener('DOMContentLoaded', function() {
     tuneSearch = new TuneSearchComponent({
         searchInputId: 'tune-search',
@@ -455,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
         personId: {{ current_user.person_id }}, // Pass person_id for context
         {% endif %}
         onTuneSelected: (tune) => {
+            selectedTuneData = tune;
             // Enable submit button when tune is selected
             submitBtn.disabled = false;
             // Auto-populate setting ID if extracted from a pasted URL
@@ -503,9 +505,55 @@ function handleSubmit(e) {
         return;
     }
 
-    // Check if offline
+    const theSessionTune = tuneSearch.getTheSessionTuneData();
+    const settingIdRaw = (document.getElementById('setting-id').value || '').trim();
+
+    // Plain catalog add (no TheSession new-tune, no specific setting): route through the
+    // offline op-queue, which tries the network and queues on failure. We deliberately do
+    // NOT gate on navigator.onLine — it's unreliable (it reports online when it isn't,
+    // which sent adds to a failing POST). submit() handles online + offline transparently.
+    if (window.MyTunesOffline && !theSessionTune && !settingIdRaw) {
+        const learnStatus = document.getElementById('learn-status').value;
+        const notesVal = (document.getElementById('notes').value || '').trim();
+        const tid = parseInt(selectedTuneId);
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding...';
+        // name/tune_type ride along so the My Tunes list can show the tune while the add
+        // is still queued offline (the server ignores the extra fields).
+        window.MyTunesOffline.submit({
+            type: 'add', tune_id: tid, learn_status: learnStatus,
+            name: (selectedTuneData && selectedTuneData.name) || tuneSearch.getValue(),
+            tune_type: selectedTuneData && selectedTuneData.tune_type,
+        })
+            .then(function (res) {
+                if (notesVal) {
+                    return window.MyTunesOffline.submit({ type: 'set_notes', tune_id: tid, notes: notesVal }).then(function () { return res; });
+                }
+                return res;
+            })
+            .then(function () {
+                // Online or queued offline: go to the tune list, same as the classic add
+                // path. The list overlays a queued add as "pending" until it syncs.
+                window.location.href = '/my-tunes?show=' + tid + '&added=' + encodeURIComponent(tuneSearch.getValue());
+            })
+            .catch(function (error) {
+                console.error('Error adding tune:', error);
+                showMessage('Failed to add tune. Please try again.', 'error');
+                submitBtn.textContent = 'Add to My Tunes';
+                submitBtn.disabled = false;
+            });
+        return;
+    }
+
+    // TheSession.org new tunes or a specific setting need a connection (the classic POST
+    // creates the catalog row / records the setting).
     if (!navigator.onLine) {
-        showMessage('You are offline. Please check your connection.', 'error');
+        showMessage(
+            theSessionTune
+                ? 'You are offline. New tunes from TheSession.org can only be added online.'
+                : 'You are offline. Please check your connection.',
+            'error'
+        );
         return;
     }
 
@@ -525,7 +573,6 @@ function handleSubmit(e) {
     };
 
     // If this is a tune from TheSession.org, include the tune details for insertion
-    const theSessionTune = tuneSearch.getTheSessionTuneData();
     if (theSessionTune) {
         formData.new_tune = {
             tune_id: theSessionTune.tune_id,
@@ -668,6 +715,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
 {% endblock %}

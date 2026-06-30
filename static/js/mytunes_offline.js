@@ -18,8 +18,9 @@
   if (window.MyTunesOffline) return
 
   var DB_NAME = 'ceol-mytunes'
-  var DB_VERSION = 1
+  var DB_VERSION = 2
   var OPS = 'ops'
+  var POPULAR = 'popular' // top catalog tunes, cached so you can add them offline
   var ENDPOINT = '/api/my-tunes/ops'
   var dbPromise = null
 
@@ -30,6 +31,7 @@
         req.onupgradeneeded = function () {
           var d = req.result
           if (!d.objectStoreNames.contains(OPS)) d.createObjectStore(OPS, { keyPath: 'op_id' })
+          if (!d.objectStoreNames.contains(POPULAR)) d.createObjectStore(POPULAR, { keyPath: 'tune_id' })
         }
         req.onsuccess = function () { resolve(req.result) }
         req.onerror = function () { reject(req.error) }
@@ -38,12 +40,12 @@
     return dbPromise
   }
 
-  function idb(mode, fn) {
+  function idb(store, mode, fn) {
     return db().then(function (d) {
       return new Promise(function (resolve, reject) {
-        var tx = d.transaction(OPS, mode)
-        var store = tx.objectStore(OPS)
-        var out = fn(store)
+        var tx = d.transaction(store, mode)
+        var os = tx.objectStore(store)
+        var out = fn(os)
         tx.oncomplete = function () { resolve(out && out.result !== undefined ? out.result : out) }
         tx.onerror = function () { reject(tx.error) }
         tx.onabort = function () { reject(tx.error) }
@@ -51,17 +53,54 @@
     })
   }
 
-  function queuePut(op) { return idb('readwrite', function (s) { s.put(op) }) }
-  function queueDelete(op_id) { return idb('readwrite', function (s) { s.delete(op_id) }) }
+  function queuePut(op) { return idb(OPS, 'readwrite', function (s) { s.put(op) }) }
+  function queueDelete(op_id) { return idb(OPS, 'readwrite', function (s) { s.delete(op_id) }) }
   function queueAll() {
-    return idb('readonly', function (s) { return s.getAll() }).then(function (all) {
+    return idb(OPS, 'readonly', function (s) { return s.getAll() }).then(function (all) {
       return (all || []).sort(function (a, b) { return a.ts - b.ts })
+    })
+  }
+
+  // --- Popular tunes (offline add) ---------------------------------------------
+  // Smart quotes \u-escaped (project rule: never embed smart-quote literals in source).
+  var _norm = function (s) { return (s || '').replace(/[\u2018\u2019\u201B`\u00B4]/g, "'").toLowerCase().trim() }
+
+  // Replace the cached popular set with the given tunes ({tune_id, name, tune_type,
+  // tunebook_count, in_person_tune, learn_status}).
+  function savePopular(tunes) {
+    return idb(POPULAR, 'readwrite', function (s) {
+      s.clear()
+      ;(tunes || []).forEach(function (t) { if (t && t.tune_id) s.put(t) })
+    })
+  }
+
+  // Offline name search over the cached popular set: substring match, most-bookmarked
+  // first, capped. Returns [] if nothing is cached.
+  function searchPopular(query, limit) {
+    var q = _norm(query)
+    limit = limit || 20
+    return idb(POPULAR, 'readonly', function (s) { return s.getAll() }).then(function (all) {
+      return (all || [])
+        .filter(function (t) { return _norm(t.name).indexOf(q) !== -1 })
+        .sort(function (a, b) { return (b.tunebook_count || 0) - (a.tunebook_count || 0) })
+        .slice(0, limit)
     })
   }
 
   function uuid() {
     if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID()
     return 'op-' + Date.now() + '-' + Math.random().toString(16).slice(2)
+  }
+
+  // Strictly-increasing timestamp. Two ops created in the same millisecond (e.g. two
+  // fast heard taps) must still replay in submit order — equal ts sorts unstably and
+  // could apply set_heard=2 before set_heard=1, leaving the wrong final count.
+  var _lastTs = 0
+  function nextTs() {
+    var t = Date.now()
+    if (t <= _lastTs) t = _lastTs + 1
+    _lastTs = t
+    return t
   }
 
   // POST one op. Resolves the parsed JSON on a 2xx; rejects with a TypeError on a
@@ -93,7 +132,7 @@
   // REJECTS (caller should revert) and is NOT queued (it can't succeed on replay).
   function submit(op) {
     if (!op.op_id) op.op_id = uuid()
-    if (!op.ts) op.ts = Date.now()
+    if (!op.ts) op.ts = nextTs()
     return send(op).then(
       function (data) { return { online: true, queued: false, data: data } },
       function (err) {
@@ -108,17 +147,21 @@
   var flushing = false
   // Replay queued ops oldest-first. Stops at the first network failure (still
   // offline); drops any op the server rejects (a bad op can't succeed on replay).
+  // Fires a 'mytunes-synced' window event once it has cleared at least one op, so any
+  // open view (e.g. the My Tunes list) can refresh and drop its "pending" markers.
   function flush() {
     if (flushing) return Promise.resolve()
     flushing = true
+    var cleared = 0
     return queueAll()
       .then(function (ops) {
         return ops.reduce(function (chain, op) {
           return chain.then(function () {
             return send(op).then(
-              function () { return queueDelete(op.op_id) },
+              function () { cleared++; return queueDelete(op.op_id) },
               function (err) {
                 if (isNetworkError(err)) throw err // still offline -> stop
+                cleared++
                 return queueDelete(op.op_id) // server rejected -> discard
               }
             )
@@ -126,12 +169,21 @@
         }, Promise.resolve())
       })
       .catch(function () {})
-      .then(function () { flushing = false })
+      .then(function () {
+        flushing = false
+        if (cleared && window.dispatchEvent) window.dispatchEvent(new Event('mytunes-synced'))
+      })
   }
 
   if (window.addEventListener) window.addEventListener('online', flush)
 
-  window.MyTunesOffline = { submit: submit, flush: flush, pending: queueAll }
+  window.MyTunesOffline = {
+    submit: submit,
+    flush: flush,
+    pending: queueAll,
+    savePopular: savePopular,
+    searchPopular: searchPopular,
+  }
 
   // Replay anything left from a previous offline session, once the page settles.
   if (window.addEventListener) {

@@ -20,6 +20,7 @@ from api_person_tune_routes import (
     increment_tune_heard_count,
     decrement_tune_heard_count,
     my_tunes_op,
+    get_popular_tunes,
     sync_my_tunes,
     search_tunes,
     update_my_profile,
@@ -969,6 +970,12 @@ app.add_url_rule(
     "/api/tunes/search",
     "search_tunes",
     search_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/tunes/popular",
+    "get_popular_tunes",
+    get_popular_tunes,
     methods=["GET"],
 )
 app.add_url_rule(

@@ -125,4 +125,64 @@ test.describe("offline writes (Tier 2)", () => {
     // Cleanup so the run is repeatable.
     await page.evaluate(async (tid) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: tid }); }, tid);
   });
+
+  test("popular tunes cached on My Tunes make the add page searchable offline", async ({ page, context }) => {
+    // Warm the SW first so the My Tunes visit is controlled (and thus snapshotted for
+    // offline), then load My Tunes.
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/my-tunes");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+
+    // Popular tunes get cached for offline add.
+    await expect
+      .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.searchPopular("the")).length), { timeout: 8000 })
+      .toBeGreaterThan(0);
+    // Give the SW time to snapshot /my-tunes/add (cache-page) AND to run the deferred
+    // (~2s) precache that caches the add page's search script for offline use.
+    await page.waitForTimeout(3500);
+
+    let addedTid: number | null = null;
+    await context.setOffline(true);
+    try {
+      // The add page is reachable offline even though we only visited /my-tunes.
+      await page.goto("/my-tunes/add");
+      await expect(page.locator("h1")).toContainText(/Add Tune/i);
+      await expect(page.locator("body")).not.toContainText(/You're offline/i);
+
+      // Offline search surfaces cached popular tunes.
+      await page.locator("#tune-search").fill("the");
+      const firstResult = page.locator("#autocomplete-results .autocomplete-item").first();
+      await expect(firstResult).toBeVisible({ timeout: 8000 });
+      addedTid = Number(await firstResult.getAttribute("data-tune-id"));
+
+      // Selecting + adding offline must QUEUE (the bug: it hit a failing network POST
+      // because navigator.onLine wrongly reported online), then navigate to the list.
+      await firstResult.click();
+      await expect(page.locator("#submit-btn")).toBeEnabled();
+      await Promise.all([
+        page.waitForURL(/\/my-tunes(\?|$)/),
+        page.locator("#submit-btn").click(),
+      ]);
+
+      // The queued tune SHOWS in the list, marked "pending" (not vanished until sync).
+      const card = page.locator(`.tune-card[data-tune-id="${addedTid}"], .tune-card-swipe-container[data-tune-id="${addedTid}"]`).first();
+      await expect(card).toBeVisible({ timeout: 8000 });
+      await expect(card).toContainText(/pending/i);
+
+      // Reconnect: the queue flushes and the card drops its "pending" marker without a
+      // manual reload (the 'mytunes-synced' event re-loads the list).
+      await context.setOffline(false);
+      await expect(card).not.toContainText(/pending/i, { timeout: 10000 });
+      await expect
+        .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
+        .toBe(0);
+    } finally {
+      await context.setOffline(false);
+      // Remove the test tune so the run is repeatable.
+      if (addedTid) {
+        await page.evaluate(async (tid) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: tid }); }, addedTid);
+      }
+    }
+  });
 });
