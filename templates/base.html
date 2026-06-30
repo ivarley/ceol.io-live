@@ -48,6 +48,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 
+    <!-- App-wide My-Tunes offline op-queue + connection / offline-sync indicator -->
+    <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/connection_status.js') }}" defer></script>
+
     <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
     <script>
         (function() {
@@ -108,6 +112,26 @@
 
         .docs-content {
             padding-top: 10px !important;
+        }
+
+        /* Connection / offline-sync status (see connection_status.js) */
+        .conn-status { position: relative; display: inline-flex; align-items: center; }
+        .conn-status-btn {
+            background: none; border: none; padding: 0; margin-right: 12px;
+            cursor: pointer; display: inline-flex; align-items: center;
+        }
+        .conn-status-popup { min-width: 200px; }
+        .conn-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            display: inline-block; vertical-align: middle;
+            flex: 0 0 auto;
+        }
+        .conn-offline { background: #e0a23e; }                 /* orange: offline */
+        .conn-syncing { background: #e0a23e; animation: conn-pulse 1s ease-in-out infinite; } /* syncing */
+        .conn-caught-up { background: #3fb950; }               /* green: caught up */
+        @keyframes conn-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(1.35); }
         }
 
         /* Ephemeral Flash Message Styles */
@@ -258,6 +282,17 @@
                 <ul class="list-inline mx-md-3 mb-0 d-none d-lg-flex">
                     <!-- <li class="list-inline-item"><a href="#"><i class="fab fa-product-hunt fa-fw"></i></a></li> -->
                 </ul><!--//social-list-->
+
+                <!-- Connection / offline-sync status (managed by connection_status.js) -->
+                <span class="conn-status" id="conn-status" style="display:none;">
+                    <button type="button" class="conn-status-btn" id="conn-status-btn" aria-label="Connection status">
+                        <span id="conn-status-dot" class="conn-dot"></span>
+                    </button>
+                    <div class="in-session-popup conn-status-popup" id="conn-status-popup">
+                        <div class="in-session-popup-title" id="conn-status-title"></div>
+                        <div class="in-session-popup-detail" id="conn-status-detail"></div>
+                    </div>
+                </span>
 
                 <!-- In Session Badge -->
                 {% if current_user.is_authenticated %}

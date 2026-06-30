@@ -149,6 +149,11 @@ test.describe("offline writes (Tier 2)", () => {
       await page.goto("/my-tunes/add");
       await expect(page.locator("h1")).toContainText(/Add Tune/i);
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
+      // The offline dot must show here too (navigator.onLine can lie on this page).
+      await expect(page.locator("#conn-status-dot.conn-offline")).toBeVisible({ timeout: 8000 });
+      // The "offline since" timestamp is persisted so the duration accumulates across pages.
+      const offlineSinceAdd = await page.evaluate(() => localStorage.getItem("ceol_offline_since"));
+      expect(offlineSinceAdd).toBeTruthy();
 
       // Offline search surfaces cached popular tunes.
       await page.locator("#tune-search").fill("the");
@@ -169,20 +174,66 @@ test.describe("offline writes (Tier 2)", () => {
       const card = page.locator(`.tune-card[data-tune-id="${addedTid}"], .tune-card-swipe-container[data-tune-id="${addedTid}"]`).first();
       await expect(card).toBeVisible({ timeout: 8000 });
       await expect(card).toContainText(/pending/i);
+      // The header connection dot shows offline, and tapping it explains the state.
+      await expect(page.locator("#conn-status-dot.conn-offline")).toBeVisible({ timeout: 8000 });
+      await page.locator("#conn-status-btn").click();
+      await expect(page.locator("#conn-status-popup")).toContainText(/you're offline/i);
+      await expect(page.locator("#conn-status-popup")).toContainText(/waiting to sync/i);
+      await page.locator("#conn-status-btn").click(); // close
+      // The offline-since timestamp survived the navigation (timer keeps running, not reset).
+      const offlineSinceList = await page.evaluate(() => localStorage.getItem("ceol_offline_since"));
+      expect(offlineSinceList).toBe(offlineSinceAdd);
 
-      // Reconnect: the queue flushes and the card drops its "pending" marker without a
-      // manual reload (the 'mytunes-synced' event re-loads the list).
+      // Reconnect: the heartbeat/flush syncs automatically (no reload). The card drops
+      // its "pending" marker and the dot flashes "caught up" (green) before hiding.
       await context.setOffline(false);
       await expect(card).not.toContainText(/pending/i, { timeout: 10000 });
       await expect
         .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
         .toBe(0);
+      await expect(page.locator("#conn-status-dot.conn-caught-up")).toBeVisible({ timeout: 8000 });
+      await expect(page.locator("#conn-status-dot")).toBeHidden({ timeout: 8000 });
     } finally {
       await context.setOffline(false);
       // Remove the test tune so the run is repeatable.
       if (addedTid) {
         await page.evaluate(async (tid) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: tid }); }, addedTid);
       }
+    }
+  });
+
+  test("home dashboard counts reflect a pending offline add", async ({ page, context }) => {
+    // Warm the SW so the home page is snapshotted while controlled.
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+
+    const before = Number((await page.locator("#stat-learning").innerText()).trim());
+
+    // A real catalog tune the user doesn't have.
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
+    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
+    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number | undefined;
+    expect(tid).toBeTruthy();
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate(async (tid) => {
+        await (window as any).MyTunesOffline.submit({ type: "add", tune_id: tid, learn_status: "learning" });
+      }, tid);
+
+      // Reload home offline: the "In Progress" count should be the snapshot value + 1.
+      await page.goto("/");
+      await expect(page.locator("#stat-learning")).toHaveText(String(before + 1), { timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+      await page.evaluate(() => (window as any).MyTunesOffline.flush());
+      await expect
+        .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
+        .toBe(0);
+      if (tid) await page.evaluate(async (t) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: t }); }, tid);
     }
   });
 });

@@ -137,7 +137,11 @@
       function (data) { return { online: true, queued: false, data: data } },
       function (err) {
         if (isNetworkError(err)) {
-          return queuePut(op).then(function () { return { online: false, queued: true } })
+          return queuePut(op).then(function () {
+            // Tell the connection indicator we're offline with unsynced work.
+            if (window.dispatchEvent) window.dispatchEvent(new Event('mytunes-queued'))
+            return { online: false, queued: true }
+          })
         }
         throw err
       }

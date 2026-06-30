@@ -303,11 +303,11 @@
         </div>
         <div class="tune-stats">
             <a href="/my-tunes?status=learning&sortType=heard&sortDir=desc&sortType2=popularity&sortDir2=desc" class="tune-stat">
-                <span class="tune-stat-number">{{ learning_count }}</span>
+                <span class="tune-stat-number" id="stat-learning">{{ learning_count }}</span>
                 <span class="tune-stat-label">In Progress</span>
             </a>
             <a href="/my-tunes?status=want+to+learn&sortType=heard&sortDir=desc&sortType2=popularity&sortDir2=desc" class="tune-stat">
-                <span class="tune-stat-number">{{ want_to_learn_count }}</span>
+                <span class="tune-stat-number" id="stat-want-to-learn">{{ want_to_learn_count }}</span>
                 <span class="tune-stat-label">To Learn</span>
             </a>
         </div>
@@ -360,4 +360,50 @@
 {% endif %}
 
 </div>
+
+<script>
+// Offline agreement: adjust the dashboard counts by any not-yet-synced My-Tunes ops so
+// "In Progress" / "To Learn" match the My Tunes page while offline. Computed against the
+// cached list (same model as the My Tunes overlay). No-op when nothing is queued.
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.MyTunesOffline || !document.getElementById('stat-learning')) return;
+    function adjust(id, d) {
+        if (!d) return;
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = Math.max(0, (parseInt(el.textContent, 10) || 0) + d);
+    }
+    window.MyTunesOffline.pending().then(function (ops) {
+        if (!ops || !ops.length) return;
+        return fetch('/api/my-tunes?per_page=2000&sort=alpha-asc')
+            .then(function (r) { return r.ok ? r.json() : { tunes: [] }; })
+            .catch(function () { return { tunes: [] }; })
+            .then(function (d) {
+                var status = {};
+                (d.tunes || []).forEach(function (t) { status[t.tune_id] = t.learn_status; });
+                var delta = { 'want to learn': 0, 'learning': 0, 'learned': 0 };
+                ops.slice().sort(function (a, b) { return a.ts - b.ts; }).forEach(function (op) {
+                    if (op.type === 'add') {
+                        if (!(op.tune_id in status)) {
+                            var s = op.learn_status || 'want to learn';
+                            if (s in delta) delta[s]++;
+                            status[op.tune_id] = s;
+                        }
+                    } else if (op.type === 'set_status') {
+                        var old = status[op.tune_id];
+                        if (old && old in delta) delta[old]--;
+                        if (op.learn_status in delta) delta[op.learn_status]++;
+                        status[op.tune_id] = op.learn_status;
+                    } else if (op.type === 'remove') {
+                        var o2 = status[op.tune_id];
+                        if (o2 && o2 in delta) delta[o2]--;
+                        delete status[op.tune_id];
+                    }
+                });
+                adjust('stat-learning', delta['learning']);
+                adjust('stat-want-to-learn', delta['want to learn']);
+            });
+    }).catch(function () {});
+});
+</script>
 {% endblock %}
