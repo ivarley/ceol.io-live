@@ -9,7 +9,12 @@
     html, body {
         overscroll-behavior-y: none; /* Prevent pull-to-refresh */
         overscroll-behavior-x: none; /* Prevent horizontal bounce */
-        overflow-x: hidden; /* Prevent horizontal scroll when swiping cards */
+        /* Use `clip` rather than `hidden`: `overflow-x: hidden` forces overflow-y
+           to compute to `auto`, turning <body> into a scroll container sized to its
+           content. Combined with `overscroll-behavior-y: none`, that traps wheel/touch
+           scrolling and the page becomes unscrollable. `clip` prevents horizontal
+           scroll without creating a scroll container, so vertical page scroll works. */
+        overflow-x: clip; /* Prevent horizontal scroll when swiping cards */
     }
 }
 
@@ -1431,12 +1436,6 @@
         }
     }
 
-    /* Larger text support */
-    @media (prefers-reduced-motion: no-preference) {
-        * {
-            scroll-behavior: smooth;
-        }
-    }
 }
 
 /* ============================================
