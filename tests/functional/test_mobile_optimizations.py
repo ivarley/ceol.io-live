@@ -3,7 +3,21 @@ Simplified functional tests for mobile optimizations in personal tune management
 Tests that mobile CSS and JavaScript are properly loaded.
 """
 
+import os
+
 import pytest
+
+# Mobile CSS now lives in an external stylesheet (linked from the page) rather
+# than inline <style> blocks, so feature checks read the file directly.
+_MOBILE_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "static", "css", "my_tunes_mobile.css",
+)
+
+
+def _mobile_css():
+    with open(_MOBILE_CSS_PATH, "r", encoding="utf-8") as fh:
+        return fh.read()
 
 
 class TestMobileAssets:
@@ -50,33 +64,22 @@ class TestMobileCSSFeatures:
     """Test that mobile CSS features are present."""
 
     def test_touch_target_minimum_defined(self, client, authenticated_user):
-        """Test that touch target minimum is defined in CSS."""
-        with authenticated_user:
-            response = client.get('/my-tunes')
-            assert response.status_code == 200
-            
-            # Check for touch-target-min CSS variable
-            assert b'--touch-target-min' in response.data or b'44px' in response.data
+        """Touch-target sizing is defined in the mobile stylesheet."""
+        assert '44px' in _mobile_css()
 
     def test_mobile_media_queries_present(self, client, authenticated_user):
-        """Test that mobile media queries are present."""
-        with authenticated_user:
-            response = client.get('/my-tunes')
-            assert response.status_code == 200
-            
-            # Check for mobile media queries
-            assert b'@media' in response.data
-            assert b'max-width' in response.data
+        """Mobile media queries live in the external stylesheet."""
+        css = _mobile_css()
+        assert '@media' in css
+        assert 'max-width' in css
 
     def test_responsive_grid_present(self, client, authenticated_user):
-        """Test that responsive grid is present."""
+        """Responsive grid markup is on the page; grid CSS is in the stylesheet."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for grid layout
             assert b'tunes-grid' in response.data
-            assert b'grid-template-columns' in response.data
+        assert 'grid-template-columns' in _mobile_css()
 
     def test_pull_to_refresh_css_present(self, client, authenticated_user):
         """Test that pull-to-refresh CSS file is loaded."""
@@ -138,10 +141,11 @@ class TestMobileLayout:
             response = client.get('/my-tunes')
             assert response.status_code == 200
             
-            # Check for filters
+            # Check for filters (class names: filters-container > filter-top-row,
+            # with filter-button-group inside the expandable panel)
             assert b'filters-container' in response.data
-            assert b'filter-row' in response.data
-            assert b'filter-group' in response.data
+            assert b'filter-top-row' in response.data
+            assert b'filter-button-group' in response.data
 
     def test_modal_present(self, client, authenticated_user):
         """Test that modal is present."""

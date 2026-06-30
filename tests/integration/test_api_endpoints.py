@@ -206,7 +206,8 @@ class TestSessionsAPI:
             "timezone": "America/Chicago",
         }
 
-        response = client.post("/api/add-session", json=session_data)
+        with authenticated_user:
+            response = client.post("/api/add-session", json=session_data)
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -258,9 +259,10 @@ class TestSessionInstanceAPI:
             "comments": "Test session instance",
         }
 
-        response = client.post(
-            f"/api/sessions/{session_path}/add_instance", json=instance_data
-        )
+        with authenticated_user:
+            response = client.post(
+                f"/api/sessions/{session_path}/add_instance", json=instance_data
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -315,9 +317,10 @@ class TestSessionInstanceAPI:
             "end_time": "22:30",
         }
 
-        response = client.put(
-            f"/api/sessions/{session_path}/2023-08-15/update", json=update_data
-        )
+        with authenticated_user:
+            response = client.put(
+                f"/api/sessions/{session_path}/2023-08-15/update", json=update_data
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -368,7 +371,8 @@ class TestSessionInstanceAPI:
         session_instance_id = db_cursor.fetchone()[0]
         db_conn.commit()
 
-        response = client.delete(f"/api/sessions/{session_path}/2023-08-15/delete")
+        with authenticated_user:
+            response = client.delete(f"/api/sessions/{session_path}/2023-08-15/delete")
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -392,31 +396,54 @@ class TestSessionInstanceAPI:
 class TestTuneAPI:
     """Test tune-related API endpoints."""
 
-    @patch("api_routes.get_db_connection")
-    def test_add_tune_api(self, mock_get_conn, client, authenticated_user):
-        """Test adding tune to session instance via API."""
-        # Mock database responses for the add_tune API
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
+    def test_add_tune_api(self, client, authenticated_user, db_conn, db_cursor):
+        """Test adding a tune to a session instance via API.
 
-        # Mock session lookup
-        mock_cursor.fetchone.side_effect = [
-            (123,),  # session_id lookup
-            (1,),  # successful insert_session_instance_tune call
-        ]
-
-        tune_data = {"tune_name": "Test API Reel"}
-
-        response = client.post(
-            "/api/sessions/test-session/2023-08-15/add_tune", json=tune_data
+        Runs against the real seeded DB: add_tune_ajax does fuzzy matching, set
+        segmentation and fractional-index ordering across several queries, which
+        a hand-rolled cursor mock can't represent faithfully.
+        """
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"add-tune-session-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+        """,
+            (f"Add Tune Session {unique_id}", session_path, "Austin", "TX", "USA"),
         )
+        session_id = db_cursor.fetchone()[0]
+        test_date = date(2023, 8, 15)
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s)",
+            (session_id, test_date),
+        )
+        db_conn.commit()
+
+        tune_data = {"tune_name": f"Test API Reel {unique_id}"}
+
+        with authenticated_user:
+            response = client.post(
+                f"/api/sessions/{session_path}/2023-08-15/add_tune", json=tune_data
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
-        assert data["message"] == "Tune added successfully!"
+        assert "added successfully" in data["message"]
+
+        # Verify the tune landed on the instance.
+        db_cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND si.date = %s
+        """,
+            (session_id, test_date),
+        )
+        assert db_cursor.fetchone()[0] >= 1
 
     @patch("api_routes.requests.get")
     def test_refresh_tunebook_count_api(
@@ -434,7 +461,7 @@ class TestTuneAPI:
         unique_id = str(uuid.uuid4())[:8]
         session_name = f"Tunebook Test Session {unique_id}"
         session_path = f"tunebook-test-{unique_id}"
-        tune_id = int(unique_id[:6], 16) % 100000 + 21000  # Generate unique tune ID
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 21000  # Generate unique tune ID
 
         db_cursor.execute(
             """
@@ -463,9 +490,10 @@ class TestTuneAPI:
         )
         db_conn.commit()
 
-        response = client.post(
-            f"/api/sessions/{session_path}/tunes/{tune_id}/refresh_tunebook_count"
-        )
+        with authenticated_user:
+            response = client.post(
+                f"/api/sessions/{session_path}/tunes/{tune_id}/refresh_tunebook_count"
+            )
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -636,7 +664,7 @@ class TestUserAPI:
         """Test updating user auto-save preference via API."""
         # Create the user in the database (authenticated_user fixture provides user_id=1)
         unique_id = str(uuid.uuid4())[:8]
-        person_id = int(unique_id[:6], 16) % 100000 + 50000  # Unique person_id
+        person_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000  # Unique person_id
 
         db_cursor.execute(
             """
@@ -683,12 +711,17 @@ class TestUserAPI:
 class TestAdminAPI:
     """Test admin-specific API endpoints."""
 
-    def test_admin_api_requires_privileges(self, client, authenticated_user):
-        """Test that admin API endpoints require admin privileges."""
-        with authenticated_user:
-            response = client.get("/api/admin/sessions/test-session/people")
+    def test_admin_api_requires_privileges(self, client, authenticated_regular_user):
+        """Test that admin API endpoints require admin privileges.
 
-        # Non-admin authenticated user should get 403 forbidden
+        Uses a genuinely non-admin user against a real seeded session — the
+        endpoint checks that the session exists (404) before the admin check
+        (403), so a non-existent path would mask the permission behavior.
+        """
+        with authenticated_regular_user:
+            response = client.get("/api/admin/sessions/austin/mueller/people")
+
+        # Non-admin authenticated user should get 403 forbidden.
         assert response.status_code == 403
 
     def test_get_session_players_api(self, client, admin_user, db_conn, db_cursor):

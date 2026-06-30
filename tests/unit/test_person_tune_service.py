@@ -51,7 +51,8 @@ class TestPersonTuneServiceCreate:
             person_id=1,
             tune_id=100,
             learn_status='learning',
-            notes='Test notes'
+            notes='Test notes',
+            setting_id=None
         )
         
         # Verify save was called

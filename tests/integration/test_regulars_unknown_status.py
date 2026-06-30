@@ -1,248 +1,171 @@
 """
-Integration test for T047 - Always show regulars with unknown status
-Tests that session regulars are always shown in attendance list, even without attendance records.
+Integration tests for the session-instance attendee list.
+
+History: an earlier feature (T047) pre-populated the list with every session
+regular under an "unknown" status. That was intentionally reversed — the
+attendee endpoint now only returns people who have actually been added/checked
+in (it returns an empty `regulars` section and lists attendees in `attendees`,
+each carrying their `is_regular` flag). These tests verify that current contract.
+
+Rows are created with DB-assigned IDs (RETURNING) and torn down in FK order so
+the tests don't collide with seed data or leak state between runs.
 """
 
-import pytest
+import uuid
 import json
+from datetime import date
+
 from database import get_db_connection
 
 
-class TestRegularsUnknownStatus:
-    """Integration tests for showing regulars with unknown status"""
+def _make_session_with_regular(cur, *, with_attendance=None, extra_regular=False):
+    """Create a session, instance, and one or two regular members.
 
-    def test_regulars_show_with_unknown_status_when_no_attendance_record(self, client, authenticated_admin_user):
-        """Test that regulars appear with 'unknown' status when they have no attendance record"""
+    `with_attendance`: attendance value ('yes'/'maybe'/'no') for the first
+    regular, or None to leave them without an attendance record.
+    Returns a dict of the created ids for assertions and cleanup.
+    """
+    unique = str(uuid.uuid4())[:8]
+    cur.execute(
+        """
+        INSERT INTO session (name, path, location_name)
+        VALUES (%s, %s, 'Test Location') RETURNING session_id
+        """,
+        (f"Attendee Test {unique}", f"attendee-test-{unique}"),
+    )
+    session_id = cur.fetchone()[0]
+
+    cur.execute(
+        "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+        (session_id, date(2023, 1, 1)),
+    )
+    instance_id = cur.fetchone()[0]
+
+    cur.execute(
+        "INSERT INTO person (first_name, last_name, email) VALUES ('Test', 'Regular', %s) RETURNING person_id",
+        (f"reg-{unique}@example.com",),
+    )
+    regular_id = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO session_person (session_id, person_id, is_regular, is_admin) VALUES (%s, %s, true, false)",
+        (session_id, regular_id),
+    )
+    if with_attendance is not None:
+        cur.execute(
+            """
+            INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment)
+            VALUES (%s, %s, %s, 'Note')
+            """,
+            (instance_id, regular_id, with_attendance),
+        )
+
+    second_id = None
+    if extra_regular:
+        cur.execute(
+            "INSERT INTO person (first_name, last_name, email) VALUES ('Test', 'Regular2', %s) RETURNING person_id",
+            (f"reg2-{unique}@example.com",),
+        )
+        second_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO session_person (session_id, person_id, is_regular, is_admin) VALUES (%s, %s, true, false)",
+            (session_id, second_id),
+        )
+
+    return {
+        "session_id": session_id,
+        "instance_id": instance_id,
+        "regular_id": regular_id,
+        "second_id": second_id,
+    }
+
+
+def _cleanup(cur, ids):
+    cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = %s", (ids["instance_id"],))
+    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (ids["instance_id"],))
+    cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (ids["instance_id"],))
+    cur.execute("DELETE FROM session_person WHERE session_id = %s", (ids["session_id"],))
+    person_ids = [p for p in (ids["regular_id"], ids["second_id"]) if p]
+    cur.execute("DELETE FROM person WHERE person_id = ANY(%s)", (person_ids,))
+    cur.execute("DELETE FROM session WHERE session_id = %s", (ids["session_id"],))
+
+
+class TestAttendeeList:
+    """The attendee endpoint lists only people with attendance records."""
+
+    def test_regular_without_attendance_is_not_listed(self, client, authenticated_admin_user):
+        """A regular with no attendance record is no longer pre-populated."""
         conn = get_db_connection()
         cur = conn.cursor()
-        
+        ids = None
         try:
-            # Create test session
-            cur.execute("""
-                INSERT INTO session (session_id, name, path, location_name)
-                VALUES (999, 'Test Session', 'test-session', 'Test Location')
-                ON CONFLICT (session_id) DO NOTHING
-            """)
-            
-            # Create test person
-            cur.execute("""
-                INSERT INTO person (person_id, first_name, last_name, email)
-                VALUES (999, 'Test', 'Regular', 'test.regular@example.com')
-                ON CONFLICT (person_id) DO NOTHING
-            """)
-            
-            # Make person a regular of the session (but no attendance record)
-            cur.execute("""
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                VALUES (999, 999, true, false)
-                ON CONFLICT (session_id, person_id) DO NOTHING
-            """)
-            
-            # Create session instance
-            cur.execute("""
-                INSERT INTO session_instance (session_instance_id, session_id, date)
-                VALUES (999, 999, '2023-01-01')
-                ON CONFLICT (session_instance_id) DO NOTHING
-            """)
-            
+            ids = _make_session_with_regular(cur, with_attendance=None)
             conn.commit()
-            
-            # Test the API - should show the regular with 'unknown' status
+
             with authenticated_admin_user:
-                response = client.get('/api/session_instance/999/attendees')
-            
+                response = client.get(f"/api/session_instance/{ids['instance_id']}/attendees")
+
             assert response.status_code == 200
             data = json.loads(response.data)
-            assert data['success'] is True
-            
-            # Should have one regular with 'unknown' status
-            regulars = data['data']['regulars']
-            assert len(regulars) == 1
-            
-            regular = regulars[0]
-            assert regular['person_id'] == 999
-            assert regular['display_name'] == 'Test R'
-            assert regular['attendance'] == 'unknown'  # This should be the new 'unknown' status
-            assert regular['is_regular'] is True
-            
+            assert data["success"] is True
+            # Not pre-populated: the regular does not appear anywhere.
+            everyone = data["data"]["regulars"] + data["data"]["attendees"]
+            assert ids["regular_id"] not in [p["person_id"] for p in everyone]
         finally:
-            # Cleanup - order matters for foreign key constraints
-            cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = 999")
-            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = 999")
-            cur.execute("DELETE FROM session_instance WHERE session_instance_id = 999") 
-            cur.execute("DELETE FROM session_person WHERE session_id = 999")
-            cur.execute("DELETE FROM person WHERE person_id = 999")
-            cur.execute("DELETE FROM session WHERE session_id = 999")
-            conn.commit()
+            if ids is not None:
+                _cleanup(cur, ids)
+                conn.commit()
             cur.close()
             conn.close()
 
-    def test_regulars_with_attendance_still_show_correct_status(self, client, authenticated_admin_user):
-        """Test that regulars with attendance records still show their actual status, not unknown"""
+    def test_regular_with_attendance_shows_actual_status(self, client, authenticated_admin_user):
+        """A regular who has checked in appears with their real status + flag."""
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Use unique IDs to avoid conflicts
-        test_session_id = 99998
-        test_person_id = 99998
-        test_instance_id = 99998
-        
         try:
-            # Clean up any existing test data first
-            cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_person WHERE session_id = %s AND person_id = %s", (test_session_id, test_person_id))
-            cur.execute("DELETE FROM person WHERE person_id = %s", (test_person_id,))
-            cur.execute("DELETE FROM session WHERE session_id = %s", (test_session_id,))
+            ids = _make_session_with_regular(cur, with_attendance="yes")
             conn.commit()
-            
-            # Create test session
-            cur.execute("""
-                INSERT INTO session (session_id, name, path, location_name)
-                VALUES (%s, 'Test Session 2', 'test-session-99998', 'Test Location')
-            """, (test_session_id,))
-            
-            # Create test person
-            cur.execute("""
-                INSERT INTO person (person_id, first_name, last_name, email)
-                VALUES (%s, 'Test', 'Regular2', 'test.regular99998@example.com')
-            """, (test_person_id,))
-            
-            # Make person a regular of the session
-            cur.execute("""
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                VALUES (%s, %s, true, false)
-            """, (test_session_id, test_person_id))
-            
-            # Create session instance
-            cur.execute("""
-                INSERT INTO session_instance (session_instance_id, session_id, date)
-                VALUES (%s, %s, '2023-01-02')
-            """, (test_instance_id, test_session_id))
-            
-            # Add attendance record for the regular
-            cur.execute("""
-                INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment)
-                VALUES (%s, %s, 'yes', 'Will be there')
-            """, (test_instance_id, test_person_id))
-            
-            conn.commit()
-            
-            # Test the API - should show the regular with 'yes' status, not 'unknown'
+
             with authenticated_admin_user:
-                response = client.get(f'/api/session_instance/{test_instance_id}/attendees')
-            
+                response = client.get(f"/api/session_instance/{ids['instance_id']}/attendees")
+
             assert response.status_code == 200
             data = json.loads(response.data)
-            assert data['success'] is True
-            
-            # Should have one regular with 'yes' status
-            regulars = data['data']['regulars']
-            assert len(regulars) == 1
-            
-            regular = regulars[0]
-            assert regular['person_id'] == test_person_id
-            assert regular['display_name'] == 'Test R'
-            assert regular['attendance'] == 'yes'  # Should be actual status, not 'unknown'
-            assert regular['is_regular'] is True
-            assert regular['comment'] == 'Will be there'
-            
+            attendees = data["data"]["attendees"]
+            match = next((a for a in attendees if a["person_id"] == ids["regular_id"]), None)
+            assert match is not None
+            assert match["attendance"] == "yes"
+            assert match["is_regular"] is True
         finally:
-            # Cleanup - order matters for foreign key constraints
-            cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (test_instance_id,))
-            cur.execute("DELETE FROM session_person WHERE session_id = %s", (test_session_id,))
-            cur.execute("DELETE FROM person WHERE person_id = %s", (test_person_id,))
-            cur.execute("DELETE FROM session WHERE session_id = %s", (test_session_id,))
-            conn.commit()
+            if ids is not None:
+                _cleanup(cur, ids)
+                conn.commit()
             cur.close()
             conn.close()
 
-    def test_mixed_scenario_some_regulars_with_some_without_attendance(self, client, authenticated_admin_user):
-        """Test scenario with mix of regulars - some with attendance, some without"""
+    def test_mixed_only_attending_regulars_listed(self, client, authenticated_admin_user):
+        """Of two regulars, only the one with an attendance record is listed."""
         conn = get_db_connection()
         cur = conn.cursor()
-        
         try:
-            # Create test session
-            cur.execute("""
-                INSERT INTO session (session_id, name, path, location_name)
-                VALUES (997, 'Test Session 3', 'test-session-3', 'Test Location')
-                ON CONFLICT (session_id) DO NOTHING
-            """)
-            
-            # Create two test people
-            cur.execute("""
-                INSERT INTO person (person_id, first_name, last_name, email)
-                VALUES 
-                    (997, 'Regular', 'WithAttendance', 'reg.attendance@example.com'),
-                    (996, 'Regular', 'NoAttendance', 'reg.noattendance@example.com')
-                ON CONFLICT (person_id) DO NOTHING
-            """)
-            
-            # Make both regulars of the session
-            cur.execute("""
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                VALUES 
-                    (997, 997, true, false),
-                    (997, 996, true, false)
-                ON CONFLICT (session_id, person_id) DO NOTHING
-            """)
-            
-            # Create session instance
-            cur.execute("""
-                INSERT INTO session_instance (session_instance_id, session_id, date)
-                VALUES (997, 997, '2023-01-03')
-                ON CONFLICT (session_instance_id) DO NOTHING
-            """)
-            
-            # Add attendance record for only one regular
-            cur.execute("""
-                INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment)
-                VALUES (997, 997, 'maybe', 'Might attend')
-                ON CONFLICT (session_instance_id, person_id) DO NOTHING
-            """)
-            
+            ids = _make_session_with_regular(cur, with_attendance="maybe", extra_regular=True)
             conn.commit()
-            
-            # Test the API - should show both regulars
+
             with authenticated_admin_user:
-                response = client.get('/api/session_instance/997/attendees')
-            
+                response = client.get(f"/api/session_instance/{ids['instance_id']}/attendees")
+
             assert response.status_code == 200
             data = json.loads(response.data)
-            assert data['success'] is True
-            
-            # Should have two regulars
-            regulars = data['data']['regulars']
-            assert len(regulars) == 2
-            
-            # Sort by person_id to ensure consistent testing
-            regulars.sort(key=lambda x: x['person_id'])
-            
-            # First regular (996) should have 'unknown' status
-            regular_no_attendance = regulars[0]
-            assert regular_no_attendance['person_id'] == 996
-            assert regular_no_attendance['attendance'] == 'unknown'
-            assert regular_no_attendance['is_regular'] is True
-            
-            # Second regular (997) should have 'maybe' status
-            regular_with_attendance = regulars[1]
-            assert regular_with_attendance['person_id'] == 997
-            assert regular_with_attendance['attendance'] == 'maybe'
-            assert regular_with_attendance['comment'] == 'Might attend'
-            assert regular_with_attendance['is_regular'] is True
-            
+            listed_ids = [a["person_id"] for a in data["data"]["attendees"]]
+
+            # The regular with attendance appears...
+            assert ids["regular_id"] in listed_ids
+            match = next(a for a in data["data"]["attendees"] if a["person_id"] == ids["regular_id"])
+            assert match["attendance"] == "maybe"
+            # ...the regular without an attendance record does not.
+            assert ids["second_id"] not in listed_ids
         finally:
-            # Cleanup - order matters for foreign key constraints
-            cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = 997")
-            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = 997")
-            cur.execute("DELETE FROM session_instance WHERE session_instance_id = 997") 
-            cur.execute("DELETE FROM session_person WHERE session_id = 997")
-            cur.execute("DELETE FROM person WHERE person_id IN (996, 997)")
-            cur.execute("DELETE FROM session WHERE session_id = 997")
-            conn.commit()
+            if ids is not None:
+                _cleanup(cur, ids)
+                conn.commit()
             cur.close()
             conn.close()

@@ -550,8 +550,10 @@ class TestEmailVerificationFlow:
         # Verify email
         response = client.get(f"/verify-email/{verification_token}")
 
-        assert response.status_code == 302  # Redirect to login
-        assert "/login" in response.headers["Location"]
+        # Verification now auto-logs the user in and forwards them to the
+        # (optional) password-setup page rather than back to the login form.
+        assert response.status_code == 302
+        assert "/auth/set-password" in response.headers["Location"]
 
         # Verify email_verified was set to True
         db_cursor.execute(

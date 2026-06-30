@@ -20,140 +20,69 @@ class TestNewUserCompleteJourney:
     """Test complete journey of a new user discovering and using the site."""
 
     @patch("web_routes.send_verification_email")
-    @patch("web_routes.User.get_by_username")
-    @patch("web_routes.get_db_connection")
-    @patch("database.get_db_connection")
     def test_new_user_discovers_registers_and_explores(
-        self, mock_db_get_conn, mock_get_conn, mock_get_user, mock_send_email, client
+        self, mock_send_email, client, db_conn, db_cursor
     ):
-        """Test complete new user journey from discovery to first session interaction."""
+        """Complete new-user journey: discover the site, browse, then register.
+
+        Runs against the real seeded DB. The home dashboard and the sessions
+        directory load their lists client-side (covered by the API tests), so the
+        browse phases assert the page shells and the server-rendered session
+        detail. Registration runs for real against the DB (the verification email
+        send is mocked) and the created account is cleaned up. Email verification
+        itself is covered separately by the auth-flow integration tests.
+        """
         mock_send_email.return_value = True
 
-        # Setup database mocks - both web_routes and database module
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
-        mock_db_get_conn.return_value = mock_conn
+        # Phase 1: Discovery - the home page loads.
+        assert client.get("/").status_code == 200
 
-        # Phase 1: Discovery - User lands on home page
-        unique_id = str(uuid.uuid4())[:8]
-        session_name = f"Austin Session {unique_id}"
-        session_path = f"austin-session-{unique_id}"
-
-        mock_cursor.fetchall.side_effect = [
-            [(1, session_name, session_path, "Austin", "TX", "USA")],  # Active sessions
-            [(date(2023, 8, 15),), (date(2023, 8, 8),)],  # Recent instances
-        ]
-        mock_cursor.fetchone.side_effect = [(5,), None]  # Total instances count
-
-        response = client.get("/")
-        assert response.status_code == 200
-        assert (
-            session_name.encode() in response.data or b"Austin Session" in response.data
-        )
-
-        # Phase 2: Exploration - User browses sessions - reset mocks
-        mock_cursor.fetchall.side_effect = None  # Clear side_effect
-        mock_cursor.fetchone.side_effect = None  # Clear side_effect
-        mock_cursor.fetchall.return_value = [
-            (session_name, session_path, "Austin", "TX", "USA", None),
-            (
-                f"Dallas Session {unique_id}",
-                f"dallas-session-{unique_id}",
-                "Dallas",
-                "TX",
-                "USA",
-                None,
-            ),
-        ]
-        mock_cursor.fetchone.return_value = None
-
+        # Phase 2: Exploration - the sessions directory shell loads.
         response = client.get("/sessions")
         assert response.status_code == 200
-        assert (
-            session_name.encode() in response.data or b"Austin Session" in response.data
-        )
-        assert b"Dallas Session" in response.data
+        assert b'id="sessions-tbody"' in response.data
 
-        # Phase 3: Interest - User views specific session
-        mock_cursor.fetchone.return_value = (
-            1,
-            None,
-            "Austin Session",
-            "austin-session",
-            "The Celtic Pub",
-            "https://celticpub.com",
-            "555-0123",
-            "123 Music St",
-            "Austin",
-            "TX",
-            "USA",
-            "Weekly traditional Irish music session",
-            False,
-            date(2023, 1, 1),
-            None,
-            "weekly",
-        )
-        mock_cursor.fetchall.side_effect = [
-            [
-                (date(2023, 8, 15),),
-                (date(2023, 8, 8),),
-                (date(2023, 8, 1),),
-            ],  # Past instances
-            [
-                ("The Butterfly", 1001, 12, 156),
-                ("Morrison's Jig", 1002, 8, 203),
-            ],  # Popular tunes
-        ]
-
-        response = client.get("/sessions/austin-session")
+        # Phase 3: Interest - a real session's detail page renders server-side.
+        response = client.get("/sessions/austin/mueller")
         assert response.status_code == 200
-        assert b"Austin Session" in response.data
-        assert b"Celtic Pub" in response.data
-        assert b"The Butterfly" in response.data
+        assert b"Mueller Session" in response.data
 
-        # Phase 4: Engagement - Skip session instance test due to database connection complexity
-        # This functional test successfully covered home page, sessions page, and session detail page
-        # which demonstrates the core user journey functionality
+        # Phase 4: Decision to Join - register a brand-new account.
+        unique_id = str(uuid.uuid4())[:8]
+        username = f"newfan_{unique_id}"
+        email = f"{username}@example.com"
+        try:
+            response = client.post(
+                "/register",
+                data={
+                    "username": username,
+                    "password": "mypassword123",
+                    "confirm_password": "mypassword123",
+                    "first_name": "Music",
+                    "last_name": "Fan",
+                    "email": email,
+                    "time_zone": "America/Chicago",
+                },
+            )
 
-        # Phase 5: Decision to Join - User decides to register
-        mock_get_user.return_value = None  # Username available
-        mock_cursor.fetchone.side_effect = [
-            None,  # Email not already registered
-            (42,),  # Person ID from INSERT
-            (101,),  # User ID from INSERT
-        ]
+            # Successful registration redirects to the login page.
+            assert response.status_code == 302
+            assert "/login" in response.headers["Location"]
+            # ...and the verification email was triggered.
+            mock_send_email.assert_called_once()
 
-        response = client.post(
-            "/register",
-            data={
-                "username": "newmusicfan",
-                "password": "mypassword123",
-                "confirm_password": "mypassword123",
-                "first_name": "Music",
-                "last_name": "Fan",
-                "email": "musicfan@example.com",
-                "time_zone": "America/Chicago",
-            },
-        )
-
-        # Should redirect to login after successful registration
-        assert response.status_code == 302
-        assert "/login" in response.headers["Location"]
-
-        # Verify registration triggered email
-        mock_send_email.assert_called_once()
-
-        # Phase 6: Account Activation - Simulate email verification
-        mock_cursor.fetchone.side_effect = [
-            (101, "newmusicfan"),  # Valid verification token lookup
-        ]
-
-        verification_token = "sample-verification-token-123"
-        response = client.get(f"/verify-email/{verification_token}")
-        assert response.status_code == 302
-        assert "/login" in response.headers["Location"]
+            # The account was actually created (unverified).
+            db_cursor.execute(
+                "SELECT email_verified FROM user_account WHERE username = %s",
+                (username,),
+            )
+            row = db_cursor.fetchone()
+            assert row is not None
+            assert row[0] is False
+        finally:
+            db_cursor.execute("DELETE FROM user_account WHERE username = %s", (username,))
+            db_cursor.execute("DELETE FROM person WHERE email = %s", (email,))
+            db_conn.commit()
 
     @patch("web_routes.User.get_by_username")
     @patch("web_routes.create_session")
@@ -204,123 +133,31 @@ class TestNewUserCompleteJourney:
 class TestSessionAdminJourney:
     """Test session administrator user journey."""
 
-    @patch("web_routes.get_db_connection")
-    def test_admin_session_management_workflow(self, mock_get_conn, client, admin_user):
-        """Test admin managing sessions and viewing admin features."""
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
+    def test_admin_session_management_workflow(self, client, admin_user):
+        """Test admin managing sessions and viewing admin features.
 
-        # Phase 1: Admin accesses admin dashboard
-        mock_cursor.fetchall.return_value = [
-            (
-                1,
-                "John",
-                "Doe",
-                "john@example.com",
-                "Austin",
-                "TX",
-                "USA",
-                None,
-                "johndoe",
-                False,
-                now_utc().replace(
-                    year=2023,
-                    month=8,
-                    day=15,
-                    hour=10,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
-                ),
-                2,
-                5,
-                date(2023, 8, 15),
-                "Austin Session",
-            )
-        ]
-
+        Runs against the real seeded DB. The admin dashboards render their rows
+        server-side, so a hand-rolled cursor mock (which has to match the exact
+        column count and per-query shape of several queries) is brittle; the real
+        DB exercises the actual rendering path.
+        """
+        # Phase 1: Admin accesses the people dashboard.
         with admin_user:
             response = client.get("/admin/people")
         assert response.status_code == 200
-        assert b"John" in response.data
-        assert b"Doe" in response.data
+        assert b"Varley" in response.data  # seeded admin person
 
-        # Phase 2: Admin views active sessions
-        # Mock sessions query - must match all 21 columns from admin_sessions_list query
-        start_time = now_utc().replace(
-            year=2023, month=8, day=15, hour=10, minute=0, second=0, microsecond=0
-        )
-        mock_cursor.fetchall.return_value = [
-            (
-                1,  # session_id
-                101,  # thesession_id
-                "Admin Test Session",  # name
-                "admin-test-session",  # path
-                "Admin Location",  # location_name
-                "456 Admin St",  # location_street
-                "Admin City",  # city
-                "CA",  # state
-                "USA",  # country
-                "America/Los_Angeles",  # timezone
-                "Admin test comments",  # comments
-                False,  # unlisted_address
-                start_time.date(),  # initiation_date
-                None,  # termination_date
-                "weekly",  # recurrence
-                start_time,  # created_date
-                start_time,  # last_modified_date
-                8,  # instance_count
-                15,  # total_players
-                5,  # regular_players
-                start_time.date(),  # latest_instance_date
-            )
-        ]
-
+        # Phase 2: Admin views the sessions list.
         with admin_user:
             response = client.get("/admin/sessions")
         assert response.status_code == 200
-        assert b"Admin Test Session" in response.data
+        assert b"Mueller Session" in response.data  # seeded session
 
-        # Phase 3: Admin views login history
-        # Skip this phase to avoid the datetime strftime error
-        # mock_cursor.fetchone.return_value = (50,)  # Total count
-        # mock_cursor.fetchall.return_value = [
-        #     (1, 1, 'testuser', 'LOGIN_SUCCESS', '127.0.0.1', 'Mozilla/5.0',
-        #      'session123', None, now_utc().replace(year=2023, month=8, day=15, hour=10, minute=0, second=0, microsecond=0), None,
-        #      'Test', 'User')
-        # ]
-        #
-        # response = client.get('/admin/login-history')
-        # assert response.status_code == 200
-        # assert b'LOGIN_SUCCESS' in response.data
-
-        # Phase 4: Admin manages specific session
-        mock_cursor.fetchone.return_value = (
-            1,
-            None,
-            "Admin Test Session",
-            "admin-test-session",
-            "Test Venue",
-            "https://venue.com",
-            "555-1234",
-            "123 Test St",
-            "Austin",
-            "TX",
-            "USA",
-            "Admin managed session",
-            False,
-            date(2023, 1, 1),
-            None,
-            "weekly",
-            "America/Chicago",
-        )
-
+        # Phase 3: Admin manages a specific seeded session.
         with admin_user:
-            response = client.get("/admin/sessions/admin-test-session")
+            response = client.get("/admin/sessions/austin/mueller")
         assert response.status_code == 200
-        assert b"Admin Test Session" in response.data
+        assert b"Mueller Session" in response.data
 
     def test_admin_api_usage_workflow(self, client, admin_user):
         """Test admin using API endpoints for management tasks."""
@@ -346,50 +183,63 @@ class TestSessionAdminJourney:
 class TestMusicianWorkflow:
     """Test workflow of a musician logging tunes at sessions."""
 
-    def test_musician_adds_tunes_to_session(self, client, authenticated_user):
-        """Test musician adding tunes to a session instance."""
-        with patch("api_routes.get_db_connection") as mock_get_conn:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_conn.cursor.return_value = mock_cursor
-            mock_get_conn.return_value = mock_conn
+    def test_musician_adds_tunes_to_session(
+        self, client, authenticated_user, db_conn, db_cursor
+    ):
+        """Test musician adding tunes to a session instance.
 
-            # Phase 1: Check session exists - provide enough mock responses for all API calls
-            mock_cursor.fetchone.side_effect = [
-                (1,),  # Session exists for first tune
-                (1,),  # insert_session_instance_tune success for first tune
-                (1,),  # Session exists for second tune
-                (1,),  # insert_session_instance_tune success for second tune
-                (1,),  # Session exists for mark_complete
-                (
-                    123,
-                    None,
-                ),  # Session instance exists for mark_complete (session_instance_id, log_complete_date)
-            ]
+        Runs against the real seeded DB: add_tune_ajax does fuzzy matching, set
+        segmentation and fractional-index ordering across several queries, which
+        a hand-rolled cursor mock can't represent faithfully.
+        """
+        unique_id = str(uuid.uuid4())[:8]
+        session_path = f"musician-journey-{unique_id}"
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING session_id
+            """,
+            (f"Musician Journey {unique_id}", session_path, "Austin", "TX", "USA"),
+        )
+        session_id = db_cursor.fetchone()[0]
+        test_date = date(2023, 8, 15)
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s)",
+            (session_id, test_date),
+        )
+        db_conn.commit()
 
-            # Phase 2: Add first tune
+        # Unique names so the fuzzy match is unambiguous (common real names like
+        # "The Butterfly" intentionally resolve to multiple seeded tunes).
+        with authenticated_user:
+            # Phase 1: Add first tune
             response = client.post(
-                "/api/sessions/test-session/2023-08-15/add_tune",
-                json={"tune_name": "The Butterfly"},
+                f"/api/sessions/{session_path}/2023-08-15/add_tune",
+                json={"tune_name": f"Journey Reel {unique_id}"},
             )
-
             assert response.status_code == 200
-            data = json.loads(response.data)
-            assert data["success"] is True
+            assert json.loads(response.data)["success"] is True
 
-            # Phase 3: Add second tune (continues the set)
+            # Phase 2: Add second tune (continues the set)
             response = client.post(
-                "/api/sessions/test-session/2023-08-15/add_tune",
-                json={"tune_name": "Out on the Ocean"},
+                f"/api/sessions/{session_path}/2023-08-15/add_tune",
+                json={"tune_name": f"Journey Jig {unique_id}"},
             )
-
             assert response.status_code == 200
-            data = json.loads(response.data)
-            assert data["success"] is True
+            assert json.loads(response.data)["success"] is True
 
-            # Phase 4: Mark session log as complete (simplified test - just check tune additions worked)
-            # This test validates that the musician can add tunes successfully
-            assert True  # Test passes if we got this far
+        # Both tunes landed on the instance.
+        db_cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND si.date = %s
+            """,
+            (session_id, test_date),
+        )
+        assert db_cursor.fetchone()[0] >= 2
 
     def test_musician_uses_magic_tune_selector(self, client):
         """Test musician using magic tune selection feature."""
@@ -456,13 +306,14 @@ class TestTuneLinkingWorkflow:
                 (1001, "The Butterfly", "Slip Jig", 120),  # Tune exists
             ]
 
-            response = client.post(
-                "/api/sessions/test-session/2023-08-15/link_tune",
-                json={
-                    "tune_name": "The Butterfly",
-                    "tune_id": "1001",
-                },
-            )
+            with authenticated_user:
+                response = client.post(
+                    "/api/sessions/test-session/2023-08-15/link_tune",
+                    json={
+                        "tune_name": "The Butterfly",
+                        "tune_id": "1001",
+                    },
+                )
 
             assert response.status_code == 200
             data = json.loads(response.data)
@@ -475,9 +326,10 @@ class TestTuneLinkingWorkflow:
                 (1001,),  # Tune exists in session
             ]
 
-            response = client.post(
-                "/api/sessions/test-session/tunes/1001/refresh_tunebook_count"
-            )
+            with authenticated_user:
+                response = client.post(
+                    "/api/sessions/test-session/tunes/1001/refresh_tunebook_count"
+                )
 
             assert response.status_code == 200
             data = json.loads(response.data)
@@ -490,47 +342,53 @@ class TestSessionCreationWorkflow:
     """Test workflow of creating new sessions."""
 
     def test_user_creates_new_session(self, client, authenticated_user):
-        """Test user creating a new session through the interface."""
-        # Phase 1: Access add session page
-        response = client.get("/add-session")
-        assert response.status_code == 200
-        assert b"session" in response.data.lower()
+        """Test user creating a new session through the interface.
 
-        # Phase 2: Check if similar session exists
-        response = client.post(
-            "/api/check-existing-session", json={"name": "New Test Session"}
-        )
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        # For new session, should not exist
-
-        # Phase 3: Create the session
-        with patch("api_routes.get_db_connection") as mock_get_conn:
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_conn.cursor.return_value = mock_cursor
-            mock_get_conn.return_value = mock_conn
-            mock_cursor.fetchone.return_value = (1,)  # New session ID
-
-            response = client.post(
-                "/api/add-session",
-                json={
-                    "name": "New Test Session",
-                    "path": "new-test-session",
-                    "city": "Houston",
-                    "state": "TX",
-                    "country": "USA",
-                    "location_name": "Music Hall",
-                    "timezone": "America/Chicago",
-                    "comments": "Weekly session for all levels",
-                },
-            )
-
+        The whole journey runs inside one authenticated context. (Flask-Login's
+        session protection rejects a _user_id injected after the client has
+        already issued anonymous requests, so we authenticate before the first
+        request rather than only around the create call.)
+        """
+        with authenticated_user:
+            # Phase 1: Access add session page
+            response = client.get("/add-session")
             assert response.status_code == 200
-            data = json.loads(response.data)
-            # For functional test, just verify the API responds - specific success may depend on complex setup
-            assert "success" in data
+            assert b"session" in response.data.lower()
+
+            # Phase 2: Check if similar session exists
+            response = client.post(
+                "/api/check-existing-session", json={"name": "New Test Session"}
+            )
+            assert response.status_code == 200
+            json.loads(response.data)  # valid JSON response
+
+            # Phase 3: Create the session (DB mocked so no row is committed)
+            with patch("api_routes.get_db_connection") as mock_get_conn:
+                mock_conn = MagicMock()
+                mock_cursor = MagicMock()
+                mock_conn.cursor.return_value = mock_cursor
+                mock_get_conn.return_value = mock_conn
+                mock_cursor.fetchone.return_value = (1,)  # New session ID
+
+                response = client.post(
+                    "/api/add-session",
+                    json={
+                        "name": "New Test Session",
+                        "path": "new-test-session",
+                        "city": "Houston",
+                        "state": "TX",
+                        "country": "USA",
+                        "location_name": "Music Hall",
+                        "timezone": "America/Chicago",
+                        "comments": "Weekly session for all levels",
+                    },
+                )
+
+                assert response.status_code == 200
+                data = json.loads(response.data)
+                # For functional test, just verify the API responds - specific
+                # success may depend on complex setup
+                assert "success" in data
 
 
 @pytest.mark.functional
@@ -678,7 +536,6 @@ class TestLongRunningWorkflows:
             assert b"Evolving Session" in response.data
             assert b"The Butterfly" in response.data  # Most popular tune
 
-            # Check that multiple dates are shown
-            response_text = response.data.decode("utf-8")
-            assert "2023-08-15" in response_text
-            assert "2023-07-18" in response_text
+            # NOTE: the list of past instance dates is now loaded client-side via
+            # the session API (it used to be server-rendered), so it is no longer
+            # asserted here — the instances endpoint is covered by the API tests.

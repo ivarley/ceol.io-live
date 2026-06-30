@@ -18,37 +18,39 @@ class TestHomeRoute:
     """Test the home page route."""
 
     @patch("web_routes.get_db_connection")
-    def test_home_success(self, mock_get_conn, client):
-        """Test successful home page load with active sessions."""
-        # Setup mock database response
+    def test_home_success(self, mock_get_conn, client, authenticated_user):
+        """The authenticated dashboard renders this week's upcoming sessions.
+
+        (The DB path only runs for logged-in users; anonymous visitors get a
+        static landing page.)
+        """
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Mock active sessions query
+        # Authed home issues three queries in order: learning counts (fetchall),
+        # suggested tune (fetchone), then upcoming sessions (fetchall).
         mock_cursor.fetchall.side_effect = [
-            [
-                (1, "Austin Session", "austin-session", "Austin", "TX", "USA")
-            ],  # Active sessions
-            [
-                (datetime(2023, 8, 15).date(),),
-                (datetime(2023, 8, 8).date(),),
-            ],  # Recent instances
+            [("learning", 3), ("want to learn", 2)],  # learning counts
+            [("Austin Session", "austin/session", 101,
+              datetime(2023, 8, 15).date(), None, None)],  # upcoming sessions
         ]
-        mock_cursor.fetchone.return_value = [5]  # Total instances count
+        mock_cursor.fetchone.return_value = (1, "Cooley's", "reel", 9)  # suggested tune
 
-        response = client.get("/")
+        with authenticated_user:
+            response = client.get("/")
 
         assert response.status_code == 200
         assert b"Austin Session" in response.data
 
     @patch("web_routes.get_db_connection")
-    def test_home_database_error(self, mock_get_conn, client):
-        """Test home page handles database connection errors."""
+    def test_home_database_error(self, mock_get_conn, client, authenticated_user):
+        """Home handles a database failure gracefully instead of 500ing."""
         mock_get_conn.side_effect = Exception("Database connection failed")
 
-        response = client.get("/")
+        with authenticated_user:
+            response = client.get("/")
 
         assert response.status_code == 200
         assert b"Database connection failed" in response.data
@@ -115,40 +117,29 @@ class TestMagicRoute:
 class TestSessionRoutes:
     """Test session-related routes."""
 
-    @patch("web_routes.get_db_connection")
-    def test_sessions_list(self, mock_get_conn, client):
-        """Test sessions list page."""
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
+    def test_sessions_list(self, client):
+        """The sessions directory renders its shell.
 
-        mock_cursor.fetchall.return_value = [
-            ("Test Session", "test-session", "Austin", "TX", "USA", None)
-        ]
-
+        Hits the real seeded DB. The session rows themselves are loaded
+        client-side from /api/sessions/with-today-status (covered by the API
+        integration tests), so only the page shell is asserted here.
+        """
         response = client.get("/sessions")
 
         assert response.status_code == 200
-        assert b"Test Session" in response.data
+        assert b"Sessions" in response.data
+        assert b'id="sessions-tbody"' in response.data
 
-    @patch("web_routes.get_db_connection")
-    def test_session_tunes_success(self, mock_get_conn, client):
-        """Test session tunes page for valid session."""
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
+    def test_session_tunes_success(self, client):
+        """A real session's detail page renders the session name server-side.
 
-        # Mock session info and tunes queries
-        mock_cursor.fetchone.return_value = (1, "Test Session")
-        mock_cursor.fetchall.return_value = [(1001, "Test Reel", "reel", 5, 42, None)]
-
-        response = client.get("/sessions/test-session/tunes")
+        Hits the real seeded DB (austin/mueller). The tune list loads via AJAX
+        (covered by the API tests), so only the server-rendered name is checked.
+        """
+        response = client.get("/sessions/austin/mueller/tunes")
 
         assert response.status_code == 200
-        assert b"Test Session" in response.data
-        assert b"Test Reel" in response.data
+        assert b"Mueller Session" in response.data
 
     @patch("web_routes.get_db_connection")
     def test_session_tunes_not_found(self, mock_get_conn, client):
@@ -320,7 +311,8 @@ class TestAuthenticationRoutes:
         )
 
         assert response.status_code == 302  # Redirect after login
-        mock_login_user.assert_called_once_with(user, remember=False)
+        # Login persists across browser/PWA restarts (remember=True).
+        mock_login_user.assert_called_once_with(user, remember=True)
 
     @patch("web_routes.User.get_by_username")
     def test_login_post_invalid_credentials(self, mock_get_user, client):
@@ -450,6 +442,7 @@ class TestAdminRoutes:
                 5,
                 datetime(2023, 8, 15).date(),
                 "Test Session",
+                7,  # tune_count
             )
         ]
 

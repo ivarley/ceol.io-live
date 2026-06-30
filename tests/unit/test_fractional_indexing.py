@@ -370,9 +370,13 @@ class TestRebalanceScenarios:
         after = "z"
         positions = []
 
-        # Insert 50 items, always inserting right after 'before' (before the last insert)
+        # Insert many items, always inserting right after 'before' (before the
+        # last insert). With a base-62 alphabet each character carries ~6 bits,
+        # so it takes ~160 repeated bisections of the same gap before a position
+        # first exceeds MAX_POSITION_LENGTH (32). Use a count comfortably past
+        # that so the "eventually exceeds" property is actually demonstrated.
         current_after = after
-        for _ in range(50):
+        for _ in range(250):
             new_pos = generate_position_between(before, current_after)
             positions.append(new_pos)
             # Next insert goes between 'before' and 'new_pos'
@@ -459,9 +463,15 @@ class TestRebalanceScenarios:
             current_pos = generate_append_position(current_pos)
             positions.append(current_pos)
 
-        # Even with 500 tunes, positions should stay manageable
+        # Append extends with the midpoint char (see generate_append_position),
+        # so each new character only buys ~31 appends before extending again;
+        # 500 appends lands around 17 chars. The invariant that matters is that
+        # append-only usage never reaches the rebalance threshold
+        # (MAX_POSITION_LENGTH), so it never triggers a rebalance.
         max_len = max(len(p) for p in positions)
-        assert max_len <= 10, f"Normal usage produced long positions: max {max_len}"
+        assert max_len <= self.MAX_POSITION_LENGTH, (
+            f"Normal usage produced long positions: max {max_len}"
+        )
 
         # Verify ordering
         assert positions == sorted(positions)

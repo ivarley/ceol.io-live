@@ -165,8 +165,8 @@ class TestPersonTuneStatusManagement:
         person_tune = PersonTune(person_tune_id=1, learn_status='want to learn')
         
         person_tune.set_learn_status('learning', user_id=1)
-        
-        mock_update.assert_called_once_with('test_user')
+
+        mock_update.assert_called_once_with(1)
 
 
 class TestPersonTuneHeardCount:
@@ -184,26 +184,32 @@ class TestPersonTuneHeardCount:
         assert result == 3
         assert person_tune.heard_count == 3
     
-    def test_increment_heard_count_invalid_status(self):
-        """Test incrementing heard count fails for non-'want to learn' status."""
-        person_tune = PersonTune(learn_status='learning')
-        
-        with pytest.raises(ValueError, match="Can only increment heard count for tunes with 'want to learn' status"):
-            person_tune.increment_heard_count()
-    
-    @patch('models.person_tune.PersonTune._update_in_database')
-    def test_increment_heard_count_updates_database_for_persisted_record(self, mock_update):
-        """Test that increment_heard_count calls database update for persisted records."""
+    def test_increment_heard_count_any_status(self):
+        """Heard count can be incremented regardless of learn status.
+
+        The old 'want to learn'-only restriction was intentionally removed when
+        swipe-to-increment/decrement was added (heard_count became a general
+        counter), so incrementing a 'learning' tune now succeeds.
+        """
+        person_tune = PersonTune(learn_status='learning', heard_count=2)
+
+        result = person_tune.increment_heard_count()
+
+        assert result == 3
+        assert person_tune.heard_count == 3
+
+    @patch('models.person_tune.PersonTune._increment_heard_count_in_database')
+    def test_increment_heard_count_updates_database_for_persisted_record(self, mock_increment):
+        """increment_heard_count delegates to the atomic DB method for persisted records."""
         person_tune = PersonTune(
             person_tune_id=1,
             learn_status='want to learn',
             heard_count=0
         )
-        
+
         person_tune.increment_heard_count(user_id=1)
-        
-        assert person_tune.heard_count == 1
-        mock_update.assert_called_once_with('test_user')
+
+        mock_increment.assert_called_once_with(1)
 
 
 class TestPersonTuneDatabaseOperations:
@@ -238,7 +244,9 @@ class TestPersonTuneDatabaseOperations:
         # Check INSERT call
         insert_call = mock_cursor.execute.call_args_list[1]
         assert "INSERT INTO person_tune" in insert_call[0][0]
-        assert insert_call[0][1] == (1, 100, 'learning', 0, None, None)
+        # params: person_id, tune_id, learn_status, heard_count, learned_date,
+        # notes, setting_id, name_alias, created_by_user_id
+        assert insert_call[0][1] == (1, 100, 'learning', 0, None, None, None, None, 1)
         
         # Verify result
         assert result is person_tune
@@ -267,7 +275,7 @@ class TestPersonTuneDatabaseOperations:
         
         # Verify database operations
         mock_save_history.assert_called_once_with(
-            mock_cursor, 'person_tune', 'UPDATE', 123, 'test_user'
+            mock_cursor, 'person_tune', 'UPDATE', 123, user_id=1
         )
         
         # Check UPDATE call
@@ -290,9 +298,9 @@ class TestPersonTuneDatabaseOperations:
         # Mock database response
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchone.return_value = (
-            123, 1, 100, 'learning', 2, None, 'Test notes', mock_date, mock_date
+            123, 1, 100, 'learning', 2, None, 'Test notes', None, None, mock_date, mock_date
         )
-        
+
         result = PersonTune.get_by_id(123)
         
         # Verify query
@@ -334,7 +342,7 @@ class TestPersonTuneDatabaseOperations:
         
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchone.return_value = (
-            123, 1, 100, 'want to learn', 0, None, None, mock_date, mock_date
+            123, 1, 100, 'want to learn', 0, None, None, None, None, mock_date, mock_date
         )
         
         result = PersonTune.get_by_person_and_tune(1, 100)
@@ -359,8 +367,8 @@ class TestPersonTuneDatabaseOperations:
         
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchall.return_value = [
-            (123, 1, 100, 'learning', 0, None, None, mock_date, mock_date),
-            (124, 1, 101, 'learning', 1, None, 'Notes', mock_date, mock_date)
+            (123, 1, 100, 'learning', 0, None, None, None, None, mock_date, mock_date),
+            (124, 1, 101, 'learning', 1, None, 'Notes', None, None, mock_date, mock_date)
         ]
         
         results = PersonTune.get_for_person(
@@ -400,7 +408,7 @@ class TestPersonTuneDatabaseOperations:
         
         # Verify database operations
         mock_save_history.assert_called_once_with(
-            mock_cursor, 'person_tune', 'DELETE', 123, 'test_user'
+            mock_cursor, 'person_tune', 'DELETE', 123, user_id=1
         )
         
         delete_calls = [call for call in mock_cursor.execute.call_args_list 
@@ -448,10 +456,12 @@ class TestPersonTuneUtilityMethods:
             'heard_count': 5,
             'learned_date': mock_date.isoformat(),
             'notes': 'Test notes',
+            'setting_id': None,
+            'name_alias': None,
             'created_date': mock_date.isoformat(),
             'last_modified_date': mock_date.isoformat()
         }
-        
+
         assert result == expected
     
     def test_to_dict_with_none_dates(self):
@@ -478,7 +488,8 @@ class TestPersonTuneUtilityMethods:
         
         expected = (
             "PersonTune(person_tune_id=123, person_id=1, tune_id=100, "
-            "learn_status='learning', heard_count=3)"
+            "learn_status='learning', heard_count=3, "
+            "setting_id=None, name_alias='None')"
         )
         assert result == expected
     

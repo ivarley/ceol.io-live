@@ -356,7 +356,12 @@ def admin_user(client, sample_user_data):
     admin_data = sample_user_data.copy()
     admin_data["is_system_admin"] = True
     admin_data["username"] = "admin"
-    admin_data["user_id"] = 2
+    # Must be a user_id that is actually a system admin in the seeded DB: many
+    # endpoints re-check admin status with a fresh `SELECT is_system_admin FROM
+    # user_account WHERE user_id = %s` rather than trusting the (mocked) session,
+    # so a fake id maps to a non-admin row and yields 403. user_id=1 is the
+    # seeded system admin (ian).
+    admin_data["user_id"] = 1
 
     class AuthenticatedAdminContext:
         def __init__(self, client, user_data):
@@ -401,7 +406,12 @@ def authenticated_admin_user(client, sample_user_data):
     admin_data = sample_user_data.copy()
     admin_data["is_system_admin"] = True
     admin_data["username"] = "admin"
-    admin_data["user_id"] = 2
+    # Must be a user_id that is actually a system admin in the seeded DB: many
+    # endpoints re-check admin status with a fresh `SELECT is_system_admin FROM
+    # user_account WHERE user_id = %s` rather than trusting the (mocked) session,
+    # so a fake id maps to a non-admin row and yields 403. user_id=1 is the
+    # seeded system admin (ian).
+    admin_data["user_id"] = 1
 
     class AuthenticatedAdminContext:
         def __init__(self, client, user_data):

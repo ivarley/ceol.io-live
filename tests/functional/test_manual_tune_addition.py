@@ -19,7 +19,7 @@ class TestManualTuneAdditionWorkflow:
         """Test complete workflow: search tune → select from results → add to collection."""
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
@@ -102,7 +102,7 @@ class TestManualTuneAdditionWorkflow:
             for status in statuses:
                 # Create a unique tune for each status
                 unique_id = str(uuid.uuid4())[:8]
-                tune_id = int(unique_id[:6], 16) % 100000 + 60000  # Different range
+                tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 60000  # Different range
 
                 db_cursor.execute("""
                     INSERT INTO tune (tune_id, name, tune_type)
@@ -130,7 +130,7 @@ class TestManualTuneAdditionWorkflow:
 
             # Create a test tune
             unique_id = str(uuid.uuid4())[:8]
-            tune_id = int(unique_id[:6], 16) % 100000 + 70000
+            tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 70000
 
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)
@@ -177,7 +177,7 @@ class TestManualAdditionValidation:
         with authenticated_user:
             # Create a test tune
             unique_id = str(uuid.uuid4())[:8]
-            tune_id = int(unique_id[:6], 16) % 100000 + 80000
+            tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 80000
 
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)
@@ -210,7 +210,7 @@ class TestManualAdditionValidation:
         with authenticated_user:
             # Create a test tune
             unique_id = str(uuid.uuid4())[:8]
-            tune_id = int(unique_id[:6], 16) % 100000 + 90000
+            tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 90000
 
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)
@@ -298,7 +298,7 @@ class TestSuccessRedirection:
 
             # Create a test tune
             unique_id = str(uuid.uuid4())[:8]
-            tune_id = int(unique_id[:6], 16) % 100000 + 95000
+            tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 95000
 
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)

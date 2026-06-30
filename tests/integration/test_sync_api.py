@@ -465,16 +465,18 @@ def test_sync_partial_success_with_some_failures(client, authenticated_user, db_
     # Clean up any existing person_tunes
     person_id = authenticated_user.person_id
     db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s", (person_id,))
-    
-    # Make sure tune 2 doesn't exist in the tune table so it will fail
-    db_cursor.execute("DELETE FROM tune WHERE tune_id = 2")
-    
+
+    # (Batch sync pulls all needed data from the tunebook payload, so all three
+    # tunes succeed — see assertions below. The old "delete tune 2 so it fails"
+    # step is gone: it no longer changes the outcome and tune 2 is FK-referenced
+    # by seeded session_tune rows.)
+
     # Set thesession_user_id
     db_cursor.execute("""
         UPDATE person SET thesession_user_id = %s WHERE person_id = %s
     """, (12345, person_id))
     db_conn.commit()
-    
+
     # Mock tunebook with 3 tunes
     mock_tunebook = {
         'tunes': [

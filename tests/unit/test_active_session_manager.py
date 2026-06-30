@@ -73,9 +73,14 @@ class TestUpdateActiveSessions:
 
         # Run the check at 6:59pm Thursday (look ahead will see 7:00pm in window)
         with patch('active_session_manager.datetime') as mock_dt:
-            # Simulate running at 18:59 (6:59pm) on Thursday, March 14, 2024
+            # Simulate running at 18:59 (6:59pm) on Thursday, March 14, 2024.
+            # The code calls datetime.now(tz) and datetime.combine(date, time),
+            # so wire now() to the simulated instant and delegate combine to the
+            # real implementation — a blanket MagicMock would make combine return
+            # a MagicMock and break the active-window comparison.
             thursday_659pm = datetime(2024, 3, 14, 18, 59, 0, tzinfo=ZoneInfo('America/Chicago'))
-            mock_dt.utcnow.return_value = thursday_659pm.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
+            mock_dt.now.return_value = thursday_659pm.astimezone(ZoneInfo('UTC'))
+            mock_dt.combine.side_effect = datetime.combine
 
             stats = update_active_sessions()
 
@@ -244,9 +249,12 @@ class TestUpdatePersonActiveInstance:
         mock_cur.fetchone.side_effect = [
             (True,),  # instance 101 is active
         ]
+        # The code delegates ordering to SQL (ORDER BY si.date, si.start_time,
+        # ...) and takes the first row, so the mock must return rows in that
+        # order: the earlier start (101 @ 19:00) comes before 102 @ 19:30.
         mock_cur.fetchall.return_value = [
-            (102, date(2024, 3, 14), time(19, 30), datetime(2024, 3, 14, 19, 35)),  # Later start
             (101, date(2024, 3, 14), time(19, 0), datetime(2024, 3, 14, 19, 30)),   # Earlier start
+            (102, date(2024, 3, 14), time(19, 30), datetime(2024, 3, 14, 19, 35)),  # Later start
         ]
 
         update_person_active_instance(10, 101)
@@ -353,8 +361,9 @@ class TestGetPersonActiveSession:
             date(2024, 3, 14),
             time(19, 0),
             time(22, 30),
-            "Test Session",
-            "test"
+            None,  # location_override
+            "Test Session",  # session name
+            "test"  # session path
         )
 
         result = get_person_active_session(10)

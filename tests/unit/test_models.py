@@ -76,6 +76,17 @@ class TestUser:
             sample_user_data["email"],
             sample_user_data["auto_save_tunes"],
             sample_user_data.get("auto_save_interval", 60),
+            # Active-session join columns (None: user has no active session) +
+            # beta_live_logging — see User.get_by_id's SELECT.
+            None,  # at_active_session_instance_id
+            None,  # session_id
+            None,  # date
+            None,  # start_time
+            None,  # end_time
+            None,  # location_override
+            None,  # session name
+            None,  # session path
+            False,  # beta_live_logging
         )
         mock_cursor.fetchone.return_value = user_tuple
 
@@ -316,7 +327,8 @@ class TestDatabaseUtilities:
         assert cursor.execute.call_count == 1
         call_args = cursor.execute.call_args[0]
         assert "session_tune" in call_args[0]
-        assert "LOWER(alias) = LOWER(%s)" in call_args[0]
+        # Alias matching is case- and accent-insensitive (LOWER(unaccent(...))).
+        assert "LOWER(unaccent(" in call_args[0]
 
     def test_find_matching_tune_multiple_aliases_error(self, mock_db_connection):
         """Test error handling for multiple alias matches."""
@@ -361,12 +373,9 @@ class TestDatabaseUtilities:
         assert final_name == "The Big Reel"
         assert error is None
 
-        # Should have tried flexible "The" matching
+        # Should have tried flexible "The" matching (now via tune_search_key).
         call_args = cursor.execute.call_args[0]
-        assert (
-            "LOWER('The ' || %s)" in call_args[0]
-            or "LOWER(name) = LOWER('The ' || %s)" in call_args[0]
-        )
+        assert "'The ' || %s" in call_args[0]
 
     def test_find_matching_tune_no_match(self, mock_db_connection):
         """Test when no tune matches are found."""

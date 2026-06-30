@@ -5,6 +5,8 @@ Tests the full permission model for attendance visibility and management.
 
 import pytest
 import json
+import uuid
+from datetime import date
 from flask import url_for
 
 
@@ -23,16 +25,40 @@ class TestAttendancePermissions:
         assert data['success'] is False
         assert 'error' in data
 
-    def test_logged_in_non_attendee_cannot_see_attendance(self, client, authenticated_user, session_instance_user_not_associated):
-        """Test that logged-in users who aren't associated with session cannot see attendance"""
-        session_instance_id = session_instance_user_not_associated['session_instance_id']
-        
-        with authenticated_user:
-            response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
-        
-        assert response.status_code == 404  # Session instance doesn't exist
-        data = json.loads(response.data)
-        assert data['success'] is False
+    def test_logged_in_non_attendee_cannot_see_attendance(self, client, authenticated_regular_user, db_conn, db_cursor):
+        """A logged-in non-admin who isn't a regular/admin/attendee of the
+        instance's session is forbidden (403) from viewing its attendance.
+
+        Uses a freshly-created session the user has no relationship to.
+        (authenticated_regular_user is a non-system-admin and only a regular of
+        the *sample* session, not this one.) The previous version of this test
+        pointed at a hard-coded id that happened not to exist, so it only ever
+        exercised the 404 path and never the permission check it claims to test.
+        """
+        unique = str(uuid.uuid4())[:8]
+        db_cursor.execute(
+            "INSERT INTO session (name, path) VALUES (%s, %s) RETURNING session_id",
+            (f"Unrelated Session {unique}", f"unrelated-{unique}"),
+        )
+        session_id = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+            (session_id, date(2023, 9, 1)),
+        )
+        instance_id = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        try:
+            with authenticated_regular_user:
+                response = client.get(f'/api/session_instance/{instance_id}/attendees')
+
+            assert response.status_code == 403
+            data = json.loads(response.data)
+            assert data['success'] is False
+        finally:
+            db_cursor.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (instance_id,))
+            db_cursor.execute("DELETE FROM session WHERE session_id = %s", (session_id,))
+            db_conn.commit()
 
     def test_session_regular_can_see_attendance(self, client, authenticated_regular_user, sample_session_instance_data):
         """Test that regular attendees can view attendance for their sessions"""

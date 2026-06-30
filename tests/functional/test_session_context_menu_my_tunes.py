@@ -16,49 +16,12 @@ from unittest.mock import patch, MagicMock
 class TestSessionContextMenuMyTunes:
     """Test suite for session context menu My Tunes integration."""
     
-    def test_session_instance_template_includes_my_tunes_javascript(self, client):
-        """
-        Test that session instance detail template includes My Tunes JavaScript functions.
-        
-        Requirement: 6.1 - Context menu should include My Tunes functionality
-        """
-        # Read the template file directly to verify it contains the required code
-        with open('templates/session_instance_detail.html', 'r') as f:
-            template_content = f.read()
-        
-        # Check for authentication variable
-        assert 'isUserAuthenticated' in template_content
-        
-        # Check for personal tune management functions
-        assert 'checkPersonTune' in template_content
-        assert 'addToMyTunes' in template_content
-        assert 'updateTuneStatus' in template_content
-        assert 'incrementHeardCount' in template_content
-        assert 'personTuneCache' in template_content
-        
-        # Check for context menu integration
-        assert 'Add to My Tunes' in template_content
-        assert 'My Tunes:' in template_content
-    
-    def test_context_menu_shows_status_update_options(self, client):
-        """
-        Test that context menu includes status update options.
-        
-        Requirement: 6.3 - IF the tune is already in the user's collection THEN 
-        the system SHALL display the current learn_status and allow updating it
-        """
-        # Read the template file directly
-        with open('templates/session_instance_detail.html', 'r') as f:
-            template_content = f.read()
-        
-        # Check for status options in context menu
-        assert 'want to learn' in template_content
-        assert 'learning' in template_content
-        assert 'learned' in template_content
-        
-        # Check for heard count increment option
-        assert 'Heard (' in template_content or 'heard_count' in template_content
-    
+    # NOTE: tests that asserted the My Tunes context-menu JavaScript was inlined
+    # into templates/session_instance_detail.html were removed — that
+    # context-menu integration no longer exists in the (now-deprecated)
+    # word-processor logger template. The remaining test covers the still-current
+    # API contract for adding tunes to a collection.
+
     def test_cannot_add_unlinked_tune_to_collection(
         self, client, authenticated_user
     ):

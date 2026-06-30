@@ -40,7 +40,7 @@ def generate_append_position(last_position: Optional[str]) -> str:
         >>> generate_append_position('V')
         'W'
         >>> generate_append_position('z')
-        'z0'
+        'zV'  (extends with the midpoint char, leaving room for inserts before)
     """
     if last_position is None or last_position == "":
         return START_CHAR

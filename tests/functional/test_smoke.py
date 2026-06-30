@@ -248,86 +248,26 @@ class TestLoginLogoutJourney:
 class TestSessionBrowsingJourney:
     """Test browsing sessions and viewing session details."""
 
-    @patch("web_routes.get_db_connection")
-    @patch("database.get_db_connection")
-    def test_browse_sessions_workflow(self, mock_get_db_conn, mock_get_conn, client):
-        """Test browsing sessions from home to session details."""
-        unique_id = str(uuid.uuid4())[:8]
-        session_name = f"Smoke Test Session {unique_id}"
-        session_path = f"smoke-test-{unique_id}"
+    def test_browse_sessions_workflow(self, client):
+        """Browse from home to the sessions directory to a session detail page.
 
-        # Mock database responses
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
-        mock_get_db_conn.return_value = mock_conn
+        Runs against the real seeded DB. The home dashboard and the sessions
+        directory load their lists client-side (covered by the API tests), so
+        the journey asserts the page shells here and the server-rendered session
+        name on the detail page.
+        """
+        # Step 1: Home page loads.
+        assert client.get("/").status_code == 200
 
-        # Step 1: Home page shows active sessions
-        mock_cursor.fetchall.side_effect = [
-            [(1, session_name, session_path, "Austin", "TX", "USA")],  # Active sessions
-            [(date(2023, 8, 15),), (date(2023, 8, 8),)],  # Recent instances
-            [],  # Additional empty result for other queries
-        ]
-        mock_cursor.fetchone.side_effect = [
-            (3,),  # Total instances count
-            None,  # End of queries
-        ]
-
-        response = client.get("/")
-        assert response.status_code == 200
-        # Check for any session name (might be truncated in display)
-        assert (
-            session_name.encode() in response.data
-            or b"Smoke Test Session" in response.data
-        )
-
-        # Step 2: Click through to sessions list - reset mock for new request
-        mock_cursor.fetchall.side_effect = None  # Clear side_effect
-        mock_cursor.fetchall.return_value = [
-            (session_name, session_path, "Austin", "TX", "USA", None)
-        ]
-        mock_cursor.fetchone.side_effect = None  # Clear side_effect
-        mock_cursor.fetchone.return_value = None
-
+        # Step 2: Sessions directory shell loads (rows load via the sessions API).
         response = client.get("/sessions")
         assert response.status_code == 200
-        assert (
-            session_name.encode() in response.data
-            or b"Smoke Test Session" in response.data
-        )
+        assert b'id="sessions-tbody"' in response.data
 
-        # Step 3: View specific session details - reset mock for new request
-        mock_cursor.fetchone.side_effect = None  # Clear side_effect
-        mock_cursor.fetchone.return_value = (
-            1,
-            None,
-            session_name,
-            session_path,
-            "Test Venue",
-            "https://testvenue.com",
-            "555-1234",
-            "123 Main St",
-            "Austin",
-            "TX",
-            "USA",
-            "Test session comments",
-            False,
-            date(2023, 1, 1),
-            None,
-            "weekly",
-        )
-        mock_cursor.fetchall.side_effect = [
-            [(date(2023, 8, 15),), (date(2023, 8, 8),)],  # Past instances
-            [(f"Test Reel {unique_id}", 1001, 5, 42)],  # Popular tunes
-        ]
-
-        response = client.get(f"/sessions/{session_path}")
+        # Step 3: A real session's detail page renders its name + location.
+        response = client.get("/sessions/austin/mueller")
         assert response.status_code == 200
-        assert (
-            session_name.encode() in response.data
-            or b"Smoke Test Session" in response.data
-        )
+        assert b"Mueller Session" in response.data
         assert b"Austin" in response.data
 
     @patch("web_routes.get_db_connection")
@@ -347,41 +287,17 @@ class TestSessionBrowsingJourney:
 class TestSessionInstanceJourney:
     """Test viewing and interacting with session instances."""
 
-    @patch("web_routes.get_db_connection")
-    def test_view_session_instance_details(self, mock_get_conn, client):
-        """Test viewing session instance with tunes."""
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_get_conn.return_value = mock_conn
+    def test_view_session_instance_details(self, client):
+        """A real session-instance URL resolves without error.
 
-        # Mock session instance data
-        mock_cursor.fetchone.return_value = (
-            "Test Session Instance",
-            date(2023, 8, 15),
-            "Great session!",
-            123,
-            False,
-            None,
-            "Default Location",
-            None,
-            1,
-        )
-
-        # Mock tunes data
-        mock_cursor.fetchall.return_value = [
-            (1, False, 1001, "First Reel", None, "Reel"),
-            (2, True, 1002, "Second Reel", None, "Reel"),
-            (3, False, 1003, "Test Jig", None, "Jig"),
-        ]
-
-        response = client.get("/sessions/test-session/2023-08-15")
-        assert response.status_code == 200
-        assert b"Test Session Instance" in response.data
-        assert b"Great session!" in response.data
-        assert b"First Reel" in response.data
-        assert b"Second Reel" in response.data
-        assert b"Test Jig" in response.data
+        The per-instance logging screen loads its tune list via AJAX (and beta
+        users are forwarded to the live screen), so this smoke check verifies the
+        route resolves — 200 or a redirect — rather than asserting rendered tune
+        content. austin/mueller has a seeded instance on 2024-09-03.
+        """
+        response = client.get("/sessions/austin/mueller/2024-09-03")
+        assert response.status_code in (200, 302)
+        assert b"Traceback (most recent call last)" not in response.data
 
     @patch("web_routes.get_db_connection")
     def test_session_instance_not_found(self, mock_get_conn, client):

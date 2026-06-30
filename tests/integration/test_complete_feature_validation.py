@@ -64,7 +64,7 @@ class TestRequirement1_LearningProgressTracking:
             
             # Update status
             response = client.put(
-                f'/api/my-tunes/{person_tune_id}/status',
+                f'/api/my-tunes/{person_tune_id}',
                 json={'learn_status': 'learned'}
             )
             assert response.status_code == 200
@@ -429,7 +429,7 @@ class TestRequirement7_Security:
         with authenticated_user:
             # Try to modify non-existent tune (simulates other user's tune)
             response = client.put(
-                '/api/my-tunes/999999/status',
+                '/api/my-tunes/999999',
                 json={'learn_status': 'learned'}
             )
             assert response.status_code in [403, 404]
@@ -484,14 +484,14 @@ class TestCompleteWorkflows:
             
             # Step 3: Start learning
             response = client.put(
-                f'/api/my-tunes/{person_tune_id}/status',
+                f'/api/my-tunes/{person_tune_id}',
                 json={'learn_status': 'learning'}
             )
             assert response.status_code == 200
             
             # Step 4: Mark as learned
             response = client.put(
-                f'/api/my-tunes/{person_tune_id}/status',
+                f'/api/my-tunes/{person_tune_id}',
                 json={'learn_status': 'learned'}
             )
             assert response.status_code == 200

@@ -119,7 +119,7 @@ class TestHistoryTracking:
         db_conn.commit()
 
         # Save to history before update
-        save_to_history(db_cursor, "session", "UPDATE", session_id, "test_user")
+        save_to_history(db_cursor, "session", "UPDATE", session_id, 1)
 
         # Update session
         db_cursor.execute(
@@ -177,7 +177,7 @@ class TestHistoryTracking:
         db_conn.commit()
 
         # Save to history before update
-        save_to_history(db_cursor, "user_account", "UPDATE", user_id, "admin_user")
+        save_to_history(db_cursor, "user_account", "UPDATE", user_id, 1)
 
         # Update user
         db_cursor.execute(
@@ -245,7 +245,7 @@ class TestHistoryTracking:
                     raise
 
         # Save to history before update
-        save_to_history(db_cursor, "tune", "UPDATE", tune_id, "tune_admin")
+        save_to_history(db_cursor, "tune", "UPDATE", tune_id, 1)
 
         # Update tune
         db_cursor.execute(
@@ -296,7 +296,7 @@ class TestTuneMatching:
         )
         session_id = db_cursor.fetchone()[0]
 
-        tune_id = int(unique_id[:6], 16) % 100000 + 11000  # Generate unique tune ID
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 11000  # Generate unique tune ID
         db_cursor.execute(
             """
             INSERT INTO tune (tune_id, name, tune_type)
@@ -340,7 +340,7 @@ class TestTuneMatching:
         session_id = db_cursor.fetchone()[0]
 
         # Create tune with "The" prefix and unique ID
-        tune_id = int(unique_id[:6], 16) % 100000 + 12000  # Generate unique tune ID
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 12000  # Generate unique tune ID
         db_cursor.execute(
             """
             INSERT INTO tune (tune_id, name, tune_type)
@@ -385,7 +385,7 @@ class TestTuneMatching:
         )
         session_id = db_cursor.fetchone()[0]
 
-        tune_id = int(unique_id[:6], 16) % 100000 + 10000  # Generate unique tune ID
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 10000  # Generate unique tune ID
         db_cursor.execute(
             """
             INSERT INTO tune (tune_id, name, tune_type)
@@ -435,7 +435,7 @@ class TestTuneMatching:
         session_id = db_cursor.fetchone()[0]
 
         # Create multiple tunes with same alias but unique IDs
-        tune_id_base = int(unique_id[:6], 16) % 100000 + 13000  # Generate unique base
+        tune_id_base = 900000000 + int(unique_id[:6], 16) % 100000 + 13000  # Generate unique base
         tune_ids = [tune_id_base, tune_id_base + 1]
         alias_name = f"Duplicate Alias {unique_id}"
         for i, tune_id in enumerate(tune_ids):
@@ -505,7 +505,7 @@ class TestTuneMatching:
         )
         session_id = db_cursor.fetchone()[0]
 
-        tune_id = int(unique_id[:6], 16) % 100000 + 14000  # Generate unique tune ID
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 14000  # Generate unique tune ID
         tune_name = f"O'Brien's Reel {unique_id}"
         db_cursor.execute(
             """
@@ -569,7 +569,7 @@ class TestComplexQueries:
             instance_ids.append(db_cursor.fetchone()[0])
 
         # Create tunes with unique IDs
-        tune_id_base = int(unique_id[:6], 16) % 100000 + 15000
+        tune_id_base = 900000000 + int(unique_id[:6], 16) % 100000 + 15000
         tune_data = [
             (tune_id_base, f"Complex Query Reel 1 {unique_id}", "Reel"),
             (tune_id_base + 1, f"Complex Query Jig 1 {unique_id}", "Jig"),
@@ -926,22 +926,24 @@ class TestInsertSessionInstanceTuneFunction:
         # Create test session and instance
         unique_id = str(uuid.uuid4())[:8]
         db_cursor.execute("""
-            INSERT INTO session (name, path, day_of_week, time_of_day, city, state, country)
-            VALUES (%s, %s, 'monday', '20:00', 'Test City', 'Test State', 'Test Country')
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, 'Test City', 'Test State', 'Test Country')
             RETURNING session_id
         """, (f"Test Session {unique_id}", f"test-session-{unique_id}"))
         session_id = db_cursor.fetchone()[0]
 
+        instance_date = date.today()
         db_cursor.execute("""
             INSERT INTO session_instance (session_id, date)
-            VALUES (%s, CURRENT_DATE)
+            VALUES (%s, %s)
             RETURNING session_instance_id
-        """, (session_id,))
+        """, (session_id, instance_date))
         instance_id = db_cursor.fetchone()[0]
 
-        # Insert a tune using the Python function
+        # Insert a tune using the Python function (date is a real date value,
+        # matched against session_instance.date with a bound parameter).
         tune_id = insert_session_instance_tune(
-            db_cursor, session_id, "CURRENT_DATE", None, None, f"Test Tune {unique_id}", True
+            db_cursor, session_id, instance_date, None, None, f"Test Tune {unique_id}", True
         )
 
         # Verify order_position was set
@@ -966,24 +968,25 @@ class TestInsertSessionInstanceTuneFunction:
         # Create test session and instance
         unique_id = str(uuid.uuid4())[:8]
         db_cursor.execute("""
-            INSERT INTO session (name, path, day_of_week, time_of_day, city, state, country)
-            VALUES (%s, %s, 'monday', '20:00', 'Test City', 'Test State', 'Test Country')
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, 'Test City', 'Test State', 'Test Country')
             RETURNING session_id
         """, (f"Test Session {unique_id}", f"test-session-{unique_id}"))
         session_id = db_cursor.fetchone()[0]
 
+        instance_date = date.today()
         db_cursor.execute("""
             INSERT INTO session_instance (session_id, date)
-            VALUES (%s, CURRENT_DATE)
+            VALUES (%s, %s)
             RETURNING session_instance_id
-        """, (session_id,))
+        """, (session_id, instance_date))
         instance_id = db_cursor.fetchone()[0]
 
         # Insert multiple tunes
         tune_ids = []
         for i in range(5):
             tune_id = insert_session_instance_tune(
-                db_cursor, session_id, "CURRENT_DATE", None, None, f"Test Tune {i} {unique_id}", i == 0
+                db_cursor, session_id, instance_date, None, None, f"Test Tune {i} {unique_id}", i == 0
             )
             tune_ids.append(tune_id)
 

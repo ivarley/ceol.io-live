@@ -48,8 +48,8 @@ class TestPersonTuneAPI:
 
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
-        tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
-        tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
+        tune_id_1 = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
+        tune_id_2 = 900000000 + int(unique_id[2:8], 16) % 100000 + 50000
 
         # Ensure person exists
         person_id = 2  # Match authenticated_user fixture
@@ -100,8 +100,8 @@ class TestPersonTuneAPI:
 
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
-        tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
-        tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
+        tune_id_1 = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
+        tune_id_2 = 900000000 + int(unique_id[2:8], 16) % 100000 + 50000
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
@@ -147,8 +147,8 @@ class TestPersonTuneAPI:
 
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
-        tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
-        tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
+        tune_id_1 = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
+        tune_id_2 = 900000000 + int(unique_id[2:8], 16) % 100000 + 50000
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
@@ -189,8 +189,8 @@ class TestPersonTuneAPI:
         """Test searching tunes by name."""
         # Create test tunes
         unique_id = str(uuid.uuid4())[:8]
-        tune_id_1 = int(unique_id[:6], 16) % 100000 + 50000
-        tune_id_2 = int(unique_id[2:8], 16) % 100000 + 50000
+        tune_id_1 = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
+        tune_id_2 = 900000000 + int(unique_id[2:8], 16) % 100000 + 50000
 
         person_id = 2  # Match authenticated_user fixture
         # Ensure person exists
@@ -242,7 +242,7 @@ class TestPersonTuneAPI:
         
         # Create 5 tunes
         for i in range(5):
-            tune_id = int(unique_id[:6], 16) % 100000 + 50000 + i
+            tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000 + i
             db_cursor.execute("""
                 INSERT INTO tune (tune_id, name, tune_type)
                 VALUES (%s, %s, %s)
@@ -282,7 +282,7 @@ class TestPersonTuneAPI:
         """Test successfully adding a tune to collection."""
         # Create test tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached)
@@ -331,7 +331,7 @@ class TestPersonTuneAPI:
         """Test adding a tune that's already in collection."""
         # Create test tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
         
         # Ensure person exists
@@ -365,7 +365,7 @@ class TestPersonTuneAPI:
 
     def test_update_tune_status_requires_authentication(self, client):
         """Test that PUT /api/my-tunes/<id>/status requires authentication."""
-        response = client.put("/api/my-tunes/1/status", json={"learn_status": "learning"})
+        response = client.put("/api/my-tunes/1", json={"learn_status": "learning"})
         
         assert response.status_code == 401
         data = json.loads(response.data)
@@ -375,7 +375,7 @@ class TestPersonTuneAPI:
         """Test successfully updating tune learning status."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
@@ -393,7 +393,7 @@ class TestPersonTuneAPI:
         db_conn.commit()
         
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}/status", json={
+            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
                 "learn_status": "learning"
             })
         
@@ -406,7 +406,7 @@ class TestPersonTuneAPI:
         """Test that updating status to 'learned' sets learned_date."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
@@ -424,7 +424,7 @@ class TestPersonTuneAPI:
         db_conn.commit()
         
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}/status", json={
+            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
                 "learn_status": "learned"
             })
         
@@ -438,7 +438,7 @@ class TestPersonTuneAPI:
         """Test that users cannot update other users' tunes."""
         # Create another user's tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999  # Different from authenticated user's person_id
         
         # Create the other person
@@ -463,7 +463,7 @@ class TestPersonTuneAPI:
         db_conn.commit()
         
         with authenticated_user:
-            response = client.put(f"/api/my-tunes/{person_tune_id}/status", json={
+            response = client.put(f"/api/my-tunes/{person_tune_id}", json={
                 "learn_status": "learning"
             })
         
@@ -483,7 +483,7 @@ class TestPersonTuneAPI:
         """Test successfully incrementing heard count."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
@@ -509,19 +509,24 @@ class TestPersonTuneAPI:
         assert data["heard_count"] == 3
         assert data["person_tune"]["heard_count"] == 3
 
-    def test_increment_heard_count_only_for_want_to_learn(self, client, authenticated_user, db_conn, db_cursor):
-        """Test that heard count can only be incremented for 'want to learn' status."""
+    def test_increment_heard_count_any_status(self, client, authenticated_user, db_conn, db_cursor):
+        """Heard count can be incremented regardless of learn status.
+
+        The old 'want to learn'-only restriction was removed when
+        swipe-to-increment was added, so incrementing a 'learning' tune now
+        succeeds and bumps the counter.
+        """
         # Create test tune with 'learning' status
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
-        
+
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)
             VALUES (%s, %s, %s)
             ON CONFLICT (tune_id) DO NOTHING
         """, (tune_id, f"Learning Status Tune {unique_id}", "Reel"))
-        
+
         db_cursor.execute("""
             INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count)
             VALUES (%s, %s, %s, %s)
@@ -529,20 +534,20 @@ class TestPersonTuneAPI:
         """, (person_id, tune_id, 'learning', 0))
         person_tune_id = db_cursor.fetchone()[0]
         db_conn.commit()
-        
+
         with authenticated_user:
             response = client.post(f"/api/my-tunes/{person_tune_id}/heard")
-        
-        assert response.status_code == 422  # Unprocessable Entity
+
+        assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["success"] is False
-        assert "want to learn" in data["error"].lower()
+        assert data["success"] is True
+        assert data["heard_count"] == 1
 
     def test_increment_heard_count_unauthorized(self, client, authenticated_user, db_conn, db_cursor):
         """Test that users cannot increment heard count for other users' tunes."""
         # Create another user's tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999
         
         # Create the other person
@@ -586,7 +591,7 @@ class TestPersonTuneAPI:
         """Test successfully getting tune detail."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture
         
         db_cursor.execute("""
@@ -645,7 +650,7 @@ class TestPersonTuneAPI:
         """, (non_admin_person_id, "NonAdmin", "User", f"nonadmin{unique_id}@example.com"))
         
         # Create another user's tune
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         other_person_id = 999
         
         # Create the other person
@@ -698,7 +703,7 @@ class TestPersonTuneAPI:
         """Test that tune detail includes session play count."""
         # Create test tune and person_tune
         unique_id = str(uuid.uuid4())[:8]
-        tune_id = int(unique_id[:6], 16) % 100000 + 50000
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
         person_id = 2  # Match authenticated_user fixture person_id
         session_id = int(unique_id[2:6], 16) % 10000 + 1000
         
@@ -723,6 +728,14 @@ class TestPersonTuneAPI:
             RETURNING session_instance_id
         """, (session_id,))
         session_instance_id = db_cursor.fetchone()[0]
+
+        # session_play_count counts instances the person *attended*
+        # (session_instance_person), not just sessions they belong to.
+        db_cursor.execute("""
+            INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+            VALUES (%s, %s, 'yes')
+            ON CONFLICT (session_instance_id, person_id) DO NOTHING
+        """, (session_instance_id, person_id))
         
         db_cursor.execute("""
             INSERT INTO tune (tune_id, name, tune_type)

@@ -5,6 +5,8 @@ Tests the automatic creation/deletion of session_person records using existing t
 
 import pytest
 import json
+import uuid
+from datetime import date
 
 
 class TestSessionPersonManagement:
@@ -134,8 +136,14 @@ class TestSessionPersonManagement:
             cur.close()
             conn.close()
 
-    def test_removing_last_attendee_deletes_session_person_record(self, client, authenticated_admin_user, sample_session_instance_data):
-        """Test that removing the last attendance record deletes the session_person record"""
+    def test_removing_attendance_keeps_session_person_record(self, client, authenticated_admin_user, sample_session_instance_data):
+        """Removing an attendance record removes the attendance, but keeps membership.
+
+        Session membership (session_person) is intentionally NOT deleted when the
+        last attendance is removed — that auto-deletion was removed in commit
+        "Fixing remove" (fbdcfe6). Removing attendance only clears the
+        session_instance_person row.
+        """
         session_instance_id = sample_session_instance_data['session_instance_id']
         person_id = authenticated_admin_user.person_id
         
@@ -190,106 +198,111 @@ class TestSessionPersonManagement:
             )
             assert response.status_code == 200
             
-            # Verify session_person record was deleted
+            # The attendance record is gone...
             cur.execute("""
-                SELECT COUNT(*) FROM session_person 
+                SELECT COUNT(*) FROM session_instance_person
+                WHERE session_instance_id = %s AND person_id = %s
+            """, (session_instance_id, person_id))
+            assert cur.fetchone()[0] == 0, "Attendance record should be removed"
+
+            # ...but the session membership persists.
+            cur.execute("""
+                SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
             count_after_remove = cur.fetchone()[0]
-            assert count_after_remove == 0, "Session person record should be deleted after removing last attendance"
-            
+            assert count_after_remove == 1, "Membership (session_person) persists after removing attendance"
+
             cur.close()
             conn.close()
 
-    def test_removing_one_of_multiple_attendances_keeps_session_person_record(self, client, authenticated_admin_user, multiple_session_instances):
-        """Test that removing attendance from one instance doesn't delete session_person if other instances exist"""
-        instances = multiple_session_instances['instances']
-        session_instance_1 = instances[0]['session_instance_id']
-        session_instance_2 = instances[1]['session_instance_id']
+    def test_removing_one_of_multiple_attendances_keeps_session_person_record(self, client, authenticated_admin_user, db_conn, db_cursor):
+        """Membership survives removing attendance from instances (both real).
+
+        Uses two freshly-created instances (the old fixture referenced a
+        non-existent session_instance_id). Removing attendance never deletes the
+        session_person membership.
+        """
         person_id = authenticated_admin_user.person_id
-        
-        # Get the actual session_id from the database for this session_instance_id
-        from database import get_db_connection
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_1,))
-        session_id = cur.fetchone()[0]  # Both instances should have same session_id
+
+        unique = str(uuid.uuid4())[:8]
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, 'Austin', 'TX', 'USA') RETURNING session_id
+            """,
+            (f"Multi Instance {unique}", f"multi-instance-{unique}"),
+        )
+        session_id = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+            (session_id, date(2023, 8, 15)),
+        )
+        session_instance_1 = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+            (session_id, date(2023, 8, 22)),
+        )
+        session_instance_2 = db_cursor.fetchone()[0]
+        db_conn.commit()
 
         with authenticated_admin_user:
-            # Clean up any existing records first
-            cur.execute("""
-                DELETE FROM session_instance_person sip
-                USING session_instance si
-                WHERE sip.session_instance_id = si.session_instance_id
-                AND si.session_id = %s AND sip.person_id = %s
-            """, (session_id, person_id))
-            
-            cur.execute("""
-                DELETE FROM session_person 
-                WHERE session_id = %s AND person_id = %s
-            """, (session_id, person_id))
-            
-            conn.commit()
-
             # Add the person to both session instances
             checkin_data = {'person_id': person_id, 'attendance': 'yes'}
-            
+
             response1 = client.post(
                 f'/api/session_instance/{session_instance_1}/attendees/checkin',
                 data=json.dumps(checkin_data),
                 content_type='application/json'
             )
             assert response1.status_code in [200, 201]
-            
+
             response2 = client.post(
                 f'/api/session_instance/{session_instance_2}/attendees/checkin',
                 data=json.dumps(checkin_data),
                 content_type='application/json'
             )
             assert response2.status_code in [200, 201]
-            
+
             # Verify session_person record exists
-            cur.execute("""
-                SELECT COUNT(*) FROM session_person 
+            db_cursor.execute("""
+                SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
-            count_after_adds = cur.fetchone()[0]
+
+            count_after_adds = db_cursor.fetchone()[0]
             assert count_after_adds == 1, "Session person record should exist after adding to both instances"
-            
+
             # Remove from one instance only
             response = client.delete(
                 f'/api/session_instance/{session_instance_1}/attendees/{person_id}'
             )
             assert response.status_code == 200
-            
+
             # Verify session_person record still exists (person still attending other instance)
-            cur.execute("""
-                SELECT COUNT(*) FROM session_person 
+            db_cursor.execute("""
+                SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
-            count_after_partial_remove = cur.fetchone()[0]
+
+            count_after_partial_remove = db_cursor.fetchone()[0]
             assert count_after_partial_remove == 1, "Session person record should still exist when person attends other instances"
-            
+
             # Remove from the last instance
             response = client.delete(
                 f'/api/session_instance/{session_instance_2}/attendees/{person_id}'
             )
             assert response.status_code == 200
             
-            # Now session_person record should be deleted
-            cur.execute("""
-                SELECT COUNT(*) FROM session_person 
+            # Membership persists even after all attendances are removed
+            # (auto-deletion was intentionally removed in commit "Fixing remove").
+            db_cursor.execute("""
+                SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
-            count_after_full_remove = cur.fetchone()[0]
-            assert count_after_full_remove == 0, "Session person record should be deleted after removing from all instances"
-            
-            cur.close()
-            conn.close()
+
+            count_after_full_remove = db_cursor.fetchone()[0]
+            assert count_after_full_remove == 1, "Membership persists after removing all attendances"
 
     def test_cross_session_isolation(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test that session_person records are only affected for the specific session"""
@@ -373,9 +386,10 @@ class TestSessionPersonManagement:
             remaining_records = cur.fetchall()
             other_session_remaining = [r for r in remaining_records if r[0] == different_session_id]
             our_session_remaining = [r for r in remaining_records if r[0] == session_id]
-            
+
+            # Removing attendance no longer deletes membership for either session.
             assert len(other_session_remaining) == 1, "Should still have record for the other session"
-            assert len(our_session_remaining) == 0, "Should not have record for our session after deletion"
+            assert len(our_session_remaining) == 1, "Membership for our session persists after removing attendance"
             assert other_session_remaining[0][1] is True, "Other session record should still be is_regular=True"
             assert other_session_remaining[0][2] is True, "Other session record should still be is_admin=True"
             

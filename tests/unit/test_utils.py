@@ -319,6 +319,8 @@ class TestDatabaseConnectionHandling:
             user="test_user",
             password="test_pass",
             port=5432,
+            # Connection pins the session timezone to UTC (see get_db_connection).
+            options="-c timezone=utc",
         )
 
     @patch("database.psycopg2.connect")

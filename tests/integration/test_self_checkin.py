@@ -5,6 +5,8 @@ Tests the complete self-checkin flow for regular attendees.
 
 import pytest
 import json
+import uuid
+from datetime import date
 
 
 class TestSelfCheckin:
@@ -36,22 +38,30 @@ class TestSelfCheckin:
         assert data['data']['is_regular'] is True
 
     def test_regular_attendee_appears_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
-        """Test that regular attendees appear in the regulars list regardless of attendance status"""
+        """A regular who checks in appears in the attendee list, flagged as a regular.
+
+        The attendance list no longer pre-populates regulars; people appear only
+        after they are actually added/checked in (endpoint returns an empty
+        `regulars` section by design), but their is_regular flag is preserved.
+        """
         session_instance_id = sample_session_instance_data['session_instance_id']
-        
+        user_person_id = authenticated_regular_user.person_id
+
         with authenticated_regular_user:
-            # Check attendance list
+            client.post(
+                f'/api/session_instance/{session_instance_id}/attendees/checkin',
+                data=json.dumps({'person_id': user_person_id, 'attendance': 'yes'}),
+                content_type='application/json'
+            )
+
             response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
-            
             assert response.status_code == 200
             data = json.loads(response.data)
-            
-            # User should appear in regulars list
-            regulars = data['data']['regulars']
-            user_person_id = authenticated_regular_user.person_id
-            regular_person_ids = [r['person_id'] for r in regulars]
-            
-            assert user_person_id in regular_person_ids
+
+            attendees = data['data']['attendees']
+            match = next((a for a in attendees if a['person_id'] == user_person_id), None)
+            assert match is not None
+            assert match['is_regular'] is True
 
     def test_regular_can_change_attendance_status(self, client, authenticated_regular_user, sample_session_instance_data):
         """Test that regulars can change their attendance status multiple times"""
@@ -162,30 +172,30 @@ class TestSelfCheckin:
             
             assert user_person_id in attendee_ids
 
-    def test_regular_priority_in_display_order(self, client, authenticated_regular_user, sample_session_instance_data):
-        """Test that regulars appear first in attendance lists"""
+    def test_regular_is_flagged_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
+        """A regular is identifiable via the is_regular flag in the attendee list.
+
+        The list no longer has a separately pre-populated "regulars" section the
+        UI sorts to the top; instead each attendee carries an is_regular flag the
+        UI uses to order/group them.
+        """
         session_instance_id = sample_session_instance_data['session_instance_id']
-        
+
         with authenticated_regular_user:
-            # Check in as regular
             user_person_id = authenticated_regular_user.person_id
             client.post(
                 f'/api/session_instance/{session_instance_id}/attendees/checkin',
                 data=json.dumps({'person_id': user_person_id, 'attendance': 'yes'}),
                 content_type='application/json'
             )
-            
-            # Get attendance list
+
             response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
             data = json.loads(response.data)
-            
-            # Regulars should be in their own section
-            regulars = data['data']['regulars']
-            attendees = data['data']['attendees']
-            
-            # Find the user in regulars section
-            regular_person_ids = [r['person_id'] for r in regulars]
-            assert user_person_id in regular_person_ids
+
+            all_attendees = data['data']['regulars'] + data['data']['attendees']
+            match = next((a for a in all_attendees if a['person_id'] == user_person_id), None)
+            assert match is not None
+            assert match['is_regular'] is True
 
     def test_self_checkin_persistence_across_requests(self, client, authenticated_user, sample_session_instance_data):
         """Test that self check-in persists across multiple requests"""
@@ -211,34 +221,55 @@ class TestSelfCheckin:
                 assert user_attendee is not None
                 assert user_attendee['attendance'] == 'yes'
 
-    def test_self_checkin_cross_session_independence(self, client, authenticated_user, multiple_session_instances):
-        """Test that check-in to one session doesn't affect others"""
-        instances = multiple_session_instances['instances']
-        session_a = instances[0]['session_instance_id']
-        session_b = instances[1]['session_instance_id']
+    def test_self_checkin_cross_session_independence(self, client, authenticated_user, db_conn, db_cursor):
+        """Check-in to one instance does not leak into another instance.
+
+        Uses two freshly-created real instances so the assertion is deterministic
+        (the old fixture referenced a session_instance_id that did not exist).
+        """
+        unique = str(uuid.uuid4())[:8]
+        db_cursor.execute(
+            """
+            INSERT INTO session (name, path, city, state, country)
+            VALUES (%s, %s, %s, %s, %s) RETURNING session_id
+        """,
+            (f"Indep Session {unique}", f"indep-{unique}", "Austin", "TX", "USA"),
+        )
+        session_id = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+            (session_id, date(2023, 8, 15)),
+        )
+        instance_a = db_cursor.fetchone()[0]
+        db_cursor.execute(
+            "INSERT INTO session_instance (session_id, date) VALUES (%s, %s) RETURNING session_instance_id",
+            (session_id, date(2023, 8, 22)),
+        )
+        instance_b = db_cursor.fetchone()[0]
+        db_conn.commit()
+
         user_person_id = authenticated_user.person_id
-        
+
         with authenticated_user:
-            # Check into session A only
+            # Check into instance A only
             client.post(
-                f'/api/session_instance/{session_a}/attendees/checkin',
+                f'/api/session_instance/{instance_a}/attendees/checkin',
                 data=json.dumps({'person_id': user_person_id, 'attendance': 'yes'}),
                 content_type='application/json'
             )
-            
-            # Session A should show attendance
-            response_a = client.get(f'/api/session_instance/{session_a}/attendees')
+
+            # Instance A shows attendance
+            response_a = client.get(f'/api/session_instance/{instance_a}/attendees')
             data_a = json.loads(response_a.data)
-            all_a = data_a['data']['regulars'] + data_a['data']['attendees']
-            ids_a = [a['person_id'] for a in all_a]
+            ids_a = [a['person_id'] for a in data_a['data']['attendees']]
             assert user_person_id in ids_a
-            
-            # Session B should not show attendance
-            response_b = client.get(f'/api/session_instance/{session_b}/attendees')
-            if response_b.status_code != 200:
-                print(f"Session B response status: {response_b.status_code}")
-                print(f"Session B response: {response_b.data.decode()}")
+
+            # Instance B does not
+            response_b = client.get(f'/api/session_instance/{instance_b}/attendees')
+            assert response_b.status_code == 200
             data_b = json.loads(response_b.data)
-            all_b = data_b['data']['regulars'] + data_b['data']['attendees']
-            attending_b = [a for a in all_b if a['person_id'] == user_person_id and a['attendance'] in ['yes', 'maybe']]
+            attending_b = [
+                a for a in data_b['data']['attendees']
+                if a['person_id'] == user_person_id and a['attendance'] in ['yes', 'maybe']
+            ]
             assert len(attending_b) == 0
