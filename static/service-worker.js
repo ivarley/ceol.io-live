@@ -21,7 +21,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v1'
+const VERSION = 'v2'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 const pagesCache = (uid) => `ceol-io-pages-${uid}` // per-user HTML snapshots (no cross-user leak)
 const apiCache = (uid) => `ceol-io-api-${uid}` // per-user GET /api/* responses (Tier 1)
@@ -190,9 +190,14 @@ async function handleNav(req) {
     }
     return res
   } catch (e) {
+    const shell = await caches.open(SHELL)
+    // ignoreSearch so query-param variants of a page (e.g. My Tunes filter/sort URLs,
+    // which the route ignores and the page applies client-side) share one snapshot.
     const hit =
       (await cache.match(req)) ||
-      (await (await caches.open(SHELL)).match(req)) ||
+      (await cache.match(req, { ignoreSearch: true })) ||
+      (await shell.match(req)) ||
+      (await shell.match(req, { ignoreSearch: true })) ||
       (await caches.match('/offline'))
     if (hit) return hit
     throw e
@@ -201,7 +206,7 @@ async function handleNav(req) {
 
 // GET /api/* — network-first into the per-user API cache. Online always returns fresh
 // (so a page never shows stale data while connected); offline returns the last response
-// seen for that exact URL. Only successful, non-redirected responses are cached.
+// seen. Only successful, non-redirected responses are cached.
 async function handleApi(req) {
   const uid = await currentUid()
   const cache = await caches.open(apiCache(uid))
@@ -210,7 +215,12 @@ async function handleApi(req) {
     if (res && res.ok && !res.redirected) cache.put(req, res.clone())
     return res
   } catch (e) {
-    const hit = await cache.match(req)
+    let hit = await cache.match(req)
+    // The My Tunes list is the whole collection, fetched with varying sort/pagination
+    // params but filtered/sorted CLIENT-side, so any cached variant serves offline.
+    if (!hit && new URL(req.url).pathname === '/api/my-tunes') {
+      hit = await cache.match(req, { ignoreSearch: true })
+    }
     if (hit) return hit
     throw e
   }

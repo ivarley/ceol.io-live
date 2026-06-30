@@ -58,6 +58,14 @@ test.describe("offline data (Tier 1)", () => {
       await page.goto("/my-tunes"); // page + /api/my-tunes both served from cache
       await expect(page.locator("h1")).toContainText(/My Tunes/i);
       await expect(page.getByText(/Cooley's/i).first()).toBeVisible();
+
+      // A never-visited filter/sort URL must also work offline: the route ignores the
+      // query and the list is filtered client-side, so the SW shares one cached entry
+      // across query variants (ignoreSearch).
+      await page.goto("/my-tunes?status=want+to+learn&sortType=heard&sortDir=desc");
+      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("body")).not.toContainText(/You're offline/i);
+      await expect(page.getByText(/Cooley's/i).first()).toBeVisible(); // a "want to learn" tune
     } finally {
       await context.setOffline(false);
     }
