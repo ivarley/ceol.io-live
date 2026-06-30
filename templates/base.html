@@ -51,6 +51,10 @@
     <!-- App-wide My-Tunes offline op-queue + connection / offline-sync indicator -->
     <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/connection_status.js') }}" defer></script>
+    {% if current_user.is_authenticated %}
+    <!-- Background offline warm-up of major pages (throttled, idle-only) -->
+    <script src="{{ url_for('static', filename='js/prefetch.js') }}" defer></script>
+    {% endif %}
 
     <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
     <script>

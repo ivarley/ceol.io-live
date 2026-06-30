@@ -237,3 +237,36 @@ test.describe("offline writes (Tier 2)", () => {
     }
   });
 });
+
+/**
+ * Background warm-up: a throttled idle pass caches the shells + tab data of the user's
+ * session pages, so they work offline without having been visited.
+ */
+test.describe("background prefetch", () => {
+  test.use({ storageState: STORAGE.regular });
+
+  test("an unvisited session page works offline after the warm-up", async ({ page, context }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!(window as any).CeolPrefetch, null, { timeout: 8000 });
+
+    // The first session the warm-up will cache (most recent), via page.request (no SW).
+    const ms = await (await page.request.get("/api/my-sessions?limit=25")).json();
+    expect(ms.sessions && ms.sessions.length).toBeTruthy();
+    const sess = ms.sessions[0];
+
+    // Trigger the warm-up explicitly (the real one runs on idle) and let it cache the
+    // sessions list + the first session.
+    await page.evaluate(() => (window as any).CeolPrefetch.warm());
+    await page.waitForTimeout(3000);
+
+    await context.setOffline(true);
+    try {
+      await page.goto("/sessions/" + sess.path);
+      await expect(page.locator("body")).not.toContainText(/You're offline/i);
+      await expect(page.getByText(sess.name, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+});

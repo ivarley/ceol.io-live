@@ -1290,6 +1290,45 @@ def get_popular_tunes():
 
 
 @person_tune_login_required
+def get_my_sessions():
+    """
+    GET /api/my-sessions?limit=25
+
+    The current user's sessions (path + name), most-recently-active first. Used to
+    background-prefetch session pages so they're available offline without having to
+    visit each one.
+    """
+    try:
+        try:
+            limit = min(100, max(1, int(request.args.get("limit", 25))))
+        except (ValueError, TypeError):
+            limit = 25
+        person_id = get_user_person_id()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT s.path, s.name, MAX(si.date) AS last_date
+                FROM session_person sp
+                JOIN session s ON sp.session_id = s.session_id
+                LEFT JOIN session_instance si ON si.session_id = s.session_id
+                WHERE sp.person_id = %s
+                GROUP BY s.path, s.name
+                ORDER BY MAX(si.date) DESC NULLS LAST, s.name
+                LIMIT %s
+                """,
+                (person_id, limit),
+            )
+            sessions = [{"path": r[0], "name": r[1]} for r in cur.fetchall()]
+            return jsonify({"success": True, "sessions": sessions, "count": len(sessions)}), 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error fetching sessions: {str(e)}"}), 500
+
+
+@person_tune_login_required
 def sync_my_tunes():
     """
     POST /api/my-tunes/sync

@@ -21,6 +21,7 @@ from api_person_tune_routes import (
     decrement_tune_heard_count,
     my_tunes_op,
     get_popular_tunes,
+    get_my_sessions,
     sync_my_tunes,
     search_tunes,
     update_my_profile,
@@ -976,6 +977,12 @@ app.add_url_rule(
     "/api/tunes/popular",
     "get_popular_tunes",
     get_popular_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-sessions",
+    "get_my_sessions",
+    get_my_sessions,
     methods=["GET"],
 )
 app.add_url_rule(
