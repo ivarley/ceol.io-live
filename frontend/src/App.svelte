@@ -672,6 +672,13 @@
       openTrayId = null
       expanded = false
     }
+    if (m === 'edit') {
+      // Drop you at the end of the log, ready to append the next tune. Wait two frames so
+      // the composer dock has rendered (it grows scrollHeight) before we measure the bottom.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (setsEl) setsEl.scrollTo({ top: setsEl.scrollHeight, behavior: 'smooth' })
+      }))
+    }
     if (!fromCacheOnly()) connect() // re-open the stream with the new mode= flag
   }
   // Leave the pull-down filter: clear the query, restore the underlying view/edit controls,
