@@ -89,9 +89,14 @@ main {
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #161619, var(--bg));
 }
-.topbar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.topbar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .topbar-main { flex: 1; min-width: 0; }
 .session-name { font-size: 19px; font-weight: 700; letter-spacing: 0.2px; }
+.session-return {
+  color: var(--muted); text-decoration: none; margin-left: 8px;
+  font-size: 0.7em; font-weight: 400; transition: color 0.2s ease;
+}
+.session-return:hover { color: var(--accent); }
 .session-date { font-size: 13px; color: var(--muted); margin-top: 2px; }
 /* read-only session notes shown under the date/count line (collapsed header) */
 .session-notes {

@@ -2175,7 +2175,7 @@
     <header class="topbar">
       <div class="topbar-row" onclick={toggleExpand}>
         <div class="topbar-main">
-          <div class="session-name">{sessionName || 'Session'}</div>
+          <div class="session-name">{sessionName || 'Session'}<a class="session-return" href="/sessions/{config.sessionPath}" title="Back to session" onclick={(e) => e.stopPropagation()}>⮐</a></div>
           <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
           {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
