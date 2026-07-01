@@ -112,6 +112,19 @@ Source in `frontend/` (`frontend/src`). The shell template passes `session_insta
 `current_person`, and `STREAMING_BASE_URL` to the bundle, which then fetches the bootstrap
 snapshot and opens the SSE stream.
 
+**In-log filter (pull-down search).** A filter box that lives as the first child of the
+scrolling list, hidden above the fold and revealed by scrolling to the very top (no gesture
+handling — the list keeps a `.sets-body { min-height: 100% }` so it always overflows enough
+to tuck the bar behind the header, even for a short log; the app nudges scroll past it once
+on first paint). Typing filters live, per keystroke: only sets containing a tune whose
+**name** matches survive (`displaySegments`), and the matched substring is highlighted in
+orange (reusing `suggestionParts`). It is **orthogonal to view/edit mode** — a `searchMode`
+flag separate from `mode`, so it works in view, in edit, and on **completed** logs, and
+never calls `setMode`/reconnects the stream. While active, all editing chrome is hidden
+(`canEdit = !viewing && !searchMode` gates the seams/row-actions/composer) and the dock
+shows a single **"Done Searching"** button that clears the filter and re-hides the bar. All
+in `App.svelte`; no backend involvement (it filters the already-loaded `byId` records).
+
 ## Schema delta (§I)
 
 See [Schema Reference](../data/schema.md) and [Session Model](../data/session-model.md).

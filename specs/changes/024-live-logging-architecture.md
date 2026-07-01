@@ -470,6 +470,16 @@ exist in the codebase today) via a walking skeleton, then widen.
   > your own account's changes from another window (this window authors nothing). Frontend +
   > a small `streaming/service.py` presence change; `_roster` exclusion unit-checked.
   >
+  > **Chunk 6 — in-log filter (pull-down search) — built (2026-07-01).** A filter box hidden
+  > above the list, revealed by scrolling to the top (frontend-only; no gesture code — the
+  > list carries `min-height:100%` so it always overflows enough to tuck the bar behind the
+  > header, then scroll is nudged past it on first paint). Live per-keystroke: filters
+  > `displaySegments` to sets with a name-matching tune and highlights the match in orange
+  > (reuses `suggestionParts`). A `searchMode` flag **orthogonal to `mode`** — works in view,
+  > edit, and on completed logs; never calls `setMode`/reconnects. While active, editing chrome
+  > is hidden (`canEdit = !viewing && !searchMode`) and the dock shows a lone "Done Searching".
+  > Pure client-side over the loaded `byId` records; no backend. All in `App.svelte` + `app.css`.
+  >
   > **Deferred within Phase 2:** persisting `arrival_seq` to `session_instance_person` (color
   > stability across streaming restarts — left in-memory; ~30 query sites assume a
   > `session_instance_person` row = an attendee, so persisting needs an attendance-view audit not
