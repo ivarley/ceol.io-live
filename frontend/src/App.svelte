@@ -103,6 +103,29 @@
     lastCount = n
   })
 
+  // The pull-down filter bar is the first child of the list, so it occupies the top
+  // SEARCH_BAR_H of scroll content — hidden until you scroll all the way up. The inner
+  // .sets-body has min-height:100%, so the list always overflows by ≥ SEARCH_BAR_H even for
+  // short logs (which otherwise can't scroll, leaving the bar stuck visible). Nudge past the
+  // bar once on first load so it isn't shown initially; long logs are already scrolled down.
+  let didInitialHide = false
+  function hideBarInitially(tries) {
+    if (!setsEl || searchMode || didInitialHide) return
+    const max = setsEl.scrollHeight - setsEl.clientHeight
+    if (max > 0) {
+      // scroll just past the bar (short logs may allow less — clamp to what's available)
+      setsEl.scrollTop = Math.min(SEARCH_BAR_H, max)
+      didInitialHide = true
+    } else if (tries > 0) {
+      requestAnimationFrame(() => hideBarInitially(tries - 1)) // overflow not laid out yet — retry
+    }
+  }
+  $effect(() => {
+    // Gate on content (not `loaded`): `loaded` only flips once streaming connects, which may
+    // never happen offline — but the list renders from the bootstrap snapshot regardless.
+    if (ordered.length > 0 && setsEl && !searchMode && !didInitialHide) requestAnimationFrame(() => hideBarInitially(30))
+  })
+
   // Measured height of the type-ahead dropdown (it floats UP from the dock and covers the
   // lower part of the list). Drives both the bottom spacer (scroll room past the end) and
   // the visible-band calc below. (§D smart scroll)
@@ -184,6 +207,13 @@
   let searchSeq = 0
   let searching = $state(false) // a server search is in flight for the typed text (input spinner)
   let composerFocused = $state(false) // input has focus — gates the "likely next tune" suggestion row
+  // Pull-down filter (orthogonal to view/edit mode): a search box hidden just above the
+  // list, revealed by scrolling to the top, that filters visible sets live and highlights
+  // matches. Purely client-side over byId — no network, no stream/mode change (§024).
+  let searchMode = $state(false) // the filter UI is active
+  let searchText = $state('') // live filter string
+  let searchInputEl // the filter input element (focus/blur)
+  const SEARCH_BAR_H = 56 // px; scroll offset that hides the bar (52px bar + ~4px top gap)
   // A placeholder tune row whose match is still resolving (Enter was hit faster than the
   // search returned). While set, the composer is locked; the row settles to linked/unlinked
   // or — if ambiguous — waits for the user to pick. null when nothing is resolving. (§D)
@@ -439,6 +469,9 @@
   // rather than log one — so a logger taps "✎ Edit log" to start.
   let mode = $state('view')
   const viewing = $derived(mode === 'view')
+  // Editing affordances (seams, row actions, composer) are allowed only when in edit mode
+  // AND not filtering — search mode hides them regardless of the underlying view/edit mode.
+  const canEdit = $derived(!viewing && !searchMode)
 
   let selectedId = $state(null) // the "opened" tune row (shows its action bar)
   let editingId = $state(null) // record being edited (composer pre-filled; §E "✎ Edit")
@@ -641,6 +674,14 @@
     }
     if (!fromCacheOnly()) connect() // re-open the stream with the new mode= flag
   }
+  // Leave the pull-down filter: clear the query, restore the underlying view/edit controls,
+  // and scroll the bar back out of view. Never touches `mode` or the stream.
+  function doneSearching() {
+    searchText = ''
+    searchMode = false
+    if (searchInputEl) searchInputEl.blur()
+    if (setsEl) setsEl.scrollTo({ top: SEARCH_BAR_H, behavior: 'smooth' })
+  }
   // Reconnecting requires the server; while offline we just flip the UI (presence is
   // already dropped offline) and let the next reconnect carry the current mode.
   function fromCacheOnly() {
@@ -759,8 +800,17 @@
   }
 
   // Optimistic rows (add tunes AND breaks) live in byId as temp records with a
-  // sortable position, so they segment into sets uniformly. Display = the sets.
-  const displaySegments = $derived(segments)
+  // sortable position, so they segment into sets uniformly. Display = the sets,
+  // narrowed to sets with a name match while the pull-down filter is active.
+  function tuneNameMatches(r, q) {
+    return r.record_type === 'tune' && (r.name || '').toLowerCase().includes(q)
+  }
+  const displaySegments = $derived.by(() => {
+    if (!searchMode) return segments
+    const q = searchText.trim().toLowerCase()
+    if (!q) return segments // empty query → show all, no highlight
+    return segments.filter((seg) => seg.tunes.some((r) => tuneNameMatches(r, q)))
+  })
   // "Likely next tune" (§ likely-next): when the composer sits at the END of a non-empty
   // set, the tune that follows that set's last tune >50% of the time at this session (from
   // nextByTuneId). At most one. Null mid-set, at a set start, while editing/resolving, in
@@ -2174,6 +2224,27 @@
   </div>
 
   <div class="sets" bind:this={setsEl} onscroll={onScroll}>
+    <!-- Pull-down filter: hidden above the fold, revealed by scrolling to the very top.
+         Focusing/typing enters search mode; filters displaySegments live. (§024) -->
+    <div class="searchbar" class:on={searchMode}>
+      <span class="searchbar-icon" aria-hidden="true">🔍</span>
+      <input
+        class="searchbar-input"
+        placeholder="Filter tunes…"
+        bind:value={searchText}
+        bind:this={searchInputEl}
+        onfocus={() => (searchMode = true)}
+        oninput={() => (searchMode = true)}
+        autocorrect="off"
+        autocapitalize="off"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      {#if searchMode && searchText}<button class="searchbar-clear" title="Clear" onclick={() => (searchText = '')}>✕</button>{/if}
+    </div>
+    <!-- min-height:100% (in CSS) guarantees ≥ SEARCH_BAR_H of overflow so the bar can always
+         tuck out of sight, even when the log is too short to fill the viewport -->
+    <div class="sets-body">
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
@@ -2195,7 +2266,7 @@
                 >{setStarterName(seg) || 'Not set'}</button>
               {/if}
             </div>
-            {#if !viewing && starterPickerSet === seg.tunes[0].session_instance_tune_id}
+            {#if canEdit && starterPickerSet === seg.tunes[0].session_instance_tune_id}
               <div class="starter-picker">
                 <input class="starter-filter" placeholder="Filter players…" bind:value={starterFilter} />
                 <div class="starter-list">
@@ -2217,7 +2288,7 @@
             {/if}
           </div>
         {/if}
-        {#if !viewing}
+        {#if canEdit}
           <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
             {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
               <span class="seam-line"></span>
@@ -2233,15 +2304,15 @@
             class:pending={r._resolving}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
-            class:selected={!viewing && selectedId === r.session_instance_tune_id}
+            class:selected={canEdit && selectedId === r.session_instance_tune_id}
             class:editing={editingId === r.session_instance_tune_id}
             class:flash-mine={flashing.get(r.session_instance_tune_id)?.kind === 'mine'}
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
-            style={viewing ? '' : rowStyle(r)}
-            onclick={() => r._resolving ? (!viewing && selectRow(r.session_instance_tune_id)) : (r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id))}
+            style={canEdit ? rowStyle(r) : ''}
+            onclick={() => searchMode ? null : (r._resolving ? (!viewing && selectRow(r.session_instance_tune_id)) : (r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)))}
           >
-            <span class="name">{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}</span>
+            <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}</span>
             {#if r._temp}
               {#if r._resolving}
                 <!-- match still resolving: the one case worth a spinner (what got logged is unknown) -->
@@ -2256,10 +2327,10 @@
               <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
-              {#if !viewing}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+              {#if canEdit}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
             {/if}
           </div>
-          {#if !viewing && selectedId === r.session_instance_tune_id}
+          {#if canEdit && selectedId === r.session_instance_tune_id}
             {#if r._resolving}
               <!-- pending placeholder: bail out of the in-flight match -->
               <div class="row-actions">
@@ -2279,7 +2350,7 @@
             </div>
             {/if}
           {/if}
-          {#if !r._temp && !viewing}
+          {#if !r._temp && canEdit}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
               <!-- last tune of the open set: this seam IS the end (append) point -->
               <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
@@ -2298,7 +2369,7 @@
           {/if}
         {/each}
       </div>
-      {#if !viewing && si < displaySegments.length - 1 && seg.breakAfter != null}
+      {#if canEdit && si < displaySegments.length - 1 && seg.breakAfter != null}
         <div class="seam inter-seam" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)}>
           {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
@@ -2318,7 +2389,7 @@
         </div>
       {/if}
     {/each}
-    {#if ordered.length && !endIsOpen && !viewing}
+    {#if ordered.length && !endIsOpen && canEdit}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
       <div class="seam end-seam new-set-end" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
         {#if activeSeam === 'end'}
@@ -2328,11 +2399,12 @@
     {/if}
     <!-- scroll room so the end-of-list seam can rise ABOVE the upward dropdown (§D) -->
     {#if dropdownOpen}<div class="drop-spacer" style="height:{resultsH}px" aria-hidden="true"></div>{/if}
+    </div>
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
 
-  {#if !viewing && othersTyping.length}
+  {#if canEdit && othersTyping.length}
     <div class="typing">
       {#each othersTyping as t (t.person_id)}<span class="t-name" style="color:{colorFor(t.arrival_seq)}">{t.name}</span>{/each}
       <span class="t-verb">{othersTyping.length === 1 ? 'is' : 'are'} typing…</span>
@@ -2340,6 +2412,11 @@
   {/if}
 
   <div class="dock">
+    {#if searchMode}
+      <footer class="viewbar searchbar-dock">
+        <button class="editbtn done-search" onclick={doneSearching}>Done Searching</button>
+      </footer>
+    {:else}
     {#if !atEnd}
       <button class="goend-pill" onclick={goToEnd}>↓ Go to end</button>
     {/if}
@@ -2441,6 +2518,7 @@
         {/if}
       {/if}
     </div>
+    {/if}
     {/if}
   </div>
 

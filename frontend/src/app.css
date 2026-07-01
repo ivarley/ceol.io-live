@@ -849,3 +849,58 @@ main {
   transition: transform 0.3s ease-out;
 }
 #tune-detail-modal.show .modal-dialog { transform: translateX(0); }
+
+/* Pull-down filter (§024): the search box is the first child of .sets, so it occupies the
+   top ~52px of scroll content — hidden until you scroll all the way up. When active it
+   filters the visible sets live and highlights matches in orange. */
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  box-sizing: border-box;
+  padding: 0 4px 10px;
+  /* leave ~4px above the bar (of .sets' 12px top padding) so its top border and focus ring
+     aren't clipped by the scroll container's edge when revealed. The hide offset
+     (SEARCH_BAR_H = 56 in App.svelte) covers this 4px gap plus the 52px bar. */
+  margin: -8px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+/* min-height:100% keeps the list at least one viewport tall, so there's always ≥ 52px of
+   overflow to tuck the search bar behind the header — even when the log is nearly empty */
+.sets-body { min-height: 100%; }
+.searchbar-icon { color: var(--muted); font-size: 15px; flex: none; }
+.searchbar-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 15px;
+  padding: 9px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+.searchbar-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.searchbar-clear {
+  flex: none;
+  font: inherit;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.searchbar-clear:hover { color: var(--text); }
+
+/* matched substring within a filtered tune name */
+.search-hit { color: #f5921b; font-weight: 700; }
+
+/* dock while filtering: the composer/viewbar is replaced by a single exit button */
+.searchbar-dock .done-search { background: var(--panel); }
+.searchbar-dock .done-search:hover { border-color: var(--accent); }
