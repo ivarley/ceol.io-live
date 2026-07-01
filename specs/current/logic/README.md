@@ -32,6 +32,9 @@ Real-time tracking of currently happening sessions (see also [Active Sessions Cr
 ### [Live Logging](live-logging.md)
 Real-time multi-user session logging — incremental ops, SSE down / POST up, `session_event` feed, presence/typing (Feature 024; see also the [Streaming Service](../services/README.md))
 
+### [Offline Support](offline.md)
+How the main app works without a connection — root service worker, the `/api/offline/bundle` local mirror, the tune-list write op-queue, the connection indicator, and background warm-up (the live logger has its own separate offline model)
+
 ## Key Locations
 
 - `web_routes.py` - All HTML page handlers
@@ -42,3 +45,4 @@ Real-time multi-user session logging — incremental ops, SSE down / POST up, `s
 - `api_person_tune_routes.py` - Person/tune relationship endpoints
 - `live_logging_routes.py` - Live-logging referee op endpoints (Feature 024)
 - `streaming/service.py` - Async SSE streaming sidecar (Feature 024)
+- `static/service-worker.js` - Root `/sw.js` offline worker; `static/js/offline_data.js`, `mytunes_offline.js`, `connection_status.js`, `prefetch.js` - offline client (see [Offline Support](offline.md))

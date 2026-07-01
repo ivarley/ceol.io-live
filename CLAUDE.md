@@ -36,6 +36,7 @@ Business logic, services, external integrations
 - [Tune Services](specs/current/logic/tune-logic.md) - Search, linking, popularity tracking
 - [Attendance System](specs/current/logic/attendance.md) - Check-in, roles, permissions (Feature 001)
 - [Live Logging](specs/current/logic/live-logging.md) - Real-time multi-user session logging (Feature 024)
+- [Offline Support](specs/current/logic/offline.md) - Service worker, offline bundle, tune-list op-queue, connection indicator
 - [External APIs](specs/current/logic/external-apis.md) - thesession.org, SendGrid
 - [Active Sessions](specs/current/logic/active-sessions.md) - Real-time session tracking
 
@@ -53,6 +54,7 @@ Internal services, microservices, background jobs
 - **User System**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/auth.md)
 - **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
+- **Offline Support**: [Logic](specs/current/logic/offline.md)
 
 ## Development
 

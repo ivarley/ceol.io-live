@@ -888,6 +888,10 @@ def help_sessions():
     return render_template("help_sessions.html")
 
 
+def help_offline():
+    return render_template("help_offline.html")
+
+
 def help_session_tunes():
     return render_template("help_session_tunes.html")
 

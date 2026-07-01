@@ -314,6 +314,9 @@
             <li class="help-nav-item">
                 <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">What's a Session?</a>
             </li>
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">Working Offline</a>
+            </li>
             <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
                 <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
                     <span>Features</span>
@@ -382,6 +385,9 @@
             </li>
             <li class="help-nav-item">
                 <a href="{{ url_for('help_sessions') }}" class="help-nav-link {{ 'active' if active_page == 'sessions' else '' }}">What's a Session?</a>
+            </li>
+            <li class="help-nav-item">
+                <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">Working Offline</a>
             </li>
             <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
                 <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">

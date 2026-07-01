@@ -1,0 +1,68 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "Working Offline" %}
+{% set page_description = "How ceol.io keeps working when you lose your connection" %}
+{% set active_page = "offline" %}
+
+{% block help_content %}
+<h1>Working Offline</h1>
+
+<p>Sessions happen in pubs, back rooms, and kitchens — places where the signal often isn't
+great. ceol.io is built to keep working when your connection drops, so you can look things up
+and make changes without waiting for bars to reappear.</p>
+
+<p>The one requirement: <strong>open the app online at least once</strong> (on the device and
+browser you'll use). That lets it save a copy of your tunes and the pages you need. After
+that, it works whether you're online or not.</p>
+
+<h2>What works offline</h2>
+
+<ul>
+    <li><strong>Your tune list</strong> — browse, filter, and sort My Tunes.</li>
+    <li><strong>Tune details</strong> — open any tune to see its notation (the "dots"). Offline
+        you get the opening bars (the incipit); the full notation needs a connection.</li>
+    <li><strong>Search</strong> — the "Find a tune" search in the menu finds tunes you know,
+        plus popular tunes you might want to add.</li>
+    <li><strong>Your sessions</strong> — the sessions list and the pages for sessions you've
+        visited.</li>
+    <li><strong>Making changes</strong> — add a tune to your list, change a tune's status
+        (Want To Learn / Learning / Learned), or bump its heard count.</li>
+</ul>
+
+<p>A few things still need a connection: signing in or out, admin pages, importing from
+TheSession.org, and full tune notation. If you land on a page that isn't saved yet, you'll see
+a simple "You're offline" screen with a way back.</p>
+
+<h2>The connection dot</h2>
+
+<p>A small dot in the top bar tells you where things stand:</p>
+
+<ul>
+    <li><strong>Orange</strong> — you're offline. Anything you change is saved on your device
+        and waiting to sync.</li>
+    <li><strong>Pulsing</strong> — you're back online and your changes are syncing.</li>
+    <li><strong>Green, then gone</strong> — everything's synced and up to date.</li>
+</ul>
+
+<p>Tap the dot to see how long you've been offline and how many changes are waiting to sync.</p>
+
+<h2>Changes you make offline</h2>
+
+<p>When you change something offline, it takes effect right away on screen — a tune you add
+shows up in your list marked <strong>pending</strong>. Your changes are saved on your device
+and sent automatically the next time you're online; you don't have to do anything. Add a tune
+while offline and you'll be taken to your tune list with a note that it'll sync when you're
+back on.</p>
+
+<p>It's safe to make the same change more than once or to close the app before it syncs —
+nothing gets doubled up or lost.</p>
+
+<h2>Tips</h2>
+
+<ul>
+    <li>Open the app and visit My Tunes and your session pages <strong>before</strong> you head
+        somewhere with no signal, so they're saved and ready.</li>
+    <li>If a page looks out of date, reconnect and reload — online always shows the latest.</li>
+    <li>The live session logger has its own offline handling; see its help for details.</li>
+</ul>
+{% endblock %}
