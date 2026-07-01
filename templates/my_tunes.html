@@ -46,6 +46,9 @@
                     placeholder="Search"
                     title="Search tunes"
                     autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
                 >
                 <a href="/my-tunes/add" class="filter-panel-toggle" id="add-tune-btn" onclick="handleAddTuneClick(event)" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
                 <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
@@ -1746,7 +1749,7 @@ function displayTuneDetailModalBasic(tune) {
         <h2 class="modal-tune-title modal-tune-title-editable" id="modal-tune-title" onclick="toggleNameAliasEdit()" title="Click to set custom name">${tune.tune_name || 'Unknown Tune'} ${thesessionLinkIcon}</h2>
         <div class="modal-field-section" id="name-alias-section" style="display: none;">
             <label class="modal-field-label">I call this:</label>
-            <input type="text" id="modal-name-alias-input" class="modal-field-input" placeholder="Enter your custom name for this tune" value="${tune.name_alias || ''}" oninput="onModalFieldChange()">
+            <input type="text" id="modal-name-alias-input" class="modal-field-input" placeholder="Enter your custom name for this tune" value="${tune.name_alias || ''}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onModalFieldChange()">
             <div class="name-alias-hint">Click title again to hide this field</div>
         </div>
         <div class="modal-header-row">
@@ -1761,7 +1764,7 @@ function displayTuneDetailModalBasic(tune) {
         </div>
         <div class="modal-field-section">
             <label class="modal-field-label">If you play a specific setting of the tune, enter the URL or setting ID here:</label>
-            <input type="text" id="modal-setting-id-input" class="modal-field-input" placeholder="e.g., 123 or paste URL" value="${tune.setting_id || ''}" oninput="onSettingIdInput()">
+            <input type="text" id="modal-setting-id-input" class="modal-field-input" placeholder="e.g., 123 or paste URL" value="${tune.setting_id || ''}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="onSettingIdInput()">
             <div id="modal-setting-id-error" class="modal-field-error" style="display: none;"></div>
         </div>
         <div class="heard-count-row">

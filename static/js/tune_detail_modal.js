@@ -581,6 +581,7 @@ ${abcBody}`;
                 <div class="configure-field-group-inline">
                     <label class="configure-label" for="name-alias-input">I call this:</label>
                     <input type="text" id="name-alias-input" class="configure-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                            value="${tuneData.name_alias || ''}"
                            placeholder="Enter your name for this tune"
                            oninput="TuneDetailModal.onFieldChange()">
@@ -589,6 +590,7 @@ ${abcBody}`;
                     <label class="configure-label" for="setting-input">My setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
+                               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                value="${tuneData.setting_id || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
@@ -606,6 +608,7 @@ ${abcBody}`;
                 <div class="configure-field-group-inline">
                     <label class="configure-label" for="alias-input">We call this:</label>
                     <input type="text" id="alias-input" class="configure-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                            value="${tuneData.alias || ''}"
                            placeholder="Enter session name for this tune"
                            oninput="TuneDetailModal.onFieldChange()">
@@ -614,6 +617,7 @@ ${abcBody}`;
                     <label class="configure-label" for="setting-input">Our setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
+                               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                value="${tuneData.setting_id || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
@@ -641,6 +645,7 @@ ${abcBody}`;
                 <div class="configure-field-group-inline">
                     <label class="configure-label" for="alias-input">In this case, we called it:</label>
                     <input type="text" id="alias-input" class="configure-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                            value="${tuneData.name || ''}"
                            placeholder="Enter name for this instance"
                            oninput="TuneDetailModal.onFieldChange()">
@@ -649,6 +654,7 @@ ${abcBody}`;
                     <label class="configure-label" for="setting-input">This time, we played setting:</label>
                     <div class="input-with-button">
                         <input type="text" id="setting-input" class="configure-input"
+                               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                                value="${tuneData.setting_override || ''}"
                                placeholder="e.g., 123 or paste URL"
                                oninput="TuneDetailModal.onSettingInput()">
@@ -672,6 +678,7 @@ ${abcBody}`;
                 <div class="configure-field-group">
                     <label class="configure-label" for="tune-name-input">Tune Name:</label>
                     <input type="text" id="tune-name-input" class="configure-input"
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                            value="${tuneData.name || ''}"
                            placeholder="Enter tune name"
                            oninput="TuneDetailModal.onFieldChange()">

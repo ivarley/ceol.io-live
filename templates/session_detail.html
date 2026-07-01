@@ -1686,7 +1686,7 @@
             <div class="tunes-container">
                 <div class="filters-container">
                     <div class="filter-top-row">
-                        <input type="text" id="tune-search" class="filter-search-input" placeholder="Search" autocomplete="off">
+                        <input type="text" id="tune-search" class="filter-search-input" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                         {% if is_logged_in %}
                         <a href="/sessions/{{ session.path }}/tunes/add" class="filter-panel-toggle" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
                         {% endif %}

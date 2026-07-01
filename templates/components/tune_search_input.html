@@ -33,6 +33,9 @@
             name="{{ search_id }}"
             placeholder="{{ placeholder }}"
             autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
             {% if required %}required{% endif %}>
         <div id="{{ results_id }}" class="autocomplete-results"></div>
     </div>

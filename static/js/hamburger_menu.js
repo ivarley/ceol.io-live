@@ -75,7 +75,7 @@ function openFindTuneOverlay() {
         '<div class="ft-scrim"></div>' +
         '<div class="ft-panel" role="dialog" aria-modal="true">' +
         '  <div class="ft-head"><span>Find a tune</span><button class="ft-close" aria-label="Close">✕</button></div>' +
-        '  <input class="ft-input" type="text" placeholder="Search tunes…" autocomplete="off">' +
+        '  <input class="ft-input" type="text" placeholder="Search tunes…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
         '  <ul class="ft-results"></ul>' +
         '</div>';
     document.body.appendChild(ov);

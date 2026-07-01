@@ -1472,7 +1472,7 @@
             <div class="modal-body">
                 <p>Enter a URL or tune ID from thesession.org to link for this name:</p>
                 <label for="tune-link-input">Tune ID or URL:</label>
-                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234" autocomplete="off">
+                <input type="text" id="tune-link-input" placeholder="e.g. 1234 or https://thesession.org/tunes/1234" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="link-cancel-btn">Cancel</button>
@@ -1489,7 +1489,7 @@
             </div>
             <div class="modal-body">
                 <label for="edit-tune-name-input">Tune Name:</label>
-                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name">
+                <input type="text" id="edit-tune-name-input" placeholder="Enter tune name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" id="edit-tune-cancel-btn">Cancel</button>
@@ -1547,7 +1547,10 @@
                         type="text"
                         id="tune-search-modal-input"
                         placeholder="Start typing a tune name..."
-                        autocomplete="off">
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false">
                     <div id="tune-search-modal-results" class="autocomplete-results"></div>
                 </div>
                 <input type="hidden" id="tune-search-modal-selected-id">
