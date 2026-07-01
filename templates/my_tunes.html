@@ -430,6 +430,32 @@ function overlayPendingOps(serverTunes) {
         .catch(function () { return serverTunes; });
 }
 
+// Background-cache each tunebook tune's detail (ABC + base64 "dots") while online, so
+// opening a tune drawer works offline. Prioritizes active tunes, capped, throttled, and
+// skipped under automation / data-saver. Runs after the full list has loaded.
+function cacheTuneDetailsForOffline(tunes) {
+    if (!navigator.onLine || navigator.webdriver) return;
+    if (navigator.connection && navigator.connection.saveData) return;
+    try {
+        var last = parseInt(localStorage.getItem('ceol_tunedetail_at') || '0', 10);
+        if (Date.now() - last < 3600000) return; // at most once an hour
+        localStorage.setItem('ceol_tunedetail_at', String(Date.now()));
+    } catch (e) {}
+    var rank = function (s) { return s === 'learning' ? 0 : s === 'want to learn' ? 1 : 2; };
+    var list = (tunes || []).slice()
+        .filter(function (t) { return t.person_tune_id && String(t.person_tune_id).indexOf('pending-') !== 0; })
+        .sort(function (a, b) { return rank(a.learn_status) - rank(b.learn_status); })
+        .slice(0, 100);
+    var i = 0;
+    (function next() {
+        if (i >= list.length) return;
+        var t = list[i++];
+        fetch('/api/my-tunes/' + t.person_tune_id, { credentials: 'same-origin' })
+            .catch(function () {})
+            .then(function () { setTimeout(next, 200); });
+    })();
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
@@ -1050,6 +1076,7 @@ function loadTunes() {
 
                 populateTuneTypes();
                 applyFilters();
+                cacheTuneDetailsForOffline(allTunes); // warm tune notation for offline drawers
             });
         })
         .catch(error => {
@@ -1464,6 +1491,36 @@ function triggerIncrementWithAnimation(container, button) {
     incrementHeardCountWithToast(personTuneId, oldCount);
 }
 
+// Cycle a tune's learn status directly from the list card: want to learn -> learning ->
+// learned -> want to learn. Optimistic, queued offline via the op-queue, synced on
+// reconnect. Reverts only if the server rejects it.
+function cyclePersonTuneStatus(tuneId, current, event) {
+    if (event) event.stopPropagation();
+    var order = ['want to learn', 'learning', 'learned'];
+    var next = order[(order.indexOf(current) + 1) % order.length];
+    var tune = allTunes.find(function (t) { return t.tune_id === tuneId; });
+    if (!tune) return;
+    var prev = tune.learn_status;
+    tune.learn_status = next; // optimistic
+    applyFilters();
+    var op = { type: 'set_status', tune_id: tuneId, learn_status: next };
+    var submit = window.MyTunesOffline
+        ? window.MyTunesOffline.submit(op)
+        : fetch('/api/my-tunes/ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op) })
+              .then(function (r) { return r.json(); })
+              .then(function (d) { if (!d.success) throw new Error(d.error || 'op failed'); return { online: true, data: d }; });
+    submit
+        .then(function (res) {
+            if (res && res.queued) { tune.pending_sync = true; applyFilters(); } // offline: mark pending
+        })
+        .catch(function (err) {
+            console.error('Error changing status:', err);
+            tune.learn_status = prev; // server rejected -> revert
+            applyFilters();
+            if (typeof showMessage === 'function') showMessage('Could not change status. Please try again.', 'error');
+        });
+}
+
 function createTuneCard(tune) {
     const statusClass = `status-${tune.learn_status.replace(/ /g, '-')}`;
     const heardCountHTML = tune.learn_status === 'want to learn' && tune.heard_count > 0
@@ -1524,7 +1581,7 @@ function createTuneCard(tune) {
                     </div>
                     <div class="tune-meta">
                         <div class="tune-meta-item">
-                            <span class="status-badge ${statusClass}">${tune.learn_status}</span>
+                            <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="cyclePersonTuneStatus(${tune.tune_id}, '${tune.learn_status}', event)">${tune.learn_status}</span>
                         </div>
                         ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
                     </div>
@@ -1545,7 +1602,7 @@ function createTuneCard(tune) {
                 </div>
                 <div class="tune-meta">
                     <div class="tune-meta-item">
-                        <span class="status-badge ${statusClass}">${tune.learn_status}</span>
+                        <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="cyclePersonTuneStatus(${tune.tune_id}, '${tune.learn_status}', event)">${tune.learn_status}</span>
                     </div>
                     ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
                 </div>

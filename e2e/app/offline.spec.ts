@@ -37,6 +37,27 @@ test.describe("offline resilience", () => {
 });
 
 /**
+ * Even non-cached areas (admin) show the offline page rather than a browser error.
+ */
+test.describe("offline fallback for admin", () => {
+  test.use({ storageState: STORAGE.admin });
+
+  test("an uncached admin page shows the offline page when offline", async ({ page, context }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/"); // controlled, so subsequent navigations are SW-handled
+    await page.waitForTimeout(2800); // let the deferred precache cache the /offline page
+    await context.setOffline(true);
+    try {
+      await page.goto("/admin/people"); // never visited; admin isn't cached for offline
+      await expect(page.locator("body")).toContainText(/You're offline/i);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+});
+
+/**
  * Tier 1: GET /api/* responses are cached per-user, so an AJAX-driven page still
  * shows its data offline (not just an empty shell).
  */
@@ -239,6 +260,94 @@ test.describe("offline writes (Tier 2)", () => {
 });
 
 /**
+ * Inline status change on the My Tunes list: tapping the status badge cycles the learn
+ * status, queued offline via the op-queue and synced on reconnect.
+ */
+test.describe("offline status change (Tier 2)", () => {
+  test.use({ storageState: STORAGE.regular });
+
+  test("cycling a tune's status on the list queues offline and syncs", async ({ page, context }) => {
+    await page.goto("/my-tunes");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+
+    // Add a throwaway catalog tune (want-to-learn) so we never mutate the asserted seed tunes.
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
+    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
+    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number;
+    expect(tid).toBeTruthy();
+    await page.request.post("/api/my-tunes/ops", { data: { type: "add", tune_id: tid, learn_status: "want to learn" } });
+
+    try {
+      await page.goto("/my-tunes"); // reload so the new tune is in the list
+      const badge = page.locator(`[data-tune-id="${tid}"] .status-badge`).first();
+      await expect(badge).toHaveText(/want to learn/i, { timeout: 8000 });
+
+      await context.setOffline(true);
+      await badge.click(); // want to learn -> learning (optimistic, queued)
+      await expect(badge).toHaveText(/learning/i);
+      // The op is queued asynchronously (IndexedDB write) — poll rather than check once.
+      await expect
+        .poll(
+          async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).some((o: any) => o.type === "set_status")),
+          { timeout: 5000 }
+        )
+        .toBe(true);
+
+      await context.setOffline(false);
+      await expect
+        .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
+        .toBe(0);
+      // Server reflects the change.
+      const after = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+      const row = (after.tunes || []).find((t: any) => t.tune_id === tid);
+      expect(row.learn_status).toBe("learning");
+    } finally {
+      await context.setOffline(false);
+      await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tid } });
+    }
+  });
+
+  test("the tune drawer's segmented status control changes + persists status", async ({ page }) => {
+    await page.goto("/my-tunes");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+
+    // Throwaway tune so we don't mutate seed data.
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
+    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
+    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number;
+    expect(tid).toBeTruthy();
+    await page.request.post("/api/my-tunes/ops", { data: { type: "add", tune_id: tid, learn_status: "want to learn" } });
+
+    try {
+      await page.goto("/my-tunes");
+      const card = page.locator(`[data-tune-id="${tid}"]`).first();
+      await expect(card).toBeVisible({ timeout: 8000 });
+      await card.click();
+
+      // The drawer shows a styled segmented control (no native <select>).
+      await expect(page.locator(".tunebook-status-seg")).toBeVisible({ timeout: 8000 });
+      await expect(page.locator(".tunebook-status-select")).toHaveCount(0);
+
+      await page.locator('.tunebook-status-opt[data-status="learning"]').click();
+      await expect(page.locator(".tunebook-status-opt.active")).toHaveAttribute("data-status", "learning");
+
+      await expect
+        .poll(async () => {
+          const j = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+          return (j.tunes || []).find((t: any) => t.tune_id === tid)?.learn_status;
+        }, { timeout: 8000 })
+        .toBe("learning");
+    } finally {
+      await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tid } });
+    }
+  });
+});
+
+/**
  * Background warm-up: a throttled idle pass caches the shells + tab data of the user's
  * session pages, so they work offline without having been visited.
  */
@@ -250,21 +359,72 @@ test.describe("background prefetch", () => {
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
     await page.waitForFunction(() => !!(window as any).CeolPrefetch, null, { timeout: 8000 });
 
-    // The first session the warm-up will cache (most recent), via page.request (no SW).
+    // The first session the warm-up would cache (most recent), via page.request (no SW).
     const ms = await (await page.request.get("/api/my-sessions?limit=25")).json();
     expect(ms.sessions && ms.sessions.length).toBeTruthy();
     const sess = ms.sessions[0];
 
-    // Trigger the warm-up explicitly (the real one runs on idle) and let it cache the
-    // sessions list + the first session.
-    await page.evaluate(() => (window as any).CeolPrefetch.warm());
-    await page.waitForTimeout(3000);
+    // Warm exactly one session via the real warm-up helper (caches the shell + its
+    // assets). We don't call the full warm() here because its fan-out would flood the
+    // single-process test server.
+    await page.evaluate(async (path) => {
+      await (window as any).CeolPrefetch.warmPage("/sessions/" + path);
+      await fetch("/api/sessions/" + path + "/people").catch(() => {});
+      await fetch("/api/sessions/" + path + "/logs").catch(() => {});
+      await fetch("/api/sessions/" + path + "/tunes/remaining").catch(() => {});
+    }, sess.path);
+    await page.waitForTimeout(2000);
 
     await context.setOffline(true);
     try {
       await page.goto("/sessions/" + sess.path);
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
       await expect(page.getByText(sess.name, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("warming a page also caches its stylesheet (renders styled offline)", async ({ page, context }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!(window as any).CeolPrefetch, null, { timeout: 8000 });
+
+    await page.evaluate(() => (window as any).CeolPrefetch.warmPage("/my-tunes"));
+    await page.waitForTimeout(2500);
+
+    await context.setOffline(true);
+    try {
+      // The page's own stylesheet is cached (served from the SW), so it renders styled.
+      const cssStatus = await page.evaluate(async () => (await fetch("/static/css/my_tunes_mobile.css")).status);
+      expect(cssStatus).toBe(200);
+      await page.goto("/my-tunes");
+      await expect(page.locator("h1")).toContainText(/My Tunes/i);
+      await expect(page.locator("body")).not.toContainText(/You're offline/i);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("a tunebook tune's notation detail is available offline after warming", async ({ page, context }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
+    await page.goto("/my-tunes");
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const ptid = (mine.tunes || [])[0]?.person_tune_id;
+    expect(ptid).toBeTruthy();
+
+    // Warm the tune's detail (ABC + dots) through the SW so Tier 1 caches it.
+    await page.evaluate(async (ptid) => { await fetch("/api/my-tunes/" + ptid); }, ptid);
+    await page.waitForTimeout(500);
+
+    await context.setOffline(true);
+    try {
+      // Offline, the detail is served from cache (200), not the offline 503 fallback.
+      const status = await page.evaluate(async (ptid) => (await fetch("/api/my-tunes/" + ptid)).status, ptid);
+      expect(status).toBe(200);
     } finally {
       await context.setOffline(false);
     }

@@ -687,14 +687,16 @@ ${abcBody}`;
         // On list - color by status
         const statusClass = `tunebook-status-${learnStatus.replace(/ /g, '-')}`;
 
+        const opt = (val, label) =>
+            `<button type="button" class="tunebook-status-opt${learnStatus === val ? ' active' : ''}" data-status="${val}" onclick="TuneDetailModal.setTunebookStatus('${val}')">${label}</button>`;
         return `
             <div class="tunebook-status-section ${statusClass}">
-                This tune is on your list as
-                <select id="tunebook-status-select" class="tunebook-status-select" onchange="TuneDetailModal.updateTunebookStatus()">
-                    <option value="want to learn" ${learnStatus === 'want to learn' ? 'selected' : ''}>Want To Learn</option>
-                    <option value="learning" ${learnStatus === 'learning' ? 'selected' : ''}>Learning</option>
-                    <option value="learned" ${learnStatus === 'learned' ? 'selected' : ''}>Learned</option>
-                </select>
+                <span class="tunebook-status-label">This tune is on your list as</span>
+                <div class="tunebook-status-seg" role="group" aria-label="Learn status">
+                    ${opt('want to learn', 'Want To Learn')}
+                    ${opt('learning', 'Learning')}
+                    ${opt('learned', 'Learned')}
+                </div>
             </div>
         `;
     }
@@ -1908,49 +1910,30 @@ ${abcBody}`;
      * This function is no longer used but kept for reference.
      * Status changes now go through the save() function via dirty tracking.
      */
-    function updateTunebookStatus() {
-        // Auto-save the learn-status droplist on change (spec 006), then refresh the
-        // status color + heard-count section IN PLACE (no full re-render, so unsaved
-        // Configure edits aren't clobbered).
-        const sel = document.getElementById('tunebook-status-select');
-        if (!sel) return;
-        const newStatus = sel.value;
+    function setTunebookStatus(newStatus) {
+        // Auto-save the learn status on tap, keyed by tune_id through the offline op-queue
+        // (queues when offline, syncs on reconnect). Then refresh the status color +
+        // heard-count section IN PLACE (no full re-render, so unsaved Configure edits
+        // aren't clobbered). Works across my_tunes / session / session_instance contexts.
         if (newStatus === originalValues.learn_status) return;
+        const tuneId = currentTuneData.tune_id;
+        if (!tuneId) return;
 
-        // Endpoint differs by context: my_tunes updates the person_tune row directly;
-        // session / session_instance use the per-tune status endpoint.
-        let endpoint;
-        if (currentContext === 'my_tunes') {
-            const personTuneId = currentTuneData.person_tune_id || currentConfig.additionalData?.personTuneId;
-            endpoint = `/api/my-tunes/${personTuneId}`;
-        } else {
-            endpoint = `/api/person/tunes/${currentTuneData.tune_id}/status`;
-        }
+        const seg = document.querySelector('.tunebook-status-seg');
+        const prev = originalValues.learn_status;
 
-        sel.disabled = true;
-        fetch(endpoint, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ learn_status: newStatus }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            sel.disabled = false;
-            if (!data.success) {
-                sel.value = originalValues.learn_status; // revert on failure
-                return;
-            }
-            originalValues.learn_status = newStatus;
-            currentTuneData.learn_status = newStatus;
-            if (currentTuneData.person_tune_status) {
-                currentTuneData.person_tune_status.learn_status = newStatus;
-            }
-            // recolor the status container
-            const section = sel.closest('.tunebook-status-section');
+        // Optimistically reflect the new status (highlight the chosen option + recolor).
+        const applyUi = (status) => {
+            const section = document.querySelector('.tunebook-status-section');
             if (section) {
-                section.className = 'tunebook-status-section tunebook-status-' + newStatus.replace(/ /g, '-');
+                section.className = 'tunebook-status-section tunebook-status-' + status.replace(/ /g, '-');
+                section.querySelectorAll('.tunebook-status-opt').forEach((b) => {
+                    b.classList.toggle('active', b.dataset.status === status);
+                });
             }
-            // refresh heard-count visibility in place (shown for want-to-learn/learning)
+            originalValues.learn_status = status;
+            currentTuneData.learn_status = status;
+            if (currentTuneData.person_tune_status) currentTuneData.person_tune_status.learn_status = status;
             const heardHtml = buildHeardCountSection(currentTuneData, currentConfig);
             const existingHeard = document.querySelector('.heard-count-section');
             if (existingHeard) {
@@ -1959,13 +1942,14 @@ ${abcBody}`;
             } else if (heardHtml && section) {
                 section.insertAdjacentHTML('afterend', heardHtml);
             }
-            // keep the Save button's dirty-check in sync (no longer dirty from status)
             onFieldChange();
-        })
-        .catch(() => {
-            sel.disabled = false;
-            sel.value = originalValues.learn_status;
-        });
+        };
+
+        applyUi(newStatus);
+        if (seg) seg.classList.add('saving');
+        submitMyTunesOp({ type: 'set_status', tune_id: tuneId, learn_status: newStatus })
+            .then(() => { if (seg) seg.classList.remove('saving'); }) // success OR queued offline
+            .catch(() => { if (seg) seg.classList.remove('saving'); applyUi(prev); }); // server rejected -> revert
     }
 
     /**
@@ -2360,7 +2344,7 @@ ${abcBody}`;
         incrementHeardCount: incrementHeardCount,
         decrementHeardCount: decrementHeardCount,
         addToTunebook: addToTunebook,
-        updateTunebookStatus: updateTunebookStatus,
+        setTunebookStatus: setTunebookStatus,
         removeFromMyTunes: removeFromMyTunes,
         removeFromSession: removeFromSession,
         refreshTunebookCount: refreshTunebookCount,

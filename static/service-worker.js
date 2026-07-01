@@ -21,7 +21,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v13'
+const VERSION = 'v21'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
@@ -178,8 +178,10 @@ self.addEventListener('fetch', (event) => {
     // The live logger owns its own data + worker — never touch it.
     if (url.pathname.startsWith('/api/live/')) return
     if (url.pathname.startsWith('/live/')) return
-    if (url.pathname.startsWith('/admin')) return
     if (url.pathname === '/logout') return
+    // NOTE: /admin is intentionally NOT bypassed — admin navigations still go through
+    // handleNav so they show the offline page (rather than a browser error) when
+    // offline. handleNav skips snapshotting them, so admin is never cached for offline.
 
     // Tier 1: GET /api/* — network-first into a per-user cache so the AJAX-driven
     // pages (My Tunes, Common Tunes, session-detail tabs) have data offline. Writes
@@ -215,7 +217,14 @@ async function handleNav(req) {
   const cache = await caches.open(pagesCache(uid))
   try {
     const res = await fetch(req)
-    if (res && res.ok && !res.redirected && res.headers.get('X-Offline-Exclude') == null) {
+    // Snapshot for offline — but never cache admin (excluded from offline support) or
+    // pages the server marks X-Offline-Exclude (the legacy editor). They still get the
+    // offline page on failure below; they just aren't stored.
+    if (
+      res && res.ok && !res.redirected &&
+      res.headers.get('X-Offline-Exclude') == null &&
+      !new URL(req.url).pathname.startsWith('/admin')
+    ) {
       cache.put(req, res.clone())
     }
     return res

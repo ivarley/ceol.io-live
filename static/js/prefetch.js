@@ -14,7 +14,7 @@
   var WARM_KEY = 'ceol_prefetch_at'
   var WARM_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6h
   var SESSION_CAP = 25
-  var GAP_MS = 250 // small gap between sessions so we never hammer the server
+  var GAP_MS = 250 // small gap between requests so we never hammer the server
 
   function recentlyWarmed() {
     try { return Date.now() - (parseInt(window.localStorage.getItem(WARM_KEY) || '0', 10)) < WARM_INTERVAL_MS } catch (e) { return false }
@@ -23,6 +23,7 @@
 
   function skip() {
     if (typeof navigator === 'undefined' || navigator.onLine === false) return true
+    if (navigator.webdriver) return true // don't fan out background fetches under automation (e2e)
     if (navigator.connection && navigator.connection.saveData) return true // respect data-saver
     return !('serviceWorker' in navigator)
   }
@@ -40,30 +41,71 @@
       .catch(function () {})
   }
 
-  // Fetch a GET so the Tier 1 SW cache stores it (best-effort; ignore failures).
+  // Fetch a GET so the Tier 1 / static SW cache stores it (best-effort; ignore failures).
   function warmApi(url) { return fetch(url, { credentials: 'same-origin' }).then(function () {}, function () {}) }
 
+  // Cache a page's static subresources (its stylesheets + scripts) so the warmed page
+  // renders styled/interactive offline — cache-page only stores the HTML, not its assets.
+  function warmPageAssets(url) {
+    return fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.ok && !r.redirected ? r.text() : '' })
+      .then(function (html) {
+        if (!html) return
+        var doc = new DOMParser().parseFromString(html, 'text/html')
+        var urls = []
+        doc.querySelectorAll('link[rel="stylesheet"][href], script[src]').forEach(function (el) {
+          var u = el.getAttribute('href') || el.getAttribute('src')
+          if (u && u.indexOf('/static/') === 0 && urls.indexOf(u) === -1) urls.push(u)
+        })
+        var chain = Promise.resolve()
+        urls.forEach(function (u) { chain = chain.then(function () { return warmApi(u) }) })
+        return chain
+      })
+      .catch(function () {})
+  }
+
+  // Snapshot a page (HTML) AND cache its static assets so it renders properly offline.
+  function warmPage(url) {
+    return cachePage(url).then(function () { return warmPageAssets(url) })
+  }
+
   function warmSession(path) {
-    return cachePage('/sessions/' + path)
+    return warmPage('/sessions/' + path)
       .then(function () { return warmApi('/api/sessions/' + path + '/people') })
       .then(function () { return warmApi('/api/sessions/' + path + '/logs') })
       .then(function () { return warmApi('/api/sessions/' + path + '/tunes/remaining') })
   }
 
+  // The core personal pages (+ their data) so they work offline without being visited.
+  // My Tunes first — it's the most common next hop from home.
+  function warmCorePages() {
+    return warmPage('/my-tunes')
+      .then(function () { return warmApi('/api/my-tunes?per_page=2000&sort=alpha-asc') })
+      .then(function () { return warmPage('/') })
+      .then(function () { return warmPage('/my-tunes/add') })
+      .then(function () { return warmApi('/api/tunes/popular?limit=100') })
+  }
+
+  var warming = false
   function warm() {
-    if (skip() || recentlyWarmed()) return
-    fetch('/api/my-sessions?limit=' + SESSION_CAP, { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null })
-      .then(function (d) {
-        if (!d || !d.sessions) return // not logged in / nothing to warm
-        markWarmed()
-        var chain = cachePage('/sessions')
-        d.sessions.slice(0, SESSION_CAP).forEach(function (s) {
-          chain = chain.then(function () { return delay(GAP_MS) }).then(function () { return warmSession(s.path) })
-        })
-        return chain
+    if (warming || skip() || recentlyWarmed()) return
+    warming = true
+    warmCorePages()
+      .then(function () {
+        return fetch('/api/my-sessions?limit=' + SESSION_CAP, { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : null })
+          .then(function (d) {
+            if (!d || !d.sessions) return
+            var chain = cachePage('/sessions')
+            d.sessions.slice(0, SESSION_CAP).forEach(function (s) {
+              chain = chain.then(function () { return delay(GAP_MS) }).then(function () { return warmSession(s.path) })
+            })
+            return chain
+          })
       })
+      .then(function () { markWarmed() }) // only mark done once it actually completed
       .catch(function () {})
+      .then(function () { warming = false })
   }
 
   // Only warm from a "hub" page the user tends to land on, and only after a delay — so
@@ -75,14 +117,14 @@
   }
   function schedule() {
     if (skip() || !isHub()) return
-    setTimeout(function () {
-      if (skip()) return
-      if (window.requestIdleCallback) window.requestIdleCallback(warm, { timeout: 5000 })
-      else warm()
-    }, 5000)
+    // Fire deterministically a couple of seconds after load — long enough not to compete
+    // with the user's initial navigation, short enough to be cached before they click on.
+    // (Not requestIdleCallback: right after a hard reload / SW install the page may never
+    // report "idle" for a while, so the warm-up could be delayed indefinitely.)
+    setTimeout(warm, 2000)
   }
 
-  window.CeolPrefetch = { warm: warm }
+  window.CeolPrefetch = { warm: warm, warmPage: warmPage }
 
   if (document.readyState === 'complete') schedule()
   else window.addEventListener('load', schedule)

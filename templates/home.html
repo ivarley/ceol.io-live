@@ -194,7 +194,9 @@
         font-weight: 500;
         font-size: 1rem;
         color: #fff;
-        background: var(--primary);
+        /* Fixed darker-blue (brand family) so white text has strong contrast in both
+           themes — the light-ish --primary washed the label out. */
+        background: #006aa0;
         border: none;
         border-radius: 6px;
         text-decoration: none;

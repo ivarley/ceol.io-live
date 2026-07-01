@@ -319,6 +319,7 @@
     font-size: 14px;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
@@ -377,55 +378,34 @@
     background-color: rgba(0,0,0,0.1);
 }
 
-.tunebook-status-select {
-    padding: 6px 28px 6px 10px;
+/* Learn-status segmented control (replaces a native <select> so the open list isn't the
+   unstyled OS picker, and so status changes route through the offline op-queue). */
+.tunebook-status-label { flex: 1 1 auto; min-width: 0; }
+.tunebook-status-seg {
+    display: inline-flex;
+    flex: 0 0 auto;
     border: 1.5px solid currentColor;
     border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+}
+.tunebook-status-seg.saving { opacity: 0.6; pointer-events: none; }
+.tunebook-status-opt {
+    padding: 6px 12px;
+    border: 0;
+    border-left: 1px solid currentColor;
+    background: transparent;
     color: inherit;
     font-size: 13px;
-    cursor: pointer;
     font-weight: 600;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23000' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
-    transition: all 0.2s ease;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
 }
-
-[data-theme="dark"] .tunebook-status-select {
-    background-color: rgba(0, 0, 0, 0.3);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
-}
-
-.tunebook-status-select:hover {
-    background-color: rgba(255, 255, 255, 0.8);
-    border-width: 2px;
-}
-
-[data-theme="dark"] .tunebook-status-select:hover {
-    background-color: rgba(0, 0, 0, 0.5);
-}
-
-.tunebook-status-select:focus {
-    outline: none;
-    border-width: 2px;
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="dark"] .tunebook-status-select:focus {
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
-}
-
-/* Style the dropdown options */
-.tunebook-status-select option {
-    background-color: var(--modal-bg);
-    color: var(--text-color);
-    padding: 8px 12px;
-    font-weight: 500;
-}
+.tunebook-status-opt:first-child { border-left: 0; }
+.tunebook-status-opt:hover { background-color: rgba(0, 0, 0, 0.08); }
+[data-theme="dark"] .tunebook-status-opt:hover { background-color: rgba(255, 255, 255, 0.12); }
+.tunebook-status-opt.active { background-color: rgba(0, 0, 0, 0.16); font-weight: 700; }
+[data-theme="dark"] .tunebook-status-opt.active { background-color: rgba(255, 255, 255, 0.22); }
 
 /* Heard count section */
 .heard-count-section {
