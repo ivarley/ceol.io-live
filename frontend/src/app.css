@@ -655,11 +655,18 @@ main {
 .results .r-abc { color: #9a8f6a; }
 /* "Likely next tune": the pinned, pre-typing suggestion at the top of the dropdown. The
    arrow marks it as a predicted continuation; the typed substring is bolded in r-name. */
-.results .result-next { border-bottom: 1px solid var(--border); }
-.results .result-next .r-arrow { flex: none; color: var(--accent); font-weight: 700; }
+.results .result-next { border-bottom: 1px solid var(--border); background: rgba(79, 157, 255, 0.09); font-style: italic; }
+.results .result-next .r-arrow { flex: none; color: var(--accent); font-weight: 700; font-style: normal; }
 .results .result-next .r-name { font-weight: 500; }
 .results .result-next .r-name strong { font-weight: 800; }
 .results .result-next .r-next-label { color: var(--accent); }
+/* Dismiss (✕): drop this anchor->suggestion pairing for the rest of the session. */
+.results .result-next .r-dismiss {
+  flex: none; margin-left: 2px; padding: 0 4px;
+  background: none; border: none; cursor: pointer;
+  color: #e05c5c; font-size: 16px; line-height: 1; font-style: normal; opacity: 0.65;
+}
+.results .result-next .r-dismiss:hover { opacity: 1; }
 
 /* "already logged — merged" nudge with a Keep-both escape (§D16) */
 .merge-nudge {

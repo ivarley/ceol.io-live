@@ -28,6 +28,11 @@
   // carried on each vocab entry's `next`). SvelteMap so the suggestion derived recomputes
   // when the background vocabulary load fills it in.
   const nextByTuneId = new SvelteMap()
+  // Anchor->next associations the user has dismissed (the ✕ on the suggestion row) this
+  // session. In-memory only, never persisted; keyed "<anchorTuneId>-><nextTuneId>" so a
+  // dismissal only silences that one pairing. SvelteSet so nextSuggestion recomputes on add.
+  const dismissedNext = new SvelteSet()
+  const nextAssocKey = (anchorId, nextId) => `${anchorId}->${nextId}`
   let sseStatus = $state('connecting') // raw SSE state: connecting | live | reconnecting | error
   let loaded = $state(false) // first bootstrap has populated records — gates the loading skeleton vs "no tunes yet"
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
@@ -833,6 +838,7 @@
     if (last.record_type === 'break' || last.tune_id == null) return null
     const nx = nextByTuneId.get(last.tune_id)
     if (!nx) return null
+    if (dismissedNext.has(nextAssocKey(last.tune_id, nx.tune_id))) return null // dismissed this session
     if (currentSetTuneIds().has(nx.tune_id)) return null // already in this set -> suppress
     return nx
   })
@@ -844,6 +850,14 @@
     return !q || normName(nextSuggestion.name).includes(q)
   })
   const showNext = $derived(!viewing && !composerLocked && composerFocused && nextMatches)
+  // Silence the current anchor->suggestion pairing for the rest of this session (memory only).
+  function dismissNext() {
+    const nx = nextSuggestion
+    if (!nx) return
+    const seg = cursorSegment()
+    const last = seg && seg.tunes.length ? seg.tunes[seg.tunes.length - 1] : null
+    if (last && last.tune_id != null) dismissedNext.add(nextAssocKey(last.tune_id, nx.tune_id))
+  }
   // Don't list the suggested tune twice (pinned row + a normal result below it).
   const visibleResults = $derived(
     showNext && nextSuggestion ? results.filter((r) => r.tune_id !== nextSuggestion.tune_id) : results
@@ -2476,6 +2490,7 @@
             <span class="r-arrow" aria-hidden="true">→</span>
             <span class="r-name">{parts.pre}<strong>{parts.mid}</strong>{parts.post}</span>
             <span class="r-meta">{nextSuggestion.tune_type || ''}<span class="r-next-label"> · usually next</span></span>
+            <button class="r-dismiss" type="button" title="Don't suggest this next" aria-label="Dismiss suggestion" onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); dismissNext() }}>×</button>
           </li>
         {/if}
         {#each visibleResults as t (t.tune_id)}
