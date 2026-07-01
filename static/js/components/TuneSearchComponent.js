@@ -205,10 +205,10 @@ class TuneSearchComponent {
             })
             .catch(error => {
                 console.error('Search error:', error);
-                // Offline fallback: search the locally-cached popular tunes so the user
-                // can still find and add common tunes without a connection (Tier 2).
-                if (window.MyTunesOffline && window.MyTunesOffline.searchPopular) {
-                    window.MyTunesOffline.searchPopular(query)
+                // Offline fallback: search the locally-cached bundle (your tunes + popular)
+                // so the user can still find and add tunes without a connection.
+                if (window.CeolOffline && window.CeolOffline.searchTunes) {
+                    window.CeolOffline.searchTunes(query)
                         .then(results => {
                             if (results && results.length) {
                                 this.searchResults = results;

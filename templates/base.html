@@ -48,11 +48,19 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/hamburger_menu.css') }}">
     <script src="{{ url_for('static', filename='js/hamburger_menu.js') }}"></script>
 
+    <!-- Unified tune-detail modal, available app-wide (the hamburger "Find a tune" opens it
+         from every page). Loaded here so it works offline without lazy-loading. A page with
+         its own self-contained modal (e.g. common_tunes) overrides these blocks to opt out. -->
+    {% block tune_detail_modal_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+    {% endblock %}
+
     <!-- App-wide My-Tunes offline op-queue + connection / offline-sync indicator -->
     <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/connection_status.js') }}" defer></script>
     {% if current_user.is_authenticated %}
-    <!-- Background offline warm-up of major pages (throttled, idle-only) -->
+    <!-- Offline data mirror (tunebook + notation + popular) and page warm-up -->
+    <script src="{{ url_for('static', filename='js/offline_data.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/prefetch.js') }}" defer></script>
     {% endif %}
 
@@ -747,6 +755,12 @@ if ('serviceWorker' in navigator) {
 
 <!-- LZ-String for ABC Tools share links -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+
+<!-- Unified tune-detail modal container + logic (one per page; child templates no longer include their own) -->
+{% block tune_detail_modal %}
+{% include 'tune_detail_modal.html' %}
+<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}" defer></script>
+{% endblock %}
 
 {% block extra_js %}{% endblock %}
 

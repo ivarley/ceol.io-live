@@ -93,15 +93,28 @@ function openFindTuneOverlay() {
         if (q.length < 2) { results.innerHTML = ''; return; }
         timer = setTimeout(async () => {
             const mine = ++seq;
+            const render = (tunes) => {
+                if (mine !== seq) return;
+                results.innerHTML = (tunes && tunes.length)
+                    ? tunes.map(t => `<li class="ft-item" data-tune-id="${t.tune_id}">${escapeHtmlFT(t.name)}<span class="ft-type">${t.tune_type || ''}</span></li>`).join('')
+                    : '<li class="ft-empty">No tunes match</li>';
+            };
+            const offline = async () => {
+                // Offline fallback: search the locally-cached bundle (your tunes + popular).
+                if (window.CeolOffline) { try { return await window.CeolOffline.searchTunes(q, 10); } catch (e) {} }
+                return null;
+            };
             try {
                 const res = await fetch('/api/tunes/search?q=' + encodeURIComponent(q) + '&limit=10', { credentials: 'same-origin' });
                 const json = await res.json();
                 if (mine !== seq) return;
-                const tunes = json.tunes || [];
-                results.innerHTML = tunes.length
-                    ? tunes.map(t => `<li class="ft-item" data-tune-id="${t.tune_id}">${escapeHtmlFT(t.name)}<span class="ft-type">${t.tune_type || ''}</span></li>`).join('')
-                    : '<li class="ft-empty">No tunes match</li>';
-            } catch (e) { /* search is non-critical */ }
+                if (json && json.success && (json.tunes || []).length) { render(json.tunes); return; }
+                const off = await offline();
+                render(off !== null ? off : (json.tunes || []));
+            } catch (e) {
+                const off = await offline();
+                if (off !== null) render(off);
+            }
         }, 200);
     });
     results.addEventListener('click', function (e) {
@@ -119,7 +132,7 @@ function openFindTuneOverlay() {
                 apiEndpoint: '/api/tunes/' + tuneId + '/detail',
                 additionalData: { isUserLoggedIn: true, tuneName: tuneName, global: true },
             });
-        }).catch(function () { window.location.href = '/my-tunes'; });
+        }).catch(function () { /* modal unavailable (should not happen: base.html loads it app-wide) */ });
     });
     setTimeout(() => input.focus(), 50);
 }

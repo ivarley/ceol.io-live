@@ -2,6 +2,10 @@
 
 {% block title %}Tunes In Common{% endblock %}
 
+{# This page has its own self-contained tune-detail modal, so opt out of the app-wide one. #}
+{% block tune_detail_modal_css %}{% endblock %}
+{% block tune_detail_modal %}{% endblock %}
+
 {% block extra_css %}
 <style>
 /* Base container styles */

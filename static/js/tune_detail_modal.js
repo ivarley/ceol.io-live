@@ -11,6 +11,11 @@
 (function(window) {
     'use strict';
 
+    // Idempotent: base.html now loads this on every page, and some templates also include
+    // it directly. Registering twice would rebind module-level listeners, so bail if already
+    // present.
+    if (window.TuneDetailModal) return;
+
     // Modal state
     let modalShowTime = 0;
     let currentContext = null;
@@ -100,13 +105,46 @@
                     currentTuneData = extractTuneData(data, config.context);
                     renderModalContent(modalContent, currentTuneData, config);
                 } else {
-                    showError(modalContent, data.error || 'Failed to load tune details');
+                    renderTuneFromOffline(config, modalContent, data.error);
                 }
             })
             .catch(error => {
                 console.error('Error loading tune details:', error);
-                showError(modalContent, 'Failed to load tune details');
+                renderTuneFromOffline(config, modalContent, 'Failed to load tune details');
             });
+    }
+
+    /**
+     * Offline fallback: render the tune from the locally-cached bundle (incipit notation),
+     * so the drawer works without a connection. Falls back to an error if not cached.
+     */
+    function renderTuneFromOffline(config, modalContent, errMsg) {
+        if (!window.CeolOffline || !config.tuneId) {
+            showError(modalContent, errMsg || 'Failed to load tune details');
+            return;
+        }
+        const pending = (window.MyTunesOffline && window.MyTunesOffline.pending)
+            ? window.MyTunesOffline.pending() : Promise.resolve([]);
+        Promise.all([window.CeolOffline.getTune(config.tuneId), pending])
+            .then(([tune, ops]) => {
+                if (!tune) { showError(modalContent, errMsg || 'Failed to load tune details'); return; }
+                const t = Object.assign({}, tune); // don't mutate the cached copy
+                // Popular-catalog tunes carry only `name`; the renderer reads `tune_name`.
+                if (!t.tune_name && t.name) t.tune_name = t.name;
+                // Overlay not-yet-synced ops so the drawer reflects offline edits.
+                (ops || []).filter(o => Number(o.tune_id) === Number(config.tuneId))
+                    .sort((a, b) => a.ts - b.ts)
+                    .forEach(o => {
+                        if (o.type === 'set_status') t.learn_status = o.learn_status;
+                        else if (o.type === 'set_heard') t.heard_count = o.heard_count;
+                        else if (o.type === 'set_notes') t.notes = o.notes;
+                        else if (o.type === 'add' && !t.learn_status) t.learn_status = o.learn_status || 'want to learn';
+                    });
+                // extractTuneData just picks a sub-key, so provide the tune under each.
+                currentTuneData = extractTuneData({ success: true, person_tune: t, session_tune: t, tune: t }, config.context);
+                renderModalContent(modalContent, currentTuneData, config);
+            })
+            .catch(() => showError(modalContent, errMsg || 'Failed to load tune details'));
     }
 
     /**
@@ -1882,8 +1920,10 @@ ${abcBody}`;
         })
             .then(res => {
                 if (res && res.queued) {
-                    // Offline: can't re-fetch the modal, so just acknowledge the queued add.
-                    alert('Added to your tunes. It will sync when you are back online.');
+                    // Offline: send the user to their list (where the queued add shows as
+                    // pending) and acknowledge with a toast there — not a blocking alert.
+                    try { sessionStorage.setItem('myTunesToast', 'Added to your tunes. It will sync when you are back online.'); } catch (e) {}
+                    window.location.href = '/my-tunes';
                     return;
                 }
                 // Online: reload the modal to show the updated (in-collection) state.

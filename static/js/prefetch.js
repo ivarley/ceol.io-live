@@ -12,7 +12,7 @@
   if (window.CeolPrefetch) return
 
   var WARM_KEY = 'ceol_prefetch_at'
-  var WARM_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6h
+  var WARM_INTERVAL_MS = 10 * 60 * 1000 // 10 min — refresh offline caches while browsing
   var SESSION_CAP = 25
   var GAP_MS = 250 // small gap between requests so we never hammer the server
 
@@ -76,14 +76,16 @@
       .then(function () { return warmApi('/api/sessions/' + path + '/tunes/remaining') })
   }
 
-  // The core personal pages (+ their data) so they work offline without being visited.
-  // My Tunes first — it's the most common next hop from home.
+  // The core personal pages (+ the exact data those pages fetch) so they work offline
+  // without being visited. My Tunes first — the most common next hop from home.
   function warmCorePages() {
     return warmPage('/my-tunes')
       .then(function () { return warmApi('/api/my-tunes?per_page=2000&sort=alpha-asc') })
       .then(function () { return warmPage('/') })
       .then(function () { return warmPage('/my-tunes/add') })
-      .then(function () { return warmApi('/api/tunes/popular?limit=100') })
+      .then(function () { return warmPage('/sessions') })
+      .then(function () { return warmApi('/api/sessions/with-today-status') }) // what /sessions renders from
+      .then(function () { return window.CeolOffline ? window.CeolOffline.sync(true) : null }) // tunebook + notation + popular
   }
 
   var warming = false
@@ -108,19 +110,12 @@
       .then(function () { warming = false })
   }
 
-  // Only warm from a "hub" page the user tends to land on, and only after a delay — so
-  // the burst of background fetches never competes with the user's initial navigation
-  // (which, on a loaded server, can disrupt in-flight requests like the logout redirect).
-  function isHub() {
-    var p = window.location.pathname
-    return p === '/' || p === '/sessions' || p === '/sessions/'
-  }
   function schedule() {
-    if (skip() || !isHub()) return
-    // Fire deterministically a couple of seconds after load — long enough not to compete
-    // with the user's initial navigation, short enough to be cached before they click on.
-    // (Not requestIdleCallback: right after a hard reload / SW install the page may never
-    // report "idle" for a while, so the warm-up could be delayed indefinitely.)
+    if (skip()) return
+    // Fire on any authed page load (deduped ~10 min via WARM_KEY), a couple of seconds
+    // after load — long enough not to compete with the user's initial navigation, short
+    // enough to be cached before they click on. (Not requestIdleCallback: right after a
+    // hard reload / SW install the page may never report "idle" for a while.)
     setTimeout(warm, 2000)
   }
 

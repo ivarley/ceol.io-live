@@ -21,6 +21,7 @@ from api_person_tune_routes import (
     decrement_tune_heard_count,
     my_tunes_op,
     get_popular_tunes,
+    get_offline_bundle,
     get_my_sessions,
     sync_my_tunes,
     search_tunes,
@@ -983,6 +984,12 @@ app.add_url_rule(
     "/api/my-sessions",
     "get_my_sessions",
     get_my_sessions,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/offline/bundle",
+    "get_offline_bundle",
+    get_offline_bundle,
     methods=["GET"],
 )
 app.add_url_rule(

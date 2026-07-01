@@ -118,8 +118,7 @@
     </div>
 </div>
 
-<!-- Unified Tune Detail Modal -->
-{% include 'tune_detail_modal.html' %}
+<!-- Unified Tune Detail Modal container is provided app-wide by base.html -->
 
 <script>
 // Helper functions for API calls
@@ -367,26 +366,6 @@ function extractTuneId(input) {
     return null;
 }
 
-// Cache the most popular tunes + pre-snapshot the add page so a user who has visited
-// My Tunes can search for and add popular tunes while offline (Tier 2).
-function cachePopularForOffline() {
-    if (!window.MyTunesOffline) return;
-    fetch('/api/tunes/popular?limit=100')
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { if (d && d.tunes) window.MyTunesOffline.savePopular(d.tunes); })
-        .catch(function () { /* offline / best-effort */ });
-    // Ask the worker to snapshot the add page so it's reachable offline. Use ready()
-    // (not controller, which is null on the first, uncontrolled load).
-    if (navigator.serviceWorker) {
-        navigator.serviceWorker.ready
-            .then(function (reg) {
-                var sw = reg.active || navigator.serviceWorker.controller;
-                if (sw) sw.postMessage({ type: 'cache-page', url: '/my-tunes/add' });
-            })
-            .catch(function () {});
-    }
-}
-
 // Overlay not-yet-synced offline ops (queued in MyTunesOffline) onto the server tune
 // list so an offline add/edit/remove is reflected immediately, before it syncs. Add ops
 // carry name/tune_type for display. Returns a Promise of the merged list.
@@ -430,32 +409,6 @@ function overlayPendingOps(serverTunes) {
         .catch(function () { return serverTunes; });
 }
 
-// Background-cache each tunebook tune's detail (ABC + base64 "dots") while online, so
-// opening a tune drawer works offline. Prioritizes active tunes, capped, throttled, and
-// skipped under automation / data-saver. Runs after the full list has loaded.
-function cacheTuneDetailsForOffline(tunes) {
-    if (!navigator.onLine || navigator.webdriver) return;
-    if (navigator.connection && navigator.connection.saveData) return;
-    try {
-        var last = parseInt(localStorage.getItem('ceol_tunedetail_at') || '0', 10);
-        if (Date.now() - last < 3600000) return; // at most once an hour
-        localStorage.setItem('ceol_tunedetail_at', String(Date.now()));
-    } catch (e) {}
-    var rank = function (s) { return s === 'learning' ? 0 : s === 'want to learn' ? 1 : 2; };
-    var list = (tunes || []).slice()
-        .filter(function (t) { return t.person_tune_id && String(t.person_tune_id).indexOf('pending-') !== 0; })
-        .sort(function (a, b) { return rank(a.learn_status) - rank(b.learn_status); })
-        .slice(0, 100);
-    var i = 0;
-    (function next() {
-        if (i >= list.length) return;
-        var t = list[i++];
-        fetch('/api/my-tunes/' + t.person_tune_id, { credentials: 'same-origin' })
-            .catch(function () {})
-            .then(function () { setTimeout(next, 200); });
-    })();
-}
-
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTunes();
@@ -463,9 +416,11 @@ document.addEventListener('DOMContentLoaded', function() {
     loadFiltersFromURL();
     checkForSuccessMessage();
     checkForCopyMessage();
+    checkForOfflineAddToast();
     scrollToAndHighlightTune();
     setupScrollDetection();
-    cachePopularForOffline();
+    // Offline data (tunebook + notation + popular) is mirrored globally by offline_data.js.
+    if (window.CeolOffline) window.CeolOffline.sync();
 
     // Check for tune parameter in URL and open modal if present
     const tuneId = TuneDetailModal.getTuneIdFromUrl();
@@ -523,6 +478,16 @@ function checkForCopyMessage() {
     const message = sessionStorage.getItem('copyTunesMessage');
     if (message) {
         sessionStorage.removeItem('copyTunesMessage');
+        showMessage(message, 'success');
+    }
+}
+
+// Toast handed off from an offline "add to your tunes" action in the tune drawer
+// (which navigates here instead of showing a blocking alert).
+function checkForOfflineAddToast() {
+    const message = sessionStorage.getItem('myTunesToast');
+    if (message) {
+        sessionStorage.removeItem('myTunesToast');
         showMessage(message, 'success');
     }
 }
@@ -1076,7 +1041,6 @@ function loadTunes() {
 
                 populateTuneTypes();
                 applyFilters();
-                cacheTuneDetailsForOffline(allTunes); // warm tune notation for offline drawers
             });
         })
         .catch(error => {
@@ -1573,7 +1537,7 @@ function createTuneCard(tune) {
                         <span class="swipe-action-icon">+</span>
                     </button>
                 </div>
-                <div class="tune-card tune-card-swipeable" onclick="showTuneDetail(${tune.person_tune_id}, event)">
+                <div class="tune-card tune-card-swipeable" onclick="showTuneDetail('${tune.person_tune_id}', event)">
                     <div class="tune-card-header">
                         <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
                         ${pendingBadge}
@@ -1594,7 +1558,7 @@ function createTuneCard(tune) {
         `;
     } else {
         return `
-            <div class="tune-card" ${swipeAttr} onclick="showTuneDetail(${tune.person_tune_id}, event)">
+            <div class="tune-card" ${swipeAttr} onclick="showTuneDetail('${tune.person_tune_id}', event)">
                 <div class="tune-card-header">
                     <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
                     ${pendingBadge}
@@ -1728,9 +1692,9 @@ function showTuneDetail(personTuneId, event) {
         event.stopPropagation();
     }
 
-    // Find the tune in our local data to get basic info for loading state
-    // This is just for the initial display - the modal will fetch full data from API
-    const tune = allTunes.find(t => t.person_tune_id === personTuneId);
+    // Find the tune in our local data (loose compare: pending offline-added tunes have a
+    // string 'pending-<id>' person_tune_id, real ones a number).
+    const tune = allTunes.find(t => String(t.person_tune_id) === String(personTuneId));
 
     // Use the unified tune detail modal
     // The modal will fetch its own data, so we don't need to fail if tune isn't in local array

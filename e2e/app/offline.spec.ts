@@ -153,15 +153,16 @@ test.describe("offline writes (Tier 2)", () => {
     await page.goto("/");
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
     await page.goto("/my-tunes");
-    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!(window as any).MyTunesOffline && !!(window as any).CeolOffline, null, { timeout: 8000 });
 
-    // Popular tunes get cached for offline add.
+    // Mirror the offline bundle (tunebook + popular) so offline add-search works, and warm
+    // the add page (shell + assets) since the auto warm-up is disabled under automation.
+    await page.evaluate(() => (window as any).CeolOffline.sync(true));
+    await page.evaluate(() => (window as any).CeolPrefetch.warmPage("/my-tunes/add"));
     await expect
-      .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.searchPopular("the")).length), { timeout: 8000 })
+      .poll(async () => page.evaluate(async () => (await (window as any).CeolOffline.searchTunes("the")).length), { timeout: 8000 })
       .toBeGreaterThan(0);
-    // Give the SW time to snapshot /my-tunes/add (cache-page) AND to run the deferred
-    // (~2s) precache that caches the add page's search script for offline use.
-    await page.waitForTimeout(3500);
+    await page.waitForTimeout(2500);
 
     let addedTid: number | null = null;
     await context.setOffline(true);
@@ -406,27 +407,181 @@ test.describe("background prefetch", () => {
     }
   });
 
-  test("a tunebook tune's notation detail is available offline after warming", async ({ page, context }) => {
+});
+
+/**
+ * The offline bundle (GET /api/offline/bundle mirrored into window.CeolOffline) makes the
+ * user's OWN data work offline: tune notation, global tune search, and the sessions list.
+ */
+test.describe("offline bundle model", () => {
+  test.use({ storageState: STORAGE.regular });
+
+  async function warmAndSync(page: any) {
     await page.goto("/");
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
-    await page.goto("/my-tunes");
-    await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
+    await page.waitForFunction(() => !!(window as any).CeolOffline, null, { timeout: 8000 });
+    await page.evaluate(() => (window as any).CeolOffline.sync(true));
+    await expect
+      .poll(async () => page.evaluate(async () => (await (window as any).CeolOffline.getTunes()).length), { timeout: 8000 })
+      .toBeGreaterThan(0);
+  }
 
-    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
-    const ptid = (mine.tunes || [])[0]?.person_tune_id;
-    expect(ptid).toBeTruthy();
-
-    // Warm the tune's detail (ABC + dots) through the SW so Tier 1 caches it.
-    await page.evaluate(async (ptid) => { await fetch("/api/my-tunes/" + ptid); }, ptid);
-    await page.waitForTimeout(500);
+  test("tune drawer shows notation offline (from the bundle)", async ({ page, context }) => {
+    await warmAndSync(page);
+    await page.goto("/my-tunes"); // controlled -> snapshotted; also caches its assets
+    await page.waitForTimeout(1500);
+    const card = page.locator(".tune-card[data-tune-id], .tune-card-swipe-container[data-tune-id]").first();
+    await expect(card).toBeVisible({ timeout: 8000 });
 
     await context.setOffline(true);
     try {
-      // Offline, the detail is served from cache (200), not the offline 503 fallback.
-      const status = await page.evaluate(async (ptid) => (await fetch("/api/my-tunes/" + ptid)).status, ptid);
-      expect(status).toBe(200);
+      await card.click();
+      // Drawer renders from the cached bundle, not "Failed to load".
+      await expect(page.locator("#tune-detail-content")).not.toContainText(/Failed to load/i, { timeout: 8000 });
+      await expect(page.locator("#tune-detail-content .tunebook-status-seg")).toBeVisible({ timeout: 8000 });
     } finally {
       await context.setOffline(false);
+    }
+  });
+
+  test("global Find-a-tune returns your tunes offline and opens the drawer", async ({ page, context }) => {
+    await warmAndSync(page);
+    // Stay on the home page — it has no inline tune modal, so this also proves base.html
+    // makes the drawer available app-wide offline (no fragile lazy-load).
+    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
+    const name = (mine.tunes || [])[0].tune_name as string;
+    const term = name.split(/[ ,]/)[0]; // first word
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate(() => (window as any).findTune());
+      await page.locator(".ft-input").fill(term);
+      await expect(page.locator(".ft-results .ft-item").first()).toBeVisible({ timeout: 8000 });
+      await expect(page.locator(".ft-results")).toContainText(new RegExp(term, "i"));
+
+      // Clicking a result opens the shared drawer, rendered from the bundle: a real title
+      // (not "Unknown"/"Failed to load") and notation — even from a page without an inline modal.
+      await page.locator(".ft-results .ft-item").first().click();
+      await expect(page.locator("#tune-detail-modal")).toBeVisible({ timeout: 8000 });
+      const title = page.locator("#tune-detail-content .modal-tune-title");
+      await expect(title).toBeVisible();
+      await expect(title).not.toHaveText(/Unknown|Loading/i);
+      await expect(page.locator("#tune-detail-content")).not.toContainText(/Failed to load/i);
+      await expect(page.locator("#tune-detail-content .abc-notation-section")).toBeVisible({ timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("sessions list renders offline", async ({ page, context }) => {
+    await warmAndSync(page);
+    await page.goto("/sessions"); // caches the page + /api/sessions/with-today-status
+    await expect(page.locator("body")).toContainText(/session/i, { timeout: 8000 });
+    await page.waitForTimeout(1000);
+
+    await context.setOffline(true);
+    try {
+      await page.goto("/sessions");
+      await expect(page.locator("body")).not.toContainText(/You're offline/i);
+      await expect(page.locator("body")).not.toContainText(/error loading sessions/i);
+      await expect(page.locator("body")).toContainText(/session/i);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test("offline add-to-tunes from the drawer toasts on My Tunes (no blocking alert)", async ({ page, context }) => {
+    await warmAndSync(page);
+    await page.goto("/my-tunes"); // cache the list page so the post-add navigation works offline
+    await page.waitForTimeout(1000);
+
+    // A popular tune the user does NOT own -> the drawer shows an "Add" button.
+    const bundle = await (await page.request.get("/api/offline/bundle")).json();
+    const owned = new Set((bundle.tunes || []).map((t: any) => t.tune_id));
+    const cand = (bundle.popular || []).find((t: any) => !owned.has(t.tune_id));
+    expect(cand, "a popular un-owned tune exists in the bundle").toBeTruthy();
+
+    await page.goto("/"); // a page with no inline modal, to prove the app-wide drawer works
+    await page.waitForFunction(() => !!(window as any).TuneDetailModal, null, { timeout: 8000 });
+
+    // Fail if the old blocking alert() ever fires.
+    let dialogSeen = false;
+    page.on("dialog", async (d) => { dialogSeen = true; await d.dismiss(); });
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate((c) => (window as any).TuneDetailModal.show({
+        context: "session_instance",
+        tuneId: c.tune_id,
+        apiEndpoint: "/api/tunes/" + c.tune_id + "/detail",
+        additionalData: { isUserLoggedIn: true, tuneName: c.name, global: true },
+      }), cand);
+
+      const addBtn = page.locator("#tune-detail-content .tunebook-action-btn", { hasText: /Add/i });
+      await expect(addBtn).toBeVisible({ timeout: 8000 });
+      await addBtn.click();
+
+      // Navigates to the list and toasts there — no modal dialog.
+      await expect(page).toHaveURL(/\/my-tunes/, { timeout: 8000 });
+      await expect(page.locator("#message-container .message")).toContainText(/sync when you are back online/i, { timeout: 8000 });
+      expect(dialogSeen).toBe(false);
+    } finally {
+      await context.setOffline(false);
+      await page.evaluate(() => (window as any).MyTunesOffline.flush());
+      await page.request.post("/api/my-tunes/ops", {
+        data: { op_id: `cleanup-add-${cand.tune_id}`, ts: Date.now(), type: "remove", tune_id: cand.tune_id },
+      });
+    }
+  });
+
+  test("offline-added tune is clickable, shows notation, and reflects status changes", async ({ page, context }) => {
+    await warmAndSync(page);
+    await page.goto("/my-tunes"); // snapshot the list page + assets for offline
+    await page.waitForTimeout(1500);
+
+    // Pick a popular tune the user does NOT already own that carries incipit notation.
+    const bundle = await (await page.request.get("/api/offline/bundle")).json();
+    const owned = new Set((bundle.tunes || []).map((t: any) => t.tune_id));
+    const cand = (bundle.popular || []).find((t: any) => !owned.has(t.tune_id) && t.incipit_abc);
+    expect(cand, "a popular un-owned tune with notation exists in the bundle").toBeTruthy();
+    const tid = cand.tune_id;
+    const sel = `.tune-card[data-tune-id="${tid}"], .tune-card-swipe-container[data-tune-id="${tid}"]`;
+
+    await context.setOffline(true);
+    try {
+      // Queue an offline add, exactly as the tune drawer's Add button does.
+      await page.evaluate((c) => (window as any).MyTunesOffline.submit({
+        type: "add", tune_id: c.tune_id, learn_status: "want to learn", name: c.name, tune_type: c.tune_type,
+      }), cand);
+
+      await page.goto("/my-tunes");
+      await expect(page.locator(sel).first()).toBeVisible({ timeout: 8000 });
+
+      // Fix: the pending card is clickable (its onclick id is a string) and the drawer
+      // renders from the bundle — incipit notation, not "Failed to load".
+      await page.locator(sel).first().click();
+      await expect(page.locator("#tune-detail-content")).not.toContainText(/Failed to load/i, { timeout: 8000 });
+      await expect(page.locator("#tune-detail-content .tunebook-status-seg")).toBeVisible({ timeout: 8000 });
+
+      // Fix: a status change made offline survives closing + reopening the drawer
+      // (renderTuneFromOffline overlays the queued set_status op onto the bundle tune).
+      await page.locator('.tunebook-status-opt[data-status="learning"]').click();
+      await expect(page.locator(".tunebook-status-opt.active")).toHaveAttribute("data-status", "learning");
+
+      await page.locator(".modal-close-btn").first().click();
+      await page.waitForTimeout(300);
+      await page.locator(sel).first().click();
+      await expect(page.locator(".tunebook-status-opt.active")).toHaveAttribute("data-status", "learning", { timeout: 8000 });
+    } finally {
+      await context.setOffline(false);
+      // Drain the queue and remove the test tune so reruns start clean.
+      await page.evaluate(() => (window as any).MyTunesOffline.flush());
+      await expect
+        .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
+        .toBe(0);
+      await page.request.post("/api/my-tunes/ops", {
+        data: { op_id: `cleanup-${tid}`, ts: Date.now(), type: "remove", tune_id: tid },
+      });
     }
   });
 });

@@ -1290,6 +1290,99 @@ def get_popular_tunes():
 
 
 @person_tune_login_required
+def get_offline_bundle():
+    """
+    GET /api/offline/bundle
+
+    Everything the client needs to make the user's OWN data work offline, in one
+    predictable payload it mirrors into IndexedDB:
+      - tunes:   the whole tunebook with INCIPIT notation (small "dots" preview + abc)
+                 so the list, drawer, and offline search all work without per-tune fetches.
+      - popular: top catalog tunes so offline add-search can find tunes not yet owned.
+
+    Full-size notation stays online-only to keep this bounded.
+    """
+    try:
+        person_id = get_user_person_id()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
+                       pt.learn_status, pt.heard_count, pt.notes,
+                       t.tunebook_count_cached, ts.incipit_abc, ts.incipit_image
+                FROM person_tune pt
+                JOIN tune t ON t.tune_id = pt.tune_id
+                LEFT JOIN LATERAL (
+                    SELECT incipit_abc, incipit_image
+                    FROM tune_setting ts2
+                    WHERE ts2.tune_id = pt.tune_id
+                      AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
+                    ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
+                    LIMIT 1
+                ) ts ON TRUE
+                WHERE pt.person_id = %s
+                ORDER BY t.name ASC
+                """,
+                (person_id,),
+            )
+            tunes = [
+                {
+                    "person_tune_id": r[0],
+                    "tune_id": r[1],
+                    "tune_name": r[2],
+                    "name": r[2],
+                    "tune_type": r[3],
+                    "learn_status": r[4],
+                    "heard_count": r[5] or 0,
+                    "notes": r[6],
+                    "tunebook_count": r[7] or 0,
+                    "incipit_abc": r[8],
+                    "incipit_image": bytea_to_base64(r[9]) if r[9] is not None else None,
+                }
+                for r in cur.fetchall()
+            ]
+
+            # Popular tunes carry incipit notation too, so a popular tune added offline
+            # still shows its dots/ABC in the drawer.
+            cur.execute(
+                """
+                SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+                       ts.incipit_abc, ts.incipit_image
+                FROM tune t
+                LEFT JOIN LATERAL (
+                    SELECT incipit_abc, incipit_image
+                    FROM tune_setting ts2
+                    WHERE ts2.tune_id = t.tune_id
+                    ORDER BY ts2.setting_id ASC
+                    LIMIT 1
+                ) ts ON TRUE
+                WHERE t.redirect_to_tune_id IS NULL
+                ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
+                LIMIT 100
+                """
+            )
+            popular = [
+                {
+                    "tune_id": r[0],
+                    "name": r[1],
+                    "tune_type": r[2],
+                    "tunebook_count": r[3] or 0,
+                    "incipit_abc": r[4],
+                    "incipit_image": bytea_to_base64(r[5]) if r[5] is not None else None,
+                }
+                for r in cur.fetchall()
+            ]
+
+            return jsonify({"success": True, "tunes": tunes, "popular": popular}), 200
+        finally:
+            conn.close()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error building offline bundle: {str(e)}"}), 500
+
+
+@person_tune_login_required
 def get_my_sessions():
     """
     GET /api/my-sessions?limit=25

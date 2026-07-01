@@ -20,7 +20,6 @@
   var DB_NAME = 'ceol-mytunes'
   var DB_VERSION = 2
   var OPS = 'ops'
-  var POPULAR = 'popular' // top catalog tunes, cached so you can add them offline
   var ENDPOINT = '/api/my-tunes/ops'
   var dbPromise = null
 
@@ -31,7 +30,6 @@
         req.onupgradeneeded = function () {
           var d = req.result
           if (!d.objectStoreNames.contains(OPS)) d.createObjectStore(OPS, { keyPath: 'op_id' })
-          if (!d.objectStoreNames.contains(POPULAR)) d.createObjectStore(POPULAR, { keyPath: 'tune_id' })
         }
         req.onsuccess = function () { resolve(req.result) }
         req.onerror = function () { reject(req.error) }
@@ -58,32 +56,6 @@
   function queueAll() {
     return idb(OPS, 'readonly', function (s) { return s.getAll() }).then(function (all) {
       return (all || []).sort(function (a, b) { return a.ts - b.ts })
-    })
-  }
-
-  // --- Popular tunes (offline add) ---------------------------------------------
-  // Smart quotes \u-escaped (project rule: never embed smart-quote literals in source).
-  var _norm = function (s) { return (s || '').replace(/[\u2018\u2019\u201B`\u00B4]/g, "'").toLowerCase().trim() }
-
-  // Replace the cached popular set with the given tunes ({tune_id, name, tune_type,
-  // tunebook_count, in_person_tune, learn_status}).
-  function savePopular(tunes) {
-    return idb(POPULAR, 'readwrite', function (s) {
-      s.clear()
-      ;(tunes || []).forEach(function (t) { if (t && t.tune_id) s.put(t) })
-    })
-  }
-
-  // Offline name search over the cached popular set: substring match, most-bookmarked
-  // first, capped. Returns [] if nothing is cached.
-  function searchPopular(query, limit) {
-    var q = _norm(query)
-    limit = limit || 20
-    return idb(POPULAR, 'readonly', function (s) { return s.getAll() }).then(function (all) {
-      return (all || [])
-        .filter(function (t) { return _norm(t.name).indexOf(q) !== -1 })
-        .sort(function (a, b) { return (b.tunebook_count || 0) - (a.tunebook_count || 0) })
-        .slice(0, limit)
     })
   }
 
@@ -185,8 +157,6 @@
     submit: submit,
     flush: flush,
     pending: queueAll,
-    savePopular: savePopular,
-    searchPopular: searchPopular,
   }
 
   // Replay anything left from a previous offline session, once the page settles.

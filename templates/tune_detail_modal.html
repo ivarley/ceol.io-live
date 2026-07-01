@@ -15,7 +15,10 @@
 #}
 
 <!-- Tune Detail Modal -->
-<div id="tune-detail-modal" class="modal-overlay">
+<!-- Inline display:none is a safety default: this container is now app-wide (base.html), so a
+     page with its own `.modal-overlay { display: … }` rule (e.g. add_session) can't reveal it.
+     The modal JS toggles style.display directly when opening/closing. -->
+<div id="tune-detail-modal" class="modal-overlay" style="display: none;">
     <div class="modal-dialog">
         <div id="tune-detail-content">
             <!-- Content will be dynamically populated by JavaScript -->
