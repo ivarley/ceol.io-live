@@ -91,8 +91,15 @@ write fails offline, keeps the optimistic UI, and replays on reconnect.
 
 ### Connection indicator (`static/js/connection_status.js`)
 
-A dot in the header, consistent with the live logger: **orange** = offline (queued changes
-waiting), **pulsing** = syncing, **green** = caught up (then hidden). Connectivity is
+A dot in the header, sharing one visual language with the live logger's own connection
+dot (`App.svelte`, `.conn-*` in `frontend/src/app.css`): **orange** = offline (queued
+changes waiting), **orange pulsing** = syncing/reconnecting, **green** = caught up / live.
+The app-wide dot sits by the hamburger and hides when idle-online. The live logger's dot is
+floated in the same spot (beside its shared hamburger) but only appears when a live stream
+is actually in play — in **edit** mode, or in an open **view** when at least one other
+person is connected and editing live (it's pointless on a solo read or a completed log).
+Green here means *connectivity*, never "a session is on now" — that signal is the red
+pulsing "Live" label (see [Active Sessions](active-sessions.md)). Connectivity is
 detected by a heartbeat (`HEAD /sw.js`) and fetch-failures, **not** `navigator.onLine`
 (which is unreliable — it reports false in headless automation and true on a real device that
 is actually offline). Tapping the dot shows how long you've been offline (persisted across

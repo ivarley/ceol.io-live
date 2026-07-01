@@ -48,8 +48,11 @@ Real-time tracking of which sessions are happening now and which people are atte
 
 ## UI Integration
 
-**In Session Badge**: Header green dot | `templates/base.html:326-336`
+**In Session Badge**: Header red pulsing **"● Live"** label | `templates/base.html`
 - Appears when `person.active_session_instance_id` IS NOT NULL
+- Red + pulse (broadcast convention), matching the "LIVE NOW" badge on session pages
+  and deliberately **not** green — green is reserved for connectivity (the `conn-dot`),
+  so "session on now" and "back online" never read as the same signal.
 - Hover: Popup with details
 - Click: Navigate to session
 - Data: Server-rendered from `current_user.active_session`

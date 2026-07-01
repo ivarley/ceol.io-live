@@ -1862,6 +1862,14 @@
 
   let connSeq = 0 // guards against overlapping connect() calls leaking a stream
   let renderOnly = $state(false) // completed-log fast-path: rendered, no stream (hide status pill)
+  // When to surface the connection dot (floated by the hamburger). Only when a live
+  // stream is actually in play: always in edit mode (it reflects *my* connection), and
+  // in view mode only while the log is still open AND someone else is connected and
+  // editing live — a non-away roster entry (viewers are excluded from the roster
+  // server-side, spec 024 §presence). A completed render-only log has no stream, so hide.
+  const showConnDot = $derived(
+    !renderOnly && (mode === 'edit' || (viewing && !logComplete && roster.some((p) => !p.away)))
+  )
   async function connect() {
     const myGen = ++connSeq
     renderOnly = false
@@ -2130,6 +2138,11 @@
 </script>
 
 <main bind:this={mainEl} class:view-mode={viewing}>
+  <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
+       so it sits where the app-wide indicator sits on every other page. -->
+  {#if showConnDot}
+    <span class="conn-dot conn-fixed conn-{displayStatus}" title={displayStatus} aria-label="Connection: {displayStatus}"></span>
+  {/if}
   <div class="topnav" bind:clientHeight={headerH}>
     <div class="appbar">
       <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
@@ -2154,9 +2167,6 @@
             </span>
           {/each}
         </span>
-        {#if !renderOnly}
-          <span class="status status-{displayStatus}" title="connection">{displayStatus}</span>
-        {/if}
         <span class="header-chevron" class:up={expanded}>▾</span>
       </div>
       {#if expanded}

@@ -163,11 +163,28 @@ main {
 }
 .hc-link:hover { color: var(--text); }
 
-.status { text-transform: capitalize; }
-.status-live { color: #46d27a; }
-.status-connecting, .status-reconnecting { color: #e0b341; }
-.status-offline { color: #e0594b; }
-.status-error { color: #e0594b; }
+/* Connection status dot — same visual language as the app-wide indicator
+   (connection_status.js / base.html): green = live, orange = offline,
+   orange pulsing = reconnecting. Always visible so the logger reassures. */
+.conn-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block; vertical-align: middle; flex: 0 0 auto;
+}
+.conn-live { background: #3fb950; }                  /* green: stream up */
+.conn-offline { background: #e0a23e; }               /* orange: offline */
+.conn-reconnecting { background: #e0a23e; animation: conn-pulse 1s ease-in-out infinite; }
+/* Floated beside the fixed hamburger (32px button at right:8px, top:8px+safe): sit 8px to
+   its left and vertically centered on it. Same z-index layer as .live-menu (50). */
+.conn-fixed {
+  position: fixed;
+  top: calc(19px + env(safe-area-inset-top));
+  right: 48px;
+  z-index: 50;
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.35); }
+}
 
 .sets { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 16px; }
 .set {
