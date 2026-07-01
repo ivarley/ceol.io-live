@@ -1585,6 +1585,9 @@
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')              // unaccent (strip diacritics)
       .trim().toLowerCase()
   }
+  // Notation normalizer for the local ABC index: strip whitespace (meaningless in ABC) and
+  // lowercase, mirroring the server's whitespace-stripped, case-insensitive ILIKE match.
+  const normAbc = (s) => (s || '').replace(/\s+/g, '').toLowerCase()
   function buildLocalIndex(known, aliases) {
     nextByTuneId.clear()
     if (!known && !aliases) { localIndex = null; vocabKnown = []; vocabAliases = []; return }
@@ -1600,7 +1603,7 @@
     const list = [], listById = new Map()
     const ensure = (id, name, tune_type) => {
       let e = listById.get(id)
-      if (!e) { e = { tune_id: id, name, tune_type: tune_type ?? null, nn: normName(name), aliases: [] }; listById.set(id, e); list.push(e) }
+      if (!e) { e = { tune_id: id, name, tune_type: tune_type ?? null, nn: normName(name), aliases: [], abc: '' }; listById.set(id, e); list.push(e) }
       return e
     }
     for (const t of known || []) {
@@ -1610,6 +1613,7 @@
       add(nameMap, n, t.tune_id)
       add(nameMap, stripThe(n), t.tune_id) // "The X" <-> "X" flexibility (both directions)
       const e = ensure(t.tune_id, t.name, t.tune_type)
+      if (t.abc) e.abc = normAbc(t.abc) // searchable notation for instant ABC substring match
       if (t.alias) { add(aliasMap, normName(t.alias), t.tune_id); e.aliases.push(normName(t.alias)) }
     }
     for (const a of aliases || []) {
@@ -1642,18 +1646,15 @@
 
   // Substring matches from the local vocabulary — the INSTANT type-ahead list (zero network).
   // Mirrors the server wildcard: plain substring over name+alias, ranked by the set's type
-  // preference, then vocabulary order (session plays -> global popularity), then name.
+  // preference, then vocabulary order (session plays -> global popularity), then name. A
+  // note-only query ALSO substring-matches cached notation (marked abc:true, appended after
+  // name hits), so typing an incipit finds tunes instantly — even offline (§024 fast path).
   function resolveLocalMany(q, limit = 8) {
     if (!localIndex) return []
     const qn = normName(q)
-    if (qn.length < 2) return []
     const prefer = cursorSetType() // the set's tune type (soft sort preference), or null
     const inSet = currentSetTuneIds() // already in this set -> demote below fresh suggestions
-    const hits = []
-    for (const e of localIndex.list) {
-      if (e.nn.includes(qn) || e.aliases.some((a) => a.includes(qn))) hits.push(e)
-    }
-    hits.sort((a, b) => {
+    const cmp = (a, b) => {
       const ia = inSet.has(a.tune_id) ? 1 : 0
       const ib = inSet.has(b.tune_id) ? 1 : 0
       if (ia !== ib) return ia - ib // a tune already in this set sinks beneath everything else
@@ -1662,8 +1663,29 @@
       if (pa !== pb) return pa - pb
       if (a.idx !== b.idx) return a.idx - b.idx
       return a.nn < b.nn ? -1 : a.nn > b.nn ? 1 : 0
-    })
-    return hits.slice(0, limit).map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type }))
+    }
+    const nameHits = []
+    if (qn.length >= 2) {
+      for (const e of localIndex.list) {
+        if (e.nn.includes(qn) || e.aliases.some((a) => a.includes(qn))) nameHits.push(e)
+      }
+      nameHits.sort(cmp)
+    }
+    // Notation hits: only for note-only input with a selective needle (3+ chars, so a
+    // one- or two-note fragment doesn't match half the catalog). Deduped against name hits.
+    const abcHits = []
+    const an = looksLikeAbc(q) ? normAbc(q) : ''
+    if (an.length >= 3) {
+      const seen = new Set(nameHits.map((e) => e.tune_id))
+      for (const e of localIndex.list) {
+        if (e.abc && !seen.has(e.tune_id) && e.abc.includes(an)) abcHits.push(e)
+      }
+      abcHits.sort(cmp)
+    }
+    return [
+      ...nameHits.map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type })),
+      ...abcHits.map((e) => ({ tune_id: e.tune_id, name: e.name, tune_type: e.tune_type, abc: true })),
+    ].slice(0, limit)
   }
 
   // Stable-append merge (§D): keep every already-shown LOCAL result pinned in place (so

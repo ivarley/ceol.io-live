@@ -1368,6 +1368,24 @@ def compute_session_vocabulary(cur, session_id, n, m, include_meta=False):
             for r in cur.fetchall()
         ]
 
+    # Searchable notation for the fast local index: the client substring-matches typed ABC
+    # against this. Whitespace-stripped (meaningless in ABC) and all settings joined, so it
+    # mirrors the server's cross-setting EXISTS(... REGEXP_REPLACE(ts.abc,'\\s','') ILIKE)
+    # match. Kept text-only (no images) — the vocabulary is fetched once and cached offline.
+    all_tune_ids = [t["tune_id"] for t in known_tunes]
+    if all_tune_ids:
+        cur.execute(
+            """
+            SELECT tune_id,
+                   STRING_AGG(REGEXP_REPLACE(COALESCE(abc, ''), '\\s', '', 'g'), E'\n') AS abc_search
+            FROM tune_setting WHERE tune_id = ANY(%s::int[]) GROUP BY tune_id
+            """,
+            (all_tune_ids,),
+        )
+        abc_by_id = {r[0]: r[1] for r in cur.fetchall()}
+        for d in known_tunes:
+            d["abc"] = abc_by_id.get(d["tune_id"]) or None
+
     return known_tunes, known_aliases
 
 

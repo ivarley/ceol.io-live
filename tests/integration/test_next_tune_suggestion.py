@@ -106,3 +106,24 @@ def test_below_three_floor_no_suggestion(db_cursor):
     assert "next" not in entries[MAID]
     # Lead -> Silver happens once -> no suggestion.
     assert "next" not in entries[LEAD]
+
+
+def test_searchable_abc_attached(db_cursor):
+    """Each vocabulary entry carries a whitespace-stripped `abc` string (all settings
+    joined) for the client's instant ABC substring match; tunes with no notation get None."""
+    _seed(db_cursor)
+    # Two settings for one tune -> aggregated; whitespace is stripped (meaningless in ABC).
+    db_cursor.execute(
+        "INSERT INTO tune_setting (setting_id, tune_id, abc) VALUES (%s, %s, %s), (%s, %s, %s)",
+        (99001, SILVER, "fdd cAA | B2A", 99002, SILVER, "AB cd ef"),
+    )
+    known, _ = compute_session_vocabulary(db_cursor, SID, n=200, m=0)
+    entries = _by_id(known)
+
+    silver_abc = entries[SILVER]["abc"]
+    assert silver_abc is not None
+    assert " " not in silver_abc  # whitespace stripped
+    assert "fddcAA|B2A" in silver_abc
+    assert "ABcdef" in silver_abc
+    # A tune with no tune_setting rows carries an explicit None (not a missing key).
+    assert entries[EARLS]["abc"] is None
