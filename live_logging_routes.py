@@ -334,6 +334,26 @@ def _corroborate(cur, session_instance_id, target_id, data, user_id):
     }
 
 
+def _enroll_session_tune(cur, session_id, tune_id, user_id):
+    """Enroll a linked tune into the session's repertoire (idempotent), mirroring the old
+    logger's save path (api_routes.py:7405). No-op for unlinked/break rows and merged tunes."""
+    if not tune_id:
+        return
+    # Skip merged/redirect tunes (old logger refuses to add these): only canonical tunes.
+    cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+    row = cur.fetchone()
+    if not row or row[0] is not None:
+        return
+    cur.execute(
+        """INSERT INTO session_tune (session_id, tune_id, created_by_user_id)
+           VALUES (%s, %s, %s)
+           ON CONFLICT (session_id, tune_id) DO NOTHING""",
+        (session_id, tune_id, user_id),
+    )
+    if cur.rowcount > 0:
+        save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id)
+
+
 def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
@@ -342,17 +362,20 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     if tune_id is None and not name:
         raise OpRejected("invalid", "add_tune requires tune_id or name.")
 
+    # session_id is needed both for name->tune matching and for repertoire enrollment,
+    # so resolve it once up front whenever a tune_id might end up linked.
+    cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+    srow = cur.fetchone()
+    session_id = srow[0] if srow else None
+
     # Name -> tune matching takes priority. Tapping a typeahead result sends a
     # tune_id directly; hitting Enter sends just the text, which we resolve here
     # via the same matching the rest of the app uses. An ambiguous/unknown name
     # stays unlinked (raw name, tune_id NULL).
-    if tune_id is None and name:
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        srow = cur.fetchone()
-        if srow:
-            matched_id, final_name, err = find_matching_tune(cur, srow[0], name)
-            if matched_id and not err:
-                tune_id, name = matched_id, final_name
+    if tune_id is None and name and session_id is not None:
+        matched_id, final_name, err = find_matching_tune(cur, session_id, name)
+        if matched_id and not err:
+            tune_id, name = matched_id, final_name
 
     source = data.get("source") or "human"
     confidence = data.get("confidence")
@@ -383,6 +406,9 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     )
     record_id = cur.fetchone()[0]
     save_to_history(cur, "session_instance_tune", "INSERT", record_id, user_id=user_id)
+    # A linked tune joins the session's repertoire (mirrors the old logger's save path).
+    if tune_id and session_id is not None:
+        _enroll_session_tune(cur, session_id, tune_id, user_id)
     return {"record": _reselect(cur, record_id)}
 
 
@@ -428,6 +454,12 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         f"UPDATE session_instance_tune SET {', '.join(sets)} WHERE session_instance_tune_id = %s",
         tuple(params),
     )
+    # A relink to a linked tune (not an unlink) enrolls it in the repertoire, like add.
+    if not data.get("unlink") and data.get("tune_id"):
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if srow:
+            _enroll_session_tune(cur, srow[0], data["tune_id"], user_id)
     return {"record": _reselect(cur, record_id)}
 
 

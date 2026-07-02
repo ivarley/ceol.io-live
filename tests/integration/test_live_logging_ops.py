@@ -30,6 +30,8 @@ INST = 9390         # session_instance
 REEL = 9301         # "The Test Reel"        (linked add / matching)
 MAID = 9302         # "The Maid Behind the Bar"
 COOLEY = 9303       # "Cooleys"
+NEWT = 9304         # "The Unenrolled Jig"   (canonical, NOT pre-enrolled in session_tune)
+MERGED = 9305       # "The Merged Reel"      (redirects to REEL; must never enroll)
 
 
 @pytest.fixture
@@ -46,6 +48,11 @@ def live_instance():
     for tid, name in [(REEL, "The Test Reel"), (MAID, "The Maid Behind the Bar"), (COOLEY, "Cooleys")]:
         cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')", (tid, name))
         cur.execute("INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, tid))
+    # NEWT: a canonical tune deliberately NOT enrolled, so enrollment on add is observable.
+    cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Jig')", (NEWT, "The Unenrolled Jig"))
+    # MERGED: a redirect/merged tune -- must never be enrolled (mirrors the old logger).
+    cur.execute("INSERT INTO tune (tune_id, name, tune_type, redirect_to_tune_id) VALUES (%s, %s, 'Reel', %s)",
+                (MERGED, "The Merged Reel", REEL))
     cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
                 (INST, SID, "2026-02-01"))
     # A real person for started_by (FK -> person); reuse a seeded one, don't create/delete.
@@ -54,7 +61,7 @@ def live_instance():
     conn.commit()
 
     yield {"session_id": SID, "instance_id": INST, "reel": REEL, "maid": MAID,
-           "cooley": COOLEY, "person_id": person_id}
+           "cooley": COOLEY, "newt": NEWT, "merged": MERGED, "person_id": person_id}
 
     # Teardown: children before the instance (session_instance_tune has no ON DELETE
     # CASCADE from session_instance; session_event/corroboration do). History tables
@@ -65,9 +72,12 @@ def live_instance():
     cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id = %s", (INST,))
     cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (INST,))
     cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (INST,))
+    cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (SID,))
-    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY],))
-    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY],))
+    cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT, MERGED],))
+    # MERGED references REEL via redirect_to_tune_id, so drop it before the tune it points to.
+    cur.execute("DELETE FROM tune WHERE tune_id = %s", (MERGED,))
+    cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT],))
     cur.execute("DELETE FROM session_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (SID,))
     conn.commit()
@@ -92,6 +102,13 @@ def _records(cur, inst, *, include_deleted=False):
     q += " ORDER BY order_position"
     cur.execute(q, (inst,))
     return cur.fetchall()
+
+
+def _repertoire_count(cur, session_id, tune_id):
+    """How many session_tune rows enroll this tune in this session (0 or 1)."""
+    cur.execute("SELECT COUNT(*) FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                (session_id, tune_id))
+    return cur.fetchone()[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -271,6 +288,67 @@ def test_change_tune_no_fields_rejected(client, authenticated_user, live_instanc
                       record_id=a["record"]["session_instance_tune_id"])
     assert resp["success"] is False
     assert resp["reason"] == "invalid"
+
+
+# --------------------------------------------------------------------------- #
+# session_tune (repertoire) enrollment (spec 025)
+# --------------------------------------------------------------------------- #
+
+def test_add_linked_tune_enrolls_in_repertoire(client, authenticated_user, live_instance, db_cursor):
+    """Adding a linked tune that isn't yet in the session's repertoire enrolls it."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    assert _repertoire_count(db_cursor, sid, newt) == 0
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=newt)
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+    # And a history row was recorded for the enrollment.
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_tune_history WHERE session_id = %s AND tune_id = %s AND operation = 'INSERT'",
+        (sid, newt))
+    assert db_cursor.fetchone()[0] == 1
+
+
+def test_add_tune_enrollment_idempotent(client, authenticated_user, live_instance, db_cursor):
+    """A second add of the same tune doesn't create a duplicate repertoire row or error."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=newt)
+        # Second add lands in a different set so it isn't collapsed into a corroboration.
+        _op(client, inst, op_type="set_break", action="insert")
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=newt)
+    assert body["success"] is True
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_add_unlinked_tune_does_not_enroll(client, authenticated_user, live_instance, db_cursor):
+    """An unmatchable (unlinked) add creates no session_tune row."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", name="Zzqx Not A Real Tune 4711")
+    db_cursor.execute("SELECT COUNT(*) FROM session_tune WHERE session_id = %s", (sid,))
+    # Only the three pre-enrolled catalog tunes remain; nothing new was added.
+    assert db_cursor.fetchone()[0] == 3
+
+
+def test_change_tune_relink_enrolls_new_tune(client, authenticated_user, live_instance, db_cursor):
+    """Relinking a record to a new tune_id enrolls that tune in the repertoire."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        # Start from an unlinked row so the relink is the first thing to introduce newt.
+        _, a = _op(client, inst, op_type="add_tune", name="Zzqx Not A Real Tune 4711")
+        rid = a["record"]["session_instance_tune_id"]
+        assert _repertoire_count(db_cursor, sid, newt) == 0
+        _op(client, inst, op_type="change_tune", record_id=rid, tune_id=newt)
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_merged_tune_not_enrolled(client, authenticated_user, live_instance, db_cursor):
+    """A merged/redirect tune is never enrolled, matching the old logger."""
+    sid, inst, merged = live_instance["session_id"], live_instance["instance_id"], live_instance["merged"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=merged)
+    assert body["success"] is True  # the play is still logged
+    assert _repertoire_count(db_cursor, sid, merged) == 0
 
 
 # --------------------------------------------------------------------------- #

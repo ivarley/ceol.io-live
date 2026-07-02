@@ -17,7 +17,11 @@ Canonical tune database.
 - tunebook_count (popularity from thesession.org)
 
 ### session_tune
-Session-specific tune information.
+Session-specific tune information — the session's **repertoire**. A `(session_id, tune_id)`
+row means "this tune belongs to this session's list"; it feeds the fast-match vocabulary,
+"in session" flags, and tune-list views. Enrolled as a side effect of logging any linked
+tune, by **both** loggers: the old save path (`api_routes.py`) and the live logger's
+`_enroll_session_tune` (spec 025). Merged/redirect tunes are never enrolled.
 - session_tune_id, session_id, tune_id (nullable)
 - tune_name, thesession_tune_id
 - key (VARCHAR(20) - expanded to support "Amixolydian")

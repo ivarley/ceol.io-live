@@ -62,6 +62,17 @@ All writes are incremental, intent-based ops `POST`ed to
 Each op carries a client-generated `op_id` (UUID) for idempotent retry. A rejected op
 returns `{rejected, reason}` rather than throwing (§E).
 
+### Repertoire enrollment (spec 025)
+
+Logging a **linked** tune enrolls it into the session's repertoire (`session_tune`),
+mirroring the old logger's save path. `_enroll_session_tune` (`live_logging_routes.py`)
+runs an idempotent `INSERT … ON CONFLICT (session_id, tune_id) DO NOTHING` (+ history)
+from `add_tune` (on the final linked record) and from `change_tune` (on a relink to a new
+`tune_id`). **Not** enrolled: unlinked rows (`tune_id NULL`), `break` rows, corroborations
+(the original add already enrolled), and merged/redirect tunes (`tune.redirect_to_tune_id`
+set). This keeps the fast-match vocabulary, "in session" flags, and tune-list views
+complete. Backfill for pre-fix gaps: `scripts/backfill_025_session_tune_enrollment.py`.
+
 ## Presence & typing (§F, ephemeral)
 
 Presence and typing indicators are **in-memory in the streaming service and never
