@@ -50,6 +50,11 @@ schema-test-db:
 test:
 	pytest
 	npm test
+	$(MAKE) test-frontend
+
+# Live-logging Svelte bundle unit/component tests (Vitest, in frontend/).
+test-frontend:
+	cd frontend && npm test
 
 test-unit:
 	pytest tests/unit/ -v -m unit

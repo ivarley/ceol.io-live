@@ -7,6 +7,11 @@
   import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
+  import {
+    computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
+    maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
+    openSetMergeTarget, mergeStable,
+  } from './logstate.js'
 
   let { config } = $props()
 
@@ -319,50 +324,16 @@
     return parts.join(';')
   }
 
-  // Ordered, non-deleted records (tunes + breaks), then segment into sets on breaks.
-  const ordered = $derived(
-    [...byId.values()]
-      .filter((r) => !r.deleted)
-      .sort((a, b) => (a.order_position < b.order_position ? -1 : a.order_position > b.order_position ? 1 : 0))
-  )
-  // Segment into sets, remembering the break record that *ends* each set (its
-  // boundary with the next). The between-sets ("inter") seam renders in that gap
-  // and carries Join, which removes exactly that break (spec 021 §C; prototype).
-  const segments = $derived.by(() => {
-    const out = []
-    let cur = []
-    for (const r of ordered) {
-      if (r.record_type === 'break') {
-        if (cur.length) { out.push({ tunes: cur, breakAfter: r.session_instance_tune_id }); cur = [] }
-        // a leading/empty-set break carries no set to attach to — ignore it
-      } else {
-        cur.push(r)
-      }
-    }
-    if (cur.length) out.push({ tunes: cur, breakAfter: null })
-    return out
-  })
-  const sets = $derived(segments.map((s) => s.tunes))
-  const tunes = $derived(ordered.filter((r) => r.record_type !== 'break'))
+  // Ordering + set segmentation are pure logic in logstate.js (unit-tested); the
+  // reactive SvelteMap stays here and these derive off its values.
+  const ordered = $derived(computeOrdered(byId.values()))
+  const segments = $derived(segmentByBreaks(ordered))
+  const sets = $derived(setsOf(segments))
+  const tunes = $derived(tunesOf(ordered))
   // "61 tunes in 26 sets" — shown in the header-expand and (collapsed) on the date line.
   const tuneSummary = $derived(`${tunes.length} tune${tunes.length === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
 
-  // Pluralize a tune type for display ("Reel"→"Reels", "Waltz"→"Waltzes", "March"→"Marches").
-  function pluralType(ty) {
-    if (!ty) return ty
-    if (/(s|z|ch|sh|x)$/i.test(ty)) return ty + 'es'
-    return ty + 's'
-  }
-
-  // Per-set type label (prototype setLabel): the shared tune type pluralized
-  // ("Reels"), "Mixed" if the set spans types, "Unknown" when no tune is matched.
-  // Every set gets a pill.
-  function setLabel(setTunes) {
-    const types = new Set(setTunes.map((t) => t.tune_type).filter(Boolean))
-    if (types.size === 0) return 'Unknown'
-    if (types.size > 1) return 'Mixed'
-    return pluralType([...types][0])
-  }
+  // pluralType + setLabel now live in logstate.js (pure, unit-tested).
 
   // "Logged by X, Y · 8:42 PM" for a set — every distinct person who logged a tune in
   // it (in order of first appearance), with the latest log time. null if unknown.
@@ -410,29 +381,8 @@
     return byId.has(c) && !byId.get(c).deleted ? `after:${c}` : 'end'
   })
 
-  function maxPos() {
-    let m = ''
-    for (const r of byId.values()) if (r.order_position && r.order_position > m) m = r.order_position
-    return m
-  }
-  // The server anchors + optimistic order_position for the current cursor.
-  function cursorPos() {
-    const append = () => ({ afterId: null, beforeId: null, position: generateAppend(maxPos()) })
-    const c = insertAfterId
-    if (c == null) return append()
-    if (typeof c === 'object' && c.before != null) {
-      const idx = ordered.findIndex((r) => r.session_instance_tune_id === c.before)
-      if (idx === -1) return append()
-      const x = ordered[idx].order_position
-      const prev = idx > 0 ? ordered[idx - 1].order_position : null
-      return { afterId: null, beforeId: c.before, position: generateBetween(prev, x) }
-    }
-    const idx = ordered.findIndex((r) => r.session_instance_tune_id === c)
-    if (idx === -1) return append()
-    const before = ordered[idx].order_position
-    const after = idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
-    return { afterId: c, beforeId: null, position: generateBetween(before, after) }
-  }
+  // maxPos + cursorPos now live in logstate.js (pure, unit-tested). Call sites pass
+  // the current insertion cursor, the ordered list, and all records (for append).
   function setCursor(id) {
     insertAfterId = id
     queueMicrotask(() => inputEl?.focus())
@@ -449,7 +399,7 @@
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
     const idx = ordered.findIndex((r) => r.session_instance_tune_id === afterTuneId)
-    const before = idx >= 0 ? ordered[idx].order_position : maxPos()
+    const before = idx >= 0 ? ordered[idx].order_position : maxPos(byId.values())
     const after = idx >= 0 && idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
     byId.set(tempId, {
       session_instance_tune_id: tempId, record_type: 'break',
@@ -1063,19 +1013,7 @@
   // null (append) rather than erroring; an unresolved record_id target means the row
   // never persisted, so the op is skipped. Returns a COPY (entry.payload is kept for
   // local byId lookups, which are still keyed by the temp id until settle).
-  function remapAnchors(entry) {
-    const p = { ...entry.payload }
-    const isTemp = (v) => typeof v === 'string' && v.startsWith('temp-')
-    const fixAnchor = (v) => (isTemp(v) ? (tempToReal.get(v) ?? null) : v)
-    if ('after_record_id' in p) p.after_record_id = fixAnchor(p.after_record_id)
-    if ('before_record_id' in p) p.before_record_id = fixAnchor(p.before_record_id)
-    if (isTemp(p.record_id)) {
-      const real = tempToReal.get(p.record_id)
-      if (real == null) return { payload: p, skip: true } // target never reached the server
-      p.record_id = real
-    }
-    return { payload: p, skip: false }
-  }
+  // remapAnchors now lives in logstate.js (pure, unit-tested).
 
   // Send a pending op (any type). Success -> settle; network failure -> queue it
   // (persisted for replay); server error -> undo + surface. Idempotent by op_id.
@@ -1090,7 +1028,7 @@
     }
     // Remap any temp anchor/target ids to their real server ids (an offline mid-set
     // insert / burst can reference a record that hadn't settled yet, #5b).
-    const { payload, skip } = remapAnchors(entry)
+    const { payload, skip } = remapAnchors(entry.payload, tempToReal)
     if (skip) { // the target record never reached the server -> drop this orphaned op
       pending.delete(entry.op_id); await queueDelete(entry.op_id)
       if (entry.tempId) byId.delete(entry.tempId)
@@ -1144,21 +1082,7 @@
   // break) — by tune_id when linked, else by identical normalized name when unlinked. Skips
   // optimistic/temp rows. Returns the target record or null. Used so one log action never
   // momentarily shows two copies of the same tune: we corroborate the existing row instead.
-  function openSetMergeTarget(payload) {
-    let start = 0
-    for (let i = ordered.length - 1; i >= 0; i--) {
-      if (ordered[i].record_type === 'break') { start = i + 1; break }
-    }
-    const wantId = payload.tune_id ?? null
-    const wantName = wantId == null ? normName(payload.name || '') : null
-    for (let i = start; i < ordered.length; i++) {
-      const r = ordered[i]
-      if (r.record_type !== 'tune' || r.deleted || r._temp) continue
-      if (wantId != null) { if (r.tune_id === wantId) return r }
-      else if (wantName && !r.tune_id && normName(r.name || '') === wantName) return r
-    }
-    return null
-  }
+  // openSetMergeTarget now lives in logstate.js (pure, unit-tested).
 
   // Optimistic corroboration: an append of a tune already in the open set merges into the
   // existing row (flash + "keep both" nudge) instead of adding a second copy. The op is still
@@ -1181,10 +1105,10 @@
     }
     const op_id = crypto.randomUUID()
     const tempId = `temp-${op_id}`
-    const { afterId, beforeId, position } = cursorPos()
+    const { afterId, beforeId, position } = cursorPos(insertAfterId, ordered, [...byId.values()])
     // Pure append of a duplicate -> corroborate the existing row, never a second copy.
     if (afterId == null && beforeId == null) {
-      const target = openSetMergeTarget(payload)
+      const target = openSetMergeTarget(payload, ordered)
       if (target) { corroborateLocally(target, payload, name); return }
     }
     byId.set(tempId, {
@@ -1226,7 +1150,7 @@
     const tempId = `temp-${op_id}`
     byId.set(tempId, {
       session_instance_tune_id: tempId, name: n.name, tune_id: n.payload.tune_id ?? null, tune_type: n.payload.tune_type ?? null,
-      record_type: 'tune', order_position: generateAppend(maxPos()), deleted: false, _temp: true, _status: 'sending',
+      record_type: 'tune', order_position: generateAppend(maxPos(byId.values())), deleted: false, _temp: true, _status: 'sending',
     })
     trySend({ op_id, name: n.name, op_type: 'add_tune', payload: { ...n.payload, after_record_id: null, before_record_id: null, no_merge: true }, status: 'sending', ts: Date.now(), tempId })
   }
@@ -1398,7 +1322,7 @@
       breakOp = { op_type: 'set_break', payload: { action: 'insert', before_record_id: nextFirstId } }
       advance = true
     } else {
-      const cp = cursorPos()
+      const cp = cursorPos(insertAfterId, ordered, [...byId.values()])
       position = cp.position
       addAnchors = { after_record_id: cp.afterId, before_record_id: cp.beforeId }
       advance = insertAfterId != null
@@ -1425,7 +1349,7 @@
     // Pure append that resolved to a duplicate -> drop the placeholder and corroborate the
     // existing row, so the action never leaves a second copy behind. §H30
     if (!rs.breakOp && rs.addAnchors.after_record_id == null && rs.addAnchors.before_record_id == null) {
-      const target = openSetMergeTarget(payload)
+      const target = openSetMergeTarget(payload, ordered)
       if (target) {
         byId.delete(rs.tempId)
         resolving = null
@@ -1595,20 +1519,7 @@
   // fold, unaccent, lower; "The" prefix flexibility on the tune-name tier only.
   let localIndex = null
   let vocabKnown = [], vocabAliases = [] // raw bootstrap vocabulary, kept for offline persistence
-  const stripThe = (s) => s.replace(/^the\s+/, '')
-  // Mirror the server matcher (database.normalize_quotes + unaccent + lower). Smart-quote
-  // code points are \u-escaped, never written literally — editors silently auto-correct
-  // literal smart quotes back to ASCII, which would turn the fold into a no-op.
-  function normName(s) {
-    return (s || '')
-      .replace(/[\u2018\u2019\u201b\u02bc\u2032\u0060\u00b4]/g, "'") // smart singles -> '
-      .replace(/[\u201c\u201d\u201e\u2033\u00ab\u00bb]/g, '"')        // smart doubles -> "
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')              // unaccent (strip diacritics)
-      .trim().toLowerCase()
-  }
-  // Notation normalizer for the local ABC index: strip whitespace (meaningless in ABC) and
-  // lowercase, mirroring the server's whitespace-stripped, case-insensitive ILIKE match.
-  const normAbc = (s) => (s || '').replace(/\s+/g, '').toLowerCase()
+  // stripThe / normName / normAbc now live in logstate.js (pure, unit-tested).
   function buildLocalIndex(known, aliases) {
     nextByTuneId.clear()
     if (!known && !aliases) { localIndex = null; vocabKnown = []; vocabAliases = []; return }
@@ -1709,19 +1620,7 @@
     ].slice(0, limit)
   }
 
-  // Stable-append merge (§D): keep every already-shown LOCAL result pinned in place (so
-  // nothing the user is about to tap moves), enrich it with the server's richer fields
-  // (in-session badge / notation), and append only the server-ONLY tunes below.
-  function mergeStable(localList, serverList) {
-    const sById = new Map(serverList.filter((r) => r.tune_id != null).map((r) => [r.tune_id, r]))
-    const seen = new Set(localList.map((r) => r.tune_id))
-    const merged = localList.map((r) => {
-      const s = sById.get(r.tune_id)
-      return s ? { ...r, in_session_tune: s.in_session_tune, abc: s.abc ?? r.abc } : r
-    })
-    const extra = serverList.filter((r) => r.tune_id != null && !seen.has(r.tune_id))
-    return [...merged, ...extra].slice(0, 8)
-  }
+  // mergeStable now lives in logstate.js (pure, unit-tested).
 
   // Background vocabulary load (online): fetch the session vocabulary AFTER first render,
   // build the local fast-match index, and persist it into the offline snapshot. Deferred
