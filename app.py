@@ -102,6 +102,13 @@ login_manager.login_message = "Please log in to access this page."
 def load_user(user_id):
     return User.get_by_id(int(user_id))
 
+@app.context_processor
+def inject_canonical_instruments():
+    """Expose the single canonical instrument list to every template so all
+    instrument pickers render from one source (see instruments.py)."""
+    from instruments import CANONICAL_INSTRUMENTS
+    return {"canonical_instruments": CANONICAL_INSTRUMENTS}
+
 # Before request handler to capture referrer parameter
 @app.before_request
 def capture_referrer():

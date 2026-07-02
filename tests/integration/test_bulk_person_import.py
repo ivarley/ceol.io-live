@@ -91,7 +91,8 @@ class TestBulkPersonImportAPI:
             assert person1["first_name"] == "John"
             assert person1["last_name"] == "Smith"
             assert person1["email"] == f"john-{unique_id}@bulktest.com"
-            assert set(person1["instruments"]) == {"fiddle", "flute"}
+            # Instruments are canonicalized to Title Case (see instruments.py)
+            assert set(person1["instruments"]) == {"Fiddle", "Flute"}
             assert not person1["is_duplicate"]
             
             # Check second person
@@ -99,7 +100,7 @@ class TestBulkPersonImportAPI:
             assert person2["first_name"] == "Jane"
             assert person2["last_name"] == "Doe"
             assert person2["email"] == f"jane-{unique_id}@bulktest.com"
-            assert person2["instruments"] == ["guitar"]
+            assert person2["instruments"] == ["Guitar"]
             assert not person2["is_duplicate"]
 
     def test_bulk_import_preprocess_with_headers(self, client, db_conn, db_cursor, authenticated_admin_user):
@@ -246,7 +247,7 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
                 (f"john-save-{unique_id}@bulktest.com",)
             )
             instruments = [row[0] for row in db_cursor.fetchall()]
-            assert set(instruments) == {"fiddle", "flute"}
+            assert set(instruments) == {"Fiddle", "Flute"}
             
             # Verify session_person records were created
             db_cursor.execute(

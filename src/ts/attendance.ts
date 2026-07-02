@@ -69,11 +69,17 @@ class AttendanceManager {
     private currentSearchQuery = '';
     private searchTimeout: number | null = null;
     private currentFilter = ''; // Empty string means no filter (show all)
+    // Canonical instrument vocabulary (mirrors instruments.py CANONICAL_INSTRUMENTS).
     private readonly instruments = [
-        'Banjo', 'Bodhrán', 'Bouzouki', 'Button Accordion', 'Concertina', 'Fiddle',
-        'Flute', 'Guitar', 'Harp', 'Mandolin', 'Piano', 'Piano Accordion', 'Tin Whistle', 'Uilleann Pipes'
+        'Fiddle', 'Flute', 'Whistle', 'Low Whistle', 'Uilleann Pipes', 'Concertina',
+        'Button Accordion', 'Piano Accordion', 'Banjo', 'Mandolin', 'Harp', 'Guitar',
+        'Bouzouki', 'Piano', 'Bodhrán'
     ];
     
+    // "Other" (free-text) instruments added in the Add Person modal, rendered as
+    // removable pills to match the profile page's styling.
+    private otherInstruments: string[] = [];
+
     // Beta page compatibility
     private isBetaPage = false;
     private originalTextInputTyping: (() => void) | null = null;
@@ -806,6 +812,10 @@ class AttendanceManager {
     }
 
     showAddPersonModal(): void {
+        // Start each open with a clean "other instruments" list.
+        this.otherInstruments = [];
+        this.renderOtherInstruments();
+
         // Hide search results dropdown and clear search input
         const searchResults = document.getElementById('search-results');
         if (searchResults) {
@@ -909,6 +919,10 @@ class AttendanceManager {
             instruments.push(checkbox.value);
         });
 
+        // Include "other" pills the user added, plus any leftover typed-but-not-added text.
+        // (The server canonicalizes and de-dupes.)
+        this.otherInstruments.forEach(i => instruments.push(i));
+
         const customInstrument = document.getElementById('add-new-instrument') as HTMLInputElement;
         if (customInstrument && customInstrument.value.trim()) {
             instruments.push(customInstrument.value.trim());
@@ -942,6 +956,8 @@ class AttendanceManager {
             checkbox.checked = false;
         });
         if (customInstrument) customInstrument.value = '';
+        this.otherInstruments = [];
+        this.renderOtherInstruments();
         
         // Show initial toast message
         const displayName = personData.first_name + ' ' + personData.last_name;
@@ -1025,32 +1041,59 @@ class AttendanceManager {
     addNewInstrument(): void {
         const input = document.getElementById('add-new-instrument') as HTMLInputElement;
         if (!input || !input.value.trim()) return;
-        
+
         const instrumentName = input.value.trim();
-        const container = document.getElementById('add-instruments-container');
-        if (!container) return;
-        
-        // Create new checkbox for the instrument
-        const checkDiv = document.createElement('div');
-        checkDiv.className = 'form-check';
-        
-        const checkbox = document.createElement('input');
-        checkbox.className = 'form-check-input';
-        checkbox.type = 'checkbox';
-        checkbox.value = instrumentName;
-        checkbox.checked = true;
-        checkbox.id = 'inst-' + instrumentName.toLowerCase().replace(/\s+/g, '-');
-        
-        const label = document.createElement('label');
-        label.className = 'form-check-label';
-        label.setAttribute('for', checkbox.id);
-        label.textContent = instrumentName;
-        
-        checkDiv.appendChild(checkbox);
-        checkDiv.appendChild(label);
-        container.appendChild(checkDiv);
-        
+        // Track as a removable "other" pill (matches the profile page), de-duped
+        // case-insensitively against what's already there.
+        if (!this.otherInstruments.some(i => i.toLowerCase() === instrumentName.toLowerCase())) {
+            this.otherInstruments.push(instrumentName);
+            this.renderOtherInstruments();
+        }
         input.value = '';
+    }
+
+    private renderOtherInstruments(): void {
+        const list = document.getElementById('add-other-instruments-list');
+        if (!list) return;
+        list.innerHTML = '';
+
+        this.otherInstruments.forEach((inst) => {
+            // Same inline-styled pill as the profile page (this app ships no Bootstrap).
+            const badge = document.createElement('span');
+            badge.style.display = 'inline-flex';
+            badge.style.alignItems = 'center';
+            badge.style.gap = '0.4rem';
+            badge.style.padding = '0.2rem 0.6rem';
+            badge.style.marginRight = '0.4rem';
+            badge.style.marginBottom = '0.4rem';
+            badge.style.borderRadius = '1rem';
+            badge.style.fontSize = '0.85rem';
+            badge.style.background = 'var(--secondary, #6c757d)';
+            badge.style.color = '#fff';
+
+            const label = document.createElement('span');
+            label.textContent = inst;
+            badge.appendChild(label);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.textContent = '×';
+            removeBtn.setAttribute('aria-label', `Remove ${inst}`);
+            removeBtn.style.background = 'none';
+            removeBtn.style.border = 'none';
+            removeBtn.style.color = '#fff';
+            removeBtn.style.cursor = 'pointer';
+            removeBtn.style.fontSize = '1.1rem';
+            removeBtn.style.lineHeight = '1';
+            removeBtn.style.padding = '0';
+            removeBtn.addEventListener('click', () => {
+                this.otherInstruments = this.otherInstruments.filter(i => i !== inst);
+                this.renderOtherInstruments();
+            });
+
+            badge.appendChild(removeBtn);
+            list.appendChild(badge);
+        });
     }
 
     removePerson(personId: number | string): void {

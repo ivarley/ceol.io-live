@@ -17,6 +17,7 @@ import re
 
 # Import from local modules
 from database import get_db_connection, save_to_history, get_current_user_id
+from instruments import CANONICAL_INSTRUMENTS, normalize_instruments
 from api_routes import segment_records_into_sets
 from timezone_utils import (
     now_utc,
@@ -1740,23 +1741,9 @@ def set_password_optional():
 
 
 # Common instruments for Irish/folk music
-COMMON_INSTRUMENTS = [
-    "Accordion",
-    "Banjo",
-    "Bodhrán",
-    "Bouzouki",
-    "Concertina",
-    "Fiddle",
-    "Flute",
-    "Guitar",
-    "Harp",
-    "Mandolin",
-    "Piano",
-    "Piano Accordion",
-    "Tin Whistle",
-    "Uilleann Pipes",
-    "Vocals",
-]
+# The canonical instrument list is defined once in instruments.py. Kept under the
+# old name here for the setup_profile template context.
+COMMON_INSTRUMENTS = CANONICAL_INSTRUMENTS
 
 
 @login_required
@@ -1807,10 +1794,10 @@ def setup_profile():
 
             # Add other instrument if specified
             if other_instrument:
-                for instr in other_instrument.split(","):
-                    instr = instr.strip()
-                    if instr and instr not in instruments:
-                        instruments.append(instr)
+                instruments.extend(other_instrument.split(","))
+
+            # Canonicalize casing/aliases and de-dupe against one shared vocabulary
+            instruments = normalize_instruments(instruments)
 
             # Update person record
             save_to_history(

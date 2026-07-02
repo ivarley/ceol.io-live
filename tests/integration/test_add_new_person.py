@@ -88,8 +88,9 @@ class TestAddNewPerson:
             
             assert new_person is not None
             assert new_person['display_name'].startswith('Sean M')  # May include timestamp in last name
-            assert 'bodhrán' in new_person['instruments']
-            assert 'guitar' in new_person['instruments']
+            # Instruments are canonicalized to Title Case (see instruments.py)
+            assert 'Bodhrán' in new_person['instruments']
+            assert 'Guitar' in new_person['instruments']
             assert new_person['is_regular'] is False
 
     def test_new_person_with_duplicate_instruments_handled(self, client, authenticated_admin_user, sample_session_instance_data):
@@ -111,10 +112,11 @@ class TestAddNewPerson:
                 instruments_response = client.get(f'/api/person/{person_id}/instruments')
                 instruments_data = json.loads(instruments_response.data)
                 
-                # Should only have unique instruments
-                assert len(instruments_data['data']) == 2  # fiddle and tin whistle
-                assert 'fiddle' in instruments_data['data']
-                assert 'tin whistle' in instruments_data['data']
+                # Should only have unique instruments, canonicalized to Title Case
+                # ("tin whistle" -> "Whistle"); see instruments.py
+                assert len(instruments_data['data']) == 2  # Fiddle and Whistle
+                assert 'Fiddle' in instruments_data['data']
+                assert 'Whistle' in instruments_data['data']
 
     def test_new_person_name_formatting_and_disambiguation(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test that new person names are formatted and disambiguated correctly"""
@@ -232,8 +234,9 @@ class TestAddNewPerson:
             get_response = client.get(f'/api/person/{person_id}/instruments')
             instruments = json.loads(get_response.data)['data']
             
-            assert 'harp' in instruments
-            assert 'piano accordion' in instruments
+            # Canonicalized to Title Case (see instruments.py)
+            assert 'Harp' in instruments
+            assert 'Piano Accordion' in instruments
 
     def test_create_person_with_email_creates_proper_record(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test that creating person with email creates proper database record and can be added to sessions"""
@@ -261,7 +264,7 @@ class TestAddNewPerson:
             assert created_data['data']['first_name'] == 'Searchable'
             assert created_data['data']['last_name'] == 'Person'
             assert created_data['data']['email'] == unique_email
-            assert 'mandolin' in created_data['data']['instruments']
+            assert 'Mandolin' in created_data['data']['instruments']
             
             # Verify person can be added to session instances (demonstrates they're properly created)
             checkin_response = client.post(
@@ -280,7 +283,7 @@ class TestAddNewPerson:
             
             assert created_person is not None
             assert 'Searchable' in created_person['display_name']
-            assert 'mandolin' in created_person['instruments']
+            assert 'Mandolin' in created_person['instruments']
 
     def test_history_tracking_for_new_person(self, client, authenticated_admin_user):
         """Test that creating new person creates proper history records"""

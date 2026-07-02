@@ -40,8 +40,9 @@ class TestPersonManagement:
             instruments_data = json.loads(instruments_response.data)
             instruments = instruments_data['data']
             
-            assert 'fiddle' in instruments
-            assert 'tin whistle' in instruments
+            # Instruments are canonicalized to Title Case (see instruments.py)
+            assert 'Fiddle' in instruments
+            assert 'Whistle' in instruments
             assert len(instruments) == 2
             
             # Step 3: Update instruments (add more)
@@ -62,8 +63,8 @@ class TestPersonManagement:
             new_instruments = verify_data['data']
             
             assert len(new_instruments) == 4
-            assert 'bodhrán' in new_instruments
-            assert 'guitar' in new_instruments
+            assert 'Bodhrán' in new_instruments
+            assert 'Guitar' in new_instruments
             
             # Step 5: Reduce instruments (remove some)
             reduced_instruments = {
@@ -83,7 +84,7 @@ class TestPersonManagement:
             final_instruments = final_data['data']
             
             assert len(final_instruments) == 1
-            assert final_instruments[0] == 'fiddle'
+            assert final_instruments[0] == 'Fiddle'
 
     def test_person_with_attendance_history_workflow(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test person management when they have attendance history"""
@@ -135,9 +136,10 @@ class TestPersonManagement:
             
             assert person is not None
             assert person['attendance'] == 'yes'  # Last status set
-            assert 'concertina' in person['instruments']
-            assert 'button accordion' in person['instruments']
-            assert 'piano accordion' in person['instruments']
+            # Instruments are canonicalized to Title Case (see instruments.py)
+            assert 'Concertina' in person['instruments']
+            assert 'Button Accordion' in person['instruments']
+            assert 'Piano Accordion' in person['instruments']
 
     def test_duplicate_person_handling_workflow(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test workflow when dealing with potential duplicate people"""
@@ -235,7 +237,8 @@ class TestPersonManagement:
             check_response = client.get(f'/api/person/{person_id}/instruments')
             check_data = json.loads(check_response.data)
             
-            assert 'fiddle' in check_data['data']
+            # "fiddle" canonicalizes to "Fiddle"; unknown values stay verbatim as free text
+            assert 'Fiddle' in check_data['data']
             assert 'electric_guitar' in check_data['data']
             assert 'synthesizer' in check_data['data']
 
@@ -311,7 +314,7 @@ class TestPersonManagement:
             final_attendees = final_attendance_data['data']['regulars'] + final_attendance_data['data']['attendees'] 
             final_person = next((a for a in final_attendees if a['person_id'] == sample_person_id), None)
             assert final_person is not None
-            assert 'guitar' in final_person['instruments']
+            assert 'Guitar' in final_person['instruments']
 
     def test_cross_session_person_management(self, client, authenticated_admin_user, multiple_sessions_data):
         """Test managing same person across different sessions"""
@@ -335,7 +338,7 @@ class TestPersonManagement:
             assert instruments_response.status_code == 200
             
             instruments_data = json.loads(instruments_response.data)
-            assert 'mandolin' in instruments_data['data']
+            assert 'Mandolin' in instruments_data['data']
             
             # Step 3: Update instruments to verify cross-session person management
             updated_instruments = {
@@ -352,6 +355,6 @@ class TestPersonManagement:
             # Step 4: Verify instruments were updated
             final_instruments_response = client.get(f'/api/person/{person_id}/instruments')
             final_instruments_data = json.loads(final_instruments_response.data)
-            assert 'mandolin' in final_instruments_data['data']
-            assert 'guitar' in final_instruments_data['data']
-            assert 'bodhrán' in final_instruments_data['data']
+            assert 'Mandolin' in final_instruments_data['data']
+            assert 'Guitar' in final_instruments_data['data']
+            assert 'Bodhrán' in final_instruments_data['data']

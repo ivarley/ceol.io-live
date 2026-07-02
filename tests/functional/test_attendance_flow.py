@@ -265,8 +265,9 @@ class TestAttendanceFlow:
             all_attendees = attendance_data['data']['regulars'] + attendance_data['data']['attendees']
             person = next((a for a in all_attendees if a['person_id'] == person_id), None)
             
-            assert 'fiddle' in person['instruments']
-            
+            # Instruments are canonicalized to Title Case (see instruments.py)
+            assert 'Fiddle' in person['instruments']
+
             # Step 3: Update instruments (simulate clicking on person name → edit modal)
             instruments_update = {
                 'instruments': ['fiddle', 'tin whistle', 'bodhrán']
@@ -285,9 +286,9 @@ class TestAttendanceFlow:
             all_final = final_data['data']['regulars'] + final_data['data']['attendees']
             updated_person = next((a for a in all_final if a['person_id'] == person_id), None)
             
-            assert 'fiddle' in updated_person['instruments']
-            assert 'tin whistle' in updated_person['instruments']
-            assert 'bodhrán' in updated_person['instruments']
+            assert 'Fiddle' in updated_person['instruments']
+            assert 'Whistle' in updated_person['instruments']
+            assert 'Bodhrán' in updated_person['instruments']
 
     def test_error_recovery_workflow(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test workflow error handling and recovery"""

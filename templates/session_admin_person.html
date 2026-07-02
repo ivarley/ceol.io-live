@@ -248,15 +248,15 @@
                                         <div class="mb-3">
                                             <label class="form-label"><strong>Instruments</strong></label>
                                             <div id="instruments-checkboxes" class="row">
-                                                <!-- Standard instruments (matching attendance.js list, alphabetical) -->
-                                                {% for instrument in ['banjo', 'bodhrán', 'bouzouki', 'button accordion', 'concertina', 'fiddle', 'flute', 'guitar', 'harp', 'mandolin', 'piano', 'piano accordion', 'tin whistle', 'uilleann pipes'] %}
+                                                {% set person_instruments_lower = person.instruments|map('lower')|list %}
+                                                {% for instrument in canonical_instruments %}
                                                 <div class="col-md-4 col-sm-6 mb-2">
                                                     <div class="form-check">
                                                         <input class="form-check-input instrument-checkbox" type="checkbox"
                                                                id="instrument-{{ loop.index }}" value="{{ instrument }}"
-                                                               {% if instrument in person.instruments %}checked{% endif %}>
+                                                               {% if instrument|lower in person_instruments_lower %}checked{% endif %}>
                                                         <label class="form-check-label" for="instrument-{{ loop.index }}">
-                                                            {{ instrument|title }}
+                                                            {{ instrument }}
                                                         </label>
                                                     </div>
                                                 </div>
@@ -268,8 +268,9 @@
                                         <div class="mb-3">
                                             <label class="form-label"><strong>Other Instruments</strong></label>
                                             <div id="custom-instruments">
+                                                {% set canonical_instruments_lower = canonical_instruments|map('lower')|list %}
                                                 {% for instrument in person.instruments %}
-                                                    {% if instrument not in ['banjo', 'bodhrán', 'bouzouki', 'button accordion', 'concertina', 'fiddle', 'flute', 'guitar', 'harp', 'mandolin', 'piano', 'piano accordion', 'tin whistle', 'uilleann pipes'] %}
+                                                    {% if instrument|lower not in canonical_instruments_lower %}
                                                         <div class="input-group mb-2 custom-instrument-row">
                                                             <input type="text" class="form-control custom-instrument" value="{{ instrument|title }}" placeholder="Enter instrument name">
                                                             <button class="btn btn-outline-danger remove-custom-instrument" type="button">Remove</button>

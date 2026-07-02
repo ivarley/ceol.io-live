@@ -173,68 +173,14 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">Instruments</label>
                                                     <div id="instruments-checkboxes" class="row">
+                                                        {% for instrument in canonical_instruments %}
                                                         <div class="col-md-4">
                                                             <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="fiddle" id="edit-inst-fiddle">
-                                                                <label class="form-check-label" for="edit-inst-fiddle">Fiddle</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="flute" id="edit-inst-flute">
-                                                                <label class="form-check-label" for="edit-inst-flute">Flute</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="tin whistle" id="edit-inst-whistle">
-                                                                <label class="form-check-label" for="edit-inst-whistle">Tin Whistle</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="button accordion" id="edit-inst-accordion">
-                                                                <label class="form-check-label" for="edit-inst-accordion">Button Accordion</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="piano accordion" id="edit-inst-piano-accordion">
-                                                                <label class="form-check-label" for="edit-inst-piano-accordion">Piano Accordion</label>
+                                                                <input class="form-check-input" type="checkbox" value="{{ instrument }}" id="edit-inst-{{ loop.index }}">
+                                                                <label class="form-check-label" for="edit-inst-{{ loop.index }}">{{ instrument }}</label>
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="concertina" id="edit-inst-concertina">
-                                                                <label class="form-check-label" for="edit-inst-concertina">Concertina</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="banjo" id="edit-inst-banjo">
-                                                                <label class="form-check-label" for="edit-inst-banjo">Banjo</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="guitar" id="edit-inst-guitar">
-                                                                <label class="form-check-label" for="edit-inst-guitar">Guitar</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="bouzouki" id="edit-inst-bouzouki">
-                                                                <label class="form-check-label" for="edit-inst-bouzouki">Bouzouki</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="mandolin" id="edit-inst-mandolin">
-                                                                <label class="form-check-label" for="edit-inst-mandolin">Mandolin</label>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="bodhrán" id="edit-inst-bodhran">
-                                                                <label class="form-check-label" for="edit-inst-bodhran">Bodhrán</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="uilleann pipes" id="edit-inst-pipes">
-                                                                <label class="form-check-label" for="edit-inst-pipes">Uilleann Pipes</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="harp" id="edit-inst-harp">
-                                                                <label class="form-check-label" for="edit-inst-harp">Harp</label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="piano" id="edit-inst-piano">
-                                                                <label class="form-check-label" for="edit-inst-piano">Piano</label>
-                                                            </div>
-                                                        </div>
+                                                        {% endfor %}
                                                     </div>
                                                     <div class="mt-2">
                                                         <input type="text" class="form-control" id="other-instrument" placeholder="Other instrument...">
@@ -756,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Check the appropriate checkboxes
         personInstruments.forEach(instrument => {
-            const checkbox = Array.from(checkboxes).find(cb => cb.value === instrument);
+            const checkbox = Array.from(checkboxes).find(cb => cb.value.toLowerCase() === instrument.toLowerCase());
             if (checkbox) {
                 checkbox.checked = true;
             } else {
@@ -777,20 +723,36 @@ document.addEventListener('DOMContentLoaded', function() {
         const otherInstrumentsList = document.getElementById('other-instruments-list');
         otherInstrumentsList.innerHTML = '';
 
-        otherInstruments.forEach((inst, index) => {
+        otherInstruments.forEach((inst) => {
+            // Self-contained chip: this app ships a custom theme.css (no Bootstrap),
+            // so style the pill inline rather than rely on badge/btn-close classes.
             const badge = document.createElement('span');
-            badge.className = 'badge bg-secondary me-1 mb-1';
             badge.style.display = 'inline-flex';
             badge.style.alignItems = 'center';
-            badge.style.gap = '0.25rem';
-            badge.innerHTML = `${inst}`;
+            badge.style.gap = '0.4rem';
+            badge.style.padding = '0.2rem 0.6rem';
+            badge.style.marginRight = '0.4rem';
+            badge.style.marginBottom = '0.4rem';
+            badge.style.borderRadius = '1rem';
+            badge.style.fontSize = '0.85rem';
+            badge.style.background = 'var(--secondary, #6c757d)';
+            badge.style.color = '#fff';
+
+            const label = document.createElement('span');
+            label.textContent = inst;
+            badge.appendChild(label);
 
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
-            removeBtn.className = 'btn-close btn-close-white';
-            removeBtn.style.fontSize = '0.6rem';
-            removeBtn.style.padding = '0.1rem';
-            removeBtn.setAttribute('aria-label', 'Remove');
+            removeBtn.textContent = '×';  // multiplication sign as a close glyph
+            removeBtn.setAttribute('aria-label', `Remove ${inst}`);
+            removeBtn.style.background = 'none';
+            removeBtn.style.border = 'none';
+            removeBtn.style.color = '#fff';
+            removeBtn.style.cursor = 'pointer';
+            removeBtn.style.fontSize = '1.1rem';
+            removeBtn.style.lineHeight = '1';
+            removeBtn.style.padding = '0';
             removeBtn.addEventListener('click', () => removeOtherInstrument(inst));
 
             badge.appendChild(removeBtn);

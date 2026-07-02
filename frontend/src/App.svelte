@@ -478,7 +478,36 @@
   let showCreate = $state(false)
   let newFirst = $state('')
   let newLast = $state('')
+  // Optional instrument picker for the create-person form (parity with the old logger).
+  let showInstruments = $state(false)
+  let newInstruments = $state([]) // selected instrument names (canonical + free-text "other")
+  let newOther = $state('')
+  const canonicalInstruments = $derived(config.canonicalInstruments || [])
+  // The free-text picks, shown as removable chips (canonical picks live in their checkboxes).
+  const otherPicks = $derived(newInstruments.filter(
+    (i) => !canonicalInstruments.some((c) => c.toLowerCase() === i.toLowerCase())
+  ))
   let pendingStarterFirstId = null // set we were attributing when the drawer was opened from the starter picker
+
+  function toggleInstrument(name) {
+    newInstruments = newInstruments.includes(name)
+      ? newInstruments.filter((i) => i !== name)
+      : [...newInstruments, name]
+  }
+  function addOtherInstrument() {
+    const v = newOther.trim()
+    if (v && !newInstruments.some((i) => i.toLowerCase() === v.toLowerCase())) {
+      newInstruments = [...newInstruments, v]
+    }
+    newOther = ''
+  }
+  function removeInstrument(name) {
+    newInstruments = newInstruments.filter((i) => i !== name)
+  }
+  function resetCreateForm() {
+    newFirst = ''; newLast = ''; showCreate = false
+    newInstruments = []; newOther = ''; showInstruments = false
+  }
 
   async function refreshAttendees() {
     try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
@@ -486,7 +515,7 @@
   function openAttendance() {
     starterPickerSet = null
     attendanceOpen = true
-    personQuery = ''; personResults = []; showCreate = false; newFirst = ''; newLast = ''
+    personQuery = ''; personResults = []; resetCreateForm()
     if (!attendeesLoaded) refreshAttendees()
   }
   const closeAttendance = () => { attendanceOpen = false; pendingStarterFirstId = null }
@@ -528,9 +557,12 @@
   async function createPerson() {
     const first = newFirst.trim()
     if (!first) return
-    const res = await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim() }, 'Add person')
+    // Include picked instruments plus any leftover typed-but-not-added "other" text.
+    const instruments = [...newInstruments]
+    if (newOther.trim()) instruments.push(newOther.trim())
+    const res = await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim(), instruments }, 'Add person')
     if (res) {
-      newFirst = ''; newLast = ''; showCreate = false; personQuery = ''; personResults = []
+      resetCreateForm(); personQuery = ''; personResults = []
       if (res.person) applyPendingStarter(res.person)
     }
   }
@@ -2614,13 +2646,40 @@
           <p class="att-empty">No matches — create them below.</p>
         {/if}
 
-        <button class="att-create-toggle" onclick={() => (showCreate = !showCreate)}>{showCreate ? '× Cancel' : '＋ Create new person'}</button>
+        <button class="att-create-toggle" onclick={() => (showCreate ? resetCreateForm() : (showCreate = true))}>{showCreate ? '× Cancel' : '＋ Create new person'}</button>
         {#if showCreate}
           <div class="att-create">
             <input placeholder="First name" bind:value={newFirst} />
             <input placeholder="Last name" bind:value={newLast} />
             <button class="att-add" disabled={!newFirst.trim()} onclick={createPerson}>Add</button>
           </div>
+          <button class="att-inst-toggle" onclick={() => (showInstruments = !showInstruments)}>
+            {showInstruments ? '× Instruments' : '＋ Add instruments (optional)'}
+          </button>
+          {#if showInstruments}
+            <div class="att-inst">
+              <div class="att-inst-grid">
+                {#each canonicalInstruments as inst}
+                  <label class="att-inst-item">
+                    <input type="checkbox" checked={newInstruments.includes(inst)} onchange={() => toggleInstrument(inst)} />
+                    <span>{inst}</span>
+                  </label>
+                {/each}
+              </div>
+              <div class="att-inst-other">
+                <input placeholder="Other instrument…" bind:value={newOther}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOtherInstrument() } }} />
+                <button class="att-add" disabled={!newOther.trim()} onclick={addOtherInstrument}>Add</button>
+              </div>
+              {#if otherPicks.length}
+                <div class="att-inst-chips">
+                  {#each otherPicks as o}
+                    <span class="att-chip">{o}<button aria-label={'Remove ' + o} onclick={() => removeInstrument(o)}>×</button></span>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
         {/if}
       </div>
     </aside>

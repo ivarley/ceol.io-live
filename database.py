@@ -835,16 +835,16 @@ def create_person_with_instruments(first_name, last_name, email=None, instrument
     
     Returns tuple of (success, message, person_id, display_name).
     """
-    if instruments is None:
-        instruments = []
-        
+    from instruments import normalize_instruments
+    instruments = normalize_instruments(instruments)
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         # Check if person with same name already exists (for display name disambiguation)
         cur.execute("""
             SELECT person_id, first_name, last_name, email 
@@ -939,13 +939,16 @@ def update_person_instruments(person_id, instruments, user_id=None):
     
     Returns tuple of (success, message, changes_dict).
     """
+    from instruments import normalize_instruments
+    instruments = normalize_instruments(instruments)
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         # Begin transaction
         cur.execute("BEGIN")
-        
+
         # Get existing instruments
         cur.execute("SELECT instrument FROM person_instrument WHERE person_id = %s", (person_id,))
         existing_results = cur.fetchall()

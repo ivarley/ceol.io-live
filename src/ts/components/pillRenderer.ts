@@ -542,14 +542,25 @@ export class PillRenderer {
 
         const loggedByName = getLoggedByName();
 
+        // Only logged-in viewers get the editable "Started by" droplist. For everyone
+        // else it's read-only: show the current value as a label (a dash if unset).
+        // (A broader read-only audit of this view is planned separately.)
+        const isLoggedIn = !!(window as any).sessionConfig?.isUserLoggedIn;
+        const startedByNameEl = this.createStartedByName(tuneSet);
+        const startedByLabelText = startedByNameEl?.textContent || '—';
+
+        const startedByRowHtml = isLoggedIn
+            ? `<select class="set-started-by" disabled>
+                        <option>Loading...</option>
+                    </select>`
+            : `<span class="set-started-by-label">${startedByLabelText}</span>`;
+
         // Initial loading state
         popout.innerHTML = `
             <div class="set-popout-content">
                 <div class="set-popout-row">
                     <label>Started by:</label>
-                    <select class="set-started-by" disabled>
-                        <option>Loading...</option>
-                    </select>
+                    ${startedByRowHtml}
                 </div>
                 <div class="set-popout-row">
                     <label>Logged by:</label>
@@ -558,8 +569,8 @@ export class PillRenderer {
             </div>
         `;
 
-        // Fetch attendees and populate the dropdown
-        if (sessionInstanceId) {
+        // Fetch attendees and populate the dropdown (logged-in viewers only)
+        if (isLoggedIn && sessionInstanceId) {
             const cacheKey = `session_attendees_${sessionInstanceId}`;
             const cached = localStorage.getItem(cacheKey);
 

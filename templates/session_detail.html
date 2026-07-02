@@ -1964,59 +1964,14 @@
                         <div class="add-person-form-group">
                             <label>Instruments</label>
                             <div class="instruments-checkboxes" id="add-person-instruments">
+                                {% for instrument in canonical_instruments %}
                                 <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-banjo" value="banjo">
-                                    <label for="inst-banjo">Banjo</label>
+                                    <input type="checkbox" id="add-person-inst-{{ loop.index }}" value="{{ instrument }}">
+                                    <label for="add-person-inst-{{ loop.index }}">{{ instrument }}</label>
                                 </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-bodhran" value="bodhrán">
-                                    <label for="inst-bodhran">Bodhrán</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-bouzouki" value="bouzouki">
-                                    <label for="inst-bouzouki">Bouzouki</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-accordion" value="button accordion">
-                                    <label for="inst-accordion">Button Accordion</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-concertina" value="concertina">
-                                    <label for="inst-concertina">Concertina</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-fiddle" value="fiddle">
-                                    <label for="inst-fiddle">Fiddle</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-flute" value="flute">
-                                    <label for="inst-flute">Flute</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-guitar" value="guitar">
-                                    <label for="inst-guitar">Guitar</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-harp" value="harp">
-                                    <label for="inst-harp">Harp</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-mandolin" value="mandolin">
-                                    <label for="inst-mandolin">Mandolin</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-piano" value="piano">
-                                    <label for="inst-piano">Piano</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-whistle" value="tin whistle">
-                                    <label for="inst-whistle">Tin Whistle</label>
-                                </div>
-                                <div class="instrument-checkbox-item">
-                                    <input type="checkbox" id="inst-pipes" value="uilleann pipes">
-                                    <label for="inst-pipes">Uilleann Pipes</label>
-                                </div>
+                                {% endfor %}
                             </div>
+                            <input type="text" id="add-person-other-instrument" placeholder="Other instrument(s)..." style="margin-top: 8px;">
                         </div>
 
                         <div class="add-person-form-group">
@@ -4010,6 +3965,14 @@
         document.querySelectorAll('#add-person-instruments input[type="checkbox"]:checked').forEach(cb => {
             instruments.push(cb.value);
         });
+        // Add any "Other" free-text instrument(s) (comma-separated); server re-canonicalizes
+        const otherInstrumentInput = document.getElementById('add-person-other-instrument');
+        if (otherInstrumentInput && otherInstrumentInput.value.trim()) {
+            otherInstrumentInput.value.split(',').forEach(inst => {
+                const trimmed = inst.trim();
+                if (trimmed) instruments.push(trimmed);
+            });
+        }
 
         // Parse TheSession.org ID
         const thesessionId = parseTheSessionId(thesessionInput);

@@ -16,6 +16,7 @@ from database import (
     check_in_person as db_check_in_person,
 )
 from email_utils import send_email_via_sendgrid
+from instruments import normalize_instrument, normalize_instruments
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 from functools import wraps
@@ -3987,17 +3988,16 @@ def add_person_to_session_people_tab(session_path):
             )
             person_id = cur.fetchone()[0]
 
-            # Add instruments
-            if instruments:
-                for instrument in instruments:
-                    cur.execute(
-                        """
-                        INSERT INTO person_instrument (person_id, instrument, created_by_user_id)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (person_id, instrument) DO NOTHING
-                        """,
-                        (person_id, instrument, get_current_user_id())
-                    )
+            # Add instruments (canonicalized against one shared vocabulary)
+            for instrument in normalize_instruments(instruments):
+                cur.execute(
+                    """
+                    INSERT INTO person_instrument (person_id, instrument, created_by_user_id)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (person_id, instrument) DO NOTHING
+                    """,
+                    (person_id, instrument, get_current_user_id())
+                )
 
         # Add person to session with specified is_regular value
         cur.execute(
@@ -8115,14 +8115,11 @@ def create_person_with_instruments():
         if not isinstance(instruments, list):
             return jsonify({"success": False, "message": "instruments must be a list"}), 400
         
-        # Clean and normalize instruments - accept any non-empty instrument name
-        normalized_instruments = []
-        for instrument in instruments:
-            if isinstance(instrument, str) and instrument.strip():
-                normalized = instrument.strip().lower()
-                if normalized not in normalized_instruments:  # Remove duplicates
-                    normalized_instruments.append(normalized)
-        
+        # Canonicalize casing/aliases and de-dupe against one shared vocabulary
+        normalized_instruments = normalize_instruments(
+            [i for i in instruments if isinstance(i, str)]
+        )
+
         # Check if user has admin permissions (system admin can create people anywhere)
         conn = get_db_connection()
         cur = conn.cursor()
@@ -8330,18 +8327,15 @@ def update_person_instruments(person_id):
         if not isinstance(instruments, list):
             return jsonify({"success": False, "message": "instruments must be a list"}), 400
         
-        # Clean and normalize instruments - accept any non-empty instrument name
-        normalized_instruments = []
-        for instrument in instruments:
-            if isinstance(instrument, str) and instrument.strip():
-                normalized = instrument.strip().lower()
-                if normalized not in normalized_instruments:  # Remove duplicates
-                    normalized_instruments.append(normalized)
-        
+        # Canonicalize casing/aliases and de-dupe against one shared vocabulary
+        normalized_instruments = normalize_instruments(
+            [i for i in instruments if isinstance(i, str)]
+        )
+
         # Get database connection
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if person exists
         cur.execute(
             "SELECT person_id, first_name, last_name FROM person WHERE person_id = %s",
@@ -9041,9 +9035,9 @@ def parse_csv_row(row, headers, session_city=None, session_state=None, session_c
     if not person['first_name'] or not person['last_name']:
         raise ValueError("Name is required (either separate first/last name fields or full name)")
     
-    # Clean and normalize instruments
-    person['instruments'] = [inst.lower().strip() for inst in person['instruments'] if inst.strip()]
-    
+    # Clean and canonicalize instruments against one shared vocabulary
+    person['instruments'] = normalize_instruments(person['instruments'])
+
     return person
 
 
@@ -9329,21 +9323,20 @@ def bulk_import_save_session(session_id):
                 # Log person creation
                 save_to_history(cur, 'person', 'INSERT', person_id, user_id=current_user.user_id)
 
-                # Create instruments
-                instruments = person_data.get('instruments', [])
+                # Create instruments (canonicalized against one shared vocabulary)
+                instruments = normalize_instruments(person_data.get('instruments', []))
                 for instrument in instruments:
-                    if instrument and instrument.strip():
-                        cur.execute(
-                            """
-                            INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
-                            VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
-                            """,
-                            (person_id, instrument.strip().lower(), current_user.user_id)
-                        )
+                    cur.execute(
+                        """
+                        INSERT INTO person_instrument (person_id, instrument, created_date, created_by_user_id)
+                        VALUES (%s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
+                        """,
+                        (person_id, instrument, current_user.user_id)
+                    )
 
-                        # Log instrument creation
-                        save_to_history(cur, 'person_instrument', 'INSERT',
-                                      (person_id, instrument.strip().lower()), user_id=current_user.user_id)
+                    # Log instrument creation
+                    save_to_history(cur, 'person_instrument', 'INSERT',
+                                  (person_id, instrument), user_id=current_user.user_id)
 
                 # Create session_person record
                 is_regular = person_data.get('is_regular', False)
