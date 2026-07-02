@@ -129,6 +129,12 @@ def _build_person_tune_response(person_tune, include_tune_details: bool = True) 
     """
     response = person_tune.to_dict()
 
+    # Sparse per-instrument status overrides + the person's instrument/auto list, so the
+    # detail view can render the per-instrument controls (client resolves the rest).
+    response['instrument_status'] = person_tune_service.get_instrument_overrides(
+        person_tune.person_id, person_tune.tune_id)
+    response['instruments'] = person_tune_service.get_person_instruments(person_tune.person_id)
+
     if include_tune_details:
         tune_details = _get_tune_details(person_tune.tune_id)
         if tune_details:
@@ -243,9 +249,14 @@ def get_my_tunes():
         # Calculate pagination metadata
         total_pages = (total_count + per_page - 1) // per_page
 
+        # The person's instruments + auto/manual flags, so the client can resolve
+        # per-instrument status alongside each tune's sparse `instrument_status` overrides.
+        instruments = person_tune_service.get_person_instruments(person_id)
+
         response = jsonify({
             "success": True,
             "tunes": tunes,
+            "instruments": instruments,
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -950,6 +961,50 @@ def my_tunes_op():
                     "DELETE FROM person_tune WHERE person_id=%s AND tune_id=%s",
                     (person_id, tune_id),
                 )
+            elif op_type == "set_instrument_status":
+                # Per-instrument status override. Absolute set (idempotent on replay):
+                #   status given  -> UPSERT the override, UNLESS it's an auto instrument
+                #                    being set back to learn_status (snap back -> delete row)
+                #   status null    -> DELETE the override (manual: removes from that instrument)
+                instrument = (data.get("instrument") or "").strip()
+                status = data.get("status")
+                if not instrument:
+                    return jsonify({"success": False, "error": "instrument is required"}), 400
+                if status is not None and status not in ("want to learn", "learning", "learned"):
+                    return jsonify({"success": False, "error": "invalid status"}), 400
+                # Resolve against the person's profile (case-insensitive) + get the auto flag.
+                cur.execute(
+                    "SELECT instrument, is_auto FROM person_instrument WHERE person_id=%s AND LOWER(instrument)=LOWER(%s)",
+                    (person_id, instrument),
+                )
+                inst_row = cur.fetchone()
+                if not inst_row:
+                    return jsonify({"success": False, "error": "instrument not on your profile"}), 400
+                canonical_instrument, is_auto = inst_row[0], inst_row[1]
+                # The tune must be on the person's list (the FK also enforces this).
+                cur.execute(
+                    "SELECT learn_status FROM person_tune WHERE person_id=%s AND tune_id=%s",
+                    (person_id, tune_id),
+                )
+                pt_row = cur.fetchone()
+                if not pt_row:
+                    return jsonify({"success": False, "error": "tune not on your list"}), 400
+                learn_status = pt_row[0]
+                if status is None or (is_auto and status == learn_status):
+                    cur.execute(
+                        "DELETE FROM person_tune_instrument WHERE person_id=%s AND tune_id=%s AND instrument=%s",
+                        (person_id, tune_id, canonical_instrument),
+                    )
+                else:
+                    cur.execute(
+                        """INSERT INTO person_tune_instrument
+                               (person_id, tune_id, instrument, status, created_by_user_id, last_modified_user_id)
+                           VALUES (%s, %s, %s, %s, %s, %s)
+                           ON CONFLICT (person_id, tune_id, instrument)
+                           DO UPDATE SET status = EXCLUDED.status,
+                                         last_modified_user_id = EXCLUDED.last_modified_user_id""",
+                        (person_id, tune_id, canonical_instrument, status, user_id, user_id),
+                    )
             else:
                 return jsonify({"success": False, "error": f"unknown op type: {op_type}"}), 400
             conn.commit()
@@ -964,6 +1019,40 @@ def my_tunes_op():
 
     except Exception as e:
         return jsonify({"success": False, "error": f"Error applying my-tunes op: {str(e)}"}), 500
+
+
+@person_tune_login_required
+def set_instrument_auto():
+    """
+    PUT /api/my-tunes/instrument-auto
+
+    Set whether one of the current user's instruments is "auto" (linked — follows
+    person_tune.learn_status) or manual (a curated per-instrument list). Body:
+        {"instrument": "Concertina", "is_auto": false}
+    """
+    try:
+        person_id = get_user_person_id()
+        data = request.get_json(silent=True) or {}
+        instrument = (data.get("instrument") or "").strip()
+        is_auto = data.get("is_auto")
+        if not instrument or not isinstance(is_auto, bool):
+            return jsonify({"success": False, "error": "instrument and boolean is_auto are required"}), 400
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE person_instrument SET is_auto=%s WHERE person_id=%s AND LOWER(instrument)=LOWER(%s)",
+                (is_auto, person_id, instrument),
+            )
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "error": "instrument not on your profile"}), 400
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+        return jsonify({"success": True, "instrument": instrument, "is_auto": is_auto}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error setting instrument auto flag: {str(e)}"}), 500
 
 
 @person_tune_login_required

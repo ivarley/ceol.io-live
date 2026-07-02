@@ -3679,7 +3679,7 @@ ACTIVITY_CATEGORIES = {
     'all': None,  # No filter
     'sessions': ['session', 'session_tune', 'session_tune_alias', 'session_person'],
     'people': ['person', 'user_account', 'person_instrument', 'person_tune',
-               'session_person', 'session_instance_person'],
+               'person_tune_instrument', 'session_person', 'session_instance_person'],
     'tunes': ['tune', 'tune_setting', 'session_tune', 'session_tune_alias'],
     'logs': ['session_instance', 'session_instance_tune', 'session_instance_person'],
     'logins': ['login'],

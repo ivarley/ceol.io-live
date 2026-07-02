@@ -20,6 +20,7 @@ from api_person_tune_routes import (
     increment_tune_heard_count,
     decrement_tune_heard_count,
     my_tunes_op,
+    set_instrument_auto,
     get_popular_tunes,
     get_offline_bundle,
     get_my_sessions,
@@ -969,6 +970,12 @@ app.add_url_rule(
     "my_tunes_op",
     my_tunes_op,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/my-tunes/instrument-auto",
+    "set_instrument_auto",
+    set_instrument_auto,
+    methods=["PUT"],
 )
 app.add_url_rule(
     "/api/my-tunes/sync",

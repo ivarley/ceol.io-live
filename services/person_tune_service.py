@@ -620,7 +620,57 @@ class PersonTuneService:
                 }
                 tunes.append(tune_data)
 
+            # Attach sparse per-instrument status OVERRIDES for this page's tunes in one
+            # query (no N+1). Only stored overrides appear here; the client resolves the
+            # rest (auto instruments -> learn_status, manual-with-no-row -> untracked)
+            # using the person's instrument/auto list. Single-instrument or all-auto users
+            # get {} for every tune.
+            tune_ids = [t['tune_id'] for t in tunes if t['tune_id'] is not None]
+            overrides_by_tune: Dict[int, Dict[str, str]] = {}
+            if tune_ids:
+                cur.execute(
+                    """SELECT tune_id, instrument, status
+                       FROM person_tune_instrument
+                       WHERE person_id = %s AND tune_id = ANY(%s)""",
+                    (person_id, tune_ids)
+                )
+                for t_id, instrument, status in cur.fetchall():
+                    overrides_by_tune.setdefault(t_id, {})[instrument] = status
+            for t in tunes:
+                t['instrument_status'] = overrides_by_tune.get(t['tune_id'], {})
+
             return tunes, total_count
 
+        finally:
+            conn.close()
+
+    def get_person_instruments(self, person_id: int) -> List[Dict[str, Any]]:
+        """The person's instruments with their auto/manual flag.
+
+        `is_auto` instruments follow person_tune.learn_status; manual ones are a
+        curated per-instrument list. The client uses this to resolve per-instrument
+        status alongside the sparse overrides.
+        """
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT instrument, is_auto FROM person_instrument WHERE person_id = %s ORDER BY instrument",
+                (person_id,)
+            )
+            return [{'instrument': r[0], 'is_auto': r[1]} for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_instrument_overrides(self, person_id: int, tune_id: int) -> Dict[str, str]:
+        """Sparse per-instrument status overrides for a single (person, tune)."""
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT instrument, status FROM person_tune_instrument WHERE person_id = %s AND tune_id = %s",
+                (person_id, tune_id)
+            )
+            return {r[0]: r[1] for r in cur.fetchall()}
         finally:
             conn.close()

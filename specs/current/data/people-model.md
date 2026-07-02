@@ -55,14 +55,28 @@ Permanent per-session palette color for the live logger (Feature 024).
 ### person_instrument
 Instruments a person plays (many-to-many).
 - (person_id, instrument) composite PK
-- instrument is free text (fiddle, guitar, banjo, etc.)
+- instrument - canonical value from `instruments.py` `CANONICAL_INSTRUMENTS` (Title Case),
+  or free text for "Other". All save paths normalize via `normalize_instrument`.
+- `is_auto` BOOLEAN (default TRUE) - "auto" (linked) instruments follow
+  `person_tune.learn_status`; manual ones are a curated per-instrument list that starts empty.
 
 ### person_tune
-Personal tune learning tracking.
+Personal tune learning tracking (the instrument-agnostic / "auto instruments" status).
 - person_tune_id, person_id, tune_id
-- status - "want_to_learn", "learning", "learned"
-- times_heard, last_heard_date
+- `learn_status` VARCHAR(20) - "want to learn" / "learning" / "learned" (spaces, CHECK-constrained)
+- `heard_count`, `learned_date` (auto-set by trigger when status crosses to/from 'learned')
 - notes - Personal notes
+- UNIQUE(person_id, tune_id)
+
+### person_tune_instrument
+Sparse per-instrument status **overrides** (a second axis on top of person_tune).
+- (person_id, tune_id, instrument) composite PK; FK (person_id, tune_id) → person_tune ON DELETE CASCADE
+- `status` VARCHAR(20) - same ladder as learn_status
+- A row exists **only** when a per-instrument status was set by hand. Resolution for
+  (person, tune, instrument): override row → else instrument `is_auto` → `person_tune.learn_status`
+  → else not tracked. So a single-instrument or all-auto user stores zero rows here.
+- Written by the `set_instrument_status` op (absolute-set, idempotent). Setting an auto
+  instrument back to `learn_status` deletes the row (snap-back); `status: null` deletes it.
 
 ## Key Operations
 
@@ -70,6 +84,10 @@ Personal tune learning tracking.
 **Check In**: POST /api/session_instance/<id>/attendees/checkin
 **Update Instruments**: PUT /api/person/<id>/instruments
 **Search People**: GET /api/session/<id>/people/search?q=<query>
+**Set per-instrument status**: POST /api/my-tunes/ops `{type:"set_instrument_status", tune_id, instrument, status}`
+**Set instrument auto/manual**: PUT /api/my-tunes/instrument-auto `{instrument, is_auto}`
+**My tunes (with per-instrument data)**: GET /api/my-tunes returns `instruments` (with is_auto)
+  and each tune's `instrument_status` (sparse overrides)
 
 ## Related
 
