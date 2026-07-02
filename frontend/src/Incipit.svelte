@@ -3,10 +3,11 @@
   // service is the only renderer — no client-side music rendering). If the image
   // isn't cached yet, lazily (when scrolled into view) asks the incipit endpoint to
   // render + cache it in the background, then displays it.
+  import { untrack } from 'svelte'
   import { fetchIncipit } from './client.js'
 
   let { config, tuneId, image = null, canRender = false } = $props()
-  let src = $state(image)
+  let src = $state(untrack(() => image)) // initial cached image; the lazy fetch fills it in if absent
   let loading = $state(false)
   let el
 

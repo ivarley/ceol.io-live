@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
@@ -77,7 +77,7 @@
   let input = $state('')
   let error = $state('')
   let notice = $state('')
-  let person = $state(config.currentPerson || {})
+  let person = $state(untrack(() => config.currentPerson) || {}) // initial fallback; bootstrap overwrites it
   let roster = $state([]) // who's connected right now (ephemeral presence, §F)
   let typers = $state([]) // who's currently composing (ephemeral typing, §F)
   let activities = $state([]) // transient "X did Y" toasts for others' changes (§E); stack up to MAX
@@ -89,7 +89,7 @@
 
   let es = null
   let headerH = $state(0) // measured header height, so floating toasts hover just below it
-  let inputEl // the composer input element (for stay-hot refocus)
+  let inputEl = $state(null) // the composer input element (for stay-hot refocus)
   let mainEl // the app container — visualViewport keyboard compensation (§41, mobile)
   let setsEl // the scrolling list element
   let atEnd = $state(true) // is the list scrolled to (near) the bottom?
@@ -387,6 +387,19 @@
     insertAfterId = id
     queueMicrotask(() => inputEl?.focus())
   }
+  // Keyboard activation for click-only elements (a11y): Enter/Space runs the same action.
+  function activate(e, fn) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn() }
+  }
+  // Focus-on-mount action, replacing the `autofocus` attribute (a11y_autofocus).
+  function autofocusEl(node) { node.focus() }
+  // The tune-row click action, shared by onclick + onkeydown so the row is keyboard-operable.
+  function rowClick(r) {
+    if (searchMode) return
+    if (r._resolving) { if (!viewing) selectRow(r.session_instance_tune_id); return }
+    if (r._temp || r._removing) return
+    viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)
+  }
   // Arm the between-sets seam: the next tune starts a NEW set in this gap, before
   // the set whose first tune is `nextFirstId` (spec 021 §C; prototype "new-set-after").
   function setNewSetCursor(nextFirstId) {
@@ -439,7 +452,7 @@
   let starterPickerSet = $state(null) // first-tune id of the set being attributed
   let starterFilter = $state('')
   let attendees = $state([]) // [{person_id, display_name}] for this instance
-  let attendeesLoaded = false
+  let attendeesLoaded = $state(false) // read reactively in the starter tray ("Loading…" vs "No one checked in")
   // the set's recorded starter name (first tune that carries one)
   function setStarterName(seg) {
     for (const t of seg.tunes) if (t.started_by_name) return t.started_by_name
@@ -2072,7 +2085,7 @@
     </div>
 
     <header class="topbar">
-      <div class="topbar-row" onclick={toggleExpand}>
+      <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}<a class="session-return" href="/sessions/{config.sessionPath}" title="Back to session" onclick={(e) => e.stopPropagation()}>⮐</a></div>
           <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
@@ -2149,7 +2162,7 @@
 
   <!-- Reconnect reconciliation review (§G): offline changes the server couldn't apply. -->
   {#if reconcile}
-    <div class="reconcile-scrim" onclick={dismissReconcile}></div>
+    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label="Dismiss" onclick={dismissReconcile} onkeydown={(e) => activate(e, dismissReconcile)}></div>
     <div class="reconcile" role="dialog" aria-modal="true">
       <div class="reconcile-head">Some offline changes didn’t stick</div>
       <p class="reconcile-sub">
@@ -2167,7 +2180,7 @@
   {/if}
 
   <div class="feed-msgs">
-    {#if notice}<p class="notice" onclick={() => (notice = '')}>{notice}</p>{/if}
+    {#if notice}<div class="notice" role="button" tabindex="0" onclick={() => (notice = '')} onkeydown={(e) => activate(e, () => (notice = ''))}>{notice}</div>{/if}
     {#if queuedCount > 0}
       <p class="offline-banner">
         ⏳ {queuedCount} change{queuedCount === 1 ? '' : 's'} queued{displayStatus === 'offline' ? ' — offline' : ', syncing…'}
@@ -2241,7 +2254,7 @@
           </div>
         {/if}
         {#if canEdit}
-          <div class="seam start-seam" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })}>
+          <div class="seam start-seam" role="button" tabindex="0" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
             {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
               <span class="seam-line"></span>
             {:else}<span class="seam-plus">＋ start of set</span>{/if}
@@ -2250,6 +2263,8 @@
         {#each seg.tunes as r, ti (r.session_instance_tune_id)}
           <div
             class="tune-row"
+            role="button"
+            tabindex="0"
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
             class:unlinked={!r._resolving && !r.tune_id && r.record_type === 'tune'}
             class:has-by={!viewing && !r._temp && r.tune_id && loggerColorIdx(r) != null}
@@ -2262,7 +2277,8 @@
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
             style={canEdit ? rowStyle(r) : ''}
-            onclick={() => searchMode ? null : (r._resolving ? (!viewing && selectRow(r.session_instance_tune_id)) : (r._temp || r._removing ? null : viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)))}
+            onclick={() => rowClick(r)}
+            onkeydown={(e) => activate(e, () => rowClick(r))}
           >
             <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}</span>
             {#if r._temp}
@@ -2305,11 +2321,11 @@
           {#if !r._temp && canEdit}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
               <!-- last tune of the open set: this seam IS the end (append) point -->
-              <div class="seam end-seam" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
+              <div class="seam end-seam" role="button" tabindex="0" class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
                 {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
               </div>
             {:else}
-              <div class="seam" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)}>
+              <div class="seam" role="button" tabindex="0" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
                 {#if activeSeam === `after:${r.session_instance_tune_id}`}
                   <span class="seam-line"></span>
                   {#if ti < seg.tunes.length - 1}
@@ -2322,7 +2338,7 @@
         {/each}
       </div>
       {#if canEdit && si < displaySegments.length - 1 && seg.breakAfter != null}
-        <div class="seam inter-seam" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)}>
+        <div class="seam inter-seam" role="button" tabindex="0" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
           {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
             <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>Join</button>
@@ -2343,7 +2359,7 @@
     {/each}
     {#if ordered.length && !endIsOpen && canEdit}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
-      <div class="seam end-seam new-set-end" class:active={activeSeam === 'end'} onclick={() => setCursor(null)}>
+      <div class="seam end-seam new-set-end" role="button" tabindex="0" class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
         {#if activeSeam === 'end'}
           <span class="seam-line"></span><span class="seam-hint">new set</span>
         {:else}<span class="seam-plus">＋ new set</span>{/if}
@@ -2382,10 +2398,12 @@
       </footer>
     {:else}
     {#if showNext || results.length || (noMatch && editingId == null)}
-      <ul class="results" bind:clientHeight={resultsH}>
+      <ul class="results" role="listbox" bind:clientHeight={resultsH}>
         {#if showNext && nextSuggestion}
           {@const parts = suggestionParts(nextSuggestion.name, input)}
-          <li class="result-next" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <!-- type-ahead dropdown: keyboard selection is the deferred desktop keyboard-nav (combobox) feature -->
+          <li class="result-next" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
             <span class="r-arrow" aria-hidden="true">→</span>
             <span class="r-name">{parts.pre}<strong>{parts.mid}</strong>{parts.post}</span>
             <span class="r-meta">{nextSuggestion.tune_type || ''}<span class="r-next-label"> · usually next</span></span>
@@ -2393,7 +2411,8 @@
           </li>
         {/if}
         {#each visibleResults as t (t.tune_id)}
-          <li onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <li role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
             <span class="r-name">{t.name}</span>
             <span class="r-meta">
               {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}{#if t.abc}<span class="r-abc"> · ♪ notation</span>{/if}
@@ -2404,11 +2423,13 @@
           <li class="result-empty">No tunes match your search</li>
         {/if}
         {#if resolving}
-          <li class="result-asis" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <li class="result-asis" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
             <span class="r-name">Log “{resolving.text}” as-is</span>
           </li>
         {:else if editingId == null && (results.length || noMatch)}
-          <li class="result-deeper" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <li class="result-deeper" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
             <span class="r-name">🔍 Search …</span>
           </li>
         {/if}
@@ -2476,7 +2497,7 @@
   </div>
 
   {#if attendanceOpen}
-    <div class="drawer-scrim" onclick={closeAttendance}></div>
+    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={closeAttendance} onkeydown={(e) => activate(e, closeAttendance)}></div>
     <aside class="drawer">
       <div class="drawer-head">
         <div class="drawer-title">Attendance</div>
@@ -2533,7 +2554,7 @@
         bind:value={deepQuery}
         oninput={onDeepInput}
         onkeydown={deepKey}
-        autofocus
+        use:autofocusEl
       />
       <div class="deep-tabs">
         <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
