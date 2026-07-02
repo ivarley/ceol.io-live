@@ -3327,6 +3327,79 @@ def delete_tune_ajax(session_instance_tune_id):
         )
 
 
+class TuneImportError(Exception):
+    """thesession.org import failed (404 / timeout / bad data). Carries an HTTP status so
+    API callers can map it to a response code."""
+
+    def __init__(self, message, status=502):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _fetch_thesession_tune(tune_id):
+    """GET tune #tune_id from thesession.org and return the validated JSON dict.
+
+    Raises TuneImportError on 404 / non-200 / timeout / invalid payload. Shared by the legacy
+    link_tune_ajax import and the live logger's in-transaction import (spec 026)."""
+    try:
+        api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
+        response = requests.get(api_url, timeout=10)
+    except requests.exceptions.Timeout:
+        raise TuneImportError("Timeout connecting to thesession.org", 504)
+    except requests.exceptions.RequestException as e:
+        raise TuneImportError(f"Error connecting to thesession.org: {e}", 502)
+
+    if response.status_code == 404:
+        raise TuneImportError(f"Tune #{tune_id} not found on thesession.org", 404)
+    elif response.status_code != 200:
+        raise TuneImportError(
+            f"Failed to fetch tune data from thesession.org (status: {response.status_code})",
+            502,
+        )
+
+    try:
+        data = response.json()
+    except ValueError:
+        raise TuneImportError("Invalid tune data received from thesession.org", 502)
+
+    if "name" not in data or "type" not in data:
+        raise TuneImportError("Invalid tune data received from thesession.org", 502)
+
+    return data
+
+
+def _import_tune_from_thesession(cur, tune_id, user_id):
+    """Fetch tune #tune_id from thesession.org, INSERT the local `tune` row, and cache its
+    default setting + notation PNGs. Returns (name, tune_type).
+
+    The caller owns the transaction/commit and any session_tune / session_instance_tune
+    writes. Raises TuneImportError on 404 / non-200 / timeout / invalid payload. Used by the
+    legacy link_tune_ajax path, whose connection semantics let cache_default_tune_setting
+    (a separate connection) see the tune row. The live logger uses its own in-transaction
+    importer instead (see live_logging_routes._import_tune_for_live)."""
+    data = _fetch_thesession_tune(tune_id)
+
+    tune_name_from_api = data["name"]
+    tune_type = data["type"].title()  # Convert to title case
+    tunebook_count = data.get("tunebooks", 0)  # Default to 0 if not present
+
+    # Insert the new tune into the tune table.
+    cur.execute(
+        """
+        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+        VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
+    """,
+        (tune_id, tune_name_from_api, tune_type, tunebook_count, user_id),
+    )
+    save_to_history(cur, "tune", "INSERT", tune_id, user_id=user_id)
+
+    # Cache the default setting + generate images (reuse the data we already fetched).
+    cache_default_tune_setting(tune_id, data, user_id, sync=True)
+
+    return tune_name_from_api, tune_type
+
+
 @login_required
 def link_tune_ajax(session_path, date_or_id):
     """
@@ -3469,128 +3542,50 @@ def link_tune_ajax(session_path, date_or_id):
                 setting_msg = f" with setting #{setting_id}" if setting_id else ""
                 message = f'Added "{tune_name}" to session and linked{setting_msg}'
             else:
-                # Tune doesn't exist in our database, fetch from thesession.org
+                # Tune doesn't exist in our database — import it from thesession.org.
                 try:
-                    # Fetch data from thesession.org API
-                    api_url = f"https://thesession.org/tunes/{tune_id}?format=json"
-                    response = requests.get(api_url, timeout=10)
-
-                    if response.status_code == 404:
-                        cur.close()
-                        conn.close()
-                        return jsonify(
-                            {
-                                "success": False,
-                                "message": f"Tune #{tune_id} not found on thesession.org",
-                            }
-                        )
-                    elif response.status_code != 200:
-                        cur.close()
-                        conn.close()
-                        return jsonify(
-                            {
-                                "success": False,
-                                "message": f"Failed to fetch tune data from thesession.org (status: {response.status_code})",
-                            }
-                        )
-
-                    data = response.json()
-
-                    # Extract required fields
-                    if "name" not in data or "type" not in data:
-                        cur.close()
-                        conn.close()
-                        return jsonify(
-                            {
-                                "success": False,
-                                "message": "Invalid tune data received from thesession.org",
-                            }
-                        )
-
-                    tune_name_from_api = data["name"]
-                    tune_type = data["type"].title()  # Convert to title case
-                    tunebook_count = data.get(
-                        "tunebooks", 0
-                    )  # Default to 0 if not present
-
-                    # Store for response
-                    tune_name_canonical = tune_name_from_api
-                    tune_type_result = tune_type
-
-                    # Insert new tune into tune table
-                    cur.execute(
-                        """
-                        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
-                    """,
-                        (tune_id, tune_name_from_api, tune_type, tunebook_count, get_current_user_id()),
+                    tune_name_from_api, tune_type = _import_tune_from_thesession(
+                        cur, tune_id, get_current_user_id()
                     )
-
-                    # Save the newly inserted tune to history
-                    save_to_history(cur, "tune", "INSERT", tune_id, user_id=get_current_user_id())
-
-                    # Cache the default setting and generate images
-                    # (we already have tune data from the API, pass it to avoid another fetch)
-                    cache_default_tune_setting(tune_id, data, get_current_user_id(), sync=True)
-
-                    # Determine if we need to use an alias
-                    alias = tune_name if tune_name != tune_name_from_api else None
-
-                    # Add to session_tune with alias and setting_id
-                    cur.execute(
-                        """
-                        INSERT INTO session_tune (session_id, tune_id, alias, setting_id, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """,
-                        (session_id, tune_id, alias, setting_id, get_current_user_id()),
-                    )
-
-                    # Save the newly inserted session_tune to history
-                    save_to_history(
-                        cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id()
-                    )
-
-                    # Update session_instance_tune
-                    save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
-                    cur.execute(
-                        """
-                        UPDATE session_instance_tune
-                        SET tune_id = %s, name = NULL, last_modified_user_id = %s
-                        WHERE session_instance_tune_id = %s
-                    """,
-                        (tune_id, get_current_user_id(), session_instance_tune_id),
-                    )
-
-                    setting_msg = f" with setting #{setting_id}" if setting_id else ""
-                    message = f'Fetched "{tune_name_from_api}" from thesession.org and added to session{setting_msg}'
-
-                except requests.exceptions.Timeout:
+                except TuneImportError as e:
                     cur.close()
                     conn.close()
-                    return jsonify(
-                        {
-                            "success": False,
-                            "message": "Timeout connecting to thesession.org",
-                        }
-                    )
-                except requests.exceptions.RequestException as e:
-                    cur.close()
-                    conn.close()
-                    return jsonify(
-                        {
-                            "success": False,
-                            "message": f"Error connecting to thesession.org: {str(e)}",
-                        }
-                    )
-                except Exception as e:
-                    cur.close()
-                    conn.close()
-                    return jsonify(
-                        {
-                            "success": False,
-                            "message": f"Error processing tune data: {str(e)}",
-                        }
-                    )
+                    return jsonify({"success": False, "message": e.message})
+
+                # Store for response
+                tune_name_canonical = tune_name_from_api
+                tune_type_result = tune_type
+
+                # Determine if we need to use an alias
+                alias = tune_name if tune_name != tune_name_from_api else None
+
+                # Add to session_tune with alias and setting_id
+                cur.execute(
+                    """
+                    INSERT INTO session_tune (session_id, tune_id, alias, setting_id, created_by_user_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                """,
+                    (session_id, tune_id, alias, setting_id, get_current_user_id()),
+                )
+
+                # Save the newly inserted session_tune to history
+                save_to_history(
+                    cur, "session_tune", "INSERT", (session_id, tune_id), user_id=get_current_user_id()
+                )
+
+                # Update session_instance_tune
+                save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
+                cur.execute(
+                    """
+                    UPDATE session_instance_tune
+                    SET tune_id = %s, name = NULL, last_modified_user_id = %s
+                    WHERE session_instance_tune_id = %s
+                """,
+                    (tune_id, get_current_user_id(), session_instance_tune_id),
+                )
+
+                setting_msg = f" with setting #{setting_id}" if setting_id else ""
+                message = f'Fetched "{tune_name_from_api}" from thesession.org and added to session{setting_msg}'
 
         conn.commit()
         cur.close()

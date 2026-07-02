@@ -27,8 +27,10 @@ effects), server-generated corroborate/merge detection (§H30), presence (§F).
 import json
 import re
 import uuid
+from urllib.parse import quote
 
 import psycopg2
+import requests
 from flask import request, jsonify
 from flask_login import current_user
 
@@ -45,7 +47,10 @@ from database import (
     extract_abc_incipit,
 )
 from auth import create_session
-from api_routes import api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64, match_tune_core
+from api_routes import (
+    api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
+    match_tune_core, _fetch_thesession_tune, TuneImportError,
+)
 from fractional_indexing import generate_append_position, generate_position_between
 
 
@@ -354,13 +359,78 @@ def _enroll_session_tune(cur, session_id, tune_id, user_id):
         save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id)
 
 
+def _parse_thesession_id(raw):
+    """Coerce a thesession_id (int, numeric string, or a tunes URL) to an int, or None."""
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw
+    s = str(raw).strip()
+    m = re.search(r"thesession\.org/tunes/(\d+)", s)
+    if m:
+        return int(m.group(1))
+    return int(s) if s.isdigit() else None
+
+
+def _import_tune_for_live(cur, tune_id, user_id):
+    """Import a thesession.org tune into the local catalog USING THE OP CURSOR, so the new
+    `tune` row commits atomically with the add and satisfies the session_instance_tune FK
+    (spec 026). Inserts the `tune` row plus its default `tune_setting` (ABC only — notation
+    PNGs render lazily via _ensure_incipit on first view). Returns (name, tune_type); raises
+    TuneImportError on fetch failure.
+
+    Distinct from api_routes._import_tune_from_thesession, which renders images synchronously
+    on a SEPARATE connection and so only works once the tune row is committed (the legacy
+    path). That approach can't be used inside live_op's open transaction."""
+    data = _fetch_thesession_tune(tune_id)  # raises TuneImportError
+    name = data["name"]
+    tune_type = data["type"].title()
+    tunebook_count = data.get("tunebooks", 0)
+
+    cur.execute(
+        """
+        INSERT INTO tune (tune_id, name, tune_type, tunebook_count_cached, tunebook_count_cached_date, created_by_user_id)
+        VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
+        ON CONFLICT (tune_id) DO NOTHING
+        """,
+        (tune_id, name, tune_type, tunebook_count, user_id),
+    )
+    if cur.rowcount > 0:
+        save_to_history(cur, "tune", "INSERT", tune_id, user_id=user_id)
+
+    # Default setting = the first in thesession's list; store its ABC so notation is available
+    # (image rendered + cached lazily by _ensure_incipit). thesession uses "!" as a line break.
+    settings = data.get("settings") or []
+    if settings:
+        s = settings[0]
+        setting_id = s.get("id")
+        abc = (s.get("abc") or "").replace("!", "\n")
+        if setting_id and abc:
+            incipit_abc = extract_abc_incipit(abc, tune_type)
+            cur.execute(
+                """
+                INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
+                                          created_by_user_id, last_modified_user_id)
+                VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+                ON CONFLICT (setting_id) DO NOTHING
+                """,
+                (setting_id, tune_id, s.get("key"), abc, incipit_abc, user_id, user_id),
+            )
+            if cur.rowcount > 0:
+                save_to_history(cur, "tune_setting", "INSERT", setting_id, user_id=user_id)
+
+    return name, tune_type
+
+
 def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
     if name is not None:
         name = normalize_quotes(str(name).strip()) or None
-    if tune_id is None and not name:
-        raise OpRejected("invalid", "add_tune requires tune_id or name.")
+    # thesession.org import id (spec 026) counts as "something to add" alongside tune_id/name.
+    ts_id = _parse_thesession_id(data.get("thesession_id"))
+    if tune_id is None and not name and ts_id is None:
+        raise OpRejected("invalid", "add_tune requires tune_id, name, or thesession_id.")
 
     # session_id is needed both for name->tune matching and for repertoire enrollment,
     # so resolve it once up front whenever a tune_id might end up linked.
@@ -368,11 +438,38 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     srow = cur.fetchone()
     session_id = srow[0] if srow else None
 
-    # Name -> tune matching takes priority. Tapping a typeahead result sends a
-    # tune_id directly; hitting Enter sends just the text, which we resolve here
-    # via the same matching the rest of the app uses. An ambiguous/unknown name
-    # stays unlinked (raw name, tune_id NULL).
-    if tune_id is None and name and session_id is not None:
+    # thesession.org import (spec 026): an optional thesession_id means "ensure this tune is in
+    # our catalog, importing it if needed, then log it linked". It takes priority over tune_id/
+    # name and runs inside this op's transaction, so the new tune row commits atomically with
+    # the add (FK-safe) and, offline, the whole op simply replays on reconnect. A failed import
+    # (fake/deleted id, thesession down) does NOT reject the op — we fall through and log the
+    # entry unlinked so the client shows an unmatched row rather than losing it.
+    import_failed = None
+    if ts_id is not None:
+        cur.execute("SELECT name, redirect_to_tune_id FROM tune WHERE tune_id = %s", (ts_id,))
+        row = cur.fetchone()
+        if row and row[1] is not None:
+            # Merged on thesession.org -> log the canonical tune it points to.
+            ts_id = row[1]
+            cur.execute("SELECT name FROM tune WHERE tune_id = %s", (ts_id,))
+            row = cur.fetchone()
+        if row:
+            tune_id = ts_id
+            name = row[0] or name
+        else:
+            try:
+                imported_name, _tt = _import_tune_for_live(cur, ts_id, user_id)
+                tune_id, name = ts_id, imported_name
+            except TuneImportError as e:
+                import_failed = e.message
+                if not name:
+                    name = f"#{ts_id}"  # legible unmatched row for a fake/dead id
+
+    # Name -> tune matching takes priority for typed text. Tapping a typeahead result sends a
+    # tune_id directly; hitting Enter sends just the text, which we resolve here via the same
+    # matching the rest of the app uses. An ambiguous/unknown name stays unlinked (raw name,
+    # tune_id NULL). Skipped when a thesession_id was supplied (already resolved above).
+    if ts_id is None and tune_id is None and name and session_id is not None:
         matched_id, final_name, err = find_matching_tune(cur, session_id, name)
         if matched_id and not err:
             tune_id, name = matched_id, final_name
@@ -409,7 +506,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # A linked tune joins the session's repertoire (mirrors the old logger's save path).
     if tune_id and session_id is not None:
         _enroll_session_tune(cur, session_id, tune_id, user_id)
-    return {"record": _reselect(cur, record_id)}
+    result = {"record": _reselect(cur, record_id)}
+    if import_failed:
+        # thesession import failed -> logged unlinked; tell the client so it settles the
+        # optimistic row as unmatched (rather than showing it as linked).
+        result["import_failed"] = True
+        result["import_message"] = import_failed
+    return result
 
 
 def _handle_remove_tune(cur, session_instance_id, data, user_id):
@@ -1139,6 +1242,74 @@ def live_match(session_instance_id):
         return jsonify({"success": True, **result})
     finally:
         conn.close()
+
+
+@api_login_required
+def live_thesession_search(session_instance_id):
+    """Proxy a tune search to thesession.org (spec 026 "Search on thesession.org").
+
+    Online-only, read-only: mirrors the legacy search_sessions_ajax pattern but for
+    `tunes/search?q=&format=json`. Runs only on explicit user action (never per keystroke).
+    thesession's single `q=` handles both name and ABC/incipit queries; `type=` filters by
+    tune type. Each hit carries only id/name/alias/type (no notation or tunebook count), so we
+    flag which are already local / already in this session, letting the client dedup and
+    annotate. Returns {success, results:[{tune_id, name, alias, tune_type, url, is_local,
+    in_session}]}; a network/parse failure returns {success: false} (client treats as empty)."""
+    q = (request.args.get("q") or "").strip()
+    tune_type = (request.args.get("type") or "").strip().lower() or None
+    if len(q) < 2:
+        return jsonify({"success": True, "results": []})
+    try:
+        limit = min(30, max(1, int(request.args.get("limit", 20))))
+    except (ValueError, TypeError):
+        limit = 20
+
+    api_url = f"https://thesession.org/tunes/search?q={quote(q)}&format=json&perpage={limit}"
+    if tune_type:
+        api_url += f"&type={quote(tune_type)}"
+    try:
+        resp = requests.get(api_url, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"success": False, "error": f"thesession.org returned {resp.status_code}"})
+        data = resp.json()
+    except (requests.exceptions.RequestException, ValueError):
+        return jsonify({"success": False, "error": "Could not reach thesession.org"})
+
+    hits = data.get("tunes", []) or []
+    ids = [h["id"] for h in hits if isinstance(h.get("id"), int)]
+
+    # One pass to flag which hits we already have locally and which are already in this session.
+    local_ids, session_ids = set(), set()
+    if ids:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+            srow = cur.fetchone()
+            session_id = srow[0] if srow else None
+            cur.execute("SELECT tune_id FROM tune WHERE tune_id = ANY(%s)", (ids,))
+            local_ids = {r[0] for r in cur.fetchall()}
+            if session_id is not None:
+                cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (session_id, ids))
+                session_ids = {r[0] for r in cur.fetchall()}
+        finally:
+            conn.close()
+
+    results = []
+    for h in hits:
+        tid = h.get("id")
+        if not isinstance(tid, int):
+            continue
+        results.append({
+            "tune_id": tid,
+            "name": h.get("name"),
+            "alias": h.get("alias"),
+            "tune_type": (h.get("type") or "").title() or None,
+            "url": h.get("url"),
+            "is_local": tid in local_ids,
+            "in_session": tid in session_ids,
+        })
+    return jsonify({"success": True, "results": results})
 
 
 @api_login_required

@@ -28,7 +28,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match
+from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -357,6 +357,12 @@ app.add_url_rule(
     "/api/live/instances/<int:session_instance_id>/match",
     "live_match",
     live_match,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/thesession-search",
+    "live_thesession_search",
+    live_thesession_search,
     methods=["GET"],
 )
 app.add_url_rule(

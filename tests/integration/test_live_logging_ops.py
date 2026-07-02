@@ -32,6 +32,16 @@ MAID = 9302         # "The Maid Behind the Bar"
 COOLEY = 9303       # "Cooleys"
 NEWT = 9304         # "The Unenrolled Jig"   (canonical, NOT pre-enrolled in session_tune)
 MERGED = 9305       # "The Merged Reel"      (redirects to REEL; must never enroll)
+IMPORT_ID = 9399001     # a tune NOT in the DB, "imported" from thesession.org (mocked fetch)
+IMPORT_SETTING = 9399501  # its default setting id
+
+# Canned thesession.org tune JSON for the mocked importer (spec 026).
+FAKE_TS_TUNE = {
+    "name": "The Imported Reel",
+    "type": "reel",
+    "tunebooks": 42,
+    "settings": [{"id": IMPORT_SETTING, "key": "Dmaj", "abc": "D2FA d2FA|BAFA B2A2"}],
+}
 
 
 @pytest.fixture
@@ -78,6 +88,10 @@ def live_instance():
     # MERGED references REEL via redirect_to_tune_id, so drop it before the tune it points to.
     cur.execute("DELETE FROM tune WHERE tune_id = %s", (MERGED,))
     cur.execute("DELETE FROM tune WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT],))
+    # A tune imported from thesession.org during a test (spec 026); tune_setting cascades.
+    cur.execute("DELETE FROM tune_setting_history WHERE tune_id = %s", (IMPORT_ID,))
+    cur.execute("DELETE FROM tune_history WHERE tune_id = %s", (IMPORT_ID,))
+    cur.execute("DELETE FROM tune WHERE tune_id = %s", (IMPORT_ID,))
     cur.execute("DELETE FROM session_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session WHERE session_id = %s", (SID,))
     conn.commit()
@@ -349,6 +363,106 @@ def test_merged_tune_not_enrolled(client, authenticated_user, live_instance, db_
         resp, body = _op(client, inst, op_type="add_tune", tune_id=merged)
     assert body["success"] is True  # the play is still logged
     assert _repertoire_count(db_cursor, sid, merged) == 0
+
+
+# --------------------------------------------------------------------------- #
+# thesession.org import folded into add_tune (spec 026)
+# --------------------------------------------------------------------------- #
+
+def _no_fetch(reason):
+    """A stand-in importer that fails the test if any network fetch is attempted."""
+    def _boom(tune_id):
+        raise AssertionError(reason)
+    return _boom
+
+
+def test_add_tune_by_thesession_id_imports_links_enrolls(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """thesession_id for a tune we don't have imports it (tune + default setting), logs it
+    LINKED, and enrolls it in the repertoire — all in one op."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_TUNE))
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID)
+    assert resp.status_code == 200 and body["success"] is True
+    assert body["record"]["tune_id"] == IMPORT_ID
+    assert body["record"]["name"] == "The Imported Reel"
+    assert body.get("import_failed") is None
+    # tune row created in the catalog
+    db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (IMPORT_ID,))
+    assert db_cursor.fetchone()[0] == "The Imported Reel"
+    # default setting stored with ABC; image is left NULL (rendered lazily on first view)
+    db_cursor.execute("SELECT tune_id, abc, image FROM tune_setting WHERE setting_id = %s", (IMPORT_SETTING,))
+    ts = db_cursor.fetchone()
+    assert ts is not None and ts[0] == IMPORT_ID and ts[1] and ts[2] is None
+    # enrolled in the session repertoire (via the shared spec-025 enrollment)
+    assert _repertoire_count(db_cursor, sid, IMPORT_ID) == 1
+
+
+def test_add_tune_thesession_id_idempotent_by_op_id(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """A retried import op (same op_id) dedupes: no second tune/setting/record, no re-fetch."""
+    import live_logging_routes
+    calls = {"n": 0}
+    def _once(tid):
+        calls["n"] += 1
+        return dict(FAKE_TS_TUNE)
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _once)
+    inst = live_instance["instance_id"]
+    op_id = str(uuid.uuid4())
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID, op_id=op_id)
+        resp, body = _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID, op_id=op_id)
+    assert body.get("duplicate") is True
+    assert calls["n"] == 1  # the retry returned the cached ack without importing again
+    assert len(_records(db_cursor, inst)) == 1
+
+
+def test_add_tune_thesession_id_already_local_no_fetch(
+        client, authenticated_user, live_instance, monkeypatch):
+    """If we already have the tune, thesession_id links it without any network fetch."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("should not fetch a tune already in the catalog"))
+    inst, reel = live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", thesession_id=reel)
+    assert body["success"] is True
+    assert body["record"]["tune_id"] == reel
+
+
+def test_add_tune_thesession_id_merged_follows_redirect(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """A merged/redirect thesession id logs the canonical tune (never the merged id)."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("a known redirect resolves locally, no fetch"))
+    sid, inst, reel, merged = (live_instance["session_id"], live_instance["instance_id"],
+                               live_instance["reel"], live_instance["merged"])
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", thesession_id=merged)
+    assert body["success"] is True
+    assert body["record"]["tune_id"] == reel  # canonical, not the merged id
+    assert _repertoire_count(db_cursor, sid, merged) == 0
+
+
+def test_add_tune_thesession_id_import_failure_logs_unlinked(
+        client, authenticated_user, live_instance, monkeypatch):
+    """A failed import (fake/dead id) does NOT reject the op: the entry is logged unlinked and
+    the ack carries import_failed so the client settles it as an unmatched row."""
+    import live_logging_routes
+    from api_routes import TuneImportError
+    def _fail(tid):
+        raise TuneImportError(f"Tune #{tid} not found on thesession.org", 404)
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _fail)
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", thesession_id=IMPORT_ID)
+    assert resp.status_code == 200 and body["success"] is True
+    assert body["record"]["tune_id"] is None
+    assert body["record"]["name"] == f"#{IMPORT_ID}"
+    assert body["import_failed"] is True
 
 
 # --------------------------------------------------------------------------- #

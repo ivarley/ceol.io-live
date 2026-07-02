@@ -159,6 +159,26 @@ export async function deepSearch(config, q, type, preferType, mode) {
   }
 }
 
+// Remote tune search on thesession.org (spec 026 "Search on thesession.org"). Online-only,
+// run ONLY on explicit user action (never per keystroke). Proxied server-side; each result is
+// flagged is_local / in_session so the UI can dedup against the local list. thesession's single
+// `q=` handles name and ABC queries; `type` filters by tune type. Returns [] on any failure.
+export async function thesessionSearch(config, q, type) {
+  const params = new URLSearchParams({ q })
+  if (type) params.set('type', type)
+  try {
+    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/thesession-search?${params}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.success ? (json.results || []) : []
+  } catch {
+    return []
+  }
+}
+
 // Incipit image (base64) for a tune — rendered+cached server-side on demand if
 // missing. `kind='both'` also renders the full image. Returns null if no notation.
 export async function fetchIncipit(config, tuneId, kind) {

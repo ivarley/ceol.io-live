@@ -842,6 +842,31 @@ main {
 .deep-badge.star { background: rgba(245, 197, 24, 0.16); color: #e8d28a; }
 .deep-books { color: var(--muted); margin-left: auto; }
 
+/* ---------- thesession.org remote search & import (spec 026) ---------- */
+/* The "Search on thesession.org" trigger mirrors .deep-asis exactly but in light blue. */
+.deep-asis-remote {
+  background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.5); color: #bcd6f7;
+}
+.deep-remote { padding: 4px 14px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
+.deep-remote-head {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); padding-top: 4px;
+}
+.deep-remote-card { border-style: dashed; }
+.deep-alias { color: var(--muted); font-style: italic; }
+.deep-paste { display: flex; gap: 8px; margin-top: 4px; }
+.deep-paste-field {
+  flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 11px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+}
+.deep-paste-btn {
+  flex: none; font: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; cursor: pointer;
+  background: var(--accent); border: none; border-radius: 8px; color: #04122b;
+}
+.deep-paste-btn:disabled { opacity: 0.5; cursor: default; }
+.deep-paste-error { color: var(--danger, #e06b6b); font-size: 13px; margin: 2px 0 0; }
+.results .result-ts { color: var(--accent); font-weight: 600; }
+
 /* ---------- reused legacy tune-detail modal ---------- */
 /* The live shell doesn't load theme.css, so supply the legacy DARK-theme variables
    (scoped to the modal) — otherwise its text/borders are undefined and wash out on

@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail, thesessionSearch } from './client.js'
   import Incipit from './Incipit.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -211,6 +211,7 @@
   let results = $state([]) // type-ahead search results shown above the composer (§D)
   let resultsQuery = '' // the query `results` correspond to (guards the debounce race)
   let noMatch = $state(false) // a completed search returned nothing (show the empty + deeper prompt)
+  let tsInputId = $state(null) // the composer holds a thesession.org URL/id -> offer a direct import (spec 026)
   let ambiguous = $state(false) // Enter hit a fragment matching several tunes, no unique exact (local "red" state)
   let lastMatchExact = false // whether `results` (for resultsQuery) was a unique exact match (gate decision)
   let searchTimer = null
@@ -837,7 +838,7 @@
   }
 
   // Is the type-ahead dropdown currently rendered? (gates the bottom spacer + band calc)
-  const dropdownOpen = $derived(!viewing && (showNext || results.length > 0 || (noMatch && editingId == null)))
+  const dropdownOpen = $derived(!viewing && (showNext || results.length > 0 || tsInputId != null || (noMatch && editingId == null)))
 
   // A position after everything currently present, so optimistic appends stay last
   // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
@@ -1249,6 +1250,17 @@
     addOptimistic({ name }, name)
   }
 
+  // Log a pasted thesession.org URL/id: the add op imports it server-side and resolves the
+  // canonical name (spec 026). The optimistic row shows "#id" until the SSE echo settles it.
+  function logThesessionInput() {
+    const id = tsInputId
+    if (id == null) return
+    tsInputId = null
+    clearEntry()
+    addOptimistic({ thesession_id: id, name: `#${id}` }, `#${id}`)
+    queueMicrotask(() => inputEl?.focus())
+  }
+
   // Tap a search result: add the linked tune directly, then stay hot for the next
   // (spec 021 §D13 burst entry). If a placeholder is resolving, settle IT instead.
   function pickResult(t) {
@@ -1277,6 +1289,9 @@
       }
       return
     }
+    // Enter on a pasted thesession.org URL/id: import + log (even if a title pre-fetch is still
+    // pending — the intent is clear). Works offline too: the op just replays on reconnect.
+    if (tsInputId != null) { logThesessionInput(); return }
     const q = input.trim()
     if (!q) return
     // Fast path: a UNIQUE exact match in the session's local vocabulary logs instantly.
@@ -1425,6 +1440,14 @@
   let deepSeq = 0
   let deepPrefer = null // the set's type, passed as a sort preference (not a filter)
 
+  // "Search on thesession.org" (spec 026): remote results shown BELOW the local ones, fetched
+  // ONLY on explicit tap. Deduped against the local list by tune_id (suppress-in-place).
+  let tsResults = $state([])       // remote hits for the current query, already deduped
+  let tsSearching = $state(false)
+  let tsSearched = $state(false)   // has the user run a remote search for this query yet?
+  let tsPasteUrl = $state('')      // the "paste a URL / tune ID" field inside the remote section
+  let tsPasteError = $state('')
+
   // The single tune type of the set the cursor currently points into (preset filter).
   // The set (segment) the cursor is appending/inserting into, or null (new set / unknown).
   function cursorSegment() {
@@ -1492,6 +1515,9 @@
   function runDeep() {
     if (deepTimer) clearTimeout(deepTimer)
     deepLoading = true
+    // The remote (thesession.org) results were for the previous query — drop them; the user
+    // must tap "Search on thesession.org" again for the new query.
+    resetThesession()
     deepTimer = setTimeout(async () => {
       const seq = ++deepSeq
       const r = await deepSearch(config, deepQuery.trim(), deepType, deepPrefer, deepMode)
@@ -1522,6 +1548,46 @@
       if (deepResults.length) pickDeep(deepResults[0])
       else if (deepQuery.trim()) deepLogAsIs()
     }
+  }
+
+  // --- thesession.org remote search & import (spec 026) -----------------------------
+  // Detect a thesession.org tune URL or bare numeric id -> its integer id, else null.
+  // Mirrors the server's _parse_thesession_id.
+  function parseThesessionId(raw) {
+    if (raw == null) return null
+    const s = String(raw).trim()
+    const m = s.match(/thesession\.org\/tunes\/(\d+)/)
+    if (m) return parseInt(m[1], 10)
+    return /^\d+$/.test(s) ? parseInt(s, 10) : null
+  }
+  function resetThesession() {
+    tsResults = []; tsSearching = false; tsSearched = false; tsPasteUrl = ''; tsPasteError = ''
+  }
+  // Extend the search to thesession.org for the CURRENT query (explicit action only). Remote
+  // hits already shown in the local list are suppressed (they stay up top).
+  async function runThesessionSearch() {
+    const q = deepQuery.trim()
+    if (!q || tsSearching || displayStatus === 'offline') return
+    tsSearching = true; tsSearched = true
+    const localIds = new Set(deepResults.map((r) => r.tune_id))
+    const r = await thesessionSearch(config, q, deepType)
+    tsResults = r.filter((t) => !localIds.has(t.tune_id))
+    tsSearching = false
+  }
+  // Tap a remote result -> import (server-side, folded into the add op) + log linked at cursor.
+  // We know the title/type from the search, so the optimistic row shows linked immediately.
+  function pickRemote(r) {
+    closeDeep(); clearEntry()
+    addOptimistic({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name)
+    queueMicrotask(() => inputEl?.focus())
+  }
+  // "Paste a thesession.org URL or tune ID" -> same import-and-log path (title unknown yet).
+  function pasteThesession() {
+    const id = parseThesessionId(tsPasteUrl)
+    if (id == null) { tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'; return }
+    closeDeep(); clearEntry()
+    addOptimistic({ thesession_id: id, name: `#${id}` }, `#${id}`)
+    queueMicrotask(() => inputEl?.focus())
   }
 
   // The shared matcher (same as the legacy pill editor: find_matching_tune + wildcard),
@@ -1689,6 +1755,18 @@
   function runSearch() {
     if (resolving) return // composer is locked while a placeholder resolves
     const q = input.trim()
+    // A pasted thesession.org URL / tune id short-circuits the name search: offer a single
+    // "add from thesession.org" row instead. The add op imports server-side (spec 026).
+    const pastedId = parseThesessionId(q)
+    tsInputId = pastedId
+    if (pastedId != null) {
+      results = []
+      resultsQuery = q
+      noMatch = false
+      searching = false
+      cancelSearch()
+      return
+    }
     if (q.length < 2) {
       results = []
       resultsQuery = q
@@ -2397,8 +2475,14 @@
         {/if}
       </footer>
     {:else}
-    {#if showNext || results.length || (noMatch && editingId == null)}
+    {#if showNext || results.length || tsInputId != null || (noMatch && editingId == null)}
       <ul class="results" role="listbox" bind:clientHeight={resultsH}>
+        {#if tsInputId != null}
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
+          <li class="result-ts" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logThesessionInput}>
+            <span class="r-name">＋ Add tune #{tsInputId} from thesession.org</span>
+          </li>
+        {/if}
         {#if showNext && nextSuggestion}
           {@const parts = suggestionParts(nextSuggestion.name, input)}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
@@ -2579,6 +2663,11 @@
           <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
         </div>
       {/if}
+      <!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled
+           like "Log as-is" but blue; sits directly above it. -->
+      {#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
+        <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
+      {/if}
       {#if deepMode !== 'abc' && deepQuery.trim()}
         <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
       {/if}
@@ -2608,6 +2697,41 @@
           {/each}
         {/if}
       </div>
+
+      <!-- Remote results appear below the local ones once the search has been extended. -->
+      {#if tsSearched}
+        <div class="deep-remote">
+          <div class="deep-remote-head">From thesession.org</div>
+          {#if tsSearching}
+            <p class="deep-empty">Searching thesession.org…</p>
+          {:else if !tsResults.length}
+            <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
+          {:else}
+            {#each tsResults as r (r.tune_id)}
+              <button class="deep-card deep-remote-card" onclick={() => pickRemote(r)}>
+                <div class="deep-card-head">
+                  <span class="deep-name">{r.name}</span>
+                  <span class="deep-type">{r.tune_type || ''}</span>
+                </div>
+                <div class="deep-meta">
+                  {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
+                  {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
+                  {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
+                </div>
+              </button>
+            {/each}
+          {/if}
+          <!-- Direct link entry, revealed once you've extended to thesession.org. -->
+          <div class="deep-paste">
+            <input class="deep-paste-field" placeholder="Have a link? Paste a thesession.org URL or tune ID"
+                   bind:value={tsPasteUrl}
+                   oninput={() => (tsPasteError = '')}
+                   onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pasteThesession() } }} />
+            <button class="deep-paste-btn" disabled={!tsPasteUrl.trim()} onclick={pasteThesession}>Add</button>
+          </div>
+          {#if tsPasteError}<p class="deep-paste-error">{tsPasteError}</p>{/if}
+        </div>
+      {/if}
     </div>
   {/if}
 </main>
