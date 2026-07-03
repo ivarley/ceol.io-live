@@ -15,16 +15,6 @@
     .highlight-tune {
         animation: highlight-fade 3s ease-out;
     }
-
-    /* Auto/manual toggles for the instruments settings in the filter panel. */
-    .inst-auto-toggle {
-        font: inherit; font-size: 11px; font-weight: 600; padding: 2px 10px;
-        border-radius: 999px; cursor: pointer;
-        border: 1px solid var(--border, #ccc); background: transparent; color: var(--text-muted, #888);
-    }
-    .inst-auto-toggle.is-auto {
-        border-color: var(--primary, #007bff); background: var(--primary, #007bff); color: #fff;
-    }
 </style>
 {% endblock %}
 
@@ -108,16 +98,6 @@
                     <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
                         <span id="sort-direction-icon">↑</span>
                     </button>
-                </div>
-                <div class="filter-panel-row" id="instrument-settings-row" style="display: none;">
-                    <div style="width:100%;">
-                        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Your instruments</div>
-                        <div style="font-size:11px;color:var(--text-muted,#888);margin-bottom:8px;">
-                            Auto instruments follow a tune's main status. Manual instruments are a
-                            curated list you set per tune.
-                        </div>
-                        <div id="instrument-settings-list"></div>
-                    </div>
                 </div>
                 <div class="filter-panel-actions">
                     <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
@@ -1269,7 +1249,6 @@ function applyFilters() {
 
     updateURL();
     renderTunes();
-    renderInstrumentSettings();
     renderInstrumentFilter();
 }
 
@@ -1601,42 +1580,6 @@ function cyclePersonTuneStatus(tuneId, current, event) {
 
 // --- Per-instrument status (expand panel on each card) -----------------------------
 // Only shown when you play 2+ instruments; single-instrument users see today's card.
-
-// Renders the auto/manual toggles in the filter panel (only when you play 2+ instruments).
-function renderInstrumentSettings() {
-    var row = document.getElementById('instrument-settings-row');
-    var list = document.getElementById('instrument-settings-list');
-    if (!row || !list) return;
-    if (!myInstruments || myInstruments.length < 2) { row.style.display = 'none'; return; }
-    row.style.display = 'block';
-    list.innerHTML = myInstruments.map(function (inst, i) {
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;">'
-            + '<span style="font-size:13px;">' + inst.instrument + '</span>'
-            + '<button class="inst-auto-toggle' + (inst.is_auto ? ' is-auto' : '') + '"'
-            + ' onclick="toggleInstrumentAuto(' + i + ')">' + (inst.is_auto ? 'Auto' : 'Manual') + '</button>'
-            + '</div>';
-    }).join('');
-}
-
-// Toggle an instrument between auto (follows learn_status) and manual (curated). Changing
-// this re-resolves every tune's per-instrument status, so re-render the cards.
-function toggleInstrumentAuto(index) {
-    var inst = myInstruments[index];
-    if (!inst) return;
-    var newVal = !inst.is_auto;
-    inst.is_auto = newVal; // optimistic
-    renderInstrumentSettings();
-    applyFilters();
-    fetch('/api/my-tunes/instrument-auto', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instrument: inst.instrument, is_auto: newVal }) })
-        .then(function (r) { return r.json(); })
-        .then(function (d) { if (!d.success) throw new Error(d.error || 'failed'); })
-        .catch(function (err) {
-            console.error('Error toggling instrument auto:', err);
-            inst.is_auto = !newVal; // revert
-            renderInstrumentSettings(); applyFilters();
-            if (typeof showMessage === 'function') showMessage('Could not change instrument setting.', 'error');
-        });
-}
 
 function createTuneCard(tune) {
     const statusClass = `status-${tune.learn_status.replace(/ /g, '-')}`;

@@ -130,6 +130,28 @@ class TestPerInstrumentStatus:
         insts = {i["instrument"]: i["is_auto"] for i in data["instruments"]}
         assert insts["Concertina"] is False
 
+    def test_person_instruments_endpoint_includes_is_auto(self, client, authenticated_user, db_conn, db_cursor):
+        """The profile editor needs is_auto per instrument from GET /api/person/<id>/instruments."""
+        self._setup(db_conn=db_conn, db_cursor=db_cursor, instruments=[("Fiddle", True), ("Concertina", False)])
+        with authenticated_user:
+            resp = client.get(f"/api/person/{self.PERSON_ID}/instruments")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)
+        insts = {i["instrument"]: i["is_auto"] for i in data["instruments"]}
+        assert insts == {"Fiddle": True, "Concertina": False}
+
+    def test_person_scoped_instrument_auto_endpoint(self, client, authenticated_user, db_conn, db_cursor):
+        """PUT /api/person/<id>/instrument-auto sets the flag for a specific person (the
+        profile config modal uses this, not the /my-tunes current-user variant)."""
+        self._setup(db_conn=db_conn, db_cursor=db_cursor, instruments=[("Concertina", True)])
+        with authenticated_user:
+            r = client.put(f"/api/person/{self.PERSON_ID}/instrument-auto",
+                           data=json.dumps({"instrument": "Concertina", "is_auto": False}),
+                           content_type="application/json")
+            assert r.status_code == 200
+            data = json.loads(client.get(f"/api/person/{self.PERSON_ID}/instruments").data)
+        assert {i["instrument"]: i["is_auto"] for i in data["instruments"]}["Concertina"] is False
+
     def test_learned_date_cleared_on_leaving_learned(self, client, authenticated_user, db_conn, db_cursor):
         """Regression: the person_tune trigger must clear learned_date when a tune leaves
         'learned'. The old trigger guarded with `OLD IS NOT NULL` (composite-null semantics),

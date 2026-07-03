@@ -172,21 +172,12 @@
                                             <div class="col-12">
                                                 <div class="mb-3">
                                                     <label class="form-label">Instruments</label>
-                                                    <div id="instruments-checkboxes" class="row">
-                                                        {% for instrument in canonical_instruments %}
-                                                        <div class="col-md-4">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox" value="{{ instrument }}" id="edit-inst-{{ loop.index }}">
-                                                                <label class="form-check-label" for="edit-inst-{{ loop.index }}">{{ instrument }}</label>
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
+                                                    <div class="text-muted small mb-2">Changes save immediately. Click an instrument to set it auto/manual or remove it.</div>
+                                                    <div class="instrument-typeahead-wrap">
+                                                        <input type="text" id="instrument-typeahead" class="form-control" placeholder="Add an instrument…" autocomplete="off">
+                                                        <div id="instrument-typeahead-menu" class="typeahead-menu" style="display:none;"></div>
                                                     </div>
-                                                    <div class="mt-2">
-                                                        <input type="text" class="form-control" id="other-instrument" placeholder="Other instrument...">
-                                                        <button type="button" class="btn btn-sm btn-secondary mt-1" id="add-other-instrument-btn">Add Other</button>
-                                                    </div>
-                                                    <div id="other-instruments-list" class="mt-2"></div>
+                                                    <div id="instrument-rows" class="mt-2"></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -502,8 +493,66 @@
     </div>
 </div>
 
+<style>
+    .instrument-typeahead-wrap { position: relative; }
+    .typeahead-menu {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; margin-top: 2px;
+        max-height: 240px; overflow-y: auto;
+        background: var(--bg-color, #1a1a1a); border: 1px solid var(--border-color, #333);
+        border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    .typeahead-option {
+        display: block; width: 100%; text-align: left; padding: 8px 12px;
+        background: none; border: none; color: var(--text-color, inherit); cursor: pointer; font-size: 14px;
+    }
+    .typeahead-option:hover, .typeahead-option.active { background: var(--hover-bg, rgba(255,255,255,0.08)); }
+    #instrument-rows { display: flex; flex-direction: column; gap: 6px; }
+    .instrument-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 9px 12px; border: 1px solid var(--border-color, #333); border-radius: 6px;
+        cursor: pointer; background: var(--bg-color, transparent);
+    }
+    .instrument-row:hover { background: var(--hover-bg, rgba(255,255,255,0.05)); }
+    .instrument-row-badge {
+        font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
+        border: 1px solid var(--border-color, #555); white-space: nowrap;
+    }
+    .instrument-row-badge.auto { background: var(--primary, #4f9dff); color: #fff; border-color: var(--primary, #4f9dff); }
+    .pd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+    .pd-modal { background: var(--bg-color, #1c1c1e); border: 1px solid var(--border-color, #333); border-radius: 8px; width: 90%; max-width: 440px; }
+    .pd-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color, #333); font-weight: 600; }
+    .pd-modal-close { background: none; border: none; color: inherit; font-size: 22px; cursor: pointer; line-height: 1; }
+    .pd-modal-body { padding: 16px; }
+    .pd-modal-body .form-check + .form-check { margin-top: 10px; }
+    .pd-modal-footer { padding: 12px 16px; border-top: 1px solid var(--border-color, #333); }
+    .pd-modal-remove { color: #dc3545; cursor: pointer; font-weight: 600; }
+</style>
+
+<div id="instrument-config-modal" class="pd-modal-overlay" style="display:none;" onclick="if(event.target===this)closeInstrumentConfig()">
+    <div class="pd-modal">
+        <div class="pd-modal-header">
+            <span id="instrument-config-title">Instrument</span>
+            <button type="button" class="pd-modal-close" onclick="closeInstrumentConfig()">&times;</button>
+        </div>
+        <div class="pd-modal-body">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="instrument-auto" id="inst-auto-radio" value="auto" onchange="setInstrumentAutoFromModal(true)">
+                <label class="form-check-label" for="inst-auto-radio"><strong>Auto</strong> — follows the tune's main status. When you mark a tune learned, it's learned on this instrument.</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="instrument-auto" id="inst-manual-radio" value="manual" onchange="setInstrumentAutoFromModal(false)">
+                <label class="form-check-label" for="inst-manual-radio"><strong>Manual</strong> — a curated list you set per tune. Starts empty; you add tunes to it one at a time.</label>
+            </div>
+        </div>
+        <div class="pd-modal-footer">
+            <a class="pd-modal-remove" onclick="removeInstrumentFromProfile()">Remove from profile</a>
+        </div>
+    </div>
+</div>
+
 <script src="/static/js/dist/modalManager.js"></script>
 <script>
+const CANONICAL_INSTRUMENTS = {{ canonical_instruments|tojson }};
 document.addEventListener('DOMContentLoaded', function() {
     const personId = {{ person.id }};
     let attendedLoaded = false;
@@ -649,16 +698,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Store current instruments from the page
-    const personInstruments = {{ person.instruments|tojson if person.instruments else '[]' }};
-    const otherInstruments = []; // Store instruments added via "Other"
+    // Live per-instrument profile editor (changes save immediately, decoupled from the
+    // profile Save button).
+    let profileInstruments = [];  // [{instrument, is_auto}]
+    let configInstrument = null;  // instrument name open in the config modal
 
     function toggleEditMode(isEdit) {
         editMode = isEdit;
 
         if (isEdit) {
-            // Populate instrument checkboxes
-            populateInstrumentCheckboxes();
+            // Load the live instrument editor
+            loadProfileInstruments();
 
             if (editBtn) editBtn.style.display = 'none';
             if (editButtons) editButtons.style.display = 'block';
@@ -687,86 +737,135 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function populateInstrumentCheckboxes() {
-        // Clear other instruments list
-        otherInstruments.length = 0;
-        const otherInstrumentsList = document.getElementById('other-instruments-list');
-        otherInstrumentsList.innerHTML = '';
+    // --- Live instrument editor ---------------------------------------------------------
 
-        // Get all standard instrument checkboxes
-        const checkboxes = document.querySelectorAll('#instruments-checkboxes input[type="checkbox"]');
-        const standardInstruments = Array.from(checkboxes).map(cb => cb.value);
-
-        // First, uncheck all checkboxes
-        checkboxes.forEach(cb => cb.checked = false);
-
-        // Check the appropriate checkboxes
-        personInstruments.forEach(instrument => {
-            const checkbox = Array.from(checkboxes).find(cb => cb.value.toLowerCase() === instrument.toLowerCase());
-            if (checkbox) {
-                checkbox.checked = true;
-            } else {
-                // This is an "other" instrument
-                addOtherInstrumentToList(instrument);
-            }
-        });
+    function loadProfileInstruments() {
+        fetch(`/api/person/${personId}/instruments`)
+            .then(r => r.json())
+            .then(d => {
+                profileInstruments = (d && d.instruments) ? d.instruments : [];
+                renderInstrumentRows();
+            })
+            .catch(() => { profileInstruments = []; renderInstrumentRows(); });
     }
 
-    function addOtherInstrumentToList(instrument) {
-        if (!otherInstruments.includes(instrument)) {
-            otherInstruments.push(instrument);
-            renderOtherInstruments();
+    function renderInstrumentRows() {
+        const wrap = document.getElementById('instrument-rows');
+        if (!wrap) return;
+        if (!profileInstruments.length) {
+            wrap.innerHTML = '<div class="text-muted small">No instruments yet — add one above.</div>';
+            return;
         }
+        wrap.innerHTML = profileInstruments.map(i =>
+            `<div class="instrument-row" onclick="openInstrumentConfig('${String(i.instrument).replace(/'/g, "\\'")}')">
+                <span>${i.instrument}</span>
+                <span class="instrument-row-badge${i.is_auto ? ' auto' : ''}">${i.is_auto ? 'Auto' : 'Manual'}</span>
+            </div>`
+        ).join('');
     }
 
-    function renderOtherInstruments() {
-        const otherInstrumentsList = document.getElementById('other-instruments-list');
-        otherInstrumentsList.innerHTML = '';
-
-        otherInstruments.forEach((inst) => {
-            // Self-contained chip: this app ships a custom theme.css (no Bootstrap),
-            // so style the pill inline rather than rely on badge/btn-close classes.
-            const badge = document.createElement('span');
-            badge.style.display = 'inline-flex';
-            badge.style.alignItems = 'center';
-            badge.style.gap = '0.4rem';
-            badge.style.padding = '0.2rem 0.6rem';
-            badge.style.marginRight = '0.4rem';
-            badge.style.marginBottom = '0.4rem';
-            badge.style.borderRadius = '1rem';
-            badge.style.fontSize = '0.85rem';
-            badge.style.background = 'var(--secondary, #6c757d)';
-            badge.style.color = '#fff';
-
-            const label = document.createElement('span');
-            label.textContent = inst;
-            badge.appendChild(label);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.textContent = '×';  // multiplication sign as a close glyph
-            removeBtn.setAttribute('aria-label', `Remove ${inst}`);
-            removeBtn.style.background = 'none';
-            removeBtn.style.border = 'none';
-            removeBtn.style.color = '#fff';
-            removeBtn.style.cursor = 'pointer';
-            removeBtn.style.fontSize = '1.1rem';
-            removeBtn.style.lineHeight = '1';
-            removeBtn.style.padding = '0';
-            removeBtn.addEventListener('click', () => removeOtherInstrument(inst));
-
-            badge.appendChild(removeBtn);
-            otherInstrumentsList.appendChild(badge);
-        });
+    function saveInstrumentList() {
+        // PUT the full name list; the server diffs (so is_auto on kept instruments is
+        // preserved) and normalizes casing/aliases.
+        return fetch(`/api/person/${personId}/instruments`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instruments: profileInstruments.map(i => i.instrument) })
+        }).then(r => r.json());
     }
 
-    function removeOtherInstrument(instrument) {
-        const index = otherInstruments.indexOf(instrument);
-        if (index > -1) {
-            otherInstruments.splice(index, 1);
-            renderOtherInstruments();
+    function addInstrumentToProfile(name) {
+        name = (name || '').trim();
+        if (!name) return;
+        if (profileInstruments.some(i => i.instrument.toLowerCase() === name.toLowerCase())) {
+            closeTypeahead(); return; // already on the list
         }
+        profileInstruments.push({ instrument: name, is_auto: true });
+        profileInstruments.sort((a, b) => a.instrument.localeCompare(b.instrument));
+        renderInstrumentRows();
+        document.getElementById('instrument-typeahead').value = '';
+        closeTypeahead();
+        saveInstrumentList().then(loadProfileInstruments); // reload to get canonical casing
     }
+
+    // Type-ahead against the canonical list, with an "other" (free-text) escape hatch.
+    function updateTypeahead() {
+        const input = document.getElementById('instrument-typeahead');
+        const menu = document.getElementById('instrument-typeahead-menu');
+        const q = input.value.trim().toLowerCase();
+        const have = new Set(profileInstruments.map(i => i.instrument.toLowerCase()));
+        const matches = CANONICAL_INSTRUMENTS.filter(c => c.toLowerCase().includes(q) && !have.has(c.toLowerCase()));
+        const opts = matches.map(c => ({ value: c, label: c }));
+        // "Other" escape hatch: offer to add the typed text if it isn't an exact canonical match
+        if (q && !CANONICAL_INSTRUMENTS.some(c => c.toLowerCase() === q) && !have.has(q)) {
+            opts.push({ value: input.value.trim(), label: `Add "${input.value.trim()}"` });
+        }
+        if (!opts.length) { closeTypeahead(); return; }
+        menu.innerHTML = opts.map(o =>
+            `<button type="button" class="typeahead-option" onmousedown="event.preventDefault()"
+                onclick="addInstrumentToProfile('${String(o.value).replace(/'/g, "\\'")}')">${o.label}</button>`
+        ).join('');
+        menu.style.display = 'block';
+    }
+    function closeTypeahead() {
+        const menu = document.getElementById('instrument-typeahead-menu');
+        if (menu) menu.style.display = 'none';
+    }
+
+    // Config modal (auto/manual + remove).
+    function openInstrumentConfig(name) {
+        configInstrument = name;
+        const inst = profileInstruments.find(i => i.instrument === name);
+        document.getElementById('instrument-config-title').textContent = name;
+        document.getElementById('inst-auto-radio').checked = !!(inst && inst.is_auto);
+        document.getElementById('inst-manual-radio').checked = !(inst && inst.is_auto);
+        document.getElementById('instrument-config-modal').style.display = 'flex';
+    }
+    function closeInstrumentConfig() {
+        document.getElementById('instrument-config-modal').style.display = 'none';
+        configInstrument = null;
+    }
+    function setInstrumentAutoFromModal(isAuto) {
+        if (!configInstrument) return;
+        const inst = profileInstruments.find(i => i.instrument === configInstrument);
+        if (inst) inst.is_auto = isAuto;
+        renderInstrumentRows();
+        fetch(`/api/person/${personId}/instrument-auto`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ instrument: configInstrument, is_auto: isAuto })
+        }).then(r => r.json()).then(d => { if (!d.success) loadProfileInstruments(); });
+    }
+    function removeInstrumentFromProfile() {
+        if (!configInstrument) return;
+        profileInstruments = profileInstruments.filter(i => i.instrument !== configInstrument);
+        renderInstrumentRows();
+        closeInstrumentConfig();
+        saveInstrumentList().then(loadProfileInstruments);
+    }
+
+    // These are referenced from inline onclick/onchange (rows + config modal), which resolve
+    // against window, so expose them (the rest of this script lives in a DOMContentLoaded
+    // closure).
+    window.addInstrumentToProfile = addInstrumentToProfile;
+    window.openInstrumentConfig = openInstrumentConfig;
+    window.closeInstrumentConfig = closeInstrumentConfig;
+    window.setInstrumentAutoFromModal = setInstrumentAutoFromModal;
+    window.removeInstrumentFromProfile = removeInstrumentFromProfile;
+
+    // Wire the type-ahead input once the DOM is ready.
+    (function () {
+        const input = document.getElementById('instrument-typeahead');
+        if (!input) return;
+        input.addEventListener('input', updateTypeahead);
+        input.addEventListener('focus', updateTypeahead);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); if (input.value.trim()) addInstrumentToProfile(input.value.trim()); }
+            else if (e.key === 'Escape') { closeTypeahead(); }
+        });
+        document.addEventListener('click', function (e) {
+            const wrap = document.querySelector('.instrument-typeahead-wrap');
+            if (wrap && !wrap.contains(e.target)) closeTypeahead();
+        });
+    })();
 
     // Add other instrument button handler
     const addOtherInstrumentBtn = document.getElementById('add-other-instrument-btn');
@@ -848,23 +947,15 @@ document.addEventListener('DOMContentLoaded', function() {
             user: {}
         };
 
-        // Collect instruments from checkboxes and "other" list
-        const instruments = [];
-        const checkboxes = document.querySelectorAll('#instruments-checkboxes input[type="checkbox"]:checked');
-        checkboxes.forEach(checkbox => {
-            instruments.push(checkbox.value);
-        });
-        // Add other instruments
-        otherInstruments.forEach(inst => {
-            instruments.push(inst);
-        });
+        // Instruments are managed live (immediate save) by the instrument editor, so they
+        // are NOT part of this form save.
 
         // Collect person data
         if (personForm) {
             const personInputs = personForm.querySelectorAll('input:not([type="checkbox"])');
             personInputs.forEach(input => {
-                // Skip instrument-related inputs
-                if (input.id !== 'other-instrument' && input.name) {
+                // Skip the instrument type-ahead input
+                if (input.id !== 'instrument-typeahead' && input.name) {
                     formData.person[input.name] = input.value.trim() || null;
                 }
             });
@@ -896,25 +987,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data.success) {
                 throw new Error(data.message || 'Failed to update person data');
             }
-            // Then update instruments
-            return fetch(`/api/person/${personId}/instruments`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ instruments: instruments })
-            });
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Store success message for display after reload
-                sessionStorage.setItem('personSavedMessage', 'Profile updated successfully');
-                // Reload the page to show updated data
-                window.location.reload();
-            } else {
-                showMessage('Error saving instruments: ' + data.message, 'error');
-            }
+            // Instruments already saved live; just reload to show updated profile.
+            sessionStorage.setItem('personSavedMessage', 'Profile updated successfully');
+            window.location.reload();
         })
         .catch(error => {
             console.error('Error saving changes:', error);

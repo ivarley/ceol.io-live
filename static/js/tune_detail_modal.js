@@ -759,11 +759,35 @@ ${abcBody}`;
         return instruments.map(function (inst, i) {
             const st = resolveInstStatus(overrides, inst, learnStatus);
             const manual = inst.is_auto ? '' : ' <span class="tsc-manual">manual</span>';
+            // A manual instrument that's on the tune can be removed from that instrument's
+            // list (auto instruments always follow the tune's main status, so no remove).
+            const removeLink = (!inst.is_auto && st !== null)
+                ? '<button type="button" class="tsc-remove" onclick="TuneDetailModal.removeInstrumentTune(' + i + ')">× remove</button>'
+                : '';
             return '<div class="tsc-block tsc-inst-block">'
-                + '<div class="tsc-label-line"><span class="tsc-name">' + inst.instrument + manual + '</span></div>'
+                + '<div class="tsc-label-line"><span class="tsc-name">' + inst.instrument + manual + '</span>' + removeLink + '</div>'
                 + statusSeg(st, function (v) { return "TuneDetailModal.setInstrumentStatus(" + i + ",'" + v + "')"; })
                 + '</div>';
         }).join('');
+    }
+
+    // Remove a tune from one (manual) instrument's list — deletes the override entirely.
+    function removeInstrumentTune(index) {
+        const tuneId = currentTuneData && currentTuneData.tune_id;
+        if (!tuneId) return;
+        const data = getInstrumentData(currentTuneData, currentConfig);
+        const inst = data.instruments[index];
+        if (!inst || inst.is_auto) return;
+        const prev = data.overrides;
+        const updated = Object.assign({}, data.overrides);
+        delete updated[inst.instrument];
+        setInstrumentOverrides(currentTuneData, currentConfig, updated);
+        refreshStatusSection();
+        submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: null })
+            .catch(function () {
+                setInstrumentOverrides(currentTuneData, currentConfig, prev);
+                refreshStatusSection();
+            });
     }
 
     // The inner HTML of the whole status control: the main (roll-up) block, plus the
@@ -2536,6 +2560,7 @@ ${abcBody}`;
         addToTunebook: addToTunebook,
         setTunebookStatus: setTunebookStatus,
         setInstrumentStatus: setInstrumentStatus,
+        removeInstrumentTune: removeInstrumentTune,
         toggleStatusExpand: toggleStatusExpand,
         removeFromMyTunes: removeFromMyTunes,
         removeFromSession: removeFromSession,

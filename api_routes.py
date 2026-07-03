@@ -8297,29 +8297,31 @@ def get_person_instruments(person_id):
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to view this person's instruments"}), 403
         
-        # Get person's instruments
+        # Get person's instruments (+ auto/manual flag)
         cur.execute(
             """
-            SELECT instrument 
-            FROM person_instrument 
-            WHERE person_id = %s 
+            SELECT instrument, is_auto
+            FROM person_instrument
+            WHERE person_id = %s
             ORDER BY instrument
             """,
             (person_id,)
         )
-        
+
         instrument_results = cur.fetchall()
-        instruments = [row[0] for row in instrument_results]
-        
+        instruments = [row[0] for row in instrument_results]           # names (back-compat)
+        instruments_detail = [{"instrument": row[0], "is_auto": row[1]} for row in instrument_results]
+
         cur.close()
         conn.close()
-        
+
         # Get person's name for response
         person_name = f"{person_result[1]} {person_result[2]}"
-        
+
         return jsonify({
             "success": True,
             "data": instruments,
+            "instruments": instruments_detail,
             "meta": {
                 "person_id": person_id,
                 "person_name": person_name,
@@ -8474,6 +8476,41 @@ def update_person_instruments(person_id):
     except Exception as e:
         if 'conn' in locals():
             conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_login_required
+def set_person_instrument_auto(person_id):
+    """
+    PUT /api/person/<id>/instrument-auto
+
+    Set whether one of this person's instruments is "auto" (linked — follows a tune's main
+    status) or manual (a curated per-instrument list). Body: {"instrument": ..., "is_auto": bool}.
+    Self or system admin only.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        instrument = (data.get("instrument") or "").strip()
+        is_auto = data.get("is_auto")
+        if not instrument or not isinstance(is_auto, bool):
+            return jsonify({"success": False, "message": "instrument and boolean is_auto are required"}), 400
+        if not (current_user.is_system_admin or person_id == current_user.person_id):
+            return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE person_instrument SET is_auto=%s WHERE person_id=%s AND LOWER(instrument)=LOWER(%s)",
+                (is_auto, person_id, instrument),
+            )
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "message": "Instrument not found for this person"}), 404
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+        return jsonify({"success": True, "instrument": instrument, "is_auto": is_auto})
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 

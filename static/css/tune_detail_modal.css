@@ -403,6 +403,18 @@
     opacity: 0.6;
     margin-left: 6px;
 }
+.tsc-remove {
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 12px;
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 0 2px;
+}
+.tsc-remove:hover { opacity: 1; text-decoration: underline; }
 .tsc-instruments {
     display: flex;
     flex-direction: column;

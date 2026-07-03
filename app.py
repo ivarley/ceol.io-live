@@ -877,6 +877,12 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
+    "/api/person/<int:person_id>/instrument-auto",
+    "set_person_instrument_auto",
+    set_person_instrument_auto,
+    methods=["PUT"],
+)
+app.add_url_rule(
     "/api/session_instance/<int:session_instance_id>/attendees/<int:person_id>",
     "remove_person_attendance",
     remove_person_attendance,
