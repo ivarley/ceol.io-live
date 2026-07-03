@@ -2114,8 +2114,10 @@
     <span class="conn-dot conn-fixed conn-{displayStatus}" title={displayStatus} aria-label="Connection: {displayStatus}"></span>
   {/if}
   <div class="topnav" bind:clientHeight={headerH}>
+    <!-- Mirrors the app-wide header (base.html .header): full-viewport bar, 30px logo +
+         site title (hidden on phones, like .logo-text). -->
     <div class="appbar">
-      <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /></a>
+      <a class="brand" href="/" aria-label="ceol.io home"><img src="/static/images/logo3-1.png" alt="ceol" /><span class="brand-text">Traditional Irish Session Logs</span></a>
       <!-- The hamburger menu is the SHARED app menu, rendered server-side in the live
            shell (templates/hamburger_menu.html) and floated top-right. 'Find a tune'
            routes to openDeep() here via window.__liveFindTune (set in onMount). -->

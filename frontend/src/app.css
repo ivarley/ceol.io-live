@@ -69,17 +69,42 @@ main {
   flex: 0 0 auto;
   z-index: 30;
   background: var(--bg);
+  /* room for the fixed .appbar (the in-flow .topbar starts below it) */
+  padding-top: calc(42px + env(safe-area-inset-top));
 }
+/* The app-wide header, replicated (base.html .header / theme.css, dark palette): a
+   full-VIEWPORT-width fixed bar — position:fixed escapes main's max-width column AND
+   its overflow:hidden clip — with the 30px logo at left 15px, the site title (hidden
+   on phones, like .logo-text), and the shared hamburger floated into the bar's right
+   edge by the shell (templates/live_logging.html .live-menu). .topnav reserves the
+   bar's height as padding so headerH / toast math still measure the full header. */
 .appbar {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40; /* above .topnav (30), below the hamburger .live-menu (50) */
+  height: calc(42px + env(safe-area-inset-top));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  align-items: flex-start; /* content sits at base.html's measured offsets, not centered */
+  padding: calc(6px + env(safe-area-inset-top)) 15px 0;
+  background: #2d2d2d; /* --header-bg, dark theme */
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.1);
 }
-.brand img { height: 26px; display: block; }
+.brand { display: flex; align-items: center; text-decoration: none; }
+.brand img { height: 30px; display: block; }
+.brand-text {
+  margin-left: 10px;
+  color: #e0e0e0; /* --text-color, dark theme */
+  font-family: 'Poppins', sans-serif; /* the app-wide font, loaded by the shell */
+  font-size: 26px;
+  font-weight: 300; /* base's inline font-weight:50 resolves to the lightest face, Poppins Light */
+  line-height: 1.5;
+  white-space: nowrap;
+}
+@media (max-width: 767.98px) {
+  .brand-text { display: none; }
+}
 .appbar-actions { display: flex; align-items: center; gap: 6px; position: relative; }
 /* The hamburger menu is now the SHARED app menu (static/css/hamburger_menu.css),
    rendered server-side in the live shell and floated top-right via .live-menu. */
@@ -178,12 +203,13 @@ main {
 .conn-live { background: #3fb950; }                  /* green: stream up */
 .conn-offline { background: #e0a23e; }               /* orange: offline */
 .conn-reconnecting { background: #e0a23e; animation: conn-pulse 1s ease-in-out infinite; }
-/* Floated beside the fixed hamburger (32px button at right:8px, top:8px+safe): sit 8px to
-   its left and vertically centered on it. Same z-index layer as .live-menu (50). */
+/* Floated beside the fixed hamburger (32px button at top:7px right:15px, matching the
+   base header): sit 8px to its left, centered on the button. Same z-index layer as
+   .live-menu (50). */
 .conn-fixed {
   position: fixed;
-  top: calc(19px + env(safe-area-inset-top));
-  right: 48px;
+  top: calc(18px + env(safe-area-inset-top));
+  right: 55px;
   z-index: 50;
 }
 @keyframes conn-pulse {

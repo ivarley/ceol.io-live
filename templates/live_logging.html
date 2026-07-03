@@ -36,13 +36,19 @@
        editor's always-dark palette. -->
   <link rel="stylesheet" href="/static/css/hamburger_menu.css">
   <script src="/static/js/hamburger_menu.js"></script>
+  <!-- The app-wide font (base.html loads the same family) — used by the replicated
+       header's site title; body text stays the app's system stack. -->
+  <link href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700&display=swap" rel="stylesheet">
   <style>
     .live-menu {
       --hamburger-line-color: #ececef;
       --dropdown-bg: #18181b; --dropdown-border: #2a2a30; --dropdown-shadow: rgba(0,0,0,0.55);
       --text-color: #ececef; --border-color: #2a2a30; --hover-bg: #23232c;
       --disabled-text: #9a9aa3; --bg-color: #0e0e10;
-      position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 8px; z-index: 50;
+      /* In the 42px app header bar (the Svelte .appbar) at the base-layout header's
+         measured hamburger position: 32px button at top 7, right inset 15. */
+      position: fixed; top: calc(7px + env(safe-area-inset-top)); right: 15px; z-index: 50;
+      font-family: 'Poppins', sans-serif; /* dropdown matches the app-wide menu */
     }
   </style>
 </head>
