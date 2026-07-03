@@ -77,6 +77,10 @@ Sparse per-instrument status **overrides** (a second axis on top of person_tune)
   → else not tracked. So a single-instrument or all-auto user stores zero rows here.
 - Written by the `set_instrument_status` op (absolute-set, idempotent). Setting an auto
   instrument back to `learn_status` deletes the row (snap-back); `status: null` deletes it.
+- **Removing an instrument** (PUT /api/person/<id>/instruments without it) also deletes that
+  instrument's override rows — they're not FK-cascaded from `person_instrument`, so the route
+  deletes them explicitly (and logs each to history). The profile editor warns first when the
+  removal would lose data re-adding on Auto wouldn't restore (see `removal_loss_count` below).
 
 ## Key Operations
 
@@ -86,6 +90,11 @@ Sparse per-instrument status **overrides** (a second axis on top of person_tune)
 **Search People**: GET /api/session/<id>/people/search?q=<query>
 **Set per-instrument status**: POST /api/my-tunes/ops `{type:"set_instrument_status", tune_id, instrument, status}`
 **Set instrument auto/manual**: PUT /api/my-tunes/instrument-auto `{instrument, is_auto}`
+  (current user) or PUT /api/person/<id>/instrument-auto (profile editor, self-or-admin)
+**Person's instruments (profile editor)**: GET /api/person/<id>/instruments returns each
+  instrument with `is_auto` and `removal_loss_count` (per-tune overrides a removal would lose
+  and re-adding on Auto wouldn't restore: a manual instrument's whole curated list, or an auto
+  instrument's overrides differing from `learn_status`). The editor confirms when it's > 0.
 **My tunes (with per-instrument data)**: GET /api/my-tunes returns `instruments` (with is_auto)
   and each tune's `instrument_status` (sparse overrides)
 
@@ -97,8 +106,15 @@ the tune's **roll-up** status (the furthest-along across your instruments) and e
 segmented button also carries its own status color. If you play 2+ instruments an expand triangle
 reveals a thin label line + full-width segmented control per instrument (single-instrument users
 see just the roll-up row). Setting the roll-up realigns auto instruments to it (clears their
-overrides); manual instruments are curated independently. Auto/manual is toggled from the My Tunes
-filter panel. Instruments are the canonical list from `instruments.py`.
+overrides); manual instruments are curated independently. Instruments are the canonical list from
+`instruments.py`.
+
+Auto/manual is set on the **profile page** (`person_details.html`), not the My Tunes filter panel:
+the instruments editor lists each instrument as a row that opens a config modal (auto/manual radios
++ a "Remove from profile" link). Removing an instrument that has custom per-tune data first shows a
+confirmation ("Removing X will delete its saved status for N tunes…"); a clean auto instrument is
+removed silently. The My Tunes filter panel filters the list by instrument but no longer sets
+auto/manual.
 
 ## Related
 
