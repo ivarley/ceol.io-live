@@ -429,13 +429,14 @@ RETURNS TRIGGER AS $$
 BEGIN
     NEW.last_modified_date = (NOW() AT TIME ZONE 'UTC');
 
-    -- Automatically set learned_date when status changes to 'learned'
-    IF NEW.learn_status = 'learned' AND (OLD IS NULL OR OLD.learn_status != 'learned') THEN
+    -- BEFORE UPDATE only, so OLD is always the prior row. Do NOT guard with
+    -- `OLD IS [NOT] NULL`: for a composite row that is NULL only when *every* column is
+    -- null, so any row with a null column (notes, setting_id, ...) made the clear branch
+    -- never run, leaving learned_date set after learned -> not-learned (breaks the model
+    -- validator / the detail modal).
+    IF NEW.learn_status = 'learned' AND OLD.learn_status <> 'learned' THEN
         NEW.learned_date = (NOW() AT TIME ZONE 'UTC');
-    END IF;
-
-    -- Clear learned_date if status changes away from 'learned'
-    IF NEW.learn_status != 'learned' AND OLD IS NOT NULL AND OLD.learn_status = 'learned' THEN
+    ELSIF NEW.learn_status <> 'learned' AND OLD.learn_status = 'learned' THEN
         NEW.learned_date = NULL;
     END IF;
 

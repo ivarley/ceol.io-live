@@ -318,9 +318,10 @@
     border-radius: 6px;
     font-size: 14px;
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 10px;
+    /* Box is tinted by the roll-up status (.tunebook-status-<status> below); the active
+       toggle in each row additionally carries its own status color. */
 }
 
 .tunebook-status-not-on-list {
@@ -363,6 +364,55 @@
     color: #c3e6cb;
 }
 
+/* Unified status control. Each block is a thin label line (full name — never truncated)
+   above its full-width segmented control, so the main roll-up and every instrument line
+   up identically. */
+.tsc-block {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.tsc-label-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 20px;
+}
+.tsc-name { font-size: 14px; }
+.tsc-inst-block .tsc-name { font-weight: 500; }
+.tsc-expand-btn {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    padding: 0 2px;
+}
+.tsc-caret {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+.tsc-expand-btn.open .tsc-caret { transform: rotate(90deg); }
+.tsc-manual {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+.tsc-instruments {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+[data-theme="dark"] .tsc-instruments { border-top-color: rgba(255, 255, 255, 0.15); }
+
 .tunebook-action-btn {
     padding: 4px 12px;
     border: 1px solid currentColor;
@@ -378,34 +428,41 @@
     background-color: rgba(0,0,0,0.1);
 }
 
-/* Learn-status segmented control (replaces a native <select> so the open list isn't the
-   unstyled OS picker, and so status changes route through the offline op-queue). */
-.tunebook-status-label { flex: 1 1 auto; min-width: 0; }
+/* Status segmented control — full width with three equal-width buttons so the main
+   roll-up and every instrument line up. The ACTIVE button carries the status color. */
 .tunebook-status-seg {
-    display: inline-flex;
-    flex: 0 0 auto;
+    display: flex;
+    width: 100%;
     border: 1.5px solid currentColor;
     border-radius: 6px;
     overflow: hidden;
 }
 .tunebook-status-seg.saving { opacity: 0.6; pointer-events: none; }
 .tunebook-status-opt {
-    padding: 6px 12px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 4px;
     border: 0;
     border-left: 1px solid currentColor;
     background: transparent;
     color: inherit;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
+    text-align: center;
     cursor: pointer;
     white-space: nowrap;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.12s ease;
 }
 .tunebook-status-opt:first-child { border-left: 0; }
-.tunebook-status-opt:hover { background-color: rgba(0, 0, 0, 0.08); }
-[data-theme="dark"] .tunebook-status-opt:hover { background-color: rgba(255, 255, 255, 0.12); }
-.tunebook-status-opt.active { background-color: rgba(0, 0, 0, 0.16); font-weight: 700; }
-[data-theme="dark"] .tunebook-status-opt.active { background-color: rgba(255, 255, 255, 0.22); }
+.tunebook-status-opt:hover { background-color: rgba(0, 0, 0, 0.05); }
+[data-theme="dark"] .tunebook-status-opt:hover { background-color: rgba(255, 255, 255, 0.06); }
+.tunebook-status-opt.active { font-weight: 700; }
+.tunebook-status-opt.active[data-status="want to learn"] { background-color: #cfe6ff; color: #084298; }
+.tunebook-status-opt.active[data-status="learning"] { background-color: #ffe8a3; color: #7a5b00; }
+.tunebook-status-opt.active[data-status="learned"] { background-color: #b7e4c1; color: #14532d; }
+[data-theme="dark"] .tunebook-status-opt.active[data-status="want to learn"] { background-color: #2a5a8a; color: #eaf3ff; }
+[data-theme="dark"] .tunebook-status-opt.active[data-status="learning"] { background-color: #7a5f1e; color: #fff3d4; }
+[data-theme="dark"] .tunebook-status-opt.active[data-status="learned"] { background-color: #2f6b40; color: #e6f6ea; }
 
 /* Heard count section */
 .heard-count-section {

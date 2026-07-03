@@ -89,6 +89,17 @@ Sparse per-instrument status **overrides** (a second axis on top of person_tune)
 **My tunes (with per-instrument data)**: GET /api/my-tunes returns `instruments` (with is_auto)
   and each tune's `instrument_status` (sparse overrides)
 
+## Per-instrument status control (UI)
+
+The shared tune-detail modal (`static/js/tune_detail_modal.js`, `static/css/tune_detail_modal.css`)
+renders one control in every context (My Tunes, session, live logger). The box is tinted by
+the tune's **roll-up** status (the furthest-along across your instruments) and each row's active
+segmented button also carries its own status color. If you play 2+ instruments an expand triangle
+reveals a thin label line + full-width segmented control per instrument (single-instrument users
+see just the roll-up row). Setting the roll-up realigns auto instruments to it (clears their
+overrides); manual instruments are curated independently. Auto/manual is toggled from the My Tunes
+filter panel. Instruments are the canonical list from `instruments.py`.
+
 ## Related
 
 - [Authentication](../logic/auth.md) - User accounts and login

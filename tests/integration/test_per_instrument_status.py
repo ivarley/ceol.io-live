@@ -129,3 +129,22 @@ class TestPerInstrumentStatus:
             data = json.loads(client.get("/api/my-tunes").data)
         insts = {i["instrument"]: i["is_auto"] for i in data["instruments"]}
         assert insts["Concertina"] is False
+
+    def test_learned_date_cleared_on_leaving_learned(self, client, authenticated_user, db_conn, db_cursor):
+        """Regression: the person_tune trigger must clear learned_date when a tune leaves
+        'learned'. The old trigger guarded with `OLD IS NOT NULL` (composite-null semantics),
+        so any row with a null column kept a stale learned_date -> the PersonTune model
+        validator then rejected it and GET /api/my-tunes/<id> (the detail modal) 404'd."""
+        tune_id, _ = self._setup(db_cursor, db_conn, [("Fiddle", True)])
+        db_cursor.execute("SELECT person_tune_id FROM person_tune WHERE person_id=%s AND tune_id=%s",
+                          (self.PERSON_ID, tune_id))
+        person_tune_id = db_cursor.fetchone()[0]
+        with authenticated_user:
+            # learned -> learning through the op path (which fires the trigger)
+            self._op(client, {"type": "set_status", "tune_id": tune_id, "learn_status": "learned"})
+            self._op(client, {"type": "set_status", "tune_id": tune_id, "learn_status": "learning"})
+            # The detail endpoint validates the model; a stale learned_date would 404 here.
+            resp = client.get(f"/api/my-tunes/{person_tune_id}")
+        assert resp.status_code == 200
+        db_cursor.execute("SELECT learned_date FROM person_tune WHERE person_tune_id=%s", (person_tune_id,))
+        assert db_cursor.fetchone()[0] is None  # cleared

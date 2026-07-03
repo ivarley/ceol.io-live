@@ -23,6 +23,8 @@
     let currentConfig = null;
     let originalValues = {};
     let isConfigSectionVisible = false;
+    let piExpanded = false; // whether the per-instrument rows are revealed in the status control
+    const STATUS_RANK = { 'want to learn': 1, 'learning': 2, 'learned': 3 };
     let pendingHeardCountRequests = 0;
 
     // Musical keys list
@@ -695,6 +697,145 @@ ${abcBody}`;
         `;
     }
 
+    // --- Per-instrument status (shared panel, same in every modal context) -----------
+
+    // Per-instrument data lives directly on tuneData for my_tunes, nested under
+    // person_tune_status for session contexts (mirrors how learn_status is read).
+    function getInstrumentData(tuneData, config) {
+        if (config.context === 'my_tunes') {
+            return { instruments: tuneData.instruments || [], overrides: tuneData.instrument_status || {} };
+        }
+        const s = tuneData.person_tune_status || {};
+        return { instruments: s.instruments || [], overrides: s.instrument_status || {} };
+    }
+    function getModalLearnStatus(tuneData, config) {
+        return config.context === 'my_tunes'
+            ? (tuneData.learn_status || 'want to learn')
+            : ((tuneData.person_tune_status && tuneData.person_tune_status.learn_status) || 'want to learn');
+    }
+    function setInstrumentOverrides(tuneData, config, overrides) {
+        if (config.context === 'my_tunes') { tuneData.instrument_status = overrides; }
+        else if (tuneData.person_tune_status) { tuneData.person_tune_status.instrument_status = overrides; }
+    }
+    function resolveInstStatus(overrides, inst, learnStatus) {
+        if (Object.prototype.hasOwnProperty.call(overrides, inst.instrument)) return overrides[inst.instrument];
+        return inst.is_auto ? learnStatus : null;
+    }
+    // The 3-button segmented control, shared by the main row and every instrument row so
+    // all groups are identical width and the buttons line up into columns.
+    // The tune's overall status = a roll-up: the furthest-along status across all
+    // instruments that have one (auto follow learn_status; manual only when tracked).
+    function rollupStatus(tuneData, config) {
+        const { instruments, overrides } = getInstrumentData(tuneData, config);
+        const learnStatus = getModalLearnStatus(tuneData, config);
+        if (!instruments || instruments.length < 2) return learnStatus;
+        let best = null, bestRank = 0;
+        instruments.forEach(function (inst) {
+            const st = resolveInstStatus(overrides, inst, learnStatus);
+            if (st && STATUS_RANK[st] > bestRank) { bestRank = STATUS_RANK[st]; best = st; }
+        });
+        return best || learnStatus;
+    }
+
+    // A full-width 3-button segmented control. The active button carries the status color;
+    // the box itself stays neutral.
+    function statusSeg(activeStatus, onclickFor) {
+        const opt = function (val, label) {
+            return '<button type="button" class="tunebook-status-opt' + (activeStatus === val ? ' active' : '')
+                + '" data-status="' + val + '" onclick="' + onclickFor(val) + '">' + label + '</button>';
+        };
+        return '<div class="tunebook-status-seg" role="group" aria-label="Status">'
+            + opt('want to learn', 'Want To Learn')
+            + opt('learning', 'Learning')
+            + opt('learned', 'Learned')
+            + '</div>';
+    }
+
+    // One block per instrument: a thin label line (full name) above its segmented control,
+    // so long names always show and every control lines up full-width.
+    function buildInstrumentBlocks(tuneData, config) {
+        const { instruments, overrides } = getInstrumentData(tuneData, config);
+        const learnStatus = getModalLearnStatus(tuneData, config);
+        return instruments.map(function (inst, i) {
+            const st = resolveInstStatus(overrides, inst, learnStatus);
+            const manual = inst.is_auto ? '' : ' <span class="tsc-manual">manual</span>';
+            return '<div class="tsc-block tsc-inst-block">'
+                + '<div class="tsc-label-line"><span class="tsc-name">' + inst.instrument + manual + '</span></div>'
+                + statusSeg(st, function (v) { return "TuneDetailModal.setInstrumentStatus(" + i + ",'" + v + "')"; })
+                + '</div>';
+        }).join('');
+    }
+
+    // The inner HTML of the whole status control: the main (roll-up) block, plus the
+    // per-instrument blocks (revealed by the expand triangle) when you play 2+ instruments.
+    function statusSectionInner(tuneData, config) {
+        const { instruments } = getInstrumentData(tuneData, config);
+        const multi = instruments && instruments.length >= 2;
+        const expandBtn = multi
+            ? '<button type="button" class="tsc-expand-btn' + (piExpanded ? ' open' : '') + '"'
+              + ' onclick="TuneDetailModal.toggleStatusExpand(event)" aria-label="Per-instrument status">'
+              + '<span class="tsc-caret">▸</span></button>'
+            : '';
+        const instrumentsBlock = multi
+            ? '<div class="tsc-instruments"' + (piExpanded ? '' : ' style="display:none;"') + '>'
+              + buildInstrumentBlocks(tuneData, config) + '</div>'
+            : '';
+        return '<div class="tsc-block tsc-main-block">'
+            + '<div class="tsc-label-line"><span class="tsc-name tunebook-status-label">This tune is on your list as</span>' + expandBtn + '</div>'
+            + statusSeg(rollupStatus(tuneData, config), function (v) { return "TuneDetailModal.setTunebookStatus('" + v + "')"; })
+            + '</div>'
+            + instrumentsBlock;
+    }
+
+    // Re-render the whole control in place (preserving the expanded state), so both the
+    // roll-up and the per-instrument rows stay in sync after any change.
+    function refreshStatusSection() {
+        const section = document.querySelector('.tunebook-status-section');
+        if (!section) return;
+        // Re-tint the box by the (possibly changed) roll-up status, then re-render its inner.
+        const rollup = rollupStatus(currentTuneData, currentConfig);
+        section.className = 'tunebook-status-section tunebook-status-' + rollup.replace(/ /g, '-');
+        section.innerHTML = statusSectionInner(currentTuneData, currentConfig);
+    }
+
+    function toggleStatusExpand(event) {
+        if (event) event.stopPropagation();
+        piExpanded = !piExpanded;
+        const wrap = document.querySelector('.tsc-instruments');
+        const btn = document.querySelector('.tsc-expand-btn');
+        if (wrap) wrap.style.display = piExpanded ? 'block' : 'none';
+        if (btn) btn.classList.toggle('open', piExpanded);
+    }
+
+    // Set one instrument's status directly. Clicking the active status on a MANUAL
+    // instrument toggles it off (untracked). An auto instrument always keeps a status, and
+    // setting it to learn_status stores no override (snap-back).
+    function setInstrumentStatus(index, status) {
+        const tuneId = currentTuneData && currentTuneData.tune_id;
+        if (!tuneId) return;
+        const data = getInstrumentData(currentTuneData, currentConfig);
+        const inst = data.instruments[index];
+        if (!inst) return;
+        const learnStatus = getModalLearnStatus(currentTuneData, currentConfig);
+        const current = resolveInstStatus(data.overrides, inst, learnStatus);
+        let target = status;
+        if (status === current) {
+            if (inst.is_auto) return;   // an auto instrument always has a status
+            target = null;              // toggle a manual instrument off (untrack)
+        }
+        const shouldStore = target !== null && !(inst.is_auto && target === learnStatus);
+        const prev = data.overrides;
+        const updated = Object.assign({}, data.overrides);
+        if (shouldStore) { updated[inst.instrument] = target; } else { delete updated[inst.instrument]; }
+        setInstrumentOverrides(currentTuneData, currentConfig, updated);
+        refreshStatusSection();  // roll-up may change too
+        submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: target })
+            .catch(function () {
+                setInstrumentOverrides(currentTuneData, currentConfig, prev);
+                refreshStatusSection();
+            });
+    }
+
     /**
      * Build tunebook status section
      */
@@ -729,21 +870,10 @@ ${abcBody}`;
             `;
         }
 
-        // On list - color by status
-        const statusClass = `tunebook-status-${learnStatus.replace(/ /g, '-')}`;
-
-        const opt = (val, label) =>
-            `<button type="button" class="tunebook-status-opt${learnStatus === val ? ' active' : ''}" data-status="${val}" onclick="TuneDetailModal.setTunebookStatus('${val}')">${label}</button>`;
-        return `
-            <div class="tunebook-status-section ${statusClass}">
-                <span class="tunebook-status-label">This tune is on your list as</span>
-                <div class="tunebook-status-seg" role="group" aria-label="Learn status">
-                    ${opt('want to learn', 'Want To Learn')}
-                    ${opt('learning', 'Learning')}
-                    ${opt('learned', 'Learned')}
-                </div>
-            </div>
-        `;
+        // Single control: the box is tinted by the roll-up status; the active toggle in each
+        // row also carries its own status color. Expand triangle reveals per-instrument rows.
+        const rollup = rollupStatus(tuneData, config);
+        return `<div class="tunebook-status-section tunebook-status-${rollup.replace(/ /g, '-')}">${statusSectionInner(tuneData, config)}</div>`;
     }
 
     /**
@@ -1962,25 +2092,30 @@ ${abcBody}`;
         // (queues when offline, syncs on reconnect). Then refresh the status color +
         // heard-count section IN PLACE (no full re-render, so unsaved Configure edits
         // aren't clobbered). Works across my_tunes / session / session_instance contexts.
-        if (newStatus === originalValues.learn_status) return;
-        const tuneId = currentTuneData.tune_id;
+        const tuneId = currentTuneData && currentTuneData.tune_id;
         if (!tuneId) return;
 
-        const seg = document.querySelector('.tunebook-status-seg');
-        const prev = originalValues.learn_status;
+        // Setting the tune's overall status realigns the AUTO instruments to it (they
+        // follow learn_status), i.e. clears their per-instrument overrides. Manual
+        // instruments are curated and left alone.
+        const data = getInstrumentData(currentTuneData, currentConfig);
+        const autoOverridden = (data.instruments || []).filter(function (i) {
+            return i.is_auto && Object.prototype.hasOwnProperty.call(data.overrides, i.instrument);
+        });
+        if (newStatus === originalValues.learn_status && autoOverridden.length === 0) return; // nothing to do
 
-        // Optimistically reflect the new status (highlight the chosen option + recolor).
-        const applyUi = (status) => {
-            const section = document.querySelector('.tunebook-status-section');
-            if (section) {
-                section.className = 'tunebook-status-section tunebook-status-' + status.replace(/ /g, '-');
-                section.querySelectorAll('.tunebook-status-opt').forEach((b) => {
-                    b.classList.toggle('active', b.dataset.status === status);
-                });
-            }
+        const prevStatus = originalValues.learn_status;
+        const prevOverrides = Object.assign({}, data.overrides);
+        const nextOverrides = Object.assign({}, data.overrides);
+        autoOverridden.forEach(function (i) { delete nextOverrides[i.instrument]; });
+
+        const applyUi = (status, overrides) => {
             originalValues.learn_status = status;
             currentTuneData.learn_status = status;
             if (currentTuneData.person_tune_status) currentTuneData.person_tune_status.learn_status = status;
+            setInstrumentOverrides(currentTuneData, currentConfig, overrides);
+            refreshStatusSection();
+            const section = document.querySelector('.tunebook-status-section');
             const heardHtml = buildHeardCountSection(currentTuneData, currentConfig);
             const existingHeard = document.querySelector('.heard-count-section');
             if (existingHeard) {
@@ -1991,12 +2126,20 @@ ${abcBody}`;
             }
             onFieldChange();
         };
+        const setSaving = (on) => {
+            const s = document.querySelector('.tsc-main-block .tunebook-status-seg');
+            if (s) s.classList.toggle('saving', on);
+        };
 
-        applyUi(newStatus);
-        if (seg) seg.classList.add('saving');
-        submitMyTunesOp({ type: 'set_status', tune_id: tuneId, learn_status: newStatus })
-            .then(() => { if (seg) seg.classList.remove('saving'); }) // success OR queued offline
-            .catch(() => { if (seg) seg.classList.remove('saving'); applyUi(prev); }); // server rejected -> revert
+        applyUi(newStatus, nextOverrides);
+        setSaving(true);
+        const ops = [submitMyTunesOp({ type: 'set_status', tune_id: tuneId, learn_status: newStatus })];
+        autoOverridden.forEach(function (i) {
+            ops.push(submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: i.instrument, status: null }));
+        });
+        Promise.all(ops)
+            .then(() => setSaving(false)) // success OR queued offline
+            .catch(() => { setSaving(false); applyUi(prevStatus, prevOverrides); }); // revert
     }
 
     /**
@@ -2392,6 +2535,8 @@ ${abcBody}`;
         decrementHeardCount: decrementHeardCount,
         addToTunebook: addToTunebook,
         setTunebookStatus: setTunebookStatus,
+        setInstrumentStatus: setInstrumentStatus,
+        toggleStatusExpand: toggleStatusExpand,
         removeFromMyTunes: removeFromMyTunes,
         removeFromSession: removeFromSession,
         refreshTunebookCount: refreshTunebookCount,

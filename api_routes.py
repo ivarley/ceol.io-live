@@ -27,6 +27,26 @@ from fractional_indexing import generate_append_position, generate_position_betw
 from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
+def _person_instrument_status(cur, person_id, tune_id):
+    """Per-instrument data for the shared tune-detail modal's instrument panel.
+
+    Returns (instruments, overrides): instruments is [{'instrument','is_auto'}] and
+    overrides is {instrument: status} (sparse). The client resolves the rest (auto
+    instruments follow learn_status, manual-with-no-row is untracked).
+    """
+    cur.execute(
+        "SELECT instrument, is_auto FROM person_instrument WHERE person_id = %s ORDER BY instrument",
+        (person_id,),
+    )
+    instruments = [{"instrument": r[0], "is_auto": r[1]} for r in cur.fetchall()]
+    cur.execute(
+        "SELECT instrument, status FROM person_tune_instrument WHERE person_id = %s AND tune_id = %s",
+        (person_id, tune_id),
+    )
+    overrides = {r[0]: r[1] for r in cur.fetchall()}
+    return instruments, overrides
+
+
 def api_login_required(f):
     """
     Decorator for API endpoints that require authentication.
@@ -99,7 +119,11 @@ def get_tune_detail_global(tune_id):
                 person_tune_status = {
                     "on_list": bool(tr), "person_tune_id": tr[0] if tr else None,
                     "learn_status": tr[1] if tr else None, "heard_count": tr[2] if tr else None,
+                    "instruments": [], "instrument_status": {},
                 }
+                if tr:
+                    (person_tune_status["instruments"],
+                     person_tune_status["instrument_status"]) = _person_instrument_status(cur, pr[0], tune_id)
 
         cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
         global_play_count = cur.fetchone()[0]
@@ -1429,18 +1453,23 @@ def get_session_tune_detail(session_path, tune_id):
                 )
                 tune_row = cur.fetchone()
                 if tune_row:
+                    instruments, overrides = _person_instrument_status(cur, person_id, tune_id)
                     person_tune_status = {
                         "on_list": True,
                         "person_tune_id": tune_row[0],
                         "learn_status": tune_row[1],
-                        "heard_count": tune_row[2]
+                        "heard_count": tune_row[2],
+                        "instruments": instruments,
+                        "instrument_status": overrides
                     }
                 else:
                     person_tune_status = {
                         "on_list": False,
                         "person_tune_id": None,
                         "learn_status": None,
-                        "heard_count": None
+                        "heard_count": None,
+                        "instruments": [],
+                        "instrument_status": {}
                     }
             cur.close()
 
@@ -10634,18 +10663,23 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                 )
                 tune_row = cur.fetchone()
                 if tune_row:
+                    instruments, overrides = _person_instrument_status(cur, person_id, tune_id)
                     person_tune_status = {
                         "on_list": True,
                         "person_tune_id": tune_row[0],
                         "learn_status": tune_row[1],
-                        "heard_count": tune_row[2]
+                        "heard_count": tune_row[2],
+                        "instruments": instruments,
+                        "instrument_status": overrides
                     }
                 else:
                     person_tune_status = {
                         "on_list": False,
                         "person_tune_id": None,
                         "learn_status": None,
-                        "heard_count": None
+                        "heard_count": None,
+                        "instruments": [],
+                        "instrument_status": {}
                     }
 
         # Get global play count (all sessions)

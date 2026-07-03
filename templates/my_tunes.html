@@ -15,6 +15,16 @@
     .highlight-tune {
         animation: highlight-fade 3s ease-out;
     }
+
+    /* Auto/manual toggles for the instruments settings in the filter panel. */
+    .inst-auto-toggle {
+        font: inherit; font-size: 11px; font-weight: 600; padding: 2px 10px;
+        border-radius: 999px; cursor: pointer;
+        border: 1px solid var(--border, #ccc); background: transparent; color: var(--text-muted, #888);
+    }
+    .inst-auto-toggle.is-auto {
+        border-color: var(--primary, #007bff); background: var(--primary, #007bff); color: #fff;
+    }
 </style>
 {% endblock %}
 
@@ -80,6 +90,15 @@
                         <button class="filter-status-btn" data-status="want to learn" onclick="setStatusFilter('want to learn')">Want To Learn</button>
                     </div>
                 </div>
+                <div class="filter-panel-row" id="instrument-filter-row" style="display: none;">
+                    <div class="inst-select" id="instrument-filter">
+                        <button type="button" class="inst-select-trigger" onclick="toggleInstrumentDropdown(event)">
+                            <span id="instrument-filter-label">All instruments</span>
+                            <span class="inst-select-caret">▾</span>
+                        </button>
+                        <div class="inst-select-menu" id="instrument-filter-menu"></div>
+                    </div>
+                </div>
                 <div class="filter-panel-row">
                     <div class="filter-button-group">
                         <button class="filter-sort-btn active" data-sort="alpha" onclick="setSortMode('alpha')">a-z</button>
@@ -89,6 +108,16 @@
                     <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
                         <span id="sort-direction-icon">↑</span>
                     </button>
+                </div>
+                <div class="filter-panel-row" id="instrument-settings-row" style="display: none;">
+                    <div style="width:100%;">
+                        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Your instruments</div>
+                        <div style="font-size:11px;color:var(--text-muted,#888);margin-bottom:8px;">
+                            Auto instruments follow a tune's main status. Manual instruments are a
+                            curated list you set per tune.
+                        </div>
+                        <div id="instrument-settings-list"></div>
+                    </div>
                 </div>
                 <div class="filter-panel-actions">
                     <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
@@ -284,11 +313,73 @@ function onSettingIdInput() {
 
 let allTunes = [];
 let filteredTunes = [];
+// The person's instruments + auto/manual flags (from /api/my-tunes). Used with each
+// tune's sparse `instrument_status` overrides to resolve per-instrument status.
+let myInstruments = [];
 let currentFilters = {
     search: '',
     type: '',
-    status: ''
+    status: '',
+    instrument: ''   // when set, status/list filter by this instrument's resolved status
 };
+
+// Resolve a tune's status on one instrument (by name): an explicit override wins; else an
+// auto instrument follows learn_status, and a manual instrument is untracked (null).
+function resolveTuneInstrumentStatus(tune, instrumentName) {
+    const inst = myInstruments.find(i => i.instrument.toLowerCase() === instrumentName.toLowerCase());
+    if (!inst) return null;
+    const overrides = tune.instrument_status || {};
+    if (Object.prototype.hasOwnProperty.call(overrides, inst.instrument)) return overrides[inst.instrument];
+    return inst.is_auto ? tune.learn_status : null;
+}
+
+function setInstrumentFilter(name) {
+    currentFilters.instrument = name;
+    applyFilters();
+}
+
+// Render the instrument filter as a custom dropdown (a styled trigger + a CSS-controlled
+// popup — the native <select> popup can't be themed and doesn't scale to many instruments).
+// Only shown when you play 2+ instruments.
+function renderInstrumentFilter() {
+    const row = document.getElementById('instrument-filter-row');
+    const menu = document.getElementById('instrument-filter-menu');
+    const label = document.getElementById('instrument-filter-label');
+    if (!row || !menu || !label) return;
+    if (!myInstruments || myInstruments.length < 2) { row.style.display = 'none'; return; }
+    row.style.display = 'block';
+    const opts = [{ value: '', label: 'All instruments' }].concat(
+        myInstruments.map(i => ({ value: i.instrument, label: i.instrument }))
+    );
+    const current = currentFilters.instrument;
+    const selected = opts.find(o => o.value === current) || opts[0];
+    label.textContent = selected.label;
+    menu.innerHTML = opts.map(o => {
+        const active = o.value === current ? ' active' : '';
+        return `<button type="button" class="inst-select-option${active}" data-instrument="${o.value}"
+            onclick="selectInstrument(this.dataset.instrument)">${o.label}</button>`;
+    }).join('');
+}
+
+function toggleInstrumentDropdown(event) {
+    if (event) event.stopPropagation();
+    const wrap = document.getElementById('instrument-filter');
+    if (wrap) wrap.classList.toggle('open');
+}
+
+function selectInstrument(value) {
+    const wrap = document.getElementById('instrument-filter');
+    if (wrap) wrap.classList.remove('open');
+    setInstrumentFilter(value);
+}
+
+// Close the instrument dropdown when clicking outside it.
+document.addEventListener('click', function (e) {
+    const wrap = document.getElementById('instrument-filter');
+    if (wrap && wrap.classList.contains('open') && !wrap.contains(e.target)) {
+        wrap.classList.remove('open');
+    }
+});
 let modalShowTime = 0;
 let modalFetchController = null; // AbortController for modal fetch requests
 let isLoadingFullTunes = false; // Track if full tune list is still loading
@@ -405,6 +496,11 @@ function overlayPendingOps(serverTunes) {
                     t.heard_count = op.heard_count; t.pending_sync = true;
                 } else if (op.type === 'set_notes' && t) {
                     t.notes = op.notes; t.pending_sync = true;
+                } else if (op.type === 'set_instrument_status' && t) {
+                    var over = Object.assign({}, t.instrument_status || {});
+                    if (op.status === null || op.status === undefined) { delete over[op.instrument]; }
+                    else { over[op.instrument] = op.status; }
+                    t.instrument_status = over; t.pending_sync = true;
                 }
             });
             return out.filter(function (t) { return !t._removed; });
@@ -915,6 +1011,11 @@ function loadFiltersFromURL() {
         });
     }
 
+    if (params.has('instrument')) {
+        currentFilters.instrument = params.get('instrument');
+        // The dropdown is populated once instruments load (renderInstrumentFilter).
+    }
+
     if (params.has('sortType')) {
         currentSortType = params.get('sortType');
     }
@@ -947,6 +1048,7 @@ function updateURL() {
     if (currentFilters.search) params.set('search', currentFilters.search);
     if (currentFilters.type) params.set('type', currentFilters.type);
     if (currentFilters.status) params.set('status', currentFilters.status);
+    if (currentFilters.instrument) params.set('instrument', currentFilters.instrument);
 
     // Add sort params if not default (alpha-asc)
     if (currentSortType !== 'alpha' || currentSortDirection !== 'asc') {
@@ -996,6 +1098,7 @@ function loadTunes() {
             // This prevents the 20-tune response from overwriting the 2000-tune response
             if (!fullTunesLoaded) {
                 const serverTunes = data.tunes || [];
+                if (data.instruments) myInstruments = data.instruments;
                 overlayPendingOps(serverTunes).then(function (merged) {
                     if (fullTunesLoaded) return; // the 2000 fetch already won
                     allTunes = merged;
@@ -1034,6 +1137,7 @@ function loadTunes() {
         })
         .then(data => {
             // Replace with full tune list - this should always take precedence
+            if (data.instruments) myInstruments = data.instruments;
             overlayPendingOps(data.tunes || []).then(function (merged) {
                 allTunes = merged;
                 fullTunesLoaded = true;
@@ -1121,8 +1225,13 @@ function applyFilters() {
             return false;
         }
 
-        // Status filter
-        if (currentFilters.status && tune.learn_status !== currentFilters.status) {
+        // Status filter — when an instrument is selected, filter by that instrument's
+        // resolved status (and drop tunes not tracked on it); otherwise by learn_status.
+        if (currentFilters.instrument) {
+            const instStatus = resolveTuneInstrumentStatus(tune, currentFilters.instrument);
+            if (instStatus === null) return false; // not on this instrument
+            if (currentFilters.status && instStatus !== currentFilters.status) return false;
+        } else if (currentFilters.status && tune.learn_status !== currentFilters.status) {
             return false;
         }
 
@@ -1137,7 +1246,7 @@ function applyFilters() {
 
     // Show/hide "Clear Filters" button based on active filters
     const clearFiltersBtn = document.getElementById('clear-filters-btn');
-    const hasActiveFilters = currentFilters.type || currentFilters.status;
+    const hasActiveFilters = currentFilters.type || currentFilters.status || currentFilters.instrument;
     if (clearFiltersBtn) {
         clearFiltersBtn.style.display = hasActiveFilters ? 'block' : 'none';
     }
@@ -1160,6 +1269,8 @@ function applyFilters() {
 
     updateURL();
     renderTunes();
+    renderInstrumentSettings();
+    renderInstrumentFilter();
 }
 
 function renderTunes() {
@@ -1226,7 +1337,7 @@ function renderTunes() {
             }
 
             // Check if any filters are active (excluding search for button logic)
-            const hasActiveFilters = currentFilters.type || currentFilters.status;
+            const hasActiveFilters = currentFilters.type || currentFilters.status || currentFilters.instrument;
             const actionDiv = document.getElementById('no-results-action');
 
             if (hasActiveFilters) {
@@ -1488,6 +1599,45 @@ function cyclePersonTuneStatus(tuneId, current, event) {
         });
 }
 
+// --- Per-instrument status (expand panel on each card) -----------------------------
+// Only shown when you play 2+ instruments; single-instrument users see today's card.
+
+// Renders the auto/manual toggles in the filter panel (only when you play 2+ instruments).
+function renderInstrumentSettings() {
+    var row = document.getElementById('instrument-settings-row');
+    var list = document.getElementById('instrument-settings-list');
+    if (!row || !list) return;
+    if (!myInstruments || myInstruments.length < 2) { row.style.display = 'none'; return; }
+    row.style.display = 'block';
+    list.innerHTML = myInstruments.map(function (inst, i) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;">'
+            + '<span style="font-size:13px;">' + inst.instrument + '</span>'
+            + '<button class="inst-auto-toggle' + (inst.is_auto ? ' is-auto' : '') + '"'
+            + ' onclick="toggleInstrumentAuto(' + i + ')">' + (inst.is_auto ? 'Auto' : 'Manual') + '</button>'
+            + '</div>';
+    }).join('');
+}
+
+// Toggle an instrument between auto (follows learn_status) and manual (curated). Changing
+// this re-resolves every tune's per-instrument status, so re-render the cards.
+function toggleInstrumentAuto(index) {
+    var inst = myInstruments[index];
+    if (!inst) return;
+    var newVal = !inst.is_auto;
+    inst.is_auto = newVal; // optimistic
+    renderInstrumentSettings();
+    applyFilters();
+    fetch('/api/my-tunes/instrument-auto', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instrument: inst.instrument, is_auto: newVal }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (!d.success) throw new Error(d.error || 'failed'); })
+        .catch(function (err) {
+            console.error('Error toggling instrument auto:', err);
+            inst.is_auto = !newVal; // revert
+            renderInstrumentSettings(); applyFilters();
+            if (typeof showMessage === 'function') showMessage('Could not change instrument setting.', 'error');
+        });
+}
+
 function createTuneCard(tune) {
     const statusClass = `status-${tune.learn_status.replace(/ /g, '-')}`;
     const heardCountHTML = tune.learn_status === 'want to learn' && tune.heard_count > 0
@@ -1589,7 +1739,8 @@ function clearFilters() {
     currentFilters = {
         search: currentSearch,  // Keep the search
         type: '',
-        status: ''
+        status: '',
+        instrument: ''
     };
 
     // Reset secondary sort
@@ -1599,6 +1750,7 @@ function clearFilters() {
     // Don't clear the search input - keep it as is
     // Reset type filter
     document.getElementById('type-filter').value = '';
+    // (the instrument filter is a button group; renderInstrumentFilter re-renders it)
 
     // Reset status buttons to "All"
     document.querySelectorAll('.filter-status-btn').forEach(btn => {
