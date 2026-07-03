@@ -8297,20 +8297,39 @@ def get_person_instruments(person_id):
             conn.close()
             return jsonify({"success": False, "message": "Insufficient permissions to view this person's instruments"}), 403
         
-        # Get person's instruments (+ auto/manual flag)
+        # Get person's instruments (+ auto/manual flag + how much per-tune data would
+        # be lost by removing each one). A removal loses data when it has override rows
+        # that re-adding the instrument on Auto would NOT reproduce:
+        #   - manual instrument: every override (its curated list) is lost;
+        #   - auto instrument: any override whose status differs from the tune's
+        #     learn_status (an auto instrument with no override just follows learn_status).
         cur.execute(
             """
-            SELECT instrument, is_auto
-            FROM person_instrument
-            WHERE person_id = %s
-            ORDER BY instrument
+            SELECT pi.instrument, pi.is_auto,
+                   COUNT(*) FILTER (
+                       WHERE pti.tune_id IS NOT NULL
+                         AND (NOT pi.is_auto OR pti.status <> pt.learn_status)
+                   ) AS removal_loss_count
+            FROM person_instrument pi
+            LEFT JOIN person_tune_instrument pti
+                   ON pti.person_id = pi.person_id
+                  AND pti.instrument = pi.instrument
+            LEFT JOIN person_tune pt
+                   ON pt.person_id = pti.person_id
+                  AND pt.tune_id = pti.tune_id
+            WHERE pi.person_id = %s
+            GROUP BY pi.instrument, pi.is_auto
+            ORDER BY pi.instrument
             """,
             (person_id,)
         )
 
         instrument_results = cur.fetchall()
         instruments = [row[0] for row in instrument_results]           # names (back-compat)
-        instruments_detail = [{"instrument": row[0], "is_auto": row[1]} for row in instrument_results]
+        instruments_detail = [
+            {"instrument": row[0], "is_auto": row[1], "removal_loss_count": row[2]}
+            for row in instrument_results
+        ]
 
         cur.close()
         conn.close()
@@ -8422,6 +8441,26 @@ def update_person_instruments(person_id):
 
                 cur.execute(
                     "DELETE FROM person_instrument WHERE person_id = %s AND instrument = %s",
+                    (person_id, instrument)
+                )
+
+                # Removing an instrument also drops its per-tune override rows (nothing
+                # else references them once the instrument is gone). Log each to history
+                # before deleting so the removal is auditable and reversible.
+                cur.execute(
+                    "SELECT tune_id FROM person_tune_instrument WHERE person_id = %s AND instrument = %s",
+                    (person_id, instrument)
+                )
+                for (override_tune_id,) in cur.fetchall():
+                    save_to_history(
+                        cur,
+                        'person_tune_instrument',
+                        'DELETE',
+                        (person_id, override_tune_id, instrument),
+                        user_id=current_user_id
+                    )
+                cur.execute(
+                    "DELETE FROM person_tune_instrument WHERE person_id = %s AND instrument = %s",
                     (person_id, instrument)
                 )
 

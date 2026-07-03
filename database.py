@@ -417,6 +417,21 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             (operation, user_id, person_id, instrument),
         )
         
+    elif table_name == "person_tune_instrument":
+        # For person_tune_instrument, record_id is a tuple (person_id, tune_id, instrument)
+        person_id, tune_id, instrument = record_id
+        cur.execute(
+            """
+            INSERT INTO person_tune_instrument_history
+            (person_id, tune_id, instrument, operation, changed_by_user_id, changed_at, status,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT person_id, tune_id, instrument, %s, %s, (NOW() AT TIME ZONE 'UTC'), status,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            FROM person_tune_instrument WHERE person_id = %s AND tune_id = %s AND instrument = %s
+        """,
+            (operation, user_id, person_id, tune_id, instrument),
+        )
+
     elif table_name == "session_instance_person":
         # For session_instance_person, record_id should be a tuple (session_instance_id, person_id)
         session_instance_id, person_id = record_id

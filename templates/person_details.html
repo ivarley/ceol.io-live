@@ -526,6 +526,11 @@
     .pd-modal-body .form-check + .form-check { margin-top: 10px; }
     .pd-modal-footer { padding: 12px 16px; border-top: 1px solid var(--border-color, #333); }
     .pd-modal-remove { color: #dc3545; cursor: pointer; font-weight: 600; }
+    .pd-modal-footer.confirm { display: flex; gap: 8px; justify-content: flex-end; }
+    .pd-modal-warn { color: var(--text-color, #eee); line-height: 1.4; }
+    .pd-modal-warn strong { color: #dc3545; }
+    .pd-btn { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; border: 1px solid var(--border-color, #555); background: transparent; color: inherit; }
+    .pd-btn-danger { background: #dc3545; border-color: #dc3545; color: #fff; }
 </style>
 
 <div id="instrument-config-modal" class="pd-modal-overlay" style="display:none;" onclick="if(event.target===this)closeInstrumentConfig()">
@@ -546,6 +551,22 @@
         </div>
         <div class="pd-modal-footer">
             <a class="pd-modal-remove" onclick="removeInstrumentFromProfile()">Remove from profile</a>
+        </div>
+    </div>
+</div>
+
+<div id="instrument-remove-confirm-modal" class="pd-modal-overlay" style="display:none;" onclick="if(event.target===this)cancelRemoveInstrument()">
+    <div class="pd-modal">
+        <div class="pd-modal-header">
+            <span>Remove instrument?</span>
+            <button type="button" class="pd-modal-close" onclick="cancelRemoveInstrument()">&times;</button>
+        </div>
+        <div class="pd-modal-body">
+            <p id="instrument-remove-warn" class="pd-modal-warn"></p>
+        </div>
+        <div class="pd-modal-footer confirm">
+            <button type="button" class="pd-btn" onclick="cancelRemoveInstrument()">Cancel</button>
+            <button type="button" class="pd-btn pd-btn-danger" onclick="confirmRemoveInstrument()">Remove anyway</button>
         </div>
     </div>
 </div>
@@ -832,14 +853,43 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/api/person/${personId}/instrument-auto`, {
             method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instrument: configInstrument, is_auto: isAuto })
-        }).then(r => r.json()).then(d => { if (!d.success) loadProfileInstruments(); });
+            // Reload either way: on failure to revert, on success to refresh each
+            // instrument's removal_loss_count (auto vs manual changes what a removal loses).
+        }).then(r => r.json()).then(() => loadProfileInstruments());
     }
+    let pendingRemoveInstrument = null;  // instrument awaiting the data-loss confirmation
     function removeInstrumentFromProfile() {
         if (!configInstrument) return;
-        profileInstruments = profileInstruments.filter(i => i.instrument !== configInstrument);
-        renderInstrumentRows();
+        const inst = profileInstruments.find(i => i.instrument === configInstrument);
+        const loss = inst ? (inst.removal_loss_count || 0) : 0;
+        if (loss > 0) {
+            // Removing this instrument would delete per-tune status that re-adding it on
+            // Auto wouldn't bring back — warn before losing it.
+            pendingRemoveInstrument = configInstrument;
+            const n = loss === 1 ? '1 tune' : loss + ' tunes';
+            document.getElementById('instrument-remove-warn').innerHTML =
+                'Removing <strong>' + configInstrument + '</strong> will delete its saved status for '
+                + n + ' that you\'ve customized away from your other instruments. '
+                + 'Re-adding it later starts fresh on Auto. This can\'t be undone.';
+            closeInstrumentConfig();
+            document.getElementById('instrument-remove-confirm-modal').style.display = 'flex';
+            return;
+        }
+        doRemoveInstrument(configInstrument);
         closeInstrumentConfig();
+    }
+    function doRemoveInstrument(name) {
+        profileInstruments = profileInstruments.filter(i => i.instrument !== name);
+        renderInstrumentRows();
         saveInstrumentList().then(loadProfileInstruments);
+    }
+    function confirmRemoveInstrument() {
+        if (pendingRemoveInstrument) doRemoveInstrument(pendingRemoveInstrument);
+        cancelRemoveInstrument();
+    }
+    function cancelRemoveInstrument() {
+        pendingRemoveInstrument = null;
+        document.getElementById('instrument-remove-confirm-modal').style.display = 'none';
     }
 
     // These are referenced from inline onclick/onchange (rows + config modal), which resolve
@@ -850,6 +900,8 @@ document.addEventListener('DOMContentLoaded', function() {
     window.closeInstrumentConfig = closeInstrumentConfig;
     window.setInstrumentAutoFromModal = setInstrumentAutoFromModal;
     window.removeInstrumentFromProfile = removeInstrumentFromProfile;
+    window.confirmRemoveInstrument = confirmRemoveInstrument;
+    window.cancelRemoveInstrument = cancelRemoveInstrument;
 
     // Wire the type-ahead input once the DOM is ready.
     (function () {

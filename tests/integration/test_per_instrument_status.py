@@ -152,6 +152,62 @@ class TestPerInstrumentStatus:
             data = json.loads(client.get(f"/api/person/{self.PERSON_ID}/instruments").data)
         assert {i["instrument"]: i["is_auto"] for i in data["instruments"]}["Concertina"] is False
 
+    def test_removal_loss_count_reported_per_instrument(self, client, authenticated_user, db_conn, db_cursor):
+        """GET /api/person/<id>/instruments reports removal_loss_count: the number of
+        per-tune overrides a removal would lose (and re-adding on Auto wouldn't restore).
+        learn_status is 'learned'. Fiddle (auto) override 'learning' differs -> counts.
+        Concertina (manual) override 'learning' -> its curated list counts. Banjo (auto,
+        no override) -> 0."""
+        tune_id, _ = self._setup(db_cursor, db_conn,
+                                 [("Fiddle", True), ("Concertina", False), ("Banjo", True)])
+        with authenticated_user:
+            self._op(client, {"type": "set_instrument_status", "tune_id": tune_id,
+                              "instrument": "Fiddle", "status": "learning"})
+            self._op(client, {"type": "set_instrument_status", "tune_id": tune_id,
+                              "instrument": "Concertina", "status": "learning"})
+            data = json.loads(client.get(f"/api/person/{self.PERSON_ID}/instruments").data)
+        loss = {i["instrument"]: i["removal_loss_count"] for i in data["instruments"]}
+        assert loss == {"Fiddle": 1, "Concertina": 1, "Banjo": 0}
+
+    def test_auto_override_equal_to_learn_status_not_counted(self, client, authenticated_user, db_conn, db_cursor):
+        """An auto instrument whose stored override happens to equal the tune's current
+        learn_status loses nothing on removal (re-adding on Auto reproduces it) -> 0.
+        (Such a row can linger when learn_status changed after the override was written.)"""
+        tune_id, _ = self._setup(db_cursor, db_conn, [("Fiddle", True)])
+        # Write an override row equal to learn_status ('learned') directly, bypassing snap-back.
+        db_cursor.execute("""
+            INSERT INTO person_tune_instrument (person_id, tune_id, instrument, status)
+            VALUES (%s, %s, 'Fiddle', 'learned')
+        """, (self.PERSON_ID, tune_id))
+        db_conn.commit()
+        with authenticated_user:
+            data = json.loads(client.get(f"/api/person/{self.PERSON_ID}/instruments").data)
+        loss = {i["instrument"]: i["removal_loss_count"] for i in data["instruments"]}
+        assert loss["Fiddle"] == 0
+
+    def test_removing_instrument_deletes_its_overrides(self, client, authenticated_user, db_conn, db_cursor):
+        """Removing an instrument via PUT /instruments drops its per-tune override rows
+        (otherwise they'd orphan and silently resurface if the instrument were re-added)."""
+        tune_id, _ = self._setup(db_cursor, db_conn, [("Fiddle", True), ("Concertina", False)])
+        with authenticated_user:
+            self._op(client, {"type": "set_instrument_status", "tune_id": tune_id,
+                              "instrument": "Concertina", "status": "learning"})
+            # Remove Concertina by PUTting the list without it.
+            r = client.put(f"/api/person/{self.PERSON_ID}/instruments",
+                           data=json.dumps({"instruments": ["Fiddle"]}),
+                           content_type="application/json")
+            assert r.status_code == 200
+        db_cursor.execute("""SELECT COUNT(*) FROM person_tune_instrument
+                             WHERE person_id=%s AND instrument='Concertina'""", (self.PERSON_ID,))
+        assert db_cursor.fetchone()[0] == 0
+        # And the removal was recorded in history (scoped to this tune; the history
+        # table accumulates across tests).
+        db_cursor.execute("""SELECT COUNT(*) FROM person_tune_instrument_history
+                             WHERE person_id=%s AND tune_id=%s AND instrument='Concertina'
+                               AND operation='DELETE'""",
+                          (self.PERSON_ID, tune_id))
+        assert db_cursor.fetchone()[0] == 1
+
     def test_learned_date_cleared_on_leaving_learned(self, client, authenticated_user, db_conn, db_cursor):
         """Regression: the person_tune trigger must clear learned_date when a tune leaves
         'learned'. The old trigger guarded with `OLD IS NOT NULL` (composite-null semantics),

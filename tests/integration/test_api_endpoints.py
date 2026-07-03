@@ -1155,7 +1155,7 @@ class TestAdminAPI:
         )
         
         saved_instruments = [row[0] for row in db_cursor.fetchall()]
-        expected_instruments = ["fiddle", "kazoo", "spoons", "washboard"]  # Sorted
+        expected_instruments = ["Fiddle", "kazoo", "spoons", "washboard"]  # Sorted; "fiddle" canonicalizes to "Fiddle", custom stay verbatim
         assert saved_instruments == expected_instruments
 
     def test_update_person_instruments_with_custom(
@@ -1207,7 +1207,7 @@ class TestAdminAPI:
         )
         
         saved_instruments = [row[0] for row in db_cursor.fetchall()]
-        expected_instruments = ["djembe", "fiddle", "harmonica", "spoons"]  # Sorted
+        expected_instruments = ["djembe", "Fiddle", "harmonica", "spoons"]  # Sorted; "fiddle" canonicalizes to "Fiddle"
         assert saved_instruments == expected_instruments
 
     def test_delete_session_player_with_orphan_cleanup(
