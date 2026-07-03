@@ -74,53 +74,69 @@ Integration with third-party services.
 
 ### Purpose
 
-- Transactional email delivery
-- Password resets
-- Account email verification
-- System notifications
+- Transactional email delivery: password resets, email verification, magic
+  login links
+- App update emails (spec 027): admin-composed Markdown newsletters to
+  opted-in users
 
 ### Configuration
 
-**Environment Variable**: `SENDGRID_API_KEY`
+**Environment Variables**:
+- `SENDGRID_API_KEY` - API key (required; sends fail gracefully without it)
+- `MAIL_DEFAULT_SENDER` - transactional from-address, default `noreply@ceol.io`
+- `MAIL_UPDATES_SENDER` - update-email from-address, default `ceol@ceol.io`
+  (verified sender in SendGrid)
+- `MAIL_UNSUBSCRIBE` - mailto used in the default `List-Unsubscribe` header,
+  default `unsubscribe@ceol.io`
 
-**Default Sender**: `ceol@ceol.io`
-
-**Library**: `sendgrid` Python package
+**Library**: `sendgrid` Python package (plus `markdown` for update-email bodies)
 
 ### Integration
 
 **File**: `email_utils.py`
 
 **Functions**:
-- `send_reset_email(user_email, reset_token)` - Password reset
-- `send_verification_email(user_email, verification_token)` - Account verification
+- `send_email_via_sendgrid(to_email, subject, body_text, body_html=None, from_email=None, unsubscribe_url=None)` -
+  core sender. `from_email` overrides the default sender per message;
+  `unsubscribe_url` replaces the mailto `List-Unsubscribe` header with a
+  one-click URL (RFC 8058, `List-Unsubscribe-Post: List-Unsubscribe=One-Click`).
+- `send_password_reset_email(user, token)` - password reset (1h expiry)
+- `send_verification_email(user, token)` - account verification (24h expiry)
+- `send_login_link_email(user, token)` - magic link login (15m expiry)
+- `send_update_email(user_id, to_email, subject, body_markdown)` - one app
+  update email: HTML part is rendered Markdown, plain-text part is the raw
+  Markdown, footer carries a personalized unsubscribe link. Sent individually
+  per recipient (never BCC) from `MAIL_UPDATES_SENDER`.
+- `generate_unsubscribe_token(user_id)` / `verify_unsubscribe_token(token)` -
+  stateless signed unsubscribe tokens (`itsdangerous.URLSafeSerializer`, salt
+  `email-unsub`, never expire; the token only grants flag-off).
 
-### Email Templates
+### Update Email Flow (spec 027)
 
-**Password Reset**:
-```
-Subject: Password Reset Request - ceol.io
-Body: Custom HTML template with reset link
-Link: https://ceol.io/auth/reset_password?token=<token>
-```
-
-**Verification**:
-```
-Subject: Verify Your Email - ceol.io
-Body: Custom HTML with verification link
-Link: https://ceol.io/auth/verify_email?token=<token>
-```
+1. Users are subscribed by default (`user_account.receive_update_emails`,
+   default TRUE) and can opt out on `/me` or via any email's unsubscribe link.
+2. Admin composes subject + Markdown at `/admin/email-updates`; "Send test to
+   me" (`POST /api/admin/email-updates/test`) emails only the admin and records
+   nothing.
+3. `POST /api/admin/email-updates/send` loops opted-in active users
+   synchronously, recording an `email_message` row plus one
+   `email_message_recipient` row per user ('sent'/'failed'); one failure never
+   aborts the rest.
+4. Every update email's unsubscribe link (`/unsubscribe/<token>`, no login)
+   flips the flag off; GET shows a confirmation page, POST is the RFC 8058
+   one-click target.
 
 ### Error Handling
 
 - Failed sends: Log error, show user generic message
-- No retry logic (user can request new email)
+- No retry logic (transactional: user can request a new email; updates: the
+  per-recipient 'failed' row records who was missed)
 - Invalid API key: Fails gracefully, logs error
 
 ### Testing
 
-**Unit Tests**: Mock SendGrid client
-**Manual**: Use test mode in development (env var)
+**Unit Tests**: Mock SendGrid client (`tests/unit/test_email_utils.py`);
+update-email flow covered in `tests/integration/test_update_emails.py`
 
 ## Related Specs
 

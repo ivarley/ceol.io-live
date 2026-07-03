@@ -253,6 +253,11 @@
 
                                                 <dt class="col-sm-4">Timezone:</dt>
                                                 <dd class="col-sm-8">{{ user.timezone_display or 'UTC' }}</dd>
+
+                                                <dt class="col-sm-4">Update Emails:</dt>
+                                                <dd class="col-sm-8">
+                                                    {% if user.receive_update_emails %}<span class="text-success">✓ Subscribed</span>{% else %}<span class="text-muted">Not subscribed</span>{% endif %}
+                                                </dd>
                                             </dl>
                                         </div>
                                     </div>
@@ -287,8 +292,8 @@
                                                         </select>
                                                     </div>
                                                 </div>
-                                                {% if not is_user_profile %}
                                                 <div class="col-md-6">
+                                                    {% if not is_user_profile %}
                                                     <div class="mb-3">
                                                         <div class="form-check">
                                                             <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if user.is_active else '' }}>
@@ -297,8 +302,18 @@
                                                             </label>
                                                         </div>
                                                     </div>
+                                                    {% endif %}
+                                                    {% if is_user_profile %}
+                                                    <div class="mb-3">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="receive_update_emails" name="receive_update_emails" {{ 'checked' if user.receive_update_emails else '' }}>
+                                                            <label class="form-check-label" for="receive_update_emails">
+                                                                Get regular updates about this app via email
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
                                                 </div>
-                                                {% endif %}
                                             </div>
                                         </form>
                                     </div>

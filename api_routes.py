@@ -15,7 +15,7 @@ from database import (
     normalize_quotes_sql,
     check_in_person as db_check_in_person,
 )
-from email_utils import send_email_via_sendgrid
+from email_utils import send_email_via_sendgrid, send_update_email
 from instruments import normalize_instrument, normalize_instruments
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
@@ -185,6 +185,117 @@ def admin_reset_logging_mode(session_instance_id):
             return jsonify({"success": False, "error": "Session instance not found"}), 404
         conn.commit()
         return jsonify({"success": True, "session_instance_id": session_instance_id, "logging_mode": mode})
+    finally:
+        conn.close()
+
+
+def _get_update_email_payload():
+    """Validated {subject, body_markdown} from the request, or (None, None)."""
+    data = request.get_json(silent=True) or {}
+    subject = (data.get("subject") or "").strip()
+    body_markdown = (data.get("body_markdown") or "").strip()
+    return subject, body_markdown
+
+
+@api_login_required
+def admin_email_updates_test():
+    """System-admin only: send the composed update email to yourself (spec 027).
+    POST /api/admin/email-updates/test  body {subject, body_markdown}.
+    Test sends are not recorded in email_message."""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    subject, body_markdown = _get_update_email_payload()
+    if not subject or not body_markdown:
+        return jsonify({"success": False, "error": "Subject and body are required"}), 400
+
+    # Send to the account's user_email — the same address a real send would use.
+    # (current_user.email is person.email, which can differ.)
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_email FROM user_account WHERE user_id = %s",
+            (current_user.user_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    to_email = row[0] if row else None
+    if not to_email:
+        return jsonify({"success": False, "error": "Your account has no email address"}), 400
+
+    if send_update_email(current_user.user_id, to_email, subject, body_markdown):
+        return jsonify({"success": True, "message": f"Test sent to {to_email}"})
+    return jsonify({"success": False, "error": "Send failed — check server logs"}), 502
+
+
+@api_login_required
+def admin_email_updates_send():
+    """System-admin only: send the update email to every opted-in user (spec 027).
+    POST /api/admin/email-updates/send  body {subject, body_markdown}.
+    Records an email_message row plus one email_message_recipient row per user;
+    an individual failure is recorded and skipped, never aborts the send."""
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Not authorized"}), 403
+    subject, body_markdown = _get_update_email_payload()
+    if not subject or not body_markdown:
+        return jsonify({"success": False, "error": "Subject and body are required"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT user_id, user_email FROM user_account
+            WHERE receive_update_emails = TRUE AND is_active = TRUE AND user_email IS NOT NULL
+            ORDER BY user_id
+            """
+        )
+        recipients = cur.fetchall()
+
+        cur.execute(
+            """
+            INSERT INTO email_message (subject, body_markdown, sent_by_user_id, recipient_count)
+            VALUES (%s, %s, %s, %s)
+            RETURNING email_message_id
+            """,
+            (subject, body_markdown, current_user.user_id, len(recipients)),
+        )
+        email_message_id = cur.fetchone()[0]
+
+        success_count = 0
+        failure_count = 0
+        for recipient_user_id, recipient_email in recipients:
+            try:
+                sent = send_update_email(recipient_user_id, recipient_email, subject, body_markdown)
+                error_message = None if sent else "SendGrid send failed"
+            except Exception as e:
+                sent = False
+                error_message = str(e)
+            if sent:
+                success_count += 1
+            else:
+                failure_count += 1
+            cur.execute(
+                """
+                INSERT INTO email_message_recipient (email_message_id, user_id, email, status, error_message)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (email_message_id, recipient_user_id, recipient_email,
+                 "sent" if sent else "failed", error_message),
+            )
+
+        cur.execute(
+            "UPDATE email_message SET success_count = %s, failure_count = %s WHERE email_message_id = %s",
+            (success_count, failure_count, email_message_id),
+        )
+        conn.commit()
+        return jsonify({
+            "success": True,
+            "recipient_count": len(recipients),
+            "success_count": success_count,
+            "failure_count": failure_count,
+        })
     finally:
         conn.close()
 
@@ -5494,9 +5605,13 @@ def check_username_availability():
         )
 
 
+@api_login_required
 def update_person_details(person_id):
-    """Update person and user details"""
+    """Update person and user details. Profile owner or system admin only."""
     try:
+        if not current_user.is_system_admin and current_user.person_id != person_id:
+            return jsonify({"success": False, "message": "Not authorized"}), 403
+
         data = request.get_json()
 
         if not person_id:
@@ -5535,6 +5650,22 @@ def update_person_details(person_id):
         if user_data and user_data.get("user_id"):
             user_id = user_data.get("user_id")
 
+            # The user block may only touch the account attached to this person —
+            # otherwise an owner could smuggle another user's user_id into the payload.
+            cur.execute(
+                "SELECT user_id FROM user_account WHERE person_id = %s", (person_id,)
+            )
+            person_account = cur.fetchone()
+            if not person_account or person_account[0] != user_id:
+                cur.close()
+                conn.close()
+                return (
+                    jsonify(
+                        {"success": False, "message": "User account does not match this person"}
+                    ),
+                    403,
+                )
+
             # Check if username is being changed and is available (case-insensitive)
             username = user_data.get("username")
             if username:
@@ -5552,11 +5683,20 @@ def update_person_details(person_id):
                         400,
                     )
 
+            # Opt-in to update emails (spec 027): only touch the flag when the
+            # payload mentions it — the admin edit form omits it and must not
+            # clobber the user's own setting (COALESCE keeps the current value).
+            receive_update_emails = user_data.get("receive_update_emails")
+            if receive_update_emails is not None:
+                receive_update_emails = bool(receive_update_emails)
+
             save_to_history(cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id())
             cur.execute(
                 """
                 UPDATE user_account
-                SET username = %s, user_email = %s, is_active = %s, timezone = %s, last_modified_date = %s
+                SET username = %s, user_email = %s, is_active = %s, timezone = %s,
+                    receive_update_emails = COALESCE(%s, receive_update_emails),
+                    last_modified_date = %s
                 WHERE user_id = %s
             """,
                 (
@@ -5564,6 +5704,7 @@ def update_person_details(person_id):
                     user_data.get("user_email") or None,
                     user_data.get("is_active", True),
                     user_data.get("timezone") or "UTC",
+                    receive_update_emails,
                     now_utc(),
                     user_id,
                 ),

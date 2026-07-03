@@ -266,6 +266,7 @@ CREATE TABLE user_account (
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
     beta_live_logging BOOLEAN NOT NULL DEFAULT FALSE,  -- opt-in to the new live logger (admin-set, spec 024)
+    receive_update_emails BOOLEAN NOT NULL DEFAULT TRUE,  -- app update emails, on by default; opt-out on profile (spec 027)
     email_verified BOOLEAN DEFAULT FALSE,
     auto_save_tunes BOOLEAN DEFAULT FALSE,
     auto_save_interval INTEGER DEFAULT 60 CHECK (auto_save_interval IN (10, 30, 60)),
@@ -297,6 +298,32 @@ COMMENT ON COLUMN user_account.hashed_password IS 'Bcrypt hashed password, NULL 
 COMMENT ON COLUMN user_account.login_token IS 'Token for magic link (passwordless) login, expires after 15 minutes';
 COMMENT ON COLUMN user_account.login_token_expires IS 'UTC timestamp when magic link login token expires';
 COMMENT ON COLUMN user_account.referred_by_person_id IS 'Person ID of the user who referred this account';
+COMMENT ON COLUMN user_account.receive_update_emails IS 'Receives occasional app update emails; on by default, opt-out on profile or via unsubscribe link (spec 027)';
+
+-- -----------------------------------------------------------------------------
+-- Email message tables (spec 027) — admin-sent app update emails
+-- -----------------------------------------------------------------------------
+-- One row per admin send (test sends to yourself are not recorded)
+CREATE TABLE email_message (
+    email_message_id   SERIAL PRIMARY KEY,
+    subject            TEXT NOT NULL,
+    body_markdown      TEXT NOT NULL,
+    sent_by_user_id    INTEGER NOT NULL REFERENCES user_account(user_id),
+    sent_date          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    recipient_count    INTEGER NOT NULL DEFAULT 0,
+    success_count      INTEGER NOT NULL DEFAULT 0,
+    failure_count      INTEGER NOT NULL DEFAULT 0
+);
+
+-- One row per recipient per message
+CREATE TABLE email_message_recipient (
+    email_message_id   INTEGER NOT NULL REFERENCES email_message(email_message_id),
+    user_id            INTEGER NOT NULL REFERENCES user_account(user_id),
+    email              TEXT NOT NULL,
+    status             TEXT NOT NULL CHECK (status IN ('sent', 'failed')),
+    error_message      TEXT,
+    PRIMARY KEY (email_message_id, user_id)
+);
 
 -- -----------------------------------------------------------------------------
 -- Tune Setting table (depends on tune)
@@ -1087,6 +1114,7 @@ CREATE TABLE user_account_history (
     timezone VARCHAR(50),
     is_active BOOLEAN,
     is_system_admin BOOLEAN,
+    receive_update_emails BOOLEAN,
     email_verified BOOLEAN,
     verification_token VARCHAR(255),
     verification_token_expires TIMESTAMPTZ,

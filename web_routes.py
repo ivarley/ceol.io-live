@@ -33,7 +33,12 @@ from auth import (
     generate_login_token,
     log_login_event,
 )
-from email_utils import send_password_reset_email, send_verification_email, send_login_link_email
+from email_utils import (
+    send_password_reset_email,
+    send_verification_email,
+    send_login_link_email,
+    verify_unsubscribe_token,
+)
 from recurrence_utils import to_human_readable
 
 
@@ -2329,6 +2334,42 @@ def resend_verification():
     return render_template("auth/resend_verification.html")
 
 
+def unsubscribe_updates(token):
+    """One-click unsubscribe from app update emails (spec 027). No login required:
+    the signed token identifies the user. GET shows a confirmation page; POST is
+    the RFC 8058 one-click target (mail clients POST List-Unsubscribe=One-Click)."""
+    user_id = verify_unsubscribe_token(token)
+    if user_id is None:
+        from app import render_error_page
+
+        return render_error_page("This unsubscribe link is not valid.", 404)
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        save_to_history(cur, "user_account", "UPDATE", user_id, user_id=user_id)
+        cur.execute(
+            """
+            UPDATE user_account
+            SET receive_update_emails = FALSE, last_modified_date = %s
+            WHERE user_id = %s
+            """,
+            (now_utc(), user_id),
+        )
+        if cur.rowcount == 0:
+            conn.rollback()
+            from app import render_error_page
+
+            return render_error_page("This unsubscribe link is not valid.", 404)
+        conn.commit()
+    finally:
+        conn.close()
+
+    if request.method == "POST":
+        return "", 200
+    return render_template("unsubscribe.html")
+
+
 @login_required
 def admin():
     # Check if user is system admin
@@ -2802,6 +2843,73 @@ def admin_cache_settings():
 
 
 @login_required
+def admin_email_updates():
+    """Admin screen to compose and send app update emails (spec 027)."""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM user_account
+            WHERE receive_update_emails = TRUE AND is_active = TRUE AND user_email IS NOT NULL
+            """
+        )
+        recipient_count = cur.fetchone()[0]
+
+        cur.execute(
+            """
+            SELECT em.email_message_id, em.subject, em.sent_date, ua.username,
+                   em.recipient_count, em.success_count, em.failure_count
+            FROM email_message em
+            JOIN user_account ua ON em.sent_by_user_id = ua.user_id
+            ORDER BY em.email_message_id DESC
+            """
+        )
+        messages = [
+            {
+                "id": row[0],
+                "subject": row[1],
+                "sent_date": row[2],
+                "sent_by": row[3],
+                "recipient_count": row[4],
+                "success_count": row[5],
+                "failure_count": row[6],
+                "failures": [],
+            }
+            for row in cur.fetchall()
+        ]
+
+        if messages:
+            cur.execute(
+                """
+                SELECT email_message_id, email, error_message
+                FROM email_message_recipient
+                WHERE status = 'failed'
+                """
+            )
+            failures_by_message = {}
+            for msg_id, email, error_message in cur.fetchall():
+                failures_by_message.setdefault(msg_id, []).append(
+                    {"email": email, "error": error_message}
+                )
+            for message in messages:
+                message["failures"] = failures_by_message.get(message["id"], [])
+    finally:
+        conn.close()
+
+    return render_template(
+        "admin_email_updates.html",
+        active_tab="email_updates",
+        recipient_count=recipient_count,
+        messages=messages,
+    )
+
+
+@login_required
 def person_details(person_id=None):
     """Person details page showing person info, user account, and activity data"""
     # Determine if this is a user profile view or admin view
@@ -2890,7 +2998,7 @@ def person_details(person_id=None):
         # Get user account details if exists
         cur.execute(
             """
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password, beta_live_logging
+            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password, beta_live_logging, receive_update_emails
             FROM user_account
             WHERE person_id = %s
         """,
@@ -2911,6 +3019,7 @@ def person_details(person_id=None):
                 timezone,
                 hashed_password,
                 beta_live_logging,
+                receive_update_emails,
             ) = user_row
 
             # Get last login from user_session table
@@ -2940,6 +3049,7 @@ def person_details(person_id=None):
                 "timezone_display": get_timezone_display_name(timezone or "UTC"),
                 "has_password": hashed_password is not None and hashed_password != "",
                 "beta_live_logging": beta_live_logging,
+                "receive_update_emails": receive_update_emails,
             }
 
         # Get sessions this person is associated with

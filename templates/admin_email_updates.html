@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Email Updates{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article" id="section-1">
+            {% include 'admin_tabs.html' %}
+
+            <section class="docs-section" id="email-updates">
+                <h2>Send App Updates</h2>
+                <p>
+                    <strong>{{ recipient_count }}</strong>
+                    user{{ '' if recipient_count == 1 else 's' }} {{ 'is' if recipient_count == 1 else 'are' }} opted in to update emails.
+                    Messages are sent from ceol@ceol.io with a personalized unsubscribe link.
+                </p>
+
+                <form id="compose-form" onsubmit="return false;">
+                    <div class="mb-3">
+                        <label for="email-subject" class="form-label">Subject</label>
+                        <input type="text" class="form-control" id="email-subject" name="subject" maxlength="200">
+                    </div>
+                    <div class="mb-3">
+                        <label for="email-body" class="form-label">Message</label>
+                        <textarea class="form-control" id="email-body" name="body_markdown" rows="12"
+                                  placeholder="# Heading&#10;&#10;What's new..."></textarea>
+                        <small class="form-text text-muted">
+                            Markdown is supported (headings, <em>emphasis</em>, links, lists).
+                            The plain-text version of the email is the raw Markdown.
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" id="test-send-btn" class="btn btn-outline-primary">Send test to me</button>
+                        <button type="button" id="send-btn" class="btn btn-primary">
+                            Send to {{ recipient_count }} recipient{{ '' if recipient_count == 1 else 's' }}
+                        </button>
+                    </div>
+                    <div id="send-status" class="alert" style="display: none;" role="alert"></div>
+                </form>
+
+                <h3 class="mt-5">Past Messages</h3>
+                {% if messages %}
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Subject</th>
+                                <th>Sent By</th>
+                                <th>Sent</th>
+                                <th>Failed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for message in messages %}
+                            <tr>
+                                <td>{{ message.sent_date.strftime('%Y-%m-%d %H:%M') if message.sent_date else '' }}</td>
+                                <td>{{ message.subject }}</td>
+                                <td>{{ message.sent_by }}</td>
+                                <td>{{ message.success_count }} / {{ message.recipient_count }}</td>
+                                <td>
+                                    {% if message.failures %}
+                                    <details>
+                                        <summary class="text-danger">{{ message.failure_count }}</summary>
+                                        <ul class="mb-0">
+                                            {% for failure in message.failures %}
+                                            <li>{{ failure.email }}{% if failure.error %} — {{ failure.error }}{% endif %}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </details>
+                                    {% else %}
+                                    0
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No messages sent yet.</p>
+                {% endif %}
+            </section>
+        </article>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const testBtn = document.getElementById('test-send-btn');
+    const sendBtn = document.getElementById('send-btn');
+    const statusEl = document.getElementById('send-status');
+    const recipientCount = {{ recipient_count }};
+
+    function showStatus(message, ok) {
+        statusEl.textContent = message;
+        statusEl.className = 'alert ' + (ok ? 'alert-success' : 'alert-danger');
+        statusEl.style.display = 'block';
+    }
+
+    function composedMessage() {
+        return {
+            subject: document.getElementById('email-subject').value.trim(),
+            body_markdown: document.getElementById('email-body').value.trim()
+        };
+    }
+
+    function post(url, button, workingLabel) {
+        const payload = composedMessage();
+        if (!payload.subject || !payload.body_markdown) {
+            showStatus('Subject and message are both required.', false);
+            return Promise.resolve(null);
+        }
+        const originalLabel = button.textContent;
+        testBtn.disabled = true;
+        sendBtn.disabled = true;
+        button.textContent = workingLabel;
+        statusEl.style.display = 'none';
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .catch(() => ({ success: false, error: 'Network error — please try again.' }))
+        .finally(() => {
+            testBtn.disabled = false;
+            sendBtn.disabled = false;
+            button.textContent = originalLabel;
+        });
+    }
+
+    testBtn.addEventListener('click', function() {
+        post('/api/admin/email-updates/test', testBtn, 'Sending test...').then(data => {
+            if (!data) return;
+            showStatus(data.success ? (data.message || 'Test sent.') : (data.error || 'Test send failed.'), data.success);
+        });
+    });
+
+    sendBtn.addEventListener('click', function() {
+        if (!confirm('Send this message to ' + recipientCount + ' recipient(s)? This cannot be undone.')) {
+            return;
+        }
+        post('/api/admin/email-updates/send', sendBtn, 'Sending...').then(data => {
+            if (!data) return;
+            if (data.success) {
+                showStatus('Sent to ' + data.success_count + ' of ' + data.recipient_count +
+                           ' recipients (' + data.failure_count + ' failed). Reloading...', true);
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showStatus(data.error || 'Send failed.', false);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

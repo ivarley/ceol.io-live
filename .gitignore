@@ -132,3 +132,6 @@ design/*
 
 # Live-logging Svelte/Vite build output (spec 024) -- built during deploy
 static/live/
+
+# Claude Code worktrees (each contains its own checkout)
+.claude/worktrees/

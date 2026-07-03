@@ -1,6 +1,8 @@
 import os
 import logging
-from flask import url_for
+import markdown
+from flask import url_for, current_app
+from itsdangerous import URLSafeSerializer, BadSignature
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Header
 
@@ -8,15 +10,23 @@ from sendgrid.helpers.mail import Mail, Header
 logger = logging.getLogger(__name__)
 
 
-def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
-    """Send email using SendGrid API"""
+def send_email_via_sendgrid(to_email, subject, body_text, body_html=None,
+                            from_email=None, unsubscribe_url=None):
+    """Send email using SendGrid API.
+
+    from_email: overrides MAIL_DEFAULT_SENDER for this message (must be a
+    SendGrid-verified sender). unsubscribe_url: personalized one-click
+    unsubscribe target; replaces the default mailto List-Unsubscribe header
+    (RFC 8058 — mail clients render a native Unsubscribe button and POST to it).
+    """
     try:
         api_key = os.environ.get("SENDGRID_API_KEY")
         if not api_key:
             logger.error("SendGrid API key not configured")
             return False
 
-        from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
+        if from_email is None:
+            from_email = os.environ.get("MAIL_DEFAULT_SENDER", "noreply@ceol.io")
         unsubscribe_email = os.environ.get("MAIL_UNSUBSCRIBE", "unsubscribe@ceol.io")
 
         logger.info(
@@ -32,8 +42,11 @@ def send_email_via_sendgrid(to_email, subject, body_text, body_html=None):
             html_content=body_html,
         )
 
-        # Add List-Unsubscribe headers for better deliverability
-        message.header = Header("List-Unsubscribe", f"<mailto:{unsubscribe_email}>")
+        # List-Unsubscribe headers for better deliverability
+        if unsubscribe_url:
+            message.header = Header("List-Unsubscribe", f"<{unsubscribe_url}>")
+        else:
+            message.header = Header("List-Unsubscribe", f"<mailto:{unsubscribe_email}>")
         message.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
 
         response = sg.send(message)
@@ -165,3 +178,57 @@ If you did not request this login link, please ignore this email.
         logger.error(f"Login link email failed - User: {user.username}, Email: {user.email}")
 
     return result
+
+
+def _unsubscribe_serializer():
+    return URLSafeSerializer(current_app.secret_key, salt="email-unsub")
+
+
+def generate_unsubscribe_token(user_id):
+    """Signed, non-expiring unsubscribe token for a user (spec 027)."""
+    return _unsubscribe_serializer().dumps(user_id)
+
+
+def verify_unsubscribe_token(token):
+    """Return the user_id encoded in an unsubscribe token, or None if invalid."""
+    try:
+        return _unsubscribe_serializer().loads(token)
+    except BadSignature:
+        return None
+
+
+def send_update_email(user_id, to_email, subject, body_markdown):
+    """Send one app-update email (spec 027): Markdown body, personalized
+    unsubscribe link, from the updates sender (default ceol@ceol.io)."""
+    from_email = os.environ.get("MAIL_UPDATES_SENDER", "ceol@ceol.io")
+
+    unsubscribe_url = url_for(
+        "unsubscribe_updates",
+        token=generate_unsubscribe_token(user_id),
+        _external=True,
+    )
+
+    footer_text = (
+        "You're receiving this because you opted in to updates on ceol.io.\n"
+        f"Unsubscribe: {unsubscribe_url}"
+    )
+    # Plain-text part is the raw Markdown source (readable as-is)
+    body_text = f"{body_markdown}\n\n--\n{footer_text}\n"
+
+    body_html = f"""
+    {markdown.markdown(body_markdown)}
+    <hr style="margin-top: 2em; border: none; border-top: 1px solid #ddd;">
+    <p style="color: #6c757d; font-size: 0.85em;">
+        You're receiving this because you opted in to updates on ceol.io.
+        <a href="{unsubscribe_url}">Unsubscribe</a>
+    </p>
+    """
+
+    return send_email_via_sendgrid(
+        to_email,
+        subject,
+        body_text,
+        body_html,
+        from_email=from_email,
+        unsubscribe_url=unsubscribe_url,
+    )

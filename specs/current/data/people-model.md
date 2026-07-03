@@ -28,9 +28,25 @@ Login credentials and preferences.
 - user_id, person_id (FK), username, hashed_password
 - is_system_admin, is_active, email_verified
 - timezone, auto_save_tunes, auto_save_interval (10/30/60 seconds)
+- receive_update_emails - App update emails (spec 027), default true (existing
+  users backfilled to true at launch). Toggled on the profile page (`/me`);
+  cleared without login by the signed unsubscribe link in every update email
+  (`/unsubscribe/<token>`).
 - verification_token, password_reset_token
 
 See [Authentication](../logic/auth.md) for details.
+
+### email_message / email_message_recipient
+Admin-sent app update emails (spec 027, sent from `/admin/email-updates`).
+- email_message: subject, body_markdown, sent_by_user_id (FK), sent_date,
+  recipient_count/success_count/failure_count. One row per real send; test
+  sends ("send to me") are not recorded.
+- email_message_recipient: (email_message_id, user_id) composite PK, email,
+  status ('sent'/'failed'), error_message. One row per recipient per message,
+  so a partial send is visible and diagnosable.
+- Recipients are users with receive_update_emails = TRUE, is_active = TRUE,
+  and a non-null user_email. See [External APIs](../logic/external-apis.md)
+  for the sending pipeline.
 
 ### session_person
 Session membership (regular members and admins).

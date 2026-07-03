@@ -262,6 +262,12 @@ app.add_url_rule(
 )
 app.add_url_rule("/verify-email/<token>", "verify_email", verify_email)
 app.add_url_rule(
+    "/unsubscribe/<token>",
+    "unsubscribe_updates",
+    unsubscribe_updates,
+    methods=["GET", "POST"],
+)
+app.add_url_rule(
     "/resend-verification",
     "resend_verification",
     resend_verification,
@@ -278,6 +284,7 @@ app.add_url_rule("/admin/tunes/merge", "admin_tune_merge", admin_tune_merge)
 app.add_url_rule("/admin/tunes/<int:tune_id>", "admin_tune_detail", admin_tune_detail)
 app.add_url_rule("/admin/test-links", "admin_test_links", admin_test_links)
 app.add_url_rule("/admin/cache-settings", "admin_cache_settings", admin_cache_settings)
+app.add_url_rule("/admin/email-updates", "admin_email_updates", admin_email_updates)
 app.add_url_rule("/admin/people/<int:person_id>", "person_details", person_details)
 app.add_url_rule("/admin/sessions/<path:session_path>", "session_admin", session_admin)
 app.add_url_rule(
@@ -642,6 +649,18 @@ app.add_url_rule(
     "/api/admin/instances/<int:session_instance_id>/logging-mode",
     "admin_reset_logging_mode",
     admin_reset_logging_mode,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/email-updates/test",
+    "admin_email_updates_test",
+    admin_email_updates_test,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/email-updates/send",
+    "admin_email_updates_send",
+    admin_email_updates_send,
     methods=["POST"],
 )
 app.add_url_rule(

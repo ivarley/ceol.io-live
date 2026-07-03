@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Unsubscribed - Irish Music Sessions{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card mt-5">
+                    <div class="card-header">
+                        <h3 class="card-title text-center mb-0">Unsubscribed</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>You've been unsubscribed from app updates.</p>
+                        <p class="text-muted mb-0">
+                            Changed your mind? You can turn updates back on any time
+                            on <a href="{{ url_for('user_profile') }}">your profile</a>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

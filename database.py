@@ -390,11 +390,11 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO user_account_history
             (user_id, operation, changed_by_user_id, person_id, username, user_email, hashed_password,
-             timezone, is_active, is_system_admin, email_verified, verification_token,
+             timezone, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
              verification_token_expires, password_reset_token, password_reset_expires,
              created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id)
             SELECT user_id, %s, %s, person_id, username, user_email, hashed_password,
-                   timezone, is_active, is_system_admin, email_verified, verification_token,
+                   timezone, is_active, is_system_admin, receive_update_emails, email_verified, verification_token,
                    verification_token_expires, password_reset_token, password_reset_expires,
                    created_date, last_modified_date, referred_by_person_id, created_by_user_id, last_modified_user_id
             FROM user_account WHERE user_id = %s
