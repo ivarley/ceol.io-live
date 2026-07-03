@@ -136,6 +136,25 @@ never calls `setMode`/reconnects the stream. While active, all editing chrome is
 shows a single **"Done Searching"** button that clears the filter and re-hides the bar. All
 in `App.svelte`; no backend involvement (it filters the already-loaded `byId` records).
 
+**Desktop two-pane layout (spec 028).** At viewport widths ≥ 900px (`winW` via
+`<svelte:window bind:innerWidth>`, `main.wide`), the mobile single column becomes a CSS grid:
+the log stays in the center column and a persistent right pane (`SidePane.svelte`, 360px)
+hosts the "likely next tune" suggestion card plus always-visible tune search — grid areas over
+the existing children, no DOM restructuring; `.sets` and `.sidepane` scroll independently and
+the dock stays pinned. Below 900px the pane never mounts and the phone layout is unchanged.
+The deep-search body (name/ABC catalog search, thesession.org remote search, paste-URL
+import — specs 021 §D/026) is extracted into a shared **`TuneSearch.svelte`** rendered by
+both the mobile full-screen modal (`variant="modal"`) and the pane (`variant="pane"`); it
+owns its search state and calls back on every terminal action via a single
+`onAdd(payload, name)` → `App.logTune` (clear composer, `addOptimistic` at the cursor,
+refocus). In read-only View mode the pane still renders and search stays browsable; a pick
+opens a confirm dialog ("Switch to editing?") that flips to edit mode, logs the tune, and
+clears the pane search (same end state as a direct edit-mode add); cancelling keeps the
+search. Reading never mutates silently (complete logs get a notice instead — un-complete
+from the header first). Deferred to later phases: keyboard navigation/shortcuts, multi-select +
+copy/paste of sets, reorder, and the full `store.svelte.js` extraction
+([spec 028](../../changes/inprogress/028-desktop-two-pane-logger.md)).
+
 ## Schema delta (§I)
 
 See [Schema Reference](../data/schema.md) and [Session Model](../data/session-model.md).

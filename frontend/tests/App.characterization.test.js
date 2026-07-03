@@ -34,6 +34,7 @@ vi.mock('../src/client.js', () => ({
   sendTyping: vi.fn(async () => {}),
   liveMatch: vi.fn(async () => ({ exact_match: false, results: [] })),
   deepSearch: vi.fn(async () => []),
+  thesessionSearch: vi.fn(async () => []),
   fetchIncipit: vi.fn(async () => null),
   tuneDetail: vi.fn(async () => ({})),
 }))
@@ -68,5 +69,25 @@ describe('App renders bootstrapped records (extraction guard)', () => {
     await waitFor(() => expect(container.querySelectorAll('.set-label').length).toBe(2))
     const labels = [...container.querySelectorAll('.set-label')].map((b) => b.textContent.trim())
     expect(labels).toEqual(['Reels', 'Jigs'])
+  })
+
+  // spec 028: ≥900px mounts the persistent side pane (jsdom's default innerWidth is 1024);
+  // below 900px the pane must not mount at all (mobile layout byte-for-byte unchanged).
+  it('mounts the side pane when wide, not when narrow', async () => {
+    const { container } = render(App, { props: { config } })
+    await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(3))
+    expect(container.querySelectorAll('.sidepane').length).toBe(1)
+    expect(container.querySelector('.sidepane .deep-field')).not.toBeNull()
+
+    const realWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { value: 500, configurable: true, writable: true })
+    try {
+      document.body.innerHTML = ''
+      const { container: narrow } = render(App, { props: { config } })
+      await waitFor(() => expect(narrow.querySelectorAll('.tune-row').length).toBe(3))
+      expect(narrow.querySelectorAll('.sidepane').length).toBe(0)
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: realWidth, configurable: true, writable: true })
+    }
   })
 })
