@@ -3,14 +3,15 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail, thesessionSearch } from './client.js'
-  import Incipit from './Incipit.svelte'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
+  import TuneSearch from './TuneSearch.svelte'
+  import SidePane from './SidePane.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
   import {
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
-    openSetMergeTarget, mergeStable,
+    openSetMergeTarget, mergeStable, parseThesessionId,
   } from './logstate.js'
 
   let { config } = $props()
@@ -74,6 +75,11 @@
       connect()
     }, 10000)
   }
+  // Wide-screen two-pane layout (spec 028): ≥900px turns <main> into a grid with a
+  // persistent right pane (suggestion + search). Below that, the mobile layout is untouched
+  // and the pane never mounts.
+  let winW = $state(typeof window === 'undefined' ? 0 : window.innerWidth)
+  const wide = $derived(winW >= 900)
   let input = $state('')
   let error = $state('')
   let notice = $state('')
@@ -392,8 +398,6 @@
   function activate(e, fn) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn() }
   }
-  // Focus-on-mount action, replacing the `autofocus` attribute (a11y_autofocus).
-  function autofocusEl(node) { node.focus() }
   // The tune-row click action, shared by onclick + onkeydown so the row is keyboard-operable.
   function rowClick(r) {
     if (searchMode) return
@@ -1460,25 +1464,9 @@
   }
 
   // --- deep catalog search (§D "search deeper") ---
-  const DEEP_TYPES = ['Reel', 'Jig', 'Slip Jig', 'Hornpipe', 'Polka', 'Slide', 'Waltz', 'Barndance', 'Mazurka', 'March', 'Strathspey', 'Three-Two']
+  // The search body (state + logic + markup) lives in TuneSearch.svelte (spec 028), shared
+  // between the mobile modal and the desktop side pane; only the modal gate remains here.
   let deepOpen = $state(false)
-  let deepQuery = $state('')
-  let deepType = $state(null) // hard tune-type filter (the popout)
-  let deepMode = $state('mixed') // 'mixed' (name + ABC) | 'name' | 'abc' search mode
-  let deepFilterOpen = $state(false) // type-filter popout visible
-  let deepResults = $state([])
-  let deepLoading = $state(false)
-  let deepTimer = null
-  let deepSeq = 0
-  let deepPrefer = null // the set's type, passed as a sort preference (not a filter)
-
-  // "Search on thesession.org" (spec 026): remote results shown BELOW the local ones, fetched
-  // ONLY on explicit tap. Deduped against the local list by tune_id (suppress-in-place).
-  let tsResults = $state([])       // remote hits for the current query, already deduped
-  let tsSearching = $state(false)
-  let tsSearched = $state(false)   // has the user run a remote search for this query yet?
-  let tsPasteUrl = $state('')      // the "paste a URL / tune ID" field inside the remote section
-  let tsPasteError = $state('')
 
   // The single tune type of the set the cursor currently points into (preset filter).
   // The set (segment) the cursor is appending/inserting into, or null (new set / unknown).
@@ -1518,108 +1506,45 @@
     return s.length > 0 && /^[A-Ga-gxz0-9|^_=,'\/()\[\]:<>~-]+$/.test(s)
   }
 
-  function openDeep() {
-    deepQuery = input.trim()
-    deepType = null // no hard filter; the set's type is a soft preference instead
-    deepMode = 'mixed' // blended by default; the tabs narrow to name-only / ABC-only
-    deepFilterOpen = false
-    deepPrefer = cursorSetType()
-    deepOpen = true
-    runDeep()
-  }
+  const openDeep = () => { deepOpen = true } // TuneSearch seeds itself from the composer text
   const closeDeep = () => { deepOpen = false }
-  // Typing in the field: blended results (mixed) unless the user narrowed with a tab.
-  function onDeepInput() {
-    runDeep()
-  }
-  // Tabs act as filters: click to narrow to that mode; click the active tab to clear
-  // back to the blended (mixed) list.
-  function setDeepMode(m) {
-    const next = deepMode === m ? 'mixed' : m
-    if (deepMode !== next) { deepMode = next; runDeep() }
-  }
-  const toggleDeepFilters = () => { deepFilterOpen = !deepFilterOpen }
-  function setDeepType(t) {
-    deepType = deepType === t ? null : t
-    deepFilterOpen = false
-    runDeep()
-  }
-  function runDeep() {
-    if (deepTimer) clearTimeout(deepTimer)
-    deepLoading = true
-    // The remote (thesession.org) results were for the previous query — drop them; the user
-    // must tap "Search on thesession.org" again for the new query.
-    resetThesession()
-    deepTimer = setTimeout(async () => {
-      const seq = ++deepSeq
-      const r = await deepSearch(config, deepQuery.trim(), deepType, deepPrefer, deepMode)
-      if (seq === deepSeq) { deepResults = r; deepLoading = false }
-    }, 160)
-  }
-  // Tap a deep result → log that catalog tune at the cursor, then close.
-  function pickDeep(r) {
-    closeDeep()
+
+  // The shared terminal path for every TuneSearch add (modal pick / pane pick / log-as-is /
+  // remote import): log at the cursor and hand focus back to the composer.
+  function logTune(payload, name) {
     clearEntry()
-    addOptimistic({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name)
+    addOptimistic(payload, name)
     queueMicrotask(() => inputEl?.focus())
-  }
-  // Log the typed text as an unlinked tune (the "as-is" escape lives here).
-  function deepLogAsIs() {
-    const name = deepQuery.trim()
-    if (!name) return
-    closeDeep()
-    clearEntry()
-    addOptimistic({ name }, name)
-    queueMicrotask(() => inputEl?.focus())
-  }
-  // Keyboard: Esc closes; Enter logs the top result (or as-is if none, like type-ahead).
-  function deepKey(e) {
-    if (e.key === 'Escape') { e.preventDefault(); closeDeep() }
-    else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (deepResults.length) pickDeep(deepResults[0])
-      else if (deepQuery.trim()) deepLogAsIs()
-    }
   }
 
-  // --- thesession.org remote search & import (spec 026) -----------------------------
-  // Detect a thesession.org tune URL or bare numeric id -> its integer id, else null.
-  // Mirrors the server's _parse_thesession_id.
-  function parseThesessionId(raw) {
-    if (raw == null) return null
-    const s = String(raw).trim()
-    const m = s.match(/thesession\.org\/tunes\/(\d+)/)
-    if (m) return parseInt(m[1], 10)
-    return /^\d+$/.test(s) ? parseInt(s, 10) : null
+  // A pane add while in read-only View would silently mutate a log the user is just reading —
+  // confirm the implicit switch to edit mode instead (spec 028). While the pull-down filter is
+  // active, adding just exits the filter first (it's a transient state, not a deliberate mode).
+  // Returns false when nothing was logged yet, so the pane keeps the user's search.
+  let pendingViewAdd = $state(null) // {payload, name} picked in the pane while viewing
+  let sidePaneEl // the SidePane instance (to clear its search after a confirmed add)
+  function paneAdd(payload, name) {
+    if (!viewing) {
+      if (searchMode) doneSearching()
+      logTune(payload, name)
+      return true
+    }
+    if (logComplete) {
+      notice = 'This log is marked complete — use "Mark as not complete" in the header to edit it.'
+    } else {
+      pendingViewAdd = { payload, name }
+    }
+    return false
   }
-  function resetThesession() {
-    tsResults = []; tsSearching = false; tsSearched = false; tsPasteUrl = ''; tsPasteError = ''
-  }
-  // Extend the search to thesession.org for the CURRENT query (explicit action only). Remote
-  // hits already shown in the local list are suppressed (they stay up top).
-  async function runThesessionSearch() {
-    const q = deepQuery.trim()
-    if (!q || tsSearching || displayStatus === 'offline') return
-    tsSearching = true; tsSearched = true
-    const localIds = new Set(deepResults.map((r) => r.tune_id))
-    const r = await thesessionSearch(config, q, deepType)
-    tsResults = r.filter((t) => !localIds.has(t.tune_id))
-    tsSearching = false
-  }
-  // Tap a remote result -> import (server-side, folded into the add op) + log linked at cursor.
-  // We know the title/type from the search, so the optimistic row shows linked immediately.
-  function pickRemote(r) {
-    closeDeep(); clearEntry()
-    addOptimistic({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name)
-    queueMicrotask(() => inputEl?.focus())
-  }
-  // "Paste a thesession.org URL or tune ID" -> same import-and-log path (title unknown yet).
-  function pasteThesession() {
-    const id = parseThesessionId(tsPasteUrl)
-    if (id == null) { tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'; return }
-    closeDeep(); clearEntry()
-    addOptimistic({ thesession_id: id, name: `#${id}` }, `#${id}`)
-    queueMicrotask(() => inputEl?.focus())
+  const cancelViewAdd = () => { pendingViewAdd = null }
+  function confirmViewAdd() {
+    const p = pendingViewAdd
+    pendingViewAdd = null
+    if (!p) return
+    setMode('edit')
+    logTune(p.payload, p.name)
+    sidePaneEl?.resetSearch() // the add went through — clear, like a direct edit-mode add
+    requestAnimationFrame(() => inputEl?.focus()) // the composer mounts with the mode flip
   }
 
   // The shared matcher (same as the legacy pill editor: find_matching_tune + wildcard),
@@ -2180,7 +2105,9 @@
   })
 </script>
 
-<main bind:this={mainEl} class:view-mode={viewing}>
+<svelte:window bind:innerWidth={winW} />
+
+<main bind:this={mainEl} class:view-mode={viewing} class:wide>
   <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
        so it sits where the app-wide indicator sits on every other page. -->
   {#if showConnDot}
@@ -2685,112 +2612,43 @@
     </aside>
   {/if}
 
+  {#if wide}
+    <SidePane
+      bind:this={sidePaneEl}
+      {config}
+      suggestion={nextSuggestion}
+      preferType={cursorSetType()}
+      {displayStatus}
+      onAdd={paneAdd}
+      onAddSuggestion={(s) => logTune({ tune_id: s.tune_id, name: s.name, tune_type: s.tune_type }, s.name)}
+      onDismissSuggestion={dismissNext}
+    />
+  {/if}
+
+  <!-- Pane pick while in read-only View: confirm the implicit edit-mode switch (spec 028). -->
+  {#if pendingViewAdd}
+    <div class="reconcile-scrim" role="button" tabindex="-1" aria-label="Cancel" onclick={cancelViewAdd} onkeydown={(e) => activate(e, cancelViewAdd)}></div>
+    <div class="reconcile viewadd" role="dialog" aria-modal="true">
+      <div class="reconcile-head">Switch to editing?</div>
+      <p class="reconcile-sub">You're viewing this log. Add <b>“{pendingViewAdd.name}”</b> and switch to edit mode?</p>
+      <div class="reconcile-actions">
+        <button class="va-cancel" onclick={cancelViewAdd}>Cancel</button>
+        <button class="rc-ok" onclick={confirmViewAdd}>Add &amp; edit</button>
+      </div>
+    </div>
+  {/if}
+
   {#if deepOpen}
     <div class="deep-modal" transition:fly={{ y: 24, duration: 200 }}>
-      <div class="deep-head">
-        <span class="deep-title">Find a tune</span>
-        <button class="deep-done" onclick={closeDeep}>Done</button>
-      </div>
-      <input
-        class="deep-field"
-        placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
-        bind:value={deepQuery}
-        oninput={onDeepInput}
-        onkeydown={deepKey}
-        use:autofocusEl
+      <TuneSearch
+        variant="modal"
+        initialQuery={input.trim()}
+        preferType={cursorSetType()}
+        {displayStatus}
+        {config}
+        onAdd={(p, n) => { closeDeep(); logTune(p, n) }}
+        onClose={closeDeep}
       />
-      <div class="deep-tabs">
-        <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
-        <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>By ABC</button>
-        <button class="deep-tab deep-filter-tab" class:active={deepType || deepFilterOpen} title="Filter by type" aria-label="Filter by type" onclick={toggleDeepFilters}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
-        </button>
-      </div>
-      {#if deepFilterOpen}
-        <div class="deep-filters">
-          {#each DEEP_TYPES as t}
-            <button class="deep-type-chip" class:active={deepType === t} onclick={() => setDeepType(t)}>{pluralType(t)}</button>
-          {/each}
-        </div>
-      {:else if deepType}
-        <div class="deep-filters">
-          <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
-        </div>
-      {/if}
-      <!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled
-           like "Log as-is" but blue; sits directly above it. -->
-      {#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
-        <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
-      {/if}
-      {#if deepMode !== 'abc' && deepQuery.trim()}
-        <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
-      {/if}
-      <div class="deep-results">
-        {#if deepLoading && !deepResults.length}
-          <p class="deep-empty">Searching…</p>
-        {:else if !deepResults.length}
-          <p class="deep-empty">No{deepType ? ` ${deepType.toLowerCase()}` : ''} tunes match{deepQuery.trim() ? ` “${deepQuery.trim()}”` : ''}.</p>
-        {:else}
-          {#each deepResults as r (r.tune_id)}
-            <button class="deep-card" onclick={() => pickDeep(r)}>
-              <div class="deep-card-head">
-                <span class="deep-name">{r.name}</span>
-                <span class="deep-type">{r.tune_type || ''}</span>
-              </div>
-              <div class="deep-staff">
-                <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
-              </div>
-              <div class="deep-meta">
-                {#if r.abc_only}<span class="deep-badge">♪ notation</span>{/if}
-                {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
-                {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
-                {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
-                <span class="deep-books">{r.tunebook_count ?? 0} tunebooks</span>
-              </div>
-            </button>
-          {/each}
-        {/if}
-      </div>
-
-      <!-- Remote results appear below the local ones once the search has been extended. -->
-      {#if tsSearched}
-        <div class="deep-remote">
-          <div class="deep-remote-head">From thesession.org</div>
-          {#if tsSearching}
-            <p class="deep-empty">Searching thesession.org…</p>
-          {:else if !tsResults.length}
-            <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
-          {:else}
-            {#each tsResults as r (r.tune_id)}
-              <button class="deep-card deep-remote-card" onclick={() => pickRemote(r)}>
-                <div class="deep-card-head">
-                  <span class="deep-name">{r.name}</span>
-                  <span class="deep-type">{r.tune_type || ''}</span>
-                </div>
-                <div class="deep-meta">
-                  {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
-                  {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
-                  {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
-                </div>
-              </button>
-            {/each}
-          {/if}
-          <!-- Direct link entry, revealed once you've extended to thesession.org. -->
-          <div class="deep-paste">
-            <input class="deep-paste-field" placeholder="Have a link? Paste a thesession.org URL or tune ID"
-                   bind:value={tsPasteUrl}
-                   oninput={() => (tsPasteError = '')}
-                   onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pasteThesession() } }} />
-            <button class="deep-paste-btn" disabled={!tsPasteUrl.trim()} onclick={pasteThesession}>Add</button>
-          </div>
-          {#if tsPasteError}<p class="deep-paste-error">{tsPasteError}</p>{/if}
-        </div>
-      {/if}
     </div>
   {/if}
 </main>

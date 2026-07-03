@@ -163,3 +163,16 @@ export function mergeStable(localList, serverList) {
   const extra = serverList.filter((r) => r.tune_id != null && !seen.has(r.tune_id))
   return [...merged, ...extra].slice(0, 8)
 }
+
+// --- thesession.org id parsing (spec 026/028) ------------------------------ //
+
+// Detect a thesession.org tune URL or bare numeric id -> its integer id, else null.
+// Mirrors the server's _parse_thesession_id. Shared by the composer's paste detection
+// (App) and the deep-search paste-URL import (TuneSearch).
+export function parseThesessionId(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  const m = s.match(/thesession\.org\/tunes\/(\d+)/)
+  if (m) return parseInt(m[1], 10)
+  return /^\d+$/.test(s) ? parseInt(s, 10) : null
+}

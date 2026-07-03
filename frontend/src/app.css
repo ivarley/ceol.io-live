@@ -338,7 +338,7 @@ main {
 }
 .reconcile-list .rc-what { font-weight: 600; color: var(--text); }
 .reconcile-list .rc-why { color: var(--muted); font-size: 13px; }
-.reconcile-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.reconcile-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .reconcile-actions .rc-ok {
   font: inherit; font-weight: 600; padding: 9px 18px; border: none; border-radius: 8px;
   background: var(--accent); color: #04122b; cursor: pointer;
@@ -981,3 +981,82 @@ main {
 /* dock while filtering: the composer/viewbar is replaced by a single exit button */
 .searchbar-dock .done-search { background: var(--panel); }
 .searchbar-dock .done-search:hover { border-color: var(--accent); }
+
+/* ---------- desktop two-pane layout (spec 028) ---------- */
+/* ≥900px (main.wide, viewport-driven in App.svelte): grid areas over the EXISTING children —
+   log column center, persistent side pane (suggestion + search) right. The dock stays pinned;
+   .sets and .sidepane are two independent scrollers; html,body{overflow:hidden} is untouched.
+   Below 900px the pane never mounts and this whole branch is inert. The error/typing lines
+   are conditional children of <main>, so they get their own collapse-to-zero rows. */
+main.wide {
+  max-width: 1200px;
+  display: grid;
+  column-gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: auto auto 1fr auto auto auto;
+  grid-template-areas:
+    "top top"
+    "msgs pane"
+    "list pane"
+    "err pane"
+    "typing pane"
+    "dock pane";
+}
+main.wide .topnav { grid-area: top; }
+main.wide .feed-msgs { grid-area: msgs; }
+main.wide .sets { grid-area: list; }
+main.wide .error { grid-area: err; }
+main.wide .typing { grid-area: typing; }
+main.wide .dock { grid-area: dock; }
+main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
+
+/* The pane mirrors the modal's flex-column layout so the shared TuneSearch markup
+   (deep-field / deep-tabs / deep-results, global classes) lays out identically. */
+.sidepane {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px 0;
+}
+/* the modal's roomy bottom paddings (safe-area) are pointless inside the pane */
+.sidepane .deep-results { flex: none; padding-bottom: 12px; }
+.sidepane .deep-remote { padding-bottom: 12px; }
+
+/* persistent "likely next tune" card above the search (same visual language as the
+   composer dropdown's pinned .result-next row) */
+.pane-suggest {
+  flex: none;
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(79, 157, 255, 0.09);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+}
+.pane-suggest .ps-top { display: flex; align-items: center; gap: 6px; }
+.pane-suggest .ps-label {
+  flex: 1; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent);
+}
+.pane-suggest .ps-dismiss {
+  flex: none; padding: 0 4px; background: none; border: none; cursor: pointer;
+  color: #e05c5c; font-size: 16px; line-height: 1; opacity: 0.65;
+}
+.pane-suggest .ps-dismiss:hover { opacity: 1; }
+.pane-suggest .ps-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.pane-suggest .ps-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pane-suggest .ps-type { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.pane-suggest .ps-add {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px;
+  border: none; border-radius: 7px; cursor: pointer;
+  background: var(--accent); color: #04122b;
+}
+
+/* pane pick while viewing: the "switch to editing?" confirm (reuses the reconcile dialog shell) */
+.viewadd .reconcile-sub b { color: var(--text); }
+.va-cancel {
+  font: inherit; padding: 9px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.va-cancel:hover { color: var(--text); border-color: var(--muted); }

@@ -41,6 +41,40 @@ test.describe("live logger (read-only smoke)", () => {
     expect(await page.locator(".tune-row").count()).toBe(before);
   });
 
+  // spec 028: ≥900px shows the persistent side pane (suggestion + search); below,
+  // the mobile layout is unchanged and the pane never mounts. Read-only like the rest.
+  test("desktop width shows the persistent search pane", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".sidepane")).toBeVisible();
+    await expect(page.locator(".sidepane .deep-field")).toBeVisible();
+  });
+
+  test("view-mode pane pick asks before switching to edit", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("main.view-mode")).toBeVisible();
+    await page.locator(".sidepane .deep-field").fill("maggie");
+    await page.locator(".sidepane .deep-card").first().click();
+    // read-only View: the pick must NOT log — it proposes the edit-mode switch instead
+    await expect(page.locator(".viewadd")).toBeVisible();
+    await page.locator(".viewadd .va-cancel").click();
+    await expect(page.locator(".viewadd")).toHaveCount(0);
+    await expect(page.locator("main.view-mode")).toBeVisible(); // still viewing, nothing added
+    // cancelling must not eat the search — the query and results survive
+    await expect(page.locator(".sidepane .deep-field")).toHaveValue("maggie");
+    await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
+  });
+
+  test("mobile width has no side pane", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".sidepane")).toHaveCount(0);
+  });
+
   test("defaults to read-only View with a view footer", async ({ page }) => {
     await page.goto(LIVE_URL);
     await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
