@@ -151,8 +151,43 @@ refocus). In read-only View mode the pane still renders and search stays browsab
 opens a confirm dialog ("Switch to editing?") that flips to edit mode, logs the tune, and
 clears the pane search (same end state as a direct edit-mode add); cancelling keeps the
 search. Reading never mutates silently (complete logs get a notice instead — un-complete
-from the header first). Deferred to later phases: keyboard navigation/shortcuts, multi-select +
-copy/paste of sets, reorder, and the full `store.svelte.js` extraction
+from the header first).
+
+**Keyboard nav (spec 028).** A window `keydown` handler (`onWinKey`) plus per-field handlers
+give three behaviors keyed off *what has focus*:
+
+- **Type-ahead lists own the arrows when their field is focused.** In the composer, ArrowUp/Down
+  move a highlight (`composerHl`) through `composerNavItems` (the pinned suggestion + results, in
+  the column-reverse list's visual bottom-to-top order); Enter picks the highlighted row (else
+  falls back to the suggestion / commit). In `TuneSearch` (pane *or* modal), ArrowUp/Down move
+  `hl` through the result cards and Enter picks the highlighted card. The focused field
+  `preventDefault`s so the window handler never double-acts; both expose the highlight via
+  `aria-activedescendant` (combobox pattern), styled `.hl`.
+- **Escape blurs** whatever field is focused (unless a more specific handler already claimed it —
+  the modal closes, a resolving placeholder cancels).
+- **With nothing focused ("cursor mode"), the arrows/Enter/Space drive the insertion cursor.**
+  ArrowUp/Down step it one slot through `computeCursorSlots(displaySegments, endIsOpen, …)` (pure,
+  in `logstate.js`) — the ordered list of every rendered seam (set starts, after-tune seams,
+  between-set new-set seams, the end). **Enter** runs the seam's action via `seamActionFor`
+  (also pure): a between-sets seam **joins** the two sets, an intra-set after-tune seam **splits**
+  there — matching the "Join"/"Split" pills. **Space** drops back into the tune-entry box.
+  `moveCursor` deliberately does *not* refocus the composer, so successive arrows keep stepping;
+  typing or Space refocuses, Escape blurs.
+- **Split/join hold the cursor in place** (`holdCursor`, not `setCursor` — no jump to the end,
+  no composer focus). The seam stays put and its mode flips: after a split the held spot is now
+  the new between-sets seam (Enter/tap Joins it back); after a join it's the now-intra-set seam
+  (Enter/tap Splits it back) — an exact toggle. This is the same for the mouse/touch pills, so
+  on mobile the pill just flips Split↔Join in place.
+- **Mode transitions knit the three zones (filter box ↕ cursor ↕ tune-entry box).** Stepping the
+  cursor off the **bottom** slot (ArrowDown at the end) focuses the tune-entry box; off the **top**
+  seam (ArrowUp) focuses the pull-down filter box. Conversely, ArrowUp in an **empty** tune-entry
+  box drops onto the cursor line. **"/"** anywhere (outside a text field) jumps to the search box —
+  the persistent pane when wide, else the deep-search modal.
+
+Cursor mode is edit-only (`canEdit`); "/" works in any mode (search is browsable while reading).
+
+Deferred to later phases: multi-select + copy/paste of sets, reorder, and the full
+`store.svelte.js` extraction
 ([spec 028](../../changes/inprogress/028-desktop-two-pane-logger.md)).
 
 ## Schema delta (§I)

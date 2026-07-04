@@ -3,6 +3,7 @@ import {
   computeOrdered, segmentByBreaks, setsOf, tunesOf,
   pluralType, setLabel, maxPos, cursorPos, remapAnchors,
   normName, normAbc, stripThe, openSetMergeTarget, mergeStable,
+  computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId,
 } from '../src/logstate.js'
 
 // Compact record builder. Positions are single letters so ordering is obvious.
@@ -217,5 +218,104 @@ describe('mergeStable', () => {
     const local = Array.from({ length: 6 }, (_, i) => ({ tune_id: i + 1, name: `L${i}` }))
     const server = Array.from({ length: 6 }, (_, i) => ({ tune_id: i + 100, name: `S${i}` }))
     expect(mergeStable(local, server)).toHaveLength(8)
+  })
+})
+
+describe('seamKeyFor', () => {
+  it('maps each insertAfterId shape to its seam key', () => {
+    expect(seamKeyFor(null)).toBe('end')
+    expect(seamKeyFor(42)).toBe('after:42')
+    expect(seamKeyFor({ before: 7 })).toBe('start:7')
+    expect(seamKeyFor({ newSet: 9 })).toBe('inter:9')
+  })
+})
+
+describe('computeCursorSlots', () => {
+  // Two closed sets [A,B] | [C], then an open trailing set [D] (endIsOpen).
+  const segs = [
+    { tunes: [{ session_instance_tune_id: 1 }, { session_instance_tune_id: 2 }], breakAfter: 100 },
+    { tunes: [{ session_instance_tune_id: 3 }], breakAfter: 101 },
+    { tunes: [{ session_instance_tune_id: 4 }], breakAfter: null },
+  ]
+
+  it('walks start seams, after-tune seams, and between-set new-set seams top to bottom', () => {
+    const slots = computeCursorSlots(segs, true, true)
+    expect(slots).toEqual([
+      { before: 1 }, 1, 2, { newSet: 3 }, // set 1 + gap
+      { before: 3 }, 3, { newSet: 4 },    // set 2 + gap
+      { before: 4 }, null,                // open set 3: last tune's seam IS the end
+    ])
+  })
+
+  it('adds a closed-end new-set slot when the log ends on a break', () => {
+    const closed = segs.slice(0, 2) // [A,B] | [C] |, nothing open
+    const slots = computeCursorSlots(closed, false, true)
+    // no `null` for an open end; instead a single trailing closed-end `null`
+    expect(slots).toEqual([
+      { before: 1 }, 1, 2, { newSet: 3 },
+      { before: 3 }, 3,
+      null, // closed-end new set
+    ])
+  })
+
+  it('skips optimistic (temp) rows — they render no seam', () => {
+    const withTemp = [
+      { tunes: [{ session_instance_tune_id: 1 }, { session_instance_tune_id: 't-2', _temp: true }], breakAfter: null },
+    ]
+    const slots = computeCursorSlots(withTemp, true, true)
+    // start seam + after tune 1; the temp row contributes no slot, and the (temp) open-last
+    // tune isn't the end slot, so no `null` appears
+    expect(slots).toEqual([{ before: 1 }, 1])
+  })
+
+  it('returns nothing for an empty log', () => {
+    expect(computeCursorSlots([], false, false)).toEqual([])
+  })
+
+  it('every slot round-trips through seamKeyFor uniquely', () => {
+    const slots = computeCursorSlots(segs, true, true)
+    const keys = slots.map(seamKeyFor)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('seamActionFor', () => {
+  // [1,2] | [3] | (open [4]); breaks 100, 101 close the first two sets.
+  const segs = [
+    { tunes: [{ session_instance_tune_id: 1 }, { session_instance_tune_id: 2 }], breakAfter: 100 },
+    { tunes: [{ session_instance_tune_id: 3 }], breakAfter: 101 },
+    { tunes: [{ session_instance_tune_id: 4 }], breakAfter: null },
+  ]
+
+  it('splits at an intra-set after-tune seam (tune not last in its set)', () => {
+    expect(seamActionFor(1, segs)).toEqual({ type: 'split', tuneId: 1 })
+  })
+
+  it('does NOT split at a set-final tune (no Split pill there)', () => {
+    expect(seamActionFor(2, segs)).toBeNull() // 2 is the last tune of set 1
+    expect(seamActionFor(3, segs)).toBeNull() // 3 is the only tune of set 2
+  })
+
+  it('joins a between-sets seam on the break dividing the two sets', () => {
+    // the gap before set [3] joins on set 1's closing break (100)
+    expect(seamActionFor({ newSet: 3 }, segs)).toEqual({ type: 'join', breakId: 100 })
+    // the gap before the open set [4] joins on set 2's break (101)
+    expect(seamActionFor({ newSet: 4 }, segs)).toEqual({ type: 'join', breakId: 101 })
+  })
+
+  it('has no action on start seams or the end', () => {
+    expect(seamActionFor({ before: 1 }, segs)).toBeNull()
+    expect(seamActionFor(null, segs)).toBeNull()
+  })
+})
+
+describe('parseThesessionId', () => {
+  it('extracts the id from a URL or bare number, else null', () => {
+    expect(parseThesessionId('https://thesession.org/tunes/182')).toBe(182)
+    expect(parseThesessionId('182')).toBe(182)
+    expect(parseThesessionId('  https://thesession.org/tunes/7#setting42 ')).toBe(7)
+    expect(parseThesessionId('Cooley’s')).toBeNull()
+    expect(parseThesessionId('')).toBeNull()
+    expect(parseThesessionId(null)).toBeNull()
   })
 })

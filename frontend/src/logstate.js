@@ -176,3 +176,61 @@ export function parseThesessionId(raw) {
   if (m) return parseInt(m[1], 10)
   return /^\d+$/.test(s) ? parseInt(s, 10) : null
 }
+
+// --- insertion-cursor slots (spec 028 keyboard nav) ------------------------ //
+
+// Every insertion-cursor position, top to bottom, matching the seams the live logger
+// actually renders. Values mirror `insertAfterId`: `{ before: id }` = a set's start seam,
+// `<tuneId>` = the seam after that tune, `null` = the open-set end OR the closed-end
+// new-set seam, `{ newSet: nextFirstId }` = a new set in a between-sets gap. Temp
+// (optimistic) rows render no seam, so they're skipped. Arrow keys step through this list.
+export function computeCursorSlots(segments, endIsOpen, hasOrdered) {
+  const slots = []
+  for (let si = 0; si < segments.length; si++) {
+    const seg = segments[si]
+    slots.push({ before: seg.tunes[0].session_instance_tune_id }) // start-of-set seam
+    for (let ti = 0; ti < seg.tunes.length; ti++) {
+      const r = seg.tunes[ti]
+      if (r._temp) continue
+      const openLast = endIsOpen && si === segments.length - 1 && ti === seg.tunes.length - 1
+      slots.push(openLast ? null : r.session_instance_tune_id)
+    }
+    if (si < segments.length - 1 && seg.breakAfter != null) {
+      slots.push({ newSet: segments[si + 1].tunes[0].session_instance_tune_id }) // new set in the gap
+    }
+  }
+  if (hasOrdered && !endIsOpen) slots.push(null) // closed-end new-set seam
+  return slots
+}
+
+// The seam-key a cursor slot resolves to (mirrors the App's `activeSeam` derived), so
+// cursor-stepping can locate the current position within computeCursorSlots' output.
+export function seamKeyFor(s) {
+  if (s == null) return 'end'
+  if (typeof s === 'object' && s.newSet != null) return `inter:${s.newSet}`
+  if (typeof s === 'object' && s.before != null) return `start:${s.before}`
+  return `after:${s}`
+}
+
+// The action Enter performs on the current cursor seam (spec 028 keyboard nav): a between-sets
+// seam (`{ newSet }`) joins the two sets on the break between them; an intra-set after-tune seam
+// (`<tuneId>` that isn't a set's last tune) splits there. Start seams, the end, and a set's
+// last-tune seam have no action → null. Mirrors the "Join"/"Split" pills the seams render.
+export function seamActionFor(insertAfterId, segments) {
+  const c = insertAfterId
+  if (c != null && typeof c === 'object' && c.newSet != null) {
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (segments[i + 1].tunes[0].session_instance_tune_id === c.newSet && segments[i].breakAfter != null) {
+        return { type: 'join', breakId: segments[i].breakAfter }
+      }
+    }
+    return null
+  }
+  if (typeof c === 'number') {
+    for (const seg of segments) {
+      const idx = seg.tunes.findIndex((t) => t.session_instance_tune_id === c)
+      if (idx !== -1) return idx < seg.tunes.length - 1 ? { type: 'split', tuneId: c } : null
+    }
+  }
+  return null
+}

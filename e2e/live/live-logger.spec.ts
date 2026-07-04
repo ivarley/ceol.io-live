@@ -68,6 +68,53 @@ test.describe("live logger (read-only smoke)", () => {
     await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
   });
 
+  // spec 028 keyboard nav: arrow keys walk the pane results and Enter would pick the
+  // highlighted card; Escape blurs the field. All read-only (no pick → no mutation).
+  test("pane search: arrows highlight a result, Escape blurs", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    const field = page.locator(".sidepane .deep-field");
+    await field.fill("reel");
+    await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
+    // no highlight until an arrow key is pressed
+    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(0);
+    await field.press("ArrowDown");
+    await expect(page.locator(".sidepane .deep-card.hl")).toHaveCount(1);
+    // the field (a combobox) advertises the active card via aria-activedescendant
+    await expect(field).toHaveAttribute("aria-activedescendant", "dres-0");
+    await field.press("ArrowDown");
+    await expect(field).toHaveAttribute("aria-activedescendant", "dres-1");
+    // Escape removes focus from the field (spec 028 global Escape)
+    await field.press("Escape");
+    await expect(field).not.toBeFocused();
+  });
+
+  // spec 028 keyboard shortcuts. Enters edit mode but only moves the cursor/focus (no
+  // add/remove/break ops), so instance 90's data is untouched — safe on the shared seed.
+  test('keyboard: "/" jumps to search, empty composer Up drops to cursor mode', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await page.locator(".editbtn", { hasText: /edit log/i }).click();
+    const composer = page.locator(".composer input");
+    await expect(composer).toBeVisible();
+
+    // "/" from anywhere jumps to the persistent pane search
+    await page.keyboard.press("/");
+    await expect(page.locator(".sidepane .deep-field")).toBeFocused();
+
+    // empty composer + ArrowUp leaves the tune-entry box for cursor mode (composer blurs)
+    await composer.click();
+    await expect(composer).toBeFocused();
+    await composer.press("ArrowUp");
+    await expect(composer).not.toBeFocused();
+
+    // Space from cursor mode drops back into the tune-entry box
+    await page.keyboard.press(" ");
+    await expect(composer).toBeFocused();
+  });
+
   test("mobile width has no side pane", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(LIVE_URL);

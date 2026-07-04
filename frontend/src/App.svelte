@@ -12,6 +12,7 @@
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
     openSetMergeTarget, mergeStable, parseThesessionId,
+    computeCursorSlots, seamKeyFor, seamActionFor,
   } from './logstate.js'
 
   let { config } = $props()
@@ -224,6 +225,7 @@
   let searchSeq = 0
   let searching = $state(false) // a server search is in flight for the typed text (input spinner)
   let composerFocused = $state(false) // input has focus — gates the "likely next tune" suggestion row
+  let composerHl = $state(-1) // keyboard-highlighted index into composerNavItems (-1 = none, mouse/Enter-default)
   // Pull-down filter (orthogonal to view/edit mode): a search box hidden just above the
   // list, revealed by scrolling to the top, that filters visible sets live and highlights
   // matches. Purely client-side over byId — no network, no stream/mode change (§024).
@@ -394,6 +396,84 @@
     insertAfterId = id
     queueMicrotask(() => inputEl?.focus())
   }
+  // Move the cursor to a seam and STAY in cursor mode (no composer focus) — used after a
+  // split/join so the seam holds its place and the user can Enter/tap again to toggle it back.
+  function holdCursor(id) {
+    insertAfterId = id
+    selectedId = null
+    queueMicrotask(() => setsEl?.querySelector('.seam.active')?.scrollIntoView({ block: 'nearest' }))
+  }
+  // Every insertion-cursor position, top to bottom (computeCursorSlots + seamKeyFor are pure,
+  // unit-tested in logstate.js). Arrow keys step the cursor through these when no field is focused.
+  const cursorSlots = $derived(computeCursorSlots(displaySegments, endIsOpen, ordered.length > 0))
+  // Move the insertion cursor one slot. Deliberately does NOT focus the composer — cursor-
+  // stepping happens while nothing is focused, and refocusing would flip us back into dropdown
+  // nav. Stepping off either end is a mode transition: past the bottom → the tune-entry box,
+  // above the top → the filter box (spec 028 keyboard nav).
+  function moveCursor(dir) {
+    const slots = cursorSlots
+    if (!slots.length) return
+    const cur = activeSeam
+    let idx = slots.findIndex((s) => seamKeyFor(s) === cur)
+    if (idx === -1) idx = dir > 0 ? -1 : slots.length
+    const target = idx + dir
+    if (target >= slots.length) { inputEl?.focus(); return } // off the bottom → tune entry box
+    if (target < 0) { focusFilterBox(); return } // off the top seam → filter box
+    insertAfterId = slots[target]
+    selectedId = null // stepping the cursor drops any row selection (they compete for the arrows)
+    queueMicrotask(() => setsEl?.querySelector('.seam.active')?.scrollIntoView({ block: 'nearest' }))
+  }
+  // Reveal + focus the pull-down filter box (it lives above the fold); onfocus enters searchMode.
+  function focusFilterBox() {
+    const fb = mainEl?.querySelector('.searchbar-input')
+    if (!fb) return
+    setsEl?.scrollTo({ top: 0 })
+    queueMicrotask(() => fb.focus())
+  }
+  // "/" focus target: the persistent pane search when it's mounted (wide), else the modal.
+  function focusSearchBox() {
+    const paneField = mainEl?.querySelector('.sidepane .deep-field')
+    if (paneField) { paneField.focus(); return }
+    openDeep()
+  }
+  // Global keys (spec 028): Escape blurs whatever's focused; "/" jumps to the search box; and
+  // while nothing is focused (cursor mode), Up/Down step the cursor, Enter joins/splits at the
+  // active seam, and Space drops back into the tune-entry box. A focused field owns its own
+  // keys first — text-field focus is the signal that "a list may be active", so we never steal.
+  function onWinKey(e) {
+    const ae = document.activeElement
+    const inField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)
+    if (e.key === 'Escape') {
+      if (e.defaultPrevented) return // a modal/resolving handler already claimed it
+      if (inField) ae.blur()
+      return
+    }
+    if (e.key === '/') {
+      if (inField || e.defaultPrevented) return // a slash typed into a field is just text
+      e.preventDefault()
+      focusSearchBox()
+      return
+    }
+    if (inField || e.defaultPrevented) return // everything below is cursor-mode only
+    if (!canEdit) return // no cursor in view/filter modes
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      moveCursor(e.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    // Enter/Space: don't steal from a focused button/link/role=button (a focused seam already
+    // claimed the key via its own handler + preventDefault, caught by the guard above).
+    const interactive = ae && (ae.tagName === 'BUTTON' || ae.tagName === 'A' || ae.getAttribute?.('role') === 'button')
+    if (interactive) return
+    if (e.key === 'Enter') {
+      const act = seamActionFor(insertAfterId, displaySegments)
+      if (act?.type === 'join') { e.preventDefault(); joinAt(act.breakId) }
+      else if (act?.type === 'split') { e.preventDefault(); splitAt(act.tuneId) }
+    } else if (e.key === ' ') {
+      e.preventDefault()
+      inputEl?.focus() // Space → back to the tune entry box
+    }
+  }
   // Keyboard activation for click-only elements (a11y): Enter/Space runs the same action.
   function activate(e, fn) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn() }
@@ -419,21 +499,28 @@
     const idx = ordered.findIndex((r) => r.session_instance_tune_id === afterTuneId)
     const before = idx >= 0 ? ordered[idx].order_position : maxPos(byId.values())
     const after = idx >= 0 && idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
+    // The tune right after the split becomes the first tune of the new set — the cursor holds
+    // that spot as the new between-sets seam (Enter/tap there now Joins, undoing the split).
+    const nextId = idx >= 0 ? ordered[idx + 1]?.session_instance_tune_id : null
     byId.set(tempId, {
       session_instance_tune_id: tempId, record_type: 'break',
       order_position: generateBetween(before, after), deleted: false, _temp: true,
     })
     trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: afterTuneId }, status: 'sending', ts: Date.now(), tempId })
-    setCursor(null) // split leaves edit mode (§C10)
+    holdCursor(nextId != null ? { newSet: nextId } : null)
   }
 
   // Join: remove the boundary break (between-sets seam) -> merge the two sets (§C).
   function joinAt(breakId) {
     const brk = byId.get(breakId)
+    // The tune just before the removed break is no longer a set's last tune — the cursor holds
+    // that spot, now an intra-set seam (Enter/tap there now Splits, undoing the join).
+    const bidx = ordered.findIndex((r) => r.session_instance_tune_id === breakId)
+    const prevId = bidx > 0 ? ordered[bidx - 1]?.session_instance_tune_id : null
     byId.delete(breakId) // optimistic merge
     const op_id = crypto.randomUUID()
     trySend({ op_id, op_type: 'set_break', payload: { action: 'remove', record_id: breakId }, status: 'sending', ts: Date.now(), restoreRecord: brk })
-    setCursor(null)
+    holdCursor(prevId != null ? prevId : null)
   }
 
   // --- row selection + actions (spec 021 §E) ---
@@ -876,6 +963,27 @@
   // Is the type-ahead dropdown currently rendered? (gates the bottom spacer + band calc)
   const dropdownOpen = $derived(!viewing && (showNext || results.length > 0 || tsInputId != null || (noMatch && editingId == null)))
 
+  // --- keyboard nav of the composer dropdown (spec 028 desktop) ---------------------
+  // The arrow-navigable rows, in visual BOTTOM-TO-TOP order (the list is column-reverse,
+  // so results[0] sits nearest the input and the suggestion just below it): index 0 is
+  // the pinned suggestion (if shown), then the search results going up. ArrowUp walks up
+  // the stack (index+1), ArrowDown back toward the input (index-1). Enter picks the
+  // highlighted row; -1 means none is highlighted (Enter falls back to its default).
+  const composerNavItems = $derived(
+    showNext && nextSuggestion ? [nextSuggestion, ...visibleResults] : visibleResults
+  )
+  // Keep the highlight valid as results stream in/out; never auto-jump to a row.
+  $effect(() => { if (composerHl >= composerNavItems.length) composerHl = -1 })
+  function moveComposerHl(dir) {
+    const n = composerNavItems.length
+    if (!n) return false
+    let i = composerHl
+    i = i < 0 ? (dir > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, i + dir))
+    composerHl = i
+    queueMicrotask(() => document.querySelector('.results li.hl')?.scrollIntoView({ block: 'nearest' }))
+    return true
+  }
+
   // A position after everything currently present, so optimistic appends stay last
   // and stay ordered among themselves (base-62 order_position; 'z' is the max char).
   function nextTempPos() {
@@ -1272,6 +1380,7 @@
     noMatch = false
     ambiguous = false
     searching = false
+    composerHl = -1
     cancelSearch()
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
@@ -1522,7 +1631,7 @@
   // active, adding just exits the filter first (it's a transient state, not a deliberate mode).
   // Returns false when nothing was logged yet, so the pane keeps the user's search.
   let pendingViewAdd = $state(null) // {payload, name} picked in the pane while viewing
-  let sidePaneEl // the SidePane instance (to clear its search after a confirmed add)
+  let sidePaneEl = $state(null) // the SidePane instance (to clear its search after a confirmed add)
   function paneAdd(payload, name) {
     if (!viewing) {
       if (searchMode) doneSearching()
@@ -1796,6 +1905,7 @@
     if (viewing) return // no composer in view mode; never broadcast typing as a viewer
     if (resolving) return // composer is locked while a placeholder resolves
     ambiguous = false // editing the text re-opens the question; next Enter re-evaluates
+    composerHl = -1 // typing invalidates any keyboard highlight
     runSearch()
     if (input.trim()) {
       const now = Date.now()
@@ -1824,6 +1934,7 @@
     noMatch = false
     ambiguous = false
     searching = false
+    composerHl = -1
   }
 
   const othersTyping = $derived(typers.filter((t) => t.person_id !== person.person_id))
@@ -2105,7 +2216,7 @@
   })
 </script>
 
-<svelte:window bind:innerWidth={winW} />
+<svelte:window bind:innerWidth={winW} onkeydown={onWinKey} />
 
 <main bind:this={mainEl} class:view-mode={viewing} class:wide>
   <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
@@ -2437,7 +2548,7 @@
       </footer>
     {:else}
     {#if showNext || results.length || tsInputId != null || (noMatch && editingId == null)}
-      <ul class="results" role="listbox" bind:clientHeight={resultsH}>
+      <ul class="results" role="listbox" id="composer-results" bind:clientHeight={resultsH}>
         {#if tsInputId != null}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
           <li class="result-ts" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logThesessionInput}>
@@ -2447,17 +2558,17 @@
         {#if showNext && nextSuggestion}
           {@const parts = suggestionParts(nextSuggestion.name, input)}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-          <!-- type-ahead dropdown: keyboard selection is the deferred desktop keyboard-nav (combobox) feature -->
-          <li class="result-next" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
+          <li id="cres-0" class="result-next" class:hl={composerHl === 0} role="option" aria-selected={composerHl === 0} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(nextSuggestion)}>
             <span class="r-arrow" aria-hidden="true">→</span>
             <span class="r-name">{parts.pre}<strong>{parts.mid}</strong>{parts.post}</span>
             <span class="r-meta">{nextSuggestion.tune_type || ''}<span class="r-next-label"> · usually next</span></span>
             <button class="r-dismiss" type="button" title="Don't suggest this next" aria-label="Dismiss suggestion" onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); dismissNext() }}>×</button>
           </li>
         {/if}
-        {#each visibleResults as t (t.tune_id)}
+        {#each visibleResults as t, vi (t.tune_id)}
+          {@const ci = (showNext && nextSuggestion ? 1 : 0) + vi}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-          <li role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
+          <li id="cres-{ci}" class:hl={composerHl === ci} role="option" aria-selected={composerHl === ci} onmousedown={(e) => e.preventDefault()} onclick={() => pickResult(t)}>
             <span class="r-name">{t.name}</span>
             <span class="r-meta">
               {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}{#if t.abc}<span class="r-abc"> · ♪ notation</span>{/if}
@@ -2513,13 +2624,28 @@
           autocapitalize="off"
           autocomplete="off"
           spellcheck="false"
+          role="combobox"
+          aria-expanded={composerNavItems.length > 0}
+          aria-controls="composer-results"
+          aria-activedescendant={composerHl >= 0 ? `cres-${composerHl}` : undefined}
           placeholder={composerLocked ? 'Resolving…' : (editingId != null ? 'Re-pick or rename this tune…' : 'Search or type a tune…')}
           bind:value={input}
           bind:this={inputEl}
           oninput={onInput}
           onfocus={() => { composerFocused = true; scheduleSeam() }}
           onblur={stopTyping}
-          onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!input.trim() && nextSuggestion) pickResult(nextSuggestion); else commit() } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) } }}
+          onkeydown={(e) => {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              if (moveComposerHl(e.key === 'ArrowUp' ? 1 : -1)) { e.preventDefault(); return }
+              // empty box + ArrowUp: leave the tune entry box and step back onto the cursor line
+              if (e.key === 'ArrowUp' && !input.trim()) { e.preventDefault(); inputEl?.blur() }
+            } else if (e.key === 'Enter') {
+              e.preventDefault()
+              if (composerHl >= 0 && composerNavItems[composerHl]) pickResult(composerNavItems[composerHl])
+              else if (!input.trim() && nextSuggestion) pickResult(nextSuggestion)
+              else commit()
+            } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) }
+          }}
         />
         {#if searching}<span class="spinner input-spin"></span>{/if}
       </div>

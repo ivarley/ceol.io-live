@@ -28,6 +28,7 @@
   let deepLoading = $state(false)
   let deepTimer = null
   let deepSeq = 0
+  let hl = $state(-1) // keyboard-highlighted index into deepResults (-1 = none)
 
   // "Search on thesession.org" (spec 026): remote results shown BELOW the local ones, fetched
   // ONLY on explicit tap. Deduped against the local list by tune_id (suppress-in-place).
@@ -44,6 +45,7 @@
   function runSearch() {
     if (deepTimer) clearTimeout(deepTimer)
     deepLoading = true
+    hl = -1 // a new query invalidates the keyboard highlight
     // The remote (thesession.org) results were for the previous query — drop them; the user
     // must tap "Search on thesession.org" again for the new query.
     resetThesession()
@@ -52,6 +54,16 @@
       const r = await deepSearch(config, deepQuery.trim(), deepType, preferType, deepMode)
       if (seq === deepSeq) { deepResults = r; deepLoading = false }
     }, 160)
+  }
+  // Keyboard nav of the local result cards (spec 028). The pane list is a normal top-to-bottom
+  // column, so ArrowDown = next (index+1), ArrowUp = previous; Enter picks the highlighted card.
+  $effect(() => { if (hl >= deepResults.length) hl = -1 })
+  function moveHl(dir) {
+    const n = deepResults.length
+    if (!n) return false
+    hl = hl < 0 ? (dir > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, hl + dir))
+    queueMicrotask(() => document.querySelector('.deep-results .deep-card.hl')?.scrollIntoView({ block: 'nearest' }))
+    return true
   }
   // Typing in the field: blended results (mixed) unless the user narrowed with a tab.
   function onDeepInput() {
@@ -99,13 +111,17 @@
     if (!name) return
     afterAdd(onAdd({ name }, name))
   }
-  // Keyboard: Esc closes the modal; Enter logs the top result (or as-is if none, like type-ahead).
+  // Keyboard: arrows walk the result cards; Esc closes the modal (pane defers to App's global
+  // blur); Enter logs the highlighted card, else the top result, else as-is (like type-ahead).
   function deepKey(e) {
-    if (e.key === 'Escape') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (moveHl(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault()
+    } else if (e.key === 'Escape') {
       if (variant === 'modal') { e.preventDefault(); onClose() }
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (deepResults.length) pickDeep(deepResults[0])
+      if (hl >= 0 && deepResults[hl]) pickDeep(deepResults[hl])
+      else if (deepResults.length) pickDeep(deepResults[0])
       else if (deepQuery.trim()) deepLogAsIs()
     }
   }
@@ -155,6 +171,10 @@
 {/if}
 <input
   class="deep-field"
+  role="combobox"
+  aria-expanded={deepResults.length > 0}
+  aria-controls="deep-results-list"
+  aria-activedescendant={hl >= 0 ? `dres-${hl}` : undefined}
   placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
   bind:value={deepQuery}
   oninput={onDeepInput}
@@ -192,7 +212,7 @@
 {#if deepMode !== 'abc' && deepQuery.trim()}
   <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
 {/if}
-<div class="deep-results">
+<div class="deep-results" id="deep-results-list" role="listbox">
   {#if deepLoading && !deepResults.length}
     <p class="deep-empty">Searching…</p>
   {:else if !deepResults.length}
@@ -202,8 +222,8 @@
       <p class="deep-empty">No{deepType ? ` ${deepType.toLowerCase()}` : ''} tunes match{deepQuery.trim() ? ` “${deepQuery.trim()}”` : ''}.</p>
     {/if}
   {:else}
-    {#each deepResults as r (r.tune_id)}
-      <button class="deep-card" onclick={() => pickDeep(r)}>
+    {#each deepResults as r, di (r.tune_id)}
+      <button id="dres-{di}" class="deep-card" class:hl={hl === di} onclick={() => pickDeep(r)}>
         <div class="deep-card-head">
           <span class="deep-name">{r.name}</span>
           <span class="deep-type">{r.tune_type || ''}</span>
