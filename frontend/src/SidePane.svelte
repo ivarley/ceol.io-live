@@ -9,6 +9,8 @@
     suggestion = null, // App's nextSuggestion (null in View mode / mid-set)
     preferType = null,
     displayStatus = 'live',
+    history = [], // page-local recall history for the search box (shared with the modal)
+    onRemember = () => {},
     onAdd, // App gates this by mode (in read-only View it confirms the edit-mode switch)
     onAddSuggestion,
     onDismissSuggestion,
@@ -36,5 +38,5 @@
       </div>
     </div>
   {/if}
-  <TuneSearch bind:this={searchEl} variant="pane" initialQuery="" {config} {preferType} {displayStatus} {onAdd} />
+  <TuneSearch bind:this={searchEl} variant="pane" initialQuery="" {config} {preferType} {displayStatus} {history} {onRemember} {onAdd} />
 </aside>

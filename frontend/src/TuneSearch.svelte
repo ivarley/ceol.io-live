@@ -2,7 +2,7 @@
   import { onDestroy, untrack } from 'svelte'
   import { deepSearch, thesessionSearch } from './client.js'
   import Incipit from './Incipit.svelte'
-  import { pluralType, parseThesessionId } from './logstate.js'
+  import { pluralType, parseThesessionId, historyStep } from './logstate.js'
 
   // The deep-search body (spec 028): one shared component behind BOTH the mobile
   // full-screen modal and the desktop side pane, so local catalog search, the
@@ -15,6 +15,8 @@
     preferType = null, // the cursor set's type — a soft ranking preference, not a filter
     displayStatus = 'live', // gates the remote search (online-only)
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
+    history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
+    onRemember = () => {}, // record a used query into the shared history
     onAdd,
     onClose = () => {},
   } = $props()
@@ -29,6 +31,7 @@
   let deepTimer = null
   let deepSeq = 0
   let hl = $state(-1) // keyboard-highlighted index into deepResults (-1 = none)
+  let histPos = $state(null) // recall cursor into `history` (null = live draft, not navigating)
 
   // "Search on thesession.org" (spec 026): remote results shown BELOW the local ones, fetched
   // ONLY on explicit tap. Deduped against the local list by tune_id (suppress-in-place).
@@ -65,10 +68,28 @@
     queueMicrotask(() => document.querySelector('.deep-results .deep-card.hl')?.scrollIntoView({ block: 'nearest' }))
     return true
   }
-  // Typing in the field: blended results (mixed) unless the user narrowed with a tab.
+  // Typing in the field: blended results (mixed) unless the user narrowed with a tab. Also
+  // remember the query once it settles (800ms idle) so recall holds real searches, not every
+  // keystroke — complements remembering on a pick (afterAdd).
+  let rememberTimer = null
   function onDeepInput() {
+    histPos = null // typing leaves history-recall mode
+    if (rememberTimer) clearTimeout(rememberTimer)
+    rememberTimer = setTimeout(() => onRemember(deepQuery), 800)
     runSearch()
   }
+  // Recall a past search into the box AND run it, so the results show immediately (spec 028).
+  // histPos stays set so the arrows keep cycling history; typing or a pick exits recall mode.
+  function stepHistory(dir) {
+    const step = historyStep(history, histPos, dir)
+    if (!step) return false
+    histPos = step.pos
+    deepQuery = step.value
+    if (step.value.trim()) runSearch() // fire the recalled search
+    else { deepResults = []; deepLoading = false; deepSeq++ } // back to the empty draft
+    return true
+  }
+  const rememberQuery = () => onRemember(deepQuery)
   // Tabs act as filters: click to narrow to that mode; click the active tab to clear
   // back to the blended (mixed) list.
   function setDeepMode(m) {
@@ -98,6 +119,8 @@
   // caller returns false (the add was deferred, e.g. the View-mode confirm), so a cancelled
   // confirm doesn't eat the search.
   function afterAdd(added) {
+    rememberQuery() // a query that led to a log is worth recalling later (spec 028)
+    histPos = null
     if (added === false || variant !== 'pane') return
     reset()
   }
@@ -111,18 +134,27 @@
     if (!name) return
     afterAdd(onAdd({ name }, name))
   }
-  // Keyboard: arrows walk the result cards; Esc closes the modal (pane defers to App's global
-  // blur); Enter logs the highlighted card, else the top result, else as-is (like type-ahead).
+  // Keyboard: with results showing, arrows walk the cards; with none (empty box), ArrowUp
+  // recalls past searches (then keeps cycling until you type or commit). Esc closes the modal
+  // (pane defers to App's global blur). Enter commits a recalled query to a real search, else
+  // logs the highlighted/top card, else as-is (like type-ahead).
   function deepKey(e) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      if (moveHl(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault()
+      const dir = e.key === 'ArrowDown' ? 1 : -1
+      // ArrowUp on an empty box recalls past searches (even though an empty query browses
+      // popular tunes); with a typed query, or ArrowDown, the arrows walk the result cards.
+      if (histPos != null) { if (stepHistory(dir)) e.preventDefault() } // cycling history
+      else if (dir < 0 && !deepQuery.trim()) { if (stepHistory(-1)) e.preventDefault() } // empty box: recall
+      else if (deepResults.length) { if (moveHl(dir)) e.preventDefault() } // result nav
     } else if (e.key === 'Escape') {
       if (variant === 'modal') { e.preventDefault(); onClose() }
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (hl >= 0 && deepResults[hl]) pickDeep(deepResults[hl])
       else if (deepResults.length) pickDeep(deepResults[0])
-      else if (deepQuery.trim()) deepLogAsIs()
+      // Don't log a RECALLED query as-is while its search is still loading — only a query the
+      // user actually typed (histPos == null) falls through to the as-is escape.
+      else if (histPos == null && deepQuery.trim()) deepLogAsIs()
     }
   }
 
@@ -159,6 +191,7 @@
 
   onDestroy(() => {
     if (deepTimer) clearTimeout(deepTimer)
+    if (rememberTimer) clearTimeout(rememberTimer)
     deepSeq++ // discard an in-flight search settling after unmount
   })
 </script>

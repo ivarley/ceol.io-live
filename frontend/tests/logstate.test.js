@@ -4,6 +4,7 @@ import {
   pluralType, setLabel, maxPos, cursorPos, remapAnchors,
   normName, normAbc, stripThe, openSetMergeTarget, mergeStable,
   computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId,
+  rememberInHistory, historyStep,
 } from '../src/logstate.js'
 
 // Compact record builder. Positions are single letters so ordering is obvious.
@@ -317,5 +318,57 @@ describe('parseThesessionId', () => {
     expect(parseThesessionId('Cooley’s')).toBeNull()
     expect(parseThesessionId('')).toBeNull()
     expect(parseThesessionId(null)).toBeNull()
+  })
+})
+
+describe('rememberInHistory', () => {
+  it('appends a trimmed query as the newest entry', () => {
+    const h = []
+    rememberInHistory(h, '  reel  ')
+    rememberInHistory(h, 'jig')
+    expect(h).toEqual(['reel', 'jig'])
+  })
+
+  it('ignores blanks', () => {
+    const h = ['reel']
+    rememberInHistory(h, '   ')
+    rememberInHistory(h, '')
+    rememberInHistory(h, null)
+    expect(h).toEqual(['reel'])
+  })
+
+  it('is MRU: re-using an entry moves it to newest (no duplicates)', () => {
+    const h = ['reel', 'jig', 'polka']
+    rememberInHistory(h, 'jig')
+    expect(h).toEqual(['reel', 'polka', 'jig'])
+  })
+})
+
+describe('historyStep', () => {
+  const h = ['reel', 'jig', 'polka'] // oldest -> newest
+
+  it('Up from the draft lands on the newest, then walks older, stopping at oldest', () => {
+    let s = historyStep(h, null, -1)
+    expect(s).toEqual({ pos: 2, value: 'polka' })
+    s = historyStep(h, s.pos, -1)
+    expect(s).toEqual({ pos: 1, value: 'jig' })
+    s = historyStep(h, s.pos, -1)
+    expect(s).toEqual({ pos: 0, value: 'reel' })
+    s = historyStep(h, s.pos, -1)
+    expect(s).toEqual({ pos: 0, value: 'reel' }) // clamps at oldest
+  })
+
+  it('Down walks newer and past the newest returns to an empty draft', () => {
+    expect(historyStep(h, 0, 1)).toEqual({ pos: 1, value: 'jig' })
+    expect(historyStep(h, 2, 1)).toEqual({ pos: null, value: '' }) // past newest -> draft
+  })
+
+  it('Down from the draft is a no-op (null) — the caller decides what Down-at-rest means', () => {
+    expect(historyStep(h, null, 1)).toBeNull()
+  })
+
+  it('empty history never steps', () => {
+    expect(historyStep([], null, -1)).toBeNull()
+    expect(historyStep([], null, 1)).toBeNull()
   })
 })

@@ -13,6 +13,7 @@
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
     openSetMergeTarget, mergeStable, parseThesessionId,
     computeCursorSlots, seamKeyFor, seamActionFor,
+    rememberInHistory, historyStep,
   } from './logstate.js'
 
   let { config } = $props()
@@ -430,6 +431,47 @@
     setsEl?.scrollTo({ top: 0 })
     queueMicrotask(() => fb.focus())
   }
+  // Page-local recall history for the filter box (MRU) and the pane/modal search box (shared,
+  // passed down). Not persisted — lives only for this page's lifetime (spec 028).
+  let filterHist = []
+  let filterHistPos = null // navigation cursor into filterHist (null = live draft)
+  let searchHist = $state([]) // shared with TuneSearch via a prop; MRU list of past deep-search queries
+  // Filter box keys: ArrowUp cycles older filters, ArrowDown cycles newer (past newest → empty)
+  // or, from an empty non-navigating box, drops back onto the top seam.
+  function onFilterKey(e) {
+    if (e.key === 'ArrowUp') {
+      const step = historyStep(filterHist, filterHistPos, -1)
+      if (step) { filterHistPos = step.pos; searchText = step.value; e.preventDefault() }
+    } else if (e.key === 'ArrowDown') {
+      if (filterHistPos != null) {
+        const step = historyStep(filterHist, filterHistPos, 1)
+        if (step) { filterHistPos = step.pos; searchText = step.value; e.preventDefault() }
+      } else if (!searchText.trim()) {
+        e.preventDefault()
+        exitFilterToTopSeam()
+      }
+    }
+  }
+  // Remember a filter term once you've settled on it (800ms idle), so recall history holds the
+  // terms you actually filtered by — not every intermediate keystroke. Deterministic, no blur.
+  let filterRememberTimer = null
+  function onFilterInput() {
+    searchMode = true
+    filterHistPos = null
+    if (filterRememberTimer) clearTimeout(filterRememberTimer)
+    filterRememberTimer = setTimeout(() => rememberInHistory(filterHist, searchText), 800)
+  }
+  const rememberFilter = () => { rememberInHistory(filterHist, searchText); filterHistPos = null }
+  // ArrowDown on an empty filter: leave filter mode and land on the very top seam (cursor mode).
+  function exitFilterToTopSeam() {
+    searchText = ''
+    searchMode = false
+    searchInputEl?.blur()
+    if (viewing || !segments.length) return
+    insertAfterId = { before: segments[0].tunes[0].session_instance_tune_id }
+    selectedId = null
+    queueMicrotask(() => setsEl?.querySelector('.seam.active')?.scrollIntoView({ block: 'nearest' }))
+  }
   // "/" focus target: the persistent pane search when it's mounted (wide), else the modal.
   function focusSearchBox() {
     const paneField = mainEl?.querySelector('.sidepane .deep-field')
@@ -466,6 +508,8 @@
     const interactive = ae && (ae.tagName === 'BUTTON' || ae.tagName === 'A' || ae.getAttribute?.('role') === 'button')
     if (interactive) return
     if (e.key === 'Enter') {
+      // The live yellow end seam of an open set: Enter closes the set (same as "End set").
+      if (activeSeam === 'end' && endIsOpen) { e.preventDefault(); endSet(); return }
       const act = seamActionFor(insertAfterId, displaySegments)
       if (act?.type === 'join') { e.preventDefault(); joinAt(act.breakId) }
       else if (act?.type === 'split') { e.preventDefault(); splitAt(act.tuneId) }
@@ -773,9 +817,14 @@
     }
     if (!fromCacheOnly()) connect() // re-open the stream with the new mode= flag
   }
-  // Leave the pull-down filter: clear the query, restore the underlying view/edit controls,
-  // and scroll the bar back out of view. Never touches `mode` or the stream.
+  // Leave the pull-down filter: remember the term, clear the query, restore the underlying
+  // view/edit controls, and scroll the bar out of view. Never touches `mode` or the stream.
+  // Both the "Done Searching" button and the filter's clear "✕" route here, so clearing the
+  // filter always drops search mode too (not just the text).
   function doneSearching() {
+    rememberInHistory(filterHist, searchText)
+    if (filterRememberTimer) { clearTimeout(filterRememberTimer); filterRememberTimer = null }
+    filterHistPos = null
     searchText = ''
     searchMode = false
     if (searchInputEl) searchInputEl.blur()
@@ -2349,13 +2398,15 @@
         bind:value={searchText}
         bind:this={searchInputEl}
         onfocus={() => (searchMode = true)}
-        oninput={() => (searchMode = true)}
+        oninput={onFilterInput}
+        onblur={rememberFilter}
+        onkeydown={onFilterKey}
         autocorrect="off"
         autocapitalize="off"
         autocomplete="off"
         spellcheck="false"
       />
-      {#if searchMode && searchText}<button class="searchbar-clear" title="Clear" onclick={() => (searchText = '')}>✕</button>{/if}
+      {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
     </div>
     <!-- min-height:100% (in CSS) guarantees ≥ SEARCH_BAR_H of overflow so the bar can always
          tuck out of sight, even when the log is too short to fill the viewport -->
@@ -2635,6 +2686,15 @@
           onfocus={() => { composerFocused = true; scheduleSeam() }}
           onblur={stopTyping}
           onkeydown={(e) => {
+            // "/" as the very first character jumps to the search box (spec 028), matching the
+            // global shortcut — you can still type "/" once there's text in the field.
+            if (e.key === '/' && !input) { e.preventDefault(); focusSearchBox(); return }
+            // ArrowRight from an EMPTY field hops to the "End set" button (when it's showing).
+            if (e.key === 'ArrowRight' && !input) {
+              const btn = mainEl?.querySelector('.dock .endset.hot')
+              if (btn) { e.preventDefault(); btn.focus() }
+              return
+            }
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
               if (moveComposerHl(e.key === 'ArrowUp' ? 1 : -1)) { e.preventDefault(); return }
               // empty box + ArrowUp: leave the tune entry box and step back onto the cursor line
@@ -2649,7 +2709,7 @@
         />
         {#if searching}<span class="spinner input-spin"></span>{/if}
       </div>
-      <button onmousedown={(e) => e.preventDefault()} onclick={commit}>{editingId != null ? 'Save' : 'Log'}</button>
+      <button onmousedown={(e) => e.preventDefault()} onclick={commit} disabled={editingId == null && !composerLocked && !input.trim()}>{editingId != null ? 'Save' : 'Log'}</button>
       {#if editingId != null}
         <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>
       {:else if activeSeam === 'end'}
@@ -2747,6 +2807,8 @@
       suggestion={nextSuggestion}
       preferType={cursorSetType()}
       {displayStatus}
+      history={searchHist}
+      onRemember={(q) => rememberInHistory(searchHist, q)}
       onAdd={paneAdd}
       onAddSuggestion={(s) => logTune({ tune_id: s.tune_id, name: s.name, tune_type: s.tune_type }, s.name)}
       onDismissSuggestion={dismissNext}
@@ -2774,6 +2836,8 @@
         preferType={cursorSetType()}
         {displayStatus}
         {config}
+        history={searchHist}
+        onRemember={(q) => rememberInHistory(searchHist, q)}
         onAdd={(p, n) => { closeDeep(); logTune(p, n) }}
         onClose={closeDeep}
       />

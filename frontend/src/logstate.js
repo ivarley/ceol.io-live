@@ -234,3 +234,33 @@ export function seamActionFor(insertAfterId, segments) {
   }
   return null
 }
+
+// --- page-local input history (spec 028: filter box + search box recall) --- //
+
+// Push a used query onto an MRU history list (in place): drop any prior copy, append as newest.
+// Blank queries are ignored. Returns the same array for chaining.
+export function rememberInHistory(hist, q) {
+  const s = (q || '').trim()
+  if (!s) return hist
+  const i = hist.indexOf(s)
+  if (i !== -1) hist.splice(i, 1)
+  hist.push(s)
+  return hist
+}
+
+// Step through history (oldest→newest). `pos` is the current cursor (null = the live draft, not
+// yet navigating). dir < 0 = older (Up), dir > 0 = newer (Down). Returns { pos, value } for the
+// next state, or null when the move isn't possible (empty history, or Down from the draft — the
+// caller handles that, e.g. "Down in an empty filter jumps to the top seam"). Stepping newer past
+// the newest returns { pos: null, value: '' } — back to an empty draft.
+export function historyStep(hist, pos, dir) {
+  const n = hist.length
+  if (!n) return null
+  if (dir < 0) {
+    const next = pos == null ? n - 1 : Math.max(0, pos - 1)
+    return { pos: next, value: hist[next] }
+  }
+  if (pos == null) return null
+  if (pos >= n - 1) return { pos: null, value: '' }
+  return { pos: pos + 1, value: hist[pos + 1] }
+}

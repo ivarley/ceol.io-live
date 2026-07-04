@@ -113,6 +113,84 @@ test.describe("live logger (read-only smoke)", () => {
     // Space from cursor mode drops back into the tune-entry box
     await page.keyboard.press(" ");
     await expect(composer).toBeFocused();
+
+    // "/" as the FIRST character in the composer also jumps to search (nothing typed into it)…
+    await expect(composer).toHaveValue("");
+    await composer.press("/");
+    await expect(page.locator(".sidepane .deep-field")).toBeFocused();
+    await expect(composer).toHaveValue("");
+    // …but "/" after existing text is literal
+    await composer.fill("reel");
+    await composer.press("/");
+    await expect(composer).toBeFocused();
+    await expect(composer).toHaveValue("reel/");
+  });
+
+  // spec 028: page-local recall history for the filter and search boxes, plus the filter's
+  // ArrowDown-to-top-seam. Read-only (filtering/searching sends no ops).
+  test("filter + search boxes recall history; filter Down exits to the top seam", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await page.locator(".editbtn", { hasText: /edit log/i }).click();
+
+    // --- filter box recall (800ms idle-debounce remembers each dwelled-on term) ---
+    const filter = page.locator(".searchbar-input");
+    await filter.fill("reel");
+    await page.waitForTimeout(900);
+    await filter.fill("jig");
+    await page.waitForTimeout(900);
+    await filter.fill("");
+    await filter.press("ArrowUp");
+    await expect(filter).toHaveValue("jig"); // newest first
+    await filter.press("ArrowUp");
+    await expect(filter).toHaveValue("reel");
+    // empty box + ArrowDown leaves the filter for the top seam (blurs the field)
+    await filter.fill("");
+    await filter.press("ArrowDown");
+    await expect(filter).not.toBeFocused();
+
+    // --- search box recall (empty box: ArrowUp recalls; Enter commits to a real search) ---
+    const search = page.locator(".sidepane .deep-field");
+    await search.fill("cooley");
+    await page.waitForTimeout(900);
+    await search.fill("kesh");
+    await page.waitForTimeout(900);
+    await search.fill("");
+    await page.waitForTimeout(200);
+    await search.press("ArrowUp");
+    await expect(search).toHaveValue("kesh");
+    await search.press("ArrowUp");
+    await expect(search).toHaveValue("cooley");
+    // recall fires the search — results appear, not just the "log as-is" escape
+    await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
+  });
+
+  // Regression (spec 028): clearing the filter with "✕" must also drop search mode, not just the
+  // text — otherwise the "Done Searching" dock lingers with the filter gone.
+  test("clearing the filter with ✕ also exits search mode", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    const filter = page.locator(".searchbar-input");
+    await filter.fill("maggie");
+    await expect(page.locator(".searchbar-dock")).toBeVisible(); // "Done Searching" dock is up
+    await page.locator(".searchbar-clear").click();
+    await expect(page.locator(".searchbar-dock")).toHaveCount(0); // search mode fully dropped
+    await expect(filter).toHaveValue("");
+  });
+
+  // spec 028: the Log button is disabled while the composer is empty. Read-only (never commits).
+  test("Log button is disabled while the composer is empty", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    await page.locator(".editbtn", { hasText: /edit log/i }).click();
+    const composer = page.locator(".composer input");
+    const logBtn = page.locator(".composer > button").filter({ hasText: /^Log$/ });
+    await expect(logBtn).toBeDisabled();
+    await composer.fill("reel");
+    await expect(logBtn).toBeEnabled();
+    await composer.fill("");
+    await expect(logBtn).toBeDisabled();
   });
 
   test("mobile width has no side pane", async ({ page }) => {

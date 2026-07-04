@@ -178,13 +178,30 @@ give three behaviors keyed off *what has focus*:
   the new between-sets seam (Enter/tap Joins it back); after a join it's the now-intra-set seam
   (Enter/tap Splits it back) — an exact toggle. This is the same for the mouse/touch pills, so
   on mobile the pill just flips Split↔Join in place.
+- **Enter on the live yellow end seam ends the set** (`activeSeam === 'end' && endIsOpen` → the
+  same `endSet` the "End set" button calls). The closed-end "new set" white line has no action.
+
+**Text-box recall history (spec 028).** The filter box and the search box each keep a page-local
+MRU history (`filterHist` in App; `searchHist` in App, `$state` so it stays live across the pane
+and modal `TuneSearch` instances that share it via a prop). A term is remembered on an 800ms
+idle-debounce after typing (plus on a pick, for search) — so history holds terms you settled on,
+not every keystroke (`rememberInHistory`, MRU-dedup). **ArrowUp** recalls older entries, **ArrowDown**
+newer (past the newest → empty draft), via the pure `historyStep`. In the filter box (no result
+list) the arrows always drive history; **ArrowDown on an empty, non-navigating filter** instead
+exits to the top seam. In the search box, ArrowUp recalls only when the box is **empty** (a typed
+query's arrows walk the result cards); each recall **fires the search** so the results show
+immediately, and `histPos` stays set so further arrows keep cycling. Enter then picks the top/
+highlighted result (a recalled query mid-load never falls through to "log as-is").
 - **Mode transitions knit the three zones (filter box ↕ cursor ↕ tune-entry box).** Stepping the
   cursor off the **bottom** slot (ArrowDown at the end) focuses the tune-entry box; off the **top**
   seam (ArrowUp) focuses the pull-down filter box. Conversely, ArrowUp in an **empty** tune-entry
   box drops onto the cursor line. **"/"** anywhere (outside a text field) jumps to the search box —
-  the persistent pane when wide, else the deep-search modal.
+  the persistent pane when wide, else the deep-search modal. Typing **"/" as the first character
+  in the (empty) tune-entry box** jumps there too; once the box has text, "/" is literal.
 
 Cursor mode is edit-only (`canEdit`); "/" works in any mode (search is browsable while reading).
+The **Log button is disabled while the composer is empty**; **ArrowRight from an empty composer**
+hops focus to the "End set" button when it's showing (open set at the live end).
 
 Deferred to later phases: multi-select + copy/paste of sets, reorder, and the full
 `store.svelte.js` extraction

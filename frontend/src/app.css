@@ -796,6 +796,8 @@ main {
   font-weight: 600;
   cursor: pointer;
 }
+/* Log disabled while the field is empty — dimmed, not clickable */
+.composer > button:disabled { opacity: 0.4; cursor: default; }
 /* "Search …" footer in the type-ahead results (deep search also lives in the menu) */
 /* footer rows sit at the TOP of the column-reverse list, so the divider goes on their bottom */
 .results .result-deeper { color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
