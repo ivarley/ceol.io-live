@@ -2421,6 +2421,13 @@
       notesText = snap.notes || ''
       logComplete = !!snap.log_complete
       highWater = snap.last_event_id || 0
+      // Server truth is applied — the screen can render NOW. Flipping `loaded` here
+      // (rather than when connect() fully resolves) matters only for an EMPTY log:
+      // rows render as soon as byId fills, but the "No tunes yet" message is gated on
+      // `loaded`, and the snapshot write + queue hydration below run on IndexedDB,
+      // which can take seconds on a cold mobile browser — an empty session would sit
+      // on the loading skeleton that whole time.
+      loaded = true
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
 
       // Completed log = read-only. Render the records and stop — skip the offline-queue
