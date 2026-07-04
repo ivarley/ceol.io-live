@@ -196,6 +196,41 @@ export async function fetchIncipit(config, tuneId, kind) {
   }
 }
 
+// The current user's whole tune list — instruments (with is_auto) + every
+// person_tune row's learn_status and sparse per-instrument overrides — for the
+// my-list highlight mode. Pages through /api/my-tunes (2000/page covers nearly
+// everyone in one call).
+export async function myTunesList() {
+  let instruments = []
+  const tunes = []
+  for (let page = 1; ; page++) {
+    const res = await fetch(`/api/my-tunes?per_page=2000&page=${page}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (!res.ok) throw new Error(`my-tunes failed: ${res.status}`)
+    const j = await res.json()
+    if (page === 1) instruments = j.instruments || []
+    tunes.push(...(j.tunes || []))
+    if (!j.pagination?.has_next) break
+  }
+  return { instruments, tunes }
+}
+
+// One idempotent my-tunes op (add / set_status / set_instrument_status …) —
+// the same endpoint the tune-detail modal saves through.
+export async function myTunesOp(op) {
+  const res = await fetch('/api/my-tunes/ops', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(op),
+  })
+  const j = await res.json().catch(() => ({}))
+  if (!res.ok || j.success === false) throw new Error(j.error || `my-tunes op failed: ${res.status}`)
+  return j
+}
+
 // Search people to add to attendance (§F editor); flags who's already checked in.
 export async function peopleSearch(config, q) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people/search?q=${encodeURIComponent(q)}`, {

@@ -1321,3 +1321,88 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 }
 .assign-head { font-size: 15px; font-weight: 700; }
 .assign-modal .starter-list { overflow-y: auto; }
+
+/* ---------- my-list highlight mode: color/label tunes by MY learn status ---------- */
+
+/* the ★ toggle, left of the ☑ selection toggle on the filter bar */
+.listmode-btn {
+  flex: none;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.listmode-btn.on { background: var(--accent); border-color: var(--accent); color: #04122b; }
+
+/* instrument scope: a droplist (2+ instruments) or a read-only label, in the
+   filter box's slot */
+.searchbar-inst {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 15px;
+  padding: 9px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+.searchbar-inst:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.searchbar-instlabel {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--text);
+  padding: 9px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status palette = the tune-detail modal's dark tunebook-status-* values (this
+   shell is always dark), so a chip here matches the modal's roll-up tint. */
+.ls-chip {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 999px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.ls-chip.ls-want-to-learn { background: #1f3a4a; color: #cce5ff; }
+.ls-chip.ls-learning { background: #4a3f1f; color: #ffeaa7; }
+.ls-chip.ls-learned { background: #1f4a2f; color: #c3e6cb; }
+.ls-chip.ls-not-on-list { background: #4a1f1f; color: #f8d7da; }
+
+/* subtle same-hue row wash so status reads at a glance; the bulk-selected wash
+   (accent + ring) must stay dominant, hence the :not() */
+.tune-row.ls-want-to-learn:not(.bulk-selected) { background: rgba(79, 157, 255, 0.09); }
+.tune-row.ls-learning:not(.bulk-selected) { background: rgba(245, 197, 24, 0.08); }
+.tune-row.ls-learned:not(.bulk-selected) { background: rgba(70, 210, 122, 0.09); }
+.tune-row.ls-not-on-list:not(.bulk-selected) { background: rgba(224, 89, 75, 0.09); }
+
+/* select-by-status shortcuts under "Select all · None" (selection + list mode) */
+.selrow-status { flex-wrap: wrap; padding-top: 0; }
+.selrow-k { color: var(--muted); font-size: 12.5px; }
+.selrow-status button.ls-not-on-list { color: #f2a19a; }
+.selrow-status button.ls-want-to-learn { color: #9ecbff; }
+.selrow-status button.ls-learning { color: #ffd76a; }
+.selrow-status button.ls-learned { color: #7ade9a; }
+
+/* bulk set-status modal (assign-modal shell) */
+.mylist-scope { margin: -2px 0 2px; color: var(--muted); font-size: 13px; }
+.mylist-modal .ls-opt { font-weight: 600; border-radius: 8px; }
+.mylist-modal .ls-opt.ls-want-to-learn { background: #1f3a4a; color: #cce5ff; }
+.mylist-modal .ls-opt.ls-learning { background: #4a3f1f; color: #ffeaa7; }
+.mylist-modal .ls-opt.ls-learned { background: #1f4a2f; color: #c3e6cb; }

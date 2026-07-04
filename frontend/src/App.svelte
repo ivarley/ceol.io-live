@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail, myTunesList, myTunesOp } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
   import SidePane from './SidePane.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
@@ -19,6 +19,7 @@
     dragBlock, dropTargets, optimisticMove,
     serializeClipboard, parseClipboard, rangeBetween, selectableIds,
   } from './selection.js'
+  import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
 
   let { config } = $props()
 
@@ -236,7 +237,7 @@
   // matches. Purely client-side over byId — no network, no stream/mode change (§024).
   let searchMode = $state(false) // the filter UI is active
   let searchText = $state('') // live filter string
-  let searchInputEl // the filter input element (focus/blur)
+  let searchInputEl = $state(null) // the filter input element (focus/blur); null while list mode swaps in the droplist
   const SEARCH_BAR_H = 56 // px; scroll offset that hides the bar (52px bar + ~4px top gap)
   // A placeholder tune row whose match is still resolving (Enter was hit faster than the
   // search returned). While set, the composer is locked; the row settles to linked/unlinked
@@ -498,6 +499,7 @@
       if (e.defaultPrevented) return // a modal/resolving handler already claimed it
       if (inField) { ae.blur(); return }
       if (drag) { cancelDrag(); return } // Esc mid-drag: settle the block back, no op
+      if (listStatusOpen) { listStatusOpen = false; return }
       if (assignOpen) { assignOpen = false; return }
       if (selectMode) { exitSelectMode(); return }
       return
@@ -848,6 +850,99 @@
     const seq = ++noticeSeq
     notice = text
     setTimeout(() => { if (noticeSeq === seq && notice === text) notice = '' }, 4000)
+  }
+
+  // --- my-list highlight mode: color/label every tune by MY learn status ---
+  // Orthogonal to view/edit, the filter, and selection mode (it composes with
+  // selection: select-by-status shortcuts + a bulk "My list" footer action). The
+  // status shown is the SAME roll-up the tune-detail modal uses (mylist.js); the
+  // scope droplist narrows it to one of my instruments. Pure personal state —
+  // person_tune only, never the session log — so it works in view mode too.
+  let listMode = $state(false)
+  let listInstrument = $state('all') // 'all' or one of my instrument names
+  let myInstruments = $state([]) // [{instrument, is_auto}] from /api/my-tunes
+  const myList = new SvelteMap() // tune_id -> {learn_status, instrument_status}
+  let listLoading = $state(false)
+  let listLoaded = $state(false) // fetched once per page load; bulk updates keep it current locally
+  let listStatusOpen = $state(false) // the bulk set-status modal
+  let listBusy = $state(false) // a bulk status update is in flight
+
+  function toggleListMode() {
+    if (listMode) {
+      listMode = false
+      listStatusOpen = false
+      return
+    }
+    if (searchMode) doneSearching() // the droplist replaces the filter box
+    listMode = true
+    if (!listLoaded) refreshMyList()
+  }
+  async function refreshMyList() {
+    listLoading = true
+    try {
+      const d = await myTunesList()
+      myList.clear()
+      for (const t of d.tunes) {
+        if (t.tune_id != null) myList.set(t.tune_id, { learn_status: t.learn_status, instrument_status: t.instrument_status || {} })
+      }
+      myInstruments = d.instruments || []
+      if (listInstrument !== 'all' && !myInstruments.some((i) => i.instrument === listInstrument)) listInstrument = 'all'
+      listLoaded = true
+    } catch {
+      listMode = false
+      notice = "Couldn't load your tune list — this needs a connection."
+    } finally {
+      listLoading = false
+    }
+  }
+  // Status for a log row under the current scope. null for breaks and unlinked
+  // rows (no tune_id -> can't be on a list); those render without a chip. Also
+  // null until the list has actually loaded — an empty map would paint every
+  // tune "not on list" during the fetch.
+  function rowListStatus(r) {
+    if (!listLoaded || r.record_type !== 'tune' || r.tune_id == null) return null
+    return listStatus(myList.get(r.tune_id), myInstruments, listInstrument)
+  }
+  // Select-by-status shortcut (additive, like "Select all"): every settled linked
+  // tune currently SHOWING the given status chip.
+  function selectByStatus(target) {
+    for (const seg of displaySegments) {
+      for (const t of seg.tunes) {
+        if (t._temp || t._removing || t.tune_id == null) continue
+        if (rowListStatus(t) === target) selected.add(t.session_instance_tune_id)
+      }
+    }
+  }
+  // Bulk add-to-list / set-status on the selection, scoped to the droplist's
+  // instrument. Ops go one-per-tune through the modal's idempotent endpoint;
+  // the cached list is updated locally as each tune lands (no refetch). The
+  // selection is kept afterwards (cheap to layer another change on).
+  async function applyListStatus(target) {
+    listStatusOpen = false
+    const tuneIds = [...new Set([...selected].map((id) => byId.get(id)?.tune_id).filter((t) => t != null))]
+    const unlinked = [...selected].filter((id) => byId.get(id) && byId.get(id).tune_id == null).length
+    const plans = planStatusOps(tuneIds, (tid) => myList.get(tid), myInstruments, listInstrument, target)
+    if (!plans.length) {
+      flashNotice(unlinked ? 'No change — unlinked tunes can’t be added to your list' : 'Already up to date')
+      return
+    }
+    listBusy = true
+    let done = 0
+    let failed = 0
+    for (const p of plans) {
+      try {
+        for (const op of p.ops) await myTunesOp({ ...op, tune_id: p.tune_id })
+        myList.set(p.tune_id, applyStatusLocally(myList.get(p.tune_id), myInstruments, listInstrument, target))
+        done++
+      } catch {
+        failed++
+      }
+    }
+    listBusy = false
+    const scope = listInstrument !== 'all' && myInstruments.length > 1 ? ` on ${listInstrument}` : ''
+    const skipped = tuneIds.length - plans.length
+    if (failed) notice = `Set ${done} of ${plans.length} tunes to “${target}”${scope} — ${failed} failed (offline?)`
+    else flashNotice(`Set ${done} tune${done === 1 ? '' : 's'} to “${target}”${scope}${skipped ? ` · ${skipped} already there` : ''}`)
   }
 
   function enterSelectMode() {
@@ -2807,22 +2902,39 @@
     <!-- Pull-down filter: hidden above the fold, revealed by scrolling to the very top.
          Focusing/typing enters search mode; filters displaySegments live. (§024) -->
     <div class="searchbar" class:on={searchMode}>
-      <span class="searchbar-icon" aria-hidden="true">🔍</span>
-      <input
-        class="searchbar-input"
-        placeholder="Filter tunes…"
-        bind:value={searchText}
-        bind:this={searchInputEl}
-        onfocus={() => (searchMode = true)}
-        oninput={onFilterInput}
-        onblur={rememberFilter}
-        onkeydown={onFilterKey}
-        autocorrect="off"
-        autocapitalize="off"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
+      <span class="searchbar-icon" aria-hidden="true">{listMode ? '★' : '🔍'}</span>
+      {#if listMode}
+        <!-- highlight mode: the instrument scope replaces the filter box -->
+        {#if myInstruments.length > 1}
+          <select class="searchbar-inst" aria-label="Instrument" bind:value={listInstrument}>
+            <option value="all">All instruments</option>
+            {#each myInstruments as i (i.instrument)}
+              <option value={i.instrument}>{i.instrument}</option>
+            {/each}
+          </select>
+        {:else}
+          <span class="searchbar-instlabel">{myInstruments[0]?.instrument || 'My tune list'}</span>
+        {/if}
+        {#if listLoading}<span class="spinner" aria-label="Loading your list"></span>{/if}
+      {:else}
+        <input
+          class="searchbar-input"
+          placeholder="Filter tunes…"
+          bind:value={searchText}
+          bind:this={searchInputEl}
+          onfocus={() => (searchMode = true)}
+          oninput={onFilterInput}
+          onblur={rememberFilter}
+          onkeydown={onFilterKey}
+          autocorrect="off"
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
+      {/if}
+      <!-- my-list highlight toggle: color every tune by MY learn status -->
+      <button class="listmode-btn" class:on={listMode} title={listMode ? 'Hide my list status' : 'Show my list status'} aria-pressed={listMode} onclick={toggleListMode}>★</button>
       <!-- selection-mode toggle (spec 029 §A): available in edit AND view (copy-only) -->
       <button class="selmode-btn" class:on={selectMode} title={selectMode ? 'Leave selection mode' : 'Select tunes'} aria-pressed={selectMode} onclick={toggleSelectMode}>☑</button>
     </div>
@@ -2835,6 +2947,19 @@
         <span aria-hidden="true">·</span>
         <button onclick={selectNone}>None</button>
       </div>
+      {#if listMode}
+        <!-- select-by-status shortcuts (additive, like Select all) -->
+        <div class="selrow selrow-status">
+          <span class="selrow-k">Select:</span>
+          <button class="ls-not-on-list" onclick={() => selectByStatus(NOT_ON_LIST)}>not on list</button>
+          <span aria-hidden="true">·</span>
+          <button class="ls-want-to-learn" onclick={() => selectByStatus('want to learn')}>want to learn</button>
+          <span aria-hidden="true">·</span>
+          <button class="ls-learning" onclick={() => selectByStatus('learning')}>learning</button>
+          <span aria-hidden="true">·</span>
+          <button class="ls-learned" onclick={() => selectByStatus('learned')}>learned</button>
+        </div>
+      {/if}
     {/if}
     {#if drag?.started && dragKeys?.has('top-new')}
       <!-- drag-only drop zone: land as own set(s) at the very start (spec 029 §F) -->
@@ -2891,10 +3016,15 @@
           </div>
         {/if}
         {#each seg.tunes as r, ti (r.session_instance_tune_id)}
+          {@const lst = listMode ? rowListStatus(r) : null}
           <div
             class="tune-row"
             role="button"
             tabindex="0"
+            class:ls-want-to-learn={lst === 'want to learn'}
+            class:ls-learning={lst === 'learning'}
+            class:ls-learned={lst === 'learned'}
+            class:ls-not-on-list={lst === NOT_ON_LIST}
             class:low={!r._temp && r.confidence != null && r.confidence <= 70}
             class:unlinked={!r._resolving && !r.tune_id && r.record_type === 'tune'}
             class:has-by={!viewing && !r._temp && r.tune_id && loggerColorIdx(r) != null}
@@ -2913,6 +3043,7 @@
             onkeydown={(e) => activate(e, () => rowClick(r))}
           >
             <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}</span>
+            {#if lst}<span class="ls-chip {statusClass(lst)}">{lst}</span>{/if}
             {#if r._temp}
               {#if r._resolving}
                 <!-- match still resolving: the one case worth a spinner (what got logged is unknown) -->
@@ -3049,6 +3180,10 @@
           <button class="sel-act" class:dim={!lastCopy} disabled={searchMode} title="Paste tunes from clipboard" onclick={pasteClipboard}>Paste</button>
           <button class="sel-act sel-danger" disabled={!selected.size} onclick={bulkDelete}>Delete</button>
           <button class="sel-act" disabled={!selected.size} onclick={openAssign}>Assign</button>
+        {/if}
+        {#if listMode}
+          <!-- bulk add-to-list / set-status (my personal list — safe in view mode too) -->
+          <button class="sel-act" disabled={!selected.size || listBusy} title="Add the selected tunes to my list / change their status" onclick={() => (listStatusOpen = true)}>My list</button>
         {/if}
         <button class="sel-done" onclick={exitSelectMode}>Done</button>
       </footer>
@@ -3213,6 +3348,23 @@
           {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else}<p class="starter-empty">Loading…</p>{/if}
         {/each}
         <button class="starter-item add-player" onclick={() => { assignOpen = false; openAttendance() }}>＋ Add a player</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if listStatusOpen}
+    <!-- bulk my-list status: reuses the assign-modal shell -->
+    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={() => (listStatusOpen = false)} onkeydown={(e) => activate(e, () => (listStatusOpen = false))}></div>
+    <div class="assign-modal mylist-modal" role="dialog" aria-modal="true">
+      <div class="assign-head">Put on my list as…</div>
+      <p class="mylist-scope">
+        {selected.size} tune{selected.size === 1 ? '' : 's'}
+        {listInstrument !== 'all' && myInstruments.length > 1 ? ` · for ${listInstrument}` : ' · all instruments'}
+      </p>
+      <div class="starter-list">
+        <button class="starter-item ls-opt ls-want-to-learn" onclick={() => applyListStatus('want to learn')}>Want to learn</button>
+        <button class="starter-item ls-opt ls-learning" onclick={() => applyListStatus('learning')}>Learning</button>
+        <button class="starter-item ls-opt ls-learned" onclick={() => applyListStatus('learned')}>Learned</button>
       </div>
     </div>
   {/if}
