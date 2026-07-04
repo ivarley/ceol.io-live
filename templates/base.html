@@ -775,6 +775,7 @@ if ('serviceWorker' in navigator) {
 <!-- Unified tune-detail modal container + logic (one per page; child templates no longer include their own) -->
 {% block tune_detail_modal %}
 {% include 'tune_detail_modal.html' %}
+<script src="{{ url_for('static', filename='js/tunebook_status.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}" defer></script>
 {% endblock %}
 

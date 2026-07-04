@@ -1,9 +1,12 @@
 // My-list (tunebook) status logic for the live logger's highlight mode. Pure —
 // plain objects in, plain values out, no Svelte/DOM/network — so the roll-up and
-// the bulk-op planning are unit-testable. The rules here MUST mirror the legacy
-// tune-detail modal (static/js/tune_detail_modal.js rollupStatus/resolveInstStatus
-// and setTunebookStatus) and the server's /api/my-tunes/ops semantics, so a status
-// shown or set in the logger is exactly what the modal / My Tunes pages would show.
+// the bulk-op planning are unit-testable. Exactly TWO copies of the resolution
+// rules exist: this ES module (bundled + unit-tested) and its vanilla twin
+// static/js/tunebook_status.js (window.TunebookStatus), which the tune-detail
+// modal and the My Tunes / session pages all delegate to. Keep them in sync —
+// and keep both matching the server's /api/my-tunes/ops semantics (see
+// setTunebookStatus in tune_detail_modal.js for the overall-set behavior this
+// module's planStatusOps mirrors).
 
 export const STATUSES = ['want to learn', 'learning', 'learned']
 export const NOT_ON_LIST = 'not on list'

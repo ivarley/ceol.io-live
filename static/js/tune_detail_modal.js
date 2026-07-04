@@ -24,7 +24,6 @@
     let originalValues = {};
     let isConfigSectionVisible = false;
     let piExpanded = false; // whether the per-instrument rows are revealed in the status control
-    const STATUS_RANK = { 'want to learn': 1, 'learning': 2, 'learned': 3 };
     let pendingHeardCountRequests = 0;
 
     // Musical keys list
@@ -717,24 +716,22 @@ ${abcBody}`;
         if (config.context === 'my_tunes') { tuneData.instrument_status = overrides; }
         else if (tuneData.person_tune_status) { tuneData.person_tune_status.instrument_status = overrides; }
     }
+    // Per-instrument + roll-up resolution DELEGATE to the shared TunebookStatus
+    // helper (static/js/tunebook_status.js, loaded before this file on every page
+    // with the modal) — one canonical copy of the rules for all vanilla pages.
     function resolveInstStatus(overrides, inst, learnStatus) {
-        if (Object.prototype.hasOwnProperty.call(overrides, inst.instrument)) return overrides[inst.instrument];
-        return inst.is_auto ? learnStatus : null;
+        return TunebookStatus.instrumentStatus({ learn_status: learnStatus, instrument_status: overrides || {} }, inst);
     }
-    // The 3-button segmented control, shared by the main row and every instrument row so
-    // all groups are identical width and the buttons line up into columns.
     // The tune's overall status = a roll-up: the furthest-along status across all
     // instruments that have one (auto follow learn_status; manual only when tracked).
     function rollupStatus(tuneData, config) {
         const { instruments, overrides } = getInstrumentData(tuneData, config);
         const learnStatus = getModalLearnStatus(tuneData, config);
-        if (!instruments || instruments.length < 2) return learnStatus;
-        let best = null, bestRank = 0;
-        instruments.forEach(function (inst) {
-            const st = resolveInstStatus(overrides, inst, learnStatus);
-            if (st && STATUS_RANK[st] > bestRank) { bestRank = STATUS_RANK[st]; best = st; }
-        });
-        return best || learnStatus;
+        return TunebookStatus.resolve(
+            { learn_status: learnStatus, instrument_status: overrides || {} },
+            instruments,
+            'all'
+        );
     }
 
     // A full-width 3-button segmented control. The active button carries the status color;

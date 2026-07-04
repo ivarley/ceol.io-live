@@ -198,6 +198,30 @@
             white-space: nowrap;
         }
 
+        /* My-tunebook status highlighting (same palette as the tune-detail modal's
+           tunebook-status-* tints, both themes). Chip = solid status color; row
+           gets a subtle same-hue wash (alpha works on light and dark). */
+        .ls-chip {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 7px;
+            border-radius: 999px;
+            text-transform: capitalize;
+            white-space: nowrap;
+        }
+        .ls-chip.ls-want-to-learn { background-color: #e6f3ff; color: #004085; }
+        .ls-chip.ls-learning { background-color: #fff3cd; color: #856404; }
+        .ls-chip.ls-learned { background-color: #d4edda; color: #155724; }
+        .ls-chip.ls-not-on-list { background-color: #ffe6e6; color: #721c24; }
+        [data-theme="dark"] .ls-chip.ls-want-to-learn { background-color: #1f3a4a; color: #cce5ff; }
+        [data-theme="dark"] .ls-chip.ls-learning { background-color: #4a3f1f; color: #ffeaa7; }
+        [data-theme="dark"] .ls-chip.ls-learned { background-color: #1f4a2f; color: #c3e6cb; }
+        [data-theme="dark"] .ls-chip.ls-not-on-list { background-color: #4a1f1f; color: #f8d7da; }
+        .tune-row.ls-want-to-learn { background-color: rgba(79, 157, 255, 0.09); }
+        .tune-row.ls-learning { background-color: rgba(245, 197, 24, 0.09); }
+        .tune-row.ls-learned { background-color: rgba(70, 210, 122, 0.10); }
+        .tune-row.ls-not-on-list { background-color: rgba(224, 89, 75, 0.09); }
+
         /* Loading dots animation */
         .loading-dots {
             font-weight: bold;
@@ -1738,6 +1762,22 @@
                                 <span id="sort-direction-icon">↓</span>
                             </button>
                         </div>
+                        {% if is_logged_in %}
+                        <!-- My-tunebook status: colors every row by MY learn status (roll-up,
+                             same rules as the tune-detail modal) and, past "all", filters to
+                             one status. Instrument scope appears for 2+ instrument players. -->
+                        <div class="filter-panel-row">
+                            <select id="mystatus-filter" class="filter-panel-select" title="My tunebook status">
+                                <option value="">My Tunebook: off</option>
+                                <option value="all">Show My Status</option>
+                                <option value="not on list">Not On My List</option>
+                                <option value="want to learn">Want To Learn</option>
+                                <option value="learning">Learning</option>
+                                <option value="learned">Learned</option>
+                            </select>
+                            <select id="mystatus-inst" class="filter-panel-select" title="Instrument" style="display: none;"></select>
+                        </div>
+                        {% endif %}
                         <div class="filter-panel-actions">
                             <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
                         </div>
@@ -2060,6 +2100,7 @@
 
 {% block extra_js %}
 <script src="/static/js/dist/modalManager.js"></script>
+<script src="/static/js/tunebook_status.js"></script>
 <script>
     const sessionPath = '{{ session.path }}';
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
@@ -2505,8 +2546,10 @@
     let filteredTunes = [];
     let currentFilters = {
         search: '',
-        type: ''
+        type: '',
+        mystatus: '' // '' = off, 'all' = color only, or a learn status / 'not on list' = color + filter
     };
+    let myStatusInstrument = 'all'; // instrument scope for the my-tunebook status (2+ instruments)
     let isInitializing = true; // Flag to prevent URL updates during initialization
     let allTunesLoaded = {{ 'false' if has_more_tunes else 'true' }}; // Track if all tunes are loaded
     let isLoadingTunes = false; // Track if currently loading tunes
@@ -2760,11 +2803,21 @@
 
         currentFilters = {
             search: currentSearch,
-            type: ''
+            type: '',
+            mystatus: ''
         };
+        myStatusInstrument = 'all';
 
         // Reset type filter
         document.getElementById('type-filter').value = '';
+
+        // Reset the my-tunebook status control (logged-in only)
+        const myStatusSelect = document.getElementById('mystatus-filter');
+        if (myStatusSelect) {
+            myStatusSelect.value = '';
+            const instSel = document.getElementById('mystatus-inst');
+            if (instSel) { instSel.value = 'all'; instSel.style.display = 'none'; }
+        }
 
         applyFilters();
     }
@@ -2785,6 +2838,17 @@
         if (typeParam) {
             currentFilters.type = typeParam;
             document.getElementById('type-filter').value = typeParam;
+        }
+
+        // Load my-tunebook status filter (only if the control exists = logged in)
+        const myStatusParam = urlParams.get('mystatus');
+        const myStatusSelect = document.getElementById('mystatus-filter');
+        if (myStatusParam && myStatusSelect && [...myStatusSelect.options].some(o => o.value === myStatusParam)) {
+            currentFilters.mystatus = myStatusParam;
+            myStatusSelect.value = myStatusParam;
+            const instParam = urlParams.get('myinst');
+            if (instParam) myStatusInstrument = instParam; // validated once instruments load
+            activateMyStatus(); // lazy-loads the tunebook, then re-applies filters
         }
 
         // Load sort state
@@ -2833,6 +2897,18 @@
             urlParams.set('type', currentFilters.type);
         } else {
             urlParams.delete('type');
+        }
+
+        // Update my-tunebook status parameters
+        if (currentFilters.mystatus) {
+            urlParams.set('mystatus', currentFilters.mystatus);
+        } else {
+            urlParams.delete('mystatus');
+        }
+        if (currentFilters.mystatus && myStatusInstrument !== 'all') {
+            urlParams.set('myinst', myStatusInstrument);
+        } else {
+            urlParams.delete('myinst');
         }
 
         // Update sort parameters (only if not default: session-desc)
@@ -2885,6 +2961,78 @@
             currentFilters.type = e.target.value;
             applyFilters();
         });
+
+        // My-tunebook status filter (logged-in only; the row isn't rendered otherwise)
+        const myStatusSelect = document.getElementById('mystatus-filter');
+        if (myStatusSelect) {
+            myStatusSelect.addEventListener('change', function(e) {
+                currentFilters.mystatus = e.target.value;
+                activateMyStatus();
+            });
+            const instSelect = document.getElementById('mystatus-inst');
+            instSelect.addEventListener('change', function(e) {
+                myStatusInstrument = e.target.value;
+                applyFilters();
+            });
+        }
+    }
+
+    // Engage the my-tunebook status view: lazy-load the list on first use, then
+    // color/filter. While loading, the results count says so; a fetch failure
+    // (offline, session expired) resets the control rather than filtering on
+    // an empty list.
+    function activateMyStatus() {
+        if (!currentFilters.mystatus) {
+            const instSel = document.getElementById('mystatus-inst');
+            if (instSel) instSel.style.display = 'none';
+            applyFilters();
+            return;
+        }
+        if (window.TunebookStatus && TunebookStatus.isLoaded()) {
+            populateMyStatusInstruments();
+            applyFilters();
+            return;
+        }
+        const resultsCountText = document.getElementById('results-count-text');
+        if (resultsCountText) resultsCountText.textContent = 'Loading your tunebook…';
+        TunebookStatus.load()
+            .then(function () {
+                populateMyStatusInstruments();
+                applyFilters();
+            })
+            .catch(function () {
+                currentFilters.mystatus = '';
+                const sel = document.getElementById('mystatus-filter');
+                if (sel) sel.value = '';
+                if (resultsCountText) resultsCountText.textContent = "Couldn't load your tunebook — check your connection.";
+                applyFilters();
+            });
+    }
+
+    // Instrument scope droplist: only meaningful for 2+ instrument players
+    // (below that the roll-up IS the base status, matching the modal).
+    function populateMyStatusInstruments() {
+        const sel = document.getElementById('mystatus-inst');
+        if (!sel) return;
+        const instruments = TunebookStatus.getInstruments();
+        if (instruments.length < 2) { sel.style.display = 'none'; return; }
+        if (!sel.options.length) {
+            const all = document.createElement('option');
+            all.value = 'all';
+            all.textContent = 'All Instruments';
+            sel.appendChild(all);
+            instruments.forEach(function (i) {
+                const o = document.createElement('option');
+                o.value = i.instrument;
+                o.textContent = i.instrument;
+                sel.appendChild(o);
+            });
+        }
+        if (![...sel.options].some(function (o) { return o.value === myStatusInstrument; })) {
+            myStatusInstrument = 'all';
+        }
+        sel.value = myStatusInstrument;
+        sel.style.display = currentFilters.mystatus ? '' : 'none';
     }
 
     function applyFilters() {
@@ -2906,6 +3054,15 @@
                 return false;
             }
 
+            // My-tunebook status filter ('all' colors without filtering)
+            if (
+                currentFilters.mystatus && currentFilters.mystatus !== 'all' &&
+                window.TunebookStatus && TunebookStatus.isLoaded() &&
+                TunebookStatus.statusFor(tune[0], myStatusInstrument) !== currentFilters.mystatus
+            ) {
+                return false;
+            }
+
             return true;
         });
 
@@ -2917,7 +3074,7 @@
 
         // Show/hide "Clear Filters" button based on active filters
         const clearFiltersBtn = document.getElementById('clear-filters-btn');
-        const hasActiveFilters = currentFilters.type;
+        const hasActiveFilters = currentFilters.type || currentFilters.mystatus;
         if (clearFiltersBtn) {
             clearFiltersBtn.style.display = hasActiveFilters ? 'block' : 'none';
         }
@@ -3015,13 +3172,23 @@
         const isChecked = selectedTuneIds.has(tuneId) ? 'checked' : '';
         const selectionModeClass = isSelectionMode ? ' selection-mode' : '';
 
+        // My-tunebook status highlighting: row wash + a status chip
+        let statusClass = '';
+        let statusChip = '';
+        if (currentFilters.mystatus && window.TunebookStatus && TunebookStatus.isLoaded()) {
+            const st = TunebookStatus.statusFor(tuneId, myStatusInstrument);
+            statusClass = ' ' + TunebookStatus.classFor(st);
+            statusChip = `<span class="ls-chip ${TunebookStatus.classFor(st)}">${st}</span>`;
+        }
+
         return `
-            <div class="tune-row${selectionModeClass}" data-tune-id="${tuneId}" onclick="handleTuneRowClick(event, ${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
+            <div class="tune-row${selectionModeClass}${statusClass}" data-tune-id="${tuneId}" onclick="handleTuneRowClick(event, ${tuneId}, '${tuneName.replace(/'/g, "\\'")}', '${tuneType}', ${timesPlayed}, ${tunebookCount}, ${settingId || 'null'})">
                 <div class="tune-row-header">
                     <input type="checkbox" class="tune-select-checkbox" data-tune-id="${tuneId}" ${isChecked} onclick="handleTuneCheckboxClick(event, ${tuneId})">
                     <h3 class="tune-name">${tuneName}</h3>
                 </div>
                 <div class="tune-meta">
+                    ${statusChip}
                     ${typeBadge}
                     ${countBadge}
                 </div>

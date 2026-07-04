@@ -305,12 +305,14 @@ let currentFilters = {
 
 // Resolve a tune's status on one instrument (by name): an explicit override wins; else an
 // auto instrument follows learn_status, and a manual instrument is untracked (null).
+// The rules live in the shared TunebookStatus helper (static/js/tunebook_status.js).
 function resolveTuneInstrumentStatus(tune, instrumentName) {
     const inst = myInstruments.find(i => i.instrument.toLowerCase() === instrumentName.toLowerCase());
     if (!inst) return null;
-    const overrides = tune.instrument_status || {};
-    if (Object.prototype.hasOwnProperty.call(overrides, inst.instrument)) return overrides[inst.instrument];
-    return inst.is_auto ? tune.learn_status : null;
+    return TunebookStatus.instrumentStatus(
+        { learn_status: tune.learn_status, instrument_status: tune.instrument_status || {} },
+        inst
+    );
 }
 
 function setInstrumentFilter(name) {
