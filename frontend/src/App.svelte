@@ -15,6 +15,10 @@
     computeCursorSlots, seamKeyFor, seamActionFor,
     rememberInHistory, historyStep,
   } from './logstate.js'
+  import {
+    dragBlock, dropTargets, optimisticMove,
+    serializeClipboard, parseClipboard, rangeBetween, selectableIds,
+  } from './selection.js'
 
   let { config } = $props()
 
@@ -487,7 +491,10 @@
     const inField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)
     if (e.key === 'Escape') {
       if (e.defaultPrevented) return // a modal/resolving handler already claimed it
-      if (inField) ae.blur()
+      if (inField) { ae.blur(); return }
+      if (drag) { cancelDrag(); return } // Esc mid-drag: settle the block back, no op
+      if (assignOpen) { assignOpen = false; return }
+      if (selectMode) { exitSelectMode(); return }
       return
     }
     if (e.key === '/') {
@@ -497,6 +504,20 @@
       return
     }
     if (inField || e.defaultPrevented) return // everything below is cursor-mode only
+    // Selection-mode shortcuts (spec 029 §C): work in view mode too (copy-only there).
+    if (selectMode) {
+      const mod = e.metaKey || e.ctrlKey
+      const k = e.key.toLowerCase()
+      if (mod && k === 'c') {
+        // don't hijack a real text-selection copy
+        if (!window.getSelection()?.toString()) { e.preventDefault(); copySelection() }
+        return
+      }
+      if (mod && k === 'v') { e.preventDefault(); if (!viewing && !searchMode) pasteClipboard(); return }
+      if (mod && k === 'a') { e.preventDefault(); selectAllVisible(); return }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !viewing) { e.preventDefault(); bulkDelete(); return }
+      if (e.key === ' ') { e.preventDefault(); return } // no composer to jump to
+    }
     if (!canEdit) return // no cursor in view/filter modes
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
@@ -523,7 +544,10 @@
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn() }
   }
   // The tune-row click action, shared by onclick + onkeydown so the row is keyboard-operable.
-  function rowClick(r) {
+  // Selection mode redefines the tap (toggle select) and — deliberately — works even while
+  // the filter is active (spec 029 §B: filter + selection compose).
+  function rowClick(r, e) {
+    if (selectMode) { toggleSelect(r, e); return }
     if (searchMode) return
     if (r._resolving) { if (!viewing) selectRow(r.session_instance_tune_id); return }
     if (r._temp || r._removing) return
@@ -793,6 +817,335 @@
     selectedId = selectedId === id ? null : id
   }
 
+  // --- selection mode (spec 029): bulk select / copy / paste / delete / assign / move ---
+  // Pure client UI state, never synced. Composes with the pull-down filter (selection
+  // survives filter changes); positional actions (Paste, drag) need the filter clear.
+  // In view mode it's copy-only: no grab bars, no Paste/Delete/Assign.
+  let selectMode = $state(false)
+  const selected = new SvelteSet() // selected tune record ids
+  let shiftAnchor = null // last-tapped row: the shift-click range anchor
+  let lastCopy = $state(null) // internal rich clipboard {text, rich}; survives exiting selection mode
+  let undoDelete = $state(null) // {op_id, ids, records, count, seq} — the "Deleted N — Undo" toast
+  let undoDeleteSeq = 0
+  let assignOpen = $state(false)
+  let assignFilter = $state('')
+  const assignAttendees = $derived.by(() => {
+    const f = assignFilter.trim().toLowerCase()
+    return f ? attendees.filter((p) => p.display_name.toLowerCase().includes(f)) : attendees
+  })
+
+  // Transient success feedback (copied/pasted/assigned): rides the same `notice` slot
+  // but auto-dismisses. Sticky notices (offline warnings, rejections) still set
+  // `notice` directly and stay until tapped; the seq guard means an older timer never
+  // clobbers a newer message, transient or sticky.
+  let noticeSeq = 0
+  function flashNotice(text) {
+    const seq = ++noticeSeq
+    notice = text
+    setTimeout(() => { if (noticeSeq === seq && notice === text) notice = '' }, 4000)
+  }
+
+  function enterSelectMode() {
+    // State hygiene (spec 029 §A): close transient edit UI; a half-open edit with no
+    // composer is a trap. Selection always starts empty. The cursor seam carries over.
+    selectedId = null
+    openTrayId = null
+    starterPickerSet = null
+    if (editingId != null) cancelEdit()
+    selected.clear()
+    shiftAnchor = null
+    selectMode = true
+  }
+  function exitSelectMode() {
+    selectMode = false
+    selected.clear()
+    shiftAnchor = null
+    assignOpen = false
+    cancelDrag()
+  }
+  const toggleSelectMode = () => (selectMode ? exitSelectMode() : enterSelectMode())
+
+  // Tap = toggle; shift-tap = range from the anchor (desktop). Placeholder/temp/
+  // removing rows aren't selectable (no settled id for a bulk op to address).
+  function toggleSelect(r, e) {
+    if (r._temp || r._removing || r._resolving) return
+    const id = r.session_instance_tune_id
+    if (e?.shiftKey && shiftAnchor != null) {
+      for (const rid of rangeBetween(ordered, shiftAnchor, id)) selected.add(rid)
+      shiftAnchor = id
+      return
+    }
+    selected.has(id) ? selected.delete(id) : selected.add(id)
+    shiftAnchor = id
+  }
+  // Remote deletions silently leave the selection (the activity toast explains the
+  // count dropping); remote moves don't touch it (ids are stable).
+  $effect(() => {
+    if (!selected.size) return
+    for (const id of [...selected]) {
+      const r = byId.get(id)
+      if (!r || r.deleted) selected.delete(id)
+    }
+  })
+  // "Select all" respects the filter: only matching tunes when one is active (§B).
+  function selectAllVisible() {
+    for (const id of selectableIds(displaySegments, searchMode ? searchText : '')) selected.add(id)
+  }
+  function selectNone() { selected.clear(); shiftAnchor = null }
+
+  // Copy (§D): rich internal clipboard + plain text (lines = sets, commas = tunes —
+  // the old pill logger's system-clipboard format) so cross-app paste works.
+  async function copySelection() {
+    const clip = serializeClipboard(segments, selected)
+    if (!clip) return
+    lastCopy = clip
+    try { await navigator.clipboard.writeText(clip.text) } catch { /* internal clipboard still set */ }
+    const n = clip.rich.reduce((s, set) => s + set.length, 0)
+    flashNotice(`Copied ${n} tune${n === 1 ? '' : 's'} in ${clip.rich.length} set${clip.rich.length === 1 ? '' : 's'}`)
+  }
+
+  // Paste (§D): three-case resolution — our own last copy pastes RICH (links survive);
+  // old-logger JSON maps to adds; plain text re-matches server-side. A blocked
+  // clipboard read falls back to the internal clipboard.
+  async function pasteClipboard() {
+    if (viewing || searchMode) return
+    let text = ''
+    try { text = await navigator.clipboard.readText() } catch { /* read blocked — internal fallback */ }
+    const plan = parseClipboard(text, lastCopy) || (lastCopy ? { kind: 'internal', sets: lastCopy.rich } : null)
+    if (!plan || !plan.sets.length) { flashNotice('Nothing to paste'); return }
+    await pasteSets(plan.sets)
+  }
+
+  // Sequential add_tune/set_break ops anchored at the cursor seam — awaited one by
+  // one so each op's temp anchor is settled (or queued for remap on flush) before the
+  // next sends. To other clients this looks like fast logging. no_merge: a pasted
+  // duplicate must never corroborate-collapse (the old logger's paste also always adds).
+  async function pasteSets(sets) {
+    const c = insertAfterId
+    const newSetTarget = c && typeof c === 'object' && c.newSet != null ? c.newSet : null
+    let afterAnchor = null
+    let beforeAnchor = null
+    let prevPos = null // optimistic key chain bounds
+    let succPos = null
+    if (newSetTarget != null) {
+      beforeAnchor = newSetTarget
+      const idx = ordered.findIndex((r) => r.session_instance_tune_id === newSetTarget)
+      succPos = idx >= 0 ? ordered[idx].order_position : null
+      prevPos = idx > 0 ? ordered[idx - 1].order_position : null
+    } else {
+      const p = cursorPos(insertAfterId, ordered, [...byId.values()])
+      afterAnchor = p.afterId
+      beforeAnchor = p.beforeId
+      // p.position is the key for the FIRST pasted row; chain the rest behind it
+      prevPos = null
+      succPos = null
+      if (beforeAnchor != null) {
+        const idx = ordered.findIndex((r) => r.session_instance_tune_id === beforeAnchor)
+        succPos = idx >= 0 ? ordered[idx].order_position : null
+        prevPos = idx > 0 ? ordered[idx - 1].order_position : null
+      } else if (afterAnchor != null) {
+        const idx = ordered.findIndex((r) => r.session_instance_tune_id === afterAnchor)
+        prevPos = idx >= 0 ? ordered[idx].order_position : null
+        succPos = idx >= 0 && idx + 1 < ordered.length ? ordered[idx + 1].order_position : null
+      } else {
+        prevPos = maxPos(byId.values())
+      }
+    }
+    let prevTempId = null
+    let total = 0
+    for (let si = 0; si < sets.length; si++) {
+      if (si > 0) {
+        // break between pasted sets, anchored after the previous set's last tune
+        const bop = crypto.randomUUID()
+        const btmp = `temp-${bop}`
+        const bkey = generateBetween(prevPos, succPos)
+        byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
+        await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', after_record_id: prevTempId }, status: 'sending', ts: Date.now(), tempId: btmp })
+        prevPos = bkey
+        prevTempId = btmp // next tune anchors after the BREAK, not before it
+      }
+      for (const t of sets[si]) {
+        const op_id = crypto.randomUUID()
+        const tempId = `temp-${op_id}`
+        const key = generateBetween(prevPos, succPos)
+        byId.set(tempId, {
+          session_instance_tune_id: tempId, name: t.name, tune_id: t.tune_id ?? null, tune_type: t.tune_type ?? null,
+          record_type: 'tune', order_position: key, deleted: false, _temp: true, _status: 'sending',
+        })
+        const payload = {
+          tune_id: t.tune_id ?? null, name: t.name, no_merge: true,
+          after_record_id: prevTempId ?? afterAnchor, before_record_id: prevTempId ? null : (afterAnchor ? null : beforeAnchor),
+        }
+        await trySend({ op_id, name: t.name, op_type: 'add_tune', payload, status: 'sending', ts: Date.now(), tempId })
+        prevTempId = tempId
+        prevPos = key
+        total++
+      }
+    }
+    if (newSetTarget != null && prevTempId) {
+      // close the pasted block off from the following set (mirrors addNewSetTune)
+      const bop = crypto.randomUUID()
+      const btmp = `temp-${bop}`
+      const bkey = generateBetween(prevPos, succPos)
+      byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
+      await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', before_record_id: newSetTarget }, status: 'sending', ts: Date.now(), tempId: btmp })
+    }
+    flashNotice(`Pasted ${total} tune${total === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
+  }
+
+  // Bulk delete (§E): ONE atomic remove_tunes op + an Undo toast wired to the
+  // restore_tunes inverse op — undo over confirm for a destructive bulk action.
+  function bulkDelete() {
+    if (viewing || !selected.size) return
+    const ids = [...selected].filter((id) => {
+      const r = byId.get(id)
+      return r && !r._temp && !r._removing && typeof id === 'number'
+    })
+    if (!ids.length) return
+    const op_id = crypto.randomUUID()
+    const records = ids.map((id) => byId.get(id))
+    for (const id of ids) byId.set(id, { ...byId.get(id), _removing: op_id })
+    trySend({ op_id, op_type: 'remove_tunes', payload: { record_ids: ids }, status: 'sending', ts: Date.now(), bulkRemoveIds: ids })
+    selected.clear()
+    shiftAnchor = null
+    const seq = ++undoDeleteSeq
+    undoDelete = { op_id, ids, records, count: ids.length, seq }
+    setTimeout(() => { if (undoDelete && undoDelete.seq === seq) undoDelete = null }, 8000)
+  }
+  function undoBulkDelete() {
+    const u = undoDelete
+    undoDelete = null
+    if (!u) return
+    const entry = pending.get(u.op_id)
+    if (entry && entry.status === 'queued') {
+      // the delete never reached the server (offline) — cancel it locally, like restore()
+      pending.delete(u.op_id)
+      queueDelete(u.op_id)
+      for (const id of u.ids) {
+        const r = byId.get(id)
+        if (r && r._removing) { const { _removing, ...rest } = r; byId.set(id, rest) }
+      }
+      return
+    }
+    // already sent/settled: optimistic re-add + the inverse op (streams to everyone)
+    for (const r of u.records) if (r) byId.set(r.session_instance_tune_id, { ...r, deleted: false, _removing: undefined })
+    trySend({ op_id: crypto.randomUUID(), op_type: 'restore_tunes', payload: { record_ids: u.ids }, status: 'sending', ts: Date.now(), restoredIds: u.ids })
+  }
+
+  // Assign (§G): one attribute_set_starter per set containing a selected tune —
+  // stamps the WHOLE set (started_by means the set). Selection is kept afterwards
+  // so a mis-pick is cheap to correct.
+  function openAssign() {
+    if (!selected.size) return
+    assignOpen = true
+    assignFilter = ''
+    if (!attendeesLoaded) refreshAttendees()
+  }
+  function assignTo(personOrNull) {
+    const segs = segments.filter((seg) => seg.tunes.some((t) => selected.has(t.session_instance_tune_id)))
+    for (const seg of segs) setStarter(seg, personOrNull)
+    assignOpen = false
+    const n = segs.length
+    flashNotice(personOrNull
+      ? `Assigned ${n} set${n === 1 ? '' : 's'} to ${personOrNull.display_name}`
+      : `Cleared the starter on ${n} set${n === 1 ? '' : 's'}`)
+  }
+
+  // --- drag-to-move (§F): pointer events on the grab bar, seams as drop zones ---
+  let drag = $state(null) // {block, targets, keys, activeKey, x, y, startX, startY, started, name}
+  let dragRAF = null
+  let dragPointerY = 0
+  const dragKeys = $derived(drag?.started ? drag.keys : null)
+  function startDrag(e, r) {
+    if (viewing || searchMode || !selectMode) return
+    const block = dragBlock(ordered, selected, r.session_instance_tune_id)
+    if (!block) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const targets = dropTargets(ordered, displaySegments, endIsOpen, block.recordIds)
+    drag = {
+      block, targets, keys: new Set(targets.map((t) => t.key)), activeKey: null,
+      x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, started: false,
+      name: r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)'),
+    }
+  }
+  function dragMove(e) {
+    if (!drag) return
+    dragPointerY = e.clientY
+    if (!drag.started) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 6) return // slop
+      drag = { ...drag, started: true }
+      if (!dragRAF) dragRAF = requestAnimationFrame(autoScrollTick)
+    }
+    drag = { ...drag, x: e.clientX, y: e.clientY }
+    hitTestDrop()
+  }
+  function dragEnd() {
+    if (!drag) return
+    const t = drag.started && drag.activeKey ? drag.targets.find((x) => x.key === drag.activeKey) : null
+    if (t) performMove(t)
+    cancelDrag()
+  }
+  function cancelDrag() {
+    drag = null
+    if (dragRAF) { cancelAnimationFrame(dragRAF); dragRAF = null }
+  }
+  // Nearest eligible seam to the pointer's y (fat fingers: interval distance, capped).
+  function hitTestDrop() {
+    if (!drag?.started || !setsEl) return
+    let best = null
+    let bestD = Infinity
+    for (const el of setsEl.querySelectorAll('[data-seam]')) {
+      const key = el.dataset.seam
+      if (!drag.keys.has(key)) continue
+      const rect = el.getBoundingClientRect()
+      const d = Math.abs((rect.top + rect.bottom) / 2 - dragPointerY)
+      if (d < bestD) { bestD = d; best = key }
+    }
+    const activeKey = bestD < 90 ? best : null
+    if (activeKey !== drag.activeKey) drag = { ...drag, activeKey }
+  }
+  // Autoscroll near the list edges, speed proportional to proximity (§F).
+  function autoScrollTick() {
+    dragRAF = null
+    if (!drag?.started || !setsEl) return
+    const rect = setsEl.getBoundingClientRect()
+    const M = 48
+    let dy = 0
+    if (dragPointerY < rect.top + M) dy = -Math.ceil((rect.top + M - dragPointerY) / 4)
+    else if (dragPointerY > rect.bottom - M) dy = Math.ceil((dragPointerY - (rect.bottom - M)) / 4)
+    if (dy) { setsEl.scrollTop += dy; hitTestDrop() }
+    dragRAF = requestAnimationFrame(autoScrollTick)
+  }
+  // Drop: optimistic local reorder (same exclude-the-block key rule as the server,
+  // so the settle doesn't jump) + ONE move_tunes op. new_set boundary breaks render
+  // as temp rows that the settling event replaces.
+  function performMove(t) {
+    const { positions, tempBreakKeys } = optimisticMove(ordered, [...byId.values()], drag.block.recordIds, t)
+    const prevRecords = drag.block.recordIds.map((id) => byId.get(id)).filter(Boolean).map((r) => ({ ...r }))
+    for (const [id, key] of positions) {
+      const r = byId.get(id)
+      if (r) byId.set(id, { ...r, order_position: key })
+    }
+    const op_id = crypto.randomUUID()
+    const tempIds = []
+    for (const side of ['before', 'after']) {
+      const k = tempBreakKeys[side]
+      if (k) {
+        const tid = `temp-${op_id}-${side}`
+        byId.set(tid, { session_instance_tune_id: tid, record_type: 'break', order_position: k, deleted: false, _temp: true })
+        tempIds.push(tid)
+      }
+    }
+    trySend({
+      op_id, op_type: 'move_tunes',
+      payload: { record_ids: drag.block.tuneIds, after_record_id: t.after_record_id, before_record_id: t.before_record_id, new_set: t.new_set },
+      status: 'sending', ts: Date.now(), prevRecords, tempIds,
+    })
+    flashId(drag.block.tuneIds[0], 'mine')
+    insertAfterId = drag.block.tuneIds[drag.block.tuneIds.length - 1] // cursor lands after the block
+  }
+
   // Toggle View <-> Edit (spec 021 §A2–3). Leaving edit drops every transient editing
   // affordance; the SSE then reconnects so the server learns this connection's new
   // presence intent — a viewer asserts nothing (spec 024 §presence).
@@ -1053,6 +1406,9 @@
       case 'corroborate': return `also logged ${n}`
       case 'change_tune': return `edited ${n}`
       case 'remove_tune': return `removed ${n}`
+      case 'move_tunes': { const c = d.moved_ids?.length || 0; return `moved ${c} tune${c === 1 ? '' : 's'}` }
+      case 'remove_tunes': { const c = d.records?.length || 0; return `removed ${c} tune${c === 1 ? '' : 's'}` }
+      case 'restore_tunes': { const c = d.records?.length || 0; return `restored ${c} tune${c === 1 ? '' : 's'}` }
       case 'set_break': return d.removed ? 'removed a break' : 'ended a set'
       case 'attribute_set_starter': return d.person ? `set ${d.person.display_name} as starting a set` : 'cleared a set starter'
       case 'set_confidence': return `confirmed ${n}`
@@ -1089,6 +1445,7 @@
         if (insertAfterId === entry.tempId) insertAfterId = d.record?.session_instance_tune_id ?? null
         byId.delete(entry.tempId) // ...drop its optimistic temp record
       }
+      if (entry.tempIds) for (const t of entry.tempIds) byId.delete(t) // optimistic move boundary breaks
       pending.delete(d.op_id)
       queueDelete(d.op_id) // ...and drop it from the persisted queue (already applied)
     }
@@ -1128,6 +1485,19 @@
         break
       case 'remove_tune':
         if (d.record) (d.record.deleted ? drop(d.record.session_instance_tune_id) : put(d.record))
+        break
+      case 'move_tunes': // one atomic block move (spec 029 §F)
+        for (const r of d.records || []) put(r)
+        for (const id of d.removed_break_ids || []) drop(id)
+        if (d.actor && d.actor.person_id !== person.person_id) {
+          for (const id of d.moved_ids || []) flashId(id, 'remote', colorForPerson(d.actor.person_id))
+        }
+        break
+      case 'remove_tunes': // atomic bulk delete (spec 029 §E)
+        for (const r of d.records || []) drop(r.session_instance_tune_id)
+        break
+      case 'restore_tunes': // the delete's inverse op (undo)
+        for (const r of d.records || []) put(r)
         break
       case 'attendance_add':
       case 'attendance_remove':
@@ -1178,9 +1548,17 @@
       }
     }
     if (entry.tempId) byId.delete(entry.tempId)
+    if (entry.tempIds) for (const t of entry.tempIds) byId.delete(t) // optimistic move boundary breaks
     if (entry.restoreRecord) byId.set(entry.restoreRecord.session_instance_tune_id, entry.restoreRecord) // un-join
     if ((entry.op_type === 'change_tune' || entry.op_type === 'set_confidence') && entry.prev) byId.set(entry.prev.session_instance_tune_id, entry.prev) // revert edit / confirm
-    if (entry.prevRecords) for (const r of entry.prevRecords) byId.set(r.session_instance_tune_id, r) // revert set-starter
+    if (entry.prevRecords) for (const r of entry.prevRecords) byId.set(r.session_instance_tune_id, r) // revert set-starter / move
+    if (entry.bulkRemoveIds) { // rejected bulk delete: clear the removing marks
+      for (const id of entry.bulkRemoveIds) {
+        const r = byId.get(id)
+        if (r && r._removing) { const { _removing, ...rest } = r; byId.set(id, rest) }
+      }
+    }
+    if (entry.restoredIds) for (const id of entry.restoredIds) drop(id) // rejected restore: rows stay gone
   }
 
   function settleOp(entry, res) {
@@ -1199,8 +1577,10 @@
       return
     }
     if (entry.tempId) byId.delete(entry.tempId) // drop optimistic temp; the real record arrives below / via SSE
+    if (entry.tempIds) for (const t of entry.tempIds) byId.delete(t) // optimistic move boundary breaks
     if (entry.tempId && res.record) tempToReal.set(entry.tempId, res.record.session_instance_tune_id) // for anchor remap (#5b)
-    if (res.records) for (const r of res.records) put(r) // multi-record ops (set-starter)
+    if (res.records) for (const r of res.records) put(r) // multi-record ops (set-starter, bulk ops)
+    if (res.removed_break_ids) for (const id of res.removed_break_ids) drop(id) // move_tunes source cleanup
     if (res.record) {
       if (insertAfterId === entry.tempId) insertAfterId = res.record.session_instance_tune_id // cursor follows to the real id
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
@@ -1367,6 +1747,7 @@
   const RECONCILE_VERB = {
     add_tune: 'Add', change_tune: 'Edit', remove_tune: 'Remove', set_break: 'Set break',
     set_confidence: 'Confirm', attribute_set_starter: 'Set starter', edit_notes: 'Edit notes',
+    move_tunes: 'Move', remove_tunes: 'Bulk remove', restore_tunes: 'Restore',
   }
   const RECONCILE_REASON = {
     target_deleted: 'it had already been removed',
@@ -2407,10 +2788,23 @@
         spellcheck="false"
       />
       {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
+      <!-- selection-mode toggle (spec 029 §A): available in edit AND view (copy-only) -->
+      <button class="selmode-btn" class:on={selectMode} title={selectMode ? 'Leave selection mode' : 'Select tunes'} aria-pressed={selectMode} onclick={toggleSelectMode}>☑</button>
     </div>
     <!-- min-height:100% (in CSS) guarantees ≥ SEARCH_BAR_H of overflow so the bar can always
          tuck out of sight, even when the log is too short to fill the viewport -->
     <div class="sets-body">
+    {#if selectMode}
+      <div class="selrow">
+        <button onclick={selectAllVisible}>Select all</button>
+        <span aria-hidden="true">·</span>
+        <button onclick={selectNone}>None</button>
+      </div>
+    {/if}
+    {#if drag?.started && dragKeys?.has('top-new')}
+      <!-- drag-only drop zone: land as own set(s) at the very start (spec 029 §F) -->
+      <div class="drop-extreme" data-seam="top-new" class:drop-active={drag.activeKey === 'top-new'}>new set</div>
+    {/if}
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
@@ -2455,7 +2849,7 @@
           </div>
         {/if}
         {#if canEdit}
-          <div class="seam start-seam" role="button" tabindex="0" class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
+          <div class="seam start-seam" role="button" tabindex="0" data-seam={`start:${seg.tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`start:${seg.tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `start:${seg.tunes[0].session_instance_tune_id}`} class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
             {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
               <span class="seam-line"></span>
             {:else}<span class="seam-plus">＋ start of set</span>{/if}
@@ -2472,13 +2866,15 @@
             class:pending={r._resolving}
             class:queued={r._temp && r._status === 'queued'}
             class:removing={r._removing}
-            class:selected={canEdit && selectedId === r.session_instance_tune_id}
+            class:selected={canEdit && !selectMode && selectedId === r.session_instance_tune_id}
             class:editing={editingId === r.session_instance_tune_id}
+            class:bulk-selected={selectMode && selected.has(r.session_instance_tune_id)}
+            class:drag-source={drag?.started && drag.block.recordIds.includes(r.session_instance_tune_id)}
             class:flash-mine={flashing.get(r.session_instance_tune_id)?.kind === 'mine'}
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
             style={canEdit ? rowStyle(r) : ''}
-            onclick={() => rowClick(r)}
+            onclick={(e) => rowClick(r, e)}
             onkeydown={(e) => activate(e, () => rowClick(r))}
           >
             <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}</span>
@@ -2496,7 +2892,25 @@
               <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
-              {#if canEdit}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+              {#if canEdit && !selectMode}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+            {/if}
+            {#if selectMode}
+              {#if selected.has(r.session_instance_tune_id)}<span class="sel-badge" aria-hidden="true">✓</span>{/if}
+              {#if canEdit && !r._temp && !r._removing}
+                <!-- grab bar (spec 029 §F): touch-action:none here ONLY, so the handle
+                     drags immediately while the rest of the row still scrolls the list -->
+                <span
+                  class="grab"
+                  role="button"
+                  tabindex="-1"
+                  aria-label="Drag to move"
+                  onpointerdown={(e) => startDrag(e, r)}
+                  onpointermove={dragMove}
+                  onpointerup={dragEnd}
+                  onpointercancel={cancelDrag}
+                  onclick={(e) => e.stopPropagation()}
+                >⠿</span>
+              {/if}
             {/if}
           </div>
           {#if canEdit && selectedId === r.session_instance_tune_id}
@@ -2522,11 +2936,15 @@
           {#if !r._temp && canEdit}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
               <!-- last tune of the open set: this seam IS the end (append) point -->
-              <div class="seam end-seam" role="button" tabindex="0" class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
+              <div class="seam end-seam" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
                 {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
               </div>
+              {#if drag?.started && dragKeys?.has('end-new')}
+                <!-- drag-only drop zone: land as own set(s) below the open end (spec 029 §F) -->
+                <div class="drop-extreme" data-seam="end-new" class:drop-active={drag.activeKey === 'end-new'}>new set</div>
+              {/if}
             {:else}
-              <div class="seam" role="button" tabindex="0" class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
+              <div class="seam" role="button" tabindex="0" data-seam={`after:${r.session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`after:${r.session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `after:${r.session_instance_tune_id}`} class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
                 {#if activeSeam === `after:${r.session_instance_tune_id}`}
                   <span class="seam-line"></span>
                   {#if ti < seg.tunes.length - 1}
@@ -2539,7 +2957,7 @@
         {/each}
       </div>
       {#if canEdit && si < displaySegments.length - 1 && seg.breakAfter != null}
-        <div class="seam inter-seam" role="button" tabindex="0" class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
+        <div class="seam inter-seam" role="button" tabindex="0" data-seam={`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
           {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
             <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>Join</button>
@@ -2560,7 +2978,7 @@
     {/each}
     {#if ordered.length && !endIsOpen && canEdit}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
-      <div class="seam end-seam new-set-end" role="button" tabindex="0" class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
+      <div class="seam end-seam new-set-end" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
         {#if activeSeam === 'end'}
           <span class="seam-line"></span><span class="seam-hint">new set</span>
         {:else}<span class="seam-plus">＋ new set</span>{/if}
@@ -2581,7 +2999,25 @@
   {/if}
 
   <div class="dock">
-    {#if searchMode}
+    {#if undoDelete}
+      <div class="undo-toast" transition:fly={{ y: 8, duration: 160 }}>
+        <span>Deleted {undoDelete.count} tune{undoDelete.count === 1 ? '' : 's'}</span>
+        <button class="undo-btn" onclick={undoBulkDelete}>Undo</button>
+      </div>
+    {/if}
+    {#if selectMode}
+      <!-- selection bottom bar (spec 029 §C); view mode is copy-only -->
+      <footer class="selbar">
+        <span class="selcount">{selected.size} selected</span>
+        <button class="sel-act" disabled={!selected.size} onclick={copySelection}>Copy</button>
+        {#if !viewing}
+          <button class="sel-act" class:dim={!lastCopy} disabled={searchMode} title="Paste tunes from clipboard" onclick={pasteClipboard}>Paste</button>
+          <button class="sel-act sel-danger" disabled={!selected.size} onclick={bulkDelete}>Delete</button>
+          <button class="sel-act" disabled={!selected.size} onclick={openAssign}>Assign</button>
+        {/if}
+        <button class="sel-done" onclick={exitSelectMode}>Done</button>
+      </footer>
+    {:else if searchMode}
       <footer class="viewbar searchbar-dock">
         <button class="editbtn done-search" onclick={doneSearching}>Done Searching</button>
       </footer>
@@ -2726,6 +3162,31 @@
     {/if}
     {/if}
   </div>
+
+  {#if assignOpen}
+    <!-- bulk Assign (spec 029 §G): the set-tray starter picker as a modal -->
+    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={() => (assignOpen = false)} onkeydown={(e) => activate(e, () => (assignOpen = false))}></div>
+    <div class="assign-modal" role="dialog" aria-modal="true">
+      <div class="assign-head">Sets started by…</div>
+      <input class="starter-filter" placeholder="Filter players…" bind:value={assignFilter} />
+      <div class="starter-list">
+        <button class="starter-item clear" onclick={() => assignTo(null)}>— Clear —</button>
+        {#each assignAttendees as p (p.person_id)}
+          <button class="starter-item" onclick={() => assignTo(p)}>{p.display_name}</button>
+        {:else}
+          {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else}<p class="starter-empty">Loading…</p>{/if}
+        {/each}
+        <button class="starter-item add-player" onclick={() => { assignOpen = false; openAttendance() }}>＋ Add a player</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if drag?.started}
+    <!-- floating drag ghost (spec 029 §F): name for one tune, a count card for a block -->
+    <div class="drag-ghost" style="left:{drag.x}px; top:{drag.y}px">
+      {#if drag.block.tuneIds.length === 1}{drag.name}{:else}{drag.block.tuneIds.length} tunes{drag.block.setCount > 1 ? ` · ${drag.block.setCount} sets` : ''}{/if}
+    </div>
+  {/if}
 
   {#if attendanceOpen}
     <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={closeAttendance} onkeydown={(e) => activate(e, closeAttendance)}></div>

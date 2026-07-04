@@ -702,6 +702,238 @@ def _handle_mark_incomplete(cur, session_instance_id, data, user_id):
     return _set_log_complete(cur, session_instance_id, user_id, False)
 
 
+# --- Bulk ops (spec 029): move_tunes / remove_tunes / restore_tunes --------
+
+
+def _live_records_in_order(cur, session_instance_id):
+    """(id, record_type, order_position) for live records, in order."""
+    cur.execute(
+        "SELECT session_instance_tune_id, record_type, order_position FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND deleted = FALSE ORDER BY order_position",
+        (session_instance_id,),
+    )
+    return cur.fetchall()
+
+
+def _insert_break(cur, session_instance_id, position, user_id):
+    cur.execute(
+        """
+        INSERT INTO session_instance_tune (
+            session_instance_id, order_position, record_type, inserted_timestamp,
+            created_by_user_id, last_modified_user_id
+        ) VALUES (%s, %s, 'break', (NOW() AT TIME ZONE 'UTC'), %s, %s)
+        RETURNING session_instance_tune_id
+        """,
+        (session_instance_id, position, user_id, user_id),
+    )
+    bid = cur.fetchone()[0]
+    save_to_history(cur, "session_instance_tune", "INSERT", bid, user_id=user_id)
+    return bid
+
+
+def _handle_move_tunes(cur, session_instance_id, data, user_id):
+    """Atomically move a block of tunes (+ any breaks interior to the block's span)
+    to a new position (spec 029 §F). Identity-preserving: rows keep their ids,
+    history, logged-by, and started_by (per-tune starter claims are durable — only
+    explicit attribution stamps them). The server re-sorts the block by CURRENT
+    order_position (never trusts client order), computes the destination gap
+    EXCLUDING the moving rows (else new keys interleave with about-to-vacate
+    positions — there is no uniqueness constraint, so a collision would be a silent
+    ordering bug), and generates the N new keys sequentially. `new_set` adds the
+    boundary break(s) needed for the block to land as its own set(s). Source-side,
+    the weld law applies: whatever becomes adjacent merges; orphaned breaks (leading,
+    or back-to-back) are deleted in the same txn. Vanished anchor degrades to append
+    (matches add_tune §C so offline replays still apply).
+    """
+    ids = data.get("record_ids")
+    if not isinstance(ids, list) or not ids:
+        raise OpRejected("invalid", "move_tunes requires a non-empty record_ids list.")
+    after_id = data.get("after_record_id")
+    before_id = data.get("before_record_id")
+    if after_id in ids or before_id in ids:
+        raise OpRejected("invalid_anchor", "The drop target is inside the moved block.")
+    new_set = bool(data.get("new_set"))
+
+    # The moving tunes, in current (authoritative) order. Silently drop ids that
+    # vanished or were tombstoned meanwhile — a concurrent single delete shouldn't
+    # reject a whole offline-replayed move.
+    cur.execute(
+        "SELECT session_instance_tune_id, order_position FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) "
+        "AND record_type = 'tune' AND deleted = FALSE ORDER BY order_position",
+        (session_instance_id, ids),
+    )
+    tunes = cur.fetchall()
+    if not tunes:
+        raise OpRejected("not_found", "None of those tunes exist any more.")
+    first_pos, last_pos = tunes[0][1], tunes[-1][1]
+
+    # Interior breaks travel with the block (14 tunes in 4 sets stays 4 sets).
+    cur.execute(
+        "SELECT session_instance_tune_id, order_position FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND record_type = 'break' AND deleted = FALSE "
+        "AND order_position > %s AND order_position < %s ORDER BY order_position",
+        (session_instance_id, first_pos, last_pos),
+    )
+    interior_breaks = cur.fetchall()
+    moving = sorted(tunes + interior_breaks, key=lambda r: r[1])
+    moving_ids = [r[0] for r in moving]
+
+    # Destination gap (pred_pos, succ_pos), excluding the moving rows. Tombstones
+    # still occupy positions (same convention as _position_for). A vanished anchor
+    # degrades to append.
+    def _pos_of(rid):
+        cur.execute(
+            "SELECT order_position FROM session_instance_tune "
+            "WHERE session_instance_tune_id = %s AND session_instance_id = %s",
+            (rid, session_instance_id),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    pred_pos = succ_pos = None
+    anchored = False
+    if before_id is not None:
+        succ_pos = _pos_of(before_id)
+        if succ_pos is not None:
+            anchored = True
+            cur.execute(
+                "SELECT MAX(order_position) FROM session_instance_tune "
+                "WHERE session_instance_id = %s AND order_position < %s "
+                "AND NOT (session_instance_tune_id = ANY(%s))",
+                (session_instance_id, succ_pos, moving_ids),
+            )
+            pred_pos = cur.fetchone()[0]
+    if not anchored and after_id is not None:
+        pred_pos = _pos_of(after_id)
+        if pred_pos is not None:
+            anchored = True
+            cur.execute(
+                "SELECT MIN(order_position) FROM session_instance_tune "
+                "WHERE session_instance_id = %s AND order_position > %s "
+                "AND NOT (session_instance_tune_id = ANY(%s))",
+                (session_instance_id, pred_pos, moving_ids),
+            )
+            succ_pos = cur.fetchone()[0]
+    if not anchored:  # append (explicit, or degraded from a vanished anchor)
+        cur.execute(
+            "SELECT MAX(order_position) FROM session_instance_tune "
+            "WHERE session_instance_id = %s AND NOT (session_instance_tune_id = ANY(%s))",
+            (session_instance_id, moving_ids),
+        )
+        pred_pos = cur.fetchone()[0]
+        succ_pos = None
+
+    # new_set: a boundary break is needed on any side where the block would
+    # otherwise weld onto a live TUNE (a break or nothing already separates it).
+    def _live_type_at(pos):
+        if pos is None:
+            return None
+        cur.execute(
+            "SELECT record_type FROM session_instance_tune "
+            "WHERE session_instance_id = %s AND order_position = %s AND deleted = FALSE "
+            "AND NOT (session_instance_tune_id = ANY(%s))",
+            (session_instance_id, pos, moving_ids),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    break_before = new_set and _live_type_at(pred_pos) == "tune"
+    break_after = new_set and _live_type_at(succ_pos) == "tune"
+
+    # New keys, generated sequentially so each is between its predecessor and succ.
+    created_break_ids = []
+    prev = pred_pos
+    if break_before:
+        key = generate_position_between(prev, succ_pos)
+        created_break_ids.append(_insert_break(cur, session_instance_id, key, user_id))
+        prev = key
+    for rid, _old in moving:
+        key = generate_position_between(prev, succ_pos)
+        save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
+        cur.execute(
+            "UPDATE session_instance_tune SET order_position = %s, last_modified_user_id = %s "
+            "WHERE session_instance_tune_id = %s",
+            (key, user_id, rid),
+        )
+        prev = key
+    if break_after:
+        key = generate_position_between(prev, succ_pos)
+        created_break_ids.append(_insert_break(cur, session_instance_id, key, user_id))
+
+    # Cleanup invariant: no leading break, no back-to-back breaks (a single trailing
+    # break is a legitimate closed end and stays).
+    removed_break_ids = []
+    prev_type = None
+    for rid, rtype, _pos in _live_records_in_order(cur, session_instance_id):
+        if rtype == "break" and (prev_type is None or prev_type == "break"):
+            save_to_history(cur, "session_instance_tune", "DELETE", rid, user_id=user_id)
+            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+            removed_break_ids.append(rid)
+            continue  # prev_type unchanged: the deleted break separates nothing
+        prev_type = rtype
+
+    changed = moving_ids + created_break_ids
+    return {
+        "records": [_reselect(cur, rid) for rid in changed],
+        "moved_ids": [t[0] for t in tunes],
+        "removed_break_ids": removed_break_ids,
+    }
+
+
+def _handle_remove_tunes(cur, session_instance_id, data, user_id):
+    """Bulk soft tombstone in one atomic op/event (spec 029 §E). Already-deleted or
+    vanished ids are skipped (idempotent wrt concurrent single deletes); a break id
+    is a client bug and rejects the op."""
+    ids = data.get("record_ids")
+    if not isinstance(ids, list) or not ids:
+        raise OpRejected("invalid", "remove_tunes requires a non-empty record_ids list.")
+    cur.execute(
+        "SELECT session_instance_tune_id, record_type, deleted FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) ORDER BY order_position",
+        (session_instance_id, ids),
+    )
+    rows = cur.fetchall()
+    if any(r[1] == "break" for r in rows):
+        raise OpRejected("wrong_record_type", "Breaks can't be removed this way.")
+    target_ids = [r[0] for r in rows if not r[2]]
+    for rid in target_ids:
+        save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
+    if target_ids:
+        cur.execute(
+            "UPDATE session_instance_tune SET deleted = TRUE, last_modified_user_id = %s "
+            "WHERE session_instance_tune_id = ANY(%s)",
+            (user_id, target_ids),
+        )
+    return {"records": [_reselect(cur, rid) for rid in target_ids],
+            "already_removed": not target_ids}
+
+
+def _handle_restore_tunes(cur, session_instance_id, data, user_id):
+    """Inverse of remove_tunes (spec 029 §E — first brick of the op/inverse-op undo
+    pattern). Flips deleted back off for ids still tombstoned; positions were never
+    changed, so rows reappear exactly where they were. Live ids are skipped."""
+    ids = data.get("record_ids")
+    if not isinstance(ids, list) or not ids:
+        raise OpRejected("invalid", "restore_tunes requires a non-empty record_ids list.")
+    cur.execute(
+        "SELECT session_instance_tune_id FROM session_instance_tune "
+        "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) "
+        "AND record_type = 'tune' AND deleted = TRUE ORDER BY order_position",
+        (session_instance_id, ids),
+    )
+    target_ids = [r[0] for r in cur.fetchall()]
+    for rid in target_ids:
+        save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
+    if target_ids:
+        cur.execute(
+            "UPDATE session_instance_tune SET deleted = FALSE, last_modified_user_id = %s "
+            "WHERE session_instance_tune_id = ANY(%s)",
+            (user_id, target_ids),
+        )
+    return {"records": [_reselect(cur, rid) for rid in target_ids]}
+
+
 def _person_brief(cur, person_id):
     cur.execute("SELECT person_id, first_name, last_name FROM person WHERE person_id = %s", (person_id,))
     row = cur.fetchone()
@@ -759,6 +991,9 @@ HANDLERS = {
     "attendance_remove": _handle_attendance_remove,
     "attendance_create_person": _handle_attendance_create_person,
     "remove_tune": _handle_remove_tune,
+    "move_tunes": _handle_move_tunes,
+    "remove_tunes": _handle_remove_tunes,
+    "restore_tunes": _handle_restore_tunes,
     "change_tune": _handle_change_tune,
     "set_confidence": _handle_set_confidence,
     "attribute_set_starter": _handle_attribute_set_starter,

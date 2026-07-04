@@ -57,7 +57,10 @@ All writes are incremental, intent-based ops `POST`ed to
 
 `add_tune`, `remove_tune` (soft tombstone), `change_tune`, `set_confidence`, `set_break`,
 `attribute_set_starter`, `edit_notes`, `attendance_add` / `attendance_remove` /
-`attendance_create_person`, `mark_complete` / `mark_incomplete`.
+`attendance_create_person`, `mark_complete` / `mark_incomplete`, plus the bulk ops
+(spec 029): `move_tunes` (atomic block move; interior breaks travel, `started_by` is
+never touched), `remove_tunes` (atomic bulk tombstone), and `restore_tunes` (its
+inverse — the first brick of the op/inverse-op undo pattern).
 
 Each op carries a client-generated `op_id` (UUID) for idempotent retry. A rejected op
 returns `{rejected, reason}` rather than throwing (§E).
@@ -203,8 +206,16 @@ Cursor mode is edit-only (`canEdit`); "/" works in any mode (search is browsable
 The **Log button is disabled while the composer is empty**; **ArrowRight from an empty composer**
 hops focus to the "End set" button when it's showing (open set at the live end).
 
-Deferred to later phases: multi-select + copy/paste of sets, reorder, and the full
-`store.svelte.js` extraction
+Multi-select, copy/paste, bulk delete + undo, bulk assign, and drag-to-move landed as
+**selection mode** ([spec 029](../../changes/inprogress/029-bulk-selection-mode.md)):
+a ☑ toggle on the pull-down filter bar; row taps select (shift-click ranges, filter-aware
+select all/none); the bottom bar becomes Copy / Paste / Delete / Assign / Done (view mode:
+copy-only). The clipboard is old-pill-logger-compatible (plain text: lines = sets, commas =
+tunes; paste also accepts the old JSON pill format, and same-session pastes reuse the rich
+internal clipboard so `tune_id` links survive). Drag uses a right-edge grab bar per row
+(pointer events; seams thicken as drop zones; drag-only "new set" zones at the extremes).
+
+Still deferred: the full `store.svelte.js` extraction
 ([spec 028](../../changes/inprogress/028-desktop-two-pane-logger.md)).
 
 ## Schema delta (§I)

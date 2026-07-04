@@ -12,7 +12,10 @@ import { defineConfig, devices } from "@playwright/test";
  */
 
 const PORT = Number(process.env.E2E_PORT || 5001);
-const BASE_URL = process.env.E2E_BASE_URL || `http://127.0.0.1:${PORT}`;
+// localhost (not 127.0.0.1): the session cookie's host must match the streaming
+// sidecar's host (localhost:8080) or EventSource(withCredentials) can't authenticate —
+// cookies ignore ports but not hostnames. Spec 029's multiplayer e2e needs live SSE.
+const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",

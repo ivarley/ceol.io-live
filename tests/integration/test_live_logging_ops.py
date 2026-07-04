@@ -622,3 +622,248 @@ def test_position_for_branches(db_cursor):
     # insert before B via before=B (also lands between A and B)
     p_before = _position_for(db_cursor, 9391, None, b)
     assert p_append < p_before < p_b
+
+
+# --------------------------------------------------------------------------- #
+# bulk ops (spec 029): move_tunes / remove_tunes / restore_tunes
+# --------------------------------------------------------------------------- #
+
+def _seed_sets(client, inst, sets):
+    """Log unlinked tunes as sets (breaks between). Returns (name->id, [break ids])."""
+    ids, breaks = {}, []
+    for si, names in enumerate(sets):
+        for name in names:
+            _, r = _op(client, inst, op_type="add_tune", name=name)
+            ids[name] = r["record"]["session_instance_tune_id"]
+        if si < len(sets) - 1:
+            _, b = _op(client, inst, op_type="set_break", action="insert",
+                       after_record_id=ids[names[-1]])
+            breaks.append(b["record"]["session_instance_tune_id"])
+    return ids, breaks
+
+
+def _shape(cur, inst):
+    """[(record_type, name-or-'|')] in live order — easy structural assertions."""
+    return [("|" if r[3] == "break" else r[2]) for r in _records(cur, inst)]
+
+
+def test_move_tunes_within_set(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB"]
+    assert res["moved_ids"] == [ids["mvC"]]
+
+
+def test_move_tunes_across_sets_welds(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvD"]], after_record_id=ids["mvA"])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvD", "mvB", "|", "mvC"]
+
+
+def test_move_tunes_new_set_inserts_boundary_breaks(client, authenticated_user, live_instance, db_cursor):
+    """Drop on an inter-set seam (before C, new_set) -> block becomes its own set."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvB"]], before_record_id=ids["mvC"], new_set=True)
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "|", "mvB", "|", "mvC", "mvD"]
+
+
+def test_move_tunes_new_set_at_very_start(client, authenticated_user, live_instance, db_cursor):
+    """new_set before the first tune: boundary break only on the tune side."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"], ids["mvD"]], before_record_id=ids["mvA"], new_set=True)
+    assert res["success"] is True
+    # no leading break above the block; one break separates it from A's set; the
+    # original inter-set break is now orphaned (nothing after it) BUT a trailing
+    # break is a legitimate closed end, so it stays.
+    assert _shape(db_cursor, inst) == ["mvC", "mvD", "|", "mvA", "mvB", "|"]
+
+
+def test_move_tunes_multiset_block_preserves_interior_breaks(client, authenticated_user, live_instance, db_cursor):
+    """Interior breaks travel: a 2-set block dropped at the start is still 2 sets."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"], ["mvE", "mvF"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"], ids["mvD"], ids["mvE"], ids["mvF"]],
+                     before_record_id=ids["mvA"], new_set=True)
+    assert res["success"] is True
+    # block [C D | E F] + boundary break, then A B; break formerly after B is now
+    # trailing (closed end) and stays.
+    assert _shape(db_cursor, inst) == ["mvC", "mvD", "|", "mvE", "mvF", "|", "mvA", "mvB", "|"]
+
+
+def test_move_tunes_source_remnants_merge(client, authenticated_user, live_instance, db_cursor):
+    """Taking [B C | D] out of A B C | D E leaves A and E adjacent -> they merge."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"], ["mvD", "mvE"], ["mvF"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvB"], ids["mvC"], ids["mvD"]],
+                     after_record_id=ids["mvF"])
+    assert res["success"] is True
+    # A+E merged (their break travelled with the block); block welds onto open set F.
+    assert _shape(db_cursor, inst) == ["mvA", "mvE", "|", "mvF", "mvB", "mvC", "|", "mvD"]
+
+
+def test_move_tunes_orphan_break_cleanup(client, authenticated_user, live_instance, db_cursor):
+    """Emptying the first set leaves a leading break -> deleted in the same txn."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, breaks = _seed_sets(client, inst, [["mvA"], ["mvB", "mvC"]])
+        _, res = _op(client, inst, op_type="move_tunes", record_ids=[ids["mvA"]])  # append
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvB", "mvC", "mvA"]
+    assert breaks[0] in res["removed_break_ids"]
+
+
+def test_move_tunes_back_to_back_breaks_collapse(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC"], ["mvD"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB", "|", "mvD"]
+
+
+def test_move_tunes_anchor_inside_block_rejected(client, authenticated_user, live_instance):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvA"], ids["mvB"]], after_record_id=ids["mvA"])
+    assert res["success"] is False
+    assert res["reason"] == "invalid_anchor"
+
+
+def test_move_tunes_vanished_anchor_appends(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _op(client, inst, op_type="remove_tune", record_id=ids["mvC"])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvA"]], after_record_id=ids["mvC"])  # deleted anchor
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvB", "mvA"]
+
+
+def test_move_tunes_server_resorts_stale_client_order(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC", "mvD"]])
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"], ids["mvA"]])  # scrambled; A precedes C today
+    assert res["success"] is True
+    # non-contiguous ids re-pack in CURRENT relative order (A then C), appended.
+    assert _shape(db_cursor, inst) == ["mvB", "mvD", "mvA", "mvC"]
+
+
+def test_move_tunes_started_by_untouched(client, authenticated_user, live_instance, db_cursor):
+    """A move NEVER stamps/clears started_by — per-tune claims are durable (spec 029 F)."""
+    inst = live_instance["instance_id"]
+    pid = live_instance["person_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"], ["mvC", "mvD"]])
+        _op(client, inst, op_type="attribute_set_starter", record_id=ids["mvC"], person_id=pid)
+        _, res = _op(client, inst, op_type="move_tunes",
+                     record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+    assert res["success"] is True
+    rows = {r[2]: r for r in _records(db_cursor, inst)}
+    assert rows["mvC"][6] == pid          # claim survives the move
+    assert rows["mvA"][6] is None         # destination set untouched
+    assert rows["mvD"][6] == pid          # left-behind set-mate untouched
+
+
+def test_move_tunes_idempotent_replay(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    op_id = str(uuid.uuid4())
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _, first = _op(client, inst, op_type="move_tunes", op_id=op_id,
+                       record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+        _, replay = _op(client, inst, op_type="move_tunes", op_id=op_id,
+                        record_ids=[ids["mvC"]], after_record_id=ids["mvA"])
+    assert replay["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvC", "mvB"]  # applied exactly once
+
+
+def test_move_tunes_requires_ids(client, authenticated_user, live_instance):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, res = _op(client, inst, op_type="move_tunes", record_ids=[])
+    assert res["success"] is False
+    assert res["reason"] == "invalid"
+
+
+def test_remove_tunes_bulk_tombstones(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _, res = _op(client, inst, op_type="remove_tunes",
+                     record_ids=[ids["mvA"], ids["mvC"]])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvB"]
+    assert {r["session_instance_tune_id"] for r in res["records"]} == {ids["mvA"], ids["mvC"]}
+    assert all(r["deleted"] for r in res["records"])
+
+
+def test_remove_tunes_skips_already_deleted(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
+        _op(client, inst, op_type="remove_tune", record_id=ids["mvA"])
+        _, res = _op(client, inst, op_type="remove_tunes",
+                     record_ids=[ids["mvA"], ids["mvB"]])
+    assert res["success"] is True
+    assert [r["session_instance_tune_id"] for r in res["records"]] == [ids["mvB"]]
+    assert _shape(db_cursor, inst) == []
+
+
+def test_remove_tunes_rejects_breaks(client, authenticated_user, live_instance):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, breaks = _seed_sets(client, inst, [["mvA"], ["mvB"]])
+        _, res = _op(client, inst, op_type="remove_tunes", record_ids=[breaks[0]])
+    assert res["success"] is False
+    assert res["reason"] == "wrong_record_type"
+
+
+def test_restore_tunes_round_trip(client, authenticated_user, live_instance, db_cursor):
+    """Delete then restore: rows come back live in their original positions."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB", "mvC"]])
+        _op(client, inst, op_type="remove_tunes", record_ids=[ids["mvA"], ids["mvB"]])
+        _, res = _op(client, inst, op_type="restore_tunes",
+                     record_ids=[ids["mvA"], ids["mvB"]])
+    assert res["success"] is True
+    assert _shape(db_cursor, inst) == ["mvA", "mvB", "mvC"]  # original order preserved
+    assert all(not r["deleted"] for r in res["records"])
+
+
+def test_restore_tunes_only_flips_tombstones(client, authenticated_user, live_instance, db_cursor):
+    """Restoring a mix where one id was never deleted only touches the tombstoned one."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
+        _op(client, inst, op_type="remove_tune", record_id=ids["mvA"])
+        _, res = _op(client, inst, op_type="restore_tunes",
+                     record_ids=[ids["mvA"], ids["mvB"]])
+    assert res["success"] is True
+    assert [r["session_instance_tune_id"] for r in res["records"]] == [ids["mvA"]]
+    assert _shape(db_cursor, inst) == ["mvA", "mvB"]
