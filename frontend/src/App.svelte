@@ -289,7 +289,12 @@
   // / End-set (var(--insert)); a player tinted the same would read as the cursor.
   const PALETTE = ['#4f9dff', '#46d27a', '#ef8b3d', '#e0594b', '#b07cff', '#3fd0c9', '#ff8fab', '#9ab0c0']
   const colorFor = (seq) => PALETTE[((seq % PALETTE.length) + PALETTE.length) % PALETTE.length]
-  const initials = (name) => (name || '?').trim().slice(0, 2).toUpperCase()
+  const initials = (name) => {
+    const words = (name || '').trim().split(/\s+/).filter(Boolean)
+    if (words.length === 0) return '?'
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase()
+  }
 
   function put(record) {
     if (!record) return
