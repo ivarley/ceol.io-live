@@ -661,6 +661,23 @@
             text-decoration: underline;
         }
 
+        /* Faint parenthetical count of tunes logged for an instance */
+        .log-tune-count {
+            color: var(--text-muted, #6c757d);
+            font-size: 0.85em;
+            margin-left: 6px;
+        }
+
+        /* An instance with no tunes logged is just an empty placeholder,
+           so render its link as a fainter blue tint (still the link color,
+           just dimmer) to signal it isn't a real log yet. */
+        .instance-date-cell a.empty-log,
+        .instance-location-cell a.empty-log,
+        a.empty-log {
+            color: var(--primary);
+            opacity: 0.5;
+        }
+
         .instance-time-cell {
             padding: 8px 12px;
             vertical-align: middle;
@@ -2292,6 +2309,18 @@
         }
     }
 
+    // Faint "(N)" suffix showing how many tunes were logged for an instance.
+    // Empty when nothing has been logged.
+    function logTuneCountSuffix(instance) {
+        const count = instance.tune_count || 0;
+        return count > 0 ? ` <span class="log-tune-count">(${count} tune${count !== 1 ? 's' : ''} logged)</span>` : '';
+    }
+
+    // Class marking an instance link as an empty placeholder (no tunes logged).
+    function logEmptyClass(instance) {
+        return (instance.tune_count || 0) > 0 ? '' : ' empty-log';
+    }
+
     // Function to render logs from API data
     function renderLogs(data) {
         const logsTab = document.getElementById('logs-tab');
@@ -2381,7 +2410,7 @@
                             const instanceUrl = instance.multiple_on_date ? instance.session_instance_id : instance.date;
                             html += `<tr class="year-content-row" data-year="${year}">
                                 <td class="instance-date-cell">
-                                    <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}">${instance.date}</a>
+                                    <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}" class="${logEmptyClass(instance).trim()}">${instance.date}</a>${logTuneCountSuffix(instance)}
                                 </td>
                             </tr>`;
                         });
@@ -2407,7 +2436,7 @@
                     instances.forEach(instance => {
                         const instanceUrl = instance.multiple_on_date ? instance.session_instance_id : instance.date;
                         html += `<li style="margin-bottom: 8px;">
-                            <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}">${instance.date}</a>
+                            <a href="/sessions/${sessionPath}/${instanceUrl}" data-instance-id="${instance.session_instance_id}" class="${logEmptyClass(instance).trim()}">${instance.date}</a>${logTuneCountSuffix(instance)}
                         </li>`;
                     });
 

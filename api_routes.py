@@ -11654,7 +11654,11 @@ def get_session_logs(session_path):
             """
             SELECT si.date, si.location_override, si.start_time, si.end_time,
                    si.session_instance_id,
-                   COUNT(*) OVER (PARTITION BY si.date) as instances_on_date
+                   COUNT(*) OVER (PARTITION BY si.date) as instances_on_date,
+                   (SELECT COUNT(*) FROM session_instance_tune sit
+                    WHERE sit.session_instance_id = si.session_instance_id
+                      AND sit.record_type = 'tune'
+                      AND sit.deleted = FALSE) as tune_count
             FROM session_instance si
             WHERE si.session_id = %s
             ORDER BY si.date DESC, si.session_instance_id ASC
@@ -11682,7 +11686,8 @@ def get_session_logs(session_path):
                     'start_time': instance[2].isoformat() if instance[2] else None,
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
-                    'multiple_on_date': instance[5] > 1
+                    'multiple_on_date': instance[5] > 1,
+                    'tune_count': instance[6]
                 })
         else:
             # For regular sessions, group by year and include time info
@@ -11697,7 +11702,8 @@ def get_session_logs(session_path):
                     'start_time': instance[2].isoformat() if instance[2] else None,
                     'end_time': instance[3].isoformat() if instance[3] else None,
                     'session_instance_id': instance[4],
-                    'multiple_on_date': instance[5] > 1
+                    'multiple_on_date': instance[5] > 1,
+                    'tune_count': instance[6]
                 })
 
         # Sort instances within each group by start_time
