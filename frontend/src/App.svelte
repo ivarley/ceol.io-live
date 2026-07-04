@@ -925,7 +925,9 @@
   // one so each op's temp anchor is settled (or queued for remap on flush) before the
   // next sends. To other clients this looks like fast logging. no_merge: a pasted
   // duplicate must never corroborate-collapse (the old logger's paste also always adds).
-  async function pasteSets(sets) {
+  // advanceCursor (the composer paste): a mid-insert cursor follows the pasted block,
+  // exactly as typed-Enter entries would, so burst entry continues after it.
+  async function pasteSets(sets, { advanceCursor = false } = {}) {
     const c = insertAfterId
     const newSetTarget = c && typeof c === 'object' && c.newSet != null ? c.newSet : null
     let afterAnchor = null
@@ -981,6 +983,9 @@
           tune_id: t.tune_id ?? null, name: t.name, no_merge: true,
           after_record_id: prevTempId ?? afterAnchor, before_record_id: prevTempId ? null : (afterAnchor ? null : beforeAnchor),
         }
+        // Advance BEFORE the send: the ack's temp→real remap chases insertAfterId, so
+        // setting it after the await could leave it on an already-retired temp id.
+        if (advanceCursor && insertAfterId != null) insertAfterId = tempId
         await trySend({ op_id, name: t.name, op_type: 'add_tune', payload, status: 'sending', ts: Date.now(), tempId })
         prevTempId = tempId
         prevPos = key
@@ -1820,6 +1825,24 @@
     lastTypingSent = 0
     sendTyping(config, false) // clear-on-commit (§F)
     error = ''
+  }
+
+  // Paste into the composer: text with separators — commas = tunes in a set, line
+  // breaks = new sets — bulk-logs at the cursor through the selection-mode paste
+  // pipeline (spec 029 §D three-case resolution, so our own copy pastes rich and the
+  // old pill-logger JSON still works). The server matches each name with the same
+  // rules as typed-Enter: linked when it resolves, unlinked otherwise (an ambiguous
+  // name stays unlinked rather than blocking the batch on a dropdown). A single plain
+  // name falls through to a normal paste so it can be edited before committing.
+  function onComposerPaste(e) {
+    if (composerLocked || editingId != null) return
+    const plan = parseClipboard(e.clipboardData?.getData('text/plain') || '', lastCopy)
+    if (!plan) return
+    if (plan.kind === 'text' && plan.sets.length === 1 && plan.sets[0].length === 1) return
+    e.preventDefault()
+    // A half-typed fragment stays in the field (never silently discard user text);
+    // the cursor advances past the pasted block, so Enter still logs it in order.
+    pasteSets(plan.sets, { advanceCursor: true })
   }
 
   // Enter: add by typed text (server matches it to a tune, §C).
@@ -3131,6 +3154,7 @@
           bind:value={input}
           bind:this={inputEl}
           oninput={onInput}
+          onpaste={onComposerPaste}
           onfocus={() => { composerFocused = true; scheduleSeam() }}
           onblur={stopTyping}
           onkeydown={(e) => {

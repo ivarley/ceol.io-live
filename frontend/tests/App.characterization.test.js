@@ -91,3 +91,63 @@ describe('App renders bootstrapped records (extraction guard)', () => {
     }
   })
 })
+
+// Composer paste: commas = tunes in a set, line breaks = new sets — bulk-logged in
+// order through the same op pipeline as selection-mode paste. A single plain name is
+// NOT intercepted (normal paste; edit, then Enter).
+describe('composer multi-tune paste', () => {
+  async function mountInEditMode() {
+    const { container } = render(App, { props: { config } })
+    await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(3))
+    container.querySelector('.editbtn').click()
+    await waitFor(() => expect(container.querySelector('.composer-field input')).not.toBeNull())
+    return container
+  }
+
+  function pasteInto(input, text) {
+    const ev = new Event('paste', { bubbles: true, cancelable: true })
+    ev.clipboardData = { getData: () => text }
+    input.dispatchEvent(ev)
+    return ev
+  }
+
+  it('pastes lines/commas as ordered add_tune + set_break ops', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    // echo a real record per op so temp→real anchor remapping is observable
+    let nextId = 100
+    sendOp.mockImplementation(async (cfg, opType, payload) => {
+      const id = nextId++
+      return {
+        success: true,
+        record: {
+          session_instance_tune_id: id, tune_id: payload.tune_id ?? null, tune_type: null,
+          name: payload.name ?? null, order_position: `Z${id}`, deleted: false,
+          record_type: opType === 'set_break' ? 'break' : 'tune',
+        },
+      }
+    })
+    const container = await mountInEditMode()
+    const ev = pasteInto(container.querySelector('.composer-field input'), 'Tune A, Tune B\nTune C')
+    expect(ev.defaultPrevented).toBe(true)
+    await waitFor(() => expect(sendOp.mock.calls.length).toBe(4))
+    const ops = sendOp.mock.calls.map((c) => [c[1], c[2].name ?? null, c[2].after_record_id ?? null])
+    expect(ops).toEqual([
+      ['add_tune', 'Tune A', null],   // pure append at the end
+      ['add_tune', 'Tune B', 100],    // same set: chained after Tune A
+      ['set_break', null, 101],       // line break -> new set after Tune B
+      ['add_tune', 'Tune C', 102],    // first tune of the new set, after the break
+    ])
+    // pasted duplicates must always add, never corroborate-collapse
+    for (const c of sendOp.mock.calls) if (c[1] === 'add_tune') expect(c[2].no_merge).toBe(true)
+  })
+
+  it('leaves a single plain name to the default paste', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    const container = await mountInEditMode()
+    const ev = pasteInto(container.querySelector('.composer-field input'), 'The Lonesome Boatman')
+    expect(ev.defaultPrevented).toBe(false)
+    expect(sendOp).not.toHaveBeenCalled()
+  })
+})

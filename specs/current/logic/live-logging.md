@@ -215,6 +215,14 @@ tunes; paste also accepts the old JSON pill format, and same-session pastes reus
 internal clipboard so `tune_id` links survive). Drag uses a right-edge grab bar per row
 (pointer events; seams thicken as drop zones; drag-only "new set" zones at the extremes).
 
+**Pasting into the composer** rides the same pipeline: a paste whose text parses to more
+than one tune (commas = tunes in a set, line breaks = new sets — or the JSON/rich forms
+above) is intercepted and bulk-logged at the cursor in order, each name matched
+server-side with the same rules as typed-Enter (linked when it resolves, unlinked
+otherwise — ambiguity never blocks the batch). A mid-insert cursor advances past the
+pasted block, as if the tunes had been typed one by one; a single plain name is left to
+the normal paste so it can be edited before committing.
+
 Still deferred: the full `store.svelte.js` extraction
 ([spec 028](../../changes/inprogress/028-desktop-two-pane-logger.md)).
 
