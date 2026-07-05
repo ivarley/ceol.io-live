@@ -139,6 +139,12 @@ export async function livePeople(config) {
   return json.people || []
 }
 
+// Catalog-search API base: session-scoped on the live screen, personal
+// (/api/my-tunes) on the Add-to-My-Tunes pane. Only the search family
+// (deep-search / thesession-search / incipit) is dual-homed this way.
+const searchBase = (config) =>
+  config.searchApiBase || `/api/live/instances/${config.sessionInstanceId}`
+
 // Deep catalog search (§D "search deeper"): rich cards + incipit ABC, optional type filter.
 export async function deepSearch(config, q, type, preferType, mode) {
   const params = new URLSearchParams({ limit: '30' })
@@ -147,7 +153,7 @@ export async function deepSearch(config, q, type, preferType, mode) {
   if (preferType) params.set('prefer_type', preferType)
   if (mode) params.set('mode', mode)
   try {
-    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/deep-search?${params}`, {
+    const res = await fetch(`${searchBase(config)}/deep-search?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -167,7 +173,7 @@ export async function thesessionSearch(config, q, type) {
   const params = new URLSearchParams({ q })
   if (type) params.set('type', type)
   try {
-    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/thesession-search?${params}`, {
+    const res = await fetch(`${searchBase(config)}/thesession-search?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
@@ -184,7 +190,7 @@ export async function thesessionSearch(config, q, type) {
 export async function fetchIncipit(config, tuneId, kind) {
   const q = kind ? `?kind=${kind}` : ''
   try {
-    const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/incipit/${tuneId}${q}`, {
+    const res = await fetch(`${searchBase(config)}/incipit/${tuneId}${q}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })

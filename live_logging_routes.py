@@ -1330,21 +1330,8 @@ def _ensure_incipit(cur, tune_id, want_full=False):
     return bytea_to_base64(incipit_image)
 
 
-@api_login_required
-def live_deep_search(session_instance_id):
-    """Deep catalog search for the live screen (spec 021 §D "search deeper").
-
-    Modes (`mode=`): `mixed` (default) blends name + ABC-notation matches into one
-    ranked list (name matches first, then ABC-only); `name` and `abc` narrow to a
-    single kind (the modal's filter tabs). In `mixed`, the ABC clause only joins in
-    when the query is ABC-friendly (note letters / digits only) — ordinary name
-    queries are unaffected.
-    `type` is a hard tune-type filter (the popout); `prefer_type` is a soft sort
-    preference (the set you're logging into) so matching-type tunes sort first.
-    Returns rich cards: popularity, "on your list" / "in this session" flags, plays
-    at this session, and a ready-to-render incipit ABC (client renders with abcjs).
-    q may be empty to browse by type/popularity.
-    """
+def _parse_deep_search_args():
+    """Shared query-string parsing for the deep catalog search (live + My Tunes)."""
     q = normalize_quotes((request.args.get("q") or "").strip())
     tune_type = (request.args.get("type") or "").strip() or None
     prefer_type = (request.args.get("prefer_type") or "").strip() or None
@@ -1355,6 +1342,153 @@ def live_deep_search(session_instance_id):
         limit = min(40, max(1, int(request.args.get("limit", 25))))
     except (ValueError, TypeError):
         limit = 25
+    return q, tune_type, prefer_type, mode, limit
+
+
+def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
+                      session_id=None, on_list_last=False):
+    """The deep catalog search shared by the live screen and the Add-to-My-Tunes pane.
+
+    Modes (`mode=`): `mixed` (default) blends name + ABC-notation matches into one
+    ranked list (name matches first, then ABC-only); `name` and `abc` narrow to a
+    single kind (the modal's filter tabs). In `mixed`, the ABC clause only joins in
+    when the query is ABC-friendly (note letters / digits only) — ordinary name
+    queries are unaffected.
+    `type` is a hard tune-type filter (the popout); `prefer_type` is a soft sort
+    preference so matching-type tunes sort first. q may be empty to browse by
+    type/popularity.
+
+    session_id scopes the "in this session" / "played here" card fields; without a
+    session (My Tunes) they are constant FALSE/0. on_list_last pushes tunes already
+    on the person's list to the bottom of the ranking (the add pane dims them —
+    they're addable-again noise there, not targets); it must be part of the SQL
+    ORDER BY so not-on-list tunes fill the LIMIT window first.
+    """
+    # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
+    # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
+    # (note letters, accidentals, bar/octave marks, etc.) — except the explicit `abc`
+    # filter tab, which forces notation search on whatever was typed.
+    q_abc = re.sub(r"\s", "", q)
+    abc_friendly = bool(q_abc) and re.fullmatch(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+", q_abc) is not None
+    use_name = bool(q) and mode in ("name", "mixed")
+    use_abc = bool(q_abc) and (mode == "abc" or (mode == "mixed" and abc_friendly))
+
+    _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
+    # match the notation text with all whitespace ignored, so "fdd cAA | B" finds a
+    # tune whose body contains "fdd cAA|BAG..." ("My Darling Asleep").
+    _abc_exists = "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REGEXP_REPLACE(ts.abc, '\\s', '', 'g') ILIKE %s)"
+
+    # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
+    # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
+    params = [person_id]
+    if session_id is not None:
+        in_session_sql = "EXISTS(SELECT 1 FROM session_tune st WHERE st.tune_id = t.tune_id AND st.session_id = %s)"
+        played_here_sql = """(SELECT COUNT(*) FROM session_instance_tune sit
+                      JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                      WHERE si.session_id = %s AND sit.tune_id = t.tune_id
+                        AND sit.record_type = 'tune' AND sit.deleted = FALSE)"""
+        params += [session_id, session_id]
+    else:
+        in_session_sql = "FALSE"
+        played_here_sql = "0"
+    params.append(prefer_type)
+
+    # abc_only flag: row matched notation but NOT name (so the card can badge it).
+    if use_abc and use_name:
+        abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
+        params += [f"%{q_abc}%", f"%{q}%"]
+    elif use_abc:  # abc-only mode: every match is a notation match
+        abc_only_sql = "TRUE"
+    else:
+        abc_only_sql = "FALSE"
+
+    # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
+    order_prefix = "on_list, " if on_list_last else ""
+    if use_name and use_abc:
+        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
+                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3 ELSE 4 END"""
+        params += [q, f"{q}%", f"%{q}%"]
+        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+    elif use_name:
+        rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
+                       WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
+        params += [q, f"{q}%"]
+        order = f"{order_prefix}type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
+    else:
+        rank = "0"
+        order = f"{order_prefix}type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
+
+    where = ["t.redirect_to_tune_id IS NULL"]
+    clauses = []
+    if use_name:
+        clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
+        params.append(f"%{q}%")
+    if use_abc:
+        clauses.append(_abc_exists)
+        params.append(f"%{q_abc}%")
+    if clauses:
+        where.append("(" + " OR ".join(clauses) + ")")
+    if tune_type:
+        where.append("t.tune_type = %s")
+        params.append(tune_type)
+    params.append(limit)
+
+    sql = f"""
+        SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
+               EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
+               {in_session_sql} AS in_session,
+               {played_here_sql} AS played_here,
+               CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
+               {abc_only_sql} AS abc_only,
+               {rank} AS rank
+        FROM tune t
+        WHERE {' AND '.join(where)}
+        ORDER BY {order}
+        LIMIT %s
+    """
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+
+    results = [
+        {"tune_id": r[0], "name": r[1], "tune_type": r[2], "tunebook_count": r[3],
+         "on_list": r[4], "in_session": r[5], "played_here": r[6], "abc_only": bool(r[8])}
+        for r in rows
+    ]
+
+    # one pass for the cached incipit IMAGE + whether the tune is renderable (has
+    # ABC). Notation is rendered server-side by the abc-renderer service; the card
+    # shows the cached image inline, or lazily asks the incipit endpoint to render
+    # + cache it (no client-side rendering).
+    if results:
+        ids = [r["tune_id"] for r in results]
+        cur.execute(
+            """
+            SELECT DISTINCT ON (tune_id) tune_id, incipit_image,
+                   ((incipit_abc IS NOT NULL AND incipit_abc <> '') OR abc IS NOT NULL) AS can_render
+            FROM tune_setting WHERE tune_id = ANY(%s)
+            ORDER BY tune_id, (incipit_image IS NULL), setting_id
+            """,
+            (ids,),
+        )
+        settings = {row[0]: row for row in cur.fetchall()}
+        for r in results:
+            s = settings.get(r["tune_id"])
+            r["incipit_image"] = bytea_to_base64(s[1]) if (s and s[1]) else None
+            r["can_render"] = bool(s[2]) if s else False
+
+    return results
+
+
+@api_login_required
+def live_deep_search(session_instance_id):
+    """Deep catalog search for the live screen (spec 021 §D "search deeper").
+
+    Returns rich cards: popularity, "on your list" / "in this session" flags, plays
+    at this session, and a cached/renderable incipit. See _deep_search_core for the
+    mode/type/ranking semantics.
+    """
+    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
 
     conn = get_db_connection()
     try:
@@ -1366,110 +1500,27 @@ def live_deep_search(session_instance_id):
         session_id = srow[0]
         person_id = getattr(current_user, "person_id", None)
 
-        # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
-        # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
-        # (note letters, accidentals, bar/octave marks, etc.) — except the explicit `abc`
-        # filter tab, which forces notation search on whatever was typed.
-        q_abc = re.sub(r"\s", "", q)
-        abc_friendly = bool(q_abc) and re.fullmatch(r"[A-Ga-gxz0-9|^_=,'/()\[\]:<>~-]+", q_abc) is not None
-        use_name = bool(q) and mode in ("name", "mixed")
-        use_abc = bool(q_abc) and (mode == "abc" or (mode == "mixed" and abc_friendly))
+        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
+                                    person_id, session_id=session_id)
+        return jsonify({"success": True, "results": results})
+    finally:
+        conn.close()
 
-        _nm = f"LOWER(unaccent({normalize_quotes_sql('t.name')}))"
-        # match the notation text with all whitespace ignored, so "fdd cAA | B" finds a
-        # tune whose body contains "fdd cAA|BAG..." ("My Darling Asleep").
-        _abc_exists = "EXISTS(SELECT 1 FROM tune_setting ts WHERE ts.tune_id = t.tune_id AND REGEXP_REPLACE(ts.abc, '\\s', '', 'g') ILIKE %s)"
 
-        # SELECT-clause params first (subqueries + type_pref), then abc_only, then rank,
-        # then WHERE, then LIMIT — matching the textual order of %s placeholders below.
-        params = [person_id, session_id, session_id, prefer_type]
+@api_login_required
+def my_tunes_deep_search():
+    """Personal deep catalog search for the Add-to-My-Tunes pane: the SAME search the
+    live screen uses (name + ABC blend, type filter, incipit cards), just without a
+    session scope. Tunes already on the caller's list sort to the bottom (the pane
+    dims them — they're not add targets)."""
+    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
 
-        # abc_only flag: row matched notation but NOT name (so the card can badge it).
-        if use_abc and use_name:
-            abc_only_sql = f"({_abc_exists} AND NOT ({_nm} LIKE LOWER(unaccent(%s))))"
-            params += [f"%{q_abc}%", f"%{q}%"]
-        elif use_abc:  # abc-only mode: every match is a notation match
-            abc_only_sql = "TRUE"
-        else:
-            abc_only_sql = "FALSE"
-
-        # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
-        if use_name and use_abc:
-            rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
-                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 3 ELSE 4 END"""
-            params += [q, f"{q}%", f"%{q}%"]
-            order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
-        elif use_name:
-            rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
-                           WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2 ELSE 3 END"""
-            params += [q, f"{q}%"]
-            order = "type_pref, rank, t.tunebook_count_cached DESC NULLS LAST, t.name"
-        else:
-            rank = "0"
-            order = "type_pref, t.tunebook_count_cached DESC NULLS LAST, t.name"
-
-        where = ["t.redirect_to_tune_id IS NULL"]
-        clauses = []
-        if use_name:
-            clauses.append(f"{_nm} LIKE LOWER(unaccent(%s))")
-            params.append(f"%{q}%")
-        if use_abc:
-            clauses.append(_abc_exists)
-            params.append(f"%{q_abc}%")
-        if clauses:
-            where.append("(" + " OR ".join(clauses) + ")")
-        if tune_type:
-            where.append("t.tune_type = %s")
-            params.append(tune_type)
-        params.append(limit)
-
-        sql = f"""
-            SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
-                   EXISTS(SELECT 1 FROM person_tune pt WHERE pt.tune_id = t.tune_id AND pt.person_id = %s) AS on_list,
-                   EXISTS(SELECT 1 FROM session_tune st WHERE st.tune_id = t.tune_id AND st.session_id = %s) AS in_session,
-                   (SELECT COUNT(*) FROM session_instance_tune sit
-                      JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
-                      WHERE si.session_id = %s AND sit.tune_id = t.tune_id
-                        AND sit.record_type = 'tune' AND sit.deleted = FALSE) AS played_here,
-                   CASE WHEN t.tune_type = %s THEN 0 ELSE 1 END AS type_pref,
-                   {abc_only_sql} AS abc_only,
-                   {rank} AS rank
-            FROM tune t
-            WHERE {' AND '.join(where)}
-            ORDER BY {order}
-            LIMIT %s
-        """
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-
-        results = [
-            {"tune_id": r[0], "name": r[1], "tune_type": r[2], "tunebook_count": r[3],
-             "on_list": r[4], "in_session": r[5], "played_here": r[6], "abc_only": bool(r[8])}
-            for r in rows
-        ]
-
-        # one pass for the cached incipit IMAGE + whether the tune is renderable (has
-        # ABC). Notation is rendered server-side by the abc-renderer service; the card
-        # shows the cached image inline, or lazily asks the incipit endpoint to render
-        # + cache it (no client-side rendering).
-        if results:
-            ids = [r["tune_id"] for r in results]
-            cur.execute(
-                """
-                SELECT DISTINCT ON (tune_id) tune_id, incipit_image,
-                       ((incipit_abc IS NOT NULL AND incipit_abc <> '') OR abc IS NOT NULL) AS can_render
-                FROM tune_setting WHERE tune_id = ANY(%s)
-                ORDER BY tune_id, (incipit_image IS NULL), setting_id
-                """,
-                (ids,),
-            )
-            settings = {row[0]: row for row in cur.fetchall()}
-            for r in results:
-                s = settings.get(r["tune_id"])
-                r["incipit_image"] = bytea_to_base64(s[1]) if (s and s[1]) else None
-                r["can_render"] = bool(s[2]) if s else False
-
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        person_id = getattr(current_user, "person_id", None)
+        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
+                                    person_id, session_id=None, on_list_last=True)
         return jsonify({"success": True, "results": results})
     finally:
         conn.close()
@@ -1506,17 +1557,18 @@ def live_match(session_instance_id):
         conn.close()
 
 
-@api_login_required
-def live_thesession_search(session_instance_id):
-    """Proxy a tune search to thesession.org (spec 026 "Search on thesession.org").
+def _thesession_search_core(session_instance_id=None, person_id=None):
+    """Proxy a tune search to thesession.org (spec 026 "Search on thesession.org"),
+    shared by the live screen and the Add-to-My-Tunes pane.
 
     Online-only, read-only: mirrors the legacy search_sessions_ajax pattern but for
     `tunes/search?q=&format=json`. Runs only on explicit user action (never per keystroke).
     thesession's single `q=` handles both name and ABC/incipit queries; `type=` filters by
     tune type. Each hit carries only id/name/alias/type (no notation or tunebook count), so we
-    flag which are already local / already in this session, letting the client dedup and
-    annotate. Returns {success, results:[{tune_id, name, alias, tune_type, url, is_local,
-    in_session}]}; a network/parse failure returns {success: false} (client treats as empty)."""
+    flag which are already local / already in this session / already on the caller's list,
+    letting the client dedup and annotate. Returns {success, results:[{tune_id, name, alias,
+    tune_type, url, is_local, in_session, on_list}]}; a network/parse failure returns
+    {success: false} (client treats as empty)."""
     q = (request.args.get("q") or "").strip()
     tune_type = (request.args.get("type") or "").strip().lower() or None
     if len(q) < 2:
@@ -1540,20 +1592,23 @@ def live_thesession_search(session_instance_id):
     hits = data.get("tunes", []) or []
     ids = [h["id"] for h in hits if isinstance(h.get("id"), int)]
 
-    # One pass to flag which hits we already have locally and which are already in this session.
-    local_ids, session_ids = set(), set()
+    # One pass to flag which hits we already have locally / in this session / on the list.
+    local_ids, session_ids, list_ids = set(), set(), set()
     if ids:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-            srow = cur.fetchone()
-            session_id = srow[0] if srow else None
             cur.execute("SELECT tune_id FROM tune WHERE tune_id = ANY(%s)", (ids,))
             local_ids = {r[0] for r in cur.fetchall()}
-            if session_id is not None:
-                cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (session_id, ids))
-                session_ids = {r[0] for r in cur.fetchall()}
+            if session_instance_id is not None:
+                cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+                srow = cur.fetchone()
+                if srow:
+                    cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (srow[0], ids))
+                    session_ids = {r[0] for r in cur.fetchall()}
+            if person_id is not None:
+                cur.execute("SELECT tune_id FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)", (person_id, ids))
+                list_ids = {r[0] for r in cur.fetchall()}
         finally:
             conn.close()
 
@@ -1570,8 +1625,22 @@ def live_thesession_search(session_instance_id):
             "url": h.get("url"),
             "is_local": tid in local_ids,
             "in_session": tid in session_ids,
+            "on_list": tid in list_ids,
         })
     return jsonify({"success": True, "results": results})
+
+
+@api_login_required
+def live_thesession_search(session_instance_id):
+    """thesession.org remote search for the live screen (spec 026)."""
+    return _thesession_search_core(session_instance_id=session_instance_id)
+
+
+@api_login_required
+def my_tunes_thesession_search():
+    """thesession.org remote search for the Add-to-My-Tunes pane: same proxy, no
+    session scope, plus an on_list flag so already-added tunes dim."""
+    return _thesession_search_core(person_id=getattr(current_user, "person_id", None))
 
 
 @api_login_required
@@ -1580,6 +1649,12 @@ def live_incipit(session_instance_id, tune_id):
     service if missing. `?kind=both` also renders the full image (drawer toggle).
     Used by the deep-search cards (lazy, background) so notation is always service-
     rendered, never client-side."""
+    return _incipit_response(tune_id)
+
+
+def _incipit_response(tune_id):
+    """Render/cache-and-return an incipit image. Depends only on the tune, so both
+    the session-scoped live route and the My Tunes route share it."""
     kind = (request.args.get("kind") or "").strip().lower()
     conn = get_db_connection()
     try:
@@ -1596,6 +1671,13 @@ def live_incipit(session_instance_id, tune_id):
         return jsonify({"success": True, "image": img})
     finally:
         conn.close()
+
+
+@api_login_required
+def my_tunes_incipit(tune_id):
+    """Incipit image for the Add-to-My-Tunes pane's search cards — identical to
+    live_incipit, just not session-scoped."""
+    return _incipit_response(tune_id)
 
 
 @api_login_required

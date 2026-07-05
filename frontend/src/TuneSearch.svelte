@@ -15,6 +15,9 @@
     preferType = null, // the cursor set's type — a soft ranking preference, not a filter
     displayStatus = 'live', // gates the remote search (online-only)
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
+    title = 'Find a tune', // modal header text (the add pane says "Search for a tune")
+    allowAsIs = true, // "log as-is (unlinked)" escape — off for My Tunes (needs a catalog tune)
+    dimOnList = false, // dim results already on the list (the add pane: not add targets)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
@@ -124,9 +127,11 @@
     if (added === false || variant !== 'pane') return
     reset()
   }
-  // Tap a result → log that catalog tune at the cursor.
+  // Tap a result → log that catalog tune at the cursor. The full result card rides
+  // along as a third arg for callers that want the rich fields (incipit, on_list —
+  // the add pane); the live composer ignores it.
   function pickDeep(r) {
-    afterAdd(onAdd({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name))
+    afterAdd(onAdd({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
   }
   // Log the typed text as an unlinked tune (the "as-is" escape lives here).
   function deepLogAsIs() {
@@ -154,7 +159,7 @@
       else if (deepResults.length) pickDeep(deepResults[0])
       // Don't log a RECALLED query as-is while its search is still loading — only a query the
       // user actually typed (histPos == null) falls through to the as-is escape.
-      else if (histPos == null && deepQuery.trim()) deepLogAsIs()
+      else if (allowAsIs && histPos == null && deepQuery.trim()) deepLogAsIs()
     }
   }
 
@@ -176,7 +181,7 @@
   // Tap a remote result -> import (server-side, folded into the add op) + log linked at cursor.
   // We know the title/type from the search, so the optimistic row shows linked immediately.
   function pickRemote(r) {
-    afterAdd(onAdd({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name))
+    afterAdd(onAdd({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
   }
   // "Paste a thesession.org URL or tune ID" -> same import-and-log path (title unknown yet).
   function pasteThesession() {
@@ -198,7 +203,7 @@
 
 {#if variant === 'modal'}
   <div class="deep-head">
-    <span class="deep-title">Find a tune</span>
+    <span class="deep-title">{title}</span>
     <button class="deep-done" onclick={onClose}>Done</button>
   </div>
 {/if}
@@ -242,7 +247,7 @@
 {#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
   <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
 {/if}
-{#if deepMode !== 'abc' && deepQuery.trim()}
+{#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
   <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
 {/if}
 <div class="deep-results" id="deep-results-list" role="listbox">
@@ -256,7 +261,7 @@
     {/if}
   {:else}
     {#each deepResults as r, di (r.tune_id)}
-      <button id="dres-{di}" class="deep-card" class:hl={hl === di} onclick={() => pickDeep(r)}>
+      <button id="dres-{di}" class="deep-card" class:hl={hl === di} class:onlist={dimOnList && r.on_list} onclick={() => pickDeep(r)}>
         <div class="deep-card-head">
           <span class="deep-name">{r.name}</span>
           <span class="deep-type">{r.tune_type || ''}</span>
@@ -286,7 +291,7 @@
       <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
     {:else}
       {#each tsResults as r (r.tune_id)}
-        <button class="deep-card deep-remote-card" onclick={() => pickRemote(r)}>
+        <button class="deep-card deep-remote-card" class:onlist={dimOnList && r.on_list} onclick={() => pickRemote(r)}>
           <div class="deep-card-head">
             <span class="deep-name">{r.name}</span>
             <span class="deep-type">{r.tune_type || ''}</span>
@@ -295,6 +300,7 @@
             {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
             {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
             {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
+            {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
           </div>
         </button>
       {/each}

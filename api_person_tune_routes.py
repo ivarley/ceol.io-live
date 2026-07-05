@@ -455,6 +455,15 @@ def add_my_tune():
             }), 400
 
         tune_id = data.get('tune_id')
+
+        # thesession.org import (spec 026 pattern): a thesession_id (int, numeric
+        # string, or tunes URL) is also an acceptable target — thesession ids ARE our
+        # tune ids, so it doubles as tune_id and, when the tune isn't local yet, we
+        # import it server-side below (the add pane's remote picks + paste-a-URL).
+        from live_logging_routes import _parse_thesession_id
+        thesession_id = _parse_thesession_id(data.get('thesession_id'))
+        if not tune_id and thesession_id is not None:
+            tune_id = thesession_id
         if not tune_id:
             return jsonify({
                 "success": False,
@@ -516,6 +525,30 @@ def add_my_tune():
 
         # Check if tune exists locally
         tune_details = _get_tune_details(tune_id)
+
+        # Not local but identified by thesession_id: import it (tune row + default
+        # setting ABC; notation images render lazily). Same helper the live logger's
+        # add op uses, so imports behave identically in both flows.
+        if not tune_details and thesession_id is not None:
+            from live_logging_routes import _import_tune_for_live
+            from api_routes import TuneImportError
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                _import_tune_for_live(cur, tune_id, get_current_user_id())
+                conn.commit()
+            except TuneImportError as e:
+                conn.rollback()
+                return jsonify({
+                    "success": False,
+                    "error": f"Could not import tune from thesession.org: {e.message}"
+                }), 502
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+            tune_details = _get_tune_details(tune_id)
 
         # If tune doesn't exist and new_tune data is provided, insert it
         if not tune_details and data.get('new_tune'):

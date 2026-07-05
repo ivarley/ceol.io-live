@@ -1662,9 +1662,9 @@
         max-height: 85vh;
     }
 
-    /* Optimize grid for landscape */
+    /* The tune list is always a single column (even in landscape) */
     .tunes-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
     }
 
     /* Reduce vertical spacing */
@@ -1683,8 +1683,7 @@
 
 @media (min-width: 769px) and (max-width: 1024px) {
     .tunes-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
+        grid-template-columns: 1fr;
     }
 
     .my-tunes-container {

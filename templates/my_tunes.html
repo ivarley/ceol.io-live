@@ -5,6 +5,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mytunes/add.css') }}">
 <style>
     /* Highlight animation for newly added tunes */
     @keyframes highlight-fade {
@@ -14,6 +15,13 @@
 
     .highlight-tune {
         animation: highlight-fade 3s ease-out;
+    }
+
+    /* Desktop split pane: the add pane slides in from the right and the page content
+       yields to it (mobile instead overlays full-width, backdrop included). */
+    .my-tunes-container { transition: margin-right 0.3s ease-out; }
+    @media (min-width: 769px) {
+        body.mt-add-open .my-tunes-container { margin-right: 440px; }
     }
 </style>
 {% endblock %}
@@ -138,6 +146,9 @@
 </div>
 
 <!-- Unified Tune Detail Modal container is provided app-wide by base.html -->
+
+<!-- Add-to-My-Tunes pane (Svelte, /static/mytunes/add.js) mounts here -->
+<div id="mytunes-add-root"></div>
 
 <script>
 // Helper functions for API calls
@@ -1407,7 +1418,7 @@ function renderTunes() {
                 const addTuneUrl = searchValue.length > 0
                     ? `/my-tunes/add?q=${encodeURIComponent(searchValue)}`
                     : '/my-tunes/add';
-                actionDiv.innerHTML = `<a href="${addTuneUrl}" class="btn">Add Tune</a>`;
+                actionDiv.innerHTML = `<a href="${addTuneUrl}" class="btn" onclick="handleAddTuneClick(event)">Add Tune</a>`;
             }
         } else {
             // Still loading - keep showing loading state
@@ -2651,20 +2662,51 @@ function removeTuneFromMyTunes() {
     });
 }
 
-// Handle Add button click to pass search query as URL parameter
+// Handle Add button click: open the add pane (slide-in modal on mobile, split pane
+// on desktop), seeded with the current search text. Falls back to the legacy
+// /my-tunes/add page only if the pane bundle failed to load.
 function handleAddTuneClick(event) {
-    // Get current search value
     const searchInput = document.getElementById('search-input');
     const searchValue = searchInput ? searchInput.value.trim() : '';
 
-    // If there's a search query, pass it along to the add page
-    if (searchValue.length > 0) {
+    if (openAddTunePane(searchValue)) {
         event.preventDefault();
-        window.location.href = `/my-tunes/add?q=${encodeURIComponent(searchValue)}`;
         return;
     }
 
-    // Otherwise, just navigate normally (event will not be prevented)
+    if (searchValue.length > 0) {
+        event.preventDefault();
+        window.location.href = `/my-tunes/add?q=${encodeURIComponent(searchValue)}`;
+    }
+    // Otherwise, navigate to the legacy page normally.
+}
+
+// Open the Svelte add pane (window.MyTunesAddPane, mounted by /static/mytunes/add.js).
+// Returns false when the bundle isn't available so callers can fall back.
+function openAddTunePane(query) {
+    if (!window.MyTunesAddPane) return false;
+    window.MyTunesAddPane.open({
+        query: query || '',
+        instruments: myInstruments || [],
+        onAdded: function (tuneId, name) { afterPaneAdd(tuneId, name, false); },
+        onAlready: function (tuneId, name) { afterPaneAdd(tuneId, name, true); }
+    });
+    return true;
+}
+
+// After the pane adds (or finds we already have) a tune: refresh the list and reuse
+// the existing ?show/?added/?already landing flow in place — same toast, same
+// scroll + highlight, same URL cleanup as arriving from the legacy add page.
+function afterPaneAdd(tuneId, name, already) {
+    const params = new URLSearchParams(window.location.search);
+    params.delete('show'); params.delete('added'); params.delete('already');
+    params.set('show', tuneId);
+    if (already) params.set('already', '1');
+    else params.set('added', name || '');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    loadTunes();
+    checkForSuccessMessage();
+    scrollToAndHighlightTune();
 }
 </script>
 
@@ -2675,4 +2717,5 @@ function handleAddTuneClick(event) {
 <script src="{{ url_for('static', filename='js/my_tunes_mobile.js') }}"></script>
 <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='mytunes/add.js') }}"></script>
 {% endblock %}

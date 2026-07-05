@@ -29,7 +29,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search
+from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -1007,6 +1007,25 @@ app.add_url_rule(
     "sync_my_tunes",
     sync_my_tunes,
     methods=["POST"],
+)
+# Add-to-My-Tunes pane: the live screen's deep search, personal (session-less) flavor.
+app.add_url_rule(
+    "/api/my-tunes/deep-search",
+    "my_tunes_deep_search",
+    my_tunes_deep_search,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/thesession-search",
+    "my_tunes_thesession_search",
+    my_tunes_thesession_search,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/incipit/<int:tune_id>",
+    "my_tunes_incipit",
+    my_tunes_incipit,
+    methods=["GET"],
 )
 app.add_url_rule(
     "/api/my-tunes/common/<int:other_person_id>",

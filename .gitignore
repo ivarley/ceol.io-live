@@ -133,5 +133,8 @@ design/*
 # Live-logging Svelte/Vite build output (spec 024) -- built during deploy
 static/live/
 
+# Add-to-My-Tunes pane build output -- built during deploy (frontend npm run build)
+static/mytunes/
+
 # Claude Code worktrees (each contains its own checkout)
 .claude/worktrees/
