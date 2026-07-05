@@ -82,3 +82,5 @@ def test_canonical_list_shape():
     assert "Low Whistle" in CANONICAL_INSTRUMENTS
     assert "Vocals" not in CANONICAL_INSTRUMENTS
     assert "Tin Whistle" not in CANONICAL_INSTRUMENTS
+    # Every picker renders this list in order; it must stay alphabetical.
+    assert CANONICAL_INSTRUMENTS == sorted(CANONICAL_INSTRUMENTS)

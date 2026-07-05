@@ -10,23 +10,24 @@ case-insensitively. Anything not recognised as a canonical instrument or a known
 alias is kept verbatim as an "Other" free-text instrument.
 """
 
-# Canonical, display-ordered instrument list.
+# Canonical instrument list, alphabetical. Every picker in the UI renders this
+# in order, so keep it sorted (test_instruments.py enforces this).
 CANONICAL_INSTRUMENTS = [
+    "Banjo",
+    "Bodhrán",
+    "Bouzouki",
+    "Button Accordion",
+    "Concertina",
     "Fiddle",
     "Flute",
-    "Whistle",
-    "Low Whistle",
-    "Uilleann Pipes",
-    "Concertina",
-    "Button Accordion",
-    "Piano Accordion",
-    "Banjo",
-    "Mandolin",
-    "Harp",
     "Guitar",
-    "Bouzouki",
+    "Harp",
+    "Low Whistle",
+    "Mandolin",
     "Piano",
-    "Bodhrán",
+    "Piano Accordion",
+    "Uilleann Pipes",
+    "Whistle",
 ]
 
 # Legacy / alternate spellings mapped onto canonical names. Keys are lowercase.
