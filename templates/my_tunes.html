@@ -33,7 +33,7 @@
                 </a>
             </h1>
             <div class="page-actions">
-                <a href="/my-tunes/sync" class="btn btn-secondary">Sync</a>
+                <a href="/my-tunes/sync" class="btn btn-secondary sync-btn">Sync With TheSession.org</a>
             </div>
         </div>
 
@@ -68,25 +68,11 @@
 
             <div id="filter-panel" class="filter-panel" style="display: none;">
                 <div class="filter-panel-row">
-                    <select id="type-filter" class="filter-panel-select" title="Tune type">
-                        <option value="">All Tune Types</option>
-                    </select>
-                </div>
-                <div class="filter-panel-row">
                     <div class="filter-button-group">
                         <button class="filter-status-btn active" data-status="" onclick="setStatusFilter('')">All</button>
                         <button class="filter-status-btn" data-status="learned" onclick="setStatusFilter('learned')">Learned</button>
                         <button class="filter-status-btn" data-status="learning" onclick="setStatusFilter('learning')">Learning</button>
                         <button class="filter-status-btn" data-status="want to learn" onclick="setStatusFilter('want to learn')">Want To Learn</button>
-                    </div>
-                </div>
-                <div class="filter-panel-row" id="instrument-filter-row" style="display: none;">
-                    <div class="inst-select" id="instrument-filter">
-                        <button type="button" class="inst-select-trigger" onclick="toggleInstrumentDropdown(event)">
-                            <span id="instrument-filter-label">All instruments</span>
-                            <span class="inst-select-caret">▾</span>
-                        </button>
-                        <div class="inst-select-menu" id="instrument-filter-menu"></div>
                     </div>
                 </div>
                 <div class="filter-panel-row">
@@ -98,6 +84,24 @@
                     <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
                         <span id="sort-direction-icon">↑</span>
                     </button>
+                </div>
+                <div class="filter-panel-row">
+                    <div class="inst-select" id="type-filter">
+                        <button type="button" class="inst-select-trigger" onclick="toggleTypeDropdown(event)">
+                            <span id="type-filter-label">All Tune Types</span>
+                            <span class="inst-select-caret">▾</span>
+                        </button>
+                        <div class="inst-select-menu" id="type-filter-menu"></div>
+                    </div>
+                </div>
+                <div class="filter-panel-row" id="instrument-filter-row" style="display: none;">
+                    <div class="inst-select" id="instrument-filter">
+                        <button type="button" class="inst-select-trigger" onclick="toggleInstrumentDropdown(event)">
+                            <span id="instrument-filter-label">All My Instruments</span>
+                            <span class="inst-select-caret">▾</span>
+                        </button>
+                        <div class="inst-select-menu" id="instrument-filter-menu"></div>
+                    </div>
                 </div>
                 <div class="filter-panel-actions">
                     <button id="clear-filters-btn" class="filter-panel-clear-btn" onclick="clearFilters()" style="display: none;">Clear Filters</button>
@@ -330,12 +334,21 @@ function renderInstrumentFilter() {
     if (!row || !menu || !label) return;
     if (!myInstruments || myInstruments.length < 2) { row.style.display = 'none'; return; }
     row.style.display = 'block';
-    const opts = [{ value: '', label: 'All instruments' }].concat(
+    const opts = [{ value: '', label: 'All My Instruments' }].concat(
         myInstruments.map(i => ({ value: i.instrument, label: i.instrument }))
     );
     const current = currentFilters.instrument;
     const selected = opts.find(o => o.value === current) || opts[0];
     label.textContent = selected.label;
+    // On desktop there's room to spell out what "all" means; CSS ellipsizes if someone
+    // plays an absurd number of instruments.
+    if (!selected.value && window.innerWidth > 768) {
+        const names = myInstruments.map(i => i.instrument);
+        const listing = names.length === 2
+            ? names.join(' and ')
+            : names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1];
+        label.textContent = 'All My Instruments (' + listing + ')';
+    }
     menu.innerHTML = opts.map(o => {
         const active = o.value === current ? ' active' : '';
         return `<button type="button" class="inst-select-option${active}" data-instrument="${o.value}"
@@ -345,6 +358,8 @@ function renderInstrumentFilter() {
 
 function toggleInstrumentDropdown(event) {
     if (event) event.stopPropagation();
+    const other = document.getElementById('type-filter');
+    if (other) other.classList.remove('open');
     const wrap = document.getElementById('instrument-filter');
     if (wrap) wrap.classList.toggle('open');
 }
@@ -355,12 +370,50 @@ function selectInstrument(value) {
     setInstrumentFilter(value);
 }
 
-// Close the instrument dropdown when clicking outside it.
+// The tune-type filter uses the same custom dropdown as the instrument filter
+// (a native <select> popup can't be themed and its font never matches).
+let tuneTypes = [];
+
+function renderTypeFilter() {
+    const menu = document.getElementById('type-filter-menu');
+    const label = document.getElementById('type-filter-label');
+    if (!menu || !label) return;
+    const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+    const opts = [{ value: '', label: 'All Tune Types' }].concat(
+        tuneTypes.map(t => ({ value: t, label: cap(t) }))
+    );
+    const current = currentFilters.type;
+    // A URL-restored type can precede the tune list loading — still show it as selected.
+    const selected = opts.find(o => o.value === current)
+        || (current ? { value: current, label: cap(current) } : opts[0]);
+    label.textContent = selected.label;
+    menu.innerHTML = opts.map(o => {
+        const active = o.value === current ? ' active' : '';
+        return `<button type="button" class="inst-select-option${active}" data-type="${o.value}"
+            onclick="selectTuneType(this.dataset.type)">${o.label}</button>`;
+    }).join('');
+}
+
+function toggleTypeDropdown(event) {
+    if (event) event.stopPropagation();
+    const other = document.getElementById('instrument-filter');
+    if (other) other.classList.remove('open');
+    const wrap = document.getElementById('type-filter');
+    if (wrap) wrap.classList.toggle('open');
+}
+
+function selectTuneType(value) {
+    const wrap = document.getElementById('type-filter');
+    if (wrap) wrap.classList.remove('open');
+    currentFilters.type = value;
+    applyFilters();
+}
+
+// Close any open custom dropdown when clicking outside it.
 document.addEventListener('click', function (e) {
-    const wrap = document.getElementById('instrument-filter');
-    if (wrap && wrap.classList.contains('open') && !wrap.contains(e.target)) {
-        wrap.classList.remove('open');
-    }
+    document.querySelectorAll('.inst-select.open').forEach(function (wrap) {
+        if (!wrap.contains(e.target)) wrap.classList.remove('open');
+    });
 });
 let modalShowTime = 0;
 let modalFetchController = null; // AbortController for modal fetch requests
@@ -671,12 +724,6 @@ function setupEventListeners() {
         }, 300);
     });
 
-    // Filter dropdowns
-    document.getElementById('type-filter').addEventListener('change', function(e) {
-        currentFilters.type = e.target.value;
-        applyFilters();
-    });
-
     // Status filter dropdown (desktop)
     const statusFilterSelect = document.getElementById('status-filter-select');
     if (statusFilterSelect) {
@@ -976,7 +1023,7 @@ function loadFiltersFromURL() {
 
     if (params.has('type')) {
         currentFilters.type = params.get('type');
-        document.getElementById('type-filter').value = params.get('type');
+        renderTypeFilter(); // label shows it now; the options fill in once tunes load
     }
 
     if (params.has('status')) {
@@ -1163,25 +1210,9 @@ function showRetryOption() {
 }
 
 function populateTuneTypes() {
-    const types = [...new Set(allTunes.map(tune => tune.tune_type).filter(Boolean))];
-    types.sort();
-    
-    const typeFilter = document.getElementById('type-filter');
-    const currentValue = typeFilter.value;
-    
-    // Keep "All Types" option and add tune types
-    typeFilter.innerHTML = '<option value="">All Types</option>';
-    types.forEach(type => {
-        const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-        typeFilter.appendChild(option);
-    });
-    
-    // Restore selected value if it still exists
-    if (currentValue && types.includes(currentValue)) {
-        typeFilter.value = currentValue;
-    }
+    tuneTypes = [...new Set(allTunes.map(tune => tune.tune_type).filter(Boolean))];
+    tuneTypes.sort();
+    renderTypeFilter();
 }
 
 function applyFilters() {
@@ -1259,6 +1290,7 @@ function applyFilters() {
     updateURL();
     renderTunes();
     renderInstrumentFilter();
+    renderTypeFilter();
 }
 
 function renderTunes() {
@@ -1762,9 +1794,7 @@ function clearFilters() {
     currentSortDirection2 = null;
 
     // Don't clear the search input - keep it as is
-    // Reset type filter
-    document.getElementById('type-filter').value = '';
-    // (the instrument filter is a button group; renderInstrumentFilter re-renders it)
+    // (the type and instrument dropdowns re-render from state in applyFilters)
 
     // Reset status buttons to "All"
     document.querySelectorAll('.filter-status-btn').forEach(btn => {

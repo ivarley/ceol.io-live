@@ -109,6 +109,18 @@
     color: white !important;
 }
 
+/* Sync is a rare action — keep it quiet: page-colored with a border, muted text. */
+.btn.sync-btn {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted, #6c757d) !important;
+}
+
+.btn.sync-btn:hover {
+    background-color: var(--hover-bg);
+    color: var(--text-color) !important;
+}
+
 .filters-container {
     margin-bottom: 20px;
 }
@@ -199,7 +211,14 @@
     color: var(--text-color);
     cursor: pointer;
 }
-.inst-select-caret { font-size: 10px; opacity: 0.7; transition: transform 0.15s ease; }
+#instrument-filter-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+.inst-select-caret { flex: 0 0 auto; font-size: 10px; opacity: 0.7; transition: transform 0.15s ease; }
 .inst-select.open .inst-select-caret { transform: rotate(180deg); }
 .inst-select-menu {
     display: none;
@@ -267,7 +286,7 @@
     background-color: var(--bg-color);
     color: var(--text-color);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px; /* match the type/instrument selects */
     transition: all 0.2s;
     white-space: nowrap;
 }
@@ -1086,7 +1105,7 @@
 
     .filter-status-btn,
     .filter-sort-btn {
-        font-size: 12px;
+        font-size: 14px;
         padding: 8px 6px;
     }
 
