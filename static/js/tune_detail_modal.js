@@ -69,6 +69,9 @@
      * @param {number} config.tuneId - The tune ID
      * @param {string} config.apiEndpoint - API endpoint to fetch tune details
      * @param {Function} config.onSave - Callback when save is successful
+     * @param {Function} config.onStatusChange - Optional; called immediately when a learn status
+     *     (roll-up or per-instrument) is changed in the modal, with
+     *     {tune_id, learn_status, instrument_status} — lets the host page update its list live
      * @param {Object} config.additionalData - Additional context-specific data
      */
     function showModal(config) {
@@ -819,10 +822,12 @@ ${abcBody}`;
         delete updated[inst.instrument];
         setInstrumentOverrides(currentTuneData, currentConfig, updated);
         refreshStatusSection();
+        notifyStatusChange();
         submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: null })
             .catch(function () {
                 setInstrumentOverrides(currentTuneData, currentConfig, prev);
                 refreshStatusSection();
+                notifyStatusChange();
             });
     }
 
@@ -858,6 +863,18 @@ ${abcBody}`;
         section.innerHTML = statusSectionInner(currentTuneData, currentConfig);
     }
 
+    // Tell the host page a status was changed (statuses auto-save in place, without the
+    // Save button / onSave), so it can update its own list immediately.
+    function notifyStatusChange() {
+        if (!currentConfig || typeof currentConfig.onStatusChange !== 'function' || !currentTuneData) return;
+        const data = getInstrumentData(currentTuneData, currentConfig);
+        currentConfig.onStatusChange({
+            tune_id: currentTuneData.tune_id,
+            learn_status: getModalLearnStatus(currentTuneData, currentConfig),
+            instrument_status: Object.assign({}, data.overrides)
+        });
+    }
+
     function toggleStatusExpand(event) {
         if (event) event.stopPropagation();
         piExpanded = !piExpanded;
@@ -889,10 +906,12 @@ ${abcBody}`;
         if (shouldStore) { updated[inst.instrument] = target; } else { delete updated[inst.instrument]; }
         setInstrumentOverrides(currentTuneData, currentConfig, updated);
         refreshStatusSection();  // roll-up may change too
+        notifyStatusChange();
         submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: target })
             .catch(function () {
                 setInstrumentOverrides(currentTuneData, currentConfig, prev);
                 refreshStatusSection();
+                notifyStatusChange();
             });
     }
 
@@ -2185,6 +2204,7 @@ ${abcBody}`;
                 section.insertAdjacentHTML('afterend', heardHtml);
             }
             onFieldChange();
+            notifyStatusChange();
         };
         const setSaving = (on) => {
             const s = document.querySelector('.tsc-main-block .tunebook-status-seg');

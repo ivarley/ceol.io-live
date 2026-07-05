@@ -953,9 +953,9 @@ function cycleStatusFilter() {
         if (state.value === 'learned') {
             icon.style.color = '#5cb85c'; // green
         } else if (state.value === 'learning') {
-            icon.style.color = '#5bc0de'; // blue
-        } else if (state.value === 'want to learn') {
             icon.style.color = '#f0ad4e'; // yellow
+        } else if (state.value === 'want to learn') {
+            icon.style.color = '#5bc0de'; // blue
         }
     } else {
         btn.classList.remove('active');
@@ -1207,22 +1207,29 @@ function applyFilters() {
             return false;
         }
 
-        // Status filter — when an instrument is selected, filter by that instrument's
-        // resolved status (and drop tunes not tracked on it); otherwise by learn_status.
+        // Status filter — when an instrument is selected, tunes not on that instrument
+        // are kept but dimmed and sorted below the matches (not dropped). Status filters
+        // by the instrument-resolved status for matches, base learn_status otherwise.
         if (currentFilters.instrument) {
             const instStatus = resolveTuneInstrumentStatus(tune, currentFilters.instrument);
-            if (instStatus === null) return false; // not on this instrument
-            if (currentFilters.status && instStatus !== currentFilters.status) return false;
-        } else if (currentFilters.status && tune.learn_status !== currentFilters.status) {
-            return false;
+            tune._instDimmed = (instStatus === null);
+            const effectiveStatus = instStatus === null ? tune.learn_status : instStatus;
+            if (currentFilters.status && effectiveStatus !== currentFilters.status) return false;
+        } else {
+            tune._instDimmed = false;
+            if (currentFilters.status && tune.learn_status !== currentFilters.status) return false;
         }
 
         return true;
     });
 
-    // Apply client-side sorting (primary + secondary)
+    // Apply client-side sorting (primary + secondary). With an instrument filter active,
+    // tunes on that instrument sort above the dimmed rest; both groups keep the sort order.
     const sortFn = buildSortFunction();
-    if (sortFn) {
+    if (currentFilters.instrument) {
+        filteredTunes.sort((a, b) =>
+            ((a._instDimmed ? 1 : 0) - (b._instDimmed ? 1 : 0)) || (sortFn ? sortFn(a, b) : 0));
+    } else if (sortFn) {
         filteredTunes.sort(sortFn);
     }
 
@@ -1350,7 +1357,10 @@ function renderTunes() {
     if (fullTunesLoaded) {
         const total = allTunes.length;
         const filtered = filteredTunes.length;
-        if (filtered < total) {
+        if (currentFilters.instrument) {
+            const onInstrument = filteredTunes.filter(t => !t._instDimmed).length;
+            resultsCountText.textContent = `${onInstrument} of ${filtered} tune${filtered !== 1 ? 's' : ''} on ${currentFilters.instrument}`;
+        } else if (filtered < total) {
             resultsCountText.textContent = `Showing ${filtered} of ${total} tunes`;
         } else {
             resultsCountText.textContent = `${total} tune${total !== 1 ? 's' : ''}`;
@@ -1365,7 +1375,17 @@ function renderTunes() {
     const wantToLearnCount = filteredTunes.filter(t => t.learn_status === 'want to learn').length;
     console.log('Want to learn tunes:', wantToLearnCount);
 
-    grid.innerHTML = filteredTunes.map(tune => createTuneCard(tune)).join('');
+    // With an instrument filter, a heading separates the on-instrument tunes from the
+    // dimmed rest (the list is already sorted matches-first by applyFilters).
+    if (currentFilters.instrument && filteredTunes.some(t => t._instDimmed)) {
+        const matches = filteredTunes.filter(t => !t._instDimmed);
+        const others = filteredTunes.filter(t => t._instDimmed);
+        grid.innerHTML = matches.map(tune => createTuneCard(tune)).join('')
+            + '<div class="tune-group-heading">Tunes on other instruments</div>'
+            + others.map(tune => createTuneCard(tune)).join('');
+    } else {
+        grid.innerHTML = filteredTunes.map(tune => createTuneCard(tune)).join('');
+    }
 
     // Initialize swipe listeners for mobile
     if (window.innerWidth <= 768) {
@@ -1580,18 +1600,64 @@ function cyclePersonTuneStatus(tuneId, current, event) {
         });
 }
 
+// Cycle a tune's status ON THE FILTERED INSTRUMENT from the list card (shown instead of
+// the overall status while an instrument filter is active). Same cycle as above, saved as
+// a per-instrument override; matches the modal's semantics — an auto instrument set back
+// to the tune's overall status stores no override (snap-back).
+function cycleInstrumentStatus(tuneId, current, event) {
+    if (event) event.stopPropagation();
+    var instName = currentFilters.instrument;
+    var tune = allTunes.find(function (t) { return t.tune_id === tuneId; });
+    var inst = instName && myInstruments.find(function (i) { return i.instrument.toLowerCase() === instName.toLowerCase(); });
+    if (!tune || !inst) return;
+    var order = ['want to learn', 'learning', 'learned'];
+    var next = order[(order.indexOf(current) + 1) % order.length];
+    var prev = Object.assign({}, tune.instrument_status || {});
+    var updated = Object.assign({}, prev);
+    if (inst.is_auto && next === tune.learn_status) { delete updated[inst.instrument]; }
+    else { updated[inst.instrument] = next; }
+    tune.instrument_status = updated; // optimistic
+    applyFilters();
+    var op = { type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: next };
+    var submit = window.MyTunesOffline
+        ? window.MyTunesOffline.submit(op)
+        : fetch('/api/my-tunes/ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op) })
+              .then(function (r) { return r.json(); })
+              .then(function (d) { if (!d.success) throw new Error(d.error || 'op failed'); return { online: true, data: d }; });
+    submit
+        .then(function (res) {
+            if (res && res.queued) { tune.pending_sync = true; applyFilters(); } // offline: mark pending
+        })
+        .catch(function (err) {
+            console.error('Error changing instrument status:', err);
+            tune.instrument_status = prev; // server rejected -> revert
+            applyFilters();
+            if (typeof showMessage === 'function') showMessage('Could not change status. Please try again.', 'error');
+        });
+}
+
 // --- Per-instrument status (expand panel on each card) -----------------------------
 // Only shown when you play 2+ instruments; single-instrument users see today's card.
 
 function createTuneCard(tune) {
-    const statusClass = `status-${tune.learn_status.replace(/ /g, '-')}`;
-    const heardCountHTML = tune.learn_status === 'want to learn' && tune.heard_count > 0
+    // With an instrument filter, on-instrument cards show (and tap-cycle) that
+    // instrument's resolved status; dimmed cards and the unfiltered list use the
+    // tune's overall learn_status.
+    const instStatus = currentFilters.instrument && !tune._instDimmed
+        ? resolveTuneInstrumentStatus(tune, currentFilters.instrument)
+        : null;
+    const displayStatus = instStatus || tune.learn_status;
+    const cycleCall = instStatus
+        ? `cycleInstrumentStatus(${tune.tune_id}, '${displayStatus}', event)`
+        : `cyclePersonTuneStatus(${tune.tune_id}, '${tune.learn_status}', event)`;
+    const statusClass = `status-${displayStatus.replace(/ /g, '-')}`;
+    const heardCountHTML = displayStatus === 'want to learn' && tune.heard_count > 0
         ? `<div class="heard-count-container">
                <span>Heard at sessions:</span>
                <span class="heard-count">${tune.heard_count}</span>
                <button class="increment-heard-btn" onclick="incrementHeardCount(${tune.person_tune_id}); event.stopPropagation();" title="Increment heard count">+</button>
            </div>`
-        : tune.learn_status === 'want to learn'
+        : displayStatus === 'want to learn'
         ? `<div class="heard-count-container">
                <button class="increment-heard-btn" onclick="incrementHeardCount(${tune.person_tune_id}); event.stopPropagation();" title="Mark as heard">+</button>
                <span style="font-size: 12px;">Mark as heard</span>
@@ -1622,6 +1688,9 @@ function createTuneCard(tune) {
     // Add data attributes for swipe functionality and highlighting
     const swipeAttr = `data-person-tune-id="${tune.person_tune_id}" data-tune-id="${tune.tune_id}"`;
 
+    // Instrument filter: tunes not on the selected instrument render dimmed
+    const dimClass = tune._instDimmed ? ' tune-card-dimmed' : '';
+
     // Show increment button for all tunes on mobile
     const canIncrement = true;
 
@@ -1635,7 +1704,7 @@ function createTuneCard(tune) {
                         <span class="swipe-action-icon">+</span>
                     </button>
                 </div>
-                <div class="tune-card tune-card-swipeable" onclick="showTuneDetail('${tune.person_tune_id}', event)">
+                <div class="tune-card tune-card-swipeable${dimClass}" onclick="showTuneDetail('${tune.person_tune_id}', event)">
                     <div class="tune-card-header">
                         <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
                         ${pendingBadge}
@@ -1643,7 +1712,7 @@ function createTuneCard(tune) {
                     </div>
                     <div class="tune-meta">
                         <div class="tune-meta-item">
-                            <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="cyclePersonTuneStatus(${tune.tune_id}, '${tune.learn_status}', event)">${tune.learn_status}</span>
+                            <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="${cycleCall}">${displayStatus}</span>
                         </div>
                         ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
                     </div>
@@ -1656,7 +1725,7 @@ function createTuneCard(tune) {
         `;
     } else {
         return `
-            <div class="tune-card" ${swipeAttr} onclick="showTuneDetail('${tune.person_tune_id}', event)">
+            <div class="tune-card${dimClass}" ${swipeAttr} onclick="showTuneDetail('${tune.person_tune_id}', event)">
                 <div class="tune-card-header">
                     <h3 class="tune-name">${tune.tune_name || 'Unknown'}</h3>
                     ${pendingBadge}
@@ -1664,7 +1733,7 @@ function createTuneCard(tune) {
                 </div>
                 <div class="tune-meta">
                     <div class="tune-meta-item">
-                        <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="cyclePersonTuneStatus(${tune.tune_id}, '${tune.learn_status}', event)">${tune.learn_status}</span>
+                        <span class="status-badge ${statusClass}" style="cursor:pointer;" title="Tap to change status" onclick="${cycleCall}">${displayStatus}</span>
                     </div>
                     ${tune.tune_key ? `<div class="tune-meta-item">Key: ${tune.tune_key}</div>` : ''}
                 </div>
@@ -1805,6 +1874,15 @@ function showTuneDetail(personTuneId, event) {
         onSave: function() {
             // Refresh the tunes list
             loadTunes();
+        },
+        onStatusChange: function(change) {
+            // Statuses auto-save in the modal (no Save click) — mirror the change into our
+            // local data and re-render so the list behind the modal updates immediately.
+            const t = allTunes.find(x => x.tune_id === change.tune_id);
+            if (!t) return;
+            t.learn_status = change.learn_status;
+            t.instrument_status = change.instrument_status;
+            applyFilters();
         },
         additionalData: {
             personTuneId: personTuneId,

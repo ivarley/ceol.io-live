@@ -378,6 +378,22 @@
     background-color: var(--hover-bg);
 }
 
+/* Instrument filter: tunes not on the selected instrument stay visible but dimmed */
+.tune-card.tune-card-dimmed {
+    opacity: 0.45;
+}
+
+/* Instrument filter: heading separating on-instrument tunes from the dimmed rest */
+.tune-group-heading {
+    grid-column: 1 / -1;
+    padding: 20px 8px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted, #6c757d);
+}
+
 .tune-card-header {
     display: flex;
     align-items: center;
@@ -431,14 +447,16 @@
     text-transform: capitalize;
 }
 
+/* Status colors match the tune detail modal (tunebook-status-*): want to learn = blue,
+   learning = yellow, learned = green */
 .status-want-to-learn {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: #e6f3ff;
+    color: #004085;
 }
 
 .status-learning {
-    background-color: #d1ecf1;
-    color: #0c5460;
+    background-color: #fff3cd;
+    color: #856404;
 }
 
 .status-learned {
@@ -933,18 +951,18 @@
    ============================================ */
 
 [data-theme="dark"] .status-want-to-learn {
-    background-color: #664d03;
-    color: #ffecb5;
+    background-color: #1f3a4a;
+    color: #cce5ff;
 }
 
 [data-theme="dark"] .status-learning {
-    background-color: #055160;
-    color: #b6effb;
+    background-color: #4a3f1f;
+    color: #ffeaa7;
 }
 
 [data-theme="dark"] .status-learned {
-    background-color: #0f5132;
-    color: #badbcc;
+    background-color: #1f4a2f;
+    color: #c3e6cb;
 }
 
 [data-theme="dark"] .modal-save-btn:disabled {
@@ -1217,12 +1235,12 @@
 
     .status-want-to-learn::before {
         content: '●';
-        color: #f0ad4e;
+        color: #5bc0de;
     }
 
     .status-learning::before {
         content: '⋯';
-        color: #5bc0de;
+        color: #f0ad4e;
     }
 
     .status-learned::before {
