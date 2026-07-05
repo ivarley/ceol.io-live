@@ -1875,6 +1875,9 @@ function showTuneDetail(personTuneId, event) {
             // Refresh the tunes list
             loadTunes();
         },
+        // Filtering by an instrument means you care about per-instrument statuses, so
+        // open the modal with those rows already revealed.
+        expandInstrumentStatus: currentFilters.instrument ? true : undefined,
         onStatusChange: function(change) {
             // Statuses auto-save in the modal (no Save click) — mirror the change into our
             // local data and re-render so the list behind the modal updates immediately.

@@ -381,21 +381,21 @@
 }
 .tsc-name { font-size: 14px; }
 .tsc-inst-block .tsc-name { font-weight: 500; }
-.tsc-expand-btn {
-    flex: 0 0 auto;
+/* Text toggle for the per-instrument rows: "View By Instrument" below the roll-up when
+   collapsed, "Hide Instruments" below the last instrument when expanded. */
+.tsc-expand-link {
+    align-self: center;
     background: none;
     border: none;
     color: inherit;
     cursor: pointer;
     font: inherit;
-    line-height: 1;
-    padding: 0 2px;
+    font-size: 12.5px;
+    padding: 0;
+    opacity: 0.75;
+    text-decoration: underline;
 }
-.tsc-caret {
-    display: inline-block;
-    transition: transform 0.15s ease;
-}
-.tsc-expand-btn.open .tsc-caret { transform: rotate(90deg); }
+.tsc-expand-link:hover { opacity: 1; }
 .tsc-manual {
     font-size: 10px;
     font-weight: 700;
@@ -424,21 +424,6 @@
     border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 [data-theme="dark"] .tsc-instruments { border-top-color: rgba(255, 255, 255, 0.15); }
-
-.tunebook-action-btn {
-    padding: 4px 12px;
-    border: 1px solid currentColor;
-    border-radius: 4px;
-    background: transparent;
-    color: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.tunebook-action-btn:hover {
-    background-color: rgba(0,0,0,0.1);
-}
 
 /* Status segmented control — full width with three equal-width buttons so the main
    roll-up and every instrument line up. The ACTIVE button carries the status color. */
@@ -469,6 +454,24 @@
 .tunebook-status-opt:hover { background-color: rgba(0, 0, 0, 0.05); }
 [data-theme="dark"] .tunebook-status-opt:hover { background-color: rgba(255, 255, 255, 0.06); }
 .tunebook-status-opt.active { font-weight: 700; }
+
+/* Not-on-list mode of the bar: two compartments — a wide non-clickable label plus an
+   "Add" action — in the red scheme regardless of the surrounding section's tint. */
+.tunebook-status-seg.tsc-notlist-seg { color: #721c24; background-color: #ffe6e6; }
+[data-theme="dark"] .tunebook-status-seg.tsc-notlist-seg { color: #f8d7da; background-color: #4a1f1f; }
+.tsc-notlist-label {
+    flex: 2 1 0;
+    cursor: default;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tsc-notlist-label:hover,
+[data-theme="dark"] .tsc-notlist-label:hover { background-color: transparent; }
+/* The Add compartment gets a lighter fill so it reads as clickable; hover lightens further. */
+.tsc-notlist-add { background-color: rgba(255, 255, 255, 0.5); }
+.tsc-notlist-add:hover { background-color: rgba(255, 255, 255, 0.75); }
+[data-theme="dark"] .tsc-notlist-add { background-color: rgba(255, 255, 255, 0.1); }
+[data-theme="dark"] .tsc-notlist-add:hover { background-color: rgba(255, 255, 255, 0.18); }
 .tunebook-status-opt.active[data-status="want to learn"] { background-color: #cfe6ff; color: #084298; }
 .tunebook-status-opt.active[data-status="learning"] { background-color: #ffe8a3; color: #7a5b00; }
 .tunebook-status-opt.active[data-status="learned"] { background-color: #b7e4c1; color: #14532d; }

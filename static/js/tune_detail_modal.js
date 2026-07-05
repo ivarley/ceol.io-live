@@ -72,11 +72,15 @@
      * @param {Function} config.onStatusChange - Optional; called immediately when a learn status
      *     (roll-up or per-instrument) is changed in the modal, with
      *     {tune_id, learn_status, instrument_status} — lets the host page update its list live
+     * @param {boolean} config.expandInstrumentStatus - Optional; when set, forces the
+     *     per-instrument status rows open (true) or closed (false) on open, instead of
+     *     keeping their last expanded state
      * @param {Object} config.additionalData - Additional context-specific data
      */
     function showModal(config) {
         currentContext = config.context;
         currentConfig = config;
+        if (config.expandInstrumentStatus !== undefined) piExpanded = !!config.expandInstrumentStatus;
         pendingHeardCountRequests = 0; // Reset pending requests counter
         const modal = document.getElementById('tune-detail-modal');
         const modalContent = document.getElementById('tune-detail-content');
@@ -790,8 +794,20 @@ ${abcBody}`;
             + '</div>';
     }
 
+    // The bar's "not on list" mode: same footprint as the 3-way seg, but two compartments —
+    // a wide non-clickable label and an "Add" action. Always red, whatever the section tint.
+    // Clicking Add puts the tune on the list as 'want to learn' and the bar becomes the
+    // standard 3-way toggle.
+    function notOnListSeg(addOnclick) {
+        return '<div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">'
+            + '<span class="tunebook-status-opt tsc-notlist-label">This tune is not on your list</span>'
+            + '<button type="button" class="tunebook-status-opt tsc-notlist-add" onclick="' + addOnclick + '">Add</button>'
+            + '</div>';
+    }
+
     // One block per instrument: a thin label line (full name) above its segmented control,
-    // so long names always show and every control lines up full-width.
+    // so long names always show and every control lines up full-width. An untracked
+    // (manual, no override) instrument shows the red not-on-list bar instead of the 3-way.
     function buildInstrumentBlocks(tuneData, config) {
         const { instruments, overrides } = getInstrumentData(tuneData, config);
         const learnStatus = getModalLearnStatus(tuneData, config);
@@ -803,9 +819,12 @@ ${abcBody}`;
             const removeLink = (!inst.is_auto && st !== null)
                 ? '<button type="button" class="tsc-remove" onclick="TuneDetailModal.removeInstrumentTune(' + i + ')">× remove</button>'
                 : '';
+            const seg = st === null
+                ? notOnListSeg("TuneDetailModal.setInstrumentStatus(" + i + ",'want to learn')")
+                : statusSeg(st, function (v) { return "TuneDetailModal.setInstrumentStatus(" + i + ",'" + v + "')"; });
             return '<div class="tsc-block tsc-inst-block">'
                 + '<div class="tsc-label-line"><span class="tsc-name">' + inst.instrument + manual + '</span>' + removeLink + '</div>'
-                + statusSeg(st, function (v) { return "TuneDetailModal.setInstrumentStatus(" + i + ",'" + v + "')"; })
+                + seg
                 + '</div>';
         }).join('');
     }
@@ -832,24 +851,23 @@ ${abcBody}`;
     }
 
     // The inner HTML of the whole status control: the main (roll-up) block, plus the
-    // per-instrument blocks (revealed by the expand triangle) when you play 2+ instruments.
+    // per-instrument blocks (revealed by a text toggle) when you play 2+ instruments.
+    // The toggle sits below the roll-up control when collapsed ("View By Instrument")
+    // and below the last instrument when expanded ("Hide Instruments").
     function statusSectionInner(tuneData, config) {
         const { instruments } = getInstrumentData(tuneData, config);
         const multi = instruments && instruments.length >= 2;
-        const expandBtn = multi
-            ? '<button type="button" class="tsc-expand-btn' + (piExpanded ? ' open' : '') + '"'
-              + ' onclick="TuneDetailModal.toggleStatusExpand(event)" aria-label="Per-instrument status">'
-              + '<span class="tsc-caret">▸</span></button>'
-            : '';
-        const instrumentsBlock = multi
-            ? '<div class="tsc-instruments"' + (piExpanded ? '' : ' style="display:none;"') + '>'
-              + buildInstrumentBlocks(tuneData, config) + '</div>'
-            : '';
-        return '<div class="tsc-block tsc-main-block">'
-            + '<div class="tsc-label-line"><span class="tsc-name tunebook-status-label">This tune is on your list as</span>' + expandBtn + '</div>'
+        const main = '<div class="tsc-block tsc-main-block">'
+            + '<div class="tsc-label-line"><span class="tsc-name tunebook-status-label">This tune is on your list as</span></div>'
             + statusSeg(rollupStatus(tuneData, config), function (v) { return "TuneDetailModal.setTunebookStatus('" + v + "')"; })
-            + '</div>'
-            + instrumentsBlock;
+            + '</div>';
+        if (!multi) return main;
+        const toggle = '<button type="button" class="tsc-expand-link"'
+            + ' onclick="TuneDetailModal.toggleStatusExpand(event)">'
+            + (piExpanded ? 'Hide Instruments' : 'View By Instrument') + '</button>';
+        return piExpanded
+            ? main + '<div class="tsc-instruments">' + buildInstrumentBlocks(tuneData, config) + '</div>' + toggle
+            : main + toggle;
     }
 
     // Re-render the whole control in place (preserving the expanded state), so both the
@@ -878,10 +896,8 @@ ${abcBody}`;
     function toggleStatusExpand(event) {
         if (event) event.stopPropagation();
         piExpanded = !piExpanded;
-        const wrap = document.querySelector('.tsc-instruments');
-        const btn = document.querySelector('.tsc-expand-btn');
-        if (wrap) wrap.style.display = piExpanded ? 'block' : 'none';
-        if (btn) btn.classList.toggle('open', piExpanded);
+        // Re-render the control: the toggle's label AND position change with the state.
+        refreshStatusSection();
     }
 
     // Set one instrument's status directly. Clicking the active status on a MANUAL
@@ -940,11 +956,11 @@ ${abcBody}`;
         }
 
         if (!onList) {
-            // Not on list - red state
+            // Not on list — same bar as the on-list control, in its two-compartment
+            // red mode. Add puts the tune on the list as 'want to learn'.
             return `
                 <div class="tunebook-status-section tunebook-status-not-on-list">
-                    This tune is not on your list.
-                    <button class="tunebook-action-btn" onclick="TuneDetailModal.addToTunebook()">Add</button>
+                    ${notOnListSeg('TuneDetailModal.addToTunebook()')}
                 </div>
             `;
         }
