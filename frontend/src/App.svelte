@@ -66,8 +66,14 @@
     if (s === 'live') {
       reachable = true
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
-    } else if (!reconnectTimer) {
-      reconnectTimer = setTimeout(() => { reconnectTimer = null; reachable = false }, 8000)
+    } else {
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => { reconnectTimer = null; reachable = false }, 8000)
+      }
+      // Safety net: any not-live stream state keeps a full-reconnect poll pending,
+      // so no failure mode (EventSource permanently closed on a non-200, a stalled
+      // reconnect, a wedged connect()) can strand us with nothing left to retry.
+      scheduleReconnect()
     }
   }
 
@@ -79,7 +85,7 @@
     if (reconnectPoll) return
     reconnectPoll = setTimeout(() => {
       reconnectPoll = null
-      connect()
+      if (sseStatus !== 'live') connect() // the stream recovered on its own — stand down
     }, 10000)
   }
   // Wide-screen two-pane layout (spec 028): ≥900px turns <main> into a grid with a
@@ -1729,6 +1735,11 @@
     try {
       const res = await sendOp(config, entry.op_type, payload, entry.op_id)
       settleOp(entry, res)
+      // This POST just proved the server is reachable. If the stream isn't live,
+      // resync NOW instead of waiting for a poll — while the stream is down, ops
+      // others logged (which only ever arrive via SSE or re-bootstrap) are missing,
+      // even though our own writes are landing fine.
+      if (sseStatus !== 'live' && !connecting) connect()
     } catch (e) {
       if (e.networkError) await markQueued(entry)
       else {
@@ -2502,8 +2513,10 @@
   const showConnDot = $derived(
     !renderOnly && (mode === 'edit' || (viewing && !logComplete && roster.some((p) => !p.away)))
   )
+  let connecting = false // a connect() is in flight — gates the opportunistic reconnect triggers
   async function connect() {
     const myGen = ++connSeq
+    connecting = true
     renderOnly = false
     if (reconnectPoll) { clearTimeout(reconnectPoll); reconnectPoll = null }
     // Snapshot pre-reconnect state for the §I36 "synced / added while away" summary.
@@ -2609,6 +2622,9 @@
     } catch (e) {
       error = e.message
       sseStatus = 'error'
+      scheduleReconnect() // never leave a failed connect with no retry pending
+    } finally {
+      if (myGen === connSeq) connecting = false // a superseding connect() owns the flag
     }
   }
 
@@ -2701,6 +2717,14 @@
     reachable = true // give the stream a fresh chance; noteSse re-arms the timeout
     connect() // re-bootstrap + reopen the stream (which flushes the queue on 'live')
   }
+  // Returning to the tab is the moment mobile stream death shows: iOS kills the SSE
+  // socket (and freezes our timers) while the page is backgrounded/locked, and no
+  // 'online'/'pageshow' event fires on the way back. If the stream isn't live when we
+  // become visible, reconnect immediately — don't wait for a suspended poll/watchdog.
+  // (A stale-'live' status is the watchdog's job: its timer fires right after resume.)
+  const onVisible = () => {
+    if (document.visibilityState === 'visible' && !renderOnly && sseStatus !== 'live' && !connecting) connect()
+  }
   // Reflect offline immediately (the SSE onerror can lag): drop the stale presence and
   // close the stream so EventSource stops its ~3s reconnect spam while we're offline.
   const onOffline = () => {
@@ -2728,6 +2752,7 @@
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+    document.addEventListener('visibilitychange', onVisible)
     // iOS keyboard / address-bar compensation (§41, exactly like the prototype): on a
     // narrow screen, pin the app container to the VISUAL viewport (height + translateY)
     // so the on-screen keyboard or URL-bar shift can't push the fixed header off-screen.
@@ -2766,6 +2791,7 @@
     window.removeEventListener('pageshow', onPageShow)
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
+    document.removeEventListener('visibilitychange', onVisible)
     if (window.visualViewport) {
       window.visualViewport.removeEventListener('resize', onViewportChange)
       window.visualViewport.removeEventListener('scroll', onViewportChange)

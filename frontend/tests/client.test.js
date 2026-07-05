@@ -31,6 +31,23 @@ describe('bootstrap', () => {
     mockFetchOnce({ ok: false, status: 500 })
     await expect(bootstrap(config)).rejects.toThrow(/bootstrap failed: 500/)
   })
+
+  it('aborts a hung fetch after 10s and flags it networkError (never wedges connect())', async () => {
+    vi.useFakeTimers()
+    try {
+      // A fetch that hangs forever until its abort signal fires — the dead
+      // keep-alive-socket case after a mobile network-interface change.
+      global.fetch = vi.fn((url, opts) => new Promise((_, rej) => {
+        opts.signal.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))
+      }))
+      const p = bootstrap(config)
+      const assertion = expect(p).rejects.toMatchObject({ networkError: true })
+      await vi.advanceTimersByTimeAsync(10000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('sendOp', () => {
@@ -138,5 +155,39 @@ describe('openStream', () => {
   it('defaults an unknown mode to edit', () => {
     const es = openStream(config, 0, {}, undefined)
     expect(es.url).toContain('mode=edit')
+  })
+
+  it('arms the watchdog at creation: a stream that never opens is killed and onDead fires', () => {
+    vi.useFakeTimers()
+    try {
+      const onStatus = vi.fn()
+      const onDead = vi.fn()
+      const es = openStream(config, 0, { onStatus, onDead }, 'edit')
+      // No onopen, no events, no error — a stalled CONNECTING (or an EventSource
+      // the browser permanently closed on a non-200, which never natively retries).
+      vi.advanceTimersByTime(45000)
+      expect(onStatus).toHaveBeenCalledWith('reconnecting')
+      expect(es.closed).toBe(true)
+      expect(onDead).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a live stream keeps the watchdog fed: pings prevent the reconnect', () => {
+    vi.useFakeTimers()
+    try {
+      const onDead = vi.fn()
+      const es = openStream(config, 0, { onDead }, 'edit')
+      es.onopen()
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(15000) // server keepalive cadence
+        es.emit('ping', '{}')
+      }
+      expect(onDead).not.toHaveBeenCalled()
+      expect(es.closed).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

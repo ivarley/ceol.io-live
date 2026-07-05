@@ -2,15 +2,23 @@
 // subscription. Kept framework-free so App.svelte owns only UI + state.
 
 export async function bootstrap(config) {
+  // Same 10s abort guard as sendOp: connect() awaits this, so a fetch that hangs
+  // on a dead keep-alive socket (common right after a network-interface change on
+  // mobile) must fail fast — a hung bootstrap used to wedge reconnection forever.
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 10000)
   let res
   try {
     res = await fetch(`/api/live/instances/${config.sessionInstanceId}/bootstrap`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
+      signal: ctrl.signal,
     })
   } catch (e) {
     e.networkError = true // offline — caller can fall back to the cached snapshot
     throw e
+  } finally {
+    clearTimeout(timer)
   }
   if (!res.ok) throw new Error(`bootstrap failed: ${res.status}`)
   return res.json()
@@ -20,15 +28,20 @@ export async function bootstrap(config) {
 // after bootstrap so it never blocks first render. Marks network failures so the caller
 // can quietly fall back to the cached snapshot's vocabulary.
 export async function vocabulary(config) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 10000)
   let res
   try {
     res = await fetch(`/api/live/instances/${config.sessionInstanceId}/vocabulary`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
+      signal: ctrl.signal,
     })
   } catch (e) {
     e.networkError = true
     throw e
+  } finally {
+    clearTimeout(timer)
   }
   if (!res.ok) throw new Error(`vocabulary failed: ${res.status}`)
   return res.json()
@@ -319,5 +332,9 @@ export function openStream(config, lastEventId, handlers, mode) {
 
   es.onopen = () => { kick(); handlers.onStatus?.('live') }
   es.onerror = () => handlers.onStatus?.('reconnecting')
+  // Arm the watchdog NOW, not on first byte: a stream that never opens (stalled
+  // connect, or a non-200 that makes EventSource give up permanently with no native
+  // retry) would otherwise sit in CONNECTING forever with no timer to kill it.
+  kick()
   return es
 }
