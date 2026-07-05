@@ -7,6 +7,7 @@
   // through the exported open()/close() (window.MyTunesAddPane).
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
+  import { createPaneState } from './pane.svelte.js'
 
   // Personal flavor of the live search API (same request/response shapes).
   const config = { searchApiBase: '/api/my-tunes' }
@@ -14,8 +15,7 @@
   const STATUSES = ['want to learn', 'learning', 'learned']
   const LABELS = { 'want to learn': 'Want To Learn', learning: 'Learning', learned: 'Learned' }
 
-  let visible = $state(false) // pane in the DOM
-  let shown = $state(false) // slide-in transform applied (one frame later, so it animates)
+  const pane = createPaneState()
   let picked = $state(null) // null = search phase; else {tune_id?, thesession_id?, name, tune_type, ...}
   let instruments = $state([]) // the person's instruments [{instrument, is_auto}], from the page
   let initialQuery = $state('')
@@ -37,16 +37,7 @@
   let onAlready = () => {}
   let onClosed = () => {}
 
-  // close() unmounts on a delay (the slide-out transition). Track that timer so a
-  // reopen inside the window cancels it — otherwise the stale timer unmounts the
-  // fresh pane while body.mt-add-open sticks, leaving the page squeezed with no pane.
-  let closeTimer = null
-
   export function open(opts = {}) {
-    if (closeTimer) {
-      clearTimeout(closeTimer)
-      closeTimer = null
-    }
     instruments = opts.instruments || []
     initialQuery = opts.query || ''
     onAdded = opts.onAdded || (() => {})
@@ -54,26 +45,19 @@
     onClosed = opts.onClosed || (() => {})
     resetConfigPhase()
     picked = null
-    visible = true
-    document.body.classList.add('mt-add-open')
-    requestAnimationFrame(() => requestAnimationFrame(() => (shown = true)))
+    pane.open()
   }
 
   export function close() {
-    if (closeTimer) clearTimeout(closeTimer)
-    shown = false
-    document.body.classList.remove('mt-add-open')
     const cb = onClosed
-    closeTimer = setTimeout(() => {
-      closeTimer = null
-      visible = false
+    pane.close(() => {
       picked = null
       cb()
-    }, 300) // matches the pane's slide transition
+    })
   }
 
   export function isOpen() {
-    return visible
+    return pane.visible
   }
 
   function resetConfigPhase() {
@@ -256,9 +240,9 @@
   }
 </script>
 
-{#if visible}
-  <div class="mt-add-backdrop" class:mt-open={shown} onclick={close} aria-hidden="true"></div>
-  <div class="mt-add-pane" class:mt-open={shown} role="dialog" aria-label="Add a tune to My Tunes">
+{#if pane.visible}
+  <div class="mt-add-backdrop" class:mt-open={pane.shown} onclick={close} aria-hidden="true"></div>
+  <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label="Add a tune to My Tunes">
     {#if !picked}
       <TuneSearch
         {config}

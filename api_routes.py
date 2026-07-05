@@ -1917,6 +1917,15 @@ def add_session_tune(session_path):
             return jsonify({"success": False, "error": "No data provided"}), 400
 
         tune_id = data.get("tune_id")
+
+        # thesession.org import (spec 026 pattern, same as POST /api/my-tunes): a
+        # thesession_id (int, numeric string, or tunes URL) doubles as the tune_id —
+        # thesession ids ARE our tune ids — and, when the tune isn't local yet, we
+        # import it server-side below (the add pane's remote picks + paste-a-URL).
+        from live_logging_routes import _parse_thesession_id
+        thesession_id = _parse_thesession_id(data.get("thesession_id"))
+        if not tune_id and thesession_id is not None:
+            tune_id = thesession_id
         if not tune_id:
             return jsonify({"success": False, "error": "tune_id is required"}), 400
 
@@ -1960,6 +1969,23 @@ def add_session_tune(session_path):
 
         # Check if tune exists in tune table
         new_tune_inserted = False
+        if not tune_check and thesession_id is not None:
+            # Identified by thesession_id but not local: import it (tune row + default
+            # setting ABC; notation images render lazily). Same helper the live logger
+            # and POST /api/my-tunes use, so imports behave identically everywhere.
+            from live_logging_routes import _import_tune_for_live
+            try:
+                _import_tune_for_live(cur, tune_id, get_current_user_id())
+            except TuneImportError as e:
+                conn.rollback()
+                cur.close()
+                conn.close()
+                return jsonify({
+                    "success": False,
+                    "error": f"Could not import tune from thesession.org: {e.message}",
+                }), 502
+            cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            tune_check = cur.fetchone()
         if not tune_check:
             # If new_tune data provided, insert it
             if data.get("new_tune"):

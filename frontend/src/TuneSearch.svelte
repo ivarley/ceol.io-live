@@ -17,7 +17,8 @@
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
     title = 'Find a tune', // modal header text (the add pane says "Search for a tune")
     allowAsIs = true, // "log as-is (unlinked)" escape — off for My Tunes (needs a catalog tune)
-    dimOnList = false, // dim results already on the list (the add pane: not add targets)
+    dimOnList = false, // dim results already on the person's list (My Tunes add pane)
+    dimInSession = false, // dim results already in the session's repertoire (session-tunes add pane)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
@@ -261,7 +262,7 @@
     {/if}
   {:else}
     {#each deepResults as r, di (r.tune_id)}
-      <button id="dres-{di}" class="deep-card" class:hl={hl === di} class:onlist={dimOnList && r.on_list} onclick={() => pickDeep(r)}>
+      <button id="dres-{di}" class="deep-card" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} onclick={() => pickDeep(r)}>
         <div class="deep-card-head">
           <span class="deep-name">{r.name}</span>
           <span class="deep-type">{r.tune_type || ''}</span>
@@ -291,7 +292,7 @@
       <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
     {:else}
       {#each tsResults as r (r.tune_id)}
-        <button class="deep-card deep-remote-card" class:onlist={dimOnList && r.on_list} onclick={() => pickRemote(r)}>
+        <button class="deep-card deep-remote-card" class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} onclick={() => pickRemote(r)}>
           <div class="deep-card-head">
             <span class="deep-name">{r.name}</span>
             <span class="deep-type">{r.tune_type || ''}</span>

@@ -1346,7 +1346,7 @@ def _parse_deep_search_args():
 
 
 def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
-                      session_id=None, on_list_last=False):
+                      session_id=None, on_list_last=False, in_session_last=False):
     """The deep catalog search shared by the live screen and the Add-to-My-Tunes pane.
 
     Modes (`mode=`): `mixed` (default) blends name + ABC-notation matches into one
@@ -1360,9 +1360,10 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
 
     session_id scopes the "in this session" / "played here" card fields; without a
     session (My Tunes) they are constant FALSE/0. on_list_last pushes tunes already
-    on the person's list to the bottom of the ranking (the add pane dims them —
-    they're addable-again noise there, not targets); it must be part of the SQL
-    ORDER BY so not-on-list tunes fill the LIMIT window first.
+    on the person's list to the bottom of the ranking (the My Tunes add pane dims
+    them — they're addable-again noise there, not targets); in_session_last does the
+    same for tunes already in the session's repertoire (the session-tunes add pane).
+    Either must be part of the SQL ORDER BY so fresh tunes fill the LIMIT window first.
     """
     # Which sub-searches apply. Whitespace is meaningless in ABC, so strip it from the
     # query before matching/detecting. ABC joins the blend only for ABC-friendly queries
@@ -1403,7 +1404,7 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
         abc_only_sql = "FALSE"
 
     # rank: name matches sort above ABC-only (ELSE 4 = notation-only rows).
-    order_prefix = "on_list, " if on_list_last else ""
+    order_prefix = ("on_list, " if on_list_last else "") + ("in_session, " if in_session_last else "")
     if use_name and use_abc:
         rank = f"""CASE WHEN {_nm} = LOWER(unaccent(%s)) THEN 1
                        WHEN {_nm} LIKE LOWER(unaccent(%s)) THEN 2
@@ -1526,6 +1527,57 @@ def my_tunes_deep_search():
         conn.close()
 
 
+def _session_id_by_path(cur, session_path):
+    cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+@api_login_required
+def session_tunes_deep_search(session_path):
+    """Deep catalog search for the add-to-session-tunes pane: same search as the live
+    screen (and My Tunes), scoped to the session by PATH. Tunes already in this
+    session's repertoire sort to the bottom (the pane dims them — they're not add
+    targets there)."""
+    q, tune_type, prefer_type, mode, limit = _parse_deep_search_args()
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        session_id = _session_id_by_path(cur, session_path)
+        if session_id is None:
+            return jsonify({"success": False, "error": "Session not found"}), 404
+        person_id = getattr(current_user, "person_id", None)
+        results = _deep_search_core(cur, q, tune_type, prefer_type, mode, limit,
+                                    person_id, session_id=session_id, in_session_last=True)
+        return jsonify({"success": True, "results": results})
+    finally:
+        conn.close()
+
+
+@api_login_required
+def session_tunes_thesession_search(session_path):
+    """thesession.org remote search for the add-to-session-tunes pane: same proxy,
+    flags in_session (dimmed) and on_list (badge)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        session_id = _session_id_by_path(cur, session_path)
+        if session_id is None:
+            return jsonify({"success": False, "error": "Session not found"}), 404
+    finally:
+        conn.close()
+    return _thesession_search_core(session_id=session_id,
+                                   person_id=getattr(current_user, "person_id", None))
+
+
+@api_login_required
+def session_tunes_incipit(session_path, tune_id):
+    """Incipit image for the add-to-session-tunes pane's search cards — rendering
+    depends only on the tune."""
+    return _incipit_response(tune_id)
+
+
 @api_login_required
 def live_match(session_instance_id):
     """Type-ahead + Enter-gate matching for the live screen, IDENTICAL to the legacy
@@ -1557,7 +1609,7 @@ def live_match(session_instance_id):
         conn.close()
 
 
-def _thesession_search_core(session_instance_id=None, person_id=None):
+def _thesession_search_core(session_id=None, person_id=None):
     """Proxy a tune search to thesession.org (spec 026 "Search on thesession.org"),
     shared by the live screen and the Add-to-My-Tunes pane.
 
@@ -1600,12 +1652,9 @@ def _thesession_search_core(session_instance_id=None, person_id=None):
             cur = conn.cursor()
             cur.execute("SELECT tune_id FROM tune WHERE tune_id = ANY(%s)", (ids,))
             local_ids = {r[0] for r in cur.fetchall()}
-            if session_instance_id is not None:
-                cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-                srow = cur.fetchone()
-                if srow:
-                    cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (srow[0], ids))
-                    session_ids = {r[0] for r in cur.fetchall()}
+            if session_id is not None:
+                cur.execute("SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = ANY(%s)", (session_id, ids))
+                session_ids = {r[0] for r in cur.fetchall()}
             if person_id is not None:
                 cur.execute("SELECT tune_id FROM person_tune WHERE person_id = %s AND tune_id = ANY(%s)", (person_id, ids))
                 list_ids = {r[0] for r in cur.fetchall()}
@@ -1633,7 +1682,17 @@ def _thesession_search_core(session_instance_id=None, person_id=None):
 @api_login_required
 def live_thesession_search(session_instance_id):
     """thesession.org remote search for the live screen (spec 026)."""
-    return _thesession_search_core(session_instance_id=session_instance_id)
+    session_id = None
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if srow:
+            session_id = srow[0]
+    finally:
+        conn.close()
+    return _thesession_search_core(session_id=session_id)
 
 
 @api_login_required

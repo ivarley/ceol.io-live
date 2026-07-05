@@ -6,7 +6,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/my_tunes_mobile.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='mytunes/add.css') }}">
 <style>
+        /* Desktop split pane: the add-tune pane slides in from the right and the page
+           content yields to it (mobile instead overlays full-width with a backdrop). */
+        .docs-content { transition: margin-right 0.3s ease-out; }
+        @media (min-width: 769px) {
+            body.mt-add-open .docs-content { margin-right: 440px; }
+        }
         .session-details {
             position: relative;
             background-color: #f5f5f5;
@@ -1729,7 +1736,7 @@
                     <div class="filter-top-row">
                         <input type="text" id="tune-search" class="filter-search-input" placeholder="Search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                         {% if is_logged_in %}
-                        <a href="/sessions/{{ session.path }}/tunes/add" class="filter-panel-toggle" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
+                        <a href="/sessions/{{ session.path }}/tunes/add" class="filter-panel-toggle" id="add-session-tune-btn" onclick="handleAddSessionTuneClick(event)" title="Add tune" style="text-decoration: none; font-size: 24px; font-weight: 300; line-height: 1;">+</a>
                         {% endif %}
                         <button id="filter-panel-toggle" class="filter-panel-toggle" onclick="toggleFilterPanel()" title="Show filters">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2096,6 +2103,9 @@
 
 </div>
 </div>
+
+<!-- Add-to-session-tunes pane (Svelte, /static/mytunes/add.js) mounts here -->
+<div id="session-tune-add-root"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -3116,7 +3126,7 @@
         if (filtered === 0 && currentFilters.search) {
             const addTuneButton = isLoggedIn
                 ? `<a href="/sessions/${sessionPath}/tunes/add?q=${encodeURIComponent(currentFilters.search)}"
-                       class="btn btn-primary"
+                       class="btn btn-primary" onclick="handleAddSessionTuneClick(event)"
                        style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
                         Add Tune
                     </a>`
@@ -4541,4 +4551,27 @@
 </script>
 <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
+<script>
+// Add-tune pane (slide-in on mobile, split pane on desktop). Falls back to the
+// legacy /tunes/add page only if the pane bundle failed to load.
+function handleAddSessionTuneClick(event) {
+    if (!window.SessionTuneAddPane) return; // let the <a href> navigate normally
+    event.preventDefault();
+    const searchInput = document.getElementById('tune-search');
+    window.SessionTuneAddPane.open({
+        sessionPath: sessionPath,
+        query: (searchInput && searchInput.value.trim()) || '',
+        onAdded: function (tuneId, name) {
+            // Land on the tunes tab with the existing toast + scroll/highlight flow
+            // (same URL the legacy add page redirected to).
+            window.location.href = '/sessions/' + sessionPath + '/tunes?show=' + tuneId +
+                '&added=' + encodeURIComponent(name || '');
+        },
+        onAlready: function (tuneId) {
+            window.location.href = '/sessions/' + sessionPath + '/tunes?show=' + tuneId + '&already=1';
+        }
+    });
+}
+</script>
+<script type="module" src="{{ url_for('static', filename='mytunes/add.js') }}"></script>
 {% endblock %}
