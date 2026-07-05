@@ -53,6 +53,9 @@
                             </div>
                         </div>
 
+                        <div id="thesession-check" class="thesession-check" style="display: none;"></div>
+                        <div id="alias-fills-note" class="alias-fills-note" style="display: none;"></div>
+
                         <h4>Records to merge:</h4>
                         <table class="records-table">
                             <thead>
@@ -355,6 +358,47 @@
     color: #fff3cd;
 }
 
+.thesession-check {
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.thesession-check.ts-confirmed {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+[data-theme="dark"] .thesession-check.ts-confirmed {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.3);
+    color: #7fd694;
+}
+
+.thesession-check.ts-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    color: #856404;
+}
+
+[data-theme="dark"] .thesession-check.ts-warning {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #fff3cd;
+}
+
+.alias-fills-note {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: var(--secondary-text);
+}
+
 .confirm-actions {
     display: flex;
     justify-content: flex-end;
@@ -548,13 +592,49 @@ function showPreview(data) {
     // Records table
     const tbody = document.getElementById('records-tbody');
     const records = data.affected_records;
-    tbody.innerHTML = `
+    let rows = `
         <tr><td>Tune Settings (ABC notation)</td><td class="text-right">${records.tune_settings}</td></tr>
         <tr><td>Session Tunes</td><td class="text-right">${records.session_tunes}</td></tr>
         <tr><td>Session Tune Aliases</td><td class="text-right">${records.session_tune_aliases}</td></tr>
         <tr><td>Session Log Entries</td><td class="text-right">${records.session_instance_tunes}</td></tr>
         <tr><td>Personal Tune Collections</td><td class="text-right">${records.person_tunes}</td></tr>
     `;
+    if (records.person_tune_instruments_moved || records.person_tune_instruments_dropped) {
+        const dropped = records.person_tune_instruments_dropped;
+        rows += `<tr><td>Per-Instrument Statuses</td><td class="text-right">${records.person_tune_instruments_moved}${dropped ? ` moved, ${dropped} dropped` : ''}</td></tr>`;
+    }
+    if (records.recording_tune_segments) {
+        rows += `<tr><td>Recording Tune Segments</td><td class="text-right">${records.recording_tune_segments}</td></tr>`;
+    }
+    tbody.innerHTML = rows;
+
+    // Name preservation summary (spec 030): who keeps seeing the old name
+    const fills = data.alias_fills || {};
+    const fillNotes = [];
+    if (fills.person_tune_name_alias) fillNotes.push(`${fills.person_tune_name_alias} tunebook record(s)`);
+    if (fills.session_tune_alias) fillNotes.push(`${fills.session_tune_alias} session repertoire record(s)`);
+    if (fills.session_instance_tune_name) fillNotes.push(`${fills.session_instance_tune_name} log entr(ies)`);
+    const aliasBox = document.getElementById('alias-fills-note');
+    if (data.names_differ && fillNotes.length > 0) {
+        aliasBox.textContent = `The tunes have different names, so the old name "${data.old_tune.name}" will be kept as the displayed name on ${fillNotes.join(', ')}, and added as a searchable alias in ${fills.session_tune_alias_rows} session(s).`;
+        aliasBox.style.display = 'block';
+    } else if (data.names_differ) {
+        aliasBox.textContent = `The old name "${data.old_tune.name}" will be added as a searchable alias in ${fills.session_tune_alias_rows || 0} session(s).`;
+        aliasBox.style.display = fills.session_tune_alias_rows ? 'block' : 'none';
+    } else {
+        aliasBox.style.display = 'none';
+    }
+
+    // thesession.org verification (spec 030)
+    const tsBox = document.getElementById('thesession-check');
+    const check = data.thesession_check;
+    if (check) {
+        tsBox.textContent = check.message;
+        tsBox.className = 'thesession-check ' + (check.status === 'confirmed' ? 'ts-confirmed' : 'ts-warning');
+        tsBox.style.display = 'block';
+    } else {
+        tsBox.style.display = 'none';
+    }
 
     // Warnings
     const warningsBox = document.getElementById('warnings-box');
@@ -599,6 +679,24 @@ function showSuccess(data) {
         const updated = tables.person_tune.updated || 0;
         const merged = tables.person_tune.deleted || 0;
         html += `<div class="result-item"><span>Personal tune records updated</span><span>${updated}${merged > 0 ? `, ${merged} merged` : ''}</span></div>`;
+    }
+    if (tables.person_tune_instrument && (tables.person_tune_instrument.moved || tables.person_tune_instrument.dropped)) {
+        const moved = tables.person_tune_instrument.moved || 0;
+        const dropped = tables.person_tune_instrument.dropped || 0;
+        html += `<div class="result-item"><span>Per-instrument statuses</span><span>${moved} moved${dropped > 0 ? `, ${dropped} dropped` : ''}</span></div>`;
+    }
+    if (tables.recording_tune_segment && tables.recording_tune_segment.updated) {
+        html += `<div class="result-item"><span>Recording tune segments updated</span><span>${tables.recording_tune_segment.updated}</span></div>`;
+    }
+    const aliasTotal = (tables.person_tune ? tables.person_tune.alias_filled || 0 : 0)
+        + (tables.session_tune ? tables.session_tune.alias_filled || 0 : 0)
+        + (tables.session_instance_tune ? tables.session_instance_tune.name_filled || 0 : 0)
+        + (tables.session_tune_alias ? tables.session_tune_alias.added || 0 : 0);
+    if (aliasTotal > 0) {
+        html += `<div class="result-item"><span>Old name preserved as alias on</span><span>${aliasTotal} record(s)</span></div>`;
+    }
+    if (data.live_events_emitted) {
+        html += `<div class="result-item"><span>Live logger screens updated</span><span>${data.live_events_emitted} record(s)</span></div>`;
     }
 
     summary.innerHTML = html || '<div class="result-item"><span>No records needed updating</span></div>';

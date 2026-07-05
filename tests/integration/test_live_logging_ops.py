@@ -356,12 +356,31 @@ def test_change_tune_relink_enrolls_new_tune(client, authenticated_user, live_in
     assert _repertoire_count(db_cursor, sid, newt) == 1
 
 
-def test_merged_tune_not_enrolled(client, authenticated_user, live_instance, db_cursor):
-    """A merged/redirect tune is never enrolled, matching the old logger."""
-    sid, inst, merged = live_instance["session_id"], live_instance["instance_id"], live_instance["merged"]
+def test_merged_tune_id_remaps_to_canonical(client, authenticated_user, live_instance, db_cursor):
+    """A direct add with a merged-away tune_id (stale typeahead cache / replayed offline
+    op) remaps to the canonical tune (spec 030): the record links to the canonical id,
+    the ack carries remapped_from, and the tombstoned id is never enrolled."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    reel, merged = live_instance["reel"], live_instance["merged"]
     with authenticated_user:
         resp, body = _op(client, inst, op_type="add_tune", tune_id=merged)
-    assert body["success"] is True  # the play is still logged
+    assert body["success"] is True
+    assert body["record"]["tune_id"] == reel
+    assert body["remapped_from"] == merged
+    assert _repertoire_count(db_cursor, sid, merged) == 0
+
+
+def test_change_tune_relink_to_merged_id_remaps(client, authenticated_user, live_instance, db_cursor):
+    """Relinking a record to a merged-away id lands on the canonical tune (spec 030)."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    reel, merged = live_instance["reel"], live_instance["merged"]
+    with authenticated_user:
+        _, add_body = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
+        rid = add_body["record"]["session_instance_tune_id"]
+        resp, body = _op(client, inst, op_type="change_tune", record_id=rid, tune_id=merged)
+    assert body["success"] is True
+    assert body["record"]["tune_id"] == reel
+    assert body["remapped_from"] == merged
     assert _repertoire_count(db_cursor, sid, merged) == 0
 
 

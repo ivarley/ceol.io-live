@@ -98,21 +98,60 @@
         // Fetch full tune details
         fetch(config.apiEndpoint)
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                if (!response.ok) {
+                    const err = new Error(`HTTP error! status: ${response.status}`);
+                    err.status = response.status;
+                    throw err;
+                }
                 return response.json();
             })
             .then(data => {
                 if (data.success) {
                     currentTuneData = extractTuneData(data, config.context);
-                    renderModalContent(modalContent, currentTuneData, config);
+                    // The tune was merged away (spec 030): the server followed the
+                    // redirect and returned the canonical tune. Heal the stale id in
+                    // our config + the URL bar, and tell the user what happened.
+                    if (data.redirected_from && currentTuneData.tune_id) {
+                        const oldId = data.redirected_from;
+                        const newId = currentTuneData.tune_id;
+                        config.tuneId = newId;
+                        config.apiEndpoint = config.apiEndpoint.replace(`/tunes/${oldId}`, `/tunes/${newId}`);
+                        if (config.context !== 'my_tunes') {
+                            updateUrlWithTune(newId);
+                        }
+                        renderModalContent(modalContent, currentTuneData, config);
+                        showMergedNotice(modalContent, oldId, currentTuneData);
+                    } else {
+                        renderModalContent(modalContent, currentTuneData, config);
+                    }
                 } else {
                     renderTuneFromOffline(config, modalContent, data.error);
                 }
             })
             .catch(error => {
                 console.error('Error loading tune details:', error);
+                // A dead ptid deep-link (the row was conflict-deleted by a tune merge,
+                // spec 030) degrades to a notice + a clean URL rather than a raw error.
+                if (error.status === 404 && config.context === 'my_tunes') {
+                    removeUrlTuneParam();
+                    showError(modalContent, 'This tunebook entry no longer exists — it may have been merged into another tune. Check your tunebook list for the merged tune.');
+                    return;
+                }
                 renderTuneFromOffline(config, modalContent, 'Failed to load tune details');
             });
+    }
+
+    /**
+     * Banner for a healed merged-tune permalink (spec 030): the id the caller asked
+     * for was merged into the tune now shown.
+     */
+    function showMergedNotice(modalContent, oldId, tuneData) {
+        const name = tuneData.tune_name || tuneData.name || `#${tuneData.tune_id}`;
+        const notice = document.createElement('div');
+        notice.className = 'tune-merged-notice';
+        notice.style.cssText = 'background: var(--input-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--secondary-text, #6c757d);';
+        notice.textContent = `Tune #${oldId} was merged into "${name}" (#${tuneData.tune_id}) — you're viewing the merged tune.`;
+        modalContent.insertBefore(notice, modalContent.firstChild);
     }
 
     /**

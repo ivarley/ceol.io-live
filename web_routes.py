@@ -251,8 +251,27 @@ def session_tunes(session_path):
     return session_handler(session_path, active_tab='tunes')
 
 
+def _resolve_tune_redirect(tune_id):
+    """If tune_id has been merged away (tune.redirect_to_tune_id set), return the
+    canonical id it now points to, else None. Permalinks to merged tunes 301 to
+    the new id so old bookmarks keep working (spec 030)."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
 def session_tune_info(session_path, tune_id):
     """Show session detail page with tunes tab active and tune modal open."""
+    redirect_to = _resolve_tune_redirect(tune_id)
+    if redirect_to:
+        return redirect(f"/sessions/{session_path}/tunes/{redirect_to}", code=301)
     return session_handler(session_path, active_tab='tunes', tune_id=tune_id)
 
 
@@ -2722,6 +2741,10 @@ def admin_tune_detail(tune_id):
     if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
+
+    redirect_to = _resolve_tune_redirect(tune_id)
+    if redirect_to:
+        return redirect(f"/admin/tunes/{redirect_to}", code=301)
 
     return render_template("admin_tunes.html", active_tab="tunes", tune_id=tune_id)
 

@@ -920,6 +920,16 @@ def my_tunes_op():
         cur = conn.cursor()
         heard_count = None
         try:
+            # A merged-away tune_id remaps to the canonical tune (spec 030): a replayed
+            # offline op means the merged tune. Uniform across op types — without this,
+            # a replayed `add` would resurrect the tombstoned tune on the list.
+            remapped_from = None
+            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+            rrow = cur.fetchone()
+            if rrow and rrow[0] is not None:
+                remapped_from = tune_id
+                tune_id = rrow[0]
+
             if op_type == "add":
                 learn_status = data.get("learn_status") or "want to learn"
                 if learn_status not in ("want to learn", "learning", "learned"):
@@ -1013,6 +1023,8 @@ def my_tunes_op():
             conn.close()
 
         resp = {"success": True, "op_id": data.get("op_id"), "type": op_type, "tune_id": tune_id}
+        if remapped_from is not None:
+            resp["remapped_from"] = remapped_from
         if heard_count is not None:
             resp["heard_count"] = heard_count
         return jsonify(resp), 200

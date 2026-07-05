@@ -474,6 +474,18 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
         if matched_id and not err:
             tune_id, name = matched_id, final_name
 
+    # A merged-away tune_id remaps to the canonical tune (spec 030): stale typeahead
+    # caches and replayed offline ops mean the merged tune, so proceed rather than
+    # reject. The name already resolved above stays on the record, preserving what
+    # the logger saw.
+    remapped_from = None
+    if tune_id is not None:
+        cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (tune_id,))
+        rrow = cur.fetchone()
+        if rrow and rrow[0] is not None:
+            remapped_from = tune_id
+            tune_id = rrow[0]
+
     source = data.get("source") or "human"
     confidence = data.get("confidence")
 
@@ -507,6 +519,8 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     if tune_id and session_id is not None:
         _enroll_session_tune(cur, session_id, tune_id, user_id)
     result = {"record": _reselect(cur, record_id)}
+    if remapped_from is not None:
+        result["remapped_from"] = remapped_from
     if import_failed:
         # thesession import failed -> logged unlinked; tell the client so it settles the
         # optimistic row as unmatched (rather than showing it as linked).
@@ -537,9 +551,19 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
     _require_live_record(cur, session_instance_id, record_id)
 
     sets, params = [], []
+    remapped_from = None
     if data.get("unlink"):
         sets += ["tune_id = NULL"]
     elif "tune_id" in data:
+        # Relink to a merged-away tune remaps to the canonical one (spec 030) —
+        # stale client caches mean the merged tune. Mutating data keeps the
+        # enrollment below on the canonical id too.
+        if data["tune_id"] is not None:
+            cur.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (data["tune_id"],))
+            rrow = cur.fetchone()
+            if rrow and rrow[0] is not None:
+                remapped_from = data["tune_id"]
+                data["tune_id"] = rrow[0]
         sets += ["tune_id = %s"]; params += [data["tune_id"]]
     if "name" in data:
         nm = data["name"]
@@ -563,7 +587,10 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         srow = cur.fetchone()
         if srow:
             _enroll_session_tune(cur, srow[0], data["tune_id"], user_id)
-    return {"record": _reselect(cur, record_id)}
+    result = {"record": _reselect(cur, record_id)}
+    if remapped_from is not None:
+        result["remapped_from"] = remapped_from
+    return result
 
 
 def _handle_set_confidence(cur, session_instance_id, data, user_id):

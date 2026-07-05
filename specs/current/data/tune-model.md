@@ -15,6 +15,13 @@ Canonical tune database.
 - tune_id, thesession_tune_id (unique)
 - name, type (jig, reel, etc.)
 - tunebook_count (popularity from thesession.org)
+- redirect_to_tune_id — merge tombstone (spec 016/030): set when this tune was merged
+  into another (mirroring thesession.org merges, via `/admin/tunes/merge`). The
+  `merge_tune_ids()` proc moves all references (incl. `person_tune_instrument` via FK
+  cascade and `recording_tune_segment`), preserves the old display name as per-context
+  aliases where none existed, and writes history rows. Reads follow the redirect
+  (permalinks 301, APIs return `redirected_from`); stale writes remap transparently
+  (`remapped_from`). No chains (DB trigger). Searches exclude tombstoned tunes.
 
 ### session_tune
 Session-specific tune information — the session's **repertoire**. A `(session_id, tune_id)`

@@ -76,6 +76,12 @@ from `add_tune` (on the final linked record) and from `change_tune` (on a relink
 set). This keeps the fast-match vocabulary, "in session" flags, and tune-list views
 complete. Backfill for pre-fix gaps: `scripts/backfill_025_session_tune_enrollment.py`.
 
+A merged-away `tune_id` arriving in `add_tune` or `change_tune` (stale typeahead cache,
+replayed offline op) is transparently **remapped** to the canonical tune before insert —
+the ack carries `remapped_from` (spec 030). When an admin merges tunes, the merge
+endpoint emits synthetic `change_tune` events for affected rows in recently-active
+instances so connected live screens relink in place.
+
 ## Presence & typing (§F, ephemeral)
 
 Presence and typing indicators are **in-memory in the streaming service and never
