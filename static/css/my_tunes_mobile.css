@@ -301,9 +301,12 @@
     border-radius: 0 4px 4px 0;
 }
 
+/* Every button keeps its full 1px border; adjacent borders overlap so each divider is a
+   single line, and the active button (raised via z-index) owns BOTH of its edges — no
+   mismatched divider colors next to it. */
 .filter-status-btn:not(:first-child),
 .filter-sort-btn:not(:first-child) {
-    border-left: none;
+    margin-left: -1px;
 }
 
 .filter-status-btn:hover,
@@ -316,17 +319,16 @@
     background-color: var(--primary);
     color: white;
     border-color: var(--primary);
-}
-
-.filter-status-btn.active + .filter-status-btn,
-.filter-sort-btn.active + .filter-sort-btn {
-    border-left: 1px solid var(--primary);
+    position: relative;
+    z-index: 1;
 }
 
 .filter-sort-btn.active-secondary {
     background-color: transparent;
     color: var(--primary);
     border-color: var(--primary);
+    position: relative;
+    z-index: 1;
 }
 
 .filter-sort-direction-btn {
@@ -580,6 +582,39 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Active-filter pills, shown while the filter panel is collapsed */
+.active-filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 1px solid var(--primary);
+    border-radius: 999px;
+    font-size: 13px;
+    color: white;
+    background-color: var(--primary); /* same blue as the active filter buttons */
+}
+
+.filter-pill-x {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.filter-pill-x:hover { opacity: 1; }
 
 .results-count {
     margin-bottom: 15px;

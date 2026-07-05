@@ -76,14 +76,15 @@
                     </div>
                 </div>
                 <div class="filter-panel-row">
-                    <div class="filter-button-group">
-                        <button class="filter-sort-btn active" data-sort="alpha" onclick="setSortMode('alpha')">a-z</button>
-                        <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">popularity</button>
-                        <button class="filter-sort-btn" data-sort="heard" onclick="setSortMode('heard')">heard</button>
-                    </div>
                     <button id="sort-direction-toggle" class="filter-sort-direction-btn" onclick="toggleSortDirection()" title="Toggle sort direction">
                         <span id="sort-direction-icon">↑</span>
                     </button>
+                    <div class="filter-button-group">
+                        <button class="filter-sort-btn active" data-sort="alpha" onclick="setSortMode('alpha')">a-z</button>
+                        <button class="filter-sort-btn" data-sort="popularity" onclick="setSortMode('popularity')">popularity</button>
+                        <button class="filter-sort-btn" data-sort="plays" onclick="setSortMode('plays')">plays</button>
+                        <button class="filter-sort-btn" data-sort="heard" onclick="setSortMode('heard')">heard</button>
+                    </div>
                 </div>
                 <div class="filter-panel-row">
                     <div class="inst-select" id="type-filter">
@@ -108,6 +109,8 @@
                 </div>
             </div>
         </div>
+
+        <div id="active-filter-pills" class="active-filter-pills" style="display: none;"></div>
 
         <div class="results-count">
             <span id="results-count-text"></span>
@@ -439,7 +442,8 @@ let currentSortDirection2 = null;
 const sortComparators = {
     alpha: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || ''),
     popularity: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0),
-    heard: (a, b) => (a.heard_count || 0) - (b.heard_count || 0)
+    heard: (a, b) => (a.heard_count || 0) - (b.heard_count || 0),
+    plays: (a, b) => (a.session_play_count || 0) - (b.session_play_count || 0)
 };
 
 // Build a composed sort function from primary + optional secondary
@@ -897,6 +901,7 @@ function toggleFilterPanel() {
         panel.style.display = 'block';
         panel.classList.add('opening');
         toggle.classList.add('active');
+        renderFilterPills(); // pills only show while the panel is collapsed
 
         // Remove animation class after animation completes
         setTimeout(() => {
@@ -910,8 +915,39 @@ function toggleFilterPanel() {
             panel.style.display = 'none';
             panel.classList.remove('closing');
             toggle.classList.remove('active');
+            renderFilterPills();
         }, 300);
     }
+}
+
+// Pills that surface the active filters (learn status / tune type / instrument) while
+// the filter panel is collapsed. The × on each pill clears just that filter.
+function renderFilterPills() {
+    const wrap = document.getElementById('active-filter-pills');
+    if (!wrap) return;
+    const panel = document.getElementById('filter-panel');
+    const panelOpen = panel && panel.style.display !== 'none';
+    const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
+    const pills = [];
+    if (currentFilters.status) pills.push({ key: 'status', label: cap(currentFilters.status) });
+    if (currentFilters.type) pills.push({ key: 'type', label: cap(currentFilters.type) });
+    if (currentFilters.instrument) pills.push({ key: 'instrument', label: currentFilters.instrument });
+    if (panelOpen || pills.length === 0) {
+        wrap.style.display = 'none';
+        wrap.innerHTML = '';
+        return;
+    }
+    wrap.style.display = 'flex';
+    wrap.innerHTML = pills.map(p =>
+        `<span class="filter-pill">${p.label}<button type="button" class="filter-pill-x" onclick="removeFilterPill('${p.key}')" title="Remove this filter">×</button></span>`
+    ).join('');
+}
+
+function removeFilterPill(key) {
+    // Each goes through its filter's setter so the panel controls stay in sync.
+    if (key === 'status') setStatusFilter('');
+    else if (key === 'type') selectTuneType('');
+    else if (key === 'instrument') setInstrumentFilter('');
 }
 
 function setStatusFilter(status) {
@@ -943,7 +979,7 @@ function setSortMode(sortType) {
     currentSortType = sortType;
 
     // Set default direction based on sort type
-    if (sortType === 'popularity' || sortType === 'heard') {
+    if (sortType === 'popularity' || sortType === 'heard' || sortType === 'plays') {
         currentSortDirection = 'desc';
     } else {
         currentSortDirection = 'asc';
@@ -1291,6 +1327,7 @@ function applyFilters() {
     renderTunes();
     renderInstrumentFilter();
     renderTypeFilter();
+    renderFilterPills();
 }
 
 function renderTunes() {
@@ -1702,12 +1739,12 @@ function createTuneCard(tune) {
         : '';
 
     // Determine what to show in the tune type badge based on sort mode
-    const isPopularityMode = currentSortType === 'popularity';
-    const isHeardMode = currentSortType === 'heard';
-    const typeLabel = isPopularityMode
+    const typeLabel = currentSortType === 'popularity'
         ? (tune.tunebook_count || 0).toString()
-        : isHeardMode
+        : currentSortType === 'heard'
         ? (tune.heard_count || 0).toString()
+        : currentSortType === 'plays'
+        ? (tune.session_play_count || 0).toString()
         : tune.tune_type || '';
 
     // Offline-queued tunes (not yet synced) get a subtle "pending" marker. It sits

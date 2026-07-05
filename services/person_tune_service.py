@@ -19,6 +19,17 @@ class _Unset:
 
 UNSET = _Unset()
 
+# ORDER BY expression for the "plays" sort: times played at sessions the person attended
+# (distinct instances — the modal's session_play_count definition). Correlated subquery
+# per row of the filtered set; index lookups, fine at this app's scale.
+PLAYS_SORT_EXPR = (
+    "(SELECT COUNT(DISTINCT sit.session_instance_id)"
+    " FROM session_instance_tune sit"
+    " INNER JOIN session_instance_person sip"
+    " ON sit.session_instance_id = sip.session_instance_id"
+    " WHERE sip.person_id = pt.person_id AND sit.tune_id = pt.tune_id)"
+)
+
 
 class PersonTuneService:
     """
@@ -585,7 +596,10 @@ class PersonTuneService:
                 'popularity-desc': 't.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
                 'popularity-asc': 't.tunebook_count_cached ASC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
                 'heard-desc': 'pt.heard_count DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
-                'heard-asc': 'pt.heard_count ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC'
+                'heard-asc': 'pt.heard_count ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                # Times played at sessions the person attended (matches session_play_count)
+                'plays-desc': f'{PLAYS_SORT_EXPR} DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC',
+                'plays-asc': f'{PLAYS_SORT_EXPR} ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC'
             }
             order_by = sort_map.get(sort_by, 'LOWER(COALESCE(pt.name_alias, t.name)) ASC')  # Default to alpha-asc
 
@@ -638,6 +652,23 @@ class PersonTuneService:
                     overrides_by_tune.setdefault(t_id, {})[instrument] = status
             for t in tunes:
                 t['instrument_status'] = overrides_by_tune.get(t['tune_id'], {})
+
+            # Times played at the person's sessions (distinct instances they attended,
+            # same definition as the detail modal's session_play_count), batched.
+            play_counts: Dict[int, int] = {}
+            if tune_ids:
+                cur.execute(
+                    """SELECT sit.tune_id, COUNT(DISTINCT sit.session_instance_id)
+                       FROM session_instance_tune sit
+                       INNER JOIN session_instance_person sip
+                           ON sit.session_instance_id = sip.session_instance_id
+                       WHERE sip.person_id = %s AND sit.tune_id = ANY(%s)
+                       GROUP BY sit.tune_id""",
+                    (person_id, tune_ids)
+                )
+                play_counts = dict(cur.fetchall())
+            for t in tunes:
+                t['session_play_count'] = play_counts.get(t['tune_id'], 0)
 
             return tunes, total_count
 

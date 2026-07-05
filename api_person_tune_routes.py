@@ -226,7 +226,7 @@ def get_my_tunes():
             }), 400
 
         # Validate sort_by if provided
-        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc', 'popularity-asc', 'heard-desc', 'heard-asc']
+        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc', 'popularity-asc', 'heard-desc', 'heard-asc', 'plays-desc', 'plays-asc']
         if sort_by not in valid_sorts:
             return jsonify({
                 "success": False,
