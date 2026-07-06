@@ -1143,6 +1143,36 @@ app.add_url_rule(
     methods=["POST"],
 )
 app.add_url_rule(
+    "/api/admin/tunes/merge-scan",
+    "start_merge_scan",
+    start_merge_scan,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/merge-scan",
+    "get_merge_scan",
+    get_merge_scan,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/merge-scan",
+    "cancel_merge_scan",
+    cancel_merge_scan,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/merge-scan/ignore",
+    "ignore_merge_pair",
+    ignore_merge_pair,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/tunes/merge-scan/ignore",
+    "unignore_merge_pair",
+    unignore_merge_pair,
+    methods=["DELETE"],
+)
+app.add_url_rule(
     "/api/admin/cache_settings/run",
     "run_cache_settings",
     run_cache_settings,

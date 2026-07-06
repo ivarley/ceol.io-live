@@ -23,6 +23,24 @@ Canonical tune database.
   (permalinks 301, APIs return `redirected_from`); stale writes remap transparently
   (`remapped_from`). No chains (DB trigger). Searches exclude tombstoned tunes.
 
+### tune_merge_scan / tune_merge_scan_result / tune_merge_ignore
+Merged-tune scan (spec 031): finds the tunes thesession.org has merged or deleted
+upstream that we don't know about yet. A background thread
+(`services/tune_merge_scan_service.py`) HEADs every non-tombstoned tune id against
+thesession.org (1 req/s, `THESESSION_SCAN_DELAY_MS`), storing only interesting hits
+(3xx = merged w/ chain-followed target + its name/aliases, 404 = deleted, error).
+`tune_merge_scan` holds cursor + heartbeat so a killed thread is detectable
+(stale > 90s) and resumable; latest scan only — a new scan wipes prior rows.
+`tune_merge_ignore` persists admin dismissals per `(tune_id, target_tune_id)`
+(NULL target = dismissed 404 row) outside the scan so they survive wipes; a changed
+upstream target no longer matches and resurfaces. The punchlist on
+`/admin/tunes/merge` joins results against `tune` at read time (done = redirect set;
+locally-tombstoned target resolves to canonical) and feeds the spec-030 preview/
+confirm flow; confirming a merge whose target isn't local imports it from
+thesession.org in the same transaction. Endpoints:
+`/api/admin/tunes/merge-scan` (POST start / `{"resume":true}` / GET status+punchlist
+/ DELETE cancel) and `/api/admin/tunes/merge-scan/ignore` (POST/DELETE).
+
 ### session_tune
 Session-specific tune information — the session's **repertoire**. A `(session_id, tune_id)`
 row means "this tune belongs to this session's list"; it feeds the fast-match vocabulary,

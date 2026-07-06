@@ -1664,6 +1664,58 @@ $$;
 COMMENT ON FUNCTION merge_tune_ids(INTEGER, INTEGER, INTEGER) IS
 'Merges all references from old_tune_id to new_tune_id (tune_setting, session_tune, session_tune_alias, session_instance_tune, person_tune + person_tune_instrument via FK cascade, recording_tune_segment), preserving the old display name as per-context aliases where no override existed, writing app-convention history rows, then marks the old tune as a redirect. Returns JSON summary. Spec 030.';
 
+-- -----------------------------------------------------------------------------
+-- Merged-tune scan (spec 031; see schema/031_merge_scan.sql for full rationale)
+-- -----------------------------------------------------------------------------
+-- tune_merge_scan: one row per scan of local tune ids against thesession.org;
+-- cursor + heartbeat make an interrupted scan detectable and resumable.
+-- "Latest scan only": starting a new scan deletes prior rows.
+CREATE TABLE tune_merge_scan (
+    scan_id             SERIAL PRIMARY KEY,
+    status              VARCHAR(16) NOT NULL CHECK (status IN ('running', 'completed', 'cancelled')),
+    cursor_tune_id      INTEGER,            -- last checked id; resume point
+    total_count         INTEGER NOT NULL,   -- snapshot of ids to check at start
+    checked_count       INTEGER NOT NULL DEFAULT 0,
+    merged_count        INTEGER NOT NULL DEFAULT 0,
+    deleted_count       INTEGER NOT NULL DEFAULT 0,
+    error_count         INTEGER NOT NULL DEFAULT 0,
+    started_by_user_id  INTEGER REFERENCES user_account(user_id),
+    started_at          TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    heartbeat_at        TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    finished_at         TIMESTAMPTZ
+);
+
+-- Only interesting hits (merged / deleted upstream / error); 200s not stored.
+-- No FK on tune_id: the row must survive its tune being merged (that is how
+-- the punchlist knows the item is done).
+CREATE TABLE tune_merge_scan_result (
+    scan_id         INTEGER NOT NULL REFERENCES tune_merge_scan(scan_id) ON DELETE CASCADE,
+    tune_id         INTEGER NOT NULL,
+    result_type     VARCHAR(16) NOT NULL CHECK (result_type IN ('merged', 'deleted', 'error')),
+    target_tune_id  INTEGER,                -- final id after following redirect chain (merged only)
+    target_name     TEXT,                   -- thesession's canonical name for the target
+    target_aliases  JSONB,                  -- thesession's alternate titles for the target
+    detail          TEXT,                   -- http status / error message
+    checked_at      TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+    PRIMARY KEY (scan_id, tune_id)
+);
+
+-- Persistent admin dismissals; outside the scan rows so they survive scan
+-- wipes. NULL target = dismissed deleted-upstream (404) row.
+CREATE TABLE tune_merge_ignore (
+    tune_id             INTEGER NOT NULL,
+    target_tune_id      INTEGER,
+    created_by_user_id  INTEGER REFERENCES user_account(user_id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+-- Pair uniqueness including the NULL-target case (portable across PG < 15,
+-- which lacks UNIQUE NULLS NOT DISTINCT).
+CREATE UNIQUE INDEX idx_tune_merge_ignore_pair
+    ON tune_merge_ignore (tune_id, target_tune_id) WHERE target_tune_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_tune_merge_ignore_deleted
+    ON tune_merge_ignore (tune_id) WHERE target_tune_id IS NULL;
+
 -- =============================================================================
 -- Schema creation complete
 -- =============================================================================
