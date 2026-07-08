@@ -44,6 +44,7 @@ Business logic, services, external integrations
 Internal services, microservices, background jobs
 - [ABC Renderer](specs/current/services/abc-renderer.md) - Node.js microservice for ABC → PNG
 - [Active Sessions Cron](specs/current/services/active-sessions-cron.md) - 15-min job tracking live sessions
+- [thesession.org Merge Sync](specs/current/services/thesession-merge-sync.md) - Weekly job auto-applying upstream tune merges (Feature 031)
 - [Streaming Service](specs/current/logic/live-logging.md) - Async SSE sidecar for live logging (Feature 024)
 
 ## Feature Index

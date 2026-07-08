@@ -10244,38 +10244,12 @@ def refresh_admin_tune_tunebook_count(tune_id):
 # ============================================================================
 
 
-def _verify_thesession_redirect(old_tune_id, new_tune_id):
-    """Ask thesession.org whether old_tune_id really redirects to new_tune_id
-    (spec 030 #8). Handles both a 30x redirect (Location: /tunes/<id>) and a 200
-    whose JSON id differs from the requested one. Never raises; returns
-    {status: confirmed|no_redirect|mismatch|not_found|unreachable, message}.
-    """
-    url = f"https://thesession.org/tunes/{old_tune_id}?format=json"
-    try:
-        resp = requests.get(url, timeout=5, allow_redirects=False)
-        if resp.status_code in (301, 302, 303, 307, 308):
-            m = re.search(r"/tunes/(\d+)", resp.headers.get("Location", ""))
-            final_id = int(m.group(1)) if m else None
-        elif resp.status_code == 200:
-            final_id = resp.json().get("id")
-        elif resp.status_code == 404:
-            return {"status": "not_found",
-                    "message": f"thesession.org has no tune #{old_tune_id} - cannot verify this merge."}
-        else:
-            return {"status": "unreachable",
-                    "message": f"thesession.org returned HTTP {resp.status_code} - could not verify this merge."}
-
-        if final_id == new_tune_id:
-            return {"status": "confirmed",
-                    "message": f"Confirmed: thesession.org redirects tune #{old_tune_id} to #{new_tune_id}."}
-        if final_id == old_tune_id:
-            return {"status": "no_redirect",
-                    "message": f"thesession.org does NOT redirect tune #{old_tune_id} - it is still a live tune there. Double-check the IDs before merging."}
-        return {"status": "mismatch",
-                "message": f"thesession.org redirects tune #{old_tune_id} to #{final_id}, not #{new_tune_id}. Double-check the IDs before merging."}
-    except Exception:
-        return {"status": "unreachable",
-                "message": "Could not reach thesession.org to verify this merge."}
+# The redirect verification + merge-apply sequence is shared with the weekly
+# sync job (spec 031), which auto-applies upstream merges through the same code.
+from services.tune_merge_scan_service import (  # noqa: E402
+    verify_thesession_redirect as _verify_thesession_redirect,
+    apply_merge as _apply_tune_merge,
+)
 
 
 @api_login_required
@@ -10546,34 +10520,10 @@ def merge_tune():
                 "warnings": warnings
             })
 
-        # Capture the log rows that live-logger clients may have open BEFORE the ids
-        # flip: rows of the old tune in instances with feed activity in the last 24h
-        # (anything older has no plausible SSE listeners; emitting events for all
-        # history would bloat the feed). Events go out after the merge, same
-        # transaction, so connected clients relink the rows in place (spec 030 #6).
-        cur.execute("""
-            SELECT sit.session_instance_id, sit.session_instance_tune_id
-            FROM session_instance_tune sit
-            WHERE sit.tune_id = %s AND sit.deleted = FALSE
-              AND sit.session_instance_id IN (
-                SELECT DISTINCT session_instance_id FROM session_event
-                WHERE server_ts > (NOW() AT TIME ZONE 'UTC') - INTERVAL '24 hours'
-              )
-        """, (old_tune_id,))
-        live_rows = cur.fetchall()
-
-        # Execute the migration using the stored procedure
-        cur.execute(
-            "SELECT merge_tune_ids(%s, %s, %s)",
-            (old_tune_id, new_tune_id, current_user.user_id)
-        )
-        result = cur.fetchone()[0]
-
-        from live_logging_routes import emit_change_tune
-        events_emitted = 0
-        for instance_id, record_id in live_rows:
-            if emit_change_tune(cur, instance_id, record_id, current_user.user_id):
-                events_emitted += 1
+        # Shared apply sequence (also used by the weekly sync): capture the log
+        # rows live-logger clients may have open, run merge_tune_ids, then emit
+        # change_tune events so connected screens relink in place (spec 030 #6).
+        result, events_emitted = _apply_tune_merge(cur, old_tune_id, new_tune_id, current_user.user_id)
 
         conn.commit()
 
@@ -10607,111 +10557,27 @@ def merge_tune():
 # ============================================================================
 
 
-def _fetch_latest_merge_scan(cur):
-    """The single live scan row ("latest scan only"), with staleness computed
-    DB-side against the same clock the heartbeat writes use. Returns dict or None."""
-    from services.tune_merge_scan_service import HEARTBEAT_STALE_SECONDS
-    cur.execute(
-        """
-        SELECT scan_id, status, cursor_tune_id, total_count, checked_count,
-               merged_count, deleted_count, error_count,
-               started_at, heartbeat_at, finished_at,
-               (status = 'running'
-                AND heartbeat_at < (NOW() AT TIME ZONE 'UTC') - make_interval(secs => %s)) AS stale
-        FROM tune_merge_scan
-        ORDER BY scan_id DESC
-        LIMIT 1
-        """,
-        (HEARTBEAT_STALE_SECONDS,),
-    )
-    row = cur.fetchone()
-    if not row:
-        return None
-    return {
-        "scan_id": row[0],
-        "status": row[1],
-        "cursor_tune_id": row[2],
-        "total_count": row[3],
-        "checked_count": row[4],
-        "merged_count": row[5],
-        "deleted_count": row[6],
-        "error_count": row[7],
-        "started_at": row[8].isoformat() if row[8] else None,
-        "heartbeat_at": row[9].isoformat() if row[9] else None,
-        "finished_at": row[10].isoformat() if row[10] else None,
-        "stale": row[11],
-    }
-
-
 @api_login_required
 def start_merge_scan():
     """
     POST /api/admin/tunes/merge-scan
 
-    Start a merged-tune scan (spec 031). Body {"resume": true} instead resumes
-    a 'running' scan whose thread died (stale heartbeat) from its cursor.
-    409 if a scan is running with a fresh heartbeat. Starting fresh wipes the
-    previous scan's rows (results are fully regenerable; ignores live in their
-    own table and survive).
+    Run the thesession.org merge sync now (spec 031) — same run the weekly
+    cron performs. 409 if a run is already going with a fresh heartbeat.
     """
     if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
-    from services.tune_merge_scan_service import start_scan_thread
+    from services.tune_merge_scan_service import create_run, start_scan_thread
 
-    data = request.get_json(silent=True) or {}
-    resume = bool(data.get("resume"))
-
-    conn = get_db_connection()
     try:
-        cur = conn.cursor()
-        # Serialize concurrent starts across Gunicorn workers: single-active-scan
-        # is enforced here in the DB, not in-process.
-        cur.execute("LOCK TABLE tune_merge_scan IN ACCESS EXCLUSIVE MODE")
-        scan = _fetch_latest_merge_scan(cur)
-
-        if scan and scan["status"] == "running" and not scan["stale"]:
-            return jsonify({
-                "success": False,
-                "error": "A scan is already running.",
-                "scan": scan,
-            }), 409
-
-        if resume:
-            if not scan or scan["status"] != "running":
-                return jsonify({"success": False, "error": "No interrupted scan to resume."}), 400
-            # Claim it: refresh the heartbeat before spawning so a concurrent
-            # resume attempt sees it fresh and 409s.
-            cur.execute(
-                "UPDATE tune_merge_scan SET heartbeat_at = (NOW() AT TIME ZONE 'UTC') WHERE scan_id = %s",
-                (scan["scan_id"],),
-            )
-            conn.commit()
-            start_scan_thread(scan["scan_id"])
-            return jsonify({"success": True, "resumed": True, "scan_id": scan["scan_id"]})
-
-        # Fresh scan: latest-only, so drop prior scan rows (results cascade).
-        cur.execute("DELETE FROM tune_merge_scan")
-        cur.execute("SELECT COUNT(*) FROM tune WHERE redirect_to_tune_id IS NULL")
-        total = cur.fetchone()[0]
-        cur.execute(
-            """
-            INSERT INTO tune_merge_scan (status, total_count, started_by_user_id)
-            VALUES ('running', %s, %s)
-            RETURNING scan_id
-            """,
-            (total, current_user.user_id),
-        )
-        scan_id = cur.fetchone()[0]
-        conn.commit()
-        start_scan_thread(scan_id)
-        return jsonify({"success": True, "resumed": False, "scan_id": scan_id, "total_count": total})
-
+        scan_id = create_run(started_by_user_id=current_user.user_id)
     except Exception as e:
-        conn.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
+    if scan_id is None:
+        return jsonify({"success": False, "error": "A sync run is already in progress."}), 409
+    start_scan_thread(scan_id)
+    return jsonify({"success": True, "scan_id": scan_id})
 
 
 @api_login_required
@@ -10719,116 +10585,86 @@ def get_merge_scan():
     """
     GET /api/admin/tunes/merge-scan
 
-    Scan status + full punchlist payload. Results are joined against `tune` at
-    read time (never mutated): a row whose tune now has redirect_to_tune_id set
-    renders as done, and a target that was itself tombstoned locally resolves
-    to its canonical tune with a note. Ignored pairs are filtered into their
-    own section; an upstream target CHANGE makes an old ignore stop matching.
+    The sync record: recent runs (newest first) with each run's result rows —
+    merges applied (or attempted), tunes deleted upstream, errors. Result rows
+    persist across runs, so this is the durable history the admin page shows.
     """
     if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Unauthorized"}), 403
 
+    from services.tune_merge_scan_service import HEARTBEAT_STALE_SECONDS
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        scan = _fetch_latest_merge_scan(cur)
-        if not scan:
-            return jsonify({
-                "success": True, "scan": None, "punchlist": [],
-                "deleted": [], "errors": [], "ignored": [], "has_unactioned": False,
-            })
-
         cur.execute(
             """
-            SELECT r.tune_id,
-                   COALESCE(ot.name, '(tune #' || r.tune_id || ')') AS tune_name,
-                   (ot.redirect_to_tune_id IS NOT NULL) AS done,
-                   r.result_type,
-                   r.target_tune_id,
-                   COALESCE(r.target_name, tt.name) AS target_name,
-                   r.target_aliases,
-                   r.detail,
-                   (tt.tune_id IS NOT NULL) AS target_is_local,
-                   tt.redirect_to_tune_id AS target_redirect_to,
-                   ct.name AS canonical_name,
-                   st.cnt AS sessions_count,
-                   pl.cnt AS plays_count,
-                   (ig.tune_id IS NOT NULL) AS ignored
-            FROM tune_merge_scan_result r
-            LEFT JOIN tune ot ON ot.tune_id = r.tune_id
-            LEFT JOIN tune tt ON tt.tune_id = r.target_tune_id
-            LEFT JOIN tune ct ON ct.tune_id = tt.redirect_to_tune_id
-            LEFT JOIN LATERAL (
-                SELECT COUNT(*) AS cnt FROM session_tune WHERE tune_id = r.tune_id
-            ) st ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT COUNT(*) AS cnt FROM session_instance_tune
-                WHERE tune_id = r.tune_id
-                  AND COALESCE(record_type, 'tune') <> 'break'
-                  AND deleted = FALSE
-            ) pl ON TRUE
-            LEFT JOIN tune_merge_ignore ig
-                ON ig.tune_id = r.tune_id
-               AND ig.target_tune_id IS NOT DISTINCT FROM r.target_tune_id
-            WHERE r.scan_id = %s
-            ORDER BY pl.cnt DESC, r.tune_id
+            SELECT scan_id, status, total_count, checked_count, merged_count,
+                   applied_count, deleted_count, error_count, started_by_user_id,
+                   started_at, finished_at,
+                   (status = 'running'
+                    AND heartbeat_at < (NOW() AT TIME ZONE 'UTC') - make_interval(secs => %s)) AS stale
+            FROM tune_merge_scan
+            ORDER BY scan_id DESC
+            LIMIT 26
             """,
-            (scan["scan_id"],),
+            (HEARTBEAT_STALE_SECONDS,),
         )
-
-        punchlist, deleted, errors, ignored = [], [], [], []
-        has_unactioned = False
+        runs = {}
+        run_order = []
         for row in cur.fetchall():
-            (tune_id, tune_name, done, result_type, target_tune_id, target_name,
-             target_aliases, detail, target_is_local, target_redirect_to,
-             canonical_name, sessions_count, plays_count, is_ignored) = row
-
-            item = {
-                "tune_id": tune_id,
-                "tune_name": tune_name,
-                "result_type": result_type,
-                "done": done,
-                "target_tune_id": target_tune_id,
-                "target_name": target_name,
-                "target_aliases": target_aliases or [],
-                "target_is_local": target_is_local,
-                "detail": detail,
-                "sessions_count": sessions_count,
-                "plays_count": plays_count,
+            run = {
+                "scan_id": row[0],
+                "status": row[1],
+                "total_count": row[2],
+                "checked_count": row[3],
+                "merged_count": row[4],
+                "applied_count": row[5],
+                "deleted_count": row[6],
+                "error_count": row[7],
+                "triggered_by": "admin" if row[8] is not None else "weekly job",
+                "started_at": row[9].isoformat() if row[9] else None,
+                "finished_at": row[10].isoformat() if row[10] else None,
+                "stale": row[11],
+                "results": [],
             }
-            # thesession says A->B but local B is already tombstoned into C:
-            # the mergeable pair is A->C (the proc forbids merging into a redirect).
-            if target_redirect_to is not None:
-                item["resolved_target_tune_id"] = target_redirect_to
-                item["resolved_target_name"] = canonical_name
-                item["resolved_note"] = (
-                    f"Tune #{target_tune_id} was already merged locally into "
-                    f"#{target_redirect_to} - merging there instead."
-                )
-            else:
-                item["resolved_target_tune_id"] = target_tune_id
-                item["resolved_target_name"] = target_name
+            runs[row[0]] = run
+            run_order.append(run)
 
-            if is_ignored:
-                ignored.append(item)
-            elif result_type == "merged":
-                punchlist.append(item)
-                if not done:
-                    has_unactioned = True
-            elif result_type == "deleted":
-                deleted.append(item)
-            else:
-                errors.append(item)
+        if runs:
+            cur.execute(
+                """
+                SELECT r.scan_id, r.tune_id,
+                       COALESCE(ot.name, '(tune #' || r.tune_id || ')') AS tune_name,
+                       r.result_type, r.target_tune_id,
+                       COALESCE(r.target_name, tt.name) AS target_name,
+                       r.target_aliases, r.detail,
+                       r.applied_at, r.checked_at
+                FROM tune_merge_scan_result r
+                LEFT JOIN tune ot ON ot.tune_id = r.tune_id
+                LEFT JOIN tune tt ON tt.tune_id = r.target_tune_id
+                WHERE r.scan_id = ANY(%s)
+                ORDER BY r.scan_id DESC, r.result_type, r.tune_id
+                """,
+                (list(runs.keys()),),
+            )
+            for (scan_id, tune_id, tune_name, result_type, target_tune_id,
+                 target_name, target_aliases, detail, applied_at, checked_at) in cur.fetchall():
+                runs[scan_id]["results"].append({
+                    "tune_id": tune_id,
+                    "tune_name": tune_name,
+                    "result_type": result_type,
+                    "target_tune_id": target_tune_id,
+                    "target_name": target_name,
+                    "target_aliases": target_aliases or [],
+                    "detail": detail,
+                    "applied": applied_at is not None,
+                    "applied_at": applied_at.isoformat() if applied_at else None,
+                    "imported": bool(detail and "target imported" in detail),
+                    "checked_at": checked_at.isoformat() if checked_at else None,
+                })
 
-        return jsonify({
-            "success": True,
-            "scan": scan,
-            "punchlist": punchlist,
-            "deleted": deleted,
-            "errors": errors,
-            "ignored": ignored,
-            "has_unactioned": has_unactioned,
-        })
+        return jsonify({"success": True, "runs": run_order})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -10863,80 +10699,6 @@ def cancel_merge_scan():
         if not cancelled:
             return jsonify({"success": False, "error": "No running scan to cancel."}), 404
         return jsonify({"success": True, "scan_id": cancelled[0]})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-@api_login_required
-def ignore_merge_pair():
-    """
-    POST /api/admin/tunes/merge-scan/ignore
-    Body {tune_id, target_tune_id?} — dismiss a punchlist pair (or, with no
-    target, a deleted-upstream row). Lives outside the scan rows, so it
-    survives scan wipes; a CHANGED upstream target won't match and shows again.
-    """
-    if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
-
-    data = request.get_json(silent=True) or {}
-    tune_id = data.get("tune_id")
-    target_tune_id = data.get("target_tune_id")
-    if not isinstance(tune_id, int):
-        return jsonify({"success": False, "error": "tune_id is required"}), 400
-    if target_tune_id is not None and not isinstance(target_tune_id, int):
-        return jsonify({"success": False, "error": "target_tune_id must be an integer"}), 400
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        # Idempotent insert; NULL-safe duplicate check (unique indexes back it up).
-        cur.execute(
-            """
-            INSERT INTO tune_merge_ignore (tune_id, target_tune_id, created_by_user_id)
-            SELECT %s, %s, %s
-            WHERE NOT EXISTS (
-                SELECT 1 FROM tune_merge_ignore
-                WHERE tune_id = %s AND target_tune_id IS NOT DISTINCT FROM %s
-            )
-            """,
-            (tune_id, target_tune_id, current_user.user_id, tune_id, target_tune_id),
-        )
-        conn.commit()
-        return jsonify({"success": True})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
-
-
-@api_login_required
-def unignore_merge_pair():
-    """
-    DELETE /api/admin/tunes/merge-scan/ignore
-    Body {tune_id, target_tune_id?} — un-dismiss a pair.
-    """
-    if not current_user.is_system_admin:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
-
-    data = request.get_json(silent=True) or {}
-    tune_id = data.get("tune_id")
-    target_tune_id = data.get("target_tune_id")
-    if not isinstance(tune_id, int):
-        return jsonify({"success": False, "error": "tune_id is required"}), 400
-
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM tune_merge_ignore WHERE tune_id = %s AND target_tune_id IS NOT DISTINCT FROM %s",
-            (tune_id, target_tune_id),
-        )
-        conn.commit()
-        return jsonify({"success": True, "removed": cur.rowcount})
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "error": str(e)}), 500

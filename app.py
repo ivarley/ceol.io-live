@@ -1161,18 +1161,6 @@ app.add_url_rule(
     methods=["DELETE"],
 )
 app.add_url_rule(
-    "/api/admin/tunes/merge-scan/ignore",
-    "ignore_merge_pair",
-    ignore_merge_pair,
-    methods=["POST"],
-)
-app.add_url_rule(
-    "/api/admin/tunes/merge-scan/ignore",
-    "unignore_merge_pair",
-    unignore_merge_pair,
-    methods=["DELETE"],
-)
-app.add_url_rule(
     "/api/admin/cache_settings/run",
     "run_cache_settings",
     run_cache_settings,

@@ -24,26 +24,41 @@ description: How to launch and drive this Flask app to verify changes end-to-end
 - Pages that call `window.confirm` block automation — stub it first via
   javascript_tool: `window.confirm = () => true`.
 
-## Stubbing thesession.org
+## Stubbing thesession.org (and its data dump)
 
 Features that call thesession.org (imports, merge verification, the 031 merge
-scan) can be driven against a local stand-in without patching app behavior:
+sync) can be driven against a local stand-in without patching app behavior:
 
 1. Serve fake `/tunes/<id>` responses (HEAD/GET, 301/404/500/JSON) on
-   `127.0.0.1:8765` with a small `http.server` script.
-2. Start the app through a wrapper that rewrites URLs at the requests layer:
+   `127.0.0.1:8765` with a small `http.server` script. For the 031 sync, also
+   serve fake dump CSVs (`tunes.csv` = one row per setting with header
+   `tune_id,setting_id,name,...`): generate them from the DB (all active tune
+   ids except the test cases) and pad with ~10k synthetic tunes so the
+   service's `MIN_DUMP_TUNES` sanity guard passes.
+2. Start the app (or run `jobs/sync_thesession_merges.py`) through a wrapper
+   that rewrites URLs at the requests layer:
    ```python
    import requests
    _orig = requests.sessions.Session.request
+   REWRITES = [
+       ("https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/tunes.csv",
+        "http://127.0.0.1:8765/dump/tunes.csv"),
+       ("https://raw.githubusercontent.com/adactio/TheSession-data/main/csv/aliases.csv",
+        "http://127.0.0.1:8765/dump/aliases.csv"),
+       ("https://thesession.org", "http://127.0.0.1:8765"),
+   ]
    def rerouted(self, method, url, *a, **kw):
-       if "thesession.org" in url:
-           url = url.replace("https://thesession.org", "http://127.0.0.1:8765")
+       for src, dst in REWRITES:
+           if url.startswith(src):
+               url = url.replace(src, dst, 1); break
        return _orig(self, method, url, *a, **kw)
    requests.sessions.Session.request = rerouted
    from app import app; app.run(port=5031)
    ```
-3. For long scans set `THESESSION_SCAN_DELAY_MS=5` in the wrapper env
-   (a 1100-tune scan then finishes in ~15s).
+3. Set `THESESSION_SCAN_DELAY_MS=5` in the wrapper (a full sync run then
+   finishes in ~6s).
+4. `load_dotenv()` in scripts outside the repo needs the explicit path
+   `load_dotenv("/Users/ianvarley/Code/ceol.io-live/.env")`.
 
 ## Gotchas
 

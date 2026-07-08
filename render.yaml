@@ -71,6 +71,30 @@ services:
       - key: PGPORT
         value: "5432"
 
+  # Weekly thesession.org merge sync (spec 031): diffs local tune ids against
+  # thesession's weekly data dump (refreshed Sundays) and auto-applies
+  # upstream merges. Mondays 06:00 UTC.
+  - type: cron
+    name: ceol-io-thesession-merge-sync
+    env: python
+    schedule: "0 6 * * 1"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python3 jobs/sync_thesession_merges.py"
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGPORT
+        value: "5432"
+
   - type: web
     name: abc-renderer
     runtime: node

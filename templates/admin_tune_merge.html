@@ -94,20 +94,15 @@
                         </div>
                     </div>
 
-                    <!-- Merged-tune scan (spec 031) -->
+                    <!-- thesession.org merge sync (spec 031) -->
                     <div class="merge-scan-section">
-                        <h2>Scan for Merged Tunes</h2>
-                        <p>Checks every local tune ID against thesession.org and lists the ones that have been merged or deleted upstream. One request per second &mdash; a full scan takes a few hours and survives closing this tab. Nothing is merged automatically.</p>
+                        <h2>thesession.org Sync</h2>
+                        <p>A weekly job (Mondays, after thesession.org's Sunday data-dump refresh) finds tunes that were merged or deleted upstream and applies the merges automatically. Below is the record of what each run changed.</p>
 
                         <div class="scan-controls">
-                            <button id="scan-start-btn" class="btn btn-primary">Start Scan</button>
-                            <button id="scan-resume-btn" class="btn btn-primary" style="display: none;">Resume Scan</button>
-                            <button id="scan-cancel-btn" class="btn btn-secondary" style="display: none;">Cancel Scan</button>
+                            <button id="scan-start-btn" class="btn btn-primary">Run Now</button>
+                            <button id="scan-cancel-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
                             <span id="scan-status-text" class="scan-status-text"></span>
-                        </div>
-
-                        <div id="scan-stale-note" class="warnings-box" style="display: none;">
-                            The last scan stopped unexpectedly (probably a server restart). Resume continues from where it left off.
                         </div>
 
                         <div id="scan-progress" class="scan-progress" style="display: none;">
@@ -117,22 +112,7 @@
 
                         <div id="scan-error" class="error-box" style="display: none;"></div>
 
-                        <div id="scan-punchlist"></div>
-
-                        <details id="scan-deleted-details" class="scan-details" style="display: none;">
-                            <summary id="scan-deleted-summary"></summary>
-                            <div id="scan-deleted-list"></div>
-                        </details>
-
-                        <details id="scan-errors-details" class="scan-details" style="display: none;">
-                            <summary id="scan-errors-summary"></summary>
-                            <div id="scan-errors-list"></div>
-                        </details>
-
-                        <details id="scan-ignored-details" class="scan-details" style="display: none;">
-                            <summary id="scan-ignored-summary"></summary>
-                            <div id="scan-ignored-list"></div>
-                        </details>
+                        <div id="sync-record"></div>
                     </div>
                 </div>
             </section>
@@ -598,27 +578,6 @@
     margin-top: 0.25rem;
 }
 
-.scan-row-note {
-    font-size: 0.85rem;
-    color: #856404;
-    margin-top: 0.25rem;
-}
-
-[data-theme="dark"] .scan-row-note {
-    color: #ffc107;
-}
-
-.scan-row-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
-}
-
-.scan-row-actions .btn {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.85rem;
-}
-
 .scan-badge {
     display: inline-block;
     font-size: 0.7rem;
@@ -654,19 +613,19 @@
     color: var(--secondary-text);
 }
 
-.scan-details {
-    margin-top: 1rem;
+.sync-run {
+    margin-top: 0.75rem;
 }
 
-.scan-details summary {
+.sync-run summary {
     cursor: pointer;
-    color: var(--secondary-text);
+    color: var(--text-color);
     font-weight: 500;
     padding: 0.4rem 0;
 }
 
-.scan-details > div {
-    margin-top: 0.5rem;
+.sync-run > div {
+    margin: 0.5rem 0 0.5rem 1rem;
 }
 
 .scan-empty {
@@ -919,22 +878,19 @@ function showSuccess(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Merged-tune scan (spec 031)
+// thesession.org merge sync (spec 031): Run Now + record of applied changes
 // ---------------------------------------------------------------------------
 
 const scanStartBtn = document.getElementById('scan-start-btn');
-const scanResumeBtn = document.getElementById('scan-resume-btn');
 const scanCancelBtn = document.getElementById('scan-cancel-btn');
 const scanStatusText = document.getElementById('scan-status-text');
-const scanStaleNote = document.getElementById('scan-stale-note');
 const scanProgress = document.getElementById('scan-progress');
 const scanProgressFill = document.getElementById('scan-progress-fill');
 const scanProgressText = document.getElementById('scan-progress-text');
 const scanErrorBox = document.getElementById('scan-error');
-const scanPunchlist = document.getElementById('scan-punchlist');
+const syncRecord = document.getElementById('sync-record');
 
 let scanPollTimer = null;
-let scanHasUnactioned = false;
 
 function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -957,15 +913,11 @@ async function scanApi(method, url, body) {
 }
 
 scanStartBtn.addEventListener('click', async function() {
-    if (scanHasUnactioned && !window.confirm(
-        'The punchlist still has unmerged items. Starting a new scan wipes the previous results (ignores are kept). Continue?')) {
-        return;
-    }
     scanStartBtn.disabled = true;
     scanErrorBox.style.display = 'none';
     try {
         const data = await scanApi('POST', '/api/admin/tunes/merge-scan', {});
-        if (!data.success) showScanError(data.error || 'Failed to start scan.');
+        if (!data.success) showScanError(data.error || 'Failed to start sync run.');
     } catch (e) {
         showScanError('Network error: ' + e.message);
     } finally {
@@ -974,25 +926,11 @@ scanStartBtn.addEventListener('click', async function() {
     }
 });
 
-scanResumeBtn.addEventListener('click', async function() {
-    scanResumeBtn.disabled = true;
-    scanErrorBox.style.display = 'none';
-    try {
-        const data = await scanApi('POST', '/api/admin/tunes/merge-scan', { resume: true });
-        if (!data.success) showScanError(data.error || 'Failed to resume scan.');
-    } catch (e) {
-        showScanError('Network error: ' + e.message);
-    } finally {
-        scanResumeBtn.disabled = false;
-        refreshScan();
-    }
-});
-
 scanCancelBtn.addEventListener('click', async function() {
     scanCancelBtn.disabled = true;
     try {
         const data = await scanApi('DELETE', '/api/admin/tunes/merge-scan');
-        if (!data.success) showScanError(data.error || 'Failed to cancel scan.');
+        if (!data.success) showScanError(data.error || 'Failed to cancel run.');
     } catch (e) {
         showScanError('Network error: ' + e.message);
     } finally {
@@ -1001,180 +939,123 @@ scanCancelBtn.addEventListener('click', async function() {
     }
 });
 
-// Punchlist actions (event delegation: rows re-render every poll).
-document.querySelector('.merge-scan-section').addEventListener('click', async function(e) {
-    const btn = e.target.closest('button[data-scan-action]');
-    if (!btn) return;
-    const tuneId = parseInt(btn.dataset.tuneId);
-    const targetId = btn.dataset.targetId ? parseInt(btn.dataset.targetId) : null;
-
-    if (btn.dataset.scanAction === 'merge') {
-        // Prefill the existing form and run the spec-030 preview/confirm flow.
-        successResults.style.display = 'none';
-        previewResults.style.display = 'none';
-        inputForm.style.display = 'block';
-        oldTuneIdInput.value = tuneId;
-        newTuneIdInput.value = btn.dataset.mergeTargetId;
-        inputForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        previewBtn.click();
-        return;
-    }
-
-    btn.disabled = true;
-    try {
-        const body = { tune_id: tuneId };
-        if (targetId !== null) body.target_tune_id = targetId;
-        const method = btn.dataset.scanAction === 'ignore' ? 'POST' : 'DELETE';
-        const data = await scanApi(method, '/api/admin/tunes/merge-scan/ignore', body);
-        if (!data.success) showScanError(data.error || 'Failed to update ignore.');
-    } catch (err) {
-        showScanError('Network error: ' + err.message);
-    }
-    refreshScan();
-});
-
 function thesessionLink(id) {
     return `<a href="https://thesession.org/tunes/${id}" target="_blank" rel="noopener">#${id}</a>`;
 }
 
-function usageText(item) {
-    return `${item.sessions_count} session${item.sessions_count === 1 ? '' : 's'} &middot; ${item.plays_count} play${item.plays_count === 1 ? '' : 's'}`;
-}
-
-function renderMergedRow(item, inIgnoredSection) {
-    const targetId = item.resolved_target_tune_id;
-    const targetName = item.resolved_target_name || item.target_name || `tune #${targetId}`;
-    let badge;
-    if (item.done) {
-        badge = '<span class="scan-badge scan-badge-done">merged</span>';
-    } else if (item.target_is_local) {
-        badge = '<span class="scan-badge scan-badge-local">target is local</span>';
-    } else {
-        badge = '<span class="scan-badge scan-badge-import">will be imported</span>';
-    }
-    const aliases = (item.target_aliases || []).filter(a => a && a !== targetName);
-    let meta = usageText(item);
-    if (aliases.length) meta += ` &middot; also known as: ${esc(aliases.join(', '))}`;
-    const note = item.resolved_note ? `<div class="scan-row-note">${esc(item.resolved_note)}</div>` : '';
-
-    let actions = '';
-    if (inIgnoredSection) {
-        actions = `<button class="btn btn-secondary" data-scan-action="unignore" data-tune-id="${item.tune_id}" data-target-id="${item.target_tune_id ?? ''}">Un-ignore</button>`;
-    } else if (!item.done) {
-        actions = `
-            <button class="btn btn-primary" data-scan-action="merge" data-tune-id="${item.tune_id}" data-merge-target-id="${targetId}">Merge&hellip;</button>
-            <button class="btn btn-secondary" data-scan-action="ignore" data-tune-id="${item.tune_id}" data-target-id="${item.target_tune_id}">Ignore</button>`;
-    }
-
-    return `
-        <div class="scan-row${item.done ? ' scan-row-done' : ''}">
-            <div class="scan-row-main">
-                <div class="scan-row-title">
-                    ${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
-                    <span class="scan-row-arrow">&#8594;</span>
-                    ${esc(targetName)} (${thesessionLink(targetId)})
-                    ${badge}
+function renderResultRow(item) {
+    if (item.result_type === 'merged') {
+        const targetName = item.target_name || `tune #${item.target_tune_id}`;
+        const badges = [
+            item.applied
+                ? '<span class="scan-badge scan-badge-local">applied</span>'
+                : '<span class="scan-badge scan-badge-import">not applied</span>',
+            item.imported ? '<span class="scan-badge scan-badge-import">imported</span>' : ''
+        ].join('');
+        const aliases = (item.target_aliases || []).filter(a => a && a !== targetName);
+        let meta = esc(item.detail || '');
+        if (aliases.length) meta += ` &middot; also known as: ${esc(aliases.join(', '))}`;
+        return `
+            <div class="scan-row">
+                <div class="scan-row-main">
+                    <div class="scan-row-title">
+                        ${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
+                        <span class="scan-row-arrow">&#8594;</span>
+                        ${esc(targetName)} (${thesessionLink(item.target_tune_id)})
+                        ${badges}
+                    </div>
+                    <div class="scan-row-meta">${meta}</div>
                 </div>
-                <div class="scan-row-meta">${meta}</div>
-                ${note}
-            </div>
-            <div class="scan-row-actions">${actions}</div>
-        </div>`;
-}
-
-function renderDeletedRow(item, inIgnoredSection) {
-    const action = inIgnoredSection
-        ? `<button class="btn btn-secondary" data-scan-action="unignore" data-tune-id="${item.tune_id}" data-target-id="">Un-ignore</button>`
-        : `<button class="btn btn-secondary" data-scan-action="ignore" data-tune-id="${item.tune_id}" data-target-id="">Ignore</button>`;
-    return `
-        <div class="scan-row">
-            <div class="scan-row-main">
-                <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})</div>
-                <div class="scan-row-meta">${usageText(item)} &middot; local history keeps referencing it; no action needed</div>
-            </div>
-            <div class="scan-row-actions">${action}</div>
-        </div>`;
-}
-
-function renderErrorRow(item) {
-    return `
-        <div class="scan-row">
-            <div class="scan-row-main">
-                <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})</div>
-                <div class="scan-row-meta">${esc(item.detail || 'error')} &middot; retried automatically on the next scan</div>
-            </div>
-        </div>`;
-}
-
-function renderSection(detailsId, summaryId, listId, label, rowsHtml, count) {
-    const details = document.getElementById(detailsId);
-    if (!count) {
-        details.style.display = 'none';
-        return;
+            </div>`;
     }
-    details.style.display = 'block';
-    document.getElementById(summaryId).textContent = `${label} (${count})`;
-    document.getElementById(listId).innerHTML = rowsHtml;
+    if (item.result_type === 'deleted') {
+        return `
+            <div class="scan-row">
+                <div class="scan-row-main">
+                    <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
+                        <span class="scan-badge scan-badge-done">deleted upstream</span></div>
+                    <div class="scan-row-meta">no longer on thesession.org &middot; local history keeps referencing it; no action needed</div>
+                </div>
+            </div>`;
+    }
+    return `
+        <div class="scan-row">
+            <div class="scan-row-main">
+                <div class="scan-row-title">${esc(item.tune_name)} (${thesessionLink(item.tune_id)})
+                    <span class="scan-badge scan-badge-import">error</span></div>
+                <div class="scan-row-meta">${esc(item.detail || 'error')} &middot; retried on the next run</div>
+            </div>
+        </div>`;
+}
+
+function renderRun(run, idx) {
+    const when = new Date(run.started_at).toLocaleString();
+    let summary;
+    if (run.status === 'running') {
+        summary = run.stale ? `${when} &mdash; interrupted` : `${when} &mdash; running&hellip;`;
+    } else {
+        const bits = [`${run.applied_count} merge${run.applied_count === 1 ? '' : 's'} applied`];
+        if (run.merged_count > run.applied_count) bits.push(`${run.merged_count - run.applied_count} not applied`);
+        if (run.deleted_count) bits.push(`${run.deleted_count} deleted upstream`);
+        if (run.error_count) bits.push(`${run.error_count} error${run.error_count === 1 ? '' : 's'}`);
+        summary = `${when} &mdash; ${esc(run.triggered_by)} &mdash; ${bits.join(' &middot; ')}`;
+        if (run.status === 'cancelled') summary += ' &mdash; cancelled';
+    }
+    const body = run.results.length
+        ? run.results.map(renderResultRow).join('')
+        : (run.status === 'running' ? '' : '<div class="scan-empty">No upstream changes affecting this database.</div>');
+    return `
+        <details class="sync-run"${idx === 0 ? ' open' : ''}>
+            <summary>${summary}</summary>
+            <div>${body}</div>
+        </details>`;
 }
 
 function renderScan(data) {
-    const scan = data.scan;
-    scanHasUnactioned = data.has_unactioned;
+    const runs = data.runs || [];
+    const latest = runs[0];
+    const running = latest && latest.status === 'running' && !latest.stale;
 
-    const running = scan && scan.status === 'running';
-    const stale = running && scan.stale;
     scanStartBtn.style.display = running ? 'none' : 'inline-block';
-    scanResumeBtn.style.display = stale ? 'inline-block' : 'none';
     scanCancelBtn.style.display = running ? 'inline-block' : 'none';
-    scanStaleNote.style.display = stale ? 'block' : 'none';
 
-    if (!scan) {
-        scanStatusText.textContent = 'No scan has been run yet.';
+    if (!latest) {
+        scanStatusText.textContent = 'No sync has run yet.';
         scanProgress.style.display = 'none';
-        scanPunchlist.innerHTML = '';
-        renderSection('scan-deleted-details', 'scan-deleted-summary', 'scan-deleted-list', '', '', 0);
-        renderSection('scan-errors-details', 'scan-errors-summary', 'scan-errors-list', '', '', 0);
-        renderSection('scan-ignored-details', 'scan-ignored-summary', 'scan-ignored-list', '', '', 0);
+        syncRecord.innerHTML = '';
         return;
     }
 
-    const statusLabel = { running: stale ? 'Interrupted' : 'Running', completed: 'Completed', cancelled: 'Cancelled' }[scan.status] || scan.status;
-    scanStatusText.textContent = `${statusLabel} — started ${new Date(scan.started_at).toLocaleString()}`;
-
-    scanProgress.style.display = 'block';
-    const pct = scan.total_count ? Math.round(100 * scan.checked_count / scan.total_count) : 0;
-    scanProgressFill.style.width = pct + '%';
-    scanProgressText.textContent =
-        `${scan.checked_count} / ${scan.total_count} checked — ${scan.merged_count} merged, ${scan.deleted_count} deleted, ${scan.error_count} error${scan.error_count === 1 ? '' : 's'}`;
-
-    if (data.punchlist.length) {
-        scanPunchlist.innerHTML = '<h4 style="margin: 1rem 0;">Merged upstream</h4>'
-            + data.punchlist.map(i => renderMergedRow(i, false)).join('');
+    if (running) {
+        scanStatusText.textContent = `Running — started ${new Date(latest.started_at).toLocaleString()}`;
+        scanProgress.style.display = 'block';
+        const pct = latest.total_count ? Math.round(100 * latest.checked_count / latest.total_count) : 0;
+        scanProgressFill.style.width = Math.min(pct, 100) + '%';
+        scanProgressText.textContent =
+            `${latest.checked_count} / ${latest.total_count} checked — ${latest.merged_count} merged (${latest.applied_count} applied), ${latest.deleted_count} deleted, ${latest.error_count} error${latest.error_count === 1 ? '' : 's'}`;
     } else {
-        scanPunchlist.innerHTML = scan.status === 'running' ? ''
-            : '<div class="scan-empty">No merged tunes found.</div>';
+        scanProgress.style.display = 'none';
+        if (latest.status === 'running' && latest.stale) {
+            scanStatusText.textContent = 'Last run was interrupted — the next run (weekly or Run Now) starts fresh.';
+        } else {
+            scanStatusText.textContent = `Last run ${new Date(latest.started_at).toLocaleString()} (${latest.triggered_by}).`;
+        }
     }
 
-    renderSection('scan-deleted-details', 'scan-deleted-summary', 'scan-deleted-list',
-        'Deleted on thesession', data.deleted.map(i => renderDeletedRow(i, false)).join(''), data.deleted.length);
-    renderSection('scan-errors-details', 'scan-errors-summary', 'scan-errors-list',
-        'Errors', data.errors.map(renderErrorRow).join(''), data.errors.length);
-    const ignoredRows = data.ignored.map(i =>
-        i.result_type === 'merged' ? renderMergedRow(i, true) : renderDeletedRow(i, true)).join('');
-    renderSection('scan-ignored-details', 'scan-ignored-summary', 'scan-ignored-list',
-        'Ignored', ignoredRows, data.ignored.length);
+    syncRecord.innerHTML = runs.map(renderRun).join('');
 }
 
 async function refreshScan() {
     try {
         const data = await scanApi('GET', '/api/admin/tunes/merge-scan');
         if (!data.success) {
-            showScanError(data.error || 'Failed to load scan status.');
+            showScanError(data.error || 'Failed to load sync record.');
             return;
         }
         renderScan(data);
 
-        const shouldPoll = data.scan && data.scan.status === 'running' && !data.scan.stale;
+        const latest = (data.runs || [])[0];
+        const shouldPoll = latest && latest.status === 'running' && !latest.stale;
         clearTimeout(scanPollTimer);
         if (shouldPoll) scanPollTimer = setTimeout(refreshScan, 5000);
     } catch (e) {
