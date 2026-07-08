@@ -24,6 +24,7 @@ Still ahead (Phase 1 tail / later): attendance ops (they have active-session sid
 effects), server-generated corroborate/merge detection (§H30), presence (§F).
 """
 
+import base64
 import json
 import re
 import uuid
@@ -1737,6 +1738,311 @@ def my_tunes_incipit(tune_id):
     """Incipit image for the Add-to-My-Tunes pane's search cards — identical to
     live_incipit, just not session-scoped."""
     return _incipit_response(tune_id)
+
+
+# ---------------------------------------------------------------------------
+# Tune preview — the deep-search "look before you log" screen (spec: search
+# results open a preview with notation/ABC/aliases/stats; the primary action
+# there is what used to happen on the card tap). Dual/triple-homed like the
+# rest of the search family: live instance, /api/my-tunes, /api/sessions/<path>/tunes.
+# ---------------------------------------------------------------------------
+
+def _tune_preview_core(tune_id, session_id=None):
+    """Preview data for a LOCAL catalog tune: every setting (ABC + incipit ABC +
+    any cached incipit image inline — full images are fetched per setting via the
+    setting-image endpoint), session-local aliases when a session scope exists,
+    and play stats. Follows a merge redirect to the canonical tune."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, tune_type, tunebook_count_cached, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+            (tune_id,),
+        )
+        t = cur.fetchone()
+        if t and t[3]:
+            tune_id = t[3]
+            cur.execute(
+                "SELECT name, tune_type, tunebook_count_cached, redirect_to_tune_id FROM tune WHERE tune_id = %s",
+                (tune_id,),
+            )
+            t = cur.fetchone()
+        if not t:
+            return jsonify({"success": False, "error": "Tune not found"}), 404
+        name, tune_type, tunebook_count = t[0], t[1], t[2]
+
+        cur.execute(
+            """
+            SELECT setting_id, key, abc, incipit_abc, incipit_image
+            FROM tune_setting
+            WHERE tune_id = %s AND abc IS NOT NULL AND abc <> ''
+            ORDER BY setting_id
+            """,
+            (tune_id,),
+        )
+        settings = [
+            {
+                "setting_id": r[0],
+                "key": r[1],
+                "abc": r[2],
+                "incipit_abc": (r[3] or "").strip() or extract_abc_incipit(r[2], tune_type),
+                "incipit_image": bytea_to_base64(r[4]) if r[4] else None,
+            }
+            for r in cur.fetchall()
+        ]
+
+        aliases, played_here, dates = [], 0, []
+        if session_id is not None:
+            cur.execute(
+                "SELECT alias FROM session_tune WHERE session_id = %s AND tune_id = %s AND alias IS NOT NULL",
+                (session_id, tune_id),
+            )
+            aliases += [r[0] for r in cur.fetchall()]
+            cur.execute(
+                "SELECT alias FROM session_tune_alias WHERE session_id = %s AND tune_id = %s ORDER BY alias",
+                (session_id, tune_id),
+            )
+            aliases += [r[0] for r in cur.fetchall() if r[0] not in aliases]
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM session_instance_tune sit
+                JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                WHERE si.session_id = %s AND sit.tune_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+                """,
+                (session_id, tune_id),
+            )
+            played_here = cur.fetchone()[0]
+            cur.execute(
+                """
+                SELECT DISTINCT si.date FROM session_instance_tune sit
+                JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                WHERE si.session_id = %s AND sit.tune_id = %s AND sit.record_type = 'tune' AND sit.deleted = FALSE
+                ORDER BY si.date DESC LIMIT 3
+                """,
+                (session_id, tune_id),
+            )
+            dates = [str(r[0]) for r in cur.fetchall()]
+
+        return jsonify({
+            "success": True,
+            "tune_id": tune_id,
+            "name": name,
+            "tune_type": tune_type,
+            "tunebook_count": tunebook_count,
+            "aliases": aliases,
+            "played_here": played_here,
+            "dates": dates,
+            "settings": settings,
+        })
+    finally:
+        conn.close()
+
+
+def _ensure_setting_image(cur, setting_id, kind):
+    """Render/cache/return the incipit or full notation PNG (base64) for ONE
+    specific setting — _ensure_incipit's per-setting sibling, for the preview's
+    settings pager and incipit⇄full toggle. None if there's nothing to render."""
+    cur.execute(
+        """
+        SELECT ts.key, ts.incipit_abc, ts.abc, ts.incipit_image, ts.image, t.tune_type
+        FROM tune_setting ts JOIN tune t ON t.tune_id = ts.tune_id
+        WHERE ts.setting_id = %s
+        """,
+        (setting_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    key, incipit_abc, abc, incipit_image, image, tune_type = row
+
+    if kind == "full":
+        if image is not None:
+            return bytea_to_base64(image)
+        if not abc:
+            return None
+        png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=False)
+        column = "image"
+    else:
+        if incipit_image is not None:
+            return bytea_to_base64(incipit_image)
+        inc_text = (incipit_abc or "").strip() or (extract_abc_incipit(abc, tune_type) if abc else "")
+        if not inc_text:
+            return None
+        png = render_abc_to_png(_wrap_abc(inc_text, key, tune_type), is_incipit=True)
+        column = "incipit_image"
+    if not png:
+        return None
+    cur.execute(
+        f"UPDATE tune_setting SET {column} = %s, cache_updated_date = (NOW() AT TIME ZONE 'UTC') WHERE setting_id = %s",
+        (psycopg2.Binary(png), setting_id),
+    )
+    return base64.b64encode(png).decode()
+
+
+def _setting_image_response(setting_id):
+    """Render/cache-and-return one setting's notation image (?kind=incipit|full).
+    Depends only on the setting, so all three route homes share it."""
+    kind = "full" if (request.args.get("kind") or "").strip().lower() == "full" else "incipit"
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        try:
+            img = _ensure_setting_image(cur, setting_id, kind)
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            img = None
+        return jsonify({"success": True, "image": img})
+    finally:
+        conn.close()
+
+
+def _thesession_preview_core(thesession_id):
+    """Preview a tune that lives on thesession.org and is NOT imported yet: fetch
+    its JSON and return name/type/aliases/settings (ABC + incipit ABC) so the
+    preview can show ABC and render notation ephemerally — nothing is imported
+    until the user confirms the add. If the id is already local, return is_local
+    (following a merge redirect) so the client uses the local preview instead."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (thesession_id,))
+        row = cur.fetchone()
+        if row:
+            return jsonify({"success": True, "is_local": True, "tune_id": row[1] or row[0]})
+    finally:
+        conn.close()
+
+    try:
+        data = _fetch_thesession_tune(thesession_id)
+    except TuneImportError as e:
+        return jsonify({"success": False, "error": e.message}), e.status
+
+    tune_type = (data.get("type") or "").title() or None
+    settings = []
+    for s in data.get("settings") or []:
+        abc = (s.get("abc") or "").replace("!", "\n")  # thesession uses "!" as a line break
+        if not abc:
+            continue
+        settings.append({
+            "setting_id": s.get("id"),
+            "key": s.get("key"),
+            "abc": abc,
+            "incipit_abc": extract_abc_incipit(abc, tune_type),
+        })
+    return jsonify({
+        "success": True,
+        "is_local": False,
+        "tune_id": thesession_id,
+        "name": data["name"],
+        "tune_type": tune_type,
+        "tunebook_count": data.get("tunebooks", 0),
+        "aliases": data.get("aliases") or [],
+        "settings": settings,
+    })
+
+
+def _render_abc_core():
+    """Ephemeral ABC → PNG render (base64) for previewing a not-yet-imported
+    thesession.org setting in notes mode. Nothing is cached — the tune isn't ours
+    yet. POST {abc, key, tune_type, kind: incipit|full}."""
+    body = request.get_json(silent=True) or {}
+    abc = (body.get("abc") or "").strip()
+    if not abc:
+        return jsonify({"success": False, "error": "abc is required"}), 400
+    if len(abc) > 20000:
+        return jsonify({"success": False, "error": "abc too long"}), 400
+    key = (body.get("key") or "").strip() or None
+    tune_type = (body.get("tune_type") or "").strip() or None
+    kind = "full" if (body.get("kind") or "").strip().lower() == "full" else "incipit"
+    if kind == "incipit":
+        abc = extract_abc_incipit(abc, tune_type) or abc
+    png = render_abc_to_png(_wrap_abc(abc, key, tune_type), is_incipit=(kind == "incipit"))
+    return jsonify({"success": True, "image": base64.b64encode(png).decode() if png else None})
+
+
+@api_login_required
+def live_tune_preview(session_instance_id, tune_id):
+    """Tune preview for the live screen's deep search (session-scoped stats/aliases)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+        srow = cur.fetchone()
+        if not srow:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        session_id = srow[0]
+    finally:
+        conn.close()
+    return _tune_preview_core(tune_id, session_id=session_id)
+
+
+@api_login_required
+def my_tunes_tune_preview(tune_id):
+    """Tune preview for the Add-to-My-Tunes pane (no session scope)."""
+    return _tune_preview_core(tune_id)
+
+
+@api_login_required
+def session_tunes_tune_preview(session_path, tune_id):
+    """Tune preview for the add-to-session-tunes pane (session-scoped by path)."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        session_id = _session_id_by_path(cur, session_path)
+    finally:
+        conn.close()
+    if session_id is None:
+        return jsonify({"success": False, "error": "Session not found"}), 404
+    return _tune_preview_core(tune_id, session_id=session_id)
+
+
+@api_login_required
+def live_setting_image(session_instance_id, setting_id):
+    return _setting_image_response(setting_id)
+
+
+@api_login_required
+def my_tunes_setting_image(setting_id):
+    return _setting_image_response(setting_id)
+
+
+@api_login_required
+def session_tunes_setting_image(session_path, setting_id):
+    return _setting_image_response(setting_id)
+
+
+@api_login_required
+def live_thesession_preview(session_instance_id, thesession_id):
+    return _thesession_preview_core(thesession_id)
+
+
+@api_login_required
+def my_tunes_thesession_preview(thesession_id):
+    return _thesession_preview_core(thesession_id)
+
+
+@api_login_required
+def session_tunes_thesession_preview(session_path, thesession_id):
+    return _thesession_preview_core(thesession_id)
+
+
+@api_login_required
+def live_render_abc(session_instance_id):
+    return _render_abc_core()
+
+
+@api_login_required
+def my_tunes_render_abc():
+    return _render_abc_core()
+
+
+@api_login_required
+def session_tunes_render_abc(session_path):
+    return _render_abc_core()
 
 
 @api_login_required

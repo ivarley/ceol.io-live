@@ -115,6 +115,7 @@ screen shell in `web_routes.py:live_logging_screen`):
 | POST | `/api/live/token` | Issue bearer token (`user_session` id) |
 | GET  | `/api/live/instances/<id>/people` `…/people/search` | Attendee lookups |
 | GET  | `/api/live/instances/<id>/tune/<tune_id>` `…/match` `…/deep-search` `…/incipit/<tune_id>` | Tune detail / linking / search / ABC |
+| GET  | `/api/live/instances/<id>/tune-preview/<tune_id>` `…/setting-image/<setting_id>` `…/thesession-preview/<id>` + POST `…/render-abc` | Deep-search preview (spec 032): settings + aliases + stats, per-setting render-on-demand, remote preview, ephemeral render. Same four also under `/api/my-tunes/…` and `/api/sessions/<path>/tunes/…` |
 
 **Streaming sidecar** (`streaming/service.py`):
 
@@ -161,6 +162,19 @@ opens a confirm dialog ("Switch to editing?") that flips to edit mode, logs the 
 clears the pane search (same end state as a direct edit-mode add); cancelling keeps the
 search. Reading never mutates silently (complete logs get a notice instead — un-complete
 from the header first).
+
+**Deep-search preview (spec 032).** Tapping a result card no longer adds immediately — it
+opens **`TunePreview.svelte`** in the same real estate (TuneSearch swaps its content; search
+state survives underneath), showing full notation with the tune-detail modal's anatomy
+(notes/abc tabs + thesession link; clicking the content flips incipit ⇄ full), a settings
+pager, session aliases, and stats. Header ‹ › steppers page through the whole result list
+(local, then remote) to compare candidates. A **＋ rail** on each card (or ⌘/Ctrl+Enter)
+keeps the one-tap add; plain Enter opens the preview and Enter again confirms, Esc backs
+out. The confirm button is context-labeled ("＋ Log This Tune" / "＋ Add This Tune") and a
+confirmed add clears the search. Remote (thesession.org) results preview via a fetch proxy
+and render notation ephemerally — nothing imports until confirmed; the paste-a-URL path
+also routes through the preview. Pending notation renders live in a module-level registry
+in `client.js`, so a spinner survives navigating away and back.
 
 **Keyboard nav (spec 028).** A window `keydown` handler (`onWinKey`) plus per-field handlers
 give three behaviors keyed off *what has focus*:

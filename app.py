@@ -29,7 +29,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit
+from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -381,6 +381,30 @@ app.add_url_rule(
     methods=["GET"],
 )
 app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/tune-preview/<int:tune_id>",
+    "live_tune_preview",
+    live_tune_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/setting-image/<int:setting_id>",
+    "live_setting_image",
+    live_setting_image,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/thesession-preview/<int:thesession_id>",
+    "live_thesession_preview",
+    live_thesession_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/live/instances/<int:session_instance_id>/render-abc",
+    "live_render_abc",
+    live_render_abc,
+    methods=["POST"],
+)
+app.add_url_rule(
     "/live/instances/<int:session_instance_id>",
     "live_logging_screen",
     live_logging_screen,
@@ -500,6 +524,30 @@ app.add_url_rule(
     "session_tunes_incipit",
     session_tunes_incipit,
     methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/tune-preview/<int:tune_id>",
+    "session_tunes_tune_preview",
+    session_tunes_tune_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/setting-image/<int:setting_id>",
+    "session_tunes_setting_image",
+    session_tunes_setting_image,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/thesession-preview/<int:thesession_id>",
+    "session_tunes_thesession_preview",
+    session_tunes_thesession_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/tunes/render-abc",
+    "session_tunes_render_abc",
+    session_tunes_render_abc,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/<int:tune_id>/aliases",
@@ -1045,6 +1093,30 @@ app.add_url_rule(
     "my_tunes_incipit",
     my_tunes_incipit,
     methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/tune-preview/<int:tune_id>",
+    "my_tunes_tune_preview",
+    my_tunes_tune_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/setting-image/<int:setting_id>",
+    "my_tunes_setting_image",
+    my_tunes_setting_image,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/thesession-preview/<int:thesession_id>",
+    "my_tunes_thesession_preview",
+    my_tunes_thesession_preview,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/my-tunes/render-abc",
+    "my_tunes_render_abc",
+    my_tunes_render_abc,
+    methods=["POST"],
 )
 app.add_url_rule(
     "/api/my-tunes/common/<int:other_person_id>",

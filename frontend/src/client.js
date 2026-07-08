@@ -215,6 +215,87 @@ export async function fetchIncipit(config, tuneId, kind) {
   }
 }
 
+// ---- tune preview (deep-search "look before you log" screen) ----------------
+// Notation images resolve through a MODULE-LEVEL cache + in-flight registry so a
+// pending render survives navigating to another setting/result and back (the
+// spinner keeps spinning and the image fills in wherever it's showing when the
+// render lands), and so the modal and the pane share one request per image.
+const _imgCache = new Map() // key -> base64 | null
+const _imgInflight = new Map() // key -> Promise<base64|null>
+
+function _sharedImage(key, fetcher) {
+  if (_imgCache.has(key)) return Promise.resolve(_imgCache.get(key))
+  let p = _imgInflight.get(key)
+  if (!p) {
+    p = fetcher()
+      .catch(() => null)
+      .then((img) => {
+        _imgInflight.delete(key)
+        if (img) _imgCache.set(key, img) // don't cache failures — a retry can succeed
+        return img
+      })
+    _imgInflight.set(key, p)
+  }
+  return p
+}
+
+// Full preview data for a LOCAL catalog tune: settings (abc + incipit abc + any
+// cached incipit image), session aliases, stats. Throws on failure.
+export async function tunePreview(config, tuneId) {
+  const res = await fetch(`${searchBase(config)}/tune-preview/${tuneId}`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || !json.success) throw new Error(json.error || `tune preview failed: ${res.status}`)
+  return json
+}
+
+// One setting's incipit/full notation image, rendered+cached server-side on demand.
+export function settingImage(config, settingId, kind) {
+  return _sharedImage(`s:${settingId}:${kind}`, async () => {
+    const res = await fetch(`${searchBase(config)}/setting-image/${settingId}?kind=${kind}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.image || null
+  })
+}
+
+// Preview data for a not-yet-imported thesession.org tune (or {is_local, tune_id}
+// if it turns out we already have it). Cached per id for the page's lifetime so
+// stepping away and back doesn't refetch. Throws on failure.
+const _tsPreviewCache = new Map()
+export async function thesessionPreview(config, thesessionId) {
+  if (_tsPreviewCache.has(thesessionId)) return _tsPreviewCache.get(thesessionId)
+  const res = await fetch(`${searchBase(config)}/thesession-preview/${thesessionId}`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || !json.success) throw new Error(json.error || `thesession preview failed: ${res.status}`)
+  _tsPreviewCache.set(thesessionId, json)
+  return json
+}
+
+// Ephemeral ABC render for a remote setting's notes mode (nothing imported/cached
+// server-side; cacheKey dedups client-side like settingImage).
+export function renderRemoteAbc(config, cacheKey, body) {
+  return _sharedImage(cacheKey, async () => {
+    const res = await fetch(`${searchBase(config)}/render-abc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.image || null
+  })
+}
+
 // The current user's whole tune list — instruments (with is_auto) + every
 // person_tune row's learn_status and sparse per-instrument overrides — for the
 // my-list highlight mode. Pages through /api/my-tunes (2000/page covers nearly

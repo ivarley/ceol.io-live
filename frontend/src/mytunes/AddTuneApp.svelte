@@ -249,6 +249,7 @@
         variant="modal"
         title="Search for a tune"
         allowAsIs={false}
+        actionLabel="＋ Add This Tune"
         dimOnList={true}
         {initialQuery}
         {history}

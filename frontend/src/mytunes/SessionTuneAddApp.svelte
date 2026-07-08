@@ -171,6 +171,7 @@
         variant="modal"
         title="Search for a tune"
         allowAsIs={false}
+        actionLabel="＋ Add This Tune"
         dimInSession={true}
         {initialQuery}
         {history}

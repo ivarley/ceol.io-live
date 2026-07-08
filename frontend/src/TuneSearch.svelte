@@ -1,7 +1,8 @@
 <script>
-  import { onDestroy, untrack } from 'svelte'
+  import { onDestroy, untrack, tick } from 'svelte'
   import { deepSearch, thesessionSearch } from './client.js'
   import Incipit from './Incipit.svelte'
+  import TunePreview from './TunePreview.svelte'
   import { pluralType, parseThesessionId, historyStep } from './logstate.js'
 
   // The deep-search body (spec 028): one shared component behind BOTH the mobile
@@ -17,6 +18,7 @@
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
     title = 'Find a tune', // modal header text (the add pane says "Search for a tune")
     allowAsIs = true, // "log as-is (unlinked)" escape — off for My Tunes (needs a catalog tune)
+    actionLabel = '＋ Log This Tune', // the preview's primary action (context-specific verb)
     dimOnList = false, // dim results already on the person's list (My Tunes add pane)
     dimInSession = false, // dim results already in the session's repertoire (session-tunes add pane)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
@@ -44,6 +46,47 @@
   let tsSearched = $state(false) // has the user run a remote search for this query yet?
   let tsPasteUrl = $state('') // the "paste a URL / tune ID" field inside the remote section
   let tsPasteError = $state('')
+
+  // --- preview (look before you log): tapping a card opens TunePreview in this same
+  // real estate; the card's ＋ rail (or ⌘Enter) keeps the old one-tap add.
+  let previewIdx = $state(null) // index into previewItems, or null (search showing)
+  let pastePreview = $state(null) // pseudo remote result for a pasted URL/id, previewed before adding
+  let resultsEl = $state(null) // the .deep-results scroller (to restore scroll on back)
+  let resultsScroll = 0
+  let everPreviewed = $state(false) // gates the modal's input re-autofocus after a preview round-trip
+  // The preview's ‹ › steppers page this combined list: local results, then remote.
+  const previewItems = $derived([
+    ...deepResults.map((r) => ({ r, remote: false })),
+    ...tsResults.map((r) => ({ r, remote: true })),
+    ...(pastePreview ? [{ r: pastePreview, remote: true }] : []),
+  ])
+  function openPreview(i) {
+    everPreviewed = true
+    resultsScroll = resultsEl?.scrollTop ?? 0
+    previewIdx = i
+  }
+  async function closePreview() {
+    previewIdx = null
+    pastePreview = null
+    await tick() // the search DOM remounts before the scroll restore
+    if (resultsEl) resultsEl.scrollTop = resultsScroll
+  }
+  // The preview's primary action: same payloads the card tap used to send. A pasted
+  // or remote id that turned out local (or merged) logs the canonical LOCAL tune,
+  // with the fetched title standing in for the placeholder "#id".
+  function previewAction(item, data) {
+    const name = data?.name ?? item.r.name
+    const tune_type = data?.tune_type ?? item.r.tune_type
+    if (item.remote) {
+      // data present without is_local:false means the id resolved to a local tune
+      // (tunePreview response); no data (load failed) stays on the remote payload —
+      // the import op handles already-local ids server-side anyway.
+      return data && data.is_local !== false
+        ? pickDeep({ ...item.r, tune_id: data.tune_id ?? item.r.tune_id, name, tune_type })
+        : pickRemote({ ...item.r, name, tune_type })
+    }
+    return pickDeep({ ...item.r, name, tune_type })
+  }
 
   function autofocusIf(node, yes) {
     if (yes) node.focus()
@@ -116,6 +159,8 @@
     deepQuery = ''
     deepResults = []
     deepLoading = false
+    previewIdx = null
+    pastePreview = null
     resetThesession()
   }
   // After an add from the persistent pane, reset for the next tune (the composer clears the
@@ -125,14 +170,18 @@
   function afterAdd(added) {
     rememberQuery() // a query that led to a log is worth recalling later (spec 028)
     histPos = null
-    if (added === false || variant !== 'pane') return
-    reset()
+    if (added === false) return added
+    previewIdx = null
+    pastePreview = null
+    if (variant === 'pane') reset()
+    return added
   }
-  // Tap a result → log that catalog tune at the cursor. The full result card rides
-  // along as a third arg for callers that want the rich fields (incipit, on_list —
-  // the add pane); the live composer ignores it.
+  // The one-tap add (＋ rail / ⌘Enter / preview confirm): log that catalog tune at
+  // the cursor. The full result card rides along as a third arg for callers that
+  // want the rich fields (incipit, on_list — the add pane); the live composer
+  // ignores it. Returns onAdd's result so the preview knows a deferred add.
   function pickDeep(r) {
-    afterAdd(onAdd({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
+    return afterAdd(onAdd({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
   }
   // Log the typed text as an unlinked tune (the "as-is" escape lives here).
   function deepLogAsIs() {
@@ -143,8 +192,11 @@
   // Keyboard: with results showing, arrows walk the cards; with none (empty box), ArrowUp
   // recalls past searches (then keeps cycling until you type or commit). Esc closes the modal
   // (pane defers to App's global blur). Enter commits a recalled query to a real search, else
-  // logs the highlighted/top card, else as-is (like type-ahead).
+  // opens the PREVIEW of the highlighted/top card (Enter again there confirms — the fast path
+  // is Enter-Enter); ⌘/Ctrl+Enter adds it immediately, skipping the preview (the ＋ rail's
+  // keyboard twin). With no results, Enter falls through to as-is (like type-ahead).
   function deepKey(e) {
+    if (previewIdx != null) return // the preview owns the keys while it's open
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       const dir = e.key === 'ArrowDown' ? 1 : -1
       // ArrowUp on an empty box recalls past searches (even though an empty query browses
@@ -156,8 +208,11 @@
       if (variant === 'modal') { e.preventDefault(); onClose() }
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (hl >= 0 && deepResults[hl]) pickDeep(deepResults[hl])
-      else if (deepResults.length) pickDeep(deepResults[0])
+      const target = hl >= 0 && deepResults[hl] ? hl : deepResults.length ? 0 : -1
+      if (target >= 0) {
+        if (e.metaKey || e.ctrlKey) pickDeep(deepResults[target])
+        else openPreview(target)
+      }
       // Don't log a RECALLED query as-is while its search is still loading — only a query the
       // user actually typed (histPos == null) falls through to the as-is escape.
       else if (allowAsIs && histPos == null && deepQuery.trim()) deepLogAsIs()
@@ -179,16 +234,20 @@
     tsResults = r.filter((t) => !localIds.has(t.tune_id))
     tsSearching = false
   }
-  // Tap a remote result -> import (server-side, folded into the add op) + log linked at cursor.
-  // We know the title/type from the search, so the optimistic row shows linked immediately.
+  // Add a remote result -> import (server-side, folded into the add op) + log linked at
+  // cursor. We know the title/type from the search, so the optimistic row shows linked
+  // immediately. Returns onAdd's result so the preview knows a deferred add.
   function pickRemote(r) {
-    afterAdd(onAdd({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
+    return afterAdd(onAdd({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
   }
-  // "Paste a thesession.org URL or tune ID" -> same import-and-log path (title unknown yet).
+  // "Paste a thesession.org URL or tune ID" -> preview it first (you pasted an id blind —
+  // the preview fetches the title/notation so you confirm it's the right tune before the
+  // import). The preview's action then follows the normal import-and-add path.
   function pasteThesession() {
     const id = parseThesessionId(tsPasteUrl)
     if (id == null) { tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'; return }
-    afterAdd(onAdd({ thesession_id: id, name: `#${id}` }, `#${id}`))
+    pastePreview = { tune_id: id, name: `#${id}`, tune_type: null }
+    openPreview(deepResults.length + tsResults.length)
   }
 
   // Initial search: the modal always ran one on open (an empty query browses by
@@ -202,6 +261,18 @@
   })
 </script>
 
+{#if previewIdx != null && previewItems[previewIdx]}
+  <!-- Look before you log: the preview takes over the search's real estate (modal
+       screen or side pane alike); Back/Esc returns with the search state intact. -->
+  <TunePreview
+    {config}
+    items={previewItems}
+    index={previewIdx}
+    {actionLabel}
+    onAction={previewAction}
+    onClose={closePreview}
+  />
+{:else}
 {#if variant === 'modal'}
   <div class="deep-head">
     <span class="deep-title">{title}</span>
@@ -218,7 +289,7 @@
   bind:value={deepQuery}
   oninput={onDeepInput}
   onkeydown={deepKey}
-  use:autofocusIf={variant === 'modal'}
+  use:autofocusIf={variant === 'modal' && !everPreviewed}
 />
 <div class="deep-tabs">
   <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
@@ -251,7 +322,7 @@
 {#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
   <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
 {/if}
-<div class="deep-results" id="deep-results-list" role="listbox">
+<div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl}>
   {#if deepLoading && !deepResults.length}
     <p class="deep-empty">Searching…</p>
   {:else if !deepResults.length}
@@ -262,22 +333,27 @@
     {/if}
   {:else}
     {#each deepResults as r, di (r.tune_id)}
-      <button id="dres-{di}" class="deep-card" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} onclick={() => pickDeep(r)}>
-        <div class="deep-card-head">
-          <span class="deep-name">{r.name}</span>
-          <span class="deep-type">{r.tune_type || ''}</span>
-        </div>
-        <div class="deep-staff">
-          <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
-        </div>
-        <div class="deep-meta">
-          {#if r.abc_only}<span class="deep-badge">♪ notation</span>{/if}
-          {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
-          {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
-          {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
-          <span class="deep-books">{r.tunebook_count ?? 0} tunebooks</span>
-        </div>
-      </button>
+      <!-- Two targets: the body opens the preview (look before you log); the ＋ rail
+           adds in one tap for a tune you already recognize from the incipit. -->
+      <div id="dres-{di}" class="deep-card deep-card-split" class:hl={hl === di} class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} role="option" aria-selected={hl === di}>
+        <button class="deep-card-body" aria-label={`Preview ${r.name}`} onclick={() => openPreview(di)}>
+          <div class="deep-card-head">
+            <span class="deep-name">{r.name}</span>
+            <span class="deep-type">{r.tune_type || ''}</span>
+          </div>
+          <div class="deep-staff">
+            <Incipit {config} tuneId={r.tune_id} image={r.incipit_image} canRender={r.can_render} />
+          </div>
+          <div class="deep-meta">
+            {#if r.abc_only}<span class="deep-badge">♪ notation</span>{/if}
+            {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+            {#if r.in_session}<span class="deep-badge">in this session</span>{/if}
+            {#if r.played_here}<span class="deep-badge">played here {r.played_here}×</span>{/if}
+            <span class="deep-books">{r.tunebook_count ?? 0} tunebooks</span>
+          </div>
+        </button>
+        <button class="deep-quick" title="Add without previewing" aria-label={`Add ${r.name} without previewing`} onclick={() => pickDeep(r)}>＋</button>
+      </div>
     {/each}
   {/if}
 </div>
@@ -291,19 +367,22 @@
     {:else if !tsResults.length}
       <p class="deep-empty">No new tunes on thesession.org for “{deepQuery.trim()}”.</p>
     {:else}
-      {#each tsResults as r (r.tune_id)}
-        <button class="deep-card deep-remote-card" class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)} onclick={() => pickRemote(r)}>
-          <div class="deep-card-head">
-            <span class="deep-name">{r.name}</span>
-            <span class="deep-type">{r.tune_type || ''}</span>
-          </div>
-          <div class="deep-meta">
-            {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
-            {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
-            {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
-            {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
-          </div>
-        </button>
+      {#each tsResults as r, ri (r.tune_id)}
+        <div class="deep-card deep-card-split deep-remote-card" class:onlist={(dimOnList && r.on_list) || (dimInSession && r.in_session)}>
+          <button class="deep-card-body" aria-label={`Preview ${r.name}`} onclick={() => openPreview(deepResults.length + ri)}>
+            <div class="deep-card-head">
+              <span class="deep-name">{r.name}</span>
+              <span class="deep-type">{r.tune_type || ''}</span>
+            </div>
+            <div class="deep-meta">
+              {#if r.alias}<span class="deep-alias">“{r.alias}”</span>{/if}
+              {#if r.is_local}<span class="deep-badge">already in library</span>{/if}
+              {#if r.in_session}<span class="deep-badge star">★ in this session</span>{/if}
+              {#if r.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+            </div>
+          </button>
+          <button class="deep-quick" title="Add without previewing" aria-label={`Add ${r.name} without previewing`} onclick={() => pickRemote(r)}>＋</button>
+        </div>
       {/each}
     {/if}
     <!-- Direct link entry, revealed once you've extended to thesession.org. -->
@@ -316,4 +395,5 @@
     </div>
     {#if tsPasteError}<p class="deep-paste-error">{tsPasteError}</p>{/if}
   </div>
+{/if}
 {/if}
