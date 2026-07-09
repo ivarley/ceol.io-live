@@ -348,6 +348,28 @@
             <div class="empty-state">No sessions scheduled this week.</div>
         {% endif %}
     </div>
+
+    {% if in_progress_logs %}
+    <!-- In-Progress Logs Card -->
+    <div class="home-card">
+        <div class="home-card-header">
+            <span class="card-icon">&#9998;</span>
+            Continue Logging
+        </div>
+        {% for s in in_progress_logs %}
+        <div class="session-item">
+            <div class="session-date">
+                <div class="session-date-day">{{ s.date.strftime('%a') }}</div>
+                <div class="session-date-num">{{ s.date.day }}</div>
+            </div>
+            <div class="session-info">
+                <div class="session-name"><a href="/sessions/{{ s.path }}/{{ s.date }}">{{ s.name }}</a></div>
+                <div class="session-meta">{{ s.date.strftime('%A, %b %-d') }} &middot; edited {{ s.last_edit.strftime('%b %-d') }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 {% else %}

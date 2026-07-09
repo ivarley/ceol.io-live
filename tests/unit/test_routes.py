@@ -29,12 +29,15 @@ class TestHomeRoute:
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
-        # Authed home issues three queries in order: learning counts (fetchall),
-        # suggested tune (fetchone), then upcoming sessions (fetchall).
+        # Authed home issues four queries in order: learning counts (fetchall),
+        # suggested tune (fetchone), upcoming sessions (fetchall), then
+        # in-progress logs (fetchall).
         mock_cursor.fetchall.side_effect = [
             [("learning", 3), ("want to learn", 2)],  # learning counts
             [("Austin Session", "austin/session", 101,
               datetime(2023, 8, 15).date(), None, None)],  # upcoming sessions
+            [("Mueller Session", "austin/mueller", 102,
+              datetime(2023, 8, 10).date(), datetime(2023, 8, 12))],  # in-progress logs
         ]
         mock_cursor.fetchone.return_value = (1, "Cooley's", "reel", 9)  # suggested tune
 
@@ -43,6 +46,8 @@ class TestHomeRoute:
 
         assert response.status_code == 200
         assert b"Austin Session" in response.data
+        assert b"Continue Logging" in response.data
+        assert b"Mueller Session" in response.data
 
     @patch("web_routes.get_db_connection")
     def test_home_database_error(self, mock_get_conn, client, authenticated_user):

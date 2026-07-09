@@ -125,6 +125,36 @@ def home():
                 for row in upcoming_rows
             ]
 
+            # In-progress logs: instances the user edited in the last 30 days
+            # that aren't marked complete
+            cur.execute(
+                """
+                SELECT s.name, s.path, si.session_instance_id, si.date,
+                       MAX(sit.last_modified_date) AS last_edit
+                FROM session_instance_tune sit
+                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+                JOIN session s ON si.session_id = s.session_id
+                WHERE sit.last_modified_user_id = %s
+                  AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
+                  AND si.log_complete_date IS NULL
+                  AND si.is_cancelled = FALSE
+                GROUP BY s.name, s.path, si.session_instance_id, si.date
+                ORDER BY last_edit DESC
+                LIMIT 3
+                """,
+                (current_user.user_id,),
+            )
+            in_progress_logs = [
+                {
+                    "name": row[0],
+                    "path": row[1],
+                    "session_instance_id": row[2],
+                    "date": row[3],
+                    "last_edit": row[4],
+                }
+                for row in cur.fetchall()
+            ]
+
             cur.close()
             conn.close()
 
@@ -134,6 +164,7 @@ def home():
                 want_to_learn_count=want_to_learn_count,
                 suggested_tune=suggested_tune,
                 upcoming_sessions=upcoming_sessions,
+                in_progress_logs=in_progress_logs,
             )
         else:
             return render_template("home.html")
