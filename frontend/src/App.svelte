@@ -580,10 +580,12 @@
   // the filter is active (spec 029 §B: filter + selection compose).
   function rowClick(r, e) {
     if (selectMode) { toggleSelect(r, e); return }
-    if (searchMode) return
-    if (r._resolving) { if (!viewing) selectRow(r.session_instance_tune_id); return }
+    if (r._resolving) { if (canEdit) selectRow(r.session_instance_tune_id); return }
     if (r._temp || r._removing) return
-    viewing ? openDrawer(r) : selectRow(r.session_instance_tune_id)
+    // While filtering, a tap opens details (same as view mode) — filtering is
+    // exactly when you've hunted down a tune and want its info.
+    if (viewing || searchMode) { openDrawer(r); return }
+    selectRow(r.session_instance_tune_id)
   }
   // Arm the between-sets seam: the next tune starts a NEW set in this gap, before
   // the set whose first tune is `nextFirstId` (spec 021 §C; prototype "new-set-after").

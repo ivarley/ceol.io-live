@@ -143,7 +143,8 @@ orange (reusing `suggestionParts`). It is **orthogonal to view/edit mode** — a
 flag separate from `mode`, so it works in view, in edit, and on **completed** logs, and
 never calls `setMode`/reconnects the stream. While active, all editing chrome is hidden
 (`canEdit = !viewing && !searchMode` gates the seams/row-actions/composer) and the dock
-shows a single **"Done Searching"** button that clears the filter and re-hides the bar. All
+shows a single **"Done Searching"** button that clears the filter and re-hides the bar.
+Tapping a tune row while filtering opens the tune detail modal (same as view mode). All
 in `App.svelte`; no backend involvement (it filters the already-loaded `byId` records).
 
 **Desktop two-pane layout (spec 028).** At viewport widths ≥ 900px (`winW` via

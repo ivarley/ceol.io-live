@@ -57,13 +57,18 @@ test.describe("live logger (read-only smoke)", () => {
     await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("main.view-mode")).toBeVisible();
     await page.locator(".sidepane .deep-field").fill("maggie");
+    // spec 032: a card click opens the preview pane first; "＋ Log This Tune" is the pick
     await page.locator(".sidepane .deep-card").first().click();
+    const logIt = page.locator(".sidepane .pv-action");
+    await expect(logIt).toBeVisible();
+    await logIt.click();
     // read-only View: the pick must NOT log — it proposes the edit-mode switch instead
     await expect(page.locator(".viewadd")).toBeVisible();
     await page.locator(".viewadd .va-cancel").click();
     await expect(page.locator(".viewadd")).toHaveCount(0);
     await expect(page.locator("main.view-mode")).toBeVisible(); // still viewing, nothing added
-    // cancelling must not eat the search — the query and results survive
+    // cancelling must not eat the search — back out of the preview to the surviving results
+    await page.locator(".sidepane .pv-back").click();
     await expect(page.locator(".sidepane .deep-field")).toHaveValue("maggie");
     await expect(page.locator(".sidepane .deep-card").first()).toBeVisible();
   });
@@ -177,6 +182,21 @@ test.describe("live logger (read-only smoke)", () => {
     await page.locator(".searchbar-clear").click();
     await expect(page.locator(".searchbar-dock")).toHaveCount(0); // search mode fully dropped
     await expect(filter).toHaveValue("");
+  });
+
+  // Regression: while the pull-down filter is active, tapping a tune row must still open
+  // the tune detail modal (same as view mode) — rowClick used to swallow the tap entirely.
+  test("tapping a tune while filtering opens the detail modal", async ({ page }) => {
+    await page.goto(LIVE_URL);
+    await expect(page.locator(".tune-row").first()).toBeVisible({ timeout: 15_000 });
+    const filter = page.locator(".searchbar-input");
+    await filter.fill("maggie");
+    await expect(page.locator(".searchbar-dock")).toBeVisible(); // filter mode is on
+    // click a matched, catalog-linked tune (unlinked rows show a notice, not the modal)
+    const row = page.locator(".tune-row:not(.unlinked)", { has: page.locator(".search-hit") }).first();
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(page.locator("#tune-detail-modal")).toBeVisible({ timeout: 10_000 });
   });
 
   // spec 028: the Log button is disabled while the composer is empty. Read-only (never commits).
