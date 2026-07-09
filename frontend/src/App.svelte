@@ -11,7 +11,7 @@
   import {
     computeOrdered, segmentByBreaks, setsOf, tunesOf, pluralType, setLabel,
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
-    openSetMergeTarget, mergeStable, parseThesessionId,
+    openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor,
     rememberInHistory, historyStep,
   } from './logstate.js'
@@ -1959,15 +1959,23 @@
     addOptimistic({ name }, name)
   }
 
-  // Log a pasted thesession.org URL/id: the add op imports it server-side and resolves the
-  // canonical name (spec 026). The optimistic row shows "#id" until the SSE echo settles it.
-  function logThesessionInput() {
+  // A pasted thesession.org URL/id jumps into the deep-search PREVIEW of that tune
+  // (spec 032, replacing the old log-immediately behavior): look at the notation —
+  // landing on the URL's ?setting=/#setting when it has one — then "＋ Log This Tune".
+  // The search underneath re-seeds with the tune's real name (session alias first,
+  // via initialPreview.reseedId), so Back shows its results, not a URL search.
+  function previewThesessionInput() {
     const id = tsInputId
     if (id == null) return
-    tsInputId = null
-    clearEntry()
-    addOptimistic({ thesession_id: id, name: `#${id}` }, `#${id}`)
-    queueMicrotask(() => inputEl?.focus())
+    const preview = {
+      items: [{ r: { tune_id: id, name: `#${id}`, tune_type: null }, remote: true }],
+      index: 0,
+      settingId: parseThesessionSettingId(input),
+      reseedId: id,
+    }
+    if (wide && sidePaneEl) { sidePaneEl.openPreview(preview); return }
+    deepPreview = preview
+    deepOpen = true
   }
 
   // Tap a search result: add the linked tune directly, then stay hot for the next
@@ -1998,9 +2006,9 @@
       }
       return
     }
-    // Enter on a pasted thesession.org URL/id: import + log (even if a title pre-fetch is still
-    // pending — the intent is clear). Works offline too: the op just replays on reconnect.
-    if (tsInputId != null) { logThesessionInput(); return }
+    // Enter on a pasted thesession.org URL/id: open its preview (spec 032) — verify the
+    // tune/setting, then log from there. (The op still queues offline from the preview.)
+    if (tsInputId != null) { previewThesessionInput(); return }
     const q = input.trim()
     if (!q) return
     // Fast path: a UNIQUE exact match in the session's local vocabulary logs instantly.
@@ -2179,22 +2187,35 @@
     return s.length > 0 && /^[A-Ga-gxz0-9|^_=,'\/()\[\]:<>~-]+$/.test(s)
   }
 
-  const openDeep = () => { deepOpen = true } // TuneSearch seeds itself from the composer text
+  // Deep search entry: on DESKTOP the deep search IS the side pane (spec 032 — never a
+  // centered modal there): seed it from the composer and focus it. Mobile opens the
+  // full-screen modal, which seeds itself from the composer text.
+  const openDeep = () => {
+    if (wide && sidePaneEl) {
+      const q = input.trim()
+      if (q) sidePaneEl.seedSearch(q)
+      queueMicrotask(() => mainEl?.querySelector('.sidepane .deep-field')?.focus())
+      return
+    }
+    deepOpen = true
+  }
   const closeDeep = () => { deepOpen = false; deepPreview = null }
 
-  // 🔍 on a quick result (spec 032): open the deep search JUMPED straight into that
-  // tune's preview — the nav list is the quick results themselves, so the header reads
-  // "2 of 4" and ‹ › page the other matches; Back lands on the deep results for the
-  // typed text (TuneSearch seeds from the composer as usual).
+  // 🔍 on a quick result (spec 032): jump straight into that tune's preview — the nav
+  // list is the quick results themselves, so the header reads "2 of 4" and ‹ › page the
+  // other matches; Back lands on the deep search. Desktop: in the side pane; mobile:
+  // the full-screen modal (via initialPreview).
   let deepPreview = $state(null) // {items, index} passed to TuneSearch as initialPreview
   function openQuickPreview(vi) {
-    deepPreview = {
+    const preview = {
       items: visibleResults.map((t) => ({
         r: { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session: t.in_session_tune },
         remote: false,
       })),
       index: vi,
     }
+    if (wide && sidePaneEl) { sidePaneEl.openPreview(preview); return }
+    deepPreview = preview
     deepOpen = true
   }
 
@@ -3262,8 +3283,8 @@
       <ul class="results" role="listbox" id="composer-results" bind:clientHeight={resultsH}>
         {#if tsInputId != null}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-          <li class="result-ts" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logThesessionInput}>
-            <span class="r-name">＋ Add tune #{tsInputId} from thesession.org</span>
+          <li class="result-ts" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={previewThesessionInput}>
+            <span class="r-name">🔍 Tune #{tsInputId} from thesession.org…</span>
           </li>
         {/if}
         {#if showNext && nextSuggestion}

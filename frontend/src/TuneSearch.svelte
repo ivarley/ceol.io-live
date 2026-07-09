@@ -1,9 +1,9 @@
 <script>
   import { onDestroy, untrack, tick } from 'svelte'
-  import { deepSearch, thesessionSearch } from './client.js'
+  import { deepSearch, thesessionSearch, thesessionPreview, tunePreview } from './client.js'
   import Incipit from './Incipit.svelte'
   import TunePreview from './TunePreview.svelte'
-  import { pluralType, parseThesessionId, historyStep } from './logstate.js'
+  import { pluralType, parseThesessionId, parseThesessionSettingId, historyStep } from './logstate.js'
 
   // The deep-search body (spec 028): one shared component behind BOTH the mobile
   // full-screen modal and the desktop side pane, so local catalog search, the
@@ -51,10 +51,10 @@
   // --- preview (look before you log): tapping a card opens TunePreview in this same
   // real estate; the card's ＋ rail (or ⌘Enter) keeps the old one-tap add.
   let previewIdx = $state(null) // index into previewItems, or null (search showing)
-  let pastePreview = $state(null) // pseudo remote result for a pasted URL/id, previewed before adding
-  // Mounted straight into a preview (the composer's 🔍 on a quick result): the items are
-  // the QUICK results (so ‹ › page the other matches and the header reads "2 of 4");
-  // closing it falls back to the normal search, seeded from the composer text as usual.
+  // Mounted straight into a preview (the composer's 🔍 on a quick result, or a pasted
+  // thesession URL): a FROZEN items list — the composer's quick results ("2 of 4"
+  // pages the other matches) or the single pasted tune. Closing it falls back to the
+  // normal search underneath.
   let externalPreview = $state(untrack(() => initialPreview))
   let resultsEl = $state(null) // the .deep-results scroller (to restore scroll on back)
   let resultsScroll = 0
@@ -65,7 +65,6 @@
   const previewItems = $derived([
     ...deepResults.map((r) => ({ r, remote: false })),
     ...tsResults.map((r) => ({ r, remote: true })),
-    ...(pastePreview ? [{ r: pastePreview, remote: true }] : []),
   ])
   function openPreview(i) {
     everPreviewed = true
@@ -74,7 +73,6 @@
   }
   async function closePreview() {
     previewIdx = null
-    pastePreview = null
     await tick() // the search DOM remounts before the scroll restore
     if (resultsEl) resultsEl.scrollTop = resultsScroll
   }
@@ -160,6 +158,11 @@
     deepFilterOpen = false
     runSearch()
   }
+  // The filter panel's type droplist ('' = any type). Stays open for more tweaks.
+  function setDeepTypeSelect(v) {
+    deepType = v || null
+    runSearch()
+  }
 
   // Clear the search back to idle (query, results, remote state). Exported so the pane's
   // owner can also clear after a DEFERRED add completes — View mode's "switch to editing?"
@@ -171,7 +174,6 @@
     deepResults = []
     deepLoading = false
     previewIdx = null
-    pastePreview = null
     externalPreview = null
     resetThesession()
   }
@@ -184,7 +186,6 @@
     histPos = null
     if (added === false) return added
     previewIdx = null
-    pastePreview = null
     externalPreview = null
     if (variant === 'pane') reset()
     return added
@@ -257,19 +258,62 @@
     if (r.setting_id != null) payload.setting_id = r.setting_id // preview's chosen setting only
     return afterAdd(onAdd(payload, r.name, r))
   }
-  // "Paste a thesession.org URL or tune ID" -> preview it first (you pasted an id blind —
-  // the preview fetches the title/notation so you confirm it's the right tune before the
-  // import). The preview's action then follows the normal import-and-add path.
+  // "Paste a thesession.org URL or tune ID" -> jump straight into that tune's preview
+  // (a frozen single-item list; the real name/notation load there), honoring a
+  // ?setting=/#setting deep link — the pager lands on that setting and it counts as
+  // CHOSEN. Meanwhile the search re-seeds with the tune's name in the background so
+  // Back lands on relevant results, not the pasted URL.
   function pasteThesession() {
-    const id = parseThesessionId(tsPasteUrl)
+    const raw = tsPasteUrl
+    const id = parseThesessionId(raw)
     if (id == null) { tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'; return }
-    pastePreview = { tune_id: id, name: `#${id}`, tune_type: null }
-    openPreview(deepResults.length + tsResults.length)
+    everPreviewed = true
+    externalPreview = {
+      items: [{ r: { tune_id: id, name: `#${id}`, tune_type: null }, remote: true }],
+      index: 0,
+      settingId: parseThesessionSettingId(raw),
+    }
+    reseedFromThesession(id)
+  }
+  // Runtime entry points for the long-lived PANE instance — the desktop twins of
+  // mounting the modal with initialQuery / initialPreview (spec 032: on desktop the
+  // deep search IS the side pane; nothing opens in a centered modal).
+  export function seed(q) {
+    previewIdx = null
+    externalPreview = null
+    deepQuery = q
+    histPos = null
+    runSearch()
+  }
+  export function openExternalPreview(preview) {
+    everPreviewed = true
+    externalPreview = preview
+    if (preview?.reseedId != null) reseedFromThesession(preview.reseedId)
+  }
+  // Resolve a pasted tune's real name — the session's local alias when it has one —
+  // and run the search on it. Cache-backed (thesessionPreview / tunePreview), so the
+  // preview showing the same tune doesn't fetch twice. Offline or a fake id: the
+  // preview surfaces the error and the search stays as it was.
+  async function reseedFromThesession(id) {
+    try {
+      const info = await thesessionPreview(config, id)
+      const d = info.is_local ? await tunePreview(config, info.tune_id) : info
+      const q = ((info.is_local && d.aliases?.length ? d.aliases[0] : '') || d.name || '').trim()
+      if (q) {
+        deepQuery = q
+        histPos = null
+        runSearch()
+      }
+    } catch { /* keep whatever the search box had */ }
   }
 
   // Initial search: the modal always ran one on open (an empty query browses by
   // popularity/type); the pane stays idle until the user types.
   if (untrack(() => variant === 'modal' || initialQuery.trim())) runSearch()
+  // Mounted straight into a PASTED tune's preview (the composer's paste detection):
+  // re-seed the search with the tune's real name in the background, so backing out
+  // of the preview lands on its results rather than a search for the URL string.
+  if (untrack(() => initialPreview?.reseedId != null)) reseedFromThesession(untrack(() => initialPreview.reseedId))
 
   onDestroy(() => {
     if (deepTimer) clearTimeout(deepTimer)
@@ -279,15 +323,20 @@
 </script>
 
 {#if externalPreview}
-  <!-- Jumped open from a composer quick result's 🔍 — Back reveals the search. -->
-  <TunePreview
-    {config}
-    items={externalPreview.items}
-    index={externalPreview.index}
-    {actionLabel}
-    onAction={previewAction}
-    onClose={() => { externalPreview = null }}
-  />
+  <!-- Jumped open from a composer quick result's 🔍 or a pasted URL — Back reveals the
+       search. Keyed so a SECOND jump (while one is already open in the pane) remounts
+       the preview on the new items/index instead of mutating props under it. -->
+  {#key externalPreview}
+    <TunePreview
+      {config}
+      items={externalPreview.items}
+      index={externalPreview.index}
+      initialSettingId={externalPreview.settingId ?? null}
+      {actionLabel}
+      onAction={previewAction}
+      onClose={() => { externalPreview = null }}
+    />
+  {/key}
 {:else if previewIdx != null && previewItems[previewIdx]}
   <!-- Look before you log: the preview takes over the search's real estate (modal
        screen or side pane alike); Back/Esc returns with the search state intact. -->
@@ -306,22 +355,26 @@
     <button class="deep-done" onclick={onClose}>Done</button>
   </div>
 {/if}
-<input
-  class="deep-field"
-  role="combobox"
-  aria-expanded={deepResults.length > 0}
-  aria-controls="deep-results-list"
-  aria-activedescendant={hl >= 0 ? `dres-${hl}` : undefined}
-  placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
-  bind:value={deepQuery}
-  oninput={onDeepInput}
-  onkeydown={deepKey}
-  use:autofocusIf={variant === 'modal' && !everPreviewed}
-/>
-<div class="deep-tabs">
-  <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
-  <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>By ABC</button>
-  <button class="deep-tab deep-filter-tab" class:active={deepType || deepFilterOpen} title="Filter by type" aria-label="Filter by type" onclick={toggleDeepFilters}>
+<div class="deep-field-row">
+  <div class="deep-field-wrap">
+    <input
+      class="deep-field"
+      role="combobox"
+      aria-expanded={deepResults.length > 0}
+      aria-controls="deep-results-list"
+      aria-activedescendant={hl >= 0 ? `dres-${hl}` : undefined}
+      placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
+      bind:value={deepQuery}
+      oninput={onDeepInput}
+      onkeydown={deepKey}
+      use:autofocusIf={variant === 'modal' && !everPreviewed}
+    />
+    {#if deepQuery}
+      <!-- cancel out of search mode — same idle state an add leaves behind -->
+      <button class="deep-clear" title="Clear search" aria-label="Clear search" onclick={reset}>×</button>
+    {/if}
+  </div>
+  <button class="deep-filter-tab" class:active={deepFilterOpen || deepType != null || deepMode !== 'mixed'} title="Search filters" aria-label="Search filters" aria-expanded={deepFilterOpen} onclick={toggleDeepFilters}>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
       <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
@@ -331,14 +384,27 @@
   </button>
 </div>
 {#if deepFilterOpen}
-  <div class="deep-filters">
-    {#each DEEP_TYPES as t}
-      <button class="deep-type-chip" class:active={deepType === t} onclick={() => setDeepType(t)}>{pluralType(t)}</button>
-    {/each}
+  <div class="deep-filter-panel">
+    <div class="deep-filter-modes">
+      <button class="deep-tab" class:active={deepMode === 'name'} onclick={() => setDeepMode('name')}>By name</button>
+      <button class="deep-tab" class:active={deepMode === 'abc'} onclick={() => setDeepMode('abc')}>By ABC</button>
+    </div>
+    <select class="deep-type-select" aria-label="Tune type" value={deepType ?? ''} onchange={(e) => setDeepTypeSelect(e.currentTarget.value)}>
+      <option value="">Any tune type</option>
+      {#each DEEP_TYPES as t}
+        <option value={t}>{pluralType(t)}</option>
+      {/each}
+    </select>
   </div>
-{:else if deepType}
+{:else if deepType || deepMode !== 'mixed'}
+  <!-- active filters as pills while the panel is closed; tap a pill to clear it -->
   <div class="deep-filters">
-    <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
+    {#if deepMode !== 'mixed'}
+      <button class="filter-pill" onclick={() => setDeepMode(deepMode)}>{deepMode === 'abc' ? 'By ABC' : 'By name'} <span class="x">✕</span></button>
+    {/if}
+    {#if deepType}
+      <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
+    {/if}
   </div>
 {/if}
 <!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled

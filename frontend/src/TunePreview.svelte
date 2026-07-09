@@ -18,6 +18,7 @@
     config,
     items, // combined nav list: [{r: <search result>, remote: bool}]
     index = 0, // start position
+    initialSettingId = null, // a pasted URL's ?setting=/#setting deep link — land the pager there (counts as CHOSEN)
     actionLabel = '＋ Log This Tune',
     onAction, // (item, previewData) -> onAdd's return (false = deferred, stay open)
     onClose,
@@ -28,13 +29,28 @@
   let size = $state('incipit') // 'incipit' | 'full' (flips on content click)
   let setIdx = $state(0) // which setting the pager is on
   let pagerTouched = false // did the user WORK the settings pager? (gates "chosen setting")
+  // A URL-requested setting jumps the pager when (or as soon as) it appears — including
+  // after the backfill lands, since the deep-linked setting may not be imported yet.
+  let pendingSetting = untrack(() => initialSettingId)
   let data = $state(null) // tune-preview / thesession-preview response
   let loading = $state(true)
   let failed = $state(false)
   let image = $state(null)
   let imgPending = $state(false)
+  let backfilling = $state(false) // thesession settings backfill in flight (the › slot hints it)
+  let aliasesExpanded = $state(false) // "Also known as" is clamped to 3 lines until expanded
+  let aliasesClamped = $state(false) // does the collapsed block actually overflow?
+  let aliasesEl = $state(null)
   let loadSeq = 0
   let imgSeq = 0
+
+  // Show "More …" only when the clamped alias block truly overflows its 3 lines —
+  // re-measured whenever the aliases change (the backfill can grow them).
+  $effect(() => {
+    void data?.aliases
+    if (!aliasesEl || aliasesExpanded) return
+    aliasesClamped = aliasesEl.scrollHeight > aliasesEl.clientHeight + 1
+  })
 
   const item = $derived(items[idx])
   const settings = $derived(data?.settings || [])
@@ -42,7 +58,13 @@
   // remote = shown from thesession.org and NOT in our library (an import-on-add);
   // a remote id that resolved to a local tune loads the local preview instead.
   const isRemote = $derived(data ? data.is_local === false : !!item?.remote && !item?.r?.is_local)
-  const tsUrl = $derived(`https://thesession.org/tunes/${data?.tune_id ?? item?.r?.tune_id ?? ''}`)
+  // The thesession link deep-links the SETTING currently showing (same URL shape the
+  // rest of the app builds: ?setting=NNN#settingNNN).
+  const tsUrl = $derived.by(() => {
+    const base = `https://thesession.org/tunes/${data?.tune_id ?? item?.r?.tune_id ?? ''}`
+    const sid = setting?.setting_id
+    return sid != null ? `${base}?setting=${sid}#setting${sid}` : base
+  })
 
   function show(i) {
     idx = i
@@ -50,6 +72,8 @@
     size = 'incipit'
     setIdx = 0
     pagerTouched = false
+    aliasesExpanded = false
+    aliasesClamped = false
     data = null
     failed = false
     loading = true
@@ -63,13 +87,20 @@
     p.then((d) => {
       if (seq !== loadSeq) return
       data = d
-      // The pager OPENS on the session's preferred setting when it has one — the
-      // notation you see first is the one this session plays. Landing there isn't
-      // a "choice" (pagerTouched stays false), so logging changes nothing.
-      if (d.session_setting_id != null) {
-        const si = (d.settings || []).findIndex((s) => s.setting_id === d.session_setting_id)
-        if (si > 0) setIdx = si
+      // A pasted URL's setting wins (and COUNTS as chosen — the user pointed at it);
+      // otherwise the pager OPENS on the session's preferred setting — the notation
+      // you see first is the one this session plays. Landing there isn't a "choice"
+      // (pagerTouched stays false), so logging changes nothing.
+      let si = -1
+      if (pendingSetting != null) {
+        si = (d.settings || []).findIndex((s) => s.setting_id === pendingSetting)
+        if (si >= 0) { pagerTouched = true; pendingSetting = null }
+        // not found yet: keep pendingSetting — the backfill may bring it
       }
+      if (si < 0 && d.session_setting_id != null) {
+        si = (d.settings || []).findIndex((s) => s.setting_id === d.session_setting_id)
+      }
+      if (si > 0) setIdx = si
       loading = false
       loadImage()
       if (d.is_local !== false) backfillSettings(d, seq)
@@ -86,13 +117,17 @@
   // response is cached per id, so stepping away and back is instant). Offline or
   // thesession down: the local settings simply stand.
   async function backfillSettings(d, seq) {
+    backfilling = true
     let ts
     try {
       ts = await thesessionPreview(config, d.tune_id, true)
     } catch {
+      if (seq === loadSeq) backfilling = false
       return
     }
-    if (seq !== loadSeq || !ts?.settings?.length) return
+    if (seq !== loadSeq) return // another tune took over; its own backfill owns the flag
+    backfilling = false
+    if (!ts?.settings?.length) return
     const have = new Set((d.settings || []).map((s) => s.setting_id))
     const extra = ts.settings.filter((s) => !have.has(s.setting_id)).map((s) => ({ ...s, remote: true }))
     const aliases = [...(d.aliases || [])]
@@ -100,6 +135,20 @@
     if (!extra.length && aliases.length === (d.aliases || []).length) return
     const hadNone = !(d.settings || []).length
     data = { ...d, settings: [...(d.settings || []), ...extra], aliases }
+    // The URL-requested setting arrived with the backfill: jump there now (unless the
+    // user already started paging themselves).
+    if (pendingSetting != null && !pagerTouched) {
+      const si = data.settings.findIndex((s) => s.setting_id === pendingSetting)
+      pendingSetting = null // one shot — found or not
+      if (si >= 0) {
+        setIdx = si
+        pagerTouched = true
+        size = 'incipit'
+        if (mode === 'notes') loadImage()
+        return
+      }
+    }
+    pendingSetting = null
     if (hadNone && extra.length && mode === 'notes') loadImage() // was "no notation"; now renderable
   }
 
@@ -152,6 +201,7 @@
   function stepResult(d) {
     const n = idx + d
     if (n < 0 || n >= items.length) return
+    pendingSetting = null // a URL's setting deep-link only applies to the tune it named
     show(n)
   }
 
@@ -187,7 +237,9 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="pv" transition:fly={{ x: 32, duration: 180 }}>
+<!-- in: only (no exit animation): a jump from one preview straight to another
+     (pane 🔍 → paste) must swap instantly, not stack two flying previews -->
+<div class="pv" in:fly={{ x: 32, duration: 180 }}>
   <div class="pv-head">
     <button class="pv-back" onclick={onClose}>‹ Results</button>
     <span class="pv-count">{idx + 1} of {items.length}</span>
@@ -196,12 +248,7 @@
   </div>
 
   <div class="pv-body">
-    <div class="pv-name">{data?.name ?? item?.r?.name ?? ''}</div>
-    <div class="pv-sub">
-      {#if item?.r?.on_list}<span class="deep-badge star">★ on your list</span>{/if}
-      {#if item?.r?.in_session}<span class="deep-badge">in this session</span>{/if}
-      <span class="deep-type">{data?.tune_type ?? item?.r?.tune_type ?? ''}</span>
-    </div>
+    <div class="pv-name">{data?.name ?? item?.r?.name ?? ''}<span class="pv-type">{data?.tune_type ?? item?.r?.tune_type ?? ''}</span></div>
 
     {#if loading}
       <div class="pv-skel" style="width:60%"></div>
@@ -210,8 +257,45 @@
     {:else if failed}
       <p class="pv-fail">Couldn’t load tune details{item?.remote ? ' from thesession.org' : ''}. Check your connection and try again.</p>
     {:else}
-      {#if data.aliases?.length}
-        <div class="pv-aliases">Also known as: {data.aliases.join(', ')}</div>
+      <!-- The two facts that decide "is this the right tune?": our history with it
+           (gold — session identity) and how common it is (accent). "in this session"
+           was redundant with the play count, so it's gone. -->
+      <div class="pv-facts">
+        {#if data.played_here}
+          <span class="pv-fact-here">♪ Played here {data.played_here}×{data.dates?.length ? ` — last: ${data.dates.join(', ')}` : ''}</span>
+        {:else}
+          <span class="pv-fact-none">Not played here yet</span>
+        {/if}
+        <span class="pv-fact-pop"><b>{data.tunebook_count ?? 0}</b> tunebooks</span>
+        {#if item?.r?.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+      </div>
+
+      <!-- The alias region is ALWAYS a fixed two-line box while collapsed — reserved
+           even before/without aliases — so the backfill filling it in never shifts the
+           pager/notation below. Only "More …" (an explicit act) may move the layout. -->
+      <div class="pv-aliaswrap" class:fixed={!aliasesExpanded}>
+        {#if data.aliases?.length}
+          <div class="pv-aliases" class:clamped={!aliasesExpanded} bind:this={aliasesEl}>Also known as: {data.aliases.join(', ')}</div>
+          {#if aliasesClamped && !aliasesExpanded}
+            <button class="pv-more" onclick={() => (aliasesExpanded = true)}>More …</button>
+          {/if}
+        {/if}
+      </div>
+
+      {#if settings.length}
+        <!-- ABOVE the notation, so paging settings never shifts this bar around
+             (the notation below is the only thing that changes height) -->
+        <div class="pv-setnav">
+          <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}>‹</button>
+          <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.setting_id != null ? ` · #${setting.setting_id}` : ''}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ this session’s</span>{/if}</span>
+          <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label="Next setting" onclick={() => stepSetting(1)}>
+            {#if backfilling && setIdx >= settings.length - 1}
+              <!-- more settings may be on their way from thesession.org — the arrow
+                   (maybe) appears when the backfill lands -->
+              <span class="pv-spin" aria-hidden="true"></span>
+            {:else}›{/if}
+          </button>
+        </div>
       {/if}
 
       <div class="nb">
@@ -226,9 +310,13 @@
             <img src={`data:image/png;base64,${image}`} alt="notation ({size})" />
           </button>
         {:else if imgPending}
-          <div class="nb-pend"><span class="spinner"></span> rendering notation…</div>
+          <!-- still clickable mid-render: flip back to the cached incipit (or on to full)
+               without waiting; the abandoned render finishes + caches in the background -->
+          <button class="nb-pend" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}><span class="spinner"></span> rendering notation…</button>
+        {:else if setting}
+          <button class="nb-pend" title="Click to show {size === 'full' ? 'the incipit' : 'the full tune'}" onclick={flipSize}><span class="deep-noabc">♪ no notation image</span></button>
         {:else}
-          <div class="nb-pend"><span class="deep-noabc">♪ {setting ? 'no notation image' : 'no notation'}</span></div>
+          <div class="nb-pend"><span class="deep-noabc">♪ no notation</span></div>
         {/if}
         <div class="nb-foot">
           <button class="nb-tab" class:active={mode === 'notes'} onclick={() => setMode('notes')}>notes</button>
@@ -237,23 +325,9 @@
         </div>
       </div>
 
-      {#if settings.length}
-        <div class="pv-setnav">
-          <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}>‹</button>
-          <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ this session’s</span>{/if}</span>
-          <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label="Next setting" onclick={() => stepSetting(1)}>›</button>
-        </div>
-      {/if}
-
       {#if isRemote}
         <div class="pv-import-note">Not in the library yet — it will be imported from thesession.org when you add it.</div>
       {/if}
-
-      <div class="pv-stats">
-        <span><b>{data.tunebook_count ?? 0}</b> tunebooks{data.played_here
-          ? ` · played here ${data.played_here}× — last: ${data.dates.join(', ')}`
-          : ''}</span>
-      </div>
     {/if}
   </div>
 

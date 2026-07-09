@@ -18,12 +18,19 @@ new centered modal).
   keeps the old one-tap add for tunes you recognize from the incipit. (`.deep-card-split`,
   `.deep-card-body`, `.deep-quick`; the base `.deep-card` keeps its column layout for the add
   panes' picked-card.)
-- **Preview content** (`TunePreview.svelte`): name/type/badges; "Also known as" (session
-  aliases locally, thesession aliases remotely); a notation block with the **tune-detail
-  modal's anatomy** — content on top, `notes`/`abc` mode tabs bottom-left (notes default),
-  a `thesession` link bottom-right (no abc-tools), clicking the image or ABC flips
-  **incipit ⇄ full**; a **settings pager** (‹ › left/right-justified, "Setting n of N · key");
-  an import note for remote tunes; tunebook count + played-here stats.
+- **Preview content** (`TunePreview.svelte`), top to bottom: title with the tune type
+  inline next to it; a **facts line** carrying the two deciding signals in color —
+  session history in gold ("♪ Played here 2× — last: …", or a muted "Not played here
+  yet") and popularity with an accent-emphasized count ("**1300** tunebooks") — plus the
+  ★ on-your-list badge (the old "in this session" badge was redundant with the play
+  count and is gone); "Also known as" aliases (clamped to 3 lines with a "More …"
+  expander, re-measured when the backfill grows them); the **settings pager ABOVE the notation**
+  (‹ › left/right-justified, single-line ellipsized "Setting n of N · #id · key · ★ this
+  session's") so paging settings never moves the bar — only the notation below changes;
+  then the notation block with the **tune-detail modal's anatomy** — content on top,
+  `notes`/`abc` mode tabs bottom-left (notes default), a `thesession` link bottom-right
+  (no abc-tools), clicking the image or ABC flips **incipit ⇄ full**; and an import note
+  for remote tunes.
 - **Settings backfill:** the local catalog usually holds only the setting an import brought
   over, so after a local tune's preview opens, the client background-fetches
   `thesession-preview/<id>?full=1` (which skips the local short-circuit) and appends the
@@ -35,13 +42,21 @@ new centered modal).
   results, then remote) so candidates can be compared without bouncing back. Back/Esc returns
   with query, results, and scroll intact.
 - **🔍 on composer quick results:** each type-ahead row on the log page carries a magnifier
-  on its far right; tapping it opens the deep-search modal JUMPED straight into that tune's
-  preview. The preview's nav list is the quick results themselves, so the header reads
-  "3 of 8" for the 3rd match and ‹ › page the other matches; "‹ Results" lands on the normal
-  deep-search results seeded from the composer text (no keyboard re-autofocus on the way
-  back). Implemented as a TuneSearch `initialPreview={items, index}` prop (App builds the
-  items from `visibleResults`); logging from the jumped preview follows the same
-  `previewAction → onAdd → close modal + log at cursor` path.
+  on its far right; tapping it jumps straight into that tune's preview. The preview's nav
+  list is the quick results themselves, so the header reads "3 of 8" for the 3rd match and
+  ‹ › page the other matches; "‹ Results" lands on the normal deep-search results seeded
+  from the composer text (no keyboard re-autofocus on the way back). Logging from the
+  jumped preview follows the same `previewAction → onAdd → log at cursor` path.
+- **Desktop routing — the deep search IS the side pane; NOTHING opens in a centered
+  modal.** On wide screens (≥900px) every deep-search entry point routes to the pane:
+  the composer's "🔍 Search …" row seeds the pane's search from the composer text and
+  focuses it; the quick-result 🔍 and the paste-URL flows open their preview in the pane
+  (`SidePane.seedSearch`/`openPreview` → TuneSearch's runtime `seed`/`openExternalPreview`
+  exports). Mobile keeps the full-screen modal, which gets the same jumps via the
+  `initialPreview={items, index, settingId?, reseedId?}` mount prop. A second jump while a
+  pane preview is already open remounts it (`{#key externalPreview}` — otherwise the new
+  items mutate under the old component's index), and TunePreview animates `in:` only, so a
+  swap replaces instantly instead of stacking two flying previews.
 - **Keyboard (desktop pane):** ↑/↓ walk cards (unchanged), **Enter opens the preview** (was:
   add immediately), Enter again confirms — the fast path is Enter-Enter; **⌘/Ctrl+Enter** adds
   skipping the preview (the ＋ rail's keyboard twin); ←/→ step results in the preview; Esc backs
@@ -49,9 +64,40 @@ new centered modal).
 - **Confirm:** one primary action, context-labeled — "＋ Log This Tune" (live logger) /
   "＋ Add This Tune" (both add panes, which then continue to their configure phase). A
   confirmed add **clears the search** (query + results), same end state as the composer.
-- **Paste-a-URL** now routes through the preview (confirm the fetched title/notation before
-  the import) instead of logging blind; the preview's confirm sends the same
-  `add_tune{thesession_id}` payload as before.
+- **Paste-a-URL** (composer paste-detect AND the deep-search paste field) jumps straight
+  into that tune's preview instead of logging blind. A `?setting=`/`#setting` deep link in
+  the URL lands the pager on that setting and **counts as chosen** (overriding the
+  session-setting landing); it survives the backfill when the setting isn't imported yet
+  (`TunePreview initialSettingId` / `pendingSetting`). Meanwhile the search underneath
+  re-seeds with the tune's REAL name — the session's local alias first — via
+  `reseedFromThesession` (cache-backed, no double fetch), so Back lands on its results,
+  not a URL-string search. The preview's confirm sends the same `add_tune{thesession_id}`
+  payload as before (offline still queues).
+- **Setting id always visible + always saved:** the pager reads "Setting 2 of 4 · #13030 ·
+  Ddor" and the `thesession` link deep-links the setting currently showing
+  (`?setting=NNN#settingNNN`). `session_tune.setting_id` is ALWAYS populated — the tune's
+  default (lowest setting_id) when nothing was chosen — on every enrollment path
+  (`_enroll_session_tune`, `add_session_tune`, `insert_session_instance_tune`, shared
+  `default_setting_id` helper) plus a backfill for existing rows
+  (`schema/032_default_session_tune_setting.sql`). Consequence for precedence: "session
+  already has an override" now means a NON-default setting — an auto-filled (or
+  explicitly-default) value is replaced by a chosen setting; only a non-default preference
+  pushes later choices down to per-row overrides.
+- **Toggle stays live mid-render:** the "rendering notation…" spinner (and the
+  no-image state) are buttons — clicking mid-fetch flips incipit ⇄ full immediately
+  (imgSeq guards the stale response; the abandoned render still finishes and caches).
+- **Search polish:** the desktop pane widened to 440px (log column absorbs the
+  difference); an **× inside the search field's right edge** cancels out of search mode
+  (same `reset()` an add performs); and while the settings **backfill is in flight**, the
+  pager's › slot shows a subtle spinner that becomes the arrow if/when more settings
+  land (`backfilling` flag around the fetch, seq-guarded; a failed backfill just
+  restores the disabled arrow).
+- **Filter layout:** the filters toggle sits to the RIGHT of the search input (same
+  row); the expandable panel holds the By name / By ABC mode buttons and a styled
+  **tune-type droplist** (replacing the chip grid). With the panel closed, active
+  filters — mode AND type — show as clearable ✕ pills. The mobile deep modal starts
+  **below the fixed app header** (top: 42px + safe-area, z-index under the header) so
+  Done never overlaps the hamburger.
 - **Render-on-demand:** an incipit/full image not yet cached fires a render request and shows
   a spinner; pending renders live in a **module-level registry in `client.js`** keyed
   `settingId:kind`, so the spinner survives navigating to another setting/result and back and

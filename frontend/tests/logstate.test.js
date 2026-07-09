@@ -3,7 +3,7 @@ import {
   computeOrdered, segmentByBreaks, setsOf, tunesOf,
   pluralType, setLabel, maxPos, cursorPos, remapAnchors,
   normName, normAbc, stripThe, openSetMergeTarget, mergeStable,
-  computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId,
+  computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId, parseThesessionSettingId,
   rememberInHistory, historyStep,
 } from '../src/logstate.js'
 
@@ -318,6 +318,17 @@ describe('parseThesessionId', () => {
     expect(parseThesessionId('Cooley’s')).toBeNull()
     expect(parseThesessionId('')).toBeNull()
     expect(parseThesessionId(null)).toBeNull()
+  })
+})
+
+describe('parseThesessionSettingId', () => {
+  it('extracts the setting deep-link from a URL (either form), else null', () => {
+    expect(parseThesessionSettingId('https://thesession.org/tunes/1716#setting15143')).toBe(15143)
+    expect(parseThesessionSettingId('https://thesession.org/tunes/1716?setting=15143')).toBe(15143)
+    expect(parseThesessionSettingId('https://thesession.org/tunes/1716?setting=15143#setting15143')).toBe(15143)
+    expect(parseThesessionSettingId('https://thesession.org/tunes/1716')).toBeNull()
+    expect(parseThesessionSettingId('1716')).toBeNull() // a bare id carries no setting
+    expect(parseThesessionSettingId(null)).toBeNull()
   })
 })
 

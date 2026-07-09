@@ -854,42 +854,61 @@ main {
 
 /* ---------- deep catalog search modal (§D) ---------- */
 .deep-modal {
-  position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 640px; z-index: 100;
+  /* starts just below the fixed .appbar (logo + hamburger stay visible/clickable) and
+     COVERS the session-instance header — not needed while searching */
+  position: fixed; top: calc(42px + env(safe-area-inset-top)); bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 640px; z-index: 35; /* above .topnav (30), below .appbar (40) */
   background: var(--bg); display: flex; flex-direction: column;
 }
 .deep-head {
   display: flex; gap: 8px; align-items: center; justify-content: space-between;
-  padding: calc(10px + env(safe-area-inset-top)) 14px 8px; background: var(--bg);
+  padding: 10px 14px 8px; background: var(--bg);
 }
 .deep-title { font-size: 16px; font-weight: 700; color: var(--text); }
 .deep-done {
   flex: none; font: inherit; font-weight: 600; padding: 8px 14px;
   background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer;
 }
+/* field row: the input (with its ×) + the filters toggle on its right */
+.deep-field-row { display: flex; gap: 8px; align-items: stretch; margin: 0 14px; }
+.deep-field-wrap { position: relative; display: flex; flex: 1; min-width: 0; }
 .deep-field {
-  margin: 0 14px; font: inherit; font-size: 16px; padding: 11px 12px;
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 11px 36px 11px 12px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
 }
-.deep-tabs {
-  display: flex; gap: 6px; align-items: center; padding: 10px 14px 0;
+/* × inside the field's right edge: cancel out of search mode (reset to idle) */
+.deep-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer;
+  background: transparent; color: var(--muted); font-size: 19px; line-height: 1; padding: 0;
 }
+.deep-clear:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .deep-tab {
   font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); color: var(--muted);
 }
 .deep-tab.active { background: var(--accent); border-color: var(--accent); color: #04122b; }
-.deep-filter-tab { margin-left: auto; display: inline-flex; align-items: center; padding: 7px 10px; }
-.deep-filter-tab.active { color: var(--accent); border-color: var(--accent); background: transparent; }
+/* the filters toggle sits to the input's right, sized to match it */
+.deep-filter-tab {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 12px; font: inherit; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--muted);
+}
+.deep-filter-tab.active { color: var(--accent); border-color: var(--accent); }
+/* the expandable filter section: name/abc mode + a tune-type droplist */
+.deep-filter-panel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px 0; }
+.deep-filter-modes { display: flex; gap: 6px; }
+.deep-type-select {
+  flex: 1; min-width: 150px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 8px 34px 8px 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239a9aa3' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
 .deep-filters {
   display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0;
 }
-.deep-type-chip {
-  font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
-  padding: 6px 12px; border-radius: 14px; cursor: pointer;
-  background: var(--panel); border: 1px solid var(--border); color: var(--muted);
-}
-.deep-type-chip.active { background: var(--accent); border-color: var(--accent); color: #04122b; }
 .deep-filters .filter-pill {
   font: inherit; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 14px; cursor: pointer;
   background: var(--accent); border: none; color: #04122b;
@@ -958,13 +977,43 @@ main {
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text);
 }
 .pv-step:disabled { opacity: 0.35; cursor: default; }
+/* subtle in-flight hint in the › slot while the thesession settings backfill runs */
+.pv-step .pv-spin {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--muted);
+  animation: spin 0.7s linear infinite; vertical-align: middle;
+}
 .pv-body {
   flex: 1; overflow-y: auto; min-height: 0;
   padding: 6px 14px 14px; display: flex; flex-direction: column; gap: 12px;
 }
 .pv-name { font-size: 21px; font-weight: 700; line-height: 1.2; color: var(--text); }
-.pv-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.pv-aliases { font-size: 13px; color: var(--muted); font-style: italic; }
+.pv-name .pv-type {
+  margin-left: 9px; font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 2px;
+}
+/* the deciding facts, right under the title: session history (gold — same voice as the
+   ★ badges) and popularity (accent-emphasized count) */
+.pv-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 13px; }
+.pv-fact-here { color: #e8d28a; font-weight: 600; }
+.pv-fact-none { color: var(--muted); font-style: italic; }
+.pv-fact-pop { color: var(--muted); }
+.pv-fact-pop b { color: var(--accent); font-weight: 700; }
+.pv-aliaswrap { position: relative; }
+/* collapsed: a RESERVED two-line box (13px × 1.4 × 2), whether aliases have arrived
+   or not — the backfill filling it in can't shift the layout below */
+.pv-aliaswrap.fixed { height: 37px; overflow: hidden; }
+.pv-aliases { font-size: 13px; line-height: 1.4; color: var(--muted); font-style: italic; }
+/* capped at 2 lines until "More …" expands it */
+.pv-aliases.clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* "More …" rides the END of the third line: overlaid bottom-right with a fade so the
+   cut text disappears under it instead of the link wrapping to its own line */
+.pv-more {
+  position: absolute; right: 0; bottom: 0;
+  border: none; cursor: pointer; padding: 0 0 0 30px;
+  background: linear-gradient(to right, transparent, var(--bg) 22px);
+  font: inherit; font-size: 13px; line-height: 1.4; font-weight: 600; color: var(--accent);
+}
 .pv-skel { height: 14px; border-radius: 6px; background: var(--panel); animation: pvpulse 1.1s ease-in-out infinite; }
 @keyframes pvpulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .pv-skel { animation: none; } }
@@ -982,7 +1031,9 @@ main {
 .nb-pend {
   min-height: 70px; display: flex; align-items: center; justify-content: center; gap: 9px;
   background: #fbfbf6; border-radius: 6px; color: #9a8f6a; font-size: 13px; font-style: italic;
+  font-family: inherit; border: none; width: 100%;
 }
+button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipit⇄full toggle */
 .nb-abc {
   display: block; width: 100%; margin: 0; padding: 9px 11px; cursor: pointer; text-align: left;
   background: var(--bg); border: none; border-radius: 6px;
@@ -999,17 +1050,20 @@ main {
 .nb-tab:disabled { opacity: 0.4; cursor: default; }
 .nb-ext { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; padding-bottom: 4px; }
 
-/* settings pager: arrows left/right justified under the notation block */
-.pv-setnav { display: flex; align-items: center; justify-content: space-between; }
-.pv-setlabel { font-size: 12px; color: var(--muted); }
+/* settings pager: arrows left/right justified, ABOVE the notation so paging never
+   moves it; the one-line label ellipsizes rather than wrapping (a wrap would bump
+   the notation below by a line) */
+.pv-setnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pv-setlabel {
+  font-size: 12px; color: var(--muted); flex: 1; min-width: 0; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* the session's preferred setting — same visual voice as the ★ badges on cards */
 .pv-sesset { color: #e8d28a; font-weight: 600; }
 .pv-import-note {
   font-size: 12px; padding: 8px 11px; border-radius: 8px;
   background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.5); color: #bcd6f7;
 }
-.pv-stats { font-size: 13px; color: var(--muted); }
-.pv-stats b { color: var(--text); font-weight: 600; }
 .pv-foot { flex: none; padding: 10px 14px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--bg); }
 .pv-action {
   width: 100%; font: inherit; font-size: 16px; font-weight: 700; padding: 13px; cursor: pointer;
@@ -1144,7 +1198,7 @@ main.wide {
   max-width: 1200px;
   display: grid;
   column-gap: 16px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 440px; /* pane widened (the preview lives here now) */
   grid-template-rows: auto auto 1fr auto auto auto;
   grid-template-areas:
     "top top"

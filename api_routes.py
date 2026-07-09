@@ -396,6 +396,20 @@ def reconcile_break_records(cur, session_instance_id, set_position_lists, audit_
     return len(sets)
 
 
+def default_setting_id(cur, tune_id):
+    """The tune's default setting (lowest setting_id), or None if it has none.
+
+    session_tune.setting_id is always populated with this on enrollment (spec 032:
+    "there is always a setting id, even if it's just the default") so the setting in
+    use is visible/linkable everywhere. A session-level setting equal to the default
+    is treated as replaceable by an explicitly chosen one (see _apply_chosen_setting)."""
+    if not tune_id:
+        return None
+    cur.execute("SELECT setting_id FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1", (tune_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def bytea_to_base64(data):
     """
     Convert PostgreSQL bytea data to base64 string.
@@ -465,7 +479,7 @@ def insert_session_instance_tune(cur, session_id, date, tune_id, setting_id, nam
             VALUES (%s, %s, %s, NULL, NULL)
             ON CONFLICT (session_id, tune_id) DO NOTHING
             """,
-            (session_id, tune_id, setting_id),
+            (session_id, tune_id, setting_id if setting_id is not None else default_setting_id(cur, tune_id)),
         )
 
     # Find the current last record in this instance (could be a tune or a break).
@@ -2021,6 +2035,11 @@ def add_session_tune(session_path):
             cur.close()
             conn.close()
             return jsonify({"success": False, "error": "Tune already exists in this session"}), 409
+
+        # No specific setting requested -> store the tune's default so the setting in
+        # use is always visible/linkable (spec 032).
+        if parsed_setting_id is None:
+            parsed_setting_id = default_setting_id(cur, tune_id)
 
         # Insert into session_tune
         cur.execute(

@@ -50,7 +50,7 @@ from database import (
 from auth import create_session
 from api_routes import (
     api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
-    match_tune_core, _fetch_thesession_tune, TuneImportError,
+    match_tune_core, _fetch_thesession_tune, TuneImportError, default_setting_id,
 )
 from fractional_indexing import generate_append_position, generate_position_between
 
@@ -342,7 +342,9 @@ def _corroborate(cur, session_instance_id, target_id, data, user_id):
 
 def _enroll_session_tune(cur, session_id, tune_id, user_id):
     """Enroll a linked tune into the session's repertoire (idempotent), mirroring the old
-    logger's save path (api_routes.py:7405). No-op for unlinked/break rows and merged tunes."""
+    logger's save path (api_routes.py:7405). No-op for unlinked/break rows and merged tunes.
+    The row always carries a setting_id — the tune's default when nothing was chosen
+    (spec 032) — so the setting in use is visible/linkable everywhere."""
     if not tune_id:
         return
     # Skip merged/redirect tunes (old logger refuses to add these): only canonical tunes.
@@ -351,10 +353,10 @@ def _enroll_session_tune(cur, session_id, tune_id, user_id):
     if not row or row[0] is not None:
         return
     cur.execute(
-        """INSERT INTO session_tune (session_id, tune_id, created_by_user_id)
-           VALUES (%s, %s, %s)
+        """INSERT INTO session_tune (session_id, tune_id, setting_id, created_by_user_id)
+           VALUES (%s, %s, %s, %s)
            ON CONFLICT (session_id, tune_id) DO NOTHING""",
-        (session_id, tune_id, user_id),
+        (session_id, tune_id, default_setting_id(cur, tune_id), user_id),
     )
     if cur.rowcount > 0:
         save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id)
@@ -474,10 +476,11 @@ def _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_
 
 
 def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_id):
-    """Where an explicitly chosen setting lands (spec 032): if the session has no
-    setting override yet, it becomes the session's preferred setting
-    (session_tune.setting_id); if the session already prefers a DIFFERENT setting,
-    it marks this logged row only (session_instance_tune.setting_override).
+    """Where an explicitly chosen setting lands (spec 032): if the session has no REAL
+    setting preference yet — setting_id NULL or still the tune's default, which every
+    enrollment now auto-fills — it becomes the session's preferred setting
+    (session_tune.setting_id); if the session already prefers a different, non-default
+    setting, it marks this logged row only (session_instance_tune.setting_override).
     Returns 'session' | 'instance' | 'already' for the op response."""
     existing = None
     row = None
@@ -487,14 +490,15 @@ def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_
         existing = row[0] if row else None
     if existing == setting_id:
         return "already"
-    if row is not None and existing is None:
+    if row is not None and (existing is None or existing == default_setting_id(cur, tune_id)):
         save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=user_id)
         cur.execute(
             "UPDATE session_tune SET setting_id = %s, last_modified_user_id = %s WHERE session_id = %s AND tune_id = %s",
             (setting_id, user_id, session_id, tune_id),
         )
         return "session"
-    # The session prefers another setting (or the tune never enrolled): this row only.
+    # The session prefers another (non-default) setting, or the tune never enrolled:
+    # this row only.
     save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
     cur.execute(
         "UPDATE session_instance_tune SET setting_override = %s, last_modified_user_id = %s WHERE session_instance_tune_id = %s",

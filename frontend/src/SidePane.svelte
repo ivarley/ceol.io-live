@@ -17,14 +17,25 @@
   } = $props()
 
   let searchEl // the TuneSearch instance
+  let asideEl // the pane itself (the scroller)
   // Clear the pane search — called by App after a deferred (confirmed) add, so it ends in
   // the same idle state a direct edit-mode add leaves behind.
   export function resetSearch() {
     searchEl?.reset()
   }
+  // Desktop routing (spec 032): the composer's "Search …" seeds THIS pane, and the
+  // 🔍 / paste-URL jumps open their preview HERE — never in a centered modal.
+  export function seedSearch(q) {
+    searchEl?.seed(q)
+    if (asideEl) asideEl.scrollTop = 0
+  }
+  export function openPreview(preview) {
+    searchEl?.openExternalPreview(preview)
+    if (asideEl) asideEl.scrollTop = 0
+  }
 </script>
 
-<aside class="sidepane">
+<aside class="sidepane" bind:this={asideEl}>
   {#if suggestion}
     <div class="pane-suggest">
       <div class="ps-top">
