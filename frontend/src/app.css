@@ -345,6 +345,14 @@ main {
 .row-actions button:hover { border-color: var(--accent); }
 .row-actions button.danger { color: #e0594b; }
 .row-actions button.danger:hover { border-color: #e0594b; }
+@media (max-width: 480px) {
+  /* phone: five buttons must share one line — shrink and let them flex to fill */
+  .row-actions { gap: 4px; }
+  .row-actions button {
+    flex: 1 1 auto; min-width: 0; white-space: nowrap; text-align: center;
+    font-size: 12px; padding: 7px 4px;
+  }
+}
 
 /* ---------- reconnect reconciliation review (§G) ---------- */
 .reconcile-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 100; }
