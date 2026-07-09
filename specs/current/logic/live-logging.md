@@ -165,7 +165,10 @@ from the header first).
 
 **Deep-search preview (spec 032).** Tapping a result card no longer adds immediately — it
 opens **`TunePreview.svelte`** in the same real estate (TuneSearch swaps its content; search
-state survives underneath), showing full notation with the tune-detail modal's anatomy
+state survives underneath), showing full notation with the tune-detail modal's anatomy.
+The composer's quick results each carry a **🔍** that opens the deep modal jumped straight
+into that tune's preview — the nav list is the quick results ("3 of 8"), Back lands on the
+seeded deep search (TuneSearch `initialPreview` prop). The preview shows notation
 (notes/abc tabs + thesession link; clicking the content flips incipit ⇄ full), a settings
 pager, session aliases, and stats. Header ‹ › steppers page through the whole result list
 (local, then remote) to compare candidates. A **＋ rail** on each card (or ⌘/Ctrl+Enter)
@@ -174,7 +177,13 @@ out. The confirm button is context-labeled ("＋ Log This Tune" / "＋ Add This 
 confirmed add clears the search. Remote (thesession.org) results preview via a fetch proxy
 and render notation ephemerally — nothing imports until confirmed; the paste-a-URL path
 also routes through the preview. Pending notation renders live in a module-level registry
-in `client.js`, so a spinner survives navigating away and back.
+in `client.js`, so a spinner survives navigating away and back. A local tune's preview
+backfills the FULL thesession settings list in the background (`thesession-preview?full=1`).
+Working the pager marks that setting as CHOSEN: the confirm sends `setting_id` on the
+`add_tune` op, which imports the setting if needed and applies it — the session's preferred
+setting (`session_tune.setting_id`) when there's no override yet, else this row only
+(`setting_override`); corroborated duplicates still apply it, and an import failure never
+fails the add (`setting_failed` ack field).
 
 **Keyboard nav (spec 028).** A window `keydown` handler (`onWinKey`) plus per-field handlers
 give three behaviors keyed off *what has focus*:

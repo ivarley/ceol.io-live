@@ -27,6 +27,7 @@
   let mode = $state('notes') // 'notes' | 'abc'
   let size = $state('incipit') // 'incipit' | 'full' (flips on content click)
   let setIdx = $state(0) // which setting the pager is on
+  let pagerTouched = false // did the user WORK the settings pager? (gates "chosen setting")
   let data = $state(null) // tune-preview / thesession-preview response
   let loading = $state(true)
   let failed = $state(false)
@@ -48,6 +49,7 @@
     mode = 'notes'
     size = 'incipit'
     setIdx = 0
+    pagerTouched = false
     data = null
     failed = false
     loading = true
@@ -61,13 +63,44 @@
     p.then((d) => {
       if (seq !== loadSeq) return
       data = d
+      // The pager OPENS on the session's preferred setting when it has one — the
+      // notation you see first is the one this session plays. Landing there isn't
+      // a "choice" (pagerTouched stays false), so logging changes nothing.
+      if (d.session_setting_id != null) {
+        const si = (d.settings || []).findIndex((s) => s.setting_id === d.session_setting_id)
+        if (si > 0) setIdx = si
+      }
       loading = false
       loadImage()
+      if (d.is_local !== false) backfillSettings(d, seq)
     }).catch(() => {
       if (seq !== loadSeq) return
       failed = true
       loading = false
     })
+  }
+
+  // The local catalog usually holds only the setting(s) an import brought over;
+  // thesession.org has them all. Backfill the rest in the BACKGROUND — the local
+  // setting shows instantly and the pager grows when the full list lands (the
+  // response is cached per id, so stepping away and back is instant). Offline or
+  // thesession down: the local settings simply stand.
+  async function backfillSettings(d, seq) {
+    let ts
+    try {
+      ts = await thesessionPreview(config, d.tune_id, true)
+    } catch {
+      return
+    }
+    if (seq !== loadSeq || !ts?.settings?.length) return
+    const have = new Set((d.settings || []).map((s) => s.setting_id))
+    const extra = ts.settings.filter((s) => !have.has(s.setting_id)).map((s) => ({ ...s, remote: true }))
+    const aliases = [...(d.aliases || [])]
+    for (const a of ts.aliases || []) if (!aliases.includes(a)) aliases.push(a)
+    if (!extra.length && aliases.length === (d.aliases || []).length) return
+    const hadNone = !(d.settings || []).length
+    data = { ...d, settings: [...(d.settings || []), ...extra], aliases }
+    if (hadNone && extra.length && mode === 'notes') loadImage() // was "no notation"; now renderable
   }
 
   // Fetch the notation image for the current tune/setting/size. Cached incipits
@@ -86,7 +119,9 @@
     const seq = ++imgSeq
     image = null
     imgPending = true
-    const p = d.is_local === false
+    // A backfilled setting (s.remote) has no tune_setting row even though the TUNE is
+    // local — it renders ephemerally, same as a fully remote tune's settings.
+    const p = s.remote || d.is_local === false
       ? renderRemoteAbc(config, `ts:${d.tune_id}:${s.setting_id ?? setIdx}:${size}`,
           { abc: s.abc, key: s.key, tune_type: d.tune_type, kind: size })
       : settingImage(config, s.setting_id, size)
@@ -110,6 +145,7 @@
     const n = setIdx + d
     if (!settings.length || n < 0 || n >= settings.length) return
     setIdx = n
+    pagerTouched = true
     size = 'incipit'
     if (mode === 'notes') loadImage()
   }
@@ -120,7 +156,10 @@
   }
 
   function doAction() {
-    onAction(items[idx], data)
+    // A setting counts as CHOSEN only if the user worked the pager on this tune —
+    // merely opening the preview (which lands on setting 1) expresses no preference.
+    const chosen = pagerTouched && setting?.setting_id != null ? setting.setting_id : null
+    onAction(items[idx], data, chosen)
   }
 
   // Keys: ← → compare candidates, Enter confirms, Esc backs out to the results.
@@ -201,7 +240,7 @@
       {#if settings.length}
         <div class="pv-setnav">
           <button class="pv-step" disabled={setIdx === 0} aria-label="Previous setting" onclick={() => stepSetting(-1)}>‹</button>
-          <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.key ? ` · ${setting.key}` : ''}</span>
+          <span class="pv-setlabel">Setting {setIdx + 1} of {settings.length}{setting?.key ? ` · ${setting.key}` : ''}{#if setting?.setting_id != null && setting.setting_id === data.session_setting_id}<span class="pv-sesset"> · ★ this session’s</span>{/if}</span>
           <button class="pv-step" disabled={setIdx >= settings.length - 1} aria-label="Next setting" onclick={() => stepSetting(1)}>›</button>
         </div>
       {/if}

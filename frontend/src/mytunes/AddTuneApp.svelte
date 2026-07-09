@@ -95,6 +95,12 @@
       can_render: result?.can_render ?? false,
     }
     resetConfigPhase()
+    // A setting chosen in the preview's pager prefills Advanced (visible, editable) —
+    // the existing submit path imports/caches it server-side.
+    if (payload.setting_id != null) {
+      settingRaw = String(payload.setting_id)
+      advancedOpen = true
+    }
     return false
   }
 

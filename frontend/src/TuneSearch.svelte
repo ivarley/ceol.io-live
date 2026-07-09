@@ -13,6 +13,7 @@
   let {
     config,
     initialQuery = '', // seed: the composer text (modal) or '' (pane)
+    initialPreview = null, // {items, index}: open JUMPED into a preview (the composer's 🔍) — Back lands on the search
     preferType = null, // the cursor set's type — a soft ranking preference, not a filter
     displayStatus = 'live', // gates the remote search (online-only)
     variant = 'pane', // 'modal' shows the Done header + autofocuses the field
@@ -51,9 +52,15 @@
   // real estate; the card's ＋ rail (or ⌘Enter) keeps the old one-tap add.
   let previewIdx = $state(null) // index into previewItems, or null (search showing)
   let pastePreview = $state(null) // pseudo remote result for a pasted URL/id, previewed before adding
+  // Mounted straight into a preview (the composer's 🔍 on a quick result): the items are
+  // the QUICK results (so ‹ › page the other matches and the header reads "2 of 4");
+  // closing it falls back to the normal search, seeded from the composer text as usual.
+  let externalPreview = $state(untrack(() => initialPreview))
   let resultsEl = $state(null) // the .deep-results scroller (to restore scroll on back)
   let resultsScroll = 0
-  let everPreviewed = $state(false) // gates the modal's input re-autofocus after a preview round-trip
+  // gates the modal's input re-autofocus after a preview round-trip (a jumped-open
+  // preview counts — Back should reveal the results, not pop the keyboard)
+  let everPreviewed = $state(!!untrack(() => initialPreview))
   // The preview's ‹ › steppers page this combined list: local results, then remote.
   const previewItems = $derived([
     ...deepResults.map((r) => ({ r, remote: false })),
@@ -71,21 +78,25 @@
     await tick() // the search DOM remounts before the scroll restore
     if (resultsEl) resultsEl.scrollTop = resultsScroll
   }
-  // The preview's primary action: same payloads the card tap used to send. A pasted
-  // or remote id that turned out local (or merged) logs the canonical LOCAL tune,
-  // with the fetched title standing in for the placeholder "#id".
-  function previewAction(item, data) {
+  // The preview's primary action: same payloads the card tap used to send, plus the
+  // explicitly chosen setting when the user worked the pager (spec 032 — the server
+  // imports it and applies it as the session's preferred setting, or to this row only
+  // if the session already prefers another). A pasted or remote id that turned out
+  // local (or merged) logs the canonical LOCAL tune, with the fetched title standing
+  // in for the placeholder "#id".
+  function previewAction(item, data, chosenSetting = null) {
     const name = data?.name ?? item.r.name
     const tune_type = data?.tune_type ?? item.r.tune_type
+    const setting = chosenSetting != null ? { setting_id: chosenSetting } : {}
     if (item.remote) {
       // data present without is_local:false means the id resolved to a local tune
       // (tunePreview response); no data (load failed) stays on the remote payload —
       // the import op handles already-local ids server-side anyway.
       return data && data.is_local !== false
-        ? pickDeep({ ...item.r, tune_id: data.tune_id ?? item.r.tune_id, name, tune_type })
-        : pickRemote({ ...item.r, name, tune_type })
+        ? pickDeep({ ...item.r, tune_id: data.tune_id ?? item.r.tune_id, name, tune_type, ...setting })
+        : pickRemote({ ...item.r, name, tune_type, ...setting })
     }
-    return pickDeep({ ...item.r, name, tune_type })
+    return pickDeep({ ...item.r, name, tune_type, ...setting })
   }
 
   function autofocusIf(node, yes) {
@@ -161,6 +172,7 @@
     deepLoading = false
     previewIdx = null
     pastePreview = null
+    externalPreview = null
     resetThesession()
   }
   // After an add from the persistent pane, reset for the next tune (the composer clears the
@@ -173,6 +185,7 @@
     if (added === false) return added
     previewIdx = null
     pastePreview = null
+    externalPreview = null
     if (variant === 'pane') reset()
     return added
   }
@@ -181,7 +194,9 @@
   // want the rich fields (incipit, on_list — the add pane); the live composer
   // ignores it. Returns onAdd's result so the preview knows a deferred add.
   function pickDeep(r) {
-    return afterAdd(onAdd({ tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
+    const payload = { tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }
+    if (r.setting_id != null) payload.setting_id = r.setting_id // preview's chosen setting only
+    return afterAdd(onAdd(payload, r.name, r))
   }
   // Log the typed text as an unlinked tune (the "as-is" escape lives here).
   function deepLogAsIs() {
@@ -196,7 +211,7 @@
   // is Enter-Enter); ⌘/Ctrl+Enter adds it immediately, skipping the preview (the ＋ rail's
   // keyboard twin). With no results, Enter falls through to as-is (like type-ahead).
   function deepKey(e) {
-    if (previewIdx != null) return // the preview owns the keys while it's open
+    if (previewIdx != null || externalPreview) return // the preview owns the keys while it's open
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       const dir = e.key === 'ArrowDown' ? 1 : -1
       // ArrowUp on an empty box recalls past searches (even though an empty query browses
@@ -238,7 +253,9 @@
   // cursor. We know the title/type from the search, so the optimistic row shows linked
   // immediately. Returns onAdd's result so the preview knows a deferred add.
   function pickRemote(r) {
-    return afterAdd(onAdd({ thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }, r.name, r))
+    const payload = { thesession_id: r.tune_id, tune_id: r.tune_id, name: r.name, tune_type: r.tune_type }
+    if (r.setting_id != null) payload.setting_id = r.setting_id // preview's chosen setting only
+    return afterAdd(onAdd(payload, r.name, r))
   }
   // "Paste a thesession.org URL or tune ID" -> preview it first (you pasted an id blind —
   // the preview fetches the title/notation so you confirm it's the right tune before the
@@ -261,7 +278,17 @@
   })
 </script>
 
-{#if previewIdx != null && previewItems[previewIdx]}
+{#if externalPreview}
+  <!-- Jumped open from a composer quick result's 🔍 — Back reveals the search. -->
+  <TunePreview
+    {config}
+    items={externalPreview.items}
+    index={externalPreview.index}
+    {actionLabel}
+    onAction={previewAction}
+    onClose={() => { externalPreview = null }}
+  />
+{:else if previewIdx != null && previewItems[previewIdx]}
   <!-- Look before you log: the preview takes over the search's real estate (modal
        screen or side pane alike); Back/Esc returns with the search state intact. -->
   <TunePreview

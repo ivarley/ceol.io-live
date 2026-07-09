@@ -423,6 +423,86 @@ def _import_tune_for_live(cur, tune_id, user_id):
     return name, tune_type
 
 
+def _ensure_setting_local(cur, tune_id, setting_id, user_id):
+    """Make sure tune_setting holds this SPECIFIC setting of a local tune, importing
+    its ABC from thesession.org if needed (spec 032: the preview's pager shows
+    settings the import never brought over; logging with one chosen imports it).
+    Raises TuneImportError if it can't be fetched or doesn't exist remotely."""
+    cur.execute("SELECT 1 FROM tune_setting WHERE setting_id = %s AND tune_id = %s", (setting_id, tune_id))
+    if cur.fetchone():
+        return
+    data = _fetch_thesession_tune(tune_id)
+    for s in data.get("settings") or []:
+        abc = (s.get("abc") or "").replace("!", "\n")  # thesession uses "!" as a line break
+        if s.get("id") != setting_id or not abc:
+            continue
+        cur.execute("SELECT tune_type FROM tune WHERE tune_id = %s", (tune_id,))
+        trow = cur.fetchone()
+        incipit_abc = extract_abc_incipit(abc, trow[0] if trow else None)
+        cur.execute(
+            """
+            INSERT INTO tune_setting (setting_id, tune_id, key, abc, incipit_abc, cache_updated_date,
+                                      created_by_user_id, last_modified_user_id)
+            VALUES (%s, %s, %s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s, %s)
+            ON CONFLICT (setting_id) DO NOTHING
+            """,
+            (setting_id, tune_id, s.get("key"), abc, incipit_abc, user_id, user_id),
+        )
+        if cur.rowcount > 0:
+            save_to_history(cur, "tune_setting", "INSERT", setting_id, user_id=user_id)
+        return
+    raise TuneImportError(f"Setting #{setting_id} not found on thesession.org for tune #{tune_id}", 404)
+
+
+def _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_id):
+    """Spec 032 glue for add_tune: parse an optional data['setting_id'], import the
+    setting if it isn't local, and apply it (session preference vs. this-row-only).
+    Returns (applied, failed_message), either may be None. Never raises — a setting
+    that can't be imported must not fail the add."""
+    chosen = data.get("setting_id")
+    try:
+        chosen = int(chosen) if chosen is not None else None
+    except (TypeError, ValueError):
+        chosen = None
+    if not chosen or not tune_id:
+        return None, None
+    try:
+        _ensure_setting_local(cur, tune_id, chosen, user_id)
+        return _apply_chosen_setting(cur, session_id, tune_id, record_id, chosen, user_id), None
+    except TuneImportError as e:
+        return None, e.message
+
+
+def _apply_chosen_setting(cur, session_id, tune_id, record_id, setting_id, user_id):
+    """Where an explicitly chosen setting lands (spec 032): if the session has no
+    setting override yet, it becomes the session's preferred setting
+    (session_tune.setting_id); if the session already prefers a DIFFERENT setting,
+    it marks this logged row only (session_instance_tune.setting_override).
+    Returns 'session' | 'instance' | 'already' for the op response."""
+    existing = None
+    row = None
+    if session_id is not None:
+        cur.execute("SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s", (session_id, tune_id))
+        row = cur.fetchone()
+        existing = row[0] if row else None
+    if existing == setting_id:
+        return "already"
+    if row is not None and existing is None:
+        save_to_history(cur, "session_tune", "UPDATE", (session_id, tune_id), user_id=user_id)
+        cur.execute(
+            "UPDATE session_tune SET setting_id = %s, last_modified_user_id = %s WHERE session_id = %s AND tune_id = %s",
+            (setting_id, user_id, session_id, tune_id),
+        )
+        return "session"
+    # The session prefers another setting (or the tune never enrolled): this row only.
+    save_to_history(cur, "session_instance_tune", "UPDATE", record_id, user_id=user_id)
+    cur.execute(
+        "UPDATE session_instance_tune SET setting_override = %s, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
+        (setting_id, user_id, record_id),
+    )
+    return "instance"
+
+
 def _handle_add_tune(cur, session_instance_id, data, user_id):
     tune_id = data.get("tune_id")
     name = data.get("name")
@@ -498,7 +578,15 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
             and not data.get("no_merge")):
         target = _find_corroboration_target(cur, session_instance_id, tune_id, name)
         if target is not None:
-            return _corroborate(cur, session_instance_id, target[0], data, user_id)
+            # A corroborated add still carries any explicitly chosen setting (spec 032) —
+            # applied FIRST so _corroborate's reselect returns the row with its override.
+            applied, failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, target[0], data, user_id)
+            result = _corroborate(cur, session_instance_id, target[0], data, user_id)
+            if applied:
+                result["setting_applied"] = applied
+            if failed:
+                result["setting_failed"] = failed
+            return result
 
     new_position = _position_for(cur, session_instance_id, data.get("after_record_id"), data.get("before_record_id"))
 
@@ -519,7 +607,15 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
     # A linked tune joins the session's repertoire (mirrors the old logger's save path).
     if tune_id and session_id is not None:
         _enroll_session_tune(cur, session_id, tune_id, user_id)
+    # An explicitly chosen setting (spec 032: the preview's pager) — import it if it
+    # isn't local yet, then session preference vs. this-row-only (_apply_chosen_setting).
+    # A failed setting import never fails the op: the tune is logged fine without it.
+    setting_applied, setting_failed = _maybe_apply_chosen_setting(cur, session_id, tune_id, record_id, data, user_id)
     result = {"record": _reselect(cur, record_id)}
+    if setting_applied:
+        result["setting_applied"] = setting_applied
+    if setting_failed:
+        result["setting_failed"] = setting_failed
     if remapped_from is not None:
         result["remapped_from"] = remapped_from
     if import_failed:
@@ -1461,18 +1557,34 @@ def _deep_search_core(cur, q, tune_type, prefer_type, mode, limit, person_id,
     # one pass for the cached incipit IMAGE + whether the tune is renderable (has
     # ABC). Notation is rendered server-side by the abc-renderer service; the card
     # shows the cached image inline, or lazily asks the incipit endpoint to render
-    # + cache it (no client-side rendering).
+    # + cache it (no client-side rendering). With a session scope, the SESSION'S
+    # preferred setting wins among the cached images (spec 032) — the notation on
+    # the card is the one this session actually plays.
     if results:
         ids = [r["tune_id"] for r in results]
-        cur.execute(
-            """
-            SELECT DISTINCT ON (tune_id) tune_id, incipit_image,
-                   ((incipit_abc IS NOT NULL AND incipit_abc <> '') OR abc IS NOT NULL) AS can_render
-            FROM tune_setting WHERE tune_id = ANY(%s)
-            ORDER BY tune_id, (incipit_image IS NULL), setting_id
-            """,
-            (ids,),
-        )
+        if session_id is not None:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (ts.tune_id) ts.tune_id, ts.incipit_image,
+                       ((ts.incipit_abc IS NOT NULL AND ts.incipit_abc <> '') OR ts.abc IS NOT NULL) AS can_render
+                FROM tune_setting ts
+                LEFT JOIN session_tune st ON st.session_id = %s AND st.tune_id = ts.tune_id
+                WHERE ts.tune_id = ANY(%s)
+                ORDER BY ts.tune_id, (ts.incipit_image IS NULL),
+                         (ts.setting_id = st.setting_id) DESC NULLS LAST, ts.setting_id
+                """,
+                (session_id, ids),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (tune_id) tune_id, incipit_image,
+                       ((incipit_abc IS NOT NULL AND incipit_abc <> '') OR abc IS NOT NULL) AS can_render
+                FROM tune_setting WHERE tune_id = ANY(%s)
+                ORDER BY tune_id, (incipit_image IS NULL), setting_id
+                """,
+                (ids,),
+            )
         settings = {row[0]: row for row in cur.fetchall()}
         for r in results:
             s = settings.get(r["tune_id"])
@@ -1792,12 +1904,17 @@ def _tune_preview_core(tune_id, session_id=None):
         ]
 
         aliases, played_here, dates = [], 0, []
+        session_setting_id = None
         if session_id is not None:
             cur.execute(
-                "SELECT alias FROM session_tune WHERE session_id = %s AND tune_id = %s AND alias IS NOT NULL",
+                "SELECT alias, setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
                 (session_id, tune_id),
             )
-            aliases += [r[0] for r in cur.fetchall()]
+            strow = cur.fetchone()
+            if strow:
+                if strow[0]:
+                    aliases.append(strow[0])
+                session_setting_id = strow[1]
             cur.execute(
                 "SELECT alias FROM session_tune_alias WHERE session_id = %s AND tune_id = %s ORDER BY alias",
                 (session_id, tune_id),
@@ -1832,6 +1949,7 @@ def _tune_preview_core(tune_id, session_id=None):
             "aliases": aliases,
             "played_here": played_here,
             "dates": dates,
+            "session_setting_id": session_setting_id,
             "settings": settings,
         })
     finally:
@@ -1905,14 +2023,22 @@ def _thesession_preview_core(thesession_id):
     its JSON and return name/type/aliases/settings (ABC + incipit ABC) so the
     preview can show ABC and render notation ephemerally — nothing is imported
     until the user confirms the add. If the id is already local, return is_local
-    (following a merge redirect) so the client uses the local preview instead."""
+    (following a merge redirect) so the client uses the local preview instead.
+
+    `?full=1` skips that local short-circuit and always fetches: the preview of an
+    already-imported tune uses it to BACKFILL the settings beyond the one(s) the
+    import brought over (loaded in the background after the local setting shows)."""
+    full = (request.args.get("full") or "") == "1"
+    is_local = False
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute("SELECT tune_id, redirect_to_tune_id FROM tune WHERE tune_id = %s", (thesession_id,))
         row = cur.fetchone()
         if row:
-            return jsonify({"success": True, "is_local": True, "tune_id": row[1] or row[0]})
+            is_local = True
+            if not full:
+                return jsonify({"success": True, "is_local": True, "tune_id": row[1] or row[0]})
     finally:
         conn.close()
 
@@ -1935,7 +2061,7 @@ def _thesession_preview_core(thesession_id):
         })
     return jsonify({
         "success": True,
-        "is_local": False,
+        "is_local": is_local,
         "tune_id": thesession_id,
         "name": data["name"],
         "tune_type": tune_type,

@@ -265,18 +265,21 @@ export function settingImage(config, settingId, kind) {
 }
 
 // Preview data for a not-yet-imported thesession.org tune (or {is_local, tune_id}
-// if it turns out we already have it). Cached per id for the page's lifetime so
-// stepping away and back doesn't refetch. Throws on failure.
+// if it turns out we already have it). `full` skips the server's local short-circuit
+// and always fetches the complete settings/aliases — used to backfill a LOCAL tune's
+// preview beyond the setting(s) the import brought over. Cached per id+variant for
+// the page's lifetime so stepping away and back doesn't refetch. Throws on failure.
 const _tsPreviewCache = new Map()
-export async function thesessionPreview(config, thesessionId) {
-  if (_tsPreviewCache.has(thesessionId)) return _tsPreviewCache.get(thesessionId)
-  const res = await fetch(`${searchBase(config)}/thesession-preview/${thesessionId}`, {
+export async function thesessionPreview(config, thesessionId, full = false) {
+  const key = `${thesessionId}:${full ? 1 : 0}`
+  if (_tsPreviewCache.has(key)) return _tsPreviewCache.get(key)
+  const res = await fetch(`${searchBase(config)}/thesession-preview/${thesessionId}${full ? '?full=1' : ''}`, {
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || !json.success) throw new Error(json.error || `thesession preview failed: ${res.status}`)
-  _tsPreviewCache.set(thesessionId, json)
+  _tsPreviewCache.set(key, json)
   return json
 }
 

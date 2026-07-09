@@ -207,6 +207,9 @@
 .mt-add-pane .nb-ext { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--link-color, var(--accent)); text-decoration: none; padding-bottom: 4px; }
 .mt-add-pane .pv-setnav { display: flex; align-items: center; justify-content: space-between; }
 .mt-add-pane .pv-setlabel { font-size: 12px; color: var(--muted); }
+/* the session's preferred setting — same voice as .deep-badge.star on this theme */
+.mt-add-pane .pv-sesset { color: #8a6d1a; font-weight: 600; }
+[data-theme="dark"] .mt-add-pane .pv-sesset { color: #e8d28a; }
 .mt-add-pane .pv-import-note {
   font-size: 12px; padding: 8px 11px; border-radius: 8px;
   background: rgba(0, 161, 224, 0.08); border: 1px solid var(--accent); color: var(--text);

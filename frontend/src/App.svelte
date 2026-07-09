@@ -2180,7 +2180,23 @@
   }
 
   const openDeep = () => { deepOpen = true } // TuneSearch seeds itself from the composer text
-  const closeDeep = () => { deepOpen = false }
+  const closeDeep = () => { deepOpen = false; deepPreview = null }
+
+  // 🔍 on a quick result (spec 032): open the deep search JUMPED straight into that
+  // tune's preview — the nav list is the quick results themselves, so the header reads
+  // "2 of 4" and ‹ › page the other matches; Back lands on the deep results for the
+  // typed text (TuneSearch seeds from the composer as usual).
+  let deepPreview = $state(null) // {items, index} passed to TuneSearch as initialPreview
+  function openQuickPreview(vi) {
+    deepPreview = {
+      items: visibleResults.map((t) => ({
+        r: { tune_id: t.tune_id, name: t.name, tune_type: t.tune_type, in_session: t.in_session_tune },
+        remote: false,
+      })),
+      index: vi,
+    }
+    deepOpen = true
+  }
 
   // The shared terminal path for every TuneSearch add (modal pick / pane pick / log-as-is /
   // remote import): log at the cursor and hand focus back to the composer.
@@ -2771,10 +2787,22 @@
     if (!vv || window.innerWidth >= 480) {
       mainEl.style.height = ''
       mainEl.style.transform = ''
+      mainEl.style.removeProperty('--results-max')
       return
     }
     mainEl.style.height = vv.height + 'px'
     mainEl.style.transform = 'translateY(' + vv.offsetTop + 'px)'
+    // Cap the composer dropdown to the space actually visible above the composer.
+    // Its CSS fallback (45vh) is measured against the LAYOUT viewport, which iOS
+    // does NOT shrink for the keyboard — an uncapped dropdown can "fit" its own
+    // max-height yet have its top rows (the "Search …" escape) clipped by main's
+    // overflow:hidden with no scrollbar to reach them.
+    const composer = mainEl.querySelector('.composer')
+    const topnav = mainEl.querySelector('.topnav')
+    if (composer && topnav) {
+      const avail = composer.getBoundingClientRect().top - topnav.getBoundingClientRect().bottom - 12
+      mainEl.style.setProperty('--results-max', Math.max(120, Math.round(avail)) + 'px')
+    }
   }
   function onViewportChange() {
     fitToViewport()
@@ -3256,6 +3284,7 @@
             <span class="r-meta">
               {t.tune_type || ''}{#if t.in_session_tune}<span class="r-insession"> · in session</span>{/if}{#if t.abc}<span class="r-abc"> · ♪ notation</span>{/if}
             </span>
+            <button class="r-peek" title="Look closer before logging" aria-label={`Preview ${t.name} before logging`} onmousedown={(e) => e.preventDefault()} onclick={(e) => { e.stopPropagation(); openQuickPreview(vi) }}>🔍</button>
           </li>
         {/each}
         {#if noMatch && !results.length}
@@ -3508,6 +3537,7 @@
       <TuneSearch
         variant="modal"
         initialQuery={input.trim()}
+        initialPreview={deepPreview}
         preferType={cursorSetType()}
         {displayStatus}
         {config}

@@ -34,6 +34,8 @@ NEWT = 9304         # "The Unenrolled Jig"   (canonical, NOT pre-enrolled in ses
 MERGED = 9305       # "The Merged Reel"      (redirects to REEL; must never enroll)
 IMPORT_ID = 9399001     # a tune NOT in the DB, "imported" from thesession.org (mocked fetch)
 IMPORT_SETTING = 9399501  # its default setting id
+SET_LOCAL = 9301501     # REEL's already-imported setting (fixture row)
+SET_REMOTE = 9301502    # REEL setting that exists only on thesession.org (mocked fetch)
 
 # Canned thesession.org tune JSON for the mocked importer (spec 026).
 FAKE_TS_TUNE = {
@@ -41,6 +43,18 @@ FAKE_TS_TUNE = {
     "type": "reel",
     "tunebooks": 42,
     "settings": [{"id": IMPORT_SETTING, "key": "Dmaj", "abc": "D2FA d2FA|BAFA B2A2"}],
+}
+
+# Canned JSON for REEL itself — the chosen-setting import (spec 032) looks a specific
+# setting up in the tune's full settings list.
+FAKE_TS_REEL = {
+    "name": "The Test Reel",
+    "type": "reel",
+    "tunebooks": 10,
+    "settings": [
+        {"id": SET_LOCAL, "key": "Dmaj", "abc": "ABCd efga|"},
+        {"id": SET_REMOTE, "key": "Amaj", "abc": "cdef!gabc|"},
+    ],
 }
 
 
@@ -58,6 +72,9 @@ def live_instance():
     for tid, name in [(REEL, "The Test Reel"), (MAID, "The Maid Behind the Bar"), (COOLEY, "Cooleys")]:
         cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')", (tid, name))
         cur.execute("INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, tid))
+    # REEL's locally-cached setting (the chosen-setting tests, spec 032).
+    cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Dmaj', 'ABCd efga|')",
+                (SET_LOCAL, REEL))
     # NEWT: a canonical tune deliberately NOT enrolled, so enrollment on add is observable.
     cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Jig')", (NEWT, "The Unenrolled Jig"))
     # MERGED: a redirect/merged tune -- must never be enrolled (mirrors the old logger).
@@ -84,6 +101,9 @@ def live_instance():
     cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (INST,))
     cur.execute("DELETE FROM session_tune_history WHERE session_id = %s", (SID,))
     cur.execute("DELETE FROM session_tune WHERE session_id = %s", (SID,))
+    # Chosen-setting imports write tune_setting_history (the settings themselves cascade
+    # with the tune deletes below).
+    cur.execute("DELETE FROM tune_setting_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT, MERGED],))
     cur.execute("DELETE FROM tune_history WHERE tune_id = ANY(%s)", ([REEL, MAID, COOLEY, NEWT, MERGED],))
     # MERGED references REEL via redirect_to_tune_id, so drop it before the tune it points to.
     cur.execute("DELETE FROM tune WHERE tune_id = %s", (MERGED,))
@@ -482,6 +502,121 @@ def test_add_tune_thesession_id_import_failure_logs_unlinked(
     assert body["record"]["tune_id"] is None
     assert body["record"]["name"] == f"#{IMPORT_ID}"
     assert body["import_failed"] is True
+
+
+# --------------------------------------------------------------------------- #
+# chosen setting on add (spec 032: the preview's settings pager)
+# --------------------------------------------------------------------------- #
+
+def _session_setting(cur, sid, tid):
+    cur.execute("SELECT setting_id FROM session_tune WHERE session_id = %s AND tune_id = %s", (sid, tid))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def test_add_tune_chosen_setting_becomes_session_preference(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """No session-level override yet -> the chosen setting becomes the session's
+    preferred setting (session_tune.setting_id); the row itself carries no override."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("locally-cached setting must not fetch"))
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
+    assert body["success"] is True
+    assert body["setting_applied"] == "session"
+    assert _session_setting(db_cursor, sid, reel) == SET_LOCAL
+    assert body["record"]["setting_override"] is None
+
+
+def test_add_tune_chosen_setting_instance_only_when_session_prefers_another(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """The session already prefers a different setting -> the chosen one applies to
+    THIS row only (setting_override), importing it from thesession.org if needed."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
+        # no_merge: a second add of the same tune would otherwise corroborate, not insert
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE, no_merge=True)
+    assert body["success"] is True
+    assert body["setting_applied"] == "instance"
+    assert body["record"]["setting_override"] == SET_REMOTE
+    assert _session_setting(db_cursor, sid, reel) == SET_LOCAL  # session preference untouched
+    # the remote setting was imported ("!" unfolded to a newline)
+    db_cursor.execute("SELECT tune_id, abc FROM tune_setting WHERE setting_id = %s", (SET_REMOTE,))
+    row = db_cursor.fetchone()
+    assert row is not None and row[0] == reel and "\n" in row[1]
+
+
+def test_add_tune_chosen_setting_already_preferred_noop(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """Choosing the setting the session already prefers changes nothing."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune",
+                        _no_fetch("locally-cached setting must not fetch"))
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL, no_merge=True)
+    assert body["success"] is True
+    assert body["setting_applied"] == "already"
+    assert body["record"]["setting_override"] is None
+    assert _session_setting(db_cursor, sid, reel) == SET_LOCAL
+
+
+def test_add_tune_chosen_setting_import_failure_is_soft(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """A chosen setting that can't be imported never fails the op: the tune logs
+    normally and the ack carries setting_failed."""
+    import live_logging_routes
+    from api_routes import TuneImportError
+
+    def _fail(tid):
+        raise TuneImportError("thesession.org is down", 502)
+
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", _fail)
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE)
+    assert body["success"] is True
+    assert body["record"]["tune_id"] == reel
+    assert body.get("setting_applied") is None
+    assert "setting_failed" in body
+    assert _session_setting(db_cursor, sid, reel) is None
+
+
+def test_add_tune_chosen_setting_survives_corroboration(
+        client, authenticated_user, live_instance, db_cursor, monkeypatch):
+    """A duplicate append collapses into a corroboration — but an explicitly chosen
+    setting still applies (to the corroborated row / session), never silently dropped."""
+    import live_logging_routes
+    monkeypatch.setattr(live_logging_routes, "_fetch_thesession_tune", lambda tid: dict(FAKE_TS_REEL))
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_LOCAL)  # session pref
+        # same tune again, pure append -> corroborates; the chosen (different) setting
+        # must land on the corroborated row as an override
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel, setting_id=SET_REMOTE)
+    assert body["success"] is True
+    assert body["op_type"] == "corroborate"
+    assert body["setting_applied"] == "instance"
+    assert body["record"]["setting_override"] == SET_REMOTE
+    assert _session_setting(db_cursor, sid, reel) == SET_LOCAL
+
+
+def test_add_tune_without_setting_id_leaves_settings_alone(
+        client, authenticated_user, live_instance, db_cursor):
+    """The one-tap paths (＋ rail, composer) send no setting_id -> no setting writes."""
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    with authenticated_user:
+        resp, body = _op(client, inst, op_type="add_tune", tune_id=reel)
+    assert body["success"] is True
+    assert body.get("setting_applied") is None
+    assert body["record"]["setting_override"] is None
+    assert _session_setting(db_cursor, sid, reel) is None
 
 
 # --------------------------------------------------------------------------- #

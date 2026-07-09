@@ -2043,6 +2043,19 @@ def add_session_tune(session_path):
         if new_tune_inserted:
             cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True)
 
+        # A specific setting may not be cached yet (e.g. chosen from the preview's
+        # backfilled pager, spec 032): fetch + cache it, same as POST /api/my-tunes.
+        if parsed_setting_id:
+            conn_check = get_db_connection()
+            try:
+                cur_check = conn_check.cursor()
+                cur_check.execute("SELECT setting_id FROM tune_setting WHERE setting_id = %s", (parsed_setting_id,))
+                setting_cached = cur_check.fetchone() is not None
+            finally:
+                conn_check.close()
+            if not setting_cached:
+                cache_default_tune_setting(tune_id, None, get_current_user_id(), sync=True, target_setting_id=parsed_setting_id)
+
         return jsonify({
             "success": True,
             "message": "Tune added to session successfully",

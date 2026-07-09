@@ -24,9 +24,24 @@ new centered modal).
   a `thesession` link bottom-right (no abc-tools), clicking the image or ABC flips
   **incipit ⇄ full**; a **settings pager** (‹ › left/right-justified, "Setting n of N · key");
   an import note for remote tunes; tunebook count + played-here stats.
+- **Settings backfill:** the local catalog usually holds only the setting an import brought
+  over, so after a local tune's preview opens, the client background-fetches
+  `thesession-preview/<id>?full=1` (which skips the local short-circuit) and appends the
+  settings thesession has beyond the local ones (dedup by `setting_id`; thesession aliases
+  merge into "Also known as" too). Backfilled settings render ephemerally via `render-abc`
+  (no `tune_setting` row); offline or thesession-down, the local settings simply stand.
+  The response is cached per id, so stepping away and back is instant.
 - **Result steppers:** ‹ › in the preview header page through the whole result list (local
   results, then remote) so candidates can be compared without bouncing back. Back/Esc returns
   with query, results, and scroll intact.
+- **🔍 on composer quick results:** each type-ahead row on the log page carries a magnifier
+  on its far right; tapping it opens the deep-search modal JUMPED straight into that tune's
+  preview. The preview's nav list is the quick results themselves, so the header reads
+  "3 of 8" for the 3rd match and ‹ › page the other matches; "‹ Results" lands on the normal
+  deep-search results seeded from the composer text (no keyboard re-autofocus on the way
+  back). Implemented as a TuneSearch `initialPreview={items, index}` prop (App builds the
+  items from `visibleResults`); logging from the jumped preview follows the same
+  `previewAction → onAdd → close modal + log at cursor` path.
 - **Keyboard (desktop pane):** ↑/↓ walk cards (unchanged), **Enter opens the preview** (was:
   add immediately), Enter again confirms — the fast path is Enter-Enter; **⌘/Ctrl+Enter** adds
   skipping the preview (the ＋ rail's keyboard twin); ←/→ step results in the preview; Esc backs
@@ -41,6 +56,28 @@ new centered modal).
   a spinner; pending renders live in a **module-level registry in `client.js`** keyed
   `settingId:kind`, so the spinner survives navigating to another setting/result and back and
   the modal/pane share in-flight requests.
+- **Session's setting surfaced** (the setting-level parallel of the tune-level "in this
+  session" badges): with a session scope, (1) the search card's incipit shows the SESSION'S
+  preferred setting when its image is cached (else the usual lowest-cached fallback — never
+  a mismatched lazy render), (2) the preview's pager OPENS on that setting
+  (`session_setting_id` in the tune-preview response; landing there is not a "choice"), and
+  (3) it's badged "★ this session's" in the pager label. My Tunes scope is unchanged.
+- **Chosen setting (logging with it):** a setting counts as CHOSEN only when the user works
+  the pager in that preview (merely opening — which lands on setting 1 — expresses no
+  preference). The confirm then sends `setting_id` in the `add_tune` op. Server side
+  (`_maybe_apply_chosen_setting`): the setting is **imported into `tune_setting` if it isn't
+  local** (fetched from thesession.org inside the op transaction, like the tune import), then
+  - **no session-level override yet** (`session_tune.setting_id` NULL, incl. just-enrolled) →
+    it becomes the session's **preferred setting**;
+  - **session already prefers a different setting** → it applies to **this row only**
+    (`session_instance_tune.setting_override`);
+  - **same as the existing preference** → no-op (`setting_applied: 'already'`).
+  A duplicate append that collapses into a **corroboration** still applies the chosen setting
+  (to the corroborated row); a setting that can't be imported never fails the op
+  (`setting_failed` in the ack). One-tap adds (＋ rail, ⌘Enter, composer) send no setting_id.
+  In the **add panes**, a chosen setting prefills the Advanced "Setting" field (visible and
+  editable) and rides their existing submit paths — `POST /api/sessions/<path>/tunes` now also
+  fetches+caches a not-yet-local setting, matching `POST /api/my-tunes`.
 
 ## Backend (`live_logging_routes.py`, routes in `app.py`)
 
@@ -94,7 +131,8 @@ Four endpoints, each homed three ways like the rest of the search family
 ## Notes / follow-ups
 
 - The suggestion chip and "log as-is" stay one-tap (nothing to preview).
-- Multiple-settings display was already carried by the pager; when remote multi-setting
-  import lands someday, the pager is the seam.
+- The pager shows ALL of thesession's settings via the backfill, and logging with one
+  chosen imports it and applies it (session preference / row override — see "Chosen
+  setting" above).
 - The pane's "usually next" card remains visible above a pane preview; harmless but could be
   hidden later if it reads oddly.
