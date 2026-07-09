@@ -154,9 +154,137 @@ def get_tune_detail_global(tune_id):
             "image": bytea_to_base64(abc_image), "incipit_image": bytea_to_base64(incipit_image),
             "tunebook_count": tunebook_count,
             "tunebook_count_cached_date": tbc_date.isoformat() if tbc_date else None,
-            "times_played": 0, "global_play_count": global_play_count, "play_instances": [],
+            "times_played": 0, "global_play_count": global_play_count,
             "person_tune_status": person_tune_status,
         }})
+    finally:
+        conn.close()
+
+
+def get_tune_history(tune_id):
+    """Play history for the tune-detail modal's History tab, fetched lazily on first
+    view (the set/position windowing below is too expensive to run on every modal open).
+
+    GET /api/tunes/<tune_id>/history
+        ?session_path=<path>  — only plays at that session
+        ?person=me            — only plays at instances the current user attended (my_tunes)
+
+    Positions are humane 'Set N, Tune M' coordinates: rows are ordered by the
+    fractional order_position, break records split the sets (spec 023) and are
+    excluded from the tune numbering.
+    """
+    session_path = request.args.get("session_path") or None
+    mine = request.args.get("person") == "me"
+    if mine and not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Login required"}), 401
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
+
+        person_id = None
+        if mine:
+            cur.execute(
+                "SELECT person_id FROM user_account WHERE user_id = %s",
+                (current_user.user_id,),
+            )
+            pr = cur.fetchone()
+            if not pr:
+                return jsonify({"success": False, "error": "No person record"}), 403
+            person_id = pr[0]
+
+        instance_limit = 100
+        cur.execute(
+            """
+            WITH target_instances AS (
+                SELECT si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path
+                FROM session_instance si
+                JOIN session s ON si.session_id = s.session_id
+                WHERE EXISTS (
+                          SELECT 1 FROM session_instance_tune x
+                          WHERE x.session_instance_id = si.session_instance_id
+                            AND x.tune_id = %(tune_id)s AND x.deleted = FALSE
+                      )
+                  AND (%(session_path)s::text IS NULL OR s.path = %(session_path)s)
+                  AND (%(person_id)s::int IS NULL OR EXISTS (
+                          SELECT 1 FROM session_instance_person sip
+                          WHERE sip.session_instance_id = si.session_instance_id
+                            AND sip.person_id = %(person_id)s
+                      ))
+                ORDER BY si.date DESC, si.session_instance_id DESC
+                LIMIT %(instance_limit)s
+            ),
+            instance_rows AS (
+                SELECT sit.session_instance_tune_id, sit.session_instance_id, sit.tune_id,
+                       sit.name, sit.key_override, sit.setting_override,
+                       sit.record_type, sit.order_position,
+                       SUM(CASE WHEN sit.record_type = 'break' THEN 1 ELSE 0 END)
+                           OVER (PARTITION BY sit.session_instance_id
+                                 ORDER BY sit.order_position, sit.session_instance_tune_id) AS set_idx
+                FROM session_instance_tune sit
+                JOIN target_instances ti ON sit.session_instance_id = ti.session_instance_id
+                WHERE sit.deleted = FALSE
+            ),
+            positioned AS (
+                SELECT *,
+                       set_idx + 1 AS set_number,
+                       ROW_NUMBER() OVER (PARTITION BY session_instance_id, set_idx
+                                          ORDER BY order_position, session_instance_tune_id) AS position_in_set
+                FROM instance_rows
+                WHERE record_type <> 'break'
+            )
+            SELECT ti.session_name, ti.session_path, ti.date,
+                   p.name, p.key_override, p.setting_override,
+                   p.session_instance_id, p.session_instance_tune_id,
+                   p.set_number, p.position_in_set
+            FROM positioned p
+            JOIN target_instances ti ON p.session_instance_id = ti.session_instance_id
+            WHERE p.tune_id = %(tune_id)s
+            ORDER BY ti.date DESC, p.session_instance_id DESC, p.set_number, p.position_in_set
+            """,
+            {
+                "tune_id": tune_id,
+                "session_path": session_path,
+                "person_id": person_id,
+                "instance_limit": instance_limit,
+            },
+        )
+        rows = cur.fetchall()
+
+        play_instances = []
+        instance_ids = set()
+        for (session_name, s_path, date, name_override, key_override, setting_override,
+             session_instance_id, session_instance_tune_id, set_number, position_in_set) in rows:
+            instance_ids.add(session_instance_id)
+            date_str = date.strftime("%Y-%m-%d") if date else None
+            play_instances.append({
+                "full_name": f"{session_name} - {date_str}" if date_str else session_name,
+                "session_name": session_name,
+                "session_path": s_path,
+                "date": date.isoformat() if date else None,
+                "set_number": set_number,
+                "position_in_set": position_in_set,
+                "name_override": name_override,
+                "key_override": key_override,
+                "setting_id_override": setting_override,
+                "session_instance_id": session_instance_id,
+                "session_instance_tune_id": session_instance_tune_id,
+                # highlight= scrolls to the exact record; tune= lets the legacy
+                # page (no per-record ids client-side) highlight by tune instead.
+                "link": f"/sessions/{s_path}/{session_instance_id}"
+                        f"?highlight={session_instance_tune_id}&tune={tune_id}",
+            })
+
+        return jsonify({
+            "success": True,
+            "redirected_from": redirected_from,
+            "play_instances": play_instances,
+            # limit is per-instance; flag truncation so the UI can say so
+            "truncated": len(instance_ids) >= instance_limit,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error retrieving history: {str(e)}"}), 500
     finally:
         conn.close()
 
@@ -1547,33 +1675,8 @@ def get_session_tune_detail(session_path, tune_id):
         play_count_result = cur.fetchone()
         times_played = play_count_result[0] if play_count_result else 0
 
-        # Get detailed play history
-        cur.execute(
-            """
-            SELECT
-                si.date,
-                sit.name,
-                sit.key_override,
-                sit.setting_override,
-                si.session_instance_id
-            FROM session_instance_tune sit
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            WHERE si.session_id = %s AND sit.tune_id = %s
-            ORDER BY si.date DESC
-        """,
-            (session_id, tune_id),
-        )
-        play_instances_raw = cur.fetchall()
-        play_instances = [
-            {
-                "date": row[0].isoformat() if row[0] else None,
-                "name_override": row[1],
-                "key_override": row[2],
-                "setting_id_override": row[3],
-                "session_instance_id": row[4],
-            }
-            for row in play_instances_raw
-        ]
+        # Play history is NOT fetched here — the modal lazily loads it from
+        # /api/tunes/<id>/history when the History tab is first viewed.
 
         # Get person_tune status if user is logged in
         person_tune_status = None
@@ -1658,7 +1761,6 @@ def get_session_tune_detail(session_path, tune_id):
                     ),
                     "times_played": times_played,
                     "global_play_count": global_play_count,
-                    "play_instances": play_instances,
                     "person_tune_status": person_tune_status,
                 },
             }
@@ -11170,33 +11272,8 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         play_count_result = cur.fetchone()
         times_played = play_count_result[0] if play_count_result else 0
 
-        # Get detailed play history for this session
-        cur.execute(
-            """
-            SELECT
-                si.date,
-                sit.name,
-                sit.key_override,
-                sit.setting_override,
-                si.session_instance_id
-            FROM session_instance_tune sit
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            WHERE si.session_id = %s AND sit.tune_id = %s
-            ORDER BY si.date DESC
-        """,
-            (session_id, tune_id),
-        )
-        play_instances_raw = cur.fetchall()
-        play_instances = [
-            {
-                "date": row[0].isoformat() if row[0] else None,
-                "name_override": row[1],
-                "key_override": row[2],
-                "setting_id_override": row[3],
-                "session_instance_id": row[4],
-            }
-            for row in play_instances_raw
-        ]
+        # Play history is NOT fetched here — the modal lazily loads it from
+        # /api/tunes/<id>/history when the History tab is first viewed.
 
         # Get person_tune status if user is logged in
         person_tune_status = None
@@ -11285,7 +11362,6 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     ),
                     "times_played": times_played,
                     "global_play_count": global_play_count,
-                    "play_instances": play_instances,
                     "person_tune_status": person_tune_status,
                 },
             }
@@ -11665,56 +11741,8 @@ def get_admin_tune_detail(tune_id):
         play_count_result = cur.fetchone()
         global_play_count = play_count_result[0] if play_count_result else 0
 
-        # Get detailed play history across all sessions
-        cur.execute(
-            """
-            SELECT
-                S.name,
-                S.path,
-                SI.date,
-                SIT.name,
-                SIT.key_override,
-                SIT.setting_override,
-                SI.session_instance_id,
-                ROW_NUMBER() OVER (PARTITION BY SIT.session_instance_id ORDER BY SIT.order_position) AS position_in_set
-            FROM session_instance_tune SIT
-            INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
-            INNER JOIN session S ON SI.session_id = S.session_id
-            WHERE SIT.tune_id = %s
-            ORDER BY SI.date DESC
-            LIMIT 100
-        """,
-            (tune_id,),
-        )
-        play_instances_raw = cur.fetchall()
-        play_instances = []
-        for row in play_instances_raw:
-            session_name = row[0]
-            session_path = row[1]
-            date = row[2]
-            name_override = row[3]
-            key_override = row[4]
-            setting_override = row[5]
-            session_instance_id = row[6]
-            position_in_set = row[7]
-
-            # Build full name for display: "Session Name - YYYY-MM-DD"
-            full_name = f"{session_name} - {date.strftime('%Y-%m-%d')}" if date else session_name
-            # Build link to session instance
-            link = f"/sessions/{session_path}/{session_instance_id}"
-
-            play_instances.append({
-                "full_name": full_name,
-                "session_name": session_name,
-                "session_path": session_path,
-                "date": date.isoformat() if date else None,
-                "position_in_set": position_in_set,
-                "name_override": name_override,
-                "key_override": key_override,
-                "setting_id_override": setting_override,
-                "session_instance_id": session_instance_id,
-                "link": link
-            })
+        # Play history is NOT fetched here — the modal lazily loads it from
+        # /api/tunes/<id>/history when the History tab is first viewed.
 
         conn.close()
 
@@ -11743,7 +11771,6 @@ def get_admin_tune_detail(tune_id):
                     ),
                     "session_count": session_count,
                     "global_play_count": global_play_count,
-                    "play_instances": play_instances,
                 },
             }
         )

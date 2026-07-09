@@ -126,8 +126,8 @@
   // end, so a manual scroll-up isn't yanked away (the "Go to end" pill covers that).
   $effect(() => {
     const n = ordered.length
-    if (n > lastCount && atEnd && setsEl) {
-      requestAnimationFrame(() => { if (setsEl) setsEl.scrollTop = setsEl.scrollHeight })
+    if (n > lastCount && atEnd && setsEl && !pendingHighlight) {
+      requestAnimationFrame(() => { if (setsEl && !pendingHighlight) setsEl.scrollTop = setsEl.scrollHeight })
     }
     lastCount = n
   })
@@ -139,7 +139,7 @@
   // bar once on first load so it isn't shown initially; long logs are already scrolled down.
   let didInitialHide = false
   function hideBarInitially(tries) {
-    if (!setsEl || searchMode || didInitialHide) return
+    if (!setsEl || searchMode || didInitialHide || pendingHighlight) return
     const max = setsEl.scrollHeight - setsEl.clientHeight
     if (max > 0) {
       // scroll just past the bar (short logs may allow less — clamp to what's available)
@@ -320,7 +320,26 @@
     if (id == null) return
     const tok = ++flashSeq
     flashing.set(id, { kind, color, tok })
-    setTimeout(() => { const e = flashing.get(id); if (e && e.tok === tok) flashing.delete(id) }, kind === 'mine' ? 700 : 1400)
+    setTimeout(() => { const e = flashing.get(id); if (e && e.tok === tok) flashing.delete(id) }, kind === 'mine' ? 700 : kind === 'highlight' ? 2600 : 1400)
+  }
+
+  // Deep-link from a tune's play history (?highlight=<session_instance_tune_id>):
+  // scroll the record's row into view and flash it. While pendingHighlight is set,
+  // the first-load scroll behaviors (jump-to-end on arriving records, the search-bar
+  // hide nudge) are suppressed — they'd clobber this scroll. Retries briefly because
+  // the rows render a tick after the bootstrap resolves.
+  let pendingHighlight = null
+  function highlightFromUrl(id, tries = 20) {
+    const el = setsEl?.querySelector(`[data-sit="${id}"]`)
+    if (!el) {
+      if (tries > 0) setTimeout(() => highlightFromUrl(id, tries - 1), 100)
+      else pendingHighlight = null
+      return
+    }
+    didInitialHide = true
+    el.scrollIntoView({ block: 'center' }) // instant — a smooth scroll can be interrupted
+    flashId(id, 'highlight')
+    pendingHighlight = null
   }
 
   // Resolve a row's logger color index: the persisted per-session color (joined at
@@ -2784,14 +2803,24 @@
     // "Log to current session" from a tune-detail page elsewhere in the app lands here
     // with ?tune=<id>. Capture it and strip it from the URL up front so a reload/back
     // can't re-add the tune; append it once the first bootstrap has loaded truth (§024).
+    // ?highlight=<session_instance_tune_id> is the other deep-link: a play-history click
+    // that should scroll to + flash an EXISTING record — never append. It wins over
+    // ?tune when both arrive (history links carry both for the legacy page's sake).
     const params = new URLSearchParams(window.location.search)
     const autoTuneId = params.get('tune')
-    if (autoTuneId) {
+    const highlightId = Number(params.get('highlight')) || null
+    pendingHighlight = highlightId
+    if (autoTuneId || highlightId) {
       params.delete('tune')
+      params.delete('highlight')
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''))
     }
-    connect().then(() => { loaded = true; if (autoTuneId) autoLogTune(autoTuneId) }) // bootstraps records, then hydrateQueue() re-applies any queued ops
+    connect().then(() => {
+      loaded = true
+      if (highlightId) highlightFromUrl(highlightId)
+      else if (autoTuneId) autoLogTune(autoTuneId)
+    }) // bootstraps records, then hydrateQueue() re-applies any queued ops
     // The shared app menu's 'Find a tune' calls this in the live context -> insert.
     window.__liveFindTune = () => openDeep()
     window.addEventListener('pagehide', onPageHide)
@@ -3108,6 +3137,7 @@
             class="tune-row"
             role="button"
             tabindex="0"
+            data-sit={r.session_instance_tune_id}
             class:ls-want-to-learn={lst === 'want to learn'}
             class:ls-learning={lst === 'learning'}
             class:ls-learned={lst === 'learned'}
@@ -3125,6 +3155,7 @@
             class:flash-mine={flashing.get(r.session_instance_tune_id)?.kind === 'mine'}
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
+            class:flash-highlight={flashing.get(r.session_instance_tune_id)?.kind === 'highlight'}
             style={canEdit ? rowStyle(r) : ''}
             onclick={(e) => rowClick(r, e)}
             onkeydown={(e) => activate(e, () => rowClick(r))}

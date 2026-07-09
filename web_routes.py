@@ -401,7 +401,13 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                 # to it for any session instance. Everyone else stays on the classic editor.
                 if current_user.is_authenticated and getattr(current_user, "beta_live_logging", False):
                     cur.close(); conn.close()
-                    return redirect(url_for("live_logging_screen", session_instance_id=session_instance[3]))
+                    # Forward a play-history deep-link (?highlight=<record>) so the live
+                    # screen can scroll to it. Deliberately NOT ?tune= — on the live
+                    # screen that means "append this tune".
+                    live_kwargs = {"session_instance_id": session_instance[3]}
+                    if request.args.get("highlight"):
+                        live_kwargs["highlight"] = request.args["highlight"]
+                    return redirect(url_for("live_logging_screen", **live_kwargs))
                 logging_mode = session_instance[13]
                 # Use s.path from database (index 11) for consistency
                 session_path_from_db = session_instance[11]

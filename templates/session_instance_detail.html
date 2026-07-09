@@ -1855,9 +1855,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Handle tune parameter in URL - open modal for specific tune
+    // Handle tune parameter in URL. A bare ?tune= opens the detail modal; combined
+    // with ?highlight= (a play-history click-through) it scrolls to and highlights
+    // the tune in the log instead.
     const tuneIdFromUrl = TuneDetailModal.getTuneIdFromUrl();
-    if (tuneIdFromUrl) {
+    const isHighlightLink = urlParams.has('highlight');
+    if (isHighlightLink) {
+        highlightAndScrollToRecord(parseInt(urlParams.get('highlight'), 10), tuneIdFromUrl);
+    } else if (tuneIdFromUrl) {
         // Wait for pills to be rendered
         setTimeout(() => {
             // Find the first pill with this tune ID to get display name and type
@@ -1881,6 +1886,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 100);
     }
 });
+
+// Highlight the exact record a play-history link points at (?highlight=<sit_id>).
+// Pills render asynchronously after DOMContentLoaded, so retry until they exist.
+// Falls back to tune-level highlighting if the record isn't found (e.g. deleted).
+function highlightAndScrollToRecord(sitId, fallbackTuneId, tries = 20) {
+    const tunePillsData = window.StateManager ? window.StateManager.getTunePillsData() : [];
+    if (tunePillsData.length === 0) {
+        if (tries > 0) setTimeout(() => highlightAndScrollToRecord(sitId, fallbackTuneId, tries - 1), 150);
+        return;
+    }
+
+    let foundPill = null;
+    for (const set of tunePillsData) {
+        foundPill = set.find(p => p.sessionInstanceTuneId === sitId);
+        if (foundPill) break;
+    }
+    if (!foundPill) {
+        if (fallbackTuneId) highlightAndScrollToTune(fallbackTuneId);
+        return;
+    }
+
+    const pillElement = document.querySelector(`[data-pill-id="${foundPill.id}"]`);
+    if (!pillElement) {
+        if (tries > 0) setTimeout(() => highlightAndScrollToRecord(sitId, fallbackTuneId, tries - 1), 150);
+        return;
+    }
+    pillElement.style.boxShadow = '0 0 0 4px rgba(255, 193, 7, 0.6)';
+    pillElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { pillElement.style.boxShadow = ''; }, 5000);
+}
 
 // Function to highlight and scroll to a specific tune
 function highlightAndScrollToTune(tuneId) {

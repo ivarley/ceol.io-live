@@ -492,6 +492,12 @@ main {
   40%  { transform: scale(1.015); }
   100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
 }
+/* play-history deep-link (?highlight=): a held amber ring that fades out */
+.tune-row.flash-highlight { animation: flash-highlight 2.6s ease-out; }
+@keyframes flash-highlight {
+  0%, 55% { box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.6); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 
 /* ---------- seams: the insertion-point model (§B) ---------- */
 .seam {

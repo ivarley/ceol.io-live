@@ -25,6 +25,10 @@
     let isConfigSectionVisible = false;
     let piExpanded = false; // whether the per-instrument rows are revealed in the status control
     let pendingHeardCountRequests = 0;
+    // History tab: play history is fetched lazily (the Set/Tune position windowing is
+    // expensive server-side) on first view of the tab, cached per scope for this modal.
+    let historyScope = null;
+    let historyCache = {};
 
     // Musical keys list
     const MUSICAL_KEYS = [
@@ -80,6 +84,8 @@
     function showModal(config) {
         currentContext = config.context;
         currentConfig = config;
+        historyCache = {};
+        historyScope = historyScopeOptions(config)[0].key;
         if (config.expandInstrumentStatus !== undefined) piExpanded = !!config.expandInstrumentStatus;
         pendingHeardCountRequests = 0; // Reset pending requests counter
         const modal = document.getElementById('tune-detail-modal');
@@ -1159,61 +1165,121 @@ ${abcBody}`;
     }
 
     /**
-     * Build History tab content
+     * The history scopes available for the current context. First entry is the default.
+     * A single entry means no toggle is shown.
+     */
+    function historyScopeOptions(config) {
+        if (config.context === 'admin' || config.additionalData?.global) {
+            return [{ key: 'all', label: 'All sessions' }];
+        }
+        if ((config.context === 'session' || config.context === 'session_instance') && config.additionalData?.sessionPath) {
+            return [{ key: 'session', label: 'This session' }, { key: 'all', label: 'All sessions' }];
+        }
+        if (config.context === 'my_tunes') {
+            return [{ key: 'mine', label: 'My sessions' }, { key: 'all', label: 'All sessions' }];
+        }
+        return [{ key: 'all', label: 'All sessions' }];
+    }
+
+    /**
+     * Build History tab content — just the scope toggle and an empty container.
+     * The actual history is fetched on first view of the tab (see loadHistory).
      */
     function buildHistoryTabContent(tuneData, config) {
-        const playInstances = tuneData.play_instances || [];
+        const options = historyScopeOptions(config);
+        const toggle = options.length > 1 ? `
+            <div class="history-scope-toggle">
+                ${options.map(o => `<button class="history-scope-btn${o.key === historyScope ? ' active' : ''}" data-scope="${o.key}" onclick="TuneDetailModal.setHistoryScope('${o.key}'); return false;">${o.label}</button>`).join('')}
+            </div>
+        ` : '';
+        return `${toggle}<div id="history-list-container"><div class="history-loading">Loading play history…</div></div>`;
+    }
 
+    /**
+     * Switch the history scope (This session / All sessions) and (re)load.
+     */
+    function setHistoryScope(scope) {
+        historyScope = scope;
+        document.querySelectorAll('.history-scope-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.scope === scope);
+        });
+        loadHistory();
+    }
+
+    /**
+     * Fetch play history for the current scope (cached per scope) and render it.
+     */
+    function loadHistory() {
+        const container = document.getElementById('history-list-container');
+        if (!container || !currentConfig) return;
+        const tuneId = currentConfig.tuneId || (currentTuneData && currentTuneData.tune_id);
+        if (!tuneId) {
+            container.innerHTML = '<div class="no-history">No play history recorded yet.</div>';
+            return;
+        }
+        const scope = historyScope;
+        if (historyCache[scope]) {
+            renderHistoryList(historyCache[scope]);
+            return;
+        }
+        container.innerHTML = '<div class="history-loading">Loading play history…</div>';
+        let url = `/api/tunes/${tuneId}/history`;
+        if (scope === 'session') {
+            url += `?session_path=${encodeURIComponent(currentConfig.additionalData.sessionPath)}`;
+        } else if (scope === 'mine') {
+            url += '?person=me';
+        }
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (scope !== historyScope) return; // user toggled scope while loading
+                if (!data.success) {
+                    container.innerHTML = '<div class="no-history">Could not load play history.</div>';
+                    return;
+                }
+                historyCache[scope] = data;
+                renderHistoryList(data);
+            })
+            .catch(() => {
+                const c = document.getElementById('history-list-container');
+                if (c && scope === historyScope) c.innerHTML = '<div class="no-history">Could not load play history.</div>';
+            });
+    }
+
+    /**
+     * Render a fetched history payload into the container.
+     */
+    function renderHistoryList(data) {
+        const container = document.getElementById('history-list-container');
+        if (!container) return;
+        const playInstances = data.play_instances || [];
         if (playInstances.length === 0) {
-            return '<div class="no-history">No play history recorded yet.</div>';
+            container.innerHTML = '<div class="no-history">No play history recorded yet.</div>';
+            return;
         }
 
-        const showFullInstanceName = config.context === 'my_tunes' || config.context === 'admin';
+        // Session-scoped history repeats the session name — just show the date.
+        const showFullName = historyScope !== 'session';
 
         const items = playInstances.map(instance => {
-            const instanceName = buildInstanceName(instance, showFullInstanceName, config);
-            const link = buildInstanceLink(instance, tuneData.tune_id, config);
-            const position = instance.position_in_set || '?';
-            const settingId = instance.setting_id_override || instance.setting_override || '';
-
+            const instanceName = showFullName
+                ? (instance.full_name || instance.date || 'Unknown')
+                : (instance.date || 'Unknown');
+            const posLine = (instance.set_number && instance.position_in_set)
+                ? `<div class="history-position">Set ${instance.set_number}, Tune ${instance.position_in_set}</div>`
+                : '';
+            const settingId = instance.setting_id_override || '';
             return `
                 <div class="history-item">
-                    <div class="history-instance-name"><a href="${link}">${instanceName}</a></div>
-                    <div class="history-position">Position in session log: #${position}</div>
+                    <div class="history-instance-name"><a href="${instance.link}">${instanceName}</a></div>
+                    ${posLine}
                     ${settingId ? `<div class="history-setting">Setting: #${settingId}</div>` : ''}
                 </div>
             `;
         }).join('\n');
 
-        return `<div class="history-list">${items}</div>`;
-    }
-
-    /**
-     * Build instance name for history
-     */
-    function buildInstanceName(instance, showFullName, config) {
-        if (showFullName) {
-            // Full format: "Session Name - YYYY-MM-DD" or "Session Name - MM/DD - Location"
-            return instance.full_name || instance.date || 'Unknown';
-        } else {
-            // Contextual format (within session): just the date or identifier
-            return instance.date || 'Unknown';
-        }
-    }
-
-    /**
-     * Build link to session instance detail with tune parameter
-     */
-    function buildInstanceLink(instance, tuneId, config) {
-        const instanceId = instance.session_instance_id;
-        const sessionPath = config.additionalData?.sessionPath || '';
-
-        if (config.context === 'admin') {
-            // Need full path - should be in instance data
-            return instance.link || '#';
-        }
-
-        return `/sessions/${sessionPath}/${instanceId}?tune=${tuneId}`;
+        const note = data.truncated ? '<div class="history-truncated">Showing the 100 most recent sessions.</div>' : '';
+        container.innerHTML = `<div class="history-list">${items}</div>${note}`;
     }
 
     /**
@@ -1480,6 +1546,9 @@ ${abcBody}`;
         document.querySelectorAll('.modal-tab-pane').forEach(pane => {
             pane.classList.toggle('active', pane.id === `${tabName}-tab`);
         });
+
+        // History is fetched lazily, only when the tab is actually viewed
+        if (tabName === 'history') loadHistory();
     }
 
     /**
@@ -2626,6 +2695,7 @@ ${abcBody}`;
         onFieldChange: onFieldChange,
         onSettingInput: onSettingInput,
         switchTab: switchTab,
+        setHistoryScope: setHistoryScope,
         save: save,
         incrementHeardCount: incrementHeardCount,
         decrementHeardCount: decrementHeardCount,
