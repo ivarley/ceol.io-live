@@ -752,6 +752,15 @@
     expanded = !expanded
     if (expanded) notesDraft = notesText // sync the editable buffer on open
   }
+  // Auto-collapse the expanded header as soon as the user starts doing anything else on
+  // the page (tap/click or keyboard focus outside the header). An unsaved notes draft
+  // keeps it open — collapsing would silently discard the typing (Save/Cancel stay up).
+  function collapseHeaderOnOutside(e) {
+    if (!expanded) return
+    if (e.target instanceof Element && e.target.closest('.topbar')) return
+    if (notesDraft !== notesText) return
+    expanded = false
+  }
   // Save the edited notes (online-only op; optimistic, reconciled by SSE echo).
   async function saveNotes() {
     const text = notesDraft
@@ -2852,6 +2861,9 @@
 </script>
 
 <svelte:window bind:innerWidth={winW} onkeydown={onWinKey} />
+<!-- Capture phase so inner stopPropagation (composer, trays, modals) can't keep the
+     expanded header from auto-closing when the user interacts elsewhere. -->
+<svelte:document onpointerdowncapture={collapseHeaderOnOutside} onfocusincapture={collapseHeaderOnOutside} />
 
 <main bind:this={mainEl} class:view-mode={viewing} class:wide>
   <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
