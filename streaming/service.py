@@ -344,7 +344,8 @@ async def _resolve_person(user_id):
         )
     if not row:
         return {"person_id": None, "name": ""}
-    return {"person_id": row["person_id"], "name": (row["first_name"] or "").strip()}
+    full_name = f"{(row['first_name'] or '').strip()} {(row['last_name'] or '').strip()}".strip()
+    return {"person_id": row["person_id"], "name": full_name}
 
 
 # --- Routes ---------------------------------------------------------------
