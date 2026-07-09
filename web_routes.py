@@ -165,6 +165,7 @@ def home():
                 suggested_tune=suggested_tune,
                 upcoming_sessions=upcoming_sessions,
                 in_progress_logs=in_progress_logs,
+                current_year=today.year,
             )
         else:
             return render_template("home.html")

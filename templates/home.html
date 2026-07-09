@@ -364,7 +364,7 @@
             </div>
             <div class="session-info">
                 <div class="session-name"><a href="/sessions/{{ s.path }}/{{ s.date }}">{{ s.name }}</a></div>
-                <div class="session-meta">{{ s.date.strftime('%A, %b %-d') }} &middot; edited {{ s.last_edit.strftime('%b %-d') }}</div>
+                <div class="session-meta">{{ s.date.strftime('%A, %b %-d, %Y' if s.date.year != current_year else '%A, %b %-d') }} &middot; edited {{ s.last_edit.strftime('%b %-d, %Y' if s.last_edit.year != current_year else '%b %-d') }}</div>
             </div>
         </div>
         {% endfor %}
