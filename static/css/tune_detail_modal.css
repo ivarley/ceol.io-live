@@ -847,6 +847,41 @@
     color: var(--modal-text-muted);
 }
 
+/* Played With tab */
+.played-with-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.played-with-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--modal-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #dee2e6);
+    cursor: pointer;
+}
+
+.played-with-item:hover {
+    background-color: var(--hover-bg, #e9ecef);
+}
+
+.played-with-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.played-with-count {
+    font-size: 13px;
+    color: var(--modal-text-muted);
+    flex-shrink: 0;
+}
+
 /* Loading states */
 .modal-loading {
     display: flex;

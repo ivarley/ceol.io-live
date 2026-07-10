@@ -29,6 +29,8 @@
     // expensive server-side) on first view of the tab, cached per scope for this modal.
     let historyScope = null;
     let historyCache = {};
+    let playedWithScope = null;
+    let playedWithCache = {};
 
     // Musical keys list
     const MUSICAL_KEYS = [
@@ -85,7 +87,9 @@
         currentContext = config.context;
         currentConfig = config;
         historyCache = {};
+        playedWithCache = {};
         historyScope = historyScopeOptions(config)[0].key;
+        playedWithScope = playedWithScopeOptions(config)[0].key;
         if (config.expandInstrumentStatus !== undefined) piExpanded = !!config.expandInstrumentStatus;
         pendingHeardCountRequests = 0; // Reset pending requests counter
         const modal = document.getElementById('tune-detail-modal');
@@ -1087,6 +1091,7 @@ ${abcBody}`;
                 <div class="modal-tabs-header">
                     <button class="modal-tab active" data-tab="stats" onclick="TuneDetailModal.switchTab('stats')">Stats</button>
                     <button class="modal-tab" data-tab="history" onclick="TuneDetailModal.switchTab('history')">History</button>
+                    <button class="modal-tab" data-tab="played-with" onclick="TuneDetailModal.switchTab('played-with')">Played With</button>
                 </div>
                 <div class="modal-tabs-content">
                     <div id="stats-tab" class="modal-tab-pane active">
@@ -1094,6 +1099,9 @@ ${abcBody}`;
                     </div>
                     <div id="history-tab" class="modal-tab-pane">
                         ${buildHistoryTabContent(tuneData, config)}
+                    </div>
+                    <div id="played-with-tab" class="modal-tab-pane">
+                        ${buildPlayedWithTabContent(config)}
                     </div>
                 </div>
             </div>
@@ -1276,6 +1284,145 @@ ${abcBody}`;
 
         const note = data.truncated ? '<div class="history-truncated">Showing the 100 most recent sessions.</div>' : '';
         container.innerHTML = `<div class="history-list">${items}</div>${note}`;
+    }
+
+    /**
+     * The Played With scopes available for the current context. First entry is the
+     * default. A single entry means no toggle is shown.
+     */
+    function playedWithScopeOptions(config) {
+        if ((config.context === 'session' || config.context === 'session_instance')
+            && !config.additionalData?.global && config.additionalData?.sessionPath) {
+            return [{ key: 'session', label: 'At This Session' }, { key: 'all', label: 'Globally' }];
+        }
+        return [{ key: 'all', label: 'Globally' }];
+    }
+
+    /**
+     * Build Played With tab content — just the scope toggle and an empty container.
+     * The actual list is fetched on first view of the tab (see loadPlayedWith).
+     */
+    function buildPlayedWithTabContent(config) {
+        const options = playedWithScopeOptions(config);
+        const toggle = options.length > 1 ? `
+            <div class="history-scope-toggle">
+                ${options.map(o => `<button class="played-with-scope-btn history-scope-btn${o.key === playedWithScope ? ' active' : ''}" data-scope="${o.key}" onclick="TuneDetailModal.setPlayedWithScope('${o.key}'); return false;">${o.label}</button>`).join('')}
+            </div>
+        ` : '';
+        return `${toggle}<div id="played-with-container"><div class="history-loading">Loading tunes…</div></div>`;
+    }
+
+    /**
+     * Switch the Played With scope (At This Session / Globally) and (re)load.
+     */
+    function setPlayedWithScope(scope) {
+        playedWithScope = scope;
+        document.querySelectorAll('.played-with-scope-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.scope === scope);
+        });
+        loadPlayedWith();
+    }
+
+    /**
+     * Fetch the tunes this tune has been played in a set with for the current scope
+     * (cached per scope per modal open) and render them. Lazy — called on first view
+     * of the Played With tab.
+     */
+    function loadPlayedWith() {
+        const container = document.getElementById('played-with-container');
+        if (!container || !currentConfig) return;
+        const tuneId = currentConfig.tuneId || (currentTuneData && currentTuneData.tune_id);
+        if (!tuneId) {
+            container.innerHTML = '<div class="no-history">No set history recorded yet.</div>';
+            return;
+        }
+        const scope = playedWithScope;
+        if (playedWithCache[scope]) {
+            renderPlayedWithList(playedWithCache[scope]);
+            return;
+        }
+        container.innerHTML = '<div class="history-loading">Loading tunes…</div>';
+        let url = `/api/tunes/${tuneId}/played-with`;
+        if (scope === 'session') {
+            url += `?session_path=${encodeURIComponent(currentConfig.additionalData.sessionPath)}`;
+        }
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (scope !== playedWithScope) return; // user toggled scope while loading
+                if (!data.success) {
+                    container.innerHTML = '<div class="no-history">Could not load played-with tunes.</div>';
+                    return;
+                }
+                playedWithCache[scope] = data;
+                renderPlayedWithList(data);
+            })
+            .catch(() => {
+                const c = document.getElementById('played-with-container');
+                if (c && scope === playedWithScope) c.innerHTML = '<div class="no-history">Could not load played-with tunes.</div>';
+            });
+    }
+
+    /**
+     * Render the Played With list: one row per companion tune with a count,
+     * already sorted by count descending by the server.
+     */
+    function renderPlayedWithList(data) {
+        const container = document.getElementById('played-with-container');
+        if (!container) return;
+        const tunes = data.tunes || [];
+        if (tunes.length === 0) {
+            const where = playedWithScope === 'session' ? ' at this session' : '';
+            container.innerHTML = `<div class="no-history">This tune has not been played in a set with any other tune${where} yet.</div>`;
+            return;
+        }
+        container.innerHTML = `<div class="played-with-list">${tunes.map(t => `
+            <div class="played-with-item" data-tune-id="${t.tune_id}">
+                <span class="played-with-name">${escapeHtml(t.name)}</span>
+                <span class="played-with-count">${t.count}</span>
+            </div>
+        `).join('\n')}</div>`;
+        container.querySelector('.played-with-list').addEventListener('click', e => {
+            const item = e.target.closest('.played-with-item');
+            if (item) openPlayedWithTune(parseInt(item.dataset.tuneId, 10));
+        });
+    }
+
+    /**
+     * Open a companion tune's detail modal in place of the current one. When the
+     * current modal is session-scoped, the session context is carried along (as a
+     * 'session' view — the tune may not be in this particular instance's log) so
+     * the At This Session / Globally toggles stay available. Otherwise it opens as
+     * a session-agnostic global view.
+     */
+    function openPlayedWithTune(tuneId) {
+        if (!tuneId) return;
+        const prev = currentConfig?.additionalData || {};
+        const loggedIn = prev.isUserLoggedIn
+            ?? (currentContext === 'my_tunes' || !!currentTuneData?.person_tune_status);
+        const sessionPath = !prev.global
+            && (currentContext === 'session' || currentContext === 'session_instance')
+            ? prev.sessionPath : null;
+        if (sessionPath) {
+            showModal({
+                context: 'session',
+                tuneId: tuneId,
+                apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tuneId}`,
+                onSave: currentConfig.onSave,
+                additionalData: {
+                    sessionPath: sessionPath,
+                    isUserLoggedIn: loggedIn,
+                    isSessionAdmin: !!prev.isSessionAdmin,
+                },
+            });
+        } else {
+            showModal({
+                context: 'session_instance',
+                tuneId: tuneId,
+                apiEndpoint: `/api/tunes/${tuneId}/detail`,
+                additionalData: { isUserLoggedIn: loggedIn, global: true },
+            });
+        }
     }
 
     /**
@@ -1543,8 +1690,9 @@ ${abcBody}`;
             pane.classList.toggle('active', pane.id === `${tabName}-tab`);
         });
 
-        // History is fetched lazily, only when the tab is actually viewed
+        // History and Played With are fetched lazily, only when the tab is actually viewed
         if (tabName === 'history') loadHistory();
+        if (tabName === 'played-with') loadPlayedWith();
     }
 
     /**
@@ -2692,6 +2840,7 @@ ${abcBody}`;
         onSettingInput: onSettingInput,
         switchTab: switchTab,
         setHistoryScope: setHistoryScope,
+        setPlayedWithScope: setPlayedWithScope,
         save: save,
         incrementHeardCount: incrementHeardCount,
         decrementHeardCount: decrementHeardCount,

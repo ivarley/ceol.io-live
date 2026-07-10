@@ -293,6 +293,78 @@ def get_tune_history(tune_id):
         conn.close()
 
 
+def get_tune_played_with(tune_id):
+    """Companion tunes for the tune-detail modal's Played With tab, fetched lazily on
+    first view.
+
+    GET /api/tunes/<tune_id>/played-with
+        ?session_path=<path>  — only count sets played at that session
+
+    Counts how often each other tune appeared in the same set as this one (sets are
+    delimited by break records within an instance, spec 023).
+    Unlinked log rows (tune_id NULL) are skipped — the tab's rows open the companion
+    tune's detail modal, which needs a canonical tune.
+    """
+    session_path = request.args.get("session_path") or None
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
+
+        cur.execute(
+            """
+            WITH target_instances AS (
+                SELECT DISTINCT sit.session_instance_id
+                FROM session_instance_tune sit
+                JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                JOIN session s ON s.session_id = si.session_id
+                WHERE sit.tune_id = %(tune_id)s AND sit.deleted = FALSE
+                  AND (%(session_path)s::text IS NULL OR s.path = %(session_path)s)
+            ),
+            instance_rows AS (
+                SELECT sit.session_instance_id, sit.tune_id, sit.record_type,
+                       SUM(CASE WHEN sit.record_type = 'break' THEN 1 ELSE 0 END)
+                           OVER (PARTITION BY sit.session_instance_id
+                                 ORDER BY sit.order_position, sit.session_instance_tune_id) AS set_idx
+                FROM session_instance_tune sit
+                JOIN target_instances ti ON sit.session_instance_id = ti.session_instance_id
+                WHERE sit.deleted = FALSE
+            ),
+            target_sets AS (
+                SELECT DISTINCT session_instance_id, set_idx
+                FROM instance_rows
+                WHERE tune_id = %(tune_id)s
+            )
+            SELECT r.tune_id, t.name, t.tune_type, COUNT(*) AS times_together
+            FROM instance_rows r
+            JOIN target_sets ts ON r.session_instance_id = ts.session_instance_id
+                               AND r.set_idx = ts.set_idx
+            JOIN tune t ON t.tune_id = r.tune_id
+            WHERE r.record_type <> 'break'
+              AND r.tune_id IS NOT NULL
+              AND r.tune_id <> %(tune_id)s
+            GROUP BY r.tune_id, t.name, t.tune_type
+            ORDER BY times_together DESC, t.name
+            """,
+            {"tune_id": tune_id, "session_path": session_path},
+        )
+        tunes = [
+            {"tune_id": row[0], "name": row[1], "tune_type": row[2], "count": row[3]}
+            for row in cur.fetchall()
+        ]
+
+        return jsonify({
+            "success": True,
+            "redirected_from": redirected_from,
+            "tunes": tunes,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Error retrieving played-with tunes: {str(e)}"}), 500
+    finally:
+        conn.close()
+
+
 @api_login_required
 def admin_set_beta_logging(user_id):
     """System-admin only: turn the new live editor on/off for a user (beta rollout).
