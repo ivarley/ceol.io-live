@@ -356,6 +356,15 @@ def get_person_tune_detail(person_tune_id):
             row = cur.fetchone()
             global_play_count = row[0] if row else 0
             response_data['global_play_count'] = global_play_count
+
+            # How many people have this tune on their Ceol.io tune list
+            cur.execute("""
+                SELECT COUNT(*)
+                FROM person_tune
+                WHERE tune_id = %s
+            """, (person_tune.tune_id,))
+            row = cur.fetchone()
+            response_data['person_list_count'] = row[0] if row else 0
         finally:
             conn.close()
         

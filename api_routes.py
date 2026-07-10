@@ -146,6 +146,9 @@ def get_tune_detail_global(tune_id):
         cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
         global_play_count = cur.fetchone()[0]
 
+        cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,))
+        person_list_count = cur.fetchone()[0]
+
         return jsonify({"success": True, "redirected_from": redirected_from, "session_tune": {
             "tune_id": tune_id, "tune_name": tune_name, "tune_type": tune_type,
             "alias": None, "setting_id": setting_id, "key": None, "setting_key": None,
@@ -155,6 +158,7 @@ def get_tune_detail_global(tune_id):
             "tunebook_count": tunebook_count,
             "tunebook_count_cached_date": tbc_date.isoformat() if tbc_date else None,
             "times_played": 0, "global_play_count": global_play_count,
+            "person_list_count": person_list_count,
             "person_tune_status": person_tune_status,
         }})
     finally:
@@ -1731,6 +1735,13 @@ def get_session_tune_detail(session_path, tune_id):
         )
         global_play_result = cur.fetchone()
         global_play_count = global_play_result[0] if global_play_result else 0
+
+        # How many people have this tune on their Ceol.io tune list
+        cur.execute(
+            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
+        )
+        person_list_result = cur.fetchone()
+        person_list_count = person_list_result[0] if person_list_result else 0
         cur.close()
 
         conn.close()
@@ -1761,6 +1772,7 @@ def get_session_tune_detail(session_path, tune_id):
                     ),
                     "times_played": times_played,
                     "global_play_count": global_play_count,
+                    "person_list_count": person_list_count,
                     "person_tune_status": person_tune_status,
                 },
             }
@@ -11326,6 +11338,13 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         )
         global_play_result = cur.fetchone()
         global_play_count = global_play_result[0] if global_play_result else 0
+
+        # How many people have this tune on their Ceol.io tune list
+        cur.execute(
+            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
+        )
+        person_list_result = cur.fetchone()
+        person_list_count = person_list_result[0] if person_list_result else 0
         cur.close()
 
         conn.close()
@@ -11362,6 +11381,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
                     ),
                     "times_played": times_played,
                     "global_play_count": global_play_count,
+                    "person_list_count": person_list_count,
                     "person_tune_status": person_tune_status,
                 },
             }
@@ -11741,6 +11761,13 @@ def get_admin_tune_detail(tune_id):
         play_count_result = cur.fetchone()
         global_play_count = play_count_result[0] if play_count_result else 0
 
+        # How many people have this tune on their Ceol.io tune list
+        cur.execute(
+            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
+        )
+        person_list_result = cur.fetchone()
+        person_list_count = person_list_result[0] if person_list_result else 0
+
         # Play history is NOT fetched here — the modal lazily loads it from
         # /api/tunes/<id>/history when the History tab is first viewed.
 
@@ -11771,6 +11798,7 @@ def get_admin_tune_detail(tune_id):
                     ),
                     "session_count": session_count,
                     "global_play_count": global_play_count,
+                    "person_list_count": person_list_count,
                 },
             }
         )

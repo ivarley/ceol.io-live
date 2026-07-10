@@ -1101,64 +1101,60 @@ ${abcBody}`;
     }
 
     /**
+     * A single stat card: a main line, plus an optional secondary line beneath it.
+     */
+    function statCard(mainHtml, subHtml) {
+        return `
+            <div class="stat-card">
+                <div class="stat-line">${mainHtml}</div>
+                ${subHtml ? `<div class="stat-subline">${subHtml}</div>` : ''}
+            </div>
+        `;
+    }
+
+    /**
      * Build Stats tab content
      */
     function buildStatsTabContent(tuneData, config) {
         const stats = [];
 
-        // TheSession.org popularity
+        const plural = (n, word) => n === 1 ? word : word + 's';
+
+        // Ceol.io tune list count (absent from offline-cached data)
+        if (tuneData.person_list_count != null) {
+            const n = tuneData.person_list_count;
+            stats.push(statCard(
+                `Saved in <span class="stat-number">${n}</span> tune ${plural(n, 'list')} on Ceol.io`
+            ));
+        }
+
+        // TheSession.org tunebook count
         const tunebookCount = tuneData.tunebook_count || tuneData.tunebook_count_cached || 0;
         const cachedDate = tuneData.tunebook_count_cached_date || '';
-        stats.push(`
-            <div class="stat-item">
-                <div class="stat-label">TheSession.org Popularity:</div>
-                <div class="stat-value">
-                    <span id="tunebook-count">${tunebookCount}</span>
-                    <button class="refresh-btn" onclick="TuneDetailModal.refreshTunebookCount()" title="Refresh">↻</button>
-                    ${cachedDate ? `<span class="stat-date">Last Updated: ${cachedDate}</span>` : ''}
-                </div>
-            </div>
-        `);
+        stats.push(statCard(
+            `Saved in <span class="stat-number" id="tunebook-count">${tunebookCount}</span> ${plural(tunebookCount, 'tunebook')} on TheSession.org
+             <button class="refresh-btn" onclick="TuneDetailModal.refreshTunebookCount()" title="Refresh">↻</button>
+             ${cachedDate ? `<span class="stat-note">Last Updated ${cachedDate}</span>` : ''}`
+        ));
 
-        // Context-specific stats
+        // Context-specific logged counts
+        const loggedCard = (count, where) =>
+            statCard(`Logged <span class="stat-number">${count || 0}</span> ${plural(count || 0, 'time')} ${where}`);
+
         if (config.context === 'my_tunes') {
-            stats.push(`
-                <div class="stat-item">
-                    <div class="stat-label">Times Played At My Sessions:</div>
-                    <div class="stat-value">${tuneData.session_play_count || 0}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Times Played Globally:</div>
-                    <div class="stat-value">${tuneData.global_play_count || 0}</div>
-                </div>
-            `);
+            stats.push(loggedCard(tuneData.session_play_count, 'at my sessions'));
+            stats.push(loggedCard(tuneData.global_play_count, 'at all sessions'));
         } else if (config.context === 'session' || config.context === 'session_instance') {
             // The global lookup view has no "this session" — show only the global count.
             if (!config.additionalData?.global) {
-                stats.push(`
-                    <div class="stat-item">
-                        <div class="stat-label">Times Played At This Session:</div>
-                        <div class="stat-value">${tuneData.times_played || 0}</div>
-                    </div>
-                `);
+                stats.push(loggedCard(tuneData.times_played, 'at this session'));
             }
-            stats.push(`
-                <div class="stat-item">
-                    <div class="stat-label">Times Played Globally:</div>
-                    <div class="stat-value">${tuneData.global_play_count || 0}</div>
-                </div>
-            `);
+            stats.push(loggedCard(tuneData.global_play_count, 'at all sessions'));
         } else if (config.context === 'admin') {
-            stats.push(`
-                <div class="stat-item">
-                    <div class="stat-label">Times Played Globally:</div>
-                    <div class="stat-value">${tuneData.global_play_count || 0}</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Number Of Sessions Playing This Tune:</div>
-                    <div class="stat-value">${tuneData.session_count || 0}</div>
-                </div>
-            `);
+            stats.push(loggedCard(tuneData.global_play_count, 'at all sessions'));
+            stats.push(statCard(
+                `In the repertoire of <span class="stat-number">${tuneData.session_count || 0}</span> sessions`
+            ));
         }
 
         return stats.join('\n');
