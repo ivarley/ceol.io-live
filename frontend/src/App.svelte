@@ -168,7 +168,9 @@
   // above the dropdown. (§D smart scroll)
   function ensureSeamVisible() {
     if (!setsEl) return
-    const seam = setsEl.querySelector('.seam.active')
+    // While editing, the edited row is the active spot (no seam is rendered) — keep IT
+    // in the band so the dropdown floating up from the dock can't cover it.
+    const seam = editingId != null ? setsEl.querySelector('.tune-row.editing') : setsEl.querySelector('.seam.active')
     if (!seam) return
     const sets = setsEl.getBoundingClientRect()
     const r = seam.getBoundingClientRect()
@@ -425,11 +427,17 @@
     }
     return byId.has(c) && !byId.get(c).deleted ? `after:${c}` : 'end'
   })
+  // What the seams actually render: while a tune row is selected (or being edited) the
+  // cursor hides — the selected row's ↑/↓ pills / the editing highlight are the active
+  // spot, and showing both at once reads as two competing "active" spots. The underlying
+  // position (insertAfterId) is kept, so it surfaces again when the row closes.
+  const visibleSeam = $derived(selectedId != null || editingId != null ? null : activeSeam)
 
   // maxPos + cursorPos now live in logstate.js (pure, unit-tested). Call sites pass
   // the current insertion cursor, the ordered list, and all records (for append).
   function setCursor(id) {
     insertAfterId = id
+    selectedId = null // cursor and row selection compete — placing the cursor deselects
     queueMicrotask(() => inputEl?.focus())
   }
   // Move the cursor to a seam and STAY in cursor mode (no composer focus) — used after a
@@ -561,6 +569,7 @@
     const interactive = ae && (ae.tagName === 'BUTTON' || ae.tagName === 'A' || ae.getAttribute?.('role') === 'button')
     if (interactive) return
     if (e.key === 'Enter') {
+      if (selectedId != null) return // row selected -> the cursor is hidden; no seam to act on
       // The live yellow end seam of an open set: Enter closes the set (same as "End set").
       if (activeSeam === 'end' && endIsOpen) { e.preventDefault(); endSet(); return }
       const act = seamActionFor(insertAfterId, displaySegments)
@@ -591,6 +600,7 @@
   // the set whose first tune is `nextFirstId` (spec 021 §C; prototype "new-set-after").
   function setNewSetCursor(nextFirstId) {
     insertAfterId = { newSet: nextFirstId }
+    selectedId = null
     queueMicrotask(() => inputEl?.focus())
   }
 
@@ -1334,8 +1344,7 @@
     return idx > 0 ? ordered[idx - 1].session_instance_tune_id : null
   }
   function insertAfterRow(id) {
-    setCursor(id) // cursor right after this tune; focuses composer
-    selectedId = null
+    setCursor(id) // cursor right after this tune; focuses composer + deselects
   }
   function insertBeforeRow(id) {
     const idx = ordered.findIndex((r) => r.session_instance_tune_id === id)
@@ -1344,7 +1353,6 @@
     // start-of-session (no pred): use the before-anchor so it lands at the set's front.
     if (pred && pred.record_type !== 'break') setCursor(pred.session_instance_tune_id)
     else setCursor({ before: id })
-    selectedId = null
   }
   function confirmRow(id) {
     // Optimistic + offline-queued (like change/remove/set-starter): patch confidence,
@@ -1370,7 +1378,10 @@
     editingId = id
     editingName = r.name || ''
     selectedId = null
-    insertAfterId = null // editing isn't an insertion point
+    // The edited tune IS the cursor location: no seam is shown or scrolled to while
+    // editing (the row's yellow highlight marks the spot), and when the edit ends the
+    // cursor surfaces right after this tune instead of jumping to the end of the list.
+    insertAfterId = id
     input = r.name || ''
     runSearch()
     queueMicrotask(() => { inputEl?.focus(); inputEl?.select() })
@@ -3127,8 +3138,8 @@
           </div>
         {/if}
         {#if canEdit}
-          <div class="seam start-seam" role="button" tabindex="0" data-seam={`start:${seg.tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`start:${seg.tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `start:${seg.tunes[0].session_instance_tune_id}`} class:active={activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
-            {#if activeSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
+          <div class="seam start-seam" role="button" tabindex="0" data-seam={`start:${seg.tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`start:${seg.tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `start:${seg.tunes[0].session_instance_tune_id}`} class:active={visibleSeam === `start:${seg.tunes[0].session_instance_tune_id}`} onclick={() => setCursor({ before: seg.tunes[0].session_instance_tune_id })} onkeydown={(e) => activate(e, () => setCursor({ before: seg.tunes[0].session_instance_tune_id }))}>
+            {#if visibleSeam === `start:${seg.tunes[0].session_instance_tune_id}`}
               <span class="seam-line"></span>
             {:else}<span class="seam-plus">＋ start of set</span>{/if}
           </div>
@@ -3178,7 +3189,13 @@
               <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
-              {#if canEdit && !selectMode}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+              {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
+              {#if canEdit && !selectMode && selectedId === r.session_instance_tune_id}
+                <!-- selected-row insert points: pills riding the row's edges (like the
+                     seam Split/Join pills) that place the cursor before/after this tune -->
+                <button class="insert-pill top" title="Insert above" aria-label="Insert above" onclick={(e) => { e.stopPropagation(); insertBeforeRow(r.session_instance_tune_id) }}>↑</button>
+                <button class="insert-pill bottom" title="Insert below" aria-label="Insert below" onclick={(e) => { e.stopPropagation(); insertAfterRow(r.session_instance_tune_id) }}>↓</button>
+              {/if}
             {/if}
             {#if selectMode}
               {#if selected.has(r.session_instance_tune_id)}<span class="sel-badge" aria-hidden="true">✓</span>{/if}
@@ -3208,9 +3225,7 @@
               </div>
             {:else}
             <div class="row-actions">
-              <button onclick={() => openDrawer(r)}>ⓘ Info</button>
-              <button onclick={() => insertBeforeRow(r.session_instance_tune_id)}>↑ Before</button>
-              <button onclick={() => insertAfterRow(r.session_instance_tune_id)}>↓ After</button>
+              {#if r.tune_id}<button onclick={() => openDrawer(r)}>ⓘ Info</button>{/if}
               {#if r.confidence != null && r.confidence <= 70}
                 <button onclick={() => confirmRow(r.session_instance_tune_id)}>✓ Confirm</button>
               {/if}
@@ -3222,16 +3237,16 @@
           {#if !r._temp && canEdit}
             {#if endIsOpen && si === displaySegments.length - 1 && ti === seg.tunes.length - 1}
               <!-- last tune of the open set: this seam IS the end (append) point -->
-              <div class="seam end-seam" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
-                {#if activeSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
+              <div class="seam end-seam" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={visibleSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
+                {#if visibleSeam === 'end'}<span class="seam-line"></span>{:else}<span class="seam-plus">＋</span>{/if}
               </div>
               {#if drag?.started && dragKeys?.has('end-new')}
                 <!-- drag-only drop zone: land as own set(s) below the open end (spec 029 §F) -->
                 <div class="drop-extreme" data-seam="end-new" class:drop-active={drag.activeKey === 'end-new'}>new set</div>
               {/if}
             {:else}
-              <div class="seam" role="button" tabindex="0" data-seam={`after:${r.session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`after:${r.session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `after:${r.session_instance_tune_id}`} class:active={activeSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
-                {#if activeSeam === `after:${r.session_instance_tune_id}`}
+              <div class="seam" role="button" tabindex="0" data-seam={`after:${r.session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`after:${r.session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `after:${r.session_instance_tune_id}`} class:active={visibleSeam === `after:${r.session_instance_tune_id}`} onclick={() => setCursor(r.session_instance_tune_id)} onkeydown={(e) => activate(e, () => setCursor(r.session_instance_tune_id))}>
+                {#if visibleSeam === `after:${r.session_instance_tune_id}`}
                   <span class="seam-line"></span>
                   {#if ti < seg.tunes.length - 1}
                     <button class="seam-pill split" onclick={(e) => { e.stopPropagation(); splitAt(r.session_instance_tune_id) }}>Split</button>
@@ -3243,8 +3258,8 @@
         {/each}
       </div>
       {#if canEdit && si < displaySegments.length - 1 && seg.breakAfter != null}
-        <div class="seam inter-seam" role="button" tabindex="0" data-seam={`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:active={activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
-          {#if activeSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
+        <div class="seam inter-seam" role="button" tabindex="0" data-seam={`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:drop-eligible={dragKeys?.has(`inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`)} class:drop-active={drag?.started && drag.activeKey === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} class:active={visibleSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`} onclick={() => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id)} onkeydown={(e) => activate(e, () => setNewSetCursor(displaySegments[si + 1].tunes[0].session_instance_tune_id))}>
+          {#if visibleSeam === `inter:${displaySegments[si + 1].tunes[0].session_instance_tune_id}`}
             <span class="seam-line"></span>
             <button class="seam-pill join" onclick={(e) => { e.stopPropagation(); joinAt(seg.breakAfter) }}>Join</button>
           {:else}<span class="seam-plus">＋ new set</span>{/if}
@@ -3264,8 +3279,8 @@
     {/each}
     {#if ordered.length && !endIsOpen && canEdit}
       <!-- closed end (trailing break): the end cursor starts a NEW set here -->
-      <div class="seam end-seam new-set-end" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={activeSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
-        {#if activeSeam === 'end'}
+      <div class="seam end-seam new-set-end" role="button" tabindex="0" data-seam="end" class:drop-eligible={dragKeys?.has('end')} class:drop-active={drag?.started && drag.activeKey === 'end'} class:active={visibleSeam === 'end'} onclick={() => setCursor(null)} onkeydown={(e) => activate(e, () => setCursor(null))}>
+        {#if visibleSeam === 'end'}
           <span class="seam-line"></span><span class="seam-hint">new set</span>
         {:else}<span class="seam-plus">＋ new set</span>{/if}
       </div>
@@ -3411,7 +3426,7 @@
           bind:this={inputEl}
           oninput={onInput}
           onpaste={onComposerPaste}
-          onfocus={() => { composerFocused = true; scheduleSeam() }}
+          onfocus={() => { composerFocused = true; selectedId = null; scheduleSeam() }}
           onblur={stopTyping}
           onkeydown={(e) => {
             // "/" as the very first character jumps to the search box (spec 028), matching the

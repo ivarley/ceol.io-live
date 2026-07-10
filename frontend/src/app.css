@@ -314,6 +314,7 @@ main {
   cursor: pointer;
   /* transparent 1px border reserved so the logger tint (below) causes no layout shift */
   border: 1px solid transparent;
+  position: relative; /* anchors the selected row's Insert ↑/↓ edge pills */
 }
 /* subtle per-logger attribution tint on linked rows (§F): a thin border in a darker,
    desaturated variant of the logger's color (mixed toward the panel bg), with the ⓘ
@@ -327,7 +328,29 @@ main {
 .row-warn { flex: none; color: var(--attention); font-size: 12px; font-weight: 600; margin-left: 6px; white-space: nowrap; }
 .tune-row:hover { background: rgba(255, 255, 255, 0.03); }
 /* selected row uses the same yellow as the insertion point (active editing) */
-.tune-row.selected { background: rgba(245, 197, 24, 0.14); box-shadow: inset 0 0 0 1px var(--insert), 0 0 12px rgba(245, 197, 24, 0.18); }
+.tune-row.selected { background: rgba(245, 197, 24, 0.14); box-shadow: inset 0 0 0 1px var(--insert), 0 0 12px rgba(245, 197, 24, 0.18); z-index: 1; }
+/* insert points on the selected row: seam-pill-style buttons straddling the row's top
+   and bottom edges at the right end; tapping one places the cursor before/after the row */
+.insert-pill {
+  position: absolute;
+  right: 10px;
+  z-index: 2;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 0;
+  min-width: 30px;
+  text-align: center;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  background: var(--insert);
+  color: #2a2008;
+  white-space: nowrap;
+}
+.insert-pill.top { top: -10px; }
+.insert-pill.bottom { bottom: -10px; }
 .tune-row.editing { background: rgba(245, 197, 24, 0.14); box-shadow: inset 0 0 0 1px var(--insert); }
 .tune-row .name { flex: 1; min-width: 0; }
 .info-btn {
@@ -346,7 +369,7 @@ main {
 .row-actions button.danger { color: #e0594b; }
 .row-actions button.danger:hover { border-color: #e0594b; }
 @media (max-width: 480px) {
-  /* phone: five buttons must share one line — shrink and let them flex to fill */
+  /* phone: the action buttons must share one line — shrink and let them flex to fill */
   .row-actions { gap: 4px; }
   .row-actions button {
     flex: 1 1 auto; min-width: 0; white-space: nowrap; text-align: center;
