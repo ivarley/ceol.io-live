@@ -2653,11 +2653,16 @@ def admin_people():
                 pt.last_tunebook_update
             FROM person p
             LEFT JOIN user_account ua ON p.person_id = ua.person_id
+            -- login_history is append-only, so it survives logout and session
+            -- expiry. user_session rows are deleted on both, which made the old
+            -- MAX(user_session.last_accessed) read as "Never" for anyone without
+            -- a currently-live session.
             LEFT JOIN (
                 SELECT
                     user_id,
-                    MAX(last_accessed) as last_login
-                FROM user_session
+                    MAX(timestamp) as last_login
+                FROM login_history
+                WHERE event_type = 'LOGIN_SUCCESS'
                 GROUP BY user_id
             ) us ON ua.user_id = us.user_id
             LEFT JOIN (
