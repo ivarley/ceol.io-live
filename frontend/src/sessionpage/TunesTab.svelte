@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast, SearchField } from '../lib/index.js'
+  import { toast, SearchField, Chip } from '../lib/index.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -615,12 +615,12 @@
               <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
             </div>
             <div class="tune-meta">
-              {#if st}<span class="ls-chip {st.cls}">{st.status}</span>{/if}
-              {#if tune.tune_type}<span class="tune-type">{tune.tune_type}</span>{/if}
+              {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}
+              {#if tune.tune_type}<Chip label={tune.tune_type} styled={false} chipClass="tune-type" />{/if}
               {#if sort.type === 'session'}
-                <span class="tune-count-badge">{tune.play_count || 0}</span>
+                <Chip label={String(tune.play_count || 0)} styled={false} chipClass="tune-count-badge" />
               {:else if sort.type === 'everywhere'}
-                <span class="tune-count-badge">{tune.tunebook_count || 0}</span>
+                <Chip label={String(tune.tunebook_count || 0)} styled={false} chipClass="tune-count-badge" />
               {/if}
             </div>
           </div>

@@ -75,10 +75,22 @@ top-center stack (`--z-toast`), auto-dismissing after 3s.
 Surface with border + `--r` radius. Props: `hover` (shadow on hover),
 `children`; extra attributes (`class`, `onclick`, …) pass through.
 
-### Chip
-Pill for statuses/filters/instruments. Props: `label` (or `children`),
-`active`, `dismissible` (× button → `onDismiss`), `onclick` (makes the body a
-button), `variant`: `'default' | 'primary' | 'success' | 'warning' | 'danger'`.
+### Chip — small pill/badge
+THE badge — status badges, type pills, filter pills, count badges, role and
+instrument markers all run on it. Clickable (whole chip is a real `<button>`,
+padding included), dismissible (the ONE sanctioned × glyph, U+00D7), or plain.
+
+| Prop | Default | |
+|---|---|---|
+| `label` / `children` | — | text or richer content |
+| `active` | `false` | |
+| `dismissible` | `false` | renders the × (`onDismiss`) |
+| `onclick` | — | whole-chip button (with `dismissible`, the body and × are separate buttons) |
+| `variant` | `'default'` | `'primary' | 'success' | 'warning' | 'danger'` (styled mode) |
+| `styled` | `true` | `false` = structure only; skin comes from the page via `chipClass` |
+| `chipClass` / `xClass` | — | legacy skin + e2e/CSS hook passthrough |
+| `...rest` | — | `title`, `style`, `data-*` … pass to the chip |
+
 
 ### Tabs — responsive tabs (bits-ui `Tabs`)
 Desktop: horizontal tab buttons. Under 768px: the same panes behind a

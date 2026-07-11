@@ -5,6 +5,7 @@
   // instrument statuses (collapsed roll-up like the detail modal), notes, and an
   // Advanced setting field. Mounted once by my_tunes.html; the page opens/closes it
   // through the exported open()/close() (window.MyTunesAddPane).
+  import { Chip } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -282,7 +283,7 @@
           {/if}
           <div class="deep-meta">
             {#if picked.thesession_id != null && picked.tune_id == null}
-              <span class="deep-badge">importing from thesession.org</span>
+              <Chip label="importing from thesession.org" styled={false} chipClass="deep-badge" />
             {/if}
             {#if picked.tunebook_count != null}
               <span class="deep-books">{picked.tunebook_count} tunebooks</span>
@@ -313,8 +314,8 @@
                   <div class="tsc-block tsc-inst-block">
                     <div class="tsc-label-line mt-label">
                       {inst.instrument}
-                      {#if !inst.is_auto}<span class="mt-manual-badge">manual</span>{/if}
-                      {#if effectiveStatus(inst) === null}<span class="mt-untracked">not tracking</span>{/if}
+                      {#if !inst.is_auto}<Chip label="manual" styled={false} chipClass="mt-manual-badge" />{/if}
+                      {#if effectiveStatus(inst) === null}<Chip label="not tracking" styled={false} chipClass="mt-untracked" />{/if}
                     </div>
                     <div class="tunebook-status-seg">
                       {#each STATUSES as st}

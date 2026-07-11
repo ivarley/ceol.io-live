@@ -4,7 +4,7 @@
   // deep link auto-open, and the Add Session Instance modal (suggestion-prefilled).
   let { sessionPath, locationName, load } = $props()
 
-  import { toast } from '../lib/index.js'
+  import { toast, Chip } from '../lib/index.js'
 
   // session_instance_modal.js declares `const SessionInstanceModal` — a global
   // LEXICAL binding, not a window property. The legacy inline onclick handlers
@@ -203,7 +203,7 @@
                 <td class="log-tunes text-center">{log.tune_count}</td>
                 <td class="log-attendance text-center">{log.attendance_count}</td>
                 <td class="log-status text-center">
-                  {#if log.is_cancelled}<span class="badge bg-danger">Cancelled</span>{:else}<span class="badge bg-success">Held</span>{/if}
+                  {#if log.is_cancelled}<Chip label="Cancelled" styled={false} chipClass="badge bg-danger" />{:else}<Chip label="Held" styled={false} chipClass="badge bg-success" />{/if}
                 </td>
               </tr>
             {/each}

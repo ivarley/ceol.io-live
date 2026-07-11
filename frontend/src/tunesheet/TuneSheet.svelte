@@ -11,7 +11,7 @@
   //
   // Contexts: my_tunes / session / session_instance / admin, plus the read-only
   // global lookup view (additionalData.global).
-  import { Dialog, Tabs, toast } from '../lib/index.js'
+  import { Chip, Dialog, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     extractTuneData,
@@ -1035,7 +1035,7 @@
           <tbody>
             <tr>
               {#if addl.tuneType}
-                <td class="modal-header-pill-cell"><span class="tune-type-pill">{addl.tuneType}</span></td>
+                <td class="modal-header-pill-cell"><Chip label={addl.tuneType} styled={false} chipClass="tune-type-pill" /></td>
               {/if}
               <td class="modal-header-title-cell">
                 <h2 class="modal-tune-title">{addl.tuneName || 'Loading...'}</h2>
@@ -1085,7 +1085,7 @@
           <tbody>
             <tr>
               {#if headerTuneType}
-                <td class="modal-header-pill-cell"><span class="tune-type-pill">{headerTuneType}</span></td>
+                <td class="modal-header-pill-cell"><Chip label={headerTuneType} styled={false} chipClass="tune-type-pill" /></td>
               {/if}
               <td class="modal-header-title-cell">
                 {#if isTitleClickable}
@@ -1302,7 +1302,7 @@
                         <div class="tsc-label-line">
                           <span class="tsc-name"
                             >{inst.instrument}{#if !inst.is_auto}
-                              <span class="tsc-manual">manual</span>{/if}</span
+                              <Chip label="manual" styled={false} chipClass="tsc-manual" />{/if}</span
                           >
                           {#if !inst.is_auto && st !== null}
                             <button type="button" class="tsc-remove" onclick={() => removeInstrumentTune(i)}

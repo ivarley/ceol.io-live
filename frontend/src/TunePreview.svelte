@@ -1,4 +1,5 @@
 <script>
+  import { Chip } from './lib/index.js'
   import { untrack } from 'svelte'
   import { fly } from 'svelte/transition'
   import { tunePreview, thesessionPreview, settingImage, renderRemoteAbc } from './client.js'
@@ -267,7 +268,7 @@
           <span class="pv-fact-none">Not played here yet</span>
         {/if}
         <span class="pv-fact-pop"><b>{data.tunebook_count ?? 0}</b> tunebooks</span>
-        {#if item?.r?.on_list}<span class="deep-badge star">★ on your list</span>{/if}
+        {#if item?.r?.on_list}<Chip label="★ on your list" styled={false} chipClass="deep-badge star" />{/if}
       </div>
 
       <!-- The alias region is ALWAYS a fixed two-line box while collapsed — reserved

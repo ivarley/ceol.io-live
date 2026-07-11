@@ -1,7 +1,7 @@
 <script>
   // People (Members) tab: session membership table with regulars/everyone
   // filter, name/email search (smart-quote normalized), and sortable columns.
-  import { SearchField } from '../lib/index.js'
+  import { SearchField, Chip } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
 
@@ -124,16 +124,16 @@
                 </td>
                 <td class="person-email">{#if person.email}{person.email}{:else}<span class="text-muted">No email</span>{/if}</td>
                 <td class="person-status">
-                  {#if person.is_regular}<span class="badge bg-success">Regular</span>{/if}
-                  {#if person.username}<span class="badge bg-info">User</span>{/if}
+                  {#if person.is_regular}<Chip label="Regular" styled={false} chipClass="badge bg-success" />{/if}
+                  {#if person.username}<Chip label="User" styled={false} chipClass="badge bg-info" />{/if}
                 </td>
                 <td class="person-attendance">{person.attendance_count} sessions</td>
                 <td class="person-last-attended">
                   {#if person.last_attended}{new Date(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
                 </td>
                 <td class="person-admin">
-                  {#if person.is_admin}<span class="badge bg-primary">Session</span>{/if}
-                  {#if person.is_system_admin}<span class="badge bg-warning">System</span>{/if}
+                  {#if person.is_admin}<Chip label="Session" styled={false} chipClass="badge bg-primary" />{/if}
+                  {#if person.is_system_admin}<Chip label="System" styled={false} chipClass="badge bg-warning" />{/if}
                 </td>
               </tr>
             {/each}

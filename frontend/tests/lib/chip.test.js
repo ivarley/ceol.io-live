@@ -45,3 +45,21 @@ describe('Chip', () => {
     expect(onclick).not.toHaveBeenCalled()
   })
 })
+
+describe('Chip — skin passthrough (spec 035 chip unification)', () => {
+  it('chipClass/xClass land on wrapper and dismiss button; styled={false} drops the skin', async () => {
+    const onDismiss = vi.fn()
+    render(Chip, {
+      props: { label: 'Reel', dismissible: true, onDismiss, styled: false, chipClass: 'filter-pill', xClass: 'filter-pill-x', title: 'a pill' },
+    })
+    const chip = document.querySelector('.kit-chip')
+    expect(chip.className).toContain('filter-pill')
+    expect(chip.className).not.toContain('kit-chip--styled')
+    expect(chip).toHaveAttribute('title', 'a pill')
+    const x = document.querySelector('.kit-x')
+    expect(x.className).toContain('filter-pill-x')
+    expect(x.textContent).toBe('\u00d7') // the ONE sanctioned close glyph
+    await fireEvent.click(x)
+    expect(onDismiss).toHaveBeenCalled()
+  })
+})

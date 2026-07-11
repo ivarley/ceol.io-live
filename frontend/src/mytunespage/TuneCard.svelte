@@ -11,6 +11,8 @@
   // `isMobile` is reactive (matchMedia in App), so rotating a tablet across the
   // 768px breakpoint re-renders the right variant — the legacy render-time
   // innerWidth check couldn't.
+  import { Chip } from '../lib/index.js'
+
   let {
     tune,
     isMobile,
@@ -132,31 +134,27 @@
   <div class="tune-card-header">
     <h3 class="tune-name">{tune.tune_name || 'Unknown'}</h3>
     {#if tune.pending_sync}
-      <span
-        class="pending-sync-badge"
+      <Chip
+        label="pending"
+        styled={false}
+        chipClass="pending-sync-badge"
         title="Queued - will sync when you are back online"
-        style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;">pending</span>
+        style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;" />
     {/if}
-    {#if typeLabel}<span class="tune-type">{typeLabel}</span>{/if}
+    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" />{/if}
   </div>
   <div class="tune-meta">
     <div class="tune-meta-item">
-      <span
-        class="status-badge {statusClass}"
+      <Chip
+        label={displayStatus}
+        styled={false}
+        chipClass="status-badge {statusClass}"
         style="cursor:pointer;"
         title="Tap to change status"
-        role="button"
-        tabindex="0"
         onclick={(e) => {
           e.stopPropagation()
           oncycle(tune, displayStatus, cycleIsInstrument)
-        }}
-        onkeydown={(e) => {
-          if (e.key === 'Enter') {
-            e.stopPropagation()
-            oncycle(tune, displayStatus, cycleIsInstrument)
-          }
-        }}>{displayStatus}</span>
+        }} />
     </div>
   </div>
   {#if displayStatus === 'want to learn'}

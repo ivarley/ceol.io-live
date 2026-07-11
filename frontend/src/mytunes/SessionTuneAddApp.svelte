@@ -5,6 +5,7 @@
   // the session questions instead: alias ("we call this"), and under Advanced a
   // specific setting and the key the session plays it in. Bundled into the
   // sessionpage bundle as a child of its App, driven via bind:this + open().
+  import { Chip } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -204,7 +205,7 @@
           {/if}
           <div class="deep-meta">
             {#if picked.thesession_id != null && picked.tune_id == null}
-              <span class="deep-badge">importing from thesession.org</span>
+              <Chip label="importing from thesession.org" styled={false} chipClass="deep-badge" />
             {/if}
             {#if picked.tunebook_count != null}
               <span class="deep-books">{picked.tunebook_count} tunebooks</span>

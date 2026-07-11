@@ -1,4 +1,5 @@
 <script>
+  import { Chip } from './lib/index.js'
   import { onDestroy, untrack, tick } from 'svelte'
   import { deepSearch, thesessionSearch, thesessionPreview, tunePreview } from './client.js'
   import Incipit from './Incipit.svelte'
@@ -400,10 +401,22 @@
   <!-- active filters as pills while the panel is closed; tap a pill to clear it -->
   <div class="deep-filters">
     {#if deepMode !== 'mixed'}
-      <button class="filter-pill" onclick={() => setDeepMode(deepMode)}>{deepMode === 'abc' ? 'By ABC' : 'By name'} <span class="x">✕</span></button>
+      <Chip
+        label={deepMode === 'abc' ? 'By ABC' : 'By name'}
+        dismissible
+        styled={false}
+        chipClass="filter-pill"
+        onclick={() => setDeepMode(deepMode)}
+        onDismiss={() => setDeepMode(deepMode)} />
     {/if}
     {#if deepType}
-      <button class="filter-pill" onclick={() => setDeepType(deepType)}>{pluralType(deepType)} <span class="x">✕</span></button>
+      <Chip
+        label={pluralType(deepType)}
+        dismissible
+        styled={false}
+        chipClass="filter-pill"
+        onclick={() => setDeepType(deepType)}
+        onDismiss={() => setDeepType(deepType)} />
     {/if}
   </div>
 {/if}

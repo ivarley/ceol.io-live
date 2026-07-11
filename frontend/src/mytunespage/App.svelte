@@ -25,7 +25,7 @@
 
   let { pageData = null } = $props()
 
-  import { toast, SearchField } from '../lib/index.js'
+  import { toast, SearchField, Chip } from '../lib/index.js'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -631,11 +631,14 @@
     {#if pills.length > 0}
       <div id="active-filter-pills" class="active-filter-pills" style="display: flex;">
         {#each pills as pill (pill.key)}
-          <span class="filter-pill">{pill.label}<button
-              type="button"
-              class="filter-pill-x"
-              title="Remove this filter"
-              onclick={() => removeFilterPill(pill.key)}>×</button></span>
+          <Chip
+            label={pill.label}
+            dismissible
+            styled={false}
+            chipClass="filter-pill"
+            xClass="filter-pill-x"
+            title="Remove this filter"
+            onDismiss={() => removeFilterPill(pill.key)} />
         {/each}
       </div>
     {/if}

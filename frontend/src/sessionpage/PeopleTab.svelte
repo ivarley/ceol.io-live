@@ -4,7 +4,7 @@
   // a new person), and the person-detail modal with its /people/<id> deep link.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { toast, SearchField } from '../lib/index.js'
+  import { toast, SearchField, Chip } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { parseTheSessionId, filterPeople } from './logic.js'
 
@@ -366,7 +366,7 @@
               </div>
             </div>
             <div class="person-meta">
-              <span class="person-attendance-badge">{person.attendance_count || 0}</span>
+              <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" />
             </div>
           </div>
         {/each}
@@ -412,7 +412,7 @@
               {#if detailPerson.instruments && detailPerson.instruments.length > 0}
                 <div class="person-instruments-list">
                   {#each detailPerson.instruments as inst (inst)}
-                    <span class="person-instrument-badge">{inst}</span>
+                    <Chip label={inst} styled={false} chipClass="person-instrument-badge" />
                   {/each}
                 </div>
               {:else}

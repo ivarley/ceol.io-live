@@ -6,7 +6,7 @@
   // same .modal CSS, body.modal-open kept for scroll-lock parity).
   let { initialSessions, person, personId, isUserProfile, isSystemAdmin } = $props()
 
-  import { Dialog, toast } from '../lib/index.js'
+  import { Dialog, toast, Chip } from '../lib/index.js'
 
   let sessions = $state([...initialSessions])
   let sessionFilter = $state('all')
@@ -220,7 +220,7 @@
           <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
             <div class="session-info">
               <a href="/sessions/{session.session_path}" class="session-title h6 mb-0 d-block text-decoration-none">{session.session_name}</a>
-              <small class="text-muted">{session.location}{#if session.role} &middot; <span class="session-role-badge" data-session-path={session.session_path}>{session.role}</span>{/if}</small>
+              <small class="text-muted">{session.location}{#if session.role} &middot; <Chip label={session.role} styled={false} chipClass="session-role-badge" data-session-path={session.session_path} />{/if}</small>
             </div>
             {#if isUserProfile}
               <button
