@@ -19,7 +19,7 @@
   const isSystemAdmin = pageData.is_system_admin
   const personId = person.id
 
-  import { toast } from '../lib/index.js'
+  import { toast, Tabs } from '../lib/index.js'
 
   const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logins']
 
@@ -43,6 +43,21 @@
   }
   noteActivated(initialTab)
 
+  // The person tabs (Logins only when a user account exists); labels differ
+  // between the /me and admin flavors.
+  const profileTabs = $derived.by(() => {
+    const t = [
+      { id: 'profile', label: 'Profile', domId: 'profile-tab' },
+      { id: 'sessions', label: sessionsTabLabel, domId: 'sessions-tab' },
+      { id: 'attended', label: attendedTabLabel, domId: 'attended-tab' },
+      { id: 'tunes', label: 'Tunes', domId: 'tunes-tab' },
+    ]
+    if (user) t.push({ id: 'logins', label: 'Logins', domId: 'logins-tab' })
+    return t
+  })
+
+  // Kit Tabs drives activeTab via bind:value; this handler adds the page's
+  // ?tab= URL sync + lazy-load bookkeeping (also called by the breadcrumb).
   function activateTab(targetId, updateUrl = true) {
     activeTab = targetId
     noteActivated(targetId)
@@ -112,94 +127,21 @@
   </nav>
 {/if}
 
-<!-- Mobile Tab Navigation (dropdown) -->
-<div class="profile-mobile-nav d-md-none mb-3">
-  <select
-    id="profile-tab-select"
-    class="form-select"
-    value={activeTab}
-    onchange={(e) => activateTab(e.currentTarget.value)}>
-    <option value="profile">Profile</option>
-    <option value="sessions">{sessionsTabLabel}</option>
-    <option value="attended">{attendedTabLabel}</option>
-    <option value="tunes">Tunes</option>
-    {#if user}
-      <option value="logins">Logins</option>
-    {/if}
-  </select>
-</div>
-
-<!-- Desktop Tab Navigation -->
-<ul class="nav nav-tabs d-none d-md-flex" id="profileTabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button
-      class="nav-link"
-      class:active={activeTab === 'profile'}
-      id="profile-tab"
-      data-bs-toggle="tab"
-      data-bs-target="#profile"
-      type="button"
-      role="tab"
-      aria-controls="profile"
-      aria-selected={activeTab === 'profile'}
-      onclick={() => activateTab('profile')}>Profile</button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button
-      class="nav-link"
-      class:active={activeTab === 'sessions'}
-      id="sessions-tab"
-      data-bs-toggle="tab"
-      data-bs-target="#sessions"
-      type="button"
-      role="tab"
-      aria-controls="sessions"
-      aria-selected={activeTab === 'sessions'}
-      onclick={() => activateTab('sessions')}>{sessionsTabLabel}</button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button
-      class="nav-link"
-      class:active={activeTab === 'attended'}
-      id="attended-tab"
-      data-bs-toggle="tab"
-      data-bs-target="#attended"
-      type="button"
-      role="tab"
-      aria-controls="attended"
-      aria-selected={activeTab === 'attended'}
-      onclick={() => activateTab('attended')}>{attendedTabLabel}</button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button
-      class="nav-link"
-      class:active={activeTab === 'tunes'}
-      id="tunes-tab"
-      data-bs-toggle="tab"
-      data-bs-target="#tunes"
-      type="button"
-      role="tab"
-      aria-controls="tunes"
-      aria-selected={activeTab === 'tunes'}
-      onclick={() => activateTab('tunes')}>Tunes</button>
-  </li>
-  {#if user}
-    <li class="nav-item" role="presentation">
-      <button
-        class="nav-link"
-        class:active={activeTab === 'logins'}
-        id="logins-tab"
-        data-bs-toggle="tab"
-        data-bs-target="#logins"
-        type="button"
-        role="tab"
-        aria-controls="logins"
-        aria-selected={activeTab === 'logins'}
-        onclick={() => activateTab('logins')}>Logins</button>
-    </li>
-  {/if}
-</ul>
-
+<!-- Responsive tabs: the kit engine (bits-ui tablist on desktop, <select> on
+     mobile) with this page's Bootstrap nav-tabs skin. listId keeps the
+     #profileTabs e2e/CSS hook; the select keeps its legacy id/class. -->
+<Tabs
+  tabs={profileTabs}
+  bind:value={activeTab}
+  onValueChange={(id) => activateTab(id)}
+  styled={false}
+  listId="profileTabs"
+  listClass="nav nav-tabs"
+  tabClass="nav-link"
+  selectId="profile-tab-select"
+  selectClass="form-select"
+  selectLabel="Profile section">
+  {#snippet children(active)}
 <!-- Tab Content -->
 <div class="tab-content" id="profileTabContent">
   <!-- Profile Tab (Person & User Info Combined) -->
@@ -270,3 +212,5 @@
     </div>
   {/if}
 </div>
+  {/snippet}
+</Tabs>

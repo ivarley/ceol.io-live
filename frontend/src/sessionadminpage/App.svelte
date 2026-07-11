@@ -5,6 +5,7 @@
   // this same shell), exactly like the legacy <a>-tabs / mobile-dropdown page.
   // showMessage and SessionInstanceModal are globals from base.html /
   // static/js/session_instance_modal.js, as before.
+  import { Tabs } from '../lib/index.js'
   import DetailsTab from './DetailsTab.svelte'
   import TunesAdminTab from './TunesAdminTab.svelte'
   import PeopleAdminTab from './PeopleAdminTab.svelte'
@@ -21,24 +22,15 @@
   const breadcrumbTab =
     activeTab === 'tunes' ? 'Tunes' : activeTab === 'people' ? 'Members' : activeTab === 'logs' ? 'Logs' : ''
 
-  function onMobileTabChange(e) {
-    const value = e.currentTarget.value
-    let url
-    if (value === 'details') {
-      url = `/admin/sessions/${sessionPath}`
-    } else if (value === 'tunes') {
-      url = `/admin/sessions/${sessionPath}/tunes`
-    } else if (value === 'people') {
-      url = `/admin/sessions/${sessionPath}/people`
-    } else if (value === 'logs') {
-      url = `/admin/sessions/${sessionPath}/logs`
-    } else if (value === 'cache') {
-      url = `/admin/sessions/${sessionPath}/cache`
-    }
-    if (url) {
-      window.location.href = url
-    }
-  }
+  // Each tab is a server route: the kit Tabs navigate mode renders real links
+  // on desktop and navigates from the mobile select.
+  const adminTabs = [
+    { id: 'details', label: 'Details', href: `/admin/sessions/${sessionPath}` },
+    { id: 'tunes', label: 'Tunes', href: `/admin/sessions/${sessionPath}/tunes` },
+    { id: 'people', label: 'Members', href: `/admin/sessions/${sessionPath}/people` },
+    { id: 'logs', label: 'Logs', href: `/admin/sessions/${sessionPath}/logs` },
+    { id: 'cache', label: 'Local Cache', href: `/admin/sessions/${sessionPath}/cache` },
+  ]
 </script>
 
 <!-- Session Admin Breadcrumb Navigation -->
@@ -60,37 +52,20 @@
   {/if}
 </nav>
 
-<!-- Session Admin Tab Navigation -->
+<!-- Session Admin Tab Navigation: kit Tabs in navigate mode (tabs are routes;
+     real links on desktop, the mobile select navigates). Legacy skin classes kept. -->
 <nav class="session-admin-tabs-nav">
-  <!-- Desktop Tab Navigation -->
-  <div class="nav nav-tabs" id="session-admin-tabs" role="tablist">
-    <a class="nav-link {activeTab === 'details' ? 'active' : ''}" href="/admin/sessions/{session.path}">
-      Details
-    </a>
-    <a class="nav-link {activeTab === 'tunes' ? 'active' : ''}" href="/admin/sessions/{session.path}/tunes">
-      Tunes
-    </a>
-    <a class="nav-link {activeTab === 'people' ? 'active' : ''}" href="/admin/sessions/{session.path}/people">
-      Members
-    </a>
-    <a class="nav-link {activeTab === 'logs' ? 'active' : ''}" href="/admin/sessions/{session.path}/logs">
-      Logs
-    </a>
-    <a class="nav-link {activeTab === 'cache' ? 'active' : ''}" href="/admin/sessions/{session.path}/cache">
-      Local Cache
-    </a>
-  </div>
-
-  <!-- Mobile Dropdown Navigation -->
-  <div class="session-admin-tabs-mobile">
-    <select class="form-select" id="session-admin-mobile-select" value={activeTab} onchange={onMobileTabChange}>
-      <option value="details">Details</option>
-      <option value="tunes">Tunes</option>
-      <option value="people">Members</option>
-      <option value="logs">Logs</option>
-      <option value="cache">Local Cache</option>
-    </select>
-  </div>
+  <Tabs
+    tabs={adminTabs}
+    navigate={true}
+    value={activeTab}
+    styled={false}
+    listId="session-admin-tabs"
+    listClass="nav nav-tabs"
+    tabClass="nav-link"
+    selectId="session-admin-mobile-select"
+    selectClass="form-select"
+    selectLabel="Admin section" />
 </nav>
 
 <!-- Tab Content -->

@@ -55,3 +55,43 @@ describe('Tabs', () => {
     expect(screen.getByTestId('pane')).toHaveTextContent('pane:stats')
   })
 })
+
+describe('Tabs — skin passthrough + navigate mode (spec 035 tabs unification)', () => {
+  it('stamps data-tab and an `active` class on triggers, and appends custom classes', async () => {
+    render(TabsFixture, { props: { tabs, tabClass: 'tab-button', listClass: 'tab-buttons' } })
+    const trigger = screen.getByRole('tab', { name: 'Tunes' })
+    expect(trigger).toHaveAttribute('data-tab', 'tunes')
+    expect(trigger.className).toContain('tab-button')
+    expect(trigger.className).toContain('active') // first tab is active by default
+    expect(document.querySelector('.kit-tabs-list').className).toContain('tab-buttons')
+    await fireEvent.click(screen.getByRole('tab', { name: 'Stats' }))
+    await tick()
+    expect(screen.getByRole('tab', { name: 'Tunes' }).className).not.toContain('active')
+    expect(screen.getByRole('tab', { name: 'Stats' }).className).toContain('active')
+  })
+
+  it('styled={false} drops the decorative root class but keeps structure', () => {
+    render(TabsFixture, { props: { tabs, styled: false } })
+    const root = document.querySelector('.kit-tabs')
+    expect(root.className).not.toContain('kit-tabs--styled')
+    expect(document.querySelector('select.kit-tabs-select')).toBeTruthy()
+  })
+
+  it('navigate mode renders real links and the select navigates', async () => {
+    const hrefTabs = [
+      { id: 'details', label: 'Details', href: '/admin/sessions/x' },
+      { id: 'tunes', label: 'Tunes', href: '/admin/sessions/x/tunes' },
+    ]
+    const onNavigate = vi.fn()
+    render(TabsFixture, { props: { tabs: hrefTabs, navigate: true, initial: 'details', onNavigate } })
+    const links = document.querySelectorAll('a.kit-tab')
+    expect(links).toHaveLength(2)
+    expect(links[1]).toHaveAttribute('href', '/admin/sessions/x/tunes')
+    expect(links[0]).toHaveAttribute('aria-current', 'page')
+    expect(links[0].className).toContain('active')
+
+    const select = document.querySelector('select.kit-tabs-select')
+    await fireEvent.change(select, { target: { value: 'tunes' } })
+    expect(onNavigate).toHaveBeenCalledWith('/admin/sessions/x/tunes')
+  })
+})

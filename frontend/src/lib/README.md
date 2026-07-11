@@ -82,14 +82,21 @@ button), `variant`: `'default' | 'primary' | 'success' | 'warning' | 'danger'`.
 
 ### Tabs — responsive tabs (bits-ui `Tabs`)
 Desktop: horizontal tab buttons. Under 768px: the same panes behind a
-`<select>`. Both controls always render; CSS picks one.
+`<select>`. Both controls always render; CSS picks one. THE tab engine —
+every tabbed surface (person page, session page, session admin, the tune
+sheet) uses it.
 
 | Prop | Default | |
 |---|---|---|
-| `tabs` | `[]` | `[{ id, label }]` |
+| `tabs` | `[]` | `[{ id, label, href?, domId? }]` — `href` per tab in navigate mode; `domId` = trigger DOM id (for `aria-labelledby` panes) |
 | `value` | first tab id | bindable active id |
-| `onValueChange` | noop | |
-| `children` | — | snippet receiving the active id — branch on it for panes |
+| `onValueChange` | noop | host hook: URL sync, lazy loads |
+| `navigate` | `false` | tabs are routes: real `<a href>` on desktop, the select navigates |
+| `onNavigate` | `location.href` | navigate-mode seam (tests) |
+| `styled` | `true` | `false` = structural responsive rule only; skin comes from the page via the class props |
+| `listId`/`listClass`/`tabClass`/`selectId`/`selectClass`/`paneClass` | — | legacy skin + e2e/CSS hook passthrough; triggers always carry `data-tab` and an `active` class |
+| `selectLabel` | `'Section'` | aria-label for the mobile select |
+| `children` | — | snippet receiving the active id — branch on it, or keep pane components mounted with an `active` flag when their state must survive switching |
 
 ```svelte
 <Tabs {tabs} bind:value>

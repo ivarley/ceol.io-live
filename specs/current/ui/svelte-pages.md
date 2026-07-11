@@ -128,3 +128,6 @@ legacy markup.
 - [AJAX Patterns](ajax.md) — serializer layer, auth decorators, Bearer tokens
 - [Live Logging](../logic/live-logging.md) — the spec-024 reference implementation
 - `specs/changes/inprogress/035-svelte-ui-consolidation.md` — the migration spec
+
+
+> Kit adoption update: lib/Tabs is now THE tab engine across personpage, sessionpage, sessionadminpage, and the tunesheet (value mode + onValueChange URL sync, or navigate mode with href tabs); pages keep their existing skins via the class-passthrough props and styled={false}.

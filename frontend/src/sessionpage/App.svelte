@@ -27,22 +27,21 @@
   const tabs = (() => {
     const t = isFestival
       ? [
-          ['logs', 'Sessions'],
-          ['tunes', 'Tunes'],
+          { id: 'logs', label: 'Sessions' },
+          { id: 'tunes', label: 'Tunes' },
         ]
       : [
-          ['tunes', 'Tunes'],
-          ['logs', 'Logs'],
+          { id: 'tunes', label: 'Tunes' },
+          { id: 'logs', label: 'Logs' },
         ]
-    if (showPeopleTab) t.push(['people', 'People'])
+    if (showPeopleTab) t.push({ id: 'people', label: 'People' })
     return t
   })()
 
   let activeTab = $state(ctx.activeTab || defaultTab)
 
-  function switchTab(tabName) {
-    activeTab = tabName
-    // Path-based navigation; the legacy switchTab dropped the query string here.
+  // Path-based tab URLs; the legacy switchTab dropped the query string here.
+  function onTabChange(tabName) {
     const newPath = `${basePathOf(window.location.pathname)}/${tabName}`
     window.history.pushState({}, '', newPath)
   }
@@ -54,7 +53,7 @@
   // to mount, now bundled in as a child with callback props (no window global).
   let addPane = $state(null)
 
-  import { toast } from '../lib/index.js'
+  import { toast, Tabs } from '../lib/index.js'
 
   $effect(() => {
     untrack(() => {
@@ -115,16 +114,20 @@
   })
 </script>
 
-<!-- Tabbed Interface -->
+<!-- Tabbed Interface: the kit Tabs engine with this page's legacy skin
+     (.tab-buttons/.tab-button CSS + e2e select on these classes). Pane
+     components stay mounted across switches so their state survives. -->
 <div class="tabs-container">
-  <div class="tab-buttons">
-    {#each tabs as [key, label] (key)}
-      <button class="tab-button" class:active={activeTab === key} data-tab={key} onclick={() => switchTab(key)}>{label}</button>
-    {/each}
-  </div>
-
+  <Tabs
+    {tabs}
+    bind:value={activeTab}
+    onValueChange={onTabChange}
+    styled={false}
+    listClass="tab-buttons"
+    tabClass="tab-button">
+    {#snippet children(active)}
   <TunesTab
-    active={activeTab === 'tunes'}
+    active={active === 'tunes'}
     {session}
     {permissions}
     addPane={() => addPane}
@@ -134,20 +137,22 @@
     deepLinkTuneId={ctx.tuneId || null} />
 
   <LogsTab
-    active={activeTab === 'logs'}
+    active={active === 'logs'}
     {session}
     isLoggedIn={permissions.is_logged_in}
     onAddInstance={openAddInstance} />
 
   {#if showPeopleTab}
     <PeopleTab
-      active={activeTab === 'people'}
+      active={active === 'people'}
       {sessionPath}
       sessionType={session.session_type}
       canonicalInstruments={ctx.canonicalInstruments || []}
       currentUserId={ctx.currentUserPersonId ?? null}
       initialPersonId={ctx.personId || null} />
   {/if}
+    {/snippet}
+  </Tabs>
 </div>
 
 <AddInstanceModal bind:this={addInstanceModal} {sessionPath} locationName={session.location_name} />

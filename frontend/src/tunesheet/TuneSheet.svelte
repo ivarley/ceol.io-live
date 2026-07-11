@@ -11,7 +11,7 @@
   //
   // Contexts: my_tunes / session / session_instance / admin, plus the read-only
   // global lookup view (additionalData.global).
-  import { Dialog, toast } from '../lib/index.js'
+  import { Dialog, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     extractTuneData,
@@ -1493,21 +1493,20 @@
 
         <!-- Tabs (Stats / History / Played With) -->
         <div class="modal-tabs-section">
-          <div class="modal-tabs-header">
-            <button class="modal-tab{activeTab === 'stats' ? ' active' : ''}" data-tab="stats" onclick={() => switchTab('stats')}
-              >Stats</button
-            >
-            <button
-              class="modal-tab{activeTab === 'history' ? ' active' : ''}"
-              data-tab="history"
-              onclick={() => switchTab('history')}>History</button
-            >
-            <button
-              class="modal-tab{activeTab === 'played-with' ? ' active' : ''}"
-              data-tab="played-with"
-              onclick={() => switchTab('played-with')}>Played With</button
-            >
-          </div>
+          <!-- Kit Tabs engine with the drawer's legacy skin; switchTab (the
+               onValueChange handler) keeps the lazy History/Played-With loads. -->
+          <Tabs
+            tabs={[
+              { id: 'stats', label: 'Stats' },
+              { id: 'history', label: 'History' },
+              { id: 'played-with', label: 'Played With' },
+            ]}
+            bind:value={activeTab}
+            onValueChange={switchTab}
+            styled={false}
+            listClass="modal-tabs-header"
+            tabClass="modal-tab"
+            selectLabel="Tune info section" />
           <div class="modal-tabs-content">
             <div id="stats-tab" class="modal-tab-pane{activeTab === 'stats' ? ' active' : ''}">
               {#if tune.person_list_count != null}
