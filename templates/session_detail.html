@@ -4550,7 +4550,7 @@
     }
 </script>
 <script src="{{ url_for('static', filename='js/mytunes_offline.js') }}"></script>
-<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
+{# Tune-detail modal comes from base.html's /static/tunesheet/sheet.js module (spec 035). #}
 <script>
 // Add-tune pane (slide-in on mobile, split pane on desktop). Falls back to the
 // legacy /tunes/add page only if the pane bundle failed to load.

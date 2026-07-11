@@ -1,7 +1,8 @@
-// My-tunebook (person_tune) status resolution — the CANONICAL vanilla-JS copy.
-// The tune-detail modal (tune_detail_modal.js) and the My Tunes / session pages
-// all delegate here; the only other implementation is the live logger's ES
-// module twin (frontend/src/mylist.js, unit-tested — keep the two in sync).
+// My-tunebook (person_tune) status resolution — the CANONICAL vanilla-JS copy
+// for the remaining vanilla pages (session detail etc.), which delegate here.
+// The only other implementation is the ES module twin (frontend/src/mylist.js,
+// unit-tested — keep the two in sync), which the Svelte bundles (live logger,
+// My Tunes page, tune-detail sheet) import instead.
 //
 // The rules:
 //   - override row wins; else an auto instrument follows the base learn_status;

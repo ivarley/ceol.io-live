@@ -149,14 +149,16 @@ class TestMobileLayout:
         assert '.filter-button-group' in css
 
     def test_modal_present(self, client, authenticated_user):
-        """Test that modal is present."""
+        """The tune-detail modal renders client-side (spec 035 Step 3): the page
+        loads the tunesheet bundle, which mounts #tune-detail-modal itself; its
+        CSS contract stays in the shared stylesheet."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for modal
-            assert b'modal-dialog' in response.data
-            assert b'modal-overlay' in response.data
+
+            # The Svelte sheet bundle (renders .modal-overlay/.modal-dialog at mount)
+            assert b'tunesheet/sheet.js' in response.data
+            assert b'css/tune_detail_modal.css' in response.data
 
     def test_button_groups_present(self, client, authenticated_user):
         """Button-group styling stays available to the client-rendered markup."""

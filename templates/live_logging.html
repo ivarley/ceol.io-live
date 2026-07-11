@@ -55,11 +55,11 @@
 <body>
   <div id="app"></div>
   <div class="live-menu">{% with hide_dark_mode = True %}{% include 'hamburger_menu.html' %}{% endwith %}</div>
-  {% include 'tune_detail_modal.html' %}
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <script src="/static/js/mytunes_offline.js"></script>
-  <script src="/static/js/tunebook_status.js"></script>
-  <script src="/static/js/tune_detail_modal.js"></script>
+  <!-- Tune-detail sheet (Svelte, spec 035 Step 3): renders its own #tune-detail-modal
+       container and installs window.TuneDetailModal for the logger's drawer. -->
+  <script type="module" src="/static/tunesheet/sheet.js"></script>
   <script type="module" src="/static/live/app.js"></script>
 </body>
 </html>

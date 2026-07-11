@@ -1,5 +1,6 @@
 // My-Tunes offline op-queue (Tier 2) — plain (non-module) global for use from
-// tune_detail_modal.js and the My Tunes page, including inside the live logger.
+// the tune-detail sheet (frontend/src/tunesheet/) and the My Tunes page,
+// including inside the live logger.
 //
 // Mirrors the live logger's offline.js shape (frontend/src/offline.js) but is a
 // standalone vanilla script: that module is ES-module-only and can't be imported by

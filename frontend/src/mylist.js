@@ -1,12 +1,13 @@
 // My-list (tunebook) status logic for the live logger's highlight mode. Pure —
 // plain objects in, plain values out, no Svelte/DOM/network — so the roll-up and
 // the bulk-op planning are unit-testable. Exactly TWO copies of the resolution
-// rules exist: this ES module (bundled + unit-tested) and its vanilla twin
-// static/js/tunebook_status.js (window.TunebookStatus), which the tune-detail
-// modal and the My Tunes / session pages all delegate to. Keep them in sync —
-// and keep both matching the server's /api/my-tunes/ops semantics (see
-// setTunebookStatus in tune_detail_modal.js for the overall-set behavior this
-// module's planStatusOps mirrors).
+// rules exist: this ES module (bundled + unit-tested; also imported by the Svelte
+// tune-detail sheet in src/tunesheet/) and its vanilla twin
+// static/js/tunebook_status.js (window.TunebookStatus), which the remaining
+// vanilla pages delegate to. Keep them in sync — and keep both matching the
+// server's /api/my-tunes/ops semantics (see setTunebookStatus in
+// src/tunesheet/TuneSheet.svelte for the overall-set behavior this module's
+// planStatusOps mirrors).
 
 export const STATUSES = ['want to learn', 'learning', 'learned']
 export const NOT_ON_LIST = 'not on list'

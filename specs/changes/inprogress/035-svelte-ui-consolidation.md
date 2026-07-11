@@ -1,9 +1,14 @@
 # 035: Svelte UI Consolidation
 
 **Date:** 2026-07-10
-**Status:** Steps 1+2 BUILT (2026-07-11) — all acceptance criteria verified locally
-(pytest 787, vitest 224, e2e offline+my-tunes+broad sweep green); uncommitted,
-awaiting user verification. Steps 3+ not started.
+**Status:** Steps 1+2+3 BUILT (2026-07-11) — verified locally (pytest 787, vitest 253,
+e2e 88/88 desktop+mobile); uncommitted, awaiting user verification. Step 3 scope note:
+the tune-detail modal and the app-wide find-tune overlay are now Svelte
+(`frontend/src/tunesheet/`, behind the unchanged `window.TuneDetailModal` /
+`window.FindTuneOverlay` contracts; legacy `tune_detail_modal.js` deleted).
+`TuneSearchComponent.js` remains only on the legacy fallback add pages
+(`my_tunes_add`, `session_tune_add`) and the quarantined pill page — it dies with
+those pages rather than being consolidated. Steps 4+ not started.
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
 

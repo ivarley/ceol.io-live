@@ -115,13 +115,14 @@ the single-process test server.
 
 ### App-wide tune drawer (`templates/base.html`)
 
-The hamburger **Find a tune** is on every page, so the unified tune-detail modal (container +
-CSS + JS from `tune_detail_modal.js`) is loaded app-wide by `base.html` via overridable Jinja
-blocks (`tune_detail_modal_css` / `tune_detail_modal`). This means the drawer works offline
-everywhere without a fragile lazy-load. The module is idempotent (guards against double
-registration) and the container defaults to inline `display:none` so a page's own
-`.modal-overlay` CSS can't reveal it. `common_tunes` has its own self-contained modal and
-overrides the blocks to opt out.
+The hamburger **Find a tune** is on every page, so the unified tune-detail sheet (the Svelte
+bundle `/static/tunesheet/sheet.js`, spec 035 Step 3, which renders its own
+`#tune-detail-modal` container and installs `window.TuneDetailModal`) is loaded app-wide by
+`base.html` via overridable Jinja blocks (`tune_detail_modal_css` / `tune_detail_modal`).
+This means the drawer works offline everywhere without a fragile lazy-load. The entry is
+idempotent (guards against double registration) and the container defaults to inline
+`display:none` so a page's own `.modal-overlay` CSS can't reveal it. `common_tunes` has its
+own self-contained modal and overrides the blocks to opt out.
 
 ## Verification
 

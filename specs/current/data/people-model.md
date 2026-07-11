@@ -116,7 +116,7 @@ Sparse per-instrument status **overrides** (a second axis on top of person_tune)
 
 ## Per-instrument status control (UI)
 
-The shared tune-detail modal (`static/js/tune_detail_modal.js`, `static/css/tune_detail_modal.css`)
+The shared tune-detail sheet (`frontend/src/tunesheet/`, styled by `static/css/tune_detail_modal.css`)
 renders one control in every context (My Tunes, session, live logger). The box is tinted by
 the tune's **roll-up** status (the furthest-along across your instruments) and each row's active
 segmented button also carries its own status color. If you play 2+ instruments an expand triangle

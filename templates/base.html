@@ -772,11 +772,13 @@ if ('serviceWorker' in navigator) {
 <!-- LZ-String for ABC Tools share links -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 
-<!-- Unified tune-detail modal container + logic (one per page; child templates no longer include their own) -->
+<!-- Unified tune-detail modal (Svelte, spec 035 Step 3): the bundle renders its own
+     #tune-detail-modal container and installs window.TuneDetailModal. tunebook_status.js
+     stays: the remaining vanilla pages (session detail, my-tunes list coloring) consume
+     window.TunebookStatus directly. -->
 {% block tune_detail_modal %}
-{% include 'tune_detail_modal.html' %}
 <script src="{{ url_for('static', filename='js/tunebook_status.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}" defer></script>
+<script type="module" src="{{ url_for('static', filename='tunesheet/sheet.js') }}"></script>
 {% endblock %}
 
 {% block extra_js %}{% endblock %}

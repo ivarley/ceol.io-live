@@ -67,102 +67,43 @@ function findTune() {
     }
 }
 
+// The overlay itself is a Svelte component in the app-wide tunesheet bundle
+// (frontend/src/tunesheet/FindTune.svelte, spec 035 Step 3c) — same #find-tune-overlay
+// / .ft-* DOM, styled by hamburger_menu.css. ensureTuneModal loads the bundle lazily
+// on any page that somehow lacks it.
 function openFindTuneOverlay() {
-    if (document.getElementById('find-tune-overlay')) return;
-    const ov = document.createElement('div');
-    ov.id = 'find-tune-overlay';
-    ov.innerHTML =
-        '<div class="ft-scrim"></div>' +
-        '<div class="ft-panel" role="dialog" aria-modal="true">' +
-        '  <div class="ft-head"><span>Find a tune</span><button class="ft-close" aria-label="Close">✕</button></div>' +
-        '  <input class="ft-input" type="text" placeholder="Search tunes…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
-        '  <ul class="ft-results"></ul>' +
-        '</div>';
-    document.body.appendChild(ov);
-    const input = ov.querySelector('.ft-input');
-    const results = ov.querySelector('.ft-results');
-    const close = () => ov.remove();
-    ov.querySelector('.ft-scrim').addEventListener('click', close);
-    ov.querySelector('.ft-close').addEventListener('click', close);
-    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
-
-    let timer = null, seq = 0;
-    input.addEventListener('input', function () {
-        const q = input.value.trim();
-        if (timer) clearTimeout(timer);
-        if (q.length < 2) { results.innerHTML = ''; return; }
-        timer = setTimeout(async () => {
-            const mine = ++seq;
-            const render = (tunes) => {
-                if (mine !== seq) return;
-                results.innerHTML = (tunes && tunes.length)
-                    ? tunes.map(t => `<li class="ft-item" data-tune-id="${t.tune_id}">${escapeHtmlFT(t.name)}<span class="ft-type">${t.tune_type || ''}</span></li>`).join('')
-                    : '<li class="ft-empty">No tunes match</li>';
-            };
-            const offline = async () => {
-                // Offline fallback: search the locally-cached bundle (your tunes + popular).
-                if (window.CeolOffline) { try { return await window.CeolOffline.searchTunes(q, 10); } catch (e) {} }
-                return null;
-            };
-            try {
-                const res = await fetch('/api/tunes/search?q=' + encodeURIComponent(q) + '&limit=10', { credentials: 'same-origin' });
-                const json = await res.json();
-                if (mine !== seq) return;
-                if (json && json.success && (json.tunes || []).length) { render(json.tunes); return; }
-                const off = await offline();
-                render(off !== null ? off : (json.tunes || []));
-            } catch (e) {
-                const off = await offline();
-                if (off !== null) render(off);
-            }
-        }, 200);
-    });
-    results.addEventListener('click', function (e) {
-        const li = e.target.closest('.ft-item');
-        if (!li) return;
-        const tuneId = parseInt(li.dataset.tuneId, 10);
-        const tuneName = li.firstChild ? li.firstChild.textContent : '';
-        close();
-        // 'session_instance' context renders the session_tune shape our session-agnostic
-        // /api/tunes/<id>/detail returns (no sessionPath/dateOrId — a global read view).
-        ensureTuneModal().then(function () {
-            window.TuneDetailModal.show({
-                context: 'session_instance',
-                tuneId: tuneId,
-                apiEndpoint: '/api/tunes/' + tuneId + '/detail',
-                additionalData: { isUserLoggedIn: true, tuneName: tuneName, global: true },
-            });
-        }).catch(function () { /* modal unavailable (should not happen: base.html loads it app-wide) */ });
-    });
-    setTimeout(() => input.focus(), 50);
+    ensureTuneModal().then(function () {
+        if (window.FindTuneOverlay) window.FindTuneOverlay.open();
+    }).catch(function () { /* bundle unavailable (should not happen: base.html loads it app-wide) */ });
 }
 
-function escapeHtmlFT(s) {
-    const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
-}
-
-// Ensure the shared tune-detail modal is available, lazy-loading it (container + css + js)
-// on pages that don't already include it (e.g. the home page). The modal self-inits even
-// when its script loads after DOMContentLoaded.
+// Ensure the shared tune-detail modal is available, lazy-loading the Svelte bundle
+// (which renders its own #tune-detail-modal container) + css on pages that don't
+// already include it. Module scripts don't reliably signal readiness via onload,
+// so poll for window.TuneDetailModal with a timeout.
 let _tuneModalLoading = null;
 function ensureTuneModal() {
     if (window.TuneDetailModal && typeof window.TuneDetailModal.show === 'function') return Promise.resolve();
     if (_tuneModalLoading) return _tuneModalLoading;
     _tuneModalLoading = new Promise(function (resolve, reject) {
-        if (!document.getElementById('tune-detail-modal')) {
-            document.body.insertAdjacentHTML('beforeend',
-                '<div id="tune-detail-modal" class="modal-overlay"><div class="modal-dialog"><div id="tune-detail-content"></div></div></div>');
-        }
         if (!document.querySelector('link[href*="tune_detail_modal.css"]')) {
             const l = document.createElement('link');
             l.rel = 'stylesheet'; l.href = '/static/css/tune_detail_modal.css';
             document.head.appendChild(l);
         }
-        const s = document.createElement('script');
-        s.src = '/static/js/tune_detail_modal.js';
-        s.onload = function () { window.TuneDetailModal ? resolve() : reject(); };
-        s.onerror = reject;
-        document.body.appendChild(s);
+        if (!document.querySelector('script[src*="tunesheet/sheet.js"]')) {
+            const s = document.createElement('script');
+            s.type = 'module';
+            s.src = '/static/tunesheet/sheet.js';
+            s.onerror = reject;
+            document.body.appendChild(s);
+        }
+        const start = Date.now();
+        (function poll() {
+            if (window.TuneDetailModal && typeof window.TuneDetailModal.show === 'function') return resolve();
+            if (Date.now() - start > 10000) return reject(new Error('tune-detail modal failed to load'));
+            setTimeout(poll, 50);
+        })();
     });
     return _tuneModalLoading;
 }
