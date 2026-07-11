@@ -3,19 +3,11 @@
 // Tune rows are the serializer dicts ({tune_id, tune_name, tune_type, play_count,
 // tunebook_count, setting_id}) — the legacy tuple format is dead.
 
-// "Search" also matches a bare thesession.org tune id or tune URL.
-export function extractTuneId(input) {
-  if (!input) return null
-  const trimmed = input.trim()
-  if (/^\d+$/.test(trimmed)) {
-    return parseInt(trimmed)
-  }
-  const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i)
-  if (urlMatch) {
-    return parseInt(urlMatch[1])
-  }
-  return null
-}
+// extractTuneId ("search" also matches a bare thesession.org tune id or URL),
+// normalizeQuotes and formatTime/formatTimeRange now live in src/shared/ —
+// one tested copy for every page bundle.
+import { extractTuneId } from '../shared/parse.js'
+import { formatTime, formatTimeRange } from '../shared/format.js'
 
 // Sort functions keyed by type (alpha, session, everywhere) and direction.
 export const sortFunctions = {
@@ -132,20 +124,6 @@ export function basePathOf(pathname) {
 
 // ---- logs tab -------------------------------------------------------------------
 
-export function formatTime(timeStr) {
-  if (!timeStr) return ''
-  const parts = timeStr.split(':')
-  let hour = parseInt(parts[0])
-  const minute = parts[1]
-  const period = hour >= 12 ? 'pm' : 'am'
-  hour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
-  return `${hour}:${minute}${period}`
-}
-
-export function formatTimeRange(startTime, endTime) {
-  return formatTime(startTime) + '-' + formatTime(endTime)
-}
-
 export function instanceTimeLabel(instance) {
   if (instance.start_time && instance.end_time) {
     return formatTimeRange(instance.start_time, instance.end_time)
@@ -181,13 +159,6 @@ export function festivalDayLabel(dateStr) {
 }
 
 // ---- people tab -------------------------------------------------------------------
-
-// Normalize smart quotes to straight quotes (iOS keyboard compatibility).
-export function normalizeQuotes(str) {
-  return str
-    .replace(/[‘’]/g, "'") // Smart single quotes → straight
-    .replace(/[“”]/g, '"') // Smart double quotes → straight
-}
 
 // Accept a bare numeric id or a thesession.org members/sessions URL.
 export function parseTheSessionId(input) {

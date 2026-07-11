@@ -120,15 +120,17 @@ Search people associated with a session (past attendees, regulars).
 
 ### Templates
 
-**`templates/session_detail.html`**:
+**`templates/session_instance_players.html`** (+ `partials/attendance_tab.html`,
+`static/js/shared/attendance.js`):
 - Attendance list display
 - Check-in buttons for regulars
-- Search interface for adding people
-- Create new person form
 
-**Components** (`templates/components/`):
-- Attendance status badges
-- Instrument tags
+**Session page People tab** (`frontend/src/sessionpage/PeopleTab.svelte` —
+the session-detail page is a Svelte shell, spec 035):
+- Session members list (regulars/all filter + search)
+- Search interface for adding existing people
+- Create new person form
+- Person-detail modal with `/people/<id>` deep link
 
 ### AJAX Workflows
 

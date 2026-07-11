@@ -3,7 +3,7 @@
   // debounced live preview of what each device would download, plus save.
   let { sessionPath, sessionLimit, globalLimit, load } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   let n = $state(String(sessionLimit))
   let m = $state(String(globalLimit))

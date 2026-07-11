@@ -318,35 +318,36 @@ class TestAPIEndpointsSmokeTest:
     """Smoke test key API endpoints."""
 
     @patch("api_routes.get_db_connection")
-    def test_sessions_data_api_smoke(self, mock_get_conn, client):
-        """Smoke test for sessions data API."""
+    def test_sessions_directory_api_smoke(self, mock_get_conn, client):
+        """Smoke test for the sessions directory API (replaced /api/sessions/data)."""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
         mock_cursor.fetchall.return_value = []  # Empty data is fine for smoke test
 
-        response = client.get("/api/sessions/data")
+        response = client.get("/api/sessions/with-today-status")
         assert response.status_code == 200
         assert response.content_type == "application/json"
 
         data = json.loads(response.data)
         assert "sessions" in data
 
-    def test_username_availability_api_smoke(self, client):
-        """Smoke test for username availability API."""
+    def test_username_availability_api_requires_login(self, client):
+        """Anonymous callers get 401 — the endpoint's only caller is the profile
+        tab on @login_required pages (spec 035 follow-up auth sweep)."""
         response = client.post(
             "/api/check-username-availability", json={"username": "smoketest_available"}
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 401
         data = json.loads(response.data)
-        assert "available" in data
+        assert data["success"] is False
 
     def test_api_endpoints_return_json(self, client):
         """Test that API endpoints return proper JSON responses."""
         api_endpoints = [
-            "/api/sessions/data",
+            "/api/sessions/with-today-status",
         ]
 
         for endpoint in api_endpoints:

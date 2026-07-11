@@ -4,7 +4,9 @@
   // a new person), and the person-detail modal with its /people/<id> deep link.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { normalizeQuotes, parseTheSessionId, filterPeople } from './logic.js'
+  import { toast } from '../lib/index.js'
+  import { normalizeQuotes } from '../shared/parse.js'
+  import { parseTheSessionId, filterPeople } from './logic.js'
 
   let {
     active,
@@ -193,13 +195,13 @@
           peopleData = []
           fetchPeople()
         } else {
-          alert('Failed to add person: ' + (result.message || 'Unknown error'))
+          toast('Failed to add person: ' + (result.message || 'Unknown error'), 'error')
         }
       })
       .catch((error) => {
         console.error('Error adding person:', error)
         addingPersonId = null
-        alert('Error adding person')
+        toast('Error adding person', 'error')
       })
   }
 
@@ -232,7 +234,7 @@
     const firstName = newFirstName.trim()
     const lastName = newLastName.trim()
     if (!firstName || !lastName) {
-      alert('First name and last name are required')
+      toast('First name and last name are required', 'error')
       return
     }
 
@@ -267,12 +269,12 @@
           peopleData = []
           fetchPeople()
         } else {
-          alert('Failed to add person: ' + (result.message || 'Unknown error'))
+          toast('Failed to add person: ' + (result.message || 'Unknown error'), 'error')
         }
       })
       .catch((error) => {
         console.error('Error adding person:', error)
-        alert('Error adding person')
+        toast('Error adding person', 'error')
       })
       .finally(() => {
         savingPerson = false

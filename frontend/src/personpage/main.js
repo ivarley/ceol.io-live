@@ -4,6 +4,9 @@
 // no fetch, and window.__PAGE_CTX__ carries the routing state (user-profile vs
 // admin flavor, canonical instrument list).
 import { mount } from 'svelte'
+// Page styles travel with the bundle (emitted as static/personpage/page.css,
+// linked by the shell's extra_css block) so the components stay portable.
+import './page.css'
 import App from './App.svelte'
 
 const target = document.getElementById('person-details-root')

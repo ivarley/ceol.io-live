@@ -1,35 +1,10 @@
 // Pure helpers for the session-admin page view (spec 035 Step 5b), ported
 // verbatim from the legacy inline script in templates/session_admin.html.
 
-// Normalize smart quotes to straight quotes (for iOS keyboard compatibility).
-export function normalizeQuotes(str) {
-  return str
-    .replace(/[\u2018\u2019]/g, "'") // Smart single quotes -> straight
-    .replace(/[\u201C\u201D]/g, '"') // Smart double quotes -> straight
-}
-
-// Accept a bare tune id or a thesession.org tune URL; null otherwise.
-export function extractTuneId(input) {
-  if (!input) return null
-  const trimmed = input.trim()
-  if (/^\d+$/.test(trimmed)) {
-    return parseInt(trimmed)
-  }
-  const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i)
-  if (urlMatch) {
-    return parseInt(urlMatch[1])
-  }
-  return null
-}
-
-// "19:00" -> "7:00pm" (recurrence preview).
-export function formatTime(time24) {
-  const [hours, minutes] = time24.split(':')
-  const h = parseInt(hours)
-  const ampm = h >= 12 ? 'pm' : 'am'
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
-  return `${h12}:${minutes}${ampm}`
-}
+// normalizeQuotes / extractTuneId now come from the shared helpers module
+// (src/shared/) — one tested copy for every page bundle. formatTime (the
+// recurrence preview's "19:00" -> "7:00pm") lives in src/shared/format.js.
+import { normalizeQuotes, extractTuneId } from '../shared/parse.js'
 
 // Generic asc/desc comparator used by the people and tunes tables.
 export function compareValues(aValue, bValue, direction) {

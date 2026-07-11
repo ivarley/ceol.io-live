@@ -4,16 +4,9 @@
 
 export const STATUS_ORDER = ['want to learn', 'learning', 'learned']
 
-// Extract a tune ID from a thesession.org URL or plain number ("123",
-// "https://thesession.org/tunes/123?setting=456"), else null.
-export function extractTuneId(input) {
-  if (!input) return null
-  const trimmed = input.trim()
-  if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10)
-  const urlMatch = trimmed.match(/thesession\.org\/tunes\/(\d+)/i)
-  if (urlMatch) return parseInt(urlMatch[1], 10)
-  return null
-}
+// extractTuneId (thesession URL / plain number -> id) now comes from the
+// shared helpers module (src/shared/) — one tested copy for every page bundle.
+import { extractTuneId } from '../shared/parse.js'
 
 // Resolve a tune's status on one instrument (by name): an explicit override wins;
 // else an auto instrument follows learn_status, and a manual instrument is

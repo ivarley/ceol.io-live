@@ -6,14 +6,13 @@
   "description": "Spec 024 live-logging screen — clean-slate Svelte + Vite bundle, served by Flask under /static/live.",
   "scripts": {
     "dev": "vite build --watch",
-    "dev:mytunes": "vite build --watch --config vite.mytunes.config.js",
     "dev:mytunespage": "vite build --watch --config vite.mytunespage.config.js",
     "dev:tunesheet": "vite build --watch --config vite.tunesheet.config.js",
     "dev:sessionsdir": "vite build --watch --config vite.sessionsdir.config.js",
     "dev:sessionpage": "vite build --watch --config vite.sessionpage.config.js",
     "dev:personpage": "vite build --watch --config vite.personpage.config.js",
     "dev:sessionadminpage": "vite build --watch --config vite.sessionadminpage.config.js",
-    "build": "vite build && vite build --config vite.mytunes.config.js && vite build --config vite.mytunespage.config.js && vite build --config vite.tunesheet.config.js && vite build --config vite.sessionsdir.config.js && vite build --config vite.sessionpage.config.js && vite build --config vite.personpage.config.js && vite build --config vite.sessionadminpage.config.js",
+    "build": "vite build && vite build --config vite.mytunespage.config.js && vite build --config vite.tunesheet.config.js && vite build --config vite.sessionsdir.config.js && vite build --config vite.sessionpage.config.js && vite build --config vite.personpage.config.js && vite build --config vite.sessionadminpage.config.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"

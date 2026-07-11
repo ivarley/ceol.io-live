@@ -5,6 +5,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail, myTunesList, myTunesOp } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
+  import { Dialog } from './lib/index.js'
   import SidePane from './SidePane.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -810,10 +811,18 @@
   // Mark this session "completely logged" (§024): hides the editing affordances for
   // everyone (the SSE echo flips other clients via applyOp). Online-only metadata op,
   // like notes. Drops us to read-only view; the next reload takes the render-only path.
-  async function markComplete() {
+  // Mark complete / re-open are decisions -> kit Dialogs (spec 035), not native
+  // confirms. markComplete()/markIncomplete() raise the Dialog; do*() run on confirm.
+  let markCompleteOpen = $state(false)
+  let markIncompleteOpen = $state(false)
+
+  function markComplete() {
     error = ''
     if (!navigator.onLine) { notice = "You're offline — marking complete needs a connection."; return }
-    if (!confirm('Mark this session log as completely logged? This hides the editing controls.')) return
+    markCompleteOpen = true
+  }
+
+  async function doMarkComplete() {
     logComplete = true // optimistic footer/header feedback; the SSE echo reconciles
     try {
       const res = await sendOp(config, 'mark_complete', {})
@@ -828,10 +837,13 @@
   // Re-open a completed log for editing. After it sticks, connect() rewires the full live
   // session (re-bootstrap returns log_complete=false -> normal path: SSE + vocabulary),
   // so a session opened via the render-only fast-path becomes editable without a reload.
-  async function markIncomplete() {
+  function markIncomplete() {
     error = ''
     if (!navigator.onLine) { notice = "You're offline — this needs a connection."; return }
-    if (!confirm('Re-open this session log for editing?')) return
+    markIncompleteOpen = true
+  }
+
+  async function doMarkIncomplete() {
     try {
       const res = await sendOp(config, 'mark_incomplete', {})
       if (res.rejected) { notice = res.message || res.reason; return }
@@ -3630,3 +3642,16 @@
     </div>
   {/if}
 </main>
+
+<Dialog
+  bind:open={markCompleteOpen}
+  title="Mark this session log as completely logged?"
+  description="This hides the editing controls."
+  confirmLabel="Mark complete"
+  onConfirm={doMarkComplete} />
+
+<Dialog
+  bind:open={markIncompleteOpen}
+  title="Re-open this session log for editing?"
+  confirmLabel="Re-open log"
+  onConfirm={doMarkIncomplete} />

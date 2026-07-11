@@ -21,23 +21,30 @@ GET /api/me/details + /api/admin/people/<id>/details, `frontend/src/personpage/`
 /api/admin/sessions/<path>/admin-detail, `frontend/src/sessionadminpage/`); shared
 serializers.timezone_options() replaces the duplicated 45-entry list; modalManager.js
 dropped from both pages (consumers ported). Eight vite bundles. Verified: pytest 787,
-vitest 316, e2e (profile/admin/sessions/app) 53/53. **Post-review fixes (2026-07-11, from independent assessment):** three unguarded
-person-scoped endpoints leaked PII (`/api/person/<id>/logins` returned any person's
-IPs/user agents anonymously) — now `@api_admin_or_self_required` (logins, attended,
-tunes-stats, available-sessions, search-sessions, active_session); new `@public_api`
-marker (api_auth.py) distinguishes deliberate-public from forgot-the-decorator
-(applied to the session logs feed); five orphaned endpoints deleted (the four
-`/api/person/tunes*` whose only caller was the deleted legacy modal, plus
-`/api/person/<id>/tunes` — ~370 lines); the six new bundle dirs untracked +
-gitignored (Render's buildCommand rebuilds them). tests/integration/test_person_api_auth.py
-covers 401/403/self/admin/public. Remaining: Step 6 (delete the pill logger once the
-beta logger is promoted) + the follow-up API-normalization spec, which now also owns:
-sweep the remaining ~45 undecorated /api/* rules and mark each `@public_api` or gate it;
-kit adoption (currently used by ZERO pages — the migrations kept legacy DOM/CSS);
-move page CSS out of the Jinja shells into the bundles (Step 2 did this right, Steps
-4-5 regressed to shell <style> blocks); replace the 25 native confirm()/alert() calls
-in new Svelte pages with lib/Dialog and the 10 showMessage copies with lib/toast;
-decouple bundle-to-bundle window globals (e.g. sessionpage -> SessionTuneAddPane).
+vitest 316, e2e (profile/admin/sessions/app) 53/53. **Post-review fixes + follow-up sweep (2026-07-11) — ALL COMPLETE except Step 6:**
+PII gates (six person-scoped endpoints -> @api_admin_or_self_required) and search_tunes
+person_id probe clamped; @public_api marker + FULL classification of all 164 /api/* rules
+(0 unclassified; ratchet test tests/integration/test_api_auth_coverage.py); logged-out
+find-a-tune fixed (/api/tunes/<id>/detail now @public_api, FindTune passes real login
+state via CEOL_UID); error shapes/status codes normalized (grid_ajax 3 shapes -> one,
+six HTTP-200 errors -> real codes); /api/sessions/data deleted + five orphaned
+/api/person/tunes* endpoints deleted; six bundle dirs untracked/gitignored (Render
+rebuilds); KIT ADOPTED (9 native confirms -> lib/Dialog with explicit verbs, 16 alerts +
+11 showMessage wrappers -> lib/toast, shared/parse+format module ends the helper
+triplication); mytunes bundle deleted — SessionTuneAddApp is a child of sessionpage
+(window.SessionTuneAddPane gone; 7 bundles); page CSS moved from all four Jinja shells
+into bundle-emitted page.css (shells are now 23-87 lines; ~29 dead selector groups
+pruned with evidence); recurrence_readable single helper; common_tunes.html third modal
++ duplicate #tune-detail-modal id removed (uses the shared drawer); docs rewritten
+(specs/current/ui/* incl. new svelte-pages.md, CLAUDE.md).
+Verified: pytest 796, vitest 316, 7 bundles, e2e 88/88 desktop+mobile, browser-checked
+(kit Dialog, decoupled add pane, light-mode parity, logged-out find-a-tune).
+**Remaining, deliberately:** Step 6 (delete the pill logger — gated on promoting the
+beta logger); REST URL renaming (churn without payoff until the native client);
+Sheet/Tabs/SearchField visual unification pass; /api/sessions/list + /api/my-sessions +
+/api/user/admin-sessions collapse (needs frontend caller changes, documented in the
+sweep report); my_tunes_add/session_tune_add legacy fallback pages die with the pill work.
+
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
 

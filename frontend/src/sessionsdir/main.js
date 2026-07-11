@@ -3,6 +3,9 @@
 // (window.__PAGE_DATA__, the exact /api/sessions/with-today-status shape) gives
 // first paint with no fetch.
 import { mount } from 'svelte'
+// Page styles travel with the bundle (emitted as static/sessionsdir/page.css,
+// linked by the shell's extra_css block) so the component stays portable.
+import './page.css'
 import App from './App.svelte'
 
 const target = document.getElementById('sessions-root')

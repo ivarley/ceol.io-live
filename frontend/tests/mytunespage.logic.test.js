@@ -1,8 +1,8 @@
 // Unit tests for the My Tunes page logic (spec 035 Step 2) — the pure module
 // behind App.svelte. Ported behaviors are asserted against the legacy semantics.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { extractTuneId } from '../src/shared/parse.js'
 import {
-  extractTuneId,
   resolveTuneInstrumentStatus,
   buildSortFunction,
   filterAndSort,

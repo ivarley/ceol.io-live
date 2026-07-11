@@ -38,6 +38,18 @@ User registration, login, password management, email verification.
 - Stored in user_session table with IP/user agent
 - Token: 32-byte URL-safe string
 
+## API Authentication
+
+- Cookie sessions via flask_login's `user_loader`; additionally a
+  `request_loader` (`app.py:106`) accepts `Authorization: Bearer
+  <user_session id>` on any route — the tokens minted by `/api/live/token`
+  (spec 035; the streaming sidecar validates the same tokens).
+- `/api/*` endpoints use the decorators in `api_auth.py`
+  (`@api_login_required` 401 JSON, `@api_admin_or_self_required` 401/403,
+  `@public_api` marker for deliberately-anonymous endpoints) — see
+  [AJAX Patterns](../ui/ajax.md). flask_login's `@login_required`
+  (302-to-login) is for HTML page routes only.
+
 ## Permissions
 
 **System Admin**: `is_system_admin = TRUE` - access everything

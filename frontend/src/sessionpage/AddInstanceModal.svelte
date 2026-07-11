@@ -12,7 +12,7 @@
   let location = $state('')
   let comments = $state('')
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   export async function open() {
     // Defaults while we fetch the suggestion.
@@ -64,7 +64,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message)
+          toast(data.message, 'success')
           close()
           // Redirect to the new session instance in edit mode; the id-based URL
           // is unambiguous when several instances share a date.

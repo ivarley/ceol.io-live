@@ -4,7 +4,7 @@
   // Save button), admin-only verify-email / beta-logging / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { Dialog, toast } from '../lib/index.js'
 
   let editMode = $state(false)
 
@@ -66,7 +66,7 @@
   function saveChanges() {
     const currentUsername = user ? username.trim() : originalUsername
     if (usernameWarning && currentUsername !== originalUsername) {
-      alert('Please fix the username issue before saving.')
+      toast('Please fix the username issue before saving.', 'error')
       return
     }
 
@@ -123,8 +123,10 @@
   let verifyingEmail = $state(false)
   let verifyBtnLabel = $state('Verify Email')
 
+  // Verifying is a decision -> kit Dialog with an explicit verb (spec 035).
+  let verifyConfirmOpen = $state(false)
+
   function verifyEmail() {
-    if (!confirm('Are you sure you want to manually verify this email address?')) return
     verifyingEmail = true
     verifyBtnLabel = 'Verifying...'
     fetch(`/api/admin/user/${user.user_id}/verify-email`, {
@@ -315,10 +317,17 @@
   // --- Deactivate/Reactivate person (admin only) ------------------------------
   let toggleActiveStatusHtml = $state(null) // null hidden; else {kind, text}
 
-  function togglePersonActive(active) {
-    const action = active ? 'reactivate' : 'deactivate'
-    if (!confirm(`Are you sure you want to ${action} ${person.name}?`)) return
+  // Deactivate/reactivate is a decision -> kit Dialog; deactivating is the
+  // destructive flavor.
+  let toggleActiveOpen = $state(false)
+  let toggleActiveTarget = $state(null) // true = reactivate, false = deactivate
 
+  function askTogglePersonActive(active) {
+    toggleActiveTarget = active
+    toggleActiveOpen = true
+  }
+
+  function togglePersonActive(active) {
     toggleActiveStatusHtml = { kind: 'info', text: 'Processing...' }
 
     fetch(`/api/admin/person/${personId}/active`, {
@@ -532,7 +541,7 @@
                 {:else}
                   <span class="text-warning">✗ Not verified</span>
                   {#if !isUserProfile}
-                    <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" disabled={verifyingEmail} onclick={(e) => { e.preventDefault(); verifyEmail() }}>{verifyBtnLabel}</button>
+                    <button id="verify-email-btn" class="btn btn-sm btn-success ms-2" disabled={verifyingEmail} onclick={(e) => { e.preventDefault(); verifyConfirmOpen = true }}>{verifyBtnLabel}</button>
                   {/if}
                 {/if}
               </dd>
@@ -660,7 +669,7 @@
             Deactivating {person.name} will prevent them from being added to any sessions, session instances, or tune sets.
             Existing associations will not be affected.
           </p>
-          <button type="button" class="btn btn-outline-danger" id="deactivate-person-btn" onclick={() => togglePersonActive(false)}>
+          <button type="button" class="btn btn-outline-danger" id="deactivate-person-btn" onclick={() => askTogglePersonActive(false)}>
             Deactivate {person.first_name}
           </button>
         {:else}
@@ -671,7 +680,7 @@
           <p class="text-muted">
             Reactivating {person.name} will allow them to be added to sessions, session instances, and tune sets again.
           </p>
-          <button type="button" class="btn btn-success" id="reactivate-person-btn" onclick={() => togglePersonActive(true)}>
+          <button type="button" class="btn btn-success" id="reactivate-person-btn" onclick={() => askTogglePersonActive(true)}>
             Reactivate {person.first_name}
           </button>
         {/if}
@@ -758,3 +767,17 @@
     </div>
   </div>
 {/if}
+
+<Dialog
+  bind:open={verifyConfirmOpen}
+  title="Verify this email address?"
+  description="This manually marks the email address as verified."
+  confirmLabel="Verify email"
+  onConfirm={verifyEmail} />
+
+<Dialog
+  bind:open={toggleActiveOpen}
+  title={`${toggleActiveTarget ? 'Reactivate' : 'Deactivate'} ${person.name}?`}
+  confirmLabel={toggleActiveTarget ? 'Reactivate person' : 'Deactivate person'}
+  destructive={!toggleActiveTarget}
+  onConfirm={() => togglePersonActive(toggleActiveTarget)} />

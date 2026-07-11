@@ -1,19 +1,18 @@
 // Pure-logic tests for the session-detail page port (spec 035 Step 4b).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { extractTuneId, normalizeQuotes } from '../src/shared/parse.js'
+import { formatTime } from '../src/shared/format.js'
 import {
-  extractTuneId,
   sortFunctions,
   filterAndSortTunes,
   resultsCountLabel,
   stateFromParams,
   applyStateToParams,
   basePathOf,
-  formatTime,
   instanceTimeLabel,
   isEmptyLog,
   instanceUrlId,
   parseTheSessionId,
-  normalizeQuotes,
   filterPeople,
 } from '../src/sessionpage/logic.js'
 

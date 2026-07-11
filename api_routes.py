@@ -87,7 +87,8 @@ def follow_tune_redirect(cur, tune_id):
     return tune_id, None
 
 
-@api_login_required
+@public_api  # "Find a tune" is offered to logged-out users; everything here is public
+# catalog data — the person_tune_status block below is already is_authenticated-guarded.
 def get_tune_detail_global(tune_id):
     """Session-agnostic tune detail for the app-wide 'Find a tune' (spec 024). Returns the
     `session_tune` shape the tune-detail modal renders (used with context 'session_instance'),
@@ -155,6 +156,7 @@ def get_tune_detail_global(tune_id):
         conn.close()
 
 
+@public_api  # backs the tune-detail modal's History tab (tunesheet bundle, loaded app-wide via base.html incl. logged-out session pages); the ?person=me variant has an inline 401 below
 def get_tune_history(tune_id):
     """Play history for the tune-detail modal's History tab, fetched lazily on first
     view (the set/position windowing below is too expensive to run on every modal open).
@@ -283,6 +285,7 @@ def get_tune_history(tune_id):
         conn.close()
 
 
+@public_api  # backs the tune-detail modal's Played With tab (tunesheet bundle on logged-out session pages)
 def get_tune_played_with(tune_id):
     """Companion tunes for the tune-detail modal's Played With tab, fetched lazily on
     first view.
@@ -1036,7 +1039,7 @@ def update_session_ajax(session_path):
     try:
         data = request.get_json()
         if not data:
-            return jsonify({"success": False, "error": "No data provided"})
+            return jsonify({"success": False, "error": "No data provided"}), 400
 
         # Validate recurrence if provided
         if "recurrence" in data and data["recurrence"]:
@@ -1045,7 +1048,7 @@ def update_session_ajax(session_path):
                 return jsonify({
                     "success": False,
                     "error": f"Invalid recurrence pattern: {error_msg}"
-                })
+                }), 400
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1056,7 +1059,7 @@ def update_session_ajax(session_path):
         if not session_result:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "Session not found"})
+            return jsonify({"success": False, "error": "Session not found"}), 404
 
         # Save to history before making changes
         session_id = session_result[0]
@@ -1121,7 +1124,7 @@ def update_session_ajax(session_path):
         if not update_fields:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "error": "No valid fields to update"})
+            return jsonify({"success": False, "error": "No valid fields to update"}), 400
 
         # Add audit fields
         update_fields.append("last_modified_date = CURRENT_TIMESTAMP")
@@ -1213,31 +1216,6 @@ def session_tune_cache_preview(session_path):
         })
     finally:
         conn.close()
-
-
-def sessions_data():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT name, path, city, state, country, termination_date FROM session ORDER BY name;"
-        )
-        sessions = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        # Convert to list format for JSON serialization, handling dates
-        sessions_list = []
-        for session_row in sessions:
-            session_data = list(session_row)
-            # Convert date to string if it exists
-            if session_data[5]:  # termination_date
-                session_data[5] = session_data[5].isoformat()
-            sessions_list.append(session_data)
-
-        return jsonify({"sessions": sessions_list})
-    except Exception as e:
-        return jsonify({"error": f"Database connection failed: {str(e)}"}), 500
 
 
 @api_login_required
@@ -1631,6 +1609,7 @@ def get_tune_incipit(tune_id):
         }), 500
 
 
+@public_api  # backs the tune-detail modal on the logged-out session Tunes tab (frontend/src/sessionpage/TunesTab.svelte); current_user use below is personalization only
 def get_session_tune_detail(session_path, tune_id):
     """Get detailed information about a tune in the context of a session"""
     try:
@@ -2262,6 +2241,7 @@ def add_session_tune(session_path):
         return jsonify({"success": False, "error": f"Error adding tune: {str(e)}"}), 500
 
 
+@api_login_required  # no anonymous caller found (POST/DELETE alias siblings are gated too)
 def get_session_tune_aliases(session_path, tune_id):
     """Get all aliases for a tune in a session"""
     try:
@@ -2836,6 +2816,7 @@ def update_session_instance_ajax(session_path, date_or_id):
         )
 
 
+@api_login_required  # zero callers found in templates/, static/js/, frontend/src/ — gated by default
 def get_session_tune_count_ajax(session_path, date):
     try:
         conn = get_db_connection()
@@ -3138,6 +3119,7 @@ def mark_session_log_incomplete_ajax(session_path, date_or_id):
         )
 
 
+@public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def check_existing_session_ajax():
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -3167,6 +3149,7 @@ def check_existing_session_ajax():
         return jsonify({"success": False, "message": f"Database error: {str(e)}"})
 
 
+@public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def search_sessions_ajax():
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -3259,6 +3242,7 @@ def search_sessions_ajax():
         )
 
 
+@public_api  # backs the /add-session page, which has no @login_required (only the final POST /api/add-session is gated) — TODO tighten?
 def fetch_session_data_ajax():
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -3992,6 +3976,7 @@ def link_tune_ajax(session_path, date_or_id):
         return jsonify({"success": False, "message": f"Failed to link tune: {str(e)}"})
 
 
+@api_login_required  # zero callers found in templates/, static/js/, frontend/src/ — gated by default
 def get_session_tunes_ajax(session_path, date):
     try:
         conn = get_db_connection()
@@ -4012,7 +3997,7 @@ def get_session_tunes_ajax(session_path, date):
         if not session_instance:
             cur.close()
             conn.close()
-            return jsonify({"success": False, "message": "Session instance not found"})
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
 
         session_instance_id = session_instance[0]
 
@@ -4057,7 +4042,7 @@ def get_session_tunes_ajax(session_path, date):
         return jsonify({"success": True, "tune_sets": sets})
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to get tunes: {str(e)}"})
+        return jsonify({"success": False, "error": f"Failed to get tunes: {str(e)}"}), 500
 
 
 def get_session_people_list(session_path):
@@ -5397,7 +5382,7 @@ def get_session_tunes_grid_ajax(session_path):
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
         if not session_result:
-            return jsonify({"error": "Session not found"}), 404
+            return jsonify({"success": False, "error": "Session not found"}), 404
 
         session_id = session_result[0]
 
@@ -5411,7 +5396,7 @@ def get_session_tunes_grid_ajax(session_path):
             admin_row = cur.fetchone()
             is_session_admin = admin_row and admin_row[0]
             if not is_session_admin:
-                return jsonify({"success": False, "message": "Insufficient permissions"}), 403
+                return jsonify({"success": False, "error": "Insufficient permissions"}), 403
 
         # Get all unique tunes that have been played at this session
         # along with session_tune settings if they exist, play counts, and tunebook stats
@@ -5487,10 +5472,10 @@ def get_session_tunes_grid_ajax(session_path):
         cur.close()
         conn.close()
 
-        return jsonify({"tunes": tunes})
+        return jsonify({"success": True, "tunes": tunes})
 
     except Exception as e:
-        return jsonify({"error": f"Failed to get session tunes: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Failed to get session tunes: {str(e)}"}), 500
 
 
 @api_admin_or_self_required
@@ -5728,6 +5713,7 @@ def get_person_tunes_stats(person_id):
         )
 
 
+@api_login_required  # only caller is the profile tab on /me and /admin/people/<id> (both @login_required pages)
 def check_username_availability():
     """Check if a username is available"""
     try:
@@ -6240,6 +6226,7 @@ def search_sessions_for_person(person_id):
         )
 
 
+@api_login_required  # only caller is the person page Sessions tab (/me, /admin/people/<id> — both @login_required pages)
 def add_person_to_session():
     """Add a person to a session and send notification email"""
     try:
@@ -6411,6 +6398,7 @@ The Ceol.io Session Management System"""
         )
 
 
+@api_login_required  # only caller is templates/admin_people.html (admin page)
 def validate_thesession_entity():
     """Validate and get info from thesession.org (member or session)"""
     try:
@@ -6521,6 +6509,7 @@ def validate_thesession_entity():
         )
 
 
+@api_login_required  # only caller is templates/admin_people.html (admin page)
 def parse_person_name():
     """Parse a person's name into first and last name"""
     try:
@@ -6555,6 +6544,7 @@ def parse_person_name():
         )
 
 
+@api_login_required  # only caller is templates/admin_people.html (admin page)
 def create_new_person():
     """Create a new person and optionally add to a session"""
     try:
@@ -6672,6 +6662,7 @@ def create_new_person():
         )
 
 
+@api_login_required  # only caller is templates/admin_people.html (admin page dropdown)
 def get_available_sessions():
     """Get list of all active sessions for dropdown"""
     try:
@@ -9793,6 +9784,7 @@ def bulk_import_save_session(session_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@public_api  # backs the logged-out /sessions directory (frontend/src/sessionsdir/App.svelte); current_user use below is personalization only
 def get_sessions_with_today_status():
     """
     Get all sessions with indicators for today's status (active instances,
@@ -9824,6 +9816,7 @@ def get_sessions_with_today_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@api_login_required  # creates data; only reference is the orphaned templates/session_select_action.html (rendered by nothing)
 def create_or_get_today_session_instance(session_path):
     """
     Create a new session instance for today, or return existing one if it already exists.
@@ -9920,6 +9913,7 @@ def create_or_get_today_session_instance(session_path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@public_api  # backs the /share page QR image (templates/share.html, no @login_required); serves only a QR PNG of a URL
 def generate_qr_code(session_id=None):
     """
     Generate a QR code for sharing pages with optional referral tracking.
@@ -9974,6 +9968,7 @@ def generate_qr_code(session_id=None):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@public_api  # backs the logged-out session Logs tab's "happening now" banner (frontend/src/sessionpage/LogsTab.svelte)
 def get_session_active_instance(session_id):
     """
     Get all currently active instances for a session.
@@ -10752,6 +10747,7 @@ def cancel_merge_scan():
 # Session Instance Tune Detail Endpoints
 # ============================================================================
 
+@public_api  # backs the tune-detail modal on logged-out session-instance pages (tunesheet bundle config fetch); current_user use below is personalization only
 def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
     """
     Get detailed information about a tune in the context of a specific session instance.
@@ -11617,6 +11613,7 @@ def get_cache_settings_stats():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@public_api  # backs the logged-out session Logs tab (frontend/src/sessionpage/LogsTab.svelte, warmed by static/js/prefetch.js)
 def get_session_logs(session_path):
     """
     Get all session instances (logs) for a session.
@@ -11740,6 +11737,7 @@ def get_session_logs(session_path):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@public_api  # backs the logged-out /sessions/<path> page (the shell embeds the same serializer output; flags reflect the anonymous user)
 def get_session_detail(session_path):
     """
     GET /api/sessions/<path>/detail — the aggregate session-detail payload
@@ -11775,6 +11773,7 @@ def get_session_detail(session_path):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@public_api  # backs the logged-out session Tunes tab pagination (frontend/src/sessionpage/TunesTab.svelte, warmed by static/js/prefetch.js)
 def get_session_tunes_remaining(session_path):
     """
     Get remaining session tunes (after the first 20) for a session.

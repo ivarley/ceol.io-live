@@ -78,7 +78,13 @@
       context: 'session_instance',
       tuneId: tune.tune_id,
       apiEndpoint: '/api/tunes/' + tune.tune_id + '/detail',
-      additionalData: { isUserLoggedIn: true, tuneName: tune.name, global: true },
+      // CEOL_UID (base.html) is null for logged-out viewers: hide the add-to-list
+      // control instead of showing an Add that would 401.
+      additionalData: {
+        isUserLoggedIn: typeof CEOL_UID !== 'undefined' && CEOL_UID != null,
+        tuneName: tune.name,
+        global: true,
+      },
     })
   }
 

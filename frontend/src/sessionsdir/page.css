@@ -1,0 +1,160 @@
+/* Page styles for the /sessions directory (spec 035 Step 4a follow-up).
+   Moved verbatim from the <style> block in templates/sessions.html so the
+   bundle carries its own CSS (emitted as static/sessionsdir/page.css).
+   Global on purpose: these style legacy class names the Svelte component
+   emits. Loads after css/theme.css via the shell's extra_css block. */
+
+.sessions-controls {
+    margin-bottom: 1.5rem;
+}
+
+.search-and-toggle {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    align-items: stretch;
+}
+
+.search-bar {
+    flex: 1;
+    padding: 0.75rem;
+    font-size: 1.125rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+
+.filter-toggle-button {
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--primary);
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.filter-toggle-button:hover {
+    opacity: 0.9;
+}
+
+.session-count {
+    margin-bottom: 1rem;
+    color: var(--secondary-text);
+}
+
+.sessions-grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+
+.sessions-grid thead {
+    background-color: var(--table-header-bg);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.sessions-grid th {
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+}
+
+.sessions-grid tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.sessions-grid tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+.sessions-grid td {
+    padding: 0.75rem;
+}
+
+.sessions-grid a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.sessions-grid a:hover {
+    text-decoration: underline;
+}
+
+.no-sessions {
+    padding: 2rem;
+    text-align: center;
+    color: var(--secondary-text);
+}
+
+.today-action-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-goto-today {
+    background-color: #28a745;
+    color: white;
+}
+
+.btn-goto-today:hover {
+    background-color: #218838;
+}
+
+select.today-action-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 24px;
+    background-image: none;
+    cursor: pointer;
+}
+
+.action-cell {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.loading-message {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-color);
+    font-size: 1.1rem;
+}
+
+.loading-dots {
+    font-weight: bold;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.3;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Mobile responsive fixes */
+@media (max-width: 576px) {
+    .search-bar {
+        min-width: 0;
+        flex-shrink: 1;
+    }
+
+    .filter-toggle-button {
+        flex-shrink: 0;
+        padding: 0.75rem 1rem;
+    }
+}

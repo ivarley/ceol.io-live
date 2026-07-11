@@ -366,22 +366,11 @@ class TestAuthenticationRoutes:
 class TestAPIRoutes:
     """Test API endpoint routes."""
 
-    def test_sessions_data_api(self, client):
-        """Test sessions data API endpoint."""
-        # This API route likely requires authentication or has specific requirements
-        # For now, just test that it returns a valid JSON response
+    def test_sessions_data_endpoint_is_gone(self, client):
+        """/api/sessions/data (positional-tuple sessions list) was deleted — zero UI
+        callers; /api/sessions/with-today-status is the serialized replacement."""
         response = client.get("/api/sessions/data")
-
-        # Accept either success or redirect/auth error as valid responses
-        assert response.status_code in [200, 302, 401, 403]
-
-        if response.status_code == 200:
-            # If successful, should be valid JSON
-            try:
-                data = json.loads(response.data)
-                assert isinstance(data, dict)
-            except json.JSONDecodeError:
-                pytest.fail("API returned 200 but invalid JSON")
+        assert response.status_code == 404
 
     def test_add_session_page(self, client):
         """Test add session page."""

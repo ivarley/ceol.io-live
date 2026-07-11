@@ -2906,18 +2906,8 @@ def _get_session_data(session_path):
             "live_cache_global_limit": session_row[19],
         }
 
-        # Add human-readable recurrence if JSON format
-        recurrence_json = session_row[14]
-        if recurrence_json:
-            try:
-                import json
-                json.loads(recurrence_json)  # Validate it's JSON
-                session_data["recurrence_readable"] = to_human_readable(recurrence_json)
-            except (json.JSONDecodeError, ValueError, TypeError):
-                # If it's not valid JSON, treat it as legacy freeform text
-                session_data["recurrence_readable"] = recurrence_json
-        else:
-            session_data["recurrence_readable"] = None
+        from serializers import recurrence_readable
+        session_data["recurrence_readable"] = recurrence_readable(session_row[14])
 
         return session_data
 

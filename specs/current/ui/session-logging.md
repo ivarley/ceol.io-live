@@ -2,10 +2,15 @@
 
 Word-processor-style interface for logging tunes played during sessions.
 
-> **Note:** This documents the original **single-user, bulk-save desktop logger**.
-> The newer **real-time multi-user live logger** (Feature 024 — incremental ops, no
-> explicit save, Svelte 5 PWA) is a separate screen documented in
-> [Live Logging](../logic/live-logging.md).
+> **QUARANTINED / DEPRECATED (spec 035).** This documents the original
+> **single-user, bulk-save pill editor** — replaced by the **real-time
+> multi-user live logger** (Feature 024 — incremental ops, no explicit save,
+> Svelte 5 PWA), documented in [Live Logging](../logic/live-logging.md).
+> The pill page is kept working but untouched: it is never cached offline
+> (`X-Offline-Exclude`), out of e2e scope, and spec 035 Step 6 (pending —
+> promote the live logger first) deletes `session_instance_detail.html`, its
+> pill modules in `static/js/dist/`, and their `frontend/src/ts/` sources.
+> Nothing new should be built against this page.
 
 ## Overview
 
@@ -29,7 +34,10 @@ Word-processor-like editing experience:
 
 ## Implementation
 
-**JavaScript**: Modular architecture with 13 separate modules
+**JavaScript**: Modular architecture, 12 pill modules in `static/js/dist/`
+(webpack-built from `frontend/src/ts/components/`; `static/js/dist/` now holds
+**only** pill-editor code so it can be deleted wholesale) plus the shared
+`static/js/shared/modalManager.js` (kept — other Jinja pages still use it).
 
 **Modules** (`templates/session_instance_detail.html`):
 - `autoSave.js` - Auto-save timer and state
@@ -40,7 +48,7 @@ Word-processor-like editing experience:
 - `pillInteraction.js` - Click/touch handling
 - `dragDrop.js` - Drag and drop
 - `textInput.js` - Text input buffer
-- `modalManager.js` - Modal dialogs
+- `modalManager.js` - Modal dialogs (in `static/js/shared/`, NOT deleted with the rest)
 - `keyboardHandler.js` - Keyboard shortcuts
 - `undoRedoManager.js` - Operation history
 - `clipboardManager.js` - Copy/paste

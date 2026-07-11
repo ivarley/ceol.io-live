@@ -11,6 +11,7 @@
   //
   // Contexts: my_tunes / session / session_instance / admin, plus the read-only
   // global lookup view (additionalData.global).
+  import { Dialog, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     extractTuneData,
@@ -524,7 +525,7 @@
       })
       .catch((error) => {
         console.error('Error adding to tunebook:', error)
-        alert('Failed to add tune to your list')
+        toast('Failed to add tune to your list', 'error')
       })
   }
 
@@ -625,7 +626,7 @@
       case 'admin': {
         updates.name = fields.name.trim()
         if (!updates.name) {
-          alert('Tune name cannot be empty')
+          toast('Tune name cannot be empty', 'error')
           return
         }
         apiEndpoint = `/api/admin/tunes/${tune.tune_id}`
@@ -756,11 +757,19 @@
 
   // ---- removals ---------------------------------------------------------------------
 
+  // Removals are decisions -> kit Dialogs with explicit verbs (spec 035), not
+  // native confirms.
+  let removeMyTunesOpen = $state(false)
+  let removeSessionOpen = $state(false)
+
   export function removeFromMyTunes() {
-    if (!confirm('Are you sure you want to remove this tune from your list?')) return
+    removeMyTunesOpen = true
+  }
+
+  function doRemoveFromMyTunes() {
     const personTuneId = config.additionalData?.personTuneId
     if (!personTuneId) {
-      alert('Unable to remove tune')
+      toast('Unable to remove tune', 'error')
       return
     }
     fetch(`/api/my-tunes/${personTuneId}`, { method: 'DELETE' })
@@ -772,21 +781,24 @@
           close()
         } else {
           console.error('Error removing tune:', data.error)
-          alert('Failed to remove tune from your list')
+          toast('Failed to remove tune from your list', 'error')
         }
       })
       .catch((error) => {
         console.error('Error:', error)
-        alert('Failed to remove tune from your list')
+        toast('Failed to remove tune from your list', 'error')
       })
   }
 
   export function removeFromSession() {
-    if (!confirm('Are you sure you want to remove this tune from the session tune list?')) return
+    removeSessionOpen = true
+  }
+
+  function doRemoveFromSession() {
     const sessionPath = config.additionalData?.sessionPath
     const tuneId = tune?.tune_id
     if (!sessionPath || !tuneId) {
-      alert('Unable to remove tune from session')
+      toast('Unable to remove tune from session', 'error')
       return
     }
     fetch(`/api/sessions/${sessionPath}/tunes/${tuneId}`, { method: 'DELETE' })
@@ -798,12 +810,12 @@
           close()
         } else {
           console.error('Error removing tune from session:', data.message)
-          alert(data.message || 'Failed to remove tune from session')
+          toast(data.message || 'Failed to remove tune from session', 'error')
         }
       })
       .catch((error) => {
         console.error('Error:', error)
-        alert('Failed to remove tune from session')
+        toast('Failed to remove tune from session', 'error')
       })
   }
 
@@ -1668,3 +1680,17 @@
     </div>
   </div>
 </div>
+
+<Dialog
+  bind:open={removeMyTunesOpen}
+  title="Remove this tune from your list?"
+  confirmLabel="Remove tune"
+  destructive={true}
+  onConfirm={doRemoveFromMyTunes} />
+
+<Dialog
+  bind:open={removeSessionOpen}
+  title="Remove this tune from the session tune list?"
+  confirmLabel="Remove tune"
+  destructive={true}
+  onConfirm={doRemoveFromSession} />

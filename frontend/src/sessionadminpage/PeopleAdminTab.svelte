@@ -1,7 +1,8 @@
 <script>
   // People (Members) tab: session membership table with regulars/everyone
   // filter, name/email search (smart-quote normalized), and sortable columns.
-  import { compareValues, normalizeQuotes, personSortValue } from './logic.js'
+  import { normalizeQuotes } from '../shared/parse.js'
+  import { compareValues, personSortValue } from './logic.js'
 
   let { sessionPath, load } = $props()
 

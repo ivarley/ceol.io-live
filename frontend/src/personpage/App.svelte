@@ -19,7 +19,7 @@
   const isSystemAdmin = pageData.is_system_admin
   const personId = person.id
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logins']
 

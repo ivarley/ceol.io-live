@@ -6,7 +6,7 @@
   // same .modal CSS, body.modal-open kept for scroll-lock parity).
   let { initialSessions, person, personId, isUserProfile, isSystemAdmin } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { Dialog, toast } from '../lib/index.js'
 
   let sessions = $state([...initialSessions])
   let sessionFilter = $state('all')
@@ -15,15 +15,16 @@
   // against 'Regular', so an Admin row hides under the Regular filter.
   const isVisible = (s) => sessionFilter === 'all' || `${s.location} · ${s.role}`.includes('Regular')
 
-  function leaveSession(s) {
-    if (
-      !confirm(
-        `Are you sure you want to leave "${s.session_name}"?\n\nThis will remove you from the session's member list. Your attendance history will be preserved.`
-      )
-    ) {
-      return
-    }
+  // Leaving is a decision -> kit Dialog with an explicit verb (spec 035).
+  let leaveOpen = $state(false)
+  let leaveTarget = $state(null)
 
+  function askLeaveSession(s) {
+    leaveTarget = s
+    leaveOpen = true
+  }
+
+  function leaveSession(s) {
     fetch(`/api/sessions/${s.session_path}/leave`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -162,11 +163,16 @@
       ? `${session.location_name} - ${session.location_display}`
       : session.location_display
 
-  function addPersonToSession(sessionId, sessionName) {
-    if (!confirm(`Add ${person.name} to "${sessionName}" as a ${selectedRole}?`)) {
-      return
-    }
+  // Adding to a session is a decision -> kit Dialog (spec 035).
+  let addConfirmOpen = $state(false)
+  let addTarget = $state(null) // { sessionId, sessionName }
 
+  function askAddPersonToSession(sessionId, sessionName) {
+    addTarget = { sessionId, sessionName }
+    addConfirmOpen = true
+  }
+
+  function addPersonToSession(sessionId) {
     fetch('/api/add-person-to-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -225,7 +231,7 @@
                 title="Leave this session"
                 onclick={(e) => {
                   e.preventDefault()
-                  leaveSession(session)
+                  askLeaveSession(session)
                 }}>
                 <span class="leave-x">&times;</span>
               </button>
@@ -364,7 +370,7 @@
                     class="btn btn-sm btn-primary add-session-btn"
                     data-session-id={session.session_id}
                     data-session-name={session.name}
-                    onclick={() => addPersonToSession(session.session_id, session.name)}>
+                    onclick={() => askAddPersonToSession(session.session_id, session.name)}>
                     Add
                   </button>
                 </div>
@@ -383,3 +389,20 @@
     </div>
   </div>
 </div>
+
+<Dialog
+  bind:open={leaveOpen}
+  title={`Leave "${leaveTarget ? leaveTarget.session_name : ''}"?`}
+  description="This will remove you from the session's member list. Your attendance history will be preserved."
+  confirmLabel="Leave session"
+  destructive={true}
+  onConfirm={() => leaveSession(leaveTarget)}
+  onCancel={() => (leaveTarget = null)} />
+
+<Dialog
+  bind:open={addConfirmOpen}
+  title={`Add ${person.name} to "${addTarget ? addTarget.sessionName : ''}"?`}
+  description={`${person.name} will be added as a ${selectedRole}.`}
+  confirmLabel="Add to session"
+  onConfirm={() => addPersonToSession(addTarget.sessionId)}
+  onCancel={() => (addTarget = null)} />

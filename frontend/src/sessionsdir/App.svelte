@@ -2,7 +2,7 @@
   // The /sessions directory (spec 035 Step 4a) — ported behavior-for-behavior from
   // the legacy inline script in templates/sessions.html. Same DOM contract
   // (#search-bar, #sessions-table, #sessions-tbody, #no-results — the e2e suite and
-  // the shell's <style> block select on these). First paint comes from the embedded
+  // this bundle's page.css select on these). First paint comes from the embedded
   // payload; a background refetch of the same API keeps it fresh.
   import { untrack } from 'svelte'
 

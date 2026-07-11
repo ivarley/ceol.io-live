@@ -8,7 +8,9 @@ import { resolve } from 'path'
 // filenames, same pattern as the other page bundles. Styling stays in the shared
 // static/css/tune_detail_modal.css (the component ships no CSS of its own).
 export default defineConfig({
-  plugins: [svelte()],
+  // The kit Dialog ships scoped component CSS, but this bundle's page loads no
+  // per-bundle stylesheet — inject component styles at runtime instead.
+  plugins: [svelte({ compilerOptions: { css: 'injected' } })],
   build: {
     outDir: resolve(__dirname, '../static/tunesheet'),
     emptyOutDir: true,

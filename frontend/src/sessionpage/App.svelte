@@ -4,13 +4,14 @@
   // The server-rendered shell keeps the page header (h1, session details, join
   // banner, flash messages) and the whole legacy <style> block; this component
   // emits the same class names, so the look is unchanged. Globals (TuneDetailModal,
-  // TunebookStatus, AccentUtils, showMessage, SessionTuneAddPane) come from
-  // base.html / existing bundles exactly as before.
+  // TunebookStatus, AccentUtils, showMessage) come from base.html exactly as
+  // before; the add-tune pane is bundled in as a child component.
   import { untrack } from 'svelte'
   import TunesTab from './TunesTab.svelte'
   import LogsTab from './LogsTab.svelte'
   import PeopleTab from './PeopleTab.svelte'
   import AddInstanceModal from './AddInstanceModal.svelte'
+  import SessionTuneAddApp from '../mytunes/SessionTuneAddApp.svelte'
   import { basePathOf } from './logic.js'
 
   let { pageData, ctx = {} } = $props()
@@ -49,7 +50,11 @@
   let addInstanceModal = $state(null)
   const openAddInstance = () => addInstanceModal && addInstanceModal.open()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  // Add-tune pane: the same component the standalone /static/mytunes bundle used
+  // to mount, now bundled in as a child with callback props (no window global).
+  let addPane = $state(null)
+
+  import { toast } from '../lib/index.js'
 
   $effect(() => {
     untrack(() => {
@@ -122,6 +127,7 @@
     active={activeTab === 'tunes'}
     {session}
     {permissions}
+    addPane={() => addPane}
     tunes={pageData.tunes || []}
     totalTunesCount={pageData.total_tunes_count || 0}
     hasMoreTunes={!!pageData.has_more_tunes}
@@ -145,3 +151,7 @@
 </div>
 
 <AddInstanceModal bind:this={addInstanceModal} {sessionPath} locationName={session.location_name} />
+
+<!-- Add-to-session-tunes pane: same component as before, now a bundled-in child
+     with callback props instead of the window.SessionTuneAddPane global. -->
+<SessionTuneAddApp bind:this={addPane} />

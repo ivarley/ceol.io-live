@@ -21,7 +21,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v29'
+const VERSION = 'v30'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
@@ -52,8 +52,6 @@ const PRECACHE = [
   '/static/js/tunebook_status.js',
   '/static/js/mytunes_offline.js',
   '/static/js/components/TuneSearchComponent.js',
-  '/static/mytunes/add.js',
-  '/static/mytunes/add.css',
   '/static/manifest.json',
   '/static/images/logo3-1.png',
   '/static/images/favicon.ico',

@@ -21,6 +21,7 @@ def api_login_required(f):
         if not current_user.is_authenticated:
             return jsonify({"success": False, "error": "Authentication required"}), 401
         return f(*args, **kwargs)
+    decorated_function._auth_required = True  # machine-checkable marker (test_api_auth_coverage)
     return decorated_function
 
 
@@ -49,4 +50,5 @@ def api_admin_or_self_required(f):
         if not (current_user.is_system_admin or is_self):
             return jsonify({"success": False, "error": "Not authorized"}), 403
         return f(*args, **kwargs)
+    decorated_function._auth_required = True  # machine-checkable marker (test_api_auth_coverage)
     return decorated_function

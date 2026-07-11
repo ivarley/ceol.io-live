@@ -28,7 +28,7 @@ person_tune_service = PersonTuneService()
 thesession_sync_service = ThesessionSyncService()
 
 
-from api_auth import api_login_required
+from api_auth import api_login_required, public_api
 
 
 def get_user_person_id() -> int:
@@ -1033,6 +1033,7 @@ def update_my_profile():
         }), 500
 
 
+@public_api  # backs the hamburger "Find a tune" overlay, offered to logged-out users on every page (templates/hamburger_menu.html else-branch → frontend/src/tunesheet/FindTune.svelte)
 def search_tunes():
     """
     GET /api/tunes/search
@@ -1076,6 +1077,14 @@ def search_tunes():
 
         # Get optional context parameters
         person_id = request.args.get('person_id', type=int)
+        # List membership/learn_status is private to the list owner: only honor
+        # person_id for self (or a system admin) — anyone else gets catalog-only
+        # results instead of a probe into another person's list.
+        if person_id is not None:
+            own = getattr(current_user, 'person_id', None) if current_user.is_authenticated else None
+            is_admin = current_user.is_authenticated and current_user.is_system_admin
+            if person_id != own and not is_admin:
+                person_id = None
         session_id = request.args.get('session_id', type=int)
         # Soft type preference (the type of the set you're logging into): matching-type
         # tunes sort above other types. None => no effect.

@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 # Import our custom modules
 from auth import User, SESSION_LIFETIME_WEEKS
+from api_auth import public_api
 from api_routes import *
 from web_routes import *
 from api_person_tune_routes import (
@@ -270,8 +271,9 @@ app.add_url_rule("/share", "share_page", share_page)
 app.add_url_rule("/register", "register", register, methods=["GET", "POST"])
 app.add_url_rule("/login", "login", login, methods=["GET", "POST"])
 app.add_url_rule("/logout", "logout", logout)
-app.add_url_rule("/api/auth/check-email", "check_email_api", check_email_api, methods=["POST"])
-app.add_url_rule("/api/auth/login-password", "login_password_api", login_password_api, methods=["POST"])
+# public_api: the login flow itself — necessarily unauthenticated (handlers live in web_routes.py)
+app.add_url_rule("/api/auth/check-email", "check_email_api", public_api(check_email_api), methods=["POST"])
+app.add_url_rule("/api/auth/login-password", "login_password_api", public_api(login_password_api), methods=["POST"])
 app.add_url_rule("/auth/login/<token>", "login_with_token", login_with_token)
 app.add_url_rule("/auth/set-password", "set_password_optional", set_password_optional, methods=["GET", "POST"])
 app.add_url_rule("/auth/setup-profile", "setup_profile", setup_profile, methods=["GET", "POST"])
@@ -503,7 +505,8 @@ def offline_page():
 
 app.add_url_rule("/offline", "offline_page", offline_page)
 
-app.add_url_rule("/api/sessions/data", "sessions_data", sessions_data)
+# /api/sessions/data (positional-tuple sessions list) deleted — zero UI callers;
+# /api/sessions/with-today-status is the serialized replacement (spec 035 follow-up).
 app.add_url_rule(
     "/api/sessions/<path:session_path>/logs",
     "get_session_logs",
@@ -1247,7 +1250,7 @@ app.add_url_rule(
 app.add_url_rule(
     "/api/qr",
     "generate_qr_code_general",
-    lambda: generate_qr_code(0),
+    public_api(lambda: generate_qr_code(0)),  # backs the public /share page QR image
     methods=["GET"],
 )
 

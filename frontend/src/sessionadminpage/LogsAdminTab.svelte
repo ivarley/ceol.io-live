@@ -4,7 +4,7 @@
   // deep link auto-open, and the Add Session Instance modal (suggestion-prefilled).
   let { sessionPath, locationName, load } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   // session_instance_modal.js declares `const SessionInstanceModal` — a global
   // LEXICAL binding, not a window property. The legacy inline onclick handlers
@@ -145,7 +145,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          toast(data.message)
+          toast(data.message, 'success')
           hideAddSessionModal()
           // Reload the logs content to show the new instance
           loadLogsContent()

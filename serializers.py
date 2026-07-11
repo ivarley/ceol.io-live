@@ -308,23 +308,30 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         "live_cache_global_limit": row["live_cache_global_limit"],
     }
 
-    # Human-readable recurrence; legacy freeform text passes through unchanged.
-    if session["recurrence"]:
-        try:
-            from recurrence_utils import to_human_readable
-
-            _json.loads(session["recurrence"])
-            session["recurrence_readable"] = to_human_readable(session["recurrence"])
-        except (ValueError, TypeError):
-            session["recurrence_readable"] = session["recurrence"]
-    else:
-        session["recurrence_readable"] = None
+    session["recurrence_readable"] = recurrence_readable(session["recurrence"])
 
     return {
         "success": True,
         "session": session,
         "timezone_options": timezone_options(),
     }
+
+
+
+def recurrence_readable(recurrence: Optional[str]) -> Optional[str]:
+    """Human-readable form of a session's recurrence. JSON recurrences render via
+    recurrence_utils.to_human_readable; legacy freeform text passes through."""
+    if not recurrence:
+        return None
+    import json as _json
+
+    try:
+        from recurrence_utils import to_human_readable
+
+        _json.loads(recurrence)
+        return to_human_readable(recurrence)
+    except (ValueError, TypeError):
+        return recurrence
 
 
 # ---------------------------------------------------------------------------
@@ -522,17 +529,7 @@ def build_session_detail_payload(
         "timezone": row["timezone"] or "UTC",
     }
 
-    # Human-readable recurrence; legacy freeform text passes through unchanged.
-    if session["recurrence"]:
-        try:
-            from recurrence_utils import to_human_readable
-
-            _json.loads(session["recurrence"])
-            session["recurrence_readable"] = to_human_readable(session["recurrence"])
-        except (ValueError, TypeError):
-            session["recurrence_readable"] = session["recurrence"]
-    else:
-        session["recurrence_readable"] = None
+    session["recurrence_readable"] = recurrence_readable(session["recurrence"])
 
     session_id = session["session_id"]
 

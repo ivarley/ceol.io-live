@@ -1619,3 +1619,17 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 .mylist-modal .ls-opt.ls-want-to-learn { background: #1f3a4a; color: #cce5ff; }
 .mylist-modal .ls-opt.ls-learning { background: #4a3f1f; color: #ffeaa7; }
 .mylist-modal .ls-opt.ls-learned { background: #1f4a2f; color: #c3e6cb; }
+
+/* ---------- kit Dialog (spec 035) ---------- */
+/* The mark-complete / re-open decisions use the shared kit Dialog, which themes
+   itself with theme.css variables. The live shell doesn't load theme.css, so
+   supply the same dark values here (mirrors the #tune-detail-modal block). */
+.kit-dialog,
+.kit-dialog-scrim {
+  --bg-color: #1a1a1a;
+  --text-color: #e0e0e0;
+  --border-color: #444;
+  --hover-bg: #3d3d3d;
+  --primary: #4da6ff;
+  --text-muted: #9a9aa3;
+}

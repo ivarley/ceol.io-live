@@ -8,7 +8,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/svelte'
 import App from '../src/sessionadminpage/App.svelte'
-import { extractTuneId, normalizeQuotes, formatTime } from '../src/sessionadminpage/logic.js'
+import { extractTuneId, normalizeQuotes } from '../src/shared/parse.js'
+import { formatTime } from '../src/shared/format.js'
 
 const payload = (over = {}) => ({
   success: true,
@@ -106,7 +107,6 @@ beforeEach(() => {
   stubFetch()
   window.showMessage = vi.fn()
   window.SessionInstanceModal = { show: vi.fn() }
-  vi.stubGlobal('confirm', vi.fn(() => true))
   window.history.replaceState({}, '', '/admin/sessions/austin/mueller')
 })
 
@@ -219,7 +219,9 @@ describe('session admin page view', () => {
     expect(container.querySelector('#termination-date').value).toBe('2025-12-31')
     expect(container.querySelector('#deactivate-session-link')).toBeNull()
     await fireEvent.click(container.querySelector('#reactivate-session-link'))
-    expect(confirm).toHaveBeenCalled()
+    // Decision -> kit Dialog (spec 035): explicit verb, no native confirm.
+    expect(document.querySelector('.kit-dialog-title').textContent).toBe('Reactivate this session?')
+    await fireEvent.click(document.querySelector('.kit-dialog-confirm'))
     await waitFor(() => {
       expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/reactivate'))).toBe(true)
     })
@@ -326,7 +328,7 @@ describe('session admin page view', () => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/add_instance'))
       expect(call).toBeTruthy()
       expect(JSON.parse(call[1].body)).toEqual({ date: '2026-07-14', start_time: '19:00', end_time: '22:00' })
-      expect(window.showMessage).toHaveBeenCalledWith('Instance added', undefined)
+      expect(window.showMessage).toHaveBeenCalledWith('Instance added', 'success')
     })
     // Modal closed + logs re-fetched.
     expect(container.querySelector('#add-session-instance-modal')).toBeNull()

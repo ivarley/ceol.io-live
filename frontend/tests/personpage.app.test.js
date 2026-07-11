@@ -109,7 +109,6 @@ beforeEach(() => {
   }
   stubFetch()
   window.showMessage = vi.fn()
-  vi.stubGlobal('confirm', vi.fn(() => true))
   sessionStorage.clear()
   window.history.replaceState({}, '', '/me')
 })
@@ -264,7 +263,8 @@ describe('person details page view (user profile flavor)', () => {
     const { container } = renderApp(payload({ sessions: [payload().sessions[0]] }))
     await fireEvent.click(container.querySelector('#sessions-tab'))
     await fireEvent.click(container.querySelector('.leave-session-btn'))
-    expect(confirm).toHaveBeenCalled()
+    // Decision -> kit Dialog (spec 035): explicit verb, no native confirm.
+    await fireEvent.click(document.querySelector('.kit-dialog-confirm'))
     await waitFor(() => {
       expect(container.querySelector('.session-card')).toBeNull()
     })
@@ -284,7 +284,14 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('.session-location').textContent).toBe('The Pub - Dublin, Ireland')
     await fireEvent.click(container.querySelector('#role-attendee'))
     await fireEvent.click(container.querySelector('.add-session-btn'))
-    expect(confirm).toHaveBeenCalledWith('Add Ian Varley to "Other Session" as a attendee?')
+    // Decision -> kit Dialog (spec 035) carrying the person/session/role.
+    expect(document.querySelector('.kit-dialog-title').textContent).toBe(
+      'Add Ian Varley to "Other Session"?'
+    )
+    expect(document.querySelector('.kit-dialog-desc').textContent).toBe(
+      'Ian Varley will be added as a attendee.'
+    )
+    await fireEvent.click(document.querySelector('.kit-dialog-confirm'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-person-to-session'))
       expect(call).toBeTruthy()
@@ -383,7 +390,12 @@ describe('person details page view (admin flavor)', () => {
     fetchRoutes['/api/admin/person/5/active'] = { success: true, message: 'Deactivated' }
     const { container } = renderAdmin()
     await fireEvent.click(container.querySelector('#deactivate-person-btn'))
-    expect(confirm).toHaveBeenCalledWith('Are you sure you want to deactivate Ian Varley?')
+    // Destructive decision -> kit Dialog with the explicit verb.
+    expect(document.querySelector('.kit-dialog-title').textContent).toBe('Deactivate Ian Varley?')
+    const confirmBtn = document.querySelector('.kit-dialog-confirm')
+    expect(confirmBtn.textContent.trim()).toBe('Deactivate person')
+    expect(confirmBtn.classList.contains('destructive')).toBe(true)
+    await fireEvent.click(confirmBtn)
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/admin/person/5/active'))
       expect(call).toBeTruthy()

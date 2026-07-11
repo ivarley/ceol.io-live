@@ -4,6 +4,9 @@
 // shape) gives first paint with no fetch, and window.__PAGE_CTX__ carries the
 // routing state (active tab, session path, system-admin flag).
 import { mount } from 'svelte'
+// Page styles travel with the bundle (emitted as static/sessionadminpage/page.css,
+// linked by the shell's extra_css block) so the components stay portable.
+import './page.css'
 import App from './App.svelte'
 
 const target = document.getElementById('session-admin-root')

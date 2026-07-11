@@ -6,7 +6,9 @@ import { resolve } from 'path'
 // tab wrapper routes), mounted by the thin Flask shell templates/session_admin.html.
 // Same lib-mode/no-hash pattern as the other page bundles.
 export default defineConfig({
-  plugins: [svelte()],
+  // The kit Dialog ships scoped component CSS, but this bundle's page loads no
+  // per-bundle stylesheet — inject component styles at runtime instead.
+  plugins: [svelte({ compilerOptions: { css: 'injected' } })],
   build: {
     outDir: resolve(__dirname, '../static/sessionadminpage'),
     emptyOutDir: true,

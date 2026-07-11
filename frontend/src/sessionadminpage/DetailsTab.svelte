@@ -2,11 +2,11 @@
   // Details tab: the session-details edit form (save via PUT
   // /api/sessions/<path>/admin-update), termination / reactivation flows, and
   // the recurrence schedule editor with live preview.
-  import { formatTime } from './logic.js'
+  import { formatTime } from '../shared/format.js'
 
   let { session, sessionPath, timezoneOptions = [] } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { Dialog, toast } from '../lib/index.js'
 
   // --- Form fields ------------------------------------------------------------
   let name = $state(session.name || '')
@@ -131,6 +131,9 @@
       })
   }
 
+  // Reactivate is a decision -> kit Dialog (spec 035: never a native confirm).
+  let reactivateConfirmOpen = $state(false)
+
   function reactivateSession() {
     fetch(`/api/admin/sessions/${sessionPath}/reactivate`, {
       method: 'PUT',
@@ -142,12 +145,12 @@
           // Reload page to show updated state
           window.location.reload()
         } else {
-          alert('Error: ' + (data.error || 'Failed to reactivate session'))
+          toast('Error: ' + (data.error || 'Failed to reactivate session'), 'error')
         }
       })
       .catch((error) => {
         console.error('Error reactivating session:', error)
-        alert('An error occurred while reactivating the session')
+        toast('An error occurred while reactivating the session', 'error')
       })
   }
 
@@ -414,9 +417,7 @@
                 class="text-success"
                 onclick={(e) => {
                   e.preventDefault()
-                  if (confirm('Are you sure you want to reactivate this session? This will remove the termination date.')) {
-                    reactivateSession()
-                  }
+                  reactivateConfirmOpen = true
                 }}>
                 <i class="fas fa-play-circle"></i> Reactivate session
               </a>
@@ -660,3 +661,10 @@
     </div>
   </div>
 {/if}
+
+<Dialog
+  bind:open={reactivateConfirmOpen}
+  title="Reactivate this session?"
+  description="This will remove the termination date."
+  confirmLabel="Reactivate session"
+  onConfirm={reactivateSession} />

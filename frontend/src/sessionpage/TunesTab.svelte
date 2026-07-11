@@ -2,7 +2,8 @@
   // The Tunes tab: instant first paint from the embedded first 20 rows, async
   // /tunes/remaining merge (serializer dicts — the tuple reshaping hack is dead),
   // client-side search/type/my-status filtering with URL round-trip, selection
-  // mode + the Copy To flow, and the add-tune pane hook (window.SessionTuneAddPane).
+  // mode + the Copy To flow, and the add-tune pane hook (the bundled-in
+  // SessionTuneAddApp, handed down from App via the addPane prop).
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import {
@@ -20,12 +21,13 @@
     totalTunesCount = 0,
     hasMoreTunes = false,
     deepLinkTuneId = null,
+    addPane = () => null, // () => the bundled-in SessionTuneAddApp instance
   } = $props()
 
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -364,11 +366,12 @@
     }
   }
 
-  // ---- add-tune pane (window.SessionTuneAddPane, /static/mytunes/add.js) ----------
+  // ---- add-tune pane (bundled-in SessionTuneAddApp, via the addPane prop) ----------
   function handleAddSessionTuneClick(event) {
-    if (!window.SessionTuneAddPane) return // let the <a href> navigate to the legacy page
+    const pane = addPane()
+    if (!pane) return // let the <a href> navigate to the legacy page
     event.preventDefault()
-    window.SessionTuneAddPane.open({
+    pane.open({
       sessionPath: sessionPath,
       query: rawSearch.trim(),
       onAdded: function (tuneId, name) {

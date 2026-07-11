@@ -8,18 +8,22 @@ The high level view of the system is documented in the /specs directory. Before 
 
 ## Quick Reference
 
-**Stack**: Flask 3.1 + PostgreSQL + Bootstrap 4.5 + Jinja2
-**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` (JSON)
+**Stack**: Flask 3.1 + PostgreSQL + Svelte 5 (interactive pages) + Jinja2 shells + Bootstrap 4.5 (legacy pages)
+**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON)
+**Payloads**: `serializers.py` — one function per payload; the page shell's embedded `__PAGE_DATA__` and the API return the same dict (spec 035)
+**API auth**: `api_auth.py` — `@api_login_required` / `@api_admin_or_self_required` / `@public_api`; Bearer tokens via `app.py` request_loader
+**Frontend**: `frontend/src/<page>/` + shared kit `frontend/src/lib/` → Vite builds to `static/<page>/` (gitignored, rebuilt on deploy); how-to: [Svelte Pages](specs/current/ui/svelte-pages.md)
 **Deploy**: Render.com (Gunicorn) | **DB**: `database.py` | **Auth**: `auth.py` (Flask-Login)
 
 ## Documentation Structure
 
 ### [UI Layer](specs/current/ui/README.md)
 Frontend, templates, interactions, theming
-- [Templates & Pages](specs/current/ui/templates.md) - HTML structure, base layouts
-- [Session Logging UI](specs/current/ui/session-logging.md) - Word-processor-style tune logging
+- [Svelte Pages](specs/current/ui/svelte-pages.md) - Thin shell + `__PAGE_DATA__` + page bundle; how to add/change a page; the component kit
+- [Templates & Pages](specs/current/ui/templates.md) - HTML structure, base layouts, shells vs. Jinja pages
+- [Session Logging UI](specs/current/ui/session-logging.md) - QUARANTINED legacy pill editor (spec 035 Step 6 deletes it)
 - [Dark Mode & Theming](specs/current/ui/theming.md) - CSS variables, theme switching
-- [AJAX Patterns](specs/current/ui/ajax.md) - API integration, loading states
+- [AJAX Patterns](specs/current/ui/ajax.md) - Serializer layer, API auth decorators, Bearer tokens
 
 ### [Data Layer](specs/current/data/README.md)
 Database schema, models, persistence
@@ -49,7 +53,7 @@ Internal services, microservices, background jobs
 
 ## Feature Index
 
-- **Session Tracking**: [Data](specs/current/data/session-model.md) | [Logic](specs/current/logic/session-logic.md) | [UI](specs/current/ui/session-logging.md)
+- **Session Tracking**: [Data](specs/current/data/session-model.md) | [Logic](specs/current/logic/session-logic.md) | [UI](specs/current/ui/svelte-pages.md)
 - **Attendance (Feature 001)**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/attendance.md)
 - **Tune Management**: [Data](specs/current/data/tune-model.md) | [Logic](specs/current/logic/tune-logic.md)
 - **Per-Instrument Tune Status**: [Data + UI](specs/current/data/people-model.md) (`person_tune_instrument` overrides, `person_instrument.is_auto`, canonical instruments in `instruments.py`)
@@ -57,6 +61,7 @@ Internal services, microservices, background jobs
 - **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 - **Offline Support**: [Logic](specs/current/logic/offline.md)
+- **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
 
 ## Development
 
@@ -81,9 +86,12 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 
 ## Key Files
 
-- `app.py:14` - Flask app initialization
-- `web_routes.py` - 2960 lines, all HTML page routes
-- `api_routes.py` - 9671 lines, all JSON API endpoints
-- `auth.py:12-70` - User model and authentication
-- `database.py:13-21` - DB connection, `database.py:24+` - History tracking
+- `app.py:52` - Flask app init; `app.py:106` - Bearer-token request_loader; API URL rules bound here
+- `web_routes.py` - ~3600 lines, all HTML page routes (migrated pages are thin shells calling serializers)
+- `api_routes.py` - ~12700 lines, JSON API endpoints; `api_person_tune_routes.py` - my-tunes/person-tune APIs
+- `serializers.py` - page/API payload builders (pure mappers, RealDictCursor loaders)
+- `api_auth.py` - API auth decorators + `@public_api` marker
+- `auth.py:13` - User model and authentication
+- `database.py:253` - DB connection, `database.py:270` - History tracking
+- `frontend/` - Svelte sources (`src/<page>/`, kit in `src/lib/`), one Vite config per bundle; `frontend/tests/` Vitest; `e2e/` Playwright
 - `schema/schema.md` - Complete database documentation

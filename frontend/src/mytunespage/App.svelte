@@ -7,8 +7,8 @@
   import { untrack } from 'svelte'
   import AddTuneApp from '../mytunes/AddTuneApp.svelte'
   import TuneCard from './TuneCard.svelte'
+  import { extractTuneId } from '../shared/parse.js'
   import {
-    extractTuneId,
     resolveTuneInstrumentStatus,
     filterAndSort,
     noResultsMessage,
@@ -25,7 +25,7 @@
 
   let { pageData = null } = $props()
 
-  const toast = (msg, type) => window.showMessage && window.showMessage(msg, type)
+  import { toast } from '../lib/index.js'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))

@@ -65,7 +65,8 @@ the bundle.
   first, then popular).
 - **The UI falls back to it when a fetch fails** (the online path is unchanged):
   - Tune-detail drawer → `CeolOffline.getTune()` (renders incipit notation).
-  - Global "Find a tune" (`hamburger_menu.js`) + `TuneSearchComponent` + the add-tune search
+  - Global "Find a tune" (`frontend/src/tunesheet/FindTune.svelte`, opened via
+    `hamburger_menu.js`) + the legacy add pages' `TuneSearchComponent`
     → `CeolOffline.searchTunes()`.
   - Sessions list → the cached `/api/sessions/with-today-status` response.
 
@@ -76,7 +77,7 @@ write fails offline, keeps the optimistic UI, and replays on reconnect.
 
 - Ops POST to **`/api/my-tunes/ops`**, which is idempotent server-side (`UNIQUE(person_id,
   tune_id)`), so replays are safe with no dedup table. Op types: `add`, `remove`,
-  `set_status`, `set_heard`, `set_notes`.
+  `set_status`, `set_heard`, `set_notes`, `set_instrument_status`.
 - Heard count is sent as an **absolute** target, never a delta, so a replayed op can't
   double-count. Ops carry a **monotonic** timestamp so two changes in the same millisecond
   still replay in submit order.
@@ -121,8 +122,9 @@ bundle `/static/tunesheet/sheet.js`, spec 035 Step 3, which renders its own
 `base.html` via overridable Jinja blocks (`tune_detail_modal_css` / `tune_detail_modal`).
 This means the drawer works offline everywhere without a fragile lazy-load. The entry is
 idempotent (guards against double registration) and the container defaults to inline
-`display:none` so a page's own `.modal-overlay` CSS can't reveal it. `common_tunes` has its
-own self-contained modal and overrides the blocks to opt out.
+`display:none` so a page's own `.modal-overlay` CSS can't reveal it. No page overrides the
+blocks anymore — `common_tunes` (the last holdout with its own inline modal) now uses the
+shared sheet too.
 
 ## Verification
 

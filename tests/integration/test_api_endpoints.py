@@ -18,8 +18,9 @@ from flask import url_for
 class TestSessionsAPI:
     """Test sessions-related API endpoints."""
 
-    def test_sessions_data_api(self, client, db_conn, db_cursor):
-        """Test /api/sessions/data endpoint returns proper JSON."""
+    def test_sessions_directory_api(self, client, db_conn, db_cursor):
+        """Test /api/sessions/with-today-status returns the serialized sessions list.
+        (Replaces the deleted /api/sessions/data tuple-shaped endpoint.)"""
         # Create test session data with unique path
         unique_id = str(uuid.uuid4())[:8]
         session_path = f"test-session-api-{unique_id}"
@@ -42,28 +43,21 @@ class TestSessionsAPI:
         session_id = db_cursor.fetchone()[0]
         db_conn.commit()
 
-        response = client.get("/api/sessions/data")
+        response = client.get("/api/sessions/with-today-status")
 
         assert response.status_code == 200
         assert response.content_type == "application/json"
 
         data = json.loads(response.data)
-        assert "sessions" in data
+        assert data["success"] is True
         assert isinstance(data["sessions"], list)
-
-        # Sessions might be returned as tuples/lists rather than dicts
-        # Just verify we have sessions data and the response is valid JSON
         assert len(data["sessions"]) >= 1  # Should include our test session
 
-        # If we have sessions, verify basic structure
-        if len(data["sessions"]) > 0:
-            session = data["sessions"][0]
-            # Session might be a list/tuple with indexed values
-            if isinstance(session, (list, tuple)):
-                assert len(session) >= 3  # Should have at least id, name, path
-            else:
-                # If it's a dict, check for expected keys
-                assert "name" in session or len(session) >= 2
+        # Serialized dicts (spec 035) — never positional tuples
+        session = data["sessions"][0]
+        assert isinstance(session, dict)
+        assert "name" in session and "path" in session and "session_id" in session
+        assert any(s["path"] == session_path for s in data["sessions"])
 
     def test_check_existing_session_api(self, client, db_conn, db_cursor):
         """Test /api/check-existing-session endpoint."""
@@ -511,7 +505,7 @@ class TestTuneAPI:
         updated_count = db_cursor.fetchone()[0]
         assert updated_count == 42
 
-    def test_get_session_tunes_api(self, client, db_conn, db_cursor):
+    def test_get_session_tunes_api(self, client, authenticated_user, db_conn, db_cursor):
         """Test getting session instance tunes via API."""
         # Create test data with unique identifiers
         unique_id = str(uuid.uuid4())[:8]
@@ -586,7 +580,8 @@ class TestTuneAPI:
         )
         db_conn.commit()
 
-        response = client.get(f"/api/sessions/{session_path}/2023-08-15/tunes")
+        with authenticated_user:
+            response = client.get(f"/api/sessions/{session_path}/2023-08-15/tunes")
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -612,8 +607,8 @@ class TestTuneAPI:
 class TestUserAPI:
     """Test user-related API endpoints."""
 
-    def test_check_username_availability_api(self, client, db_conn, db_cursor):
-        """Test username availability checking API."""
+    def test_check_username_availability_api(self, client, authenticated_user, db_conn, db_cursor):
+        """Test username availability checking API (login-gated since the 035 auth sweep)."""
         # Create existing user
         unique_id = str(uuid.uuid4())[:8]
         email = f"existing{unique_id}@example.com"
@@ -636,24 +631,25 @@ class TestUserAPI:
         )
         db_conn.commit()
 
-        # Test existing username
-        response = client.post(
-            "/api/check-username-availability",
-            json={"username": f"existinguser{unique_id}"},
-        )
+        with authenticated_user:
+            # Test existing username
+            response = client.post(
+                "/api/check-username-availability",
+                json={"username": f"existinguser{unique_id}"},
+            )
 
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["available"] is False
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["available"] is False
 
-        # Test available username
-        response = client.post(
-            "/api/check-username-availability", json={"username": "newavailableuser"}
-        )
+            # Test available username
+            response = client.post(
+                "/api/check-username-availability", json={"username": "newavailableuser"}
+            )
 
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["available"] is True
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["available"] is True
 
     def test_update_auto_save_preference(
         self, client, authenticated_user, db_conn, db_cursor

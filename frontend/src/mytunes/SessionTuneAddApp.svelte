@@ -3,8 +3,8 @@
   // (mobile slide-in / desktop split pane), but scoped to a session's repertoire —
   // tunes already in THIS session dim and sort last, and the configure phase asks
   // the session questions instead: alias ("we call this"), and under Advanced a
-  // specific setting and the key the session plays it in. Mounted once by
-  // session_detail.html; the page drives it through window.SessionTuneAddPane.
+  // specific setting and the key the session plays it in. Bundled into the
+  // sessionpage bundle as a child of its App, driven via bind:this + open().
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'

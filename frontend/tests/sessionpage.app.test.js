@@ -105,7 +105,6 @@ afterEach(() => {
   delete window.TuneDetailModal
   delete window.TunebookStatus
   delete window.showMessage
-  delete window.SessionTuneAddPane
 })
 
 const renderApp = (pageData = payload(), ctx = { activeTab: 'tunes' }) =>
@@ -321,16 +320,19 @@ describe('session detail page view', () => {
     expect(container.querySelectorAll('#tunes-list .tune-row')).toHaveLength(2)
   })
 
-  it('the add-tune button opens window.SessionTuneAddPane with the current query', async () => {
-    window.SessionTuneAddPane = { open: vi.fn() }
+  it('the add-tune button opens the bundled-in add pane seeded with the current query', async () => {
+    fetchRoutes['/api/sessions/test/tunes/search'] = { success: true, results: [] }
     const { container } = renderApp()
     const input = container.querySelector('#tune-search')
     input.value = 'kesh'
     await fireEvent.input(input)
+    expect(document.querySelector('.mt-add-pane')).toBeNull()
     await fireEvent.click(container.querySelector('#add-session-tune-btn'))
-    expect(window.SessionTuneAddPane.open).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionPath: 'test', query: 'kesh' })
-    )
+    // The pane (SessionTuneAddApp, bundled into this app) opens in place, its
+    // search seeded with the page's query — no window.SessionTuneAddPane global.
+    const pane = document.querySelector('.mt-add-pane')
+    expect(pane).toBeTruthy()
+    expect(pane.querySelector('.deep-field').value).toBe('kesh')
   })
 
   it('?added= landing shows the success toast', () => {
