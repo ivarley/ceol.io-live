@@ -138,5 +138,13 @@ static/live/
 # Add-to-My-Tunes pane build output -- built during deploy (frontend npm run build)
 static/mytunes/
 
+# Spec 035 page-bundle build outputs -- all built during deploy (frontend npm run build)
+static/mytunespage/
+static/sessionsdir/
+static/sessionpage/
+static/personpage/
+static/sessionadminpage/
+static/tunesheet/
+
 # Claude Code worktrees (each contains its own checkout)
 .claude/worktrees/

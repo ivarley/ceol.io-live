@@ -21,8 +21,23 @@ GET /api/me/details + /api/admin/people/<id>/details, `frontend/src/personpage/`
 /api/admin/sessions/<path>/admin-detail, `frontend/src/sessionadminpage/`); shared
 serializers.timezone_options() replaces the duplicated 45-entry list; modalManager.js
 dropped from both pages (consumers ported). Eight vite bundles. Verified: pytest 787,
-vitest 316, e2e (profile/admin/sessions/app) 53/53. Remaining: Step 6 (delete the pill
-logger once the beta logger is promoted) + the follow-up API-normalization spec.
+vitest 316, e2e (profile/admin/sessions/app) 53/53. **Post-review fixes (2026-07-11, from independent assessment):** three unguarded
+person-scoped endpoints leaked PII (`/api/person/<id>/logins` returned any person's
+IPs/user agents anonymously) — now `@api_admin_or_self_required` (logins, attended,
+tunes-stats, available-sessions, search-sessions, active_session); new `@public_api`
+marker (api_auth.py) distinguishes deliberate-public from forgot-the-decorator
+(applied to the session logs feed); five orphaned endpoints deleted (the four
+`/api/person/tunes*` whose only caller was the deleted legacy modal, plus
+`/api/person/<id>/tunes` — ~370 lines); the six new bundle dirs untracked +
+gitignored (Render's buildCommand rebuilds them). tests/integration/test_person_api_auth.py
+covers 401/403/self/admin/public. Remaining: Step 6 (delete the pill logger once the
+beta logger is promoted) + the follow-up API-normalization spec, which now also owns:
+sweep the remaining ~45 undecorated /api/* rules and mark each `@public_api` or gate it;
+kit adoption (currently used by ZERO pages — the migrations kept legacy DOM/CSS);
+move page CSS out of the Jinja shells into the bundles (Step 2 did this right, Steps
+4-5 regressed to shell <style> blocks); replace the 25 native confirm()/alert() calls
+in new Svelte pages with lib/Dialog and the 10 showMessage copies with lib/toast;
+decouple bundle-to-bundle window globals (e.g. sessionpage -> SessionTuneAddPane).
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
 

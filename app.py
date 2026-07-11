@@ -898,11 +898,6 @@ app.add_url_rule(
     get_person_logins_ajax,
 )
 app.add_url_rule(
-    "/api/person/<int:person_id>/tunes",
-    "get_person_tunes_ajax",
-    get_person_tunes_ajax,
-)
-app.add_url_rule(
     "/api/person/<int:person_id>/tunes-stats",
     "get_person_tunes_stats",
     get_person_tunes_stats,
@@ -1324,31 +1319,6 @@ app.add_url_rule(
     methods=["GET"],
 )
 
-# Person tune management routes
-app.add_url_rule(
-    "/api/person/tunes/<int:tune_id>",
-    "get_person_tune_status",
-    get_person_tune_status,
-    methods=["GET"],
-)
-app.add_url_rule(
-    "/api/person/tunes",
-    "add_person_tune",
-    add_person_tune,
-    methods=["POST"],
-)
-app.add_url_rule(
-    "/api/person/tunes/<int:tune_id>/status",
-    "update_person_tune_status",
-    update_person_tune_status,
-    methods=["PUT"],
-)
-app.add_url_rule(
-    "/api/person/tunes/<int:tune_id>/increment_heard",
-    "increment_person_tune_heard_count",
-    increment_person_tune_heard_count,
-    methods=["PUT"],
-)
 app.add_url_rule(
     "/api/user/admin-sessions",
     "get_user_admin_sessions",
