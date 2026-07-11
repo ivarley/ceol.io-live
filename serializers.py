@@ -40,6 +40,294 @@ def bytea_to_base64(data):
 
 
 # ---------------------------------------------------------------------------
+# timezone options — the shared dropdown source (person details + session admin
+# pages). One list of tz names; the display labels come from timezone_utils.
+# ---------------------------------------------------------------------------
+
+_TIMEZONE_NAMES = [
+    "UTC",
+    # Americas
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "America/Toronto",
+    "America/Vancouver",
+    "America/Mexico_City",
+    "America/Buenos_Aires",
+    "America/Sao_Paulo",
+    # Europe
+    "Europe/London",
+    "Europe/Dublin",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Europe/Rome",
+    "Europe/Madrid",
+    "Europe/Amsterdam",
+    "Europe/Brussels",
+    "Europe/Zurich",
+    "Europe/Stockholm",
+    "Europe/Oslo",
+    "Europe/Copenhagen",
+    "Europe/Helsinki",
+    "Europe/Athens",
+    "Europe/Moscow",
+    # Africa & Middle East
+    "Africa/Cairo",
+    "Africa/Johannesburg",
+    "Africa/Lagos",
+    "Asia/Dubai",
+    "Asia/Jerusalem",
+    # Asia
+    "Asia/Kolkata",
+    "Asia/Bangkok",
+    "Asia/Singapore",
+    "Asia/Hong_Kong",
+    "Asia/Shanghai",
+    "Asia/Tokyo",
+    "Asia/Seoul",
+    # Australia & Pacific
+    "Australia/Perth",
+    "Australia/Sydney",
+    "Australia/Melbourne",
+    "Pacific/Auckland",
+]
+
+
+def timezone_options() -> List[Dict[str, str]]:
+    """The timezone dropdown, as JSON-friendly {value, label} dicts. Replaces the
+    (tz, display) tuple list that was duplicated verbatim in web_routes.person_details
+    and web_routes.session_admin (spec 035 Step 5)."""
+    from timezone_utils import get_timezone_display_with_offset
+
+    return [
+        {"value": tz, "label": get_timezone_display_with_offset(tz)}
+        for tz in _TIMEZONE_NAMES
+    ]
+
+
+# ---------------------------------------------------------------------------
+# person details — the /me and /admin/people/<id> page and
+# GET /api/me/details / GET /api/admin/people/<id>/details
+# ---------------------------------------------------------------------------
+
+
+def build_person_details_payload(
+    conn,
+    person_id: int,
+    *,
+    is_user_profile: bool,
+    is_system_admin: bool,
+) -> Optional[Dict[str, Any]]:
+    """The COMPLETE person-details payload (spec 035 Step 5a): the person row with
+    formatted location + instruments, the linked user account (or None), and the
+    person's sessions with a derived role. GET /api/me/details (and the
+    system-admin /api/admin/people/<id>/details flavor) returns exactly this, and
+    the /me / /admin/people/<id> page shell embeds exactly this — one function,
+    so they cannot drift. Returns None when the person doesn't exist.
+    """
+    from timezone_utils import get_timezone_display_name
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(
+        """
+        SELECT person_id, first_name, last_name, email, sms_number, city, state,
+               country, thesession_user_id, active
+        FROM person
+        WHERE person_id = %s
+        """,
+        (person_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    location_parts = [p for p in (row["city"], row["state"], row["country"]) if p]
+    person = {
+        "id": row["person_id"],
+        "name": f"{row['first_name']} {row['last_name']}",
+        "first_name": row["first_name"],
+        "last_name": row["last_name"],
+        "email": row["email"],
+        "sms_number": row["sms_number"],
+        "city": row["city"],
+        "state": row["state"],
+        "country": row["country"],
+        "location": ", ".join(location_parts) if location_parts else None,
+        "thesession_user_id": row["thesession_user_id"],
+        "active": row["active"],
+    }
+
+    cur.execute(
+        "SELECT instrument FROM person_instrument WHERE person_id = %s ORDER BY instrument",
+        (person_id,),
+    )
+    person["instruments"] = [r["instrument"] for r in cur.fetchall()]
+
+    # Linked user account (or None).
+    cur.execute(
+        """
+        SELECT user_id, username, user_email, email_verified, is_system_admin,
+               is_active, created_date, timezone, hashed_password,
+               beta_live_logging, receive_update_emails
+        FROM user_account
+        WHERE person_id = %s
+        """,
+        (person_id,),
+    )
+    urow = cur.fetchone()
+    user = None
+    if urow:
+        cur.execute(
+            "SELECT MAX(last_accessed) AS last_login FROM user_session WHERE user_id = %s",
+            (urow["user_id"],),
+        )
+        ll_row = cur.fetchone()
+        last_login = ll_row["last_login"] if ll_row else None
+        user = {
+            "user_id": urow["user_id"],
+            "username": urow["username"],
+            "user_email": urow["user_email"],
+            "email_verified": urow["email_verified"],
+            "is_system_admin": urow["is_system_admin"],
+            "is_active": urow["is_active"],
+            "created_at": urow["created_date"].isoformat() if urow["created_date"] else None,
+            "last_login": last_login.isoformat() if last_login else None,
+            "timezone": urow["timezone"],
+            "timezone_display": get_timezone_display_name(urow["timezone"] or "UTC"),
+            "has_password": urow["hashed_password"] is not None and urow["hashed_password"] != "",
+            "beta_live_logging": urow["beta_live_logging"],
+            "receive_update_emails": urow["receive_update_emails"],
+        }
+
+    # Sessions this person is associated with, role derived from the flags.
+    cur.execute(
+        """
+        SELECT s.name AS session_name, s.city, s.state, s.country,
+               sp.is_regular, sp.is_admin, s.path AS session_path
+        FROM session_person sp
+        JOIN session s ON sp.session_id = s.session_id
+        WHERE sp.person_id = %s
+        ORDER BY s.name
+        """,
+        (person_id,),
+    )
+    sessions = []
+    for r in cur.fetchall():
+        if r["is_admin"]:
+            role = "Admin"
+        elif r["is_regular"]:
+            role = "Regular"
+        else:
+            role = "Attendee"
+        loc_parts = [p for p in (r["city"], r["state"], r["country"]) if p]
+        sessions.append(
+            {
+                "session_name": r["session_name"],
+                "location": ", ".join(loc_parts) if loc_parts else "Unknown",
+                "role": role,
+                "is_admin": r["is_admin"],
+                "is_regular": r["is_regular"],
+                "session_path": r["session_path"],
+            }
+        )
+
+    return {
+        "success": True,
+        "person": person,
+        "user": user,
+        "sessions": sessions,
+        "is_user_profile": is_user_profile,
+        "is_system_admin": is_system_admin,
+        "timezone_options": timezone_options(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# session admin — the /admin/sessions/<path> page and
+# GET /api/admin/sessions/<path>/admin-detail. (Auth — the session-admin check —
+# stays in the route/endpoint; this only shapes data.)
+# ---------------------------------------------------------------------------
+
+
+def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, Any]]:
+    """The COMPLETE session-admin payload (spec 035 Step 5b): the session row with
+    timezone_display, recurrence_readable, and the auto-create / live-cache
+    settings, plus the timezone dropdown. GET
+    /api/admin/sessions/<path>/admin-detail returns exactly this, and the
+    /admin/sessions/<path> page shell embeds exactly this — one function, so they
+    cannot drift. Returns None when the path doesn't exist.
+    """
+    import json as _json
+
+    from timezone_utils import get_timezone_display_name
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT session_id, name, path, location_name, location_website, location_phone,
+               location_street, city, state, country, comments, unlisted_address,
+               initiation_date, termination_date, recurrence, timezone,
+               COALESCE(auto_create_instances, FALSE) AS auto_create_instances,
+               COALESCE(auto_create_hours_ahead, 24) AS auto_create_hours_ahead,
+               COALESCE(live_cache_session_limit, 200) AS live_cache_session_limit,
+               COALESCE(live_cache_global_limit, 25) AS live_cache_global_limit
+        FROM session
+        WHERE path = %s
+        """,
+        (session_path,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    session = {
+        "session_id": row["session_id"],
+        "name": row["name"],
+        "path": row["path"],
+        "location_name": row["location_name"],
+        "location_website": row["location_website"],
+        "location_phone": row["location_phone"],
+        "location_street": row["location_street"],
+        "city": row["city"],
+        "state": row["state"],
+        "country": row["country"],
+        "comments": row["comments"],
+        "unlisted_address": row["unlisted_address"],
+        "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
+        "termination_date": row["termination_date"].isoformat() if row["termination_date"] else None,
+        "recurrence": row["recurrence"],
+        "timezone": row["timezone"],
+        "timezone_display": get_timezone_display_name(row["timezone"] or "UTC"),
+        "auto_create_instances": row["auto_create_instances"],
+        "auto_create_hours_ahead": row["auto_create_hours_ahead"],
+        "live_cache_session_limit": row["live_cache_session_limit"],
+        "live_cache_global_limit": row["live_cache_global_limit"],
+    }
+
+    # Human-readable recurrence; legacy freeform text passes through unchanged.
+    if session["recurrence"]:
+        try:
+            from recurrence_utils import to_human_readable
+
+            _json.loads(session["recurrence"])
+            session["recurrence_readable"] = to_human_readable(session["recurrence"])
+        except (ValueError, TypeError):
+            session["recurrence_readable"] = session["recurrence"]
+    else:
+        session["recurrence_readable"] = None
+
+    return {
+        "success": True,
+        "session": session,
+        "timezone_options": timezone_options(),
+    }
+
+
+# ---------------------------------------------------------------------------
 # sessions directory — the /sessions page and GET /api/sessions/with-today-status
 # ---------------------------------------------------------------------------
 

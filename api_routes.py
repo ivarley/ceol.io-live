@@ -12990,3 +12990,77 @@ def upload_recording_file(session_instance_id):
         conn.close()
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Page-payload endpoints (spec 035 Step 5): each returns exactly the serializer
+# output its page shell embeds, so the API and the embed cannot drift.
+# ---------------------------------------------------------------------------
+
+
+@api_login_required
+def get_person_details_api(person_id=None):
+    """
+    GET /api/me/details (the current user's profile) and
+    GET /api/admin/people/<person_id>/details (system-admin only) — the aggregate
+    person-details payload (spec 035 Step 5a): person + instruments, linked user
+    account, sessions with derived roles, timezone options. The /me and
+    /admin/people/<id> page shells embed the SAME serializer output.
+    """
+    try:
+        from serializers import build_person_details_payload
+
+        is_user_profile = person_id is None
+        if is_user_profile:
+            person_id = current_user.person_id
+        elif not current_user.is_system_admin:
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+
+        conn = get_db_connection()
+        try:
+            payload = build_person_details_payload(
+                conn,
+                person_id,
+                is_user_profile=is_user_profile,
+                is_system_admin=current_user.is_authenticated and current_user.is_system_admin,
+            )
+        finally:
+            conn.close()
+
+        if payload is None:
+            return jsonify({"success": False, "message": "Person not found"}), 404
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_login_required
+def get_session_admin_detail(session_path):
+    """
+    GET /api/admin/sessions/<path>/admin-detail — the session-admin page payload
+    (spec 035 Step 5b): session row + timezone_display + recurrence_readable +
+    auto-create / live-cache settings, plus timezone options. Gated by the same
+    session-admin check the web route uses (system admin OR session-level admin).
+    The /admin/sessions/<path> page shell embeds the SAME serializer output.
+    """
+    try:
+        # Lazy import: web_routes imports from api_routes at module level.
+        from serializers import build_session_admin_payload
+        from web_routes import _check_session_admin_access
+
+        if not _check_session_admin_access(session_path):
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+
+        conn = get_db_connection()
+        try:
+            payload = build_session_admin_payload(conn, session_path)
+        finally:
+            conn.close()
+
+        if payload is None:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500

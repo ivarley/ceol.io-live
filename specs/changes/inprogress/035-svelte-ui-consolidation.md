@@ -15,7 +15,14 @@ new GET `/api/sessions/<path>/detail` aggregate endpoint with permission flags /
 recurrence_readable / session-timezone today, `frontend/src/sessionpage/` — tunes tab with
 selection+copy-to, logs tab with add-instance modal, people tab). The tuple-reshaping
 hack is dead on both sides. Verified: pytest 787, vitest 284, e2e 88/88 desktop+mobile.
-Step 5 (person details, session admin) not started.
+**Step 5 also BUILT (2026-07-11):** `/me` + `/admin/people/<id>` (build_person_details_payload,
+GET /api/me/details + /api/admin/people/<id>/details, `frontend/src/personpage/`) and
+`/admin/sessions/<path>` + tab wrappers (build_session_admin_payload, GET
+/api/admin/sessions/<path>/admin-detail, `frontend/src/sessionadminpage/`); shared
+serializers.timezone_options() replaces the duplicated 45-entry list; modalManager.js
+dropped from both pages (consumers ported). Eight vite bundles. Verified: pytest 787,
+vitest 316, e2e (profile/admin/sessions/app) 53/53. Remaining: Step 6 (delete the pill
+logger once the beta logger is promoted) + the follow-up API-normalization spec.
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
 

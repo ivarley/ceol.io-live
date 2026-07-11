@@ -346,6 +346,27 @@ app.add_url_rule(
     session_admin_bulk_import,
 )
 
+# Page-payload endpoints (spec 035 Step 5): the same serializer output the
+# person-details and session-admin page shells embed.
+app.add_url_rule(
+    "/api/me/details",
+    "get_me_details",
+    get_person_details_api,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/people/<int:person_id>/details",
+    "get_person_details_api",
+    get_person_details_api,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/sessions/<path:session_path>/admin-detail",
+    "get_session_admin_detail",
+    get_session_admin_detail,
+    methods=["GET"],
+)
+
 # Register API routes
 # Live logging (spec 024) -- referee op endpoints + screen shell (Phase 0)
 app.add_url_rule(

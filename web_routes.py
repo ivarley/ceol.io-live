@@ -2814,7 +2814,12 @@ def admin_email_updates():
 
 @login_required
 def person_details(person_id=None):
-    """Person details page showing person info, user account, and activity data"""
+    """Person details page (spec 035 Step 5a): a thin shell that embeds the SAME
+    payload GET /api/me/details / GET /api/admin/people/<id>/details returns
+    (one serializer — they cannot drift) and mounts the Svelte view
+    (/static/personpage/page.js)."""
+    from serializers import build_person_details_payload
+
     # Determine if this is a user profile view or admin view
     is_user_profile = person_id is None
 
@@ -2829,281 +2834,26 @@ def person_details(person_id=None):
 
     conn = get_db_connection()
     try:
-        cur = conn.cursor()
-
-        # Get person details
-        cur.execute(
-            """
-            SELECT person_id, first_name, last_name, email, sms_number, city, state, country, thesession_user_id, active
-            FROM person
-            WHERE person_id = %s
-        """,
-            (person_id,),
-        )
-
-        person_row = cur.fetchone()
-        if not person_row:
-            from app import render_error_page
-
-            return render_error_page("Person not found.", 404)
-
-        (
+        payload = build_person_details_payload(
+            conn,
             person_id,
-            first_name,
-            last_name,
-            email,
-            sms_number,
-            city,
-            state,
-            country,
-            thesession_user_id,
-            active,
-        ) = person_row
-
-        # Format location
-        location_parts = []
-        if city:
-            location_parts.append(city)
-        if state:
-            location_parts.append(state)
-        if country:
-            location_parts.append(country)
-        location = ", ".join(location_parts) if location_parts else None
-
-        person = {
-            "id": person_id,
-            "name": f"{first_name} {last_name}",
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "sms_number": sms_number,
-            "city": city,
-            "state": state,
-            "country": country,
-            "location": location,
-            "thesession_user_id": thesession_user_id,
-            "active": active,
-        }
-
-        # Get person's instruments
-        cur.execute(
-            """
-            SELECT instrument
-            FROM person_instrument
-            WHERE person_id = %s
-            ORDER BY instrument
-            """,
-            (person_id,),
-        )
-        instruments = [row[0] for row in cur.fetchall()]
-        person["instruments"] = instruments
-
-        # Get user account details if exists
-        cur.execute(
-            """
-            SELECT user_id, username, user_email, email_verified, is_system_admin, is_active, created_date, timezone, hashed_password, beta_live_logging, receive_update_emails
-            FROM user_account
-            WHERE person_id = %s
-        """,
-            (person_id,),
-        )
-
-        user_row = cur.fetchone()
-        user = None
-        if user_row:
-            (
-                user_id,
-                username,
-                user_email,
-                email_verified,
-                is_system_admin,
-                is_active,
-                created_date,
-                timezone,
-                hashed_password,
-                beta_live_logging,
-                receive_update_emails,
-            ) = user_row
-
-            # Get last login from user_session table
-            cur.execute(
-                """
-                SELECT MAX(last_accessed) as last_login
-                FROM user_session
-                WHERE user_id = %s
-            """,
-                (user_id,),
-            )
-            last_login_row = cur.fetchone()
-            last_login = (
-                last_login_row[0] if last_login_row and last_login_row[0] else None
-            )
-
-            user = {
-                "user_id": user_id,
-                "username": username,
-                "user_email": user_email,
-                "email_verified": email_verified,
-                "is_system_admin": is_system_admin,
-                "is_active": is_active,
-                "created_at": created_date,  # Keep as created_at in template for consistency
-                "last_login": last_login,
-                "timezone": timezone,
-                "timezone_display": get_timezone_display_name(timezone or "UTC"),
-                "has_password": hashed_password is not None and hashed_password != "",
-                "beta_live_logging": beta_live_logging,
-                "receive_update_emails": receive_update_emails,
-            }
-
-        # Get sessions this person is associated with
-        cur.execute(
-            """
-            SELECT s.name as session_name, s.city, s.state, s.country, sp.is_regular, sp.is_admin, s.path as session_path
-            FROM session_person sp
-            JOIN session s ON sp.session_id = s.session_id
-            WHERE sp.person_id = %s
-            ORDER BY s.name
-        """,
-            (person_id,),
-        )
-
-        sessions = []
-        for row in cur.fetchall():
-            (
-                session_name,
-                session_city,
-                session_state,
-                session_country,
-                is_regular,
-                is_admin,
-                session_path,
-            ) = row
-
-            # Derive role from boolean flags
-            if is_admin:
-                role = "Admin"
-            elif is_regular:
-                role = "Regular"
-            else:
-                role = "Attendee"
-
-            # Format session location
-            session_location_parts = []
-            if session_city:
-                session_location_parts.append(session_city)
-            if session_state:
-                session_location_parts.append(session_state)
-            if session_country:
-                session_location_parts.append(session_country)
-            session_location = (
-                ", ".join(session_location_parts)
-                if session_location_parts
-                else "Unknown"
-            )
-
-            sessions.append(
-                {
-                    "session_name": session_name,
-                    "location": session_location,
-                    "regular_schedule": None,  # Would need to be added to query if available
-                    "role": role,
-                    "is_admin": is_admin,
-                    "is_regular": is_regular,
-                    "session_path": session_path,
-                }
-            )
-
-        # Get timezone options with UTC offsets for dropdown
-        timezone_options = [
-            ("UTC", get_timezone_display_with_offset("UTC")),
-            # Americas
-            ("America/New_York", get_timezone_display_with_offset("America/New_York")),
-            ("America/Chicago", get_timezone_display_with_offset("America/Chicago")),
-            ("America/Denver", get_timezone_display_with_offset("America/Denver")),
-            (
-                "America/Los_Angeles",
-                get_timezone_display_with_offset("America/Los_Angeles"),
-            ),
-            (
-                "America/Anchorage",
-                get_timezone_display_with_offset("America/Anchorage"),
-            ),
-            ("Pacific/Honolulu", get_timezone_display_with_offset("Pacific/Honolulu")),
-            ("America/Toronto", get_timezone_display_with_offset("America/Toronto")),
-            (
-                "America/Vancouver",
-                get_timezone_display_with_offset("America/Vancouver"),
-            ),
-            (
-                "America/Mexico_City",
-                get_timezone_display_with_offset("America/Mexico_City"),
-            ),
-            (
-                "America/Buenos_Aires",
-                get_timezone_display_with_offset("America/Buenos_Aires"),
-            ),
-            (
-                "America/Sao_Paulo",
-                get_timezone_display_with_offset("America/Sao_Paulo"),
-            ),
-            # Europe
-            ("Europe/London", get_timezone_display_with_offset("Europe/London")),
-            ("Europe/Dublin", get_timezone_display_with_offset("Europe/Dublin")),
-            ("Europe/Paris", get_timezone_display_with_offset("Europe/Paris")),
-            ("Europe/Berlin", get_timezone_display_with_offset("Europe/Berlin")),
-            ("Europe/Rome", get_timezone_display_with_offset("Europe/Rome")),
-            ("Europe/Madrid", get_timezone_display_with_offset("Europe/Madrid")),
-            ("Europe/Amsterdam", get_timezone_display_with_offset("Europe/Amsterdam")),
-            ("Europe/Brussels", get_timezone_display_with_offset("Europe/Brussels")),
-            ("Europe/Zurich", get_timezone_display_with_offset("Europe/Zurich")),
-            ("Europe/Stockholm", get_timezone_display_with_offset("Europe/Stockholm")),
-            ("Europe/Oslo", get_timezone_display_with_offset("Europe/Oslo")),
-            (
-                "Europe/Copenhagen",
-                get_timezone_display_with_offset("Europe/Copenhagen"),
-            ),
-            ("Europe/Helsinki", get_timezone_display_with_offset("Europe/Helsinki")),
-            ("Europe/Athens", get_timezone_display_with_offset("Europe/Athens")),
-            ("Europe/Moscow", get_timezone_display_with_offset("Europe/Moscow")),
-            # Africa & Middle East
-            ("Africa/Cairo", get_timezone_display_with_offset("Africa/Cairo")),
-            (
-                "Africa/Johannesburg",
-                get_timezone_display_with_offset("Africa/Johannesburg"),
-            ),
-            ("Africa/Lagos", get_timezone_display_with_offset("Africa/Lagos")),
-            ("Asia/Dubai", get_timezone_display_with_offset("Asia/Dubai")),
-            ("Asia/Jerusalem", get_timezone_display_with_offset("Asia/Jerusalem")),
-            # Asia
-            ("Asia/Kolkata", get_timezone_display_with_offset("Asia/Kolkata")),
-            ("Asia/Bangkok", get_timezone_display_with_offset("Asia/Bangkok")),
-            ("Asia/Singapore", get_timezone_display_with_offset("Asia/Singapore")),
-            ("Asia/Hong_Kong", get_timezone_display_with_offset("Asia/Hong_Kong")),
-            ("Asia/Shanghai", get_timezone_display_with_offset("Asia/Shanghai")),
-            ("Asia/Tokyo", get_timezone_display_with_offset("Asia/Tokyo")),
-            ("Asia/Seoul", get_timezone_display_with_offset("Asia/Seoul")),
-            # Australia & Pacific
-            ("Australia/Perth", get_timezone_display_with_offset("Australia/Perth")),
-            ("Australia/Sydney", get_timezone_display_with_offset("Australia/Sydney")),
-            (
-                "Australia/Melbourne",
-                get_timezone_display_with_offset("Australia/Melbourne"),
-            ),
-            ("Pacific/Auckland", get_timezone_display_with_offset("Pacific/Auckland")),
-        ]
-
-        return render_template(
-            "person_details.html",
-            person=person,
-            user=user,
-            sessions=sessions,
             is_user_profile=is_user_profile,
             is_system_admin=current_user.is_authenticated and current_user.is_system_admin,
-            timezone_options=timezone_options,
         )
-
     finally:
         conn.close()
+
+    if payload is None:
+        from app import render_error_page
+
+        return render_error_page("Person not found.", 404)
+
+    return render_template(
+        "person_details.html",
+        payload=payload,
+        person=payload["person"],
+        is_user_profile=is_user_profile,
+    )
 
 
 def _get_session_data(session_path):
@@ -3209,182 +2959,68 @@ def _check_session_admin_access(session_path):
         conn.close()
 
 
-@login_required
-def session_admin(session_path):
-    """Session admin details page"""
+def _render_session_admin(session_path, active_tab):
+    """Shared renderer for the session-admin tab wrapper routes (spec 035 Step
+    5b): auth check, then a thin shell embedding the SAME payload GET
+    /api/admin/sessions/<path>/admin-detail returns (one serializer — they
+    cannot drift). The tab content and all page behavior live in the Svelte
+    bundle (/static/sessionadminpage/page.js)."""
+    from serializers import build_session_admin_payload
+
     # Check if user is system admin or session admin
     if not _check_session_admin_access(session_path):
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
-    session_data = _get_session_data(session_path)
-    if not session_data:
+    conn = get_db_connection()
+    try:
+        payload = build_session_admin_payload(conn, session_path)
+    finally:
+        conn.close()
+
+    if payload is None:
         from app import render_error_page
 
         return render_error_page("Session not found", 404)
 
-    # Get timezone options with UTC offsets for dropdown
-    timezone_options = [
-        ("UTC", get_timezone_display_with_offset("UTC")),
-        # Americas
-        ("America/New_York", get_timezone_display_with_offset("America/New_York")),
-        ("America/Chicago", get_timezone_display_with_offset("America/Chicago")),
-        ("America/Denver", get_timezone_display_with_offset("America/Denver")),
-        (
-            "America/Los_Angeles",
-            get_timezone_display_with_offset("America/Los_Angeles"),
-        ),
-        ("America/Anchorage", get_timezone_display_with_offset("America/Anchorage")),
-        ("Pacific/Honolulu", get_timezone_display_with_offset("Pacific/Honolulu")),
-        ("America/Toronto", get_timezone_display_with_offset("America/Toronto")),
-        ("America/Vancouver", get_timezone_display_with_offset("America/Vancouver")),
-        (
-            "America/Mexico_City",
-            get_timezone_display_with_offset("America/Mexico_City"),
-        ),
-        (
-            "America/Buenos_Aires",
-            get_timezone_display_with_offset("America/Buenos_Aires"),
-        ),
-        ("America/Sao_Paulo", get_timezone_display_with_offset("America/Sao_Paulo")),
-        # Europe
-        ("Europe/London", get_timezone_display_with_offset("Europe/London")),
-        ("Europe/Dublin", get_timezone_display_with_offset("Europe/Dublin")),
-        ("Europe/Paris", get_timezone_display_with_offset("Europe/Paris")),
-        ("Europe/Berlin", get_timezone_display_with_offset("Europe/Berlin")),
-        ("Europe/Rome", get_timezone_display_with_offset("Europe/Rome")),
-        ("Europe/Madrid", get_timezone_display_with_offset("Europe/Madrid")),
-        ("Europe/Amsterdam", get_timezone_display_with_offset("Europe/Amsterdam")),
-        ("Europe/Brussels", get_timezone_display_with_offset("Europe/Brussels")),
-        ("Europe/Zurich", get_timezone_display_with_offset("Europe/Zurich")),
-        ("Europe/Stockholm", get_timezone_display_with_offset("Europe/Stockholm")),
-        ("Europe/Oslo", get_timezone_display_with_offset("Europe/Oslo")),
-        ("Europe/Copenhagen", get_timezone_display_with_offset("Europe/Copenhagen")),
-        ("Europe/Helsinki", get_timezone_display_with_offset("Europe/Helsinki")),
-        ("Europe/Athens", get_timezone_display_with_offset("Europe/Athens")),
-        ("Europe/Moscow", get_timezone_display_with_offset("Europe/Moscow")),
-        # Africa & Middle East
-        ("Africa/Cairo", get_timezone_display_with_offset("Africa/Cairo")),
-        (
-            "Africa/Johannesburg",
-            get_timezone_display_with_offset("Africa/Johannesburg"),
-        ),
-        ("Africa/Lagos", get_timezone_display_with_offset("Africa/Lagos")),
-        ("Asia/Dubai", get_timezone_display_with_offset("Asia/Dubai")),
-        ("Asia/Jerusalem", get_timezone_display_with_offset("Asia/Jerusalem")),
-        # Asia
-        ("Asia/Kolkata", get_timezone_display_with_offset("Asia/Kolkata")),
-        ("Asia/Bangkok", get_timezone_display_with_offset("Asia/Bangkok")),
-        ("Asia/Singapore", get_timezone_display_with_offset("Asia/Singapore")),
-        ("Asia/Hong_Kong", get_timezone_display_with_offset("Asia/Hong_Kong")),
-        ("Asia/Shanghai", get_timezone_display_with_offset("Asia/Shanghai")),
-        ("Asia/Tokyo", get_timezone_display_with_offset("Asia/Tokyo")),
-        ("Asia/Seoul", get_timezone_display_with_offset("Asia/Seoul")),
-        # Australia & Pacific
-        ("Australia/Perth", get_timezone_display_with_offset("Australia/Perth")),
-        ("Australia/Sydney", get_timezone_display_with_offset("Australia/Sydney")),
-        (
-            "Australia/Melbourne",
-            get_timezone_display_with_offset("Australia/Melbourne"),
-        ),
-        ("Pacific/Auckland", get_timezone_display_with_offset("Pacific/Auckland")),
-    ]
-
     return render_template(
         "session_admin.html",
-        session=session_data,
+        payload=payload,
+        session=payload["session"],
         session_path=session_path,
-        active_tab="details",
-        timezone_options=timezone_options,
+        active_tab=active_tab,
     )
+
+
+@login_required
+def session_admin(session_path):
+    """Session admin details page"""
+    return _render_session_admin(session_path, "details")
 
 
 @login_required
 def session_admin_players(session_path):
     """Session admin players page"""
-    # Check if user is system admin or session admin
-    if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    session_data = _get_session_data(session_path)
-    if not session_data:
-        from app import render_error_page
-
-        return render_error_page("Session not found", 404)
-
-    return render_template(
-        "session_admin.html",
-        session=session_data,
-        session_path=session_path,
-        active_tab="people",
-    )
+    return _render_session_admin(session_path, "people")
 
 
 @login_required
 def session_admin_logs(session_path):
     """Session admin logs page"""
-    # Check if user is system admin or session admin
-    if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    session_data = _get_session_data(session_path)
-    if not session_data:
-        from app import render_error_page
-
-        return render_error_page("Session not found", 404)
-
-    return render_template(
-        "session_admin.html",
-        session=session_data,
-        session_path=session_path,
-        active_tab="logs",
-    )
+    return _render_session_admin(session_path, "logs")
 
 
 @login_required
 def session_admin_cache(session_path):
     """Session admin "Local Cache" page — view/tune the live-logging fast-match
     vocabulary (N most-played session tunes + M globally-popular tunes; spec 024)."""
-    if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    session_data = _get_session_data(session_path)
-    if not session_data:
-        from app import render_error_page
-
-        return render_error_page("Session not found", 404)
-
-    return render_template(
-        "session_admin.html",
-        session=session_data,
-        session_path=session_path,
-        active_tab="cache",
-    )
+    return _render_session_admin(session_path, "cache")
 
 
 @login_required
 def session_admin_tunes(session_path):
     """Session admin tunes page - grid view of all tunes played at this session"""
-    # Check if user is system admin or session admin
-    if not _check_session_admin_access(session_path):
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
-
-    session_data = _get_session_data(session_path)
-    if not session_data:
-        from app import render_error_page
-
-        return render_error_page("Session not found", 404)
-
-    return render_template(
-        "session_admin.html",
-        session=session_data,
-        session_path=session_path,
-        active_tab="tunes",
-    )
+    return _render_session_admin(session_path, "tunes")
 
 
 @login_required

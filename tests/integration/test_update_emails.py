@@ -188,13 +188,17 @@ class TestProfileOptIn:
         assert resp.status_code == 200
         assert get_flag(db_conn, u["user_id"]) is True
 
-    def test_profile_page_shows_opt_in_checkbox(self, client, make_user):
+    def test_profile_page_embeds_opt_in_flag(self, client, make_user):
+        """The profile page is a thin Svelte shell (spec 035 Step 5a): the checkbox
+        itself is client-rendered, but the embedded __PAGE_DATA__ payload must
+        carry the opt-in flag the view renders it from."""
         u = make_user(opted_in=False)
         with login_as(client, u):
             resp = client.get("/me")
         assert resp.status_code == 200
-        assert b"receive_update_emails" in resp.data
-        assert b"Get regular updates about this app via email" in resp.data
+        assert b'id="person-details-root"' in resp.data
+        assert b"__PAGE_DATA__" in resp.data
+        assert b'"receive_update_emails": false' in resp.data
 
     def test_new_account_defaults_to_subscribed(self, db_conn, make_user):
         """New accounts are subscribed by default (opt-out model)."""
