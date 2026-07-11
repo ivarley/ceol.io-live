@@ -1,6 +1,7 @@
 <script>
   // Tunes tab: grid of all tunes played at this session — search (free text or
   // tune id/URL) + sortable columns, fetched once when the tab is active.
+  import { SearchField } from '../lib/index.js'
   import { compareValues, filterTuneList, tuneSortValue } from './logic.js'
 
   let { sessionPath, load } = $props()
@@ -55,16 +56,16 @@
   <div class="mb-3">
     <div class="d-flex align-items-center gap-3">
       <div class="flex-grow-1">
-        <input
-          type="text"
-          class="form-control"
+        <SearchField
+          bind:value={search}
           id="tunes-search"
+          inputClass="form-control"
+          styled={false}
           placeholder="Search tunes..."
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
-          spellcheck="false"
-          bind:value={search} />
+          spellcheck="false" />
       </div>
     </div>
   </div>

@@ -133,6 +133,12 @@
     margin-bottom: 0;
 }
 
+/* The kit SearchField wrapper takes the input's old flex slot in the row */
+.filter-top-row .kit-search {
+    flex: 1;
+    min-width: 0;
+}
+
 .filter-search-input {
     flex: 1;
     padding: 8px 10px;

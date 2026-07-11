@@ -99,3 +99,34 @@ describe('SearchField', () => {
     expect(onSearch).not.toHaveBeenCalled()
   })
 })
+
+describe('SearchField — flush/skin additions (spec 035 search unification)', () => {
+  it('Enter fires onSearch immediately, cancelling the pending debounce', async () => {
+    vi.useFakeTimers()
+    try {
+      const onSearch = vi.fn()
+      render(SearchField, { props: { onSearch, debounce: 300 } })
+      const input = document.querySelector('.kit-search-field')
+      input.value = 'kesh'
+      await fireEvent.input(input)
+      await fireEvent.keyDown(input, { key: 'Enter' })
+      expect(onSearch).toHaveBeenCalledWith('kesh')
+      vi.advanceTimersByTime(400)
+      expect(onSearch).toHaveBeenCalledTimes(1) // debounce was cancelled
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes through id + legacy classes and honors styled={false}', () => {
+    render(SearchField, {
+      props: { id: 'tune-search', inputClass: 'filter-search-input', wrapperClass: 'search-wrap', styled: false },
+    })
+    const input = document.querySelector('#tune-search')
+    expect(input).toBeTruthy()
+    expect(input.className).toContain('filter-search-input')
+    const wrap = document.querySelector('.kit-search')
+    expect(wrap.className).toContain('search-wrap')
+    expect(wrap.className).not.toContain('kit-search--styled')
+  })
+})

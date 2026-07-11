@@ -25,7 +25,7 @@
 
   let { pageData = null } = $props()
 
-  import { toast } from '../lib/index.js'
+  import { toast, SearchField } from '../lib/index.js'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -114,14 +114,6 @@
     window.history.replaceState({}, '', newURL)
   })
 
-  // Search debounce (300ms), mirroring the legacy input handler.
-  let searchTimer = null
-  function onSearchInput() {
-    clearTimeout(searchTimer)
-    searchTimer = setTimeout(() => {
-      filters.search = rawSearch.toLowerCase().trim()
-    }, 300)
-  }
 
   // ---- filter panel / dropdowns ---------------------------------------------------
   let panelOpen = $state(false)
@@ -498,19 +490,20 @@
 
     <div class="filters-container">
       <div class="filter-top-row">
-        <input
-          type="text"
+        <SearchField
+          bind:value={rawSearch}
           id="search-input"
-          class="filter-search-input"
+          inputClass="filter-search-input"
+          wrapperClass="filter-search-wrap"
+          styled={false}
           placeholder="Search"
           title="Search tunes"
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
-          bind:value={rawSearch}
-          oninput={onSearchInput}
-        />
+          debounce={300}
+          onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
         <a
           href={addTuneHref}
           class="filter-panel-toggle"

@@ -5,24 +5,24 @@
   // hamburger_menu.css, e2e-selected by offline.spec.ts) — and same behavior:
   // 200ms debounce, min 2 chars, server search with offline-bundle fallback,
   // stale-response guard, click a result -> the shared tune-detail sheet.
+  import { SearchField } from '../lib/index.js'
+
   let open = $state(false)
   let query = $state('')
   let results = $state(null) // null = nothing to show; [] = "No tunes match"
-  let inputEl = $state(null)
+  let searchField = $state(null)
 
-  let timer = null
   let seq = 0
 
   export function show() {
     query = ''
     results = null
     open = true
-    setTimeout(() => inputEl && inputEl.focus(), 50)
+    setTimeout(() => searchField && searchField.focus(), 50)
   }
 
   function close() {
     open = false
-    if (timer) clearTimeout(timer)
     seq++ // invalidate any in-flight search
   }
 
@@ -38,36 +38,36 @@
     return null
   }
 
-  function onInput() {
-    const q = query.trim()
-    if (timer) clearTimeout(timer)
+  // The kit SearchField owns the debounce (200ms) + Enter flush + Escape-clears;
+  // this handler owns the min-2-chars rule, the stale-response guard, and the
+  // server-with-offline-fallback search.
+  async function runSearch(raw) {
+    const q = (raw || '').trim()
     if (q.length < 2) {
       results = null
       return
     }
-    timer = setTimeout(async () => {
-      const mine = ++seq
-      const render = (tunes) => {
-        if (mine !== seq) return
-        results = tunes || []
+    const mine = ++seq
+    const render = (tunes) => {
+      if (mine !== seq) return
+      results = tunes || []
+    }
+    try {
+      const res = await fetch('/api/tunes/search?q=' + encodeURIComponent(q) + '&limit=10', {
+        credentials: 'same-origin',
+      })
+      const json = await res.json()
+      if (mine !== seq) return
+      if (json && json.success && (json.tunes || []).length) {
+        render(json.tunes)
+        return
       }
-      try {
-        const res = await fetch('/api/tunes/search?q=' + encodeURIComponent(q) + '&limit=10', {
-          credentials: 'same-origin',
-        })
-        const json = await res.json()
-        if (mine !== seq) return
-        if (json && json.success && (json.tunes || []).length) {
-          render(json.tunes)
-          return
-        }
-        const off = await offlineSearch(q)
-        render(off !== null ? off : json.tunes || [])
-      } catch (e) {
-        const off = await offlineSearch(q)
-        if (off !== null) render(off)
-      }
-    }, 200)
+      const off = await offlineSearch(q)
+      render(off !== null ? off : json.tunes || [])
+    } catch (e) {
+      const off = await offlineSearch(q)
+      if (off !== null) render(off)
+    }
   }
 
   function pick(tune) {
@@ -106,17 +106,19 @@
         <span>Find a tune</span>
         <button class="ft-close" aria-label="Close" onclick={close}>✕</button>
       </div>
-      <input
-        bind:this={inputEl}
+      <SearchField
+        bind:this={searchField}
         bind:value={query}
-        oninput={onInput}
-        class="ft-input"
-        type="text"
+        inputClass="ft-input"
+        wrapperClass="ft-search-wrap"
+        styled={false}
         placeholder="Search tunes…"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
-        spellcheck="false" />
+        spellcheck="false"
+        debounce={200}
+        onSearch={runSearch} />
       <ul class="ft-results">
         {#if results !== null}
           {#if results.length}

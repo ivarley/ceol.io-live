@@ -5,6 +5,7 @@
   // this bundle's page.css select on these). First paint comes from the embedded
   // payload; a background refetch of the same API keeps it fresh.
   import { untrack } from 'svelte'
+  import { SearchField } from '../lib/index.js'
 
   let { pageData = null, isLoggedIn = false } = $props()
 
@@ -27,7 +28,9 @@
   let loaded = $state(false)
   let loadError = $state(false)
   let filterIndex = $state(0)
-  let searchTerm = $state('')
+  let rawSearch = $state('')
+  // Instant client-side filter (legacy behavior): derive from the bound value.
+  const searchTerm = $derived(normalizeQuotes(rawSearch.toLowerCase()))
 
   const currentFilter = $derived(filterStates[filterIndex])
 
@@ -119,12 +122,13 @@
 
 <div class="sessions-controls">
   <div class="search-and-toggle">
-    <input
-      type="text"
+    <SearchField
+      bind:value={rawSearch}
       id="search-bar"
-      class="search-bar"
-      placeholder="Search by name or location..."
-      oninput={(e) => (searchTerm = normalizeQuotes(e.target.value.toLowerCase()))} />
+      inputClass="search-bar"
+      wrapperClass="search-bar-wrap"
+      styled={false}
+      placeholder="Search by name or location..." />
     <button
       class="filter-toggle-button"
       id="filter-toggle-button"

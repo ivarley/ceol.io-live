@@ -912,6 +912,12 @@ a.empty-log {
     }
 }
 
+/* The kit SearchField wrapper takes the input's old flex slot in the row */
+.people-controls .kit-search {
+    flex: 1;
+    min-width: 0;
+}
+
 .people-search-box {
     flex: 1;
     padding: 8px 12px;

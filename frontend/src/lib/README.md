@@ -126,12 +126,23 @@ Vertical results; ↑/↓ move the active row, Enter/click selects. No "N of M".
 | `onPrev` / `onNext` | `null` | omit to let the pager step `bind:index` itself |
 | `label` | `'result'` | aria context ("Previous result") |
 
-### SearchField
-Debounced input with clear-×; Escape clears. Generic — no tune-search logic.
+### SearchField — debounced search input
+THE search input — every page filter box runs on it. Debounced
+`onSearch(query)`, clear-× when there's text, **Escape clears** (and stops
+there; an empty box lets Escape propagate to a host Sheet/overlay), **Enter
+flushes immediately**. No tune/thesession logic — hosts own min-chars rules,
+casing, and what "search" means.
 
 | Prop | Default | |
 |---|---|---|
-| `value` | `''` | bindable |
+| `value` | `''` | bindable raw text |
 | `placeholder` | `'Search…'` | |
-| `debounce` | `300` | ms idle before `onSearch` |
-| `onSearch` | noop | `(query)`; fires immediately with `''` on clear |
+| `debounce` | `300` | ms of idle before `onSearch` fires |
+| `onSearch` | noop | settled-text callback (also fired by Enter/clear) |
+| `styled` | `true` | `false` = behavior only; skin comes from the page's legacy input class |
+| `inputClass`/`wrapperClass` | — | legacy skin + e2e/CSS hook passthrough |
+| `...rest` | — | `id`, `title`, `autocomplete`… pass to the `<input>` |
+
+`bind:this` exposes `focus()`. For instant client-side filters, just
+`bind:value` and derive — the debounce only gates `onSearch`.
+

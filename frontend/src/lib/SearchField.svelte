@@ -1,24 +1,43 @@
 <script>
   import { onDestroy } from 'svelte'
 
-  // SearchField (spec 035): debounced text input with a clear-×. The generic
-  // seed that later absorbs the tune-search UIs — no tune/thesession logic
-  // here, just "settled text" → onSearch(query).
+  // SearchField (spec 035): debounced text input with a clear-×. THE search
+  // input — every page filter box runs on it. No tune/thesession logic here,
+  // just "settled text" → onSearch(query).
+  //
+  //  * Enter flushes immediately (search now, don't wait for the debounce).
+  //  * Escape clears when there's text (and stops there); an empty box lets
+  //    Escape propagate so a host Sheet/overlay can close.
+  //  * Skinning mirrors Tabs: pages keep their legacy input classes via
+  //    inputClass/wrapperClass and styled={false}; id/title/autocomplete etc.
+  //    pass through to the <input> via ...rest.
   let {
     value = $bindable(''),
     placeholder = 'Search…',
     debounce = 300, // ms of idle before onSearch fires
     onSearch = () => {},
-    ...rest // aria-label etc. pass through to the input
+    styled = true, // false: behavior only, skin comes from the page
+    wrapperClass = '',
+    inputClass = '',
+    ...rest // id, aria-label, autocomplete… pass through to the input
   } = $props()
 
+  let inputEl = $state(null)
+  export function focus() {
+    inputEl && inputEl.focus()
+  }
+
   let timer = null
+  function fire() {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    onSearch(value)
+  }
   function schedule() {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      timer = null
-      onSearch(value)
-    }, debounce)
+    timer = setTimeout(fire, debounce)
   }
   // Clearing (× or Escape) reports immediately — an empty box is already settled.
   function clear() {
@@ -35,6 +54,9 @@
       e.preventDefault()
       e.stopPropagation() // the clear consumed it; don't also close a Sheet
       clear()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      fire()
     }
   }
   onDestroy(() => {
@@ -42,10 +64,11 @@
   })
 </script>
 
-<div class="kit-search">
+<div class="kit-search{styled ? ' kit-search--styled' : ''} {wrapperClass}">
   <input
     {...rest}
-    class="kit-search-field"
+    bind:this={inputEl}
+    class="kit-search-field {inputClass}"
     type="text"
     {placeholder}
     bind:value
@@ -65,6 +88,9 @@
   }
   .kit-search-field {
     width: 100%;
+  }
+  /* Decorative skin — only under --styled so legacy input classes aren't fought. */
+  .kit-search--styled .kit-search-field {
     padding: var(--sp-2, 8px) var(--sp-6, 24px) var(--sp-2, 8px) var(--sp-3, 12px);
     font: inherit;
     background: var(--input-bg, #fff);
@@ -72,7 +98,7 @@
     border: 1px solid var(--border-color, #ddd);
     border-radius: var(--r-sm, 4px);
   }
-  .kit-search-field:focus {
+  .kit-search--styled .kit-search-field:focus {
     outline: none;
     border-color: var(--primary, #00a1e0);
   }

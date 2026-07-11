@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast } from '../lib/index.js'
+  import { toast, SearchField } from '../lib/index.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -146,13 +146,6 @@
   })
 
   // ---- search / filters -----------------------------------------------------------
-  let searchTimeout
-  function onSearchInput() {
-    clearTimeout(searchTimeout)
-    searchTimeout = setTimeout(() => {
-      filters.search = rawSearch.toLowerCase().trim()
-    }, 300)
-  }
 
   function toggleFilterPanel() {
     if (!panelVisible) {
@@ -456,17 +449,19 @@
   <div class="tunes-container">
     <div class="filters-container">
       <div class="filter-top-row">
-        <input
-          type="text"
+<SearchField
+          bind:value={rawSearch}
           id="tune-search"
-          class="filter-search-input"
+          inputClass="filter-search-input"
+          wrapperClass="filter-search-wrap"
+          styled={false}
           placeholder="Search"
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
-          bind:value={rawSearch}
-          oninput={onSearchInput} />
+          debounce={300}
+          onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
         {#if isLoggedIn}
           <a
             href="/sessions/{sessionPath}/tunes/add"

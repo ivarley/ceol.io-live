@@ -4,7 +4,7 @@
   // a new person), and the person-detail modal with its /people/<id> deep link.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { toast } from '../lib/index.js'
+  import { toast, SearchField } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { parseTheSessionId, filterPeople } from './logic.js'
 
@@ -135,7 +135,6 @@
   let searchResults = $state(null) // null until a search ran
   let searchMessage = $state('Type to search for existing people')
   let addingPersonId = $state(null)
-  let searchTimeout = null
 
   function openAddPersonModal() {
     personSearchText = ''
@@ -144,10 +143,6 @@
     openSearchModalState()
   }
 
-  function onPersonSearchInput() {
-    if (searchTimeout) clearTimeout(searchTimeout)
-    searchTimeout = setTimeout(() => performPersonSearch(), 1000)
-  }
 
   function performPersonSearch() {
     const query = personSearchText.trim()
@@ -318,7 +313,13 @@
 <div class="tab-content" class:active id="people-tab">
   <div class="people-container">
     <div class="people-controls">
-      <input type="text" id="people-search-box" class="people-search-box" placeholder="Search people..." bind:value={searchText} />
+      <SearchField
+        bind:value={searchText}
+        id="people-search-box"
+        inputClass="people-search-box"
+        wrapperClass="people-search-wrap"
+        styled={false}
+        placeholder="Search people..." />
       {#if sessionType !== 'festival'}
         <button id="people-filter-btn" class="people-filter-btn" onclick={togglePeopleFilter}>
           {currentPeopleFilter === 'regulars' ? 'Regulars' : 'All'}
@@ -461,20 +462,15 @@
           <h2 style="margin: 0 32px 20px 0; color: var(--text-color); font-size: 20px; font-weight: 600;">Add Person to Session</h2>
           <p style="margin: 0 0 16px 0; color: var(--secondary-text); font-size: 14px;">Search people who are members of other sessions, or add someone new.</p>
 
-          <input
-            type="text"
+<SearchField
+            bind:value={personSearchText}
             id="search-person-input"
-            class="search-person-input"
+            inputClass="search-person-input"
+            styled={false}
             placeholder="Search by name..."
             autocomplete="off"
-            bind:value={personSearchText}
-            oninput={onPersonSearchInput}
-            onkeydown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                performPersonSearch()
-              }
-            }} />
+            debounce={1000}
+            onSearch={performPersonSearch} />
 
           <div class="search-results-container" id="search-results-container">
             {#if searchResults && searchResults.length > 0}

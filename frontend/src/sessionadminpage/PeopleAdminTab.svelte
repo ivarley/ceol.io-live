@@ -1,6 +1,7 @@
 <script>
   // People (Members) tab: session membership table with regulars/everyone
   // filter, name/email search (smart-quote normalized), and sortable columns.
+  import { SearchField } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
 
@@ -70,7 +71,12 @@
   <div class="mb-3">
     <div class="d-flex align-items-center gap-3">
       <div class="flex-grow-1">
-        <input type="text" class="form-control" id="people-search" placeholder="Search by name..." bind:value={search} />
+        <SearchField
+          bind:value={search}
+          id="people-search"
+          inputClass="form-control"
+          styled={false}
+          placeholder="Search by name..." />
       </div>
       <div>
         <a href="/admin/sessions/{sessionPath}/bulk-import" class="btn btn-outline-primary btn-sm">

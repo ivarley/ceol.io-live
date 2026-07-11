@@ -87,8 +87,9 @@
     padding: 12px 14px; font-weight: 700; border-bottom: 1px solid var(--border-color, #2a2a30);
 }
 #find-tune-overlay .ft-close { background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; }
+#find-tune-overlay .ft-search-wrap { margin: 12px 14px; }
 #find-tune-overlay .ft-input {
-    margin: 12px 14px; padding: 10px 12px; font: inherit;
+    padding: 10px 12px; font: inherit; width: 100%;
     background: var(--bg-color, #0e0e10); color: var(--text-color, #ececef);
     border: 1px solid var(--border-color, #2a2a30); border-radius: 8px;
 }
