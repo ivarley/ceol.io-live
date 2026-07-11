@@ -28,8 +28,10 @@
                                     <th class="sortable" data-column="sessions" data-type="number">Sessions <span class="sort-indicator"></span></th>
                                     <th class="sortable" data-column="instances" data-type="number">Instances <span class="sort-indicator"></span></th>
                                     <th class="sortable" data-column="tunes" data-type="number">Tunes <span class="sort-indicator"></span></th>
-                                    <th class="sortable" data-column="latest" data-type="text">Latest Session <span class="sort-indicator"></span></th>
-                                    <th class="sortable" data-column="login" data-type="text">Last Login <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-column="latest" data-type="date">Latest Session <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-column="logged" data-type="date">Last Logged A Tune <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-column="tunebook" data-type="date">Last Updated Their Tunebook <span class="sort-indicator"></span></th>
+                                    <th class="sortable" data-column="login" data-type="date">Last Login <span class="sort-indicator"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="people-tbody">
@@ -45,8 +47,10 @@
                                     data-sort-sessions="{{ person.session_count }}"
                                     data-sort-instances="{{ person.session_instance_count }}"
                                     data-sort-tunes="{{ person.tune_count }}"
-                                    data-sort-latest="{{ person.latest_session_info }}"
-                                    data-sort-login="{{ person.last_login }}">
+                                    data-sort-latest="{{ person.latest_session_sort }}"
+                                    data-sort-logged="{{ person.last_logged_tune_sort }}"
+                                    data-sort-tunebook="{{ person.last_tunebook_update_sort }}"
+                                    data-sort-login="{{ person.last_login_sort }}">
                                     <td class="person-name">
                                         <a href="/admin/people/{{ person.person_id }}" class="person-link">{{ person.name }}</a>
                                     </td>
@@ -96,6 +100,20 @@
                                             <span class="latest-session-info">{{ person.latest_session_info }}</span>
                                         {% else %}
                                             <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-last-logged">
+                                        {% if person.last_logged_tune == 'Never' %}
+                                            <span class="text-muted">Never</span>
+                                        {% else %}
+                                            {{ person.last_logged_tune }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="person-last-tunebook">
+                                        {% if person.last_tunebook_update == 'Never' %}
+                                            <span class="text-muted">Never</span>
+                                        {% else %}
+                                            {{ person.last_tunebook_update }}
                                         {% endif %}
                                     </td>
                                     <td class="person-last-login">
@@ -278,10 +296,16 @@
     background-color: var(--border-color);
 }
 
+/* Pinned in the header's right-hand padding so it can never wrap to its own
+   line, however the header text wraps. */
 .sort-indicator {
-    margin-left: 5px;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
     font-size: 0.8em;
     color: var(--disabled-text);
+    line-height: 1;
 }
 
 .table th.sortable.asc .sort-indicator::after {
@@ -345,7 +369,9 @@
     margin-left: 0.5rem;
 }
 
-.person-last-login {
+.person-last-login,
+.person-last-logged,
+.person-last-tunebook {
     font-family: 'Courier New', monospace;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -562,7 +588,9 @@
     }
 
     .person-username,
-    .person-last-login {
+    .person-last-login,
+    .person-last-logged,
+    .person-last-tunebook {
         font-size: 0.8rem;
     }
     
@@ -913,7 +941,18 @@ document.addEventListener('DOMContentLoaded', function() {
             let aVal = a.getAttribute(`data-sort-${column}`);
             let bVal = b.getAttribute(`data-sort-${column}`);
 
-            if (type === 'number') {
+            if (type === 'date') {
+                // Empty means no date (Never / N/A / None): always sort last,
+                // regardless of direction.
+                aVal = aVal || '';
+                bVal = bVal || '';
+                if (!aVal && !bVal) return 0;
+                if (!aVal) return 1;
+                if (!bVal) return -1;
+                if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+                return 0;
+            } else if (type === 'number') {
                 aVal = parseFloat(aVal) || 0;
                 bVal = parseFloat(bVal) || 0;
                 return direction === 'asc' ? aVal - bVal : bVal - aVal;

@@ -448,6 +448,8 @@ class TestAdminRoutes:
                 datetime(2023, 8, 15).date(),
                 "Test Session",
                 7,  # tune_count
+                datetime(2023, 8, 15, 20, 30),  # last_logged_tune
+                None,  # last_tunebook_update
             )
         ]
 

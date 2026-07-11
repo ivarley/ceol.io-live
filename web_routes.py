@@ -2648,7 +2648,9 @@ def admin_people():
                 COALESCE(sip.session_instance_count, 0) as session_instance_count,
                 latest_si.latest_date,
                 latest_si.session_name,
-                COALESCE(pt.tune_count, 0) as tune_count
+                COALESCE(pt.tune_count, 0) as tune_count,
+                llt.last_logged_tune,
+                pt.last_tunebook_update
             FROM person p
             LEFT JOIN user_account ua ON p.person_id = ua.person_id
             LEFT JOIN (
@@ -2685,10 +2687,20 @@ def admin_people():
             LEFT JOIN (
                 SELECT
                     person_id,
-                    COUNT(*) as tune_count
+                    COUNT(*) as tune_count,
+                    MAX(last_modified_date) as last_tunebook_update
                 FROM person_tune
                 GROUP BY person_id
             ) pt ON p.person_id = pt.person_id
+            LEFT JOIN (
+                SELECT
+                    ua_l.person_id,
+                    MAX(sit.created_date) as last_logged_tune
+                FROM session_instance_tune sit
+                JOIN user_account ua_l ON sit.created_by_user_id = ua_l.user_id
+                WHERE sit.record_type <> 'break'
+                GROUP BY ua_l.person_id
+            ) llt ON p.person_id = llt.person_id
             ORDER BY p.last_name, p.first_name
         """
         )
@@ -2712,6 +2724,8 @@ def admin_people():
                 latest_date,
                 session_name,
                 tune_count,
+                last_logged_tune,
+                last_tunebook_update,
             ) = row
 
             # Format full location for tooltip
@@ -2748,10 +2762,23 @@ def admin_people():
                     "username": username or "No account",
                     "is_system_admin": is_system_admin,
                     "last_login": formatted_last_login,
+                    # Sort keys: ISO timestamp for real dates, empty string for
+                    # missing ones so the table can push blanks to the bottom in
+                    # either sort direction.
+                    "last_login_sort": last_login.isoformat() if last_login else "",
                     "session_count": session_count,
                     "session_instance_count": session_instance_count,
                     "latest_session_info": latest_session_info,
+                    "latest_session_sort": latest_date.isoformat() if latest_date else "",
                     "tune_count": tune_count,
+                    "last_logged_tune": (
+                        last_logged_tune.strftime("%Y-%m-%d %H:%M") if last_logged_tune else "Never"
+                    ),
+                    "last_logged_tune_sort": (last_logged_tune.isoformat() if last_logged_tune else ""),
+                    "last_tunebook_update": (
+                        last_tunebook_update.strftime("%Y-%m-%d %H:%M") if last_tunebook_update else "Never"
+                    ),
+                    "last_tunebook_update_sort": (last_tunebook_update.isoformat() if last_tunebook_update else ""),
                 }
             )
 
