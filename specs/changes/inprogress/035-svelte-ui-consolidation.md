@@ -8,7 +8,14 @@ the tune-detail modal and the app-wide find-tune overlay are now Svelte
 `window.FindTuneOverlay` contracts; legacy `tune_detail_modal.js` deleted).
 `TuneSearchComponent.js` remains only on the legacy fallback add pages
 (`my_tunes_add`, `session_tune_add`) and the quarantined pill page — it dies with
-those pages rather than being consolidated. Steps 4+ not started.
+those pages rather than being consolidated.
+**Step 4 also BUILT (2026-07-11):** `/sessions` (serializers.build_sessions_directory_payload
++ `frontend/src/sessionsdir/`) and `/sessions/<path>` (serializers.build_session_detail_payload,
+new GET `/api/sessions/<path>/detail` aggregate endpoint with permission flags /
+recurrence_readable / session-timezone today, `frontend/src/sessionpage/` — tunes tab with
+selection+copy-to, logs tab with add-instance modal, people tab). The tuple-reshaping
+hack is dead on both sides. Verified: pytest 787, vitest 284, e2e 88/88 desktop+mobile.
+Step 5 (person details, session admin) not started.
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
 

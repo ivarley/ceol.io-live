@@ -9866,111 +9866,30 @@ def bulk_import_save_session(session_id):
 
 def get_sessions_with_today_status():
     """
-    Get all sessions with indicators for today's status:
-    - has_instance_today: Boolean indicating if an instance exists for today
-    - instance_id_today: The session_instance_id if one exists for today
-    - recurrence: The recurrence pattern for client-side parsing
+    Get all sessions with indicators for today's status (active instances,
+    membership, recurrence for client-side parsing).
 
-    NOTE: "Today" is determined based on each session's timezone, not server time.
+    NOTE: "Today" is in the user's timezone; per-session "today" derives from
+    each session's recurrence client-side.
     """
     try:
-        from timezone_utils import get_today_in_timezone
+        from serializers import build_sessions_directory_payload
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Get user's person_id if logged in
         user_person_id = None
+        user_timezone = "UTC"
         if current_user.is_authenticated:
             user_person_id = getattr(current_user, 'person_id', None)
+            user_timezone = getattr(current_user, 'timezone', None) or "UTC"
 
-        # Get all sessions with their timezone and user membership
-        cur.execute(
-            """
-            SELECT
-                s.session_id,
-                s.name,
-                s.path,
-                s.city,
-                s.state,
-                s.country,
-                s.termination_date,
-                s.recurrence,
-                s.timezone,
-                CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member,
-                s.location_name
-            FROM session s
-            LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
-            ORDER BY s.name
-            """,
-            (user_person_id,)
-        )
+        # The whole response body comes from the shared serializer; the /sessions
+        # page shell embeds the same function's output, so they can't drift.
+        conn = get_db_connection()
+        try:
+            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone)
+        finally:
+            conn.close()
 
-        # Fetch all sessions first
-        session_rows = cur.fetchall()
-
-        # Get ALL active instances in one query (much more efficient!)
-        # Active instances are marked with is_active = TRUE
-        cur.execute(
-            """
-            SELECT session_id, session_instance_id, date, start_time, end_time, location_override
-            FROM session_instance
-            WHERE is_active = TRUE
-            ORDER BY session_id, date, start_time
-            """
-        )
-
-        # Group active instances by session_id
-        active_instances_by_session = {}
-        for active_row in cur.fetchall():
-            session_id = active_row[0]
-            if session_id not in active_instances_by_session:
-                active_instances_by_session[session_id] = []
-
-            active_instances_by_session[session_id].append({
-                'session_instance_id': active_row[1],
-                'date': active_row[2].isoformat(),
-                'start_time': active_row[3].isoformat() if active_row[3] else None,
-                'end_time': active_row[4].isoformat() if active_row[4] else None,
-                'location_override': active_row[5]
-            })
-
-        # Now build the sessions list
-        sessions = []
-        for row in session_rows:
-            session_id = row[0]
-
-            # Get active instances for this session from our pre-fetched dict
-            active_instances = active_instances_by_session.get(session_id, [])
-
-            sessions.append({
-                'session_id': session_id,
-                'name': row[1],
-                'path': row[2],
-                'city': row[3],
-                'state': row[4],
-                'country': row[5],
-                'termination_date': row[6].isoformat() if row[6] else None,
-                'recurrence': row[7],
-                'user_is_member': row[9],
-                'location_name': row[10],
-                'active_instances': active_instances
-            })
-
-        cur.close()
-        conn.close()
-
-        # Return "today" in user's timezone if logged in, otherwise UTC
-        user_timezone = "UTC"
-        if current_user.is_authenticated and hasattr(current_user, 'timezone'):
-            user_timezone = current_user.timezone or "UTC"
-        today_for_user = get_today_in_timezone(user_timezone)
-
-        return jsonify({
-            'success': True,
-            'sessions': sessions,
-            'today': today_for_user.isoformat()
-        })
+        return jsonify(payload)
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -12181,77 +12100,61 @@ def get_session_logs(session_path):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+def get_session_detail(session_path):
+    """
+    GET /api/sessions/<path>/detail — the aggregate session-detail payload
+    (spec 035 Step 4b): session row + recurrence_readable, permission flags,
+    today in the session's timezone, default tab, first page of the repertoire,
+    and the popular list. The /sessions/<path> page shell embeds the SAME
+    serializer output, so the two cannot drift. Public endpoint (flags reflect
+    the current user, anonymous included).
+    """
+    try:
+        from serializers import build_session_detail_payload
+        from flask import session as flask_session
+
+        person_id = getattr(current_user, 'person_id', None) if current_user.is_authenticated else None
+
+        conn = get_db_connection()
+        try:
+            payload = build_session_detail_payload(
+                conn,
+                session_path,
+                person_id=person_id,
+                is_system_admin=flask_session.get("is_system_admin", False),
+                is_logged_in=current_user.is_authenticated,
+            )
+        finally:
+            conn.close()
+
+        if payload is None:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 def get_session_tunes_remaining(session_path):
     """
     Get remaining session tunes (after the first 20) for a session.
-    No authentication required - public endpoint.
-
-    Returns:
-    {
-        "success": true,
-        "tunes": [...]
-    }
+    No authentication required - public endpoint. Rows come from the same
+    serializer the page embed uses (serializers.load_session_tunes).
     """
     try:
+        from serializers import load_session_tunes
+
         conn = get_db_connection()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+            session_result = cur.fetchone()
+            if not session_result:
+                return jsonify({"success": False, "message": "Session not found"}), 404
 
-        # Get session ID
-        cur.execute(
-            "SELECT session_id FROM session WHERE path = %s",
-            (session_path,)
-        )
-        session_result = cur.fetchone()
-        if not session_result:
-            cur.close()
+            tunes_list = load_session_tunes(conn, session_result[0], offset=20)
+        finally:
             conn.close()
-            return jsonify({"success": False, "message": "Session not found"}), 404
-
-        session_id = session_result[0]
-
-        # Get remaining session tunes (skip first 20)
-        # Optimized: Use subquery to calculate play counts more efficiently
-        cur.execute(
-            """
-            SELECT
-                st.tune_id,
-                COALESCE(st.alias, t.name) AS tune_name,
-                t.tune_type,
-                COALESCE(play_counts.play_count, 0) AS play_count,
-                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
-                st.setting_id
-            FROM session_tune st
-            LEFT JOIN tune t ON st.tune_id = t.tune_id
-            LEFT JOIN (
-                SELECT sit.tune_id, COUNT(*) as play_count
-                FROM session_instance_tune sit
-                JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                WHERE si.session_id = %s
-                GROUP BY sit.tune_id
-            ) play_counts ON st.tune_id = play_counts.tune_id
-            WHERE st.session_id = %s
-            ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
-            OFFSET 20
-        """,
-            (session_id, session_id),
-        )
-
-        tunes = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        # Convert to list of dicts for JSON serialization
-        tunes_list = [
-            {
-                'tune_id': tune[0],
-                'tune_name': tune[1],
-                'tune_type': tune[2],
-                'play_count': tune[3],
-                'tunebook_count': tune[4],
-                'setting_id': tune[5]
-            }
-            for tune in tunes
-        ]
 
         return jsonify({
             "success": True,

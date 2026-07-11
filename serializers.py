@@ -40,6 +40,290 @@ def bytea_to_base64(data):
 
 
 # ---------------------------------------------------------------------------
+# sessions directory — the /sessions page and GET /api/sessions/with-today-status
+# ---------------------------------------------------------------------------
+
+
+def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
+    """The COMPLETE /api/sessions/with-today-status response body. The API endpoint
+    returns exactly this and the /sessions page shell embeds exactly this — one
+    function, so they cannot drift (spec 035's core invariant).
+
+    Each session carries `active_instances` (is_active=TRUE instances, batched in
+    one query) and `user_is_member` for the logged-in person. `today` is in the
+    USER's timezone (per-session "today" is derived client-side from recurrence).
+    """
+    from timezone_utils import get_today_in_timezone
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT
+            s.session_id, s.name, s.path, s.city, s.state, s.country,
+            s.termination_date, s.recurrence, s.timezone,
+            CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END AS user_is_member,
+            s.location_name
+        FROM session s
+        LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
+        ORDER BY s.name
+        """,
+        (person_id,),
+    )
+    session_rows = cur.fetchall()
+
+    cur.execute(
+        """
+        SELECT session_id, session_instance_id, date, start_time, end_time, location_override
+        FROM session_instance
+        WHERE is_active = TRUE
+        ORDER BY session_id, date, start_time
+        """
+    )
+    active_by_session = {}
+    for r in cur.fetchall():
+        active_by_session.setdefault(r["session_id"], []).append(
+            {
+                "session_instance_id": r["session_instance_id"],
+                "date": r["date"].isoformat(),
+                "start_time": r["start_time"].isoformat() if r["start_time"] else None,
+                "end_time": r["end_time"].isoformat() if r["end_time"] else None,
+                "location_override": r["location_override"],
+            }
+        )
+
+    sessions = [
+        {
+            "session_id": r["session_id"],
+            "name": r["name"],
+            "path": r["path"],
+            "city": r["city"],
+            "state": r["state"],
+            "country": r["country"],
+            "termination_date": r["termination_date"].isoformat() if r["termination_date"] else None,
+            "recurrence": r["recurrence"],
+            "user_is_member": r["user_is_member"],
+            "location_name": r["location_name"],
+            "active_instances": active_by_session.get(r["session_id"], []),
+        }
+        for r in session_rows
+    ]
+
+    return {
+        "success": True,
+        "sessions": sessions,
+        "today": get_today_in_timezone(user_timezone or "UTC").isoformat(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# session detail — the /sessions/<path> page and GET /api/sessions/<path>/detail
+# ---------------------------------------------------------------------------
+
+# One session_tune row shape for the whole page: the embedded first page, the
+# /tunes/remaining continuation, and anything else listing a session's tunes.
+# (This is where the legacy tuple-reshaping hack died — everything is dicts.)
+_SESSION_TUNES_SQL = """
+    SELECT
+        st.tune_id,
+        COALESCE(st.alias, t.name) AS tune_name,
+        t.tune_type,
+        COALESCE(play_counts.play_count, 0) AS play_count,
+        COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
+        st.setting_id
+    FROM session_tune st
+    LEFT JOIN tune t ON st.tune_id = t.tune_id
+    LEFT JOIN (
+        SELECT sit.tune_id, COUNT(*) AS play_count
+        FROM session_instance_tune sit
+        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+        WHERE si.session_id = %s
+        GROUP BY sit.tune_id
+    ) play_counts ON st.tune_id = play_counts.tune_id
+    WHERE st.session_id = %s
+    ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+"""
+
+
+def session_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Pure mapper: one session_tune row (RealDictRow over _SESSION_TUNES_SQL) -> wire dict."""
+    return {
+        "tune_id": row["tune_id"],
+        "tune_name": row["tune_name"],
+        "tune_type": row["tune_type"],
+        "play_count": row["play_count"],
+        "tunebook_count": row["tunebook_count"],
+        "setting_id": row["setting_id"],
+    }
+
+
+def load_session_tunes(conn, session_id: int, *, limit: Optional[int] = None, offset: int = 0) -> List[Dict[str, Any]]:
+    """A session's repertoire, ordered by play count / popularity / name."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    sql = _SESSION_TUNES_SQL
+    params: List[Any] = [session_id, session_id]
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(limit)
+    if offset:
+        sql += " OFFSET %s"
+        params.append(offset)
+    cur.execute(sql, params)
+    return [session_tune_to_dict(r) for r in cur.fetchall()]
+
+
+def build_session_detail_payload(
+    conn,
+    session_path: str,
+    *,
+    person_id: Optional[int] = None,
+    is_system_admin: bool = False,
+    is_logged_in: bool = False,
+    first_page: int = 20,
+) -> Optional[Dict[str, Any]]:
+    """The aggregate session-detail payload (spec 035 Step 4b): everything that
+    used to exist only in the Jinja context — the session row with
+    recurrence_readable, the permission flags, today in the session's timezone,
+    the default tab — plus the first page of the repertoire and the popular list.
+
+    GET /api/sessions/<path>/detail returns exactly this, and the /sessions/<path>
+    page shell embeds exactly this — one function, so they cannot drift.
+    Returns None when the path doesn't exist.
+    """
+    import datetime
+    import json as _json
+
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:  # pragma: no cover
+        from backports.zoneinfo import ZoneInfo
+
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT session_id, thesession_id, name, path, location_name, location_website,
+               location_phone, location_street, city, state, country, comments,
+               unlisted_address, initiation_date, termination_date, recurrence,
+               session_type, timezone
+        FROM session
+        WHERE path = %s
+        """,
+        (session_path,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    session = {
+        "session_id": row["session_id"],
+        "thesession_id": row["thesession_id"],
+        "name": row["name"],
+        "path": row["path"],
+        "location_name": row["location_name"],
+        "location_website": row["location_website"],
+        "location_phone": row["location_phone"],
+        "location_street": row["location_street"],
+        "city": row["city"],
+        "state": row["state"],
+        "country": row["country"],
+        "comments": row["comments"],
+        "unlisted_address": row["unlisted_address"],
+        "initiation_date": row["initiation_date"].isoformat() if row["initiation_date"] else None,
+        "termination_date": row["termination_date"].isoformat() if row["termination_date"] else None,
+        "recurrence": row["recurrence"],
+        "session_type": row["session_type"] or "regular",
+        "timezone": row["timezone"] or "UTC",
+    }
+
+    # Human-readable recurrence; legacy freeform text passes through unchanged.
+    if session["recurrence"]:
+        try:
+            from recurrence_utils import to_human_readable
+
+            _json.loads(session["recurrence"])
+            session["recurrence_readable"] = to_human_readable(session["recurrence"])
+        except (ValueError, TypeError):
+            session["recurrence_readable"] = session["recurrence"]
+    else:
+        session["recurrence_readable"] = None
+
+    session_id = session["session_id"]
+
+    # Permission flags (formerly Jinja-only).
+    is_session_admin = bool(is_system_admin)
+    is_session_member = False
+    if person_id:
+        cur.execute(
+            "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+            (session_id, person_id),
+        )
+        member_row = cur.fetchone()
+        if member_row is not None:
+            is_session_member = True
+            if member_row["is_admin"]:
+                is_session_admin = True
+
+    # Today in the SESSION's timezone (drives the logs tab's add-instance default).
+    try:
+        today_in_session_tz = datetime.datetime.now(ZoneInfo(session["timezone"])).date()
+    except Exception:
+        today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
+
+    # Top 20 most-played tunes at this session (includes instance-only tunes).
+    cur.execute(
+        """
+        WITH tune_counts AS (
+            SELECT
+                COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                sit.tune_id,
+                COUNT(*) AS play_count,
+                COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
+            FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            LEFT JOIN tune t ON sit.tune_id = t.tune_id
+            LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
+            WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
+            GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
+        )
+        SELECT tune_name, tune_id, play_count, tunebook_count
+        FROM tune_counts
+        ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
+        LIMIT 20
+        """,
+        (session_id, session_id),
+    )
+    popular_tunes = [
+        {
+            "tune_name": r["tune_name"],
+            "tune_id": r["tune_id"],
+            "play_count": r["play_count"],
+            "tunebook_count": r["tunebook_count"],
+        }
+        for r in cur.fetchall()
+    ]
+
+    cur.execute("SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s", (session_id,))
+    total_tunes_count = cur.fetchone()["n"]
+
+    tunes = load_session_tunes(conn, session_id, limit=first_page)
+
+    return {
+        "success": True,
+        "session": session,
+        "permissions": {
+            "is_logged_in": is_logged_in,
+            "is_session_admin": is_session_admin,
+            "is_session_member": is_session_member,
+        },
+        "today_in_session_tz": today_in_session_tz.isoformat(),
+        "default_tab": "logs" if session["session_type"] == "festival" else "tunes",
+        "tunes": tunes,
+        "total_tunes_count": total_tunes_count,
+        "has_more_tunes": total_tunes_count > first_page,
+        "popular_tunes": popular_tunes,
+    }
+
+
+# ---------------------------------------------------------------------------
 # person_tune — "a tune on my list" (list rows, detail, and write responses all
 # share this core shape; the detail view extends it via attach_* helpers below)
 # ---------------------------------------------------------------------------

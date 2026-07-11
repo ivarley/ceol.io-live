@@ -249,31 +249,25 @@ def db_test():
 
 
 def sessions():
+    """Sessions directory (spec 035 Step 4a): a thin shell that embeds the SAME
+    payload GET /api/sessions/with-today-status returns (one serializer — they
+    can't drift) and mounts the Svelte view."""
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        from serializers import build_sessions_directory_payload
 
-        # Get user's person_id if logged in
         user_person_id = None
+        user_timezone = "UTC"
         if current_user.is_authenticated:
             user_person_id = getattr(current_user, 'person_id', None)
+            user_timezone = getattr(current_user, 'timezone', None) or "UTC"
 
-        # Get all sessions with location info
-        cur.execute(
-            """
-            SELECT s.session_id, s.name, s.path, s.city, s.state, s.country, s.termination_date,
-                   CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END as user_is_member
-            FROM session s
-            LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
-            ORDER BY s.name
-            """,
-            (user_person_id,)
-        )
-        sessions = cur.fetchall()
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            payload = build_sessions_directory_payload(conn, user_person_id, user_timezone)
+        finally:
+            conn.close()
 
-        return render_template("sessions.html", sessions=sessions, is_logged_in=current_user.is_authenticated)
+        return render_template("sessions.html", payload=payload, is_logged_in=current_user.is_authenticated)
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
@@ -562,233 +556,49 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             return f"Database connection failed: {str(e)}"
 
     else:
-        # This is a session detail request
+        # This is a session detail request (spec 035 Step 4b): a thin shell around
+        # serializers.build_session_detail_payload — the SAME function that backs
+        # GET /api/sessions/<path>/detail, so the page embed and the API cannot
+        # drift. The tabbed interface (tunes/logs/people) is rendered client-side
+        # by the Svelte bundle (/static/sessionpage/page.js).
         session_path = full_path
 
         try:
-            import time
-            import logging
-            logger = logging.getLogger(__name__)
+            from flask import session as flask_session
+            from serializers import build_session_detail_payload
 
-            start_time = time.time()
-            logger.info(f"[TIMING] Session detail load started for: {session_path}")
+            user_person_id = (
+                getattr(current_user, "person_id", None) if current_user.is_authenticated else None
+            )
 
             conn = get_db_connection()
-            db_connect_time = time.time()
-            logger.info(f"[TIMING] DB connection: {(db_connect_time - start_time)*1000:.2f}ms")
-
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT session_id, thesession_id, name, path, location_name, location_website,
-                       location_phone, location_street, city, state, country, comments, unlisted_address,
-                       initiation_date, termination_date, recurrence, session_type, timezone
-                FROM session
-                WHERE path = %s
-            """,
-                (session_path,),
-            )
-            session = cur.fetchone()
-            session_query_time = time.time()
-            logger.info(f"[TIMING] Session query: {(session_query_time - db_connect_time)*1000:.2f}ms")
-
-            if session:
-                # Convert tuple to dictionary with column names
-                session_dict = {
-                    "session_id": session[0],
-                    "thesession_id": session[1],
-                    "name": session[2],
-                    "path": session[3],
-                    "location_name": session[4],
-                    "location_website": session[5],
-                    "location_phone": session[6],
-                    "location_street": session[7],
-                    "city": session[8],
-                    "state": session[9],
-                    "country": session[10],
-                    "comments": session[11],
-                    "unlisted_address": session[12],
-                    "initiation_date": session[13],
-                    "termination_date": session[14],
-                    "recurrence": session[15],
-                    "session_type": session[16] if len(session) > 16 else "regular",
-                    "timezone": session[17] if len(session) > 17 else "UTC",
-                }
-
-                # Add human-readable recurrence if JSON format
-                recurrence_json = session[15]
-                if recurrence_json:
-                    try:
-                        import json
-                        from recurrence_utils import to_human_readable
-                        json.loads(recurrence_json)  # Validate it's JSON
-                        session_dict["recurrence_readable"] = to_human_readable(recurrence_json)
-                    except (json.JSONDecodeError, ValueError, TypeError):
-                        # If it's not valid JSON, treat it as legacy freeform text
-                        session_dict["recurrence_readable"] = recurrence_json
-                else:
-                    session_dict["recurrence_readable"] = None
-
-                # Logs will be loaded asynchronously via JavaScript
-                # No need to fetch them here anymore
-                instances_by_year = {}
-                instances_by_day = {}
-                sorted_years = []
-                sorted_days = []
-
-                # Get top 20 most popular tunes for this session
-                before_popular_query = time.time()
-                cur.execute(
-                    """
-                    WITH tune_counts AS (
-                        SELECT
-                            COALESCE(sit.name, st.alias, t.name) AS tune_name,
-                            sit.tune_id,
-                            COUNT(*) AS play_count,
-                            COALESCE(t.tunebook_count_cached, 0) AS tunebook_count
-                        FROM session_instance_tune sit
-                        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                        LEFT JOIN tune t ON sit.tune_id = t.tune_id
-                        LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
-                        WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
-                        GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
-                    )
-                    SELECT tune_name, tune_id, play_count, tunebook_count
-                    FROM tune_counts
-                    ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
-                    LIMIT 20
-                """,
-                    (session[0], session[0]),
-                )
-
-                popular_tunes = cur.fetchall()
-                after_popular_query = time.time()
-                logger.info(f"[TIMING] Popular tunes query: {(after_popular_query - before_popular_query)*1000:.2f}ms")
-
-                # Get total count of session tunes
-                before_count_query = time.time()
-                cur.execute(
-                    """
-                    SELECT COUNT(DISTINCT st.tune_id)
-                    FROM session_tune st
-                    WHERE st.session_id = %s
-                """,
-                    (session[0],),
-                )
-                total_tunes_count = cur.fetchone()[0]
-                after_count_query = time.time()
-                logger.info(f"[TIMING] Tune count query: {(after_count_query - before_count_query)*1000:.2f}ms")
-
-                # Get first 20 session tunes with play counts and popularity data for the tunes tab
-                # Rest will be loaded asynchronously
-                # Optimized: Use subquery to calculate play counts more efficiently
-                before_tunes_query = time.time()
-                cur.execute(
-                    """
-                    SELECT
-                        st.tune_id,
-                        COALESCE(st.alias, t.name) AS tune_name,
-                        t.tune_type,
-                        COALESCE(play_counts.play_count, 0) AS play_count,
-                        COALESCE(t.tunebook_count_cached, 0) AS tunebook_count,
-                        st.setting_id
-                    FROM session_tune st
-                    LEFT JOIN tune t ON st.tune_id = t.tune_id
-                    LEFT JOIN (
-                        SELECT sit.tune_id, COUNT(*) as play_count
-                        FROM session_instance_tune sit
-                        JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                        WHERE si.session_id = %s
-                        GROUP BY sit.tune_id
-                    ) play_counts ON st.tune_id = play_counts.tune_id
-                    WHERE st.session_id = %s
-                    ORDER BY play_count DESC, tunebook_count DESC, tune_name ASC
-                    LIMIT 20
-                """,
-                    (session[0], session[0]),
-                )
-
-                tunes = cur.fetchall()
-                has_more_tunes = total_tunes_count > 20
-                after_tunes_query = time.time()
-                logger.info(f"[TIMING] First 20 tunes query: {(after_tunes_query - before_tunes_query)*1000:.2f}ms")
-
-                # Check if current user is an admin or member of this session
-                is_session_admin = False
-                is_session_member = False
-                if current_user.is_authenticated:
-                    from flask import session as flask_session
-
-                    # System admins are always session admins
-                    if flask_session.get("is_system_admin", False):
-                        is_session_admin = True
-
-                    # Check database for membership and admin status
-                    user_person_id = getattr(current_user, 'person_id', None)
-                    if user_person_id:
-                        cur.execute(
-                            "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
-                            (session[0], user_person_id)
-                        )
-                        row = cur.fetchone()
-                        if row is not None:
-                            is_session_member = True
-                            if row[0]:  # is_admin column
-                                is_session_admin = True
-
-                # Calculate today's date in the session's timezone
-                try:
-                    from zoneinfo import ZoneInfo
-                except ImportError:
-                    from backports.zoneinfo import ZoneInfo
-                session_tz = session_dict.get("timezone", "UTC")
-                try:
-                    tz = ZoneInfo(session_tz)
-                    today_in_session_tz = datetime.datetime.now(tz).date()
-                except Exception:
-                    # Fallback to UTC if timezone is invalid
-                    today_in_session_tz = datetime.datetime.now(ZoneInfo("UTC")).date()
-
-                cur.close()
-                conn.close()
-                after_db_work = time.time()
-                logger.info(f"[TIMING] All DB work completed: {(after_db_work - start_time)*1000:.2f}ms")
-
-                # Determine default tab based on session type
-                default_tab = 'logs' if session_dict.get('session_type') == 'festival' else 'tunes'
-
-                before_render = time.time()
-                result = render_template(
-                    "session_detail.html",
-                    session=session_dict,
-                    instances_by_year=instances_by_year,
-                    sorted_years=sorted_years,
-                    instances_by_day=instances_by_day,
-                    sorted_days=sorted_days,
-                    popular_tunes=popular_tunes,
-                    tunes=tunes,
-                    has_more_tunes=has_more_tunes,
-                    total_tunes_count=total_tunes_count,
-                    is_session_admin=is_session_admin,
+            try:
+                payload = build_session_detail_payload(
+                    conn,
+                    session_path,
+                    person_id=user_person_id,
+                    is_system_admin=flask_session.get("is_system_admin", False),
                     is_logged_in=current_user.is_authenticated,
-                    is_session_member=is_session_member,
-                    today_in_session_tz=today_in_session_tz,
-                    active_tab=active_tab,
-                    tune_id=tune_id,
-                    person_id=person_id,
-                    default_tab=default_tab,
                 )
-                after_render = time.time()
-                logger.info(f"[TIMING] Template render: {(after_render - before_render)*1000:.2f}ms")
-                logger.info(f"[TIMING] TOTAL TIME: {(after_render - start_time)*1000:.2f}ms")
-
-                return result
-            else:
-                cur.close()
+            finally:
                 conn.close()
+
+            if payload is None:
                 from app import render_error_page
 
                 return render_error_page(f"Session not found: {session_path}", 404)
+
+            return render_template(
+                "session_detail.html",
+                payload=payload,
+                session=payload["session"],
+                is_logged_in=payload["permissions"]["is_logged_in"],
+                is_session_admin=payload["permissions"]["is_session_admin"],
+                is_session_member=payload["permissions"]["is_session_member"],
+                active_tab=active_tab,
+                tune_id=tune_id,
+                person_id=person_id,
+            )
         except Exception as e:
             return f"Database connection failed: {str(e)}"
 

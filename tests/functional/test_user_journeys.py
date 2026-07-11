@@ -40,7 +40,8 @@ class TestNewUserCompleteJourney:
         # Phase 2: Exploration - the sessions directory shell loads.
         response = client.get("/sessions")
         assert response.status_code == 200
-        assert b'id="sessions-tbody"' in response.data
+        assert b'id="sessions-root"' in response.data
+        assert b'__PAGE_DATA__' in response.data
 
         # Phase 3: Interest - a real session's detail page renders server-side.
         response = client.get("/sessions/austin/mueller")
@@ -492,50 +493,52 @@ class TestLongRunningWorkflows:
             mock_conn.cursor.return_value = mock_cursor
             mock_get_conn.return_value = mock_conn
 
-            # Simulate session with history
-            mock_cursor.fetchone.return_value = (
-                1,
-                None,
-                "Evolving Session",
-                "evolving-session",
-                "Music Venue",
-                None,
-                None,
-                None,
-                "Austin",
-                "TX",
-                "USA",
-                "A session that grows over time",
-                False,
-                date(2023, 1, 1),
-                None,
-                "weekly",
-            )
+            # Simulate session with history. The page is now a thin shell over
+            # serializers.build_session_detail_payload (spec 035 Step 4b), which
+            # reads rows BY NAME via RealDictCursor — so the mock returns dicts.
+            mock_cursor.fetchone.side_effect = [
+                {  # session row
+                    "session_id": 1,
+                    "thesession_id": None,
+                    "name": "Evolving Session",
+                    "path": "evolving-session",
+                    "location_name": "Music Venue",
+                    "location_website": None,
+                    "location_phone": None,
+                    "location_street": None,
+                    "city": "Austin",
+                    "state": "TX",
+                    "country": "USA",
+                    "comments": "A session that grows over time",
+                    "unlisted_address": False,
+                    "initiation_date": date(2023, 1, 1),
+                    "termination_date": None,
+                    "recurrence": "weekly",
+                    "session_type": "regular",
+                    "timezone": "UTC",
+                },
+                {"n": 4},  # total session_tune count
+            ]
 
-            # Multiple instances showing growth
             mock_cursor.fetchall.side_effect = [
-                # Past instances (showing progression over months)
-                [
-                    (date(2023, 8, 15),),
-                    (date(2023, 8, 8),),
-                    (date(2023, 8, 1),),
-                    (date(2023, 7, 25),),
-                    (date(2023, 7, 18),),
-                ],
                 # Popular tunes (showing variety and frequency)
                 [
-                    ("The Butterfly", 1001, 15, 156),
-                    ("Morrison's Jig", 1002, 12, 203),
-                    ("The Musical Priest", 1003, 10, 89),
-                    ("Out on the Ocean", 1004, 8, 145),
+                    {"tune_name": "The Butterfly", "tune_id": 1001, "play_count": 15, "tunebook_count": 156},
+                    {"tune_name": "Morrison's Jig", "tune_id": 1002, "play_count": 12, "tunebook_count": 203},
+                    {"tune_name": "The Musical Priest", "tune_id": 1003, "play_count": 10, "tunebook_count": 89},
+                    {"tune_name": "Out on the Ocean", "tune_id": 1004, "play_count": 8, "tunebook_count": 145},
+                ],
+                # First page of the repertoire (serializer row shape)
+                [
+                    {"tune_id": 1001, "tune_name": "The Butterfly", "tune_type": "slip jig", "play_count": 15, "tunebook_count": 156, "setting_id": None},
                 ],
             ]
 
             response = client.get("/sessions/evolving-session")
             assert response.status_code == 200
             assert b"Evolving Session" in response.data
-            assert b"The Butterfly" in response.data  # Most popular tune
+            assert b"The Butterfly" in response.data  # embedded in the page payload
 
-            # NOTE: the list of past instance dates is now loaded client-side via
+            # NOTE: the list of past instance dates is loaded client-side via
             # the session API (it used to be server-rendered), so it is no longer
             # asserted here — the instances endpoint is covered by the API tests.

@@ -495,6 +495,12 @@ app.add_url_rule(
     get_session_tunes_remaining,
     methods=["GET"],
 )
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/detail",
+    "get_session_detail",
+    get_session_detail,
+    methods=["GET"],
+)
 
 # SESSION routes - MUST come BEFORE session_instance routes!
 # These have fewer segments, so <path:session_path> will greedily match the full path

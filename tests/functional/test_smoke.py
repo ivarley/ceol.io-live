@@ -262,7 +262,8 @@ class TestSessionBrowsingJourney:
         # Step 2: Sessions directory shell loads (rows load via the sessions API).
         response = client.get("/sessions")
         assert response.status_code == 200
-        assert b'id="sessions-tbody"' in response.data
+        assert b'id="sessions-root"' in response.data
+        assert b'__PAGE_DATA__' in response.data
 
         # Step 3: A real session's detail page renders its name + location.
         response = client.get("/sessions/austin/mueller")

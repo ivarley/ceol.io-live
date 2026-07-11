@@ -133,7 +133,8 @@ class TestSessionRoutes:
 
         assert response.status_code == 200
         assert b"Sessions" in response.data
-        assert b'id="sessions-tbody"' in response.data
+        assert b'id="sessions-root"' in response.data
+        assert b'__PAGE_DATA__' in response.data
 
     def test_session_tunes_success(self, client):
         """A real session's detail page renders the session name server-side.
