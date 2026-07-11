@@ -6,7 +6,7 @@
  */
 
 /* Modal overlay */
-/* Using z-index: 1900 from z-index-layers.css (--z-modal-overlay) */
+/* Using z-index: 1900 from the z-index scale in theme.css (--z-modal-overlay) */
 .instance-modal-overlay {
     position: fixed;
     top: 0;
@@ -342,9 +342,8 @@
     animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+/* @keyframes spin lives in theme.css */
+
 
 .instance-modal-loading p {
     color: var(--secondary-text, #6c757d);

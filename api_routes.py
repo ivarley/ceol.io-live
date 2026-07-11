@@ -5,7 +5,7 @@ import re
 import os
 import base64
 import psycopg2
-from flask_login import login_required
+from api_auth import api_login_required
 from database import (
     get_db_connection,
     get_current_user_id,
@@ -47,17 +47,7 @@ def _person_instrument_status(cur, person_id, tune_id):
     return instruments, overrides
 
 
-def api_login_required(f):
-    """
-    Decorator for API endpoints that require authentication.
-    Returns JSON error response instead of redirecting to login page.
-    """
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return jsonify({"success": False, "error": "Authentication required"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
+# api_login_required lives in api_auth.py (shared with api_person_tune_routes.py)
 
 
 # One-way editor lock (spec 024 beta rollout): once the new live editor has claimed an
@@ -1040,7 +1030,7 @@ def format_datetime_for_api(dt, timezone_name, include_timezone=True):
         return local_dt.strftime("%Y-%m-%d %H:%M")
 
 
-@login_required
+@api_login_required
 def update_session_ajax(session_path):
     """Update session details from admin page"""
     try:
@@ -1250,7 +1240,7 @@ def sessions_data():
         return jsonify({"error": f"Database connection failed: {str(e)}"}), 500
 
 
-@login_required
+@api_login_required
 def refresh_tunebook_count_ajax(session_path, tune_id):
     try:
         # Fetch data from thesession.org API
@@ -1343,7 +1333,7 @@ def refresh_tunebook_count_ajax(session_path, tune_id):
         )
 
 
-@login_required
+@api_login_required
 def cache_tune_setting_ajax(tune_id):
     """
     Fetch and cache a tune setting from thesession.org.
@@ -1546,7 +1536,7 @@ def cache_tune_setting_ajax(tune_id):
         })
 
 
-@login_required
+@api_login_required
 def get_tune_incipit(tune_id):
     """
     GET /api/tunes/<tune_id>/incipit
@@ -1856,7 +1846,7 @@ def get_session_tune_detail(session_path, tune_id):
         )
 
 
-@login_required
+@api_login_required
 def update_session_tune_details(session_path, tune_id):
     """Update session-specific tune details (setting_id, key, alias, and aliases)"""
     try:
@@ -2027,7 +2017,7 @@ def update_session_tune_details(session_path, tune_id):
         )
 
 
-@login_required
+@api_login_required
 def delete_session_tune(session_path, tune_id):
     """Delete a tune from a session's session_tune table (session admins only)"""
     try:
@@ -2108,7 +2098,7 @@ def delete_session_tune(session_path, tune_id):
         return jsonify({"success": False, "message": f"Error removing tune: {str(e)}"}), 500
 
 
-@login_required
+@api_login_required
 def add_session_tune(session_path):
     """Add a tune to a session's session_tune table"""
     try:
@@ -2316,7 +2306,7 @@ def get_session_tune_aliases(session_path, tune_id):
         )
 
 
-@login_required
+@api_login_required
 def add_session_tune_alias(session_path, tune_id):
     """Add a new alias for a tune in a session"""
     if not request.json:
@@ -2419,7 +2409,7 @@ def add_session_tune_alias(session_path, tune_id):
         return jsonify({"success": False, "message": f"Error adding alias: {str(e)}"})
 
 
-@login_required
+@api_login_required
 def delete_session_tune_alias(session_path, tune_id, alias_id):
     """Delete an alias for a tune in a session"""
     try:
@@ -2480,7 +2470,7 @@ def delete_session_tune_alias(session_path, tune_id, alias_id):
         return jsonify({"success": False, "message": f"Error deleting alias: {str(e)}"})
 
 
-@login_required
+@api_login_required
 def add_session_instance_ajax(session_path):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -2577,7 +2567,7 @@ def add_session_instance_ajax(session_path):
         )
 
 
-@login_required
+@api_login_required
 def get_next_session_instance_suggestion_ajax(session_path):
     """
     Get the next suggested session instance based on recurrence pattern.
@@ -2722,7 +2712,7 @@ def get_next_session_instance_suggestion_ajax(session_path):
         })
 
 
-@login_required
+@api_login_required
 def update_session_instance_ajax(session_path, date_or_id):
     """
     Update session instance. Accepts either date (YYYY-MM-DD) or numeric ID.
@@ -2877,7 +2867,7 @@ def get_session_tune_count_ajax(session_path, date):
         )
 
 
-@login_required
+@api_login_required
 def delete_session_instance_ajax(session_path, date_or_id):
     try:
         conn = get_db_connection()
@@ -2999,7 +2989,7 @@ def delete_session_instance_ajax(session_path, date_or_id):
         ), 500
 
 
-@login_required
+@api_login_required
 def mark_session_log_complete_ajax(session_path, date_or_id):
     """Mark session log as complete. Accepts either date (YYYY-MM-DD) or numeric ID."""
     try:
@@ -3075,7 +3065,7 @@ def mark_session_log_complete_ajax(session_path, date_or_id):
         )
 
 
-@login_required
+@api_login_required
 def mark_session_log_incomplete_ajax(session_path, date_or_id):
     """Mark session log as incomplete. Accepts either date (YYYY-MM-DD) or numeric ID."""
     try:
@@ -3348,7 +3338,7 @@ def fetch_session_data_ajax():
         )
 
 
-@login_required
+@api_login_required
 def add_session_ajax():
     data = request.json
     if not data:
@@ -3470,7 +3460,7 @@ def add_session_ajax():
         )
 
 
-@login_required
+@api_login_required
 def add_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -3650,7 +3640,7 @@ def add_tune_ajax(session_path, date):
         )
 
 
-@login_required
+@api_login_required
 def delete_tune_ajax(session_instance_tune_id):
     try:
         conn = get_db_connection()
@@ -3801,7 +3791,7 @@ def _import_tune_from_thesession(cur, tune_id, user_id):
     return tune_name_from_api, tune_type
 
 
-@login_required
+@api_login_required
 def link_tune_ajax(session_path, date_or_id):
     """
     Link a tune to a thesession.org tune ID.
@@ -4628,7 +4618,7 @@ def add_existing_person_to_session(session_path):
         return jsonify({"success": False, "message": f"Failed to add person: {str(e)}"}), 500
 
 
-@login_required
+@api_login_required
 def move_set_ajax(session_path, date):
     data = request.get_json()
     session_instance_tune_id = data.get("session_instance_tune_id")
@@ -4816,7 +4806,7 @@ def move_set_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to move set: {str(e)}"})
 
 
-@login_required
+@api_login_required
 def move_tune_ajax(session_path, date):
     data = request.get_json()
     session_instance_tune_id = data.get("session_instance_tune_id")
@@ -4986,7 +4976,7 @@ def move_tune_ajax(session_path, date):
         return jsonify({"success": False, "message": f"Failed to move tune: {str(e)}"})
 
 
-@login_required
+@api_login_required
 def add_tunes_to_set_ajax(session_path, date):
     data = request.get_json()
     tune_names_input = data.get("tune_names", "").strip()
@@ -5060,7 +5050,7 @@ def add_tunes_to_set_ajax(session_path, date):
         )
 
 
-@login_required
+@api_login_required
 def edit_tune_ajax(session_path, date):
     if not request.json:
         return jsonify({"success": False, "message": "No JSON data provided"})
@@ -5983,7 +5973,7 @@ def update_person_details(person_id):
         )
 
 
-@login_required
+@api_login_required
 def admin_verify_email(user_id):
     """Admin endpoint to manually verify a user's email"""
     # Check if current user is system admin
@@ -6050,7 +6040,7 @@ def admin_verify_email(user_id):
         )
 
 
-@login_required
+@api_login_required
 def toggle_person_active(person_id):
     """
     Toggle a person's active status (deactivate/reactivate).
@@ -6802,12 +6792,9 @@ def get_available_sessions():
         )
 
 
-@login_required
+@api_login_required
 def update_session_player_regular_status(session_path, person_id):
     """Update the regular status for a person in a specific session"""
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-    
     # Check if current user is a system admin
     conn = get_db_connection()
     cur = conn.cursor()
@@ -6869,12 +6856,9 @@ def update_session_player_regular_status(session_path, person_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def update_session_player_admin_status(session_path, person_id):
     """Update the admin status for a person in a specific session"""
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-
     # Check if current user is a system admin
     conn = get_db_connection()
     cur = conn.cursor()
@@ -6936,12 +6920,9 @@ def update_session_player_admin_status(session_path, person_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def update_session_player_details(session_path, person_id):
     """Update person details for session admins"""
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-    
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -7073,12 +7054,9 @@ def update_session_player_details(session_path, person_id):
         conn.close()
 
 
-@login_required
+@api_login_required
 def delete_session_player(session_path, person_id):
     """Delete a player from a session and potentially the person record if orphaned"""
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-    
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -7212,16 +7190,13 @@ def delete_session_player(session_path, person_id):
         conn.close()
 
 
-@login_required
+@api_login_required
 def leave_session_membership(session_path):
     """Allow user to remove themselves from a session membership.
 
     This only removes them from session_person (membership), preserving
     all historical data like attendance records in session_instance_person.
     """
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "error": "Authentication required"}), 401
-
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -7264,7 +7239,7 @@ def leave_session_membership(session_path):
         conn.close()
 
 
-@login_required
+@api_login_required
 def terminate_session(session_path):
     """Set the termination date for a session"""
     # Check if user is system admin
@@ -7324,7 +7299,7 @@ def terminate_session(session_path):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@login_required
+@api_login_required
 def reactivate_session(session_path):
     """Clear the termination date for a session to reactivate it"""
     # Check if user is system admin
@@ -11465,7 +11440,7 @@ def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
         ), 500
 
 
-@login_required
+@api_login_required
 def update_session_instance_tune_details(session_path, date_or_id, tune_id):
     """
     Update session_instance_tune details (name, key_override, setting_override).
@@ -11885,7 +11860,7 @@ def get_admin_tune_detail(tune_id):
 # ========================================
 
 
-@login_required
+@api_login_required
 def run_cache_settings():
     """Run the cache missing settings script"""
     import subprocess
@@ -12003,7 +11978,7 @@ def run_cache_settings():
         }), 500
 
 
-@login_required
+@api_login_required
 def get_cache_settings_stats():
     """Get statistics about cached tune settings"""
     # Check if user is system admin

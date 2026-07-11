@@ -103,6 +103,40 @@ login_manager.login_message = "Please log in to access this page."
 def load_user(user_id):
     return User.get_by_id(int(user_id))
 
+@login_manager.request_loader
+def load_user_from_request(req):
+    """Authenticate `Authorization: Bearer <user_session id>` against /api/* (spec 035).
+
+    The tokens are minted by /api/live/token (live_issue_token -> auth.create_session)
+    and were already honored by the streaming sidecar; this makes Flask honor them too.
+    Mirrors the sidecar's validation (streaming/service.py, _user_id_from_bearer).
+    Cookie sessions keep flowing through user_loader; this only runs when the session
+    cookie is absent or invalid.
+    """
+    auth_header = req.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header[7:].strip()
+    if not token:
+        return None
+    from database import get_db_connection
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT user_id FROM user_session
+            WHERE session_id = %s AND expires_at > (NOW() AT TIME ZONE 'UTC')
+            """,
+            (token,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return User.get_by_id(row[0])
+
 @app.context_processor
 def inject_canonical_instruments():
     """Expose the single canonical instrument list to every template so all

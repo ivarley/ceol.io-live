@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite build --watch",
     "dev:mytunes": "vite build --watch --config vite.mytunes.config.js",
-    "build": "vite build && vite build --config vite.mytunes.config.js",
+    "dev:mytunespage": "vite build --watch --config vite.mytunespage.config.js",
+    "build": "vite build && vite build --config vite.mytunes.config.js && vite build --config vite.mytunespage.config.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"
@@ -19,8 +20,12 @@
     "@vitest/coverage-v8": "^2.1.0",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^25.0.0",
-    "svelte": "^5.0.0",
+    "svelte": "^5.56.4",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@internationalized/date": "^3.12.2",
+    "bits-ui": "^2.18.1"
   }
 }

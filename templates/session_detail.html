@@ -969,11 +969,11 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: var(--scrim);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 10000;
+            z-index: var(--z-modal-overlay);
         }
 
         .copy-modal-overlay.hidden {
@@ -2109,7 +2109,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/dist/modalManager.js"></script>
+<script src="/static/js/shared/modalManager.js"></script>
 <script src="/static/js/tunebook_status.js"></script>
 <script>
     const sessionPath = '{{ session.path }}';

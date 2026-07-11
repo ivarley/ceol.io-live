@@ -19,7 +19,7 @@
 }
 
 /* Ensure header and hamburger menu stay fixed during swipe gestures */
-/* Using z-index: 2000 from z-index-layers.css (--z-header) */
+/* Using z-index: 2000 from the z-index scale in theme.css (--z-header) */
 .header.fixed-top {
     position: fixed;
     width: 100%;
@@ -578,10 +578,7 @@
     vertical-align: middle;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
+/* @keyframes spin lives in theme.css */
 
 /* Active-filter pills, shown while the filter panel is collapsed */
 .active-filter-pills {

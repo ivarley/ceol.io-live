@@ -15,26 +15,12 @@ from database import get_db_connection, get_current_user_id, normalize_quotes, n
 import base64
 
 
-def bytea_to_base64(data):
-    """
-    Convert PostgreSQL bytea data to base64 string.
-    Handles different return formats: bytes, memoryview, hex string.
-    """
-    if not data:
-        return None
-
-    if isinstance(data, memoryview):
-        data = data.tobytes()
-    elif isinstance(data, str):
-        # PostgreSQL returns bytea as hex string starting with \x
-        if data.startswith('\\x'):
-            data = bytes.fromhex(data[2:])
-        else:
-            data = data.encode('latin1')
-    elif not isinstance(data, bytes):
-        data = bytes(data)
-
-    return base64.b64encode(data).decode('utf-8')
+from serializers import (
+    bytea_to_base64,
+    build_my_tunes_payload,
+    build_person_tune_detail,
+    VALID_PERSON_TUNE_SORTS,
+)
 
 
 # Initialize services
@@ -42,18 +28,7 @@ person_tune_service = PersonTuneService()
 thesession_sync_service = ThesessionSyncService()
 
 
-# Auth helpers (temporary - will be moved to person_tune_auth module)
-def api_login_required(f):
-    """
-    Decorator for API endpoints that require authentication.
-    Returns JSON error response instead of redirecting to login page.
-    """
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return jsonify({"success": False, "error": "Authentication required"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
+from api_auth import api_login_required
 
 
 def get_user_person_id() -> int:
@@ -116,73 +91,14 @@ def _get_tune_details(tune_id: int) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def _build_person_tune_response(person_tune, include_tune_details: bool = True) -> Dict[str, Any]:
-    """
-    Helper function to build a response dictionary for a PersonTune.
-
-    Args:
-        person_tune: PersonTune instance
-        include_tune_details: Whether to include full tune details
-
-    Returns:
-        Dictionary with person_tune data and optional tune details
-    """
-    response = person_tune.to_dict()
-
-    # Sparse per-instrument status overrides + the person's instrument/auto list, so the
-    # detail view can render the per-instrument controls (client resolves the rest).
-    response['instrument_status'] = person_tune_service.get_instrument_overrides(
-        person_tune.person_id, person_tune.tune_id)
-    response['instruments'] = person_tune_service.get_person_instruments(person_tune.person_id)
-
-    if include_tune_details:
-        tune_details = _get_tune_details(person_tune.tune_id)
-        if tune_details:
-            # Use name_alias if it exists, otherwise use the official tune name
-            response['tune_name'] = person_tune.name_alias if person_tune.name_alias else tune_details['name']
-            response['tune_type'] = tune_details['type']
-            response['tunebook_count'] = tune_details['tunebook_count']
-            # Build thesession.org URL with setting_id if available
-            base_url = f"https://thesession.org/tunes/{person_tune.tune_id}"
-            if person_tune.setting_id:
-                response['thesession_url'] = f"{base_url}?setting={person_tune.setting_id}#setting{person_tune.setting_id}"
-            else:
-                response['thesession_url'] = base_url
-
-        # Get ABC notation and images from tune_setting
-        # If setting_id is specified, use that; otherwise, use the first setting for this tune
-        abc_notation = None
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            if person_tune.setting_id:
-                # Use the specific setting_id if saved
-                cur.execute(
-                    "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
-                    (person_tune.setting_id,)
-                )
-            else:
-                # Fall back to the first setting for this tune (ordered by setting_id)
-                cur.execute(
-                    """SELECT abc, incipit_abc, image, incipit_image, key
-                       FROM tune_setting
-                       WHERE tune_id = %s
-                       ORDER BY setting_id ASC
-                       LIMIT 1""",
-                    (person_tune.tune_id,)
-                )
-            abc_result = cur.fetchone()
-            if abc_result:
-                abc_notation = abc_result[0]
-                response['incipit_abc'] = abc_result[1]
-                response['image'] = bytea_to_base64(abc_result[2])
-                response['incipit_image'] = bytea_to_base64(abc_result[3])
-                response['setting_key'] = abc_result[4]
-        finally:
-            conn.close()
-        response['abc'] = abc_notation
-
-    return response
+def _person_tune_detail_response(person_tune_id: int) -> Optional[Dict[str, Any]]:
+    """Full detail dict for one person_tune, via the shared serializer
+    (serializers.py) — the same core shape /api/my-tunes list rows use."""
+    conn = get_db_connection()
+    try:
+        return build_person_tune_detail(conn, person_tune_id)
+    finally:
+        conn.close()
 
 
 @person_tune_login_required
@@ -226,51 +142,32 @@ def get_my_tunes():
             }), 400
 
         # Validate sort_by if provided
-        valid_sorts = ['alpha-asc', 'alpha-desc', 'popularity-desc', 'popularity-asc', 'heard-desc', 'heard-asc', 'plays-desc', 'plays-asc']
-        if sort_by not in valid_sorts:
+        if sort_by not in VALID_PERSON_TUNE_SORTS:
             return jsonify({
                 "success": False,
-                "error": f"Invalid sort. Must be one of: {', '.join(valid_sorts)}"
+                "error": f"Invalid sort. Must be one of: {', '.join(VALID_PERSON_TUNE_SORTS)}"
             }), 400
 
         person_id = get_user_person_id()
 
-        # Get tunes from service layer
-        tunes, total_count = person_tune_service.get_person_tunes_with_details(
-            person_id=person_id,
-            learn_status_filter=learn_status_filter,
-            tune_type_filter=tune_type_filter,
-            search_query=search_query if search_query else None,
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by
-        )
+        # The whole response body comes from the shared serializer; the /my-tunes
+        # page shell embeds the same function's output, so they can't drift.
+        conn = get_db_connection()
+        try:
+            payload = build_my_tunes_payload(
+                conn,
+                person_id,
+                learn_status=learn_status_filter,
+                tune_type=tune_type_filter,
+                search=search_query if search_query else None,
+                sort=sort_by,
+                page=page,
+                per_page=per_page,
+            )
+        finally:
+            conn.close()
 
-        # Calculate pagination metadata
-        total_pages = (total_count + per_page - 1) // per_page
-
-        # The person's instruments + auto/manual flags, so the client can resolve
-        # per-instrument status alongside each tune's sparse `instrument_status` overrides.
-        instruments = person_tune_service.get_person_instruments(person_id)
-
-        response = jsonify({
-            "success": True,
-            "tunes": tunes,
-            "instruments": instruments,
-            "pagination": {
-                "page": page,
-                "per_page": per_page,
-                "total_count": total_count,
-                "total_pages": total_pages,
-                "has_next": page < total_pages,
-                "has_prev": page > 1
-            },
-            "filters": {
-                "learn_status": learn_status_filter,
-                "tune_type": tune_type_filter,
-                "search": search_query
-            }
-        })
+        response = jsonify(payload)
 
         # Disable caching to ensure fresh data after updates
         # User-specific data that changes frequently should not be cached
@@ -314,60 +211,18 @@ def get_person_tune_detail(person_tune_id):
     Requirements: 4.1, 4.2
     """
     try:
-        person_id = get_user_person_id()
-        
-        # Get the person_tune record (ownership already verified by decorator)
-        person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
-        
-        if not person_tune:
+        # Ownership already verified by decorator. session_play_count,
+        # global_play_count, and person_list_count all come from the serializer.
+        # Play history is NOT fetched here — the modal lazily loads it from
+        # /api/tunes/<id>/history?person=me when the History tab is first viewed.
+        response_data = _person_tune_detail_response(person_tune_id)
+
+        if not response_data:
             return jsonify({
                 "success": False,
                 "error": "Tune not found"
             }), 404
-        
-        # Build response with tune details
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
-        
-        # Add session popularity count and play history
-        conn = get_db_connection()
-        try:
-            cur = conn.cursor()
-            # Get count of distinct session instances where this person attended and the tune was played
-            cur.execute("""
-                SELECT COUNT(DISTINCT SIT.session_instance_id)
-                FROM session_instance_tune SIT
-                INNER JOIN session_instance SI ON SIT.session_instance_id = SI.session_instance_id
-                INNER JOIN session_instance_person SIP ON SI.session_instance_id = SIP.session_instance_id
-                WHERE SIP.person_id = %s AND SIT.tune_id = %s
-            """, (person_id, person_tune.tune_id))
-            row = cur.fetchone()
-            session_play_count = row[0] if row else 0
-            response_data['session_play_count'] = session_play_count
 
-            # Play history is NOT fetched here — the modal lazily loads it from
-            # /api/tunes/<id>/history?person=me when the History tab is first viewed.
-
-            # Also get global play count (all sessions, not just where person attended)
-            cur.execute("""
-                SELECT COUNT(DISTINCT SIT.session_instance_id)
-                FROM session_instance_tune SIT
-                WHERE SIT.tune_id = %s
-            """, (person_tune.tune_id,))
-            row = cur.fetchone()
-            global_play_count = row[0] if row else 0
-            response_data['global_play_count'] = global_play_count
-
-            # How many people have this tune on their Ceol.io tune list
-            cur.execute("""
-                SELECT COUNT(*)
-                FROM person_tune
-                WHERE tune_id = %s
-            """, (person_tune.tune_id,))
-            row = cur.fetchone()
-            response_data['person_list_count'] = row[0] if row else 0
-        finally:
-            conn.close()
-        
         return jsonify({
             "success": True,
             "person_tune": response_data
@@ -608,8 +463,8 @@ def add_my_tune():
             finally:
                 conn_check.close()
 
-        # Build response with tune details
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+        # Build response with tune details via the shared serializer
+        response_data = _person_tune_detail_response(person_tune.person_tune_id)
 
         # Check if we redirected from another tune
         if data.get('_redirected_from'):
@@ -742,8 +597,8 @@ def update_person_tune(person_tune_id):
                     "error": message
                 }), 400
 
-        # Build response with tune details
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+        # Build response with tune details via the shared serializer
+        response_data = _person_tune_detail_response(person_tune.person_tune_id)
 
         return jsonify({
             "success": True,
@@ -800,9 +655,8 @@ def increment_tune_heard_count(person_tune_id):
                     "error": message
                 }), 400
 
-        # Get updated person_tune for full response
-        person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+        # Full response via the shared serializer
+        response_data = _person_tune_detail_response(person_tune_id)
 
         return jsonify({
             "success": True,
@@ -860,9 +714,8 @@ def decrement_tune_heard_count(person_tune_id):
                     "error": message
                 }), 400
 
-        # Get updated person_tune for full response
-        person_tune = person_tune_service.get_person_tune_by_id(person_tune_id)
-        response_data = _build_person_tune_response(person_tune, include_tune_details=True)
+        # Full response via the shared serializer
+        response_data = _person_tune_detail_response(person_tune_id)
 
         return jsonify({
             "success": True,

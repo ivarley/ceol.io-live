@@ -183,13 +183,10 @@ class TestSessionsAPI:
             json={"name": "New Session", "city": "Houston", "state": "TX"},
         )
 
-        # API might redirect to login or return JSON error - both are valid
-        assert response.status_code in [302, 200]  # Redirect to login or JSON error
-        if response.status_code == 200:
-            # If 200, it should be a JSON error response
-            data = response.get_json()
-            assert data is not None and "success" in data
-            assert data["success"] == False
+        # API endpoints return 401 JSON, never a redirect to the HTML login page
+        assert response.status_code == 401
+        data = response.get_json()
+        assert data is not None and data["success"] == False
 
     def test_add_session_api_authenticated(
         self, client, authenticated_user, db_conn, db_cursor

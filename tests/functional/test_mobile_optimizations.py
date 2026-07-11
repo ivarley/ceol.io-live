@@ -24,16 +24,16 @@ class TestMobileAssets:
     """Test that mobile assets are loaded on tune management pages."""
 
     def test_my_tunes_has_mobile_assets(self, client, authenticated_user):
-        """Test that my tunes page loads mobile CSS and JS."""
+        """The thin shell loads the mobile stylesheet and the Svelte page bundle
+        (spec 035 Step 2: markup renders client-side; my_tunes_mobile.js is
+        legacy-only and no longer loaded here)."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for mobile CSS
+
             assert b'my_tunes_mobile.css' in response.data
-            
-            # Check for mobile JavaScript
-            assert b'my_tunes_mobile.js' in response.data
+            assert b'mytunespage/page.js' in response.data
+            assert b'my_tunes_mobile.js' not in response.data
 
     def test_add_tune_has_mobile_assets(self, client, authenticated_user):
         """Test that add tune page loads mobile CSS and JS."""
@@ -74,11 +74,13 @@ class TestMobileCSSFeatures:
         assert 'max-width' in css
 
     def test_responsive_grid_present(self, client, authenticated_user):
-        """Responsive grid markup is on the page; grid CSS is in the stylesheet."""
+        """The grid renders client-side (Svelte); the shell carries the mount root
+        and embedded payload, and the grid CSS lives in the stylesheet."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            assert b'tunes-grid' in response.data
+            assert b'my-tunes-root' in response.data
+            assert b'__PAGE_DATA__' in response.data
         assert 'grid-template-columns' in _mobile_css()
 
     def test_pull_to_refresh_css_present(self, client, authenticated_user):
@@ -104,13 +106,12 @@ class TestMobileJavaScriptFeatures:
     """Test that mobile JavaScript features are loaded."""
 
     def test_mobile_js_loaded(self, client, authenticated_user):
-        """Test that mobile JavaScript file is loaded."""
+        """The Svelte page bundle (which owns all mobile interactions now) loads."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Mobile JS should be loaded
-            assert b'my_tunes_mobile.js' in response.data
+
+            assert b'mytunespage/page.js' in response.data
 
     def test_search_debounce_present(self, client, authenticated_user):
         """Test that search debouncing is present."""
@@ -136,16 +137,16 @@ class TestMobileLayout:
     """Test mobile layout features."""
 
     def test_filters_container_present(self, client, authenticated_user):
-        """Test that filters container is present."""
+        """Filter markup renders client-side; its CSS contract stays in the
+        stylesheet the shell loads."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for filters (class names: filters-container > filter-top-row,
-            # with filter-button-group inside the expandable panel)
-            assert b'filters-container' in response.data
-            assert b'filter-top-row' in response.data
-            assert b'filter-button-group' in response.data
+            assert b'my-tunes-root' in response.data
+        css = _mobile_css()
+        assert '.filters-container' in css
+        assert '.filter-top-row' in css
+        assert '.filter-button-group' in css
 
     def test_modal_present(self, client, authenticated_user):
         """Test that modal is present."""
@@ -158,23 +159,23 @@ class TestMobileLayout:
             assert b'modal-overlay' in response.data
 
     def test_button_groups_present(self, client, authenticated_user):
-        """Test that button groups are present."""
+        """Button-group styling stays available to the client-rendered markup."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for button groups
-            assert b'page-actions' in response.data or b'button-group' in response.data
+        css = _mobile_css()
+        assert '.page-actions' in css or 'button-group' in css
 
     def test_tune_cards_present(self, client, authenticated_user):
-        """Test that tune cards are present."""
+        """Cards render client-side from the embedded payload — the embed carries
+        the tune rows the cards are built from."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for tune cards
-            assert b'tune-card' in response.data
-            assert b'tune-name' in response.data
+            assert b'__PAGE_DATA__' in response.data
+            assert b'tune_name' in response.data  # serialized rows in the embed
+        css = _mobile_css()
+        assert '.tune-card' in css
 
 
 class TestPerformanceFeatures:
@@ -190,10 +191,8 @@ class TestPerformanceFeatures:
             assert b'loading' in response.data
 
     def test_no_results_message_present(self, client, authenticated_user):
-        """Test that no results message is present."""
+        """The no-results state renders client-side; its styling stays loaded."""
         with authenticated_user:
             response = client.get('/my-tunes')
             assert response.status_code == 200
-            
-            # Check for no results element
-            assert b'no-results' in response.data
+        assert '.no-results' in _mobile_css()

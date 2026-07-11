@@ -1381,7 +1381,6 @@
             margin-top: 10px;
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/attendance.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -1766,7 +1765,7 @@ window.showTuneDetail = function(tuneId, tuneName, tuneType) {
 <script src="/static/js/dist/pillInteraction.js"></script>
 <script src="/static/js/dist/dragDrop.js"></script>
 <script src="/static/js/dist/textInput.js"></script>
-<script src="/static/js/dist/modalManager.js"></script>
+<script src="/static/js/shared/modalManager.js"></script>
 <script src="/static/js/dist/keyboardHandler.js"></script>
 <script src="/static/js/dist/undoRedoManager.js"></script>
 <script src="/static/js/dist/clipboardManager.js"></script>
@@ -1774,9 +1773,6 @@ window.showTuneDetail = function(tuneId, tuneName, tuneType) {
 <script src="/static/js/pages/session_instance_detail.js"></script>
 <script src="{{ url_for('static', filename='js/tune_detail_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components/TuneSearchComponent.js') }}"></script>
-{% if current_user.is_authenticated and current_user.is_system_admin %}
-<script src="{{ url_for('static', filename='js/dist/sessionRecorder.js') }}"></script>
-{% endif %}
 <script>
 // Initialize edit mode button
 document.addEventListener('DOMContentLoaded', function() {

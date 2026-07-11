@@ -14,15 +14,21 @@ CSS custom properties system for light/dark theme switching.
 
 ### CSS Variables
 
-Defined in `templates/base.html` `<style>` block.
+Defined in `static/css/theme.css` (the `:root` and `[data-theme="dark"]` blocks
+at the top of the file — NOT in `templates/base.html`, which only loads the
+stylesheet). As of spec 035 this is the single token source: colors, plus the
+radius (`--r-sm/--r/--r-lg/--r-pill`), shadow (`--shadow-sm/-md/-lg`), scrim
+(`--scrim`), spacing (`--sp-1`…`--sp-8`), motion (`--dur-quick/--dur/--ease`),
+and z-index (`--z-*`) scales, and the one global `@keyframes spin`.
 
-**Light Theme**:
+**Light Theme** (excerpt):
 ```css
 :root {
   --bg-color: #fff;
   --text-color: #252930;
-  --primary-color: #00a1e0;
+  --primary: #00a1e0;
   --secondary-text: #adb4c0;
+  --text-muted: #6c757d;
   --border-color: #ddd;
   --input-bg: #fff;
   --hover-bg: #f8f9fa;
@@ -36,25 +42,28 @@ Defined in `templates/base.html` `<style>` block.
 }
 ```
 
-**Dark Theme** (default):
+**Dark Theme** (excerpt):
 ```css
 [data-theme="dark"] {
   --bg-color: #1a1a1a;
   --text-color: #e0e0e0;
-  --primary-color: #4da6ff;
+  --primary: #4da6ff;
   --secondary-text: #888;
+  --text-muted: #888;
   --border-color: #444;
   --input-bg: #2d2d2d;
   --hover-bg: #3d3d3d;
   --link-color: #4da6ff;
   --link-hover-color: #80c0ff;
-  --table-header-bg: #2d2d2d;
+  --table-header-bg: #3d3d3d;
   --header-bg: #2d2d2d;
   --dropdown-bg: #2d2d2d;
   --dropdown-border: #444;
   --dropdown-shadow: rgba(0,0,0,0.3);
 }
 ```
+
+Note: `--primary-color` was removed in spec 035 — `--primary` is the one name.
 
 ### Logo Switching
 

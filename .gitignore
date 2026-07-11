@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# anchored: the Python-template `lib/` was swallowing frontend/src/lib (the spec-035 kit)
+/lib/
 lib64/
 parts/
 sdist/
@@ -128,6 +129,7 @@ package-lock.json
 
 # TypeScript/Webpack build outputs
 static/js/dist/
+static/js/shared/
 design/*
 
 # Live-logging Svelte/Vite build output (spec 024) -- built during deploy

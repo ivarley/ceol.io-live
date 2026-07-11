@@ -146,25 +146,15 @@
     animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+/* @keyframes spin lives in theme.css */
 
-/* Styles for tunes already added to collection */
+/* Styles for tunes already added to collection (vars themed in theme.css) */
 .autocomplete-item.already-added {
     background-color: var(--already-added-bg, #f5f5f5);
 }
 
-[data-theme="dark"] .autocomplete-item.already-added {
-    background-color: var(--already-added-bg, #3a3a3a);
-}
-
 .autocomplete-item.already-added:hover {
     background-color: var(--already-added-hover-bg, #e8e8e8);
-}
-
-[data-theme="dark"] .autocomplete-item.already-added:hover {
-    background-color: var(--already-added-hover-bg, #454545);
 }
 
 /* Learn status icons */

@@ -3751,8 +3751,17 @@ def session_admin_bulk_import(session_path):
 
 @login_required
 def my_tunes():
-    """Personal tune collection page"""
-    return render_template("my_tunes.html")
+    """Personal tune collection page (spec 035 Step 2): a thin shell that embeds
+    the SAME payload GET /api/my-tunes returns (one serializer — they can't
+    drift) and mounts the Svelte view. Filtering/sorting is client-side; the
+    embed is always the default sort, and the client re-sorts from URL params."""
+    from serializers import build_my_tunes_payload
+    conn = get_db_connection()
+    try:
+        payload = build_my_tunes_payload(conn, current_user.person_id)
+    finally:
+        conn.close()
+    return render_template("my_tunes.html", payload=payload)
 
 
 @login_required

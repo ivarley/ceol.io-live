@@ -517,7 +517,9 @@ test.describe("offline bundle model", () => {
         additionalData: { isUserLoggedIn: true, tuneName: c.name, global: true },
       }), cand);
 
-      const addBtn = page.locator("#tune-detail-content .tunebook-action-btn", { hasText: /Add/i });
+      // .tsc-notlist-add: the "not on list" bar's Add action (renamed from
+      // .tunebook-action-btn in the status-UI redesign, commit 240749d).
+      const addBtn = page.locator("#tune-detail-content .tsc-notlist-add", { hasText: /Add/i });
       await expect(addBtn).toBeVisible({ timeout: 8000 });
       await addBtn.click();
 

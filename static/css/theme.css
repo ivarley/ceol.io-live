@@ -63,9 +63,86 @@
     --link-color: #00a1e0;
     --link-hover-color: #005b7f;
     --input-bg: #fff;
-    --primary-color: #00a1e0;
     --secondary-text: #adb4c0;
     --table-header-bg: #f5f6f8;
+
+    /* Muted text (formerly a phantom var; matches the #6c757d fallbacks in use) */
+    --text-muted: #6c757d;
+    /* Hover-state darks (formerly phantom vars; values match the fallbacks in use) */
+    --primary-dark: #0056b3;
+    --secondary-dark: #5a6268;
+    /* Already-added rows in tune search */
+    --already-added-bg: #f5f5f5;
+    --already-added-hover-bg: #e8e8e8;
+    /* Modal surfaces (moved from tune_detail_modal.css so load order doesn't matter) */
+    --modal-bg-secondary: #f8f9fa;
+    --modal-text-muted: #6c757d;
+    --modal-primary-dark: #0056b3;
+
+    /* ============ Design token scales (spec 035) ============ */
+    /* Radius */
+    --r-sm: 4px;
+    --r: 8px;
+    --r-lg: 12px;
+    --r-pill: 999px;
+    /* Shadow: sm = dropdowns, md = cards, lg = modals/sheets */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.2);
+    /* Scrim behind modals/sheets */
+    --scrim: rgba(0, 0, 0, 0.5);
+    /* Spacing: 4px base scale */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 24px;
+    --sp-7: 28px;
+    --sp-8: 32px;
+    /* Motion */
+    --dur-quick: 0.15s;
+    --dur: 0.25s;
+    --ease: ease-out;
+
+    /* ============ Z-index layers (folded in from z-index-layers.css) ============
+       Tier 1: component layering (1-10) */
+    --z-background: -1;
+    --z-base: 0;
+    --z-component-1: 1;
+    --z-component-2: 2;
+    --z-component-3: 3;
+    --z-component-elevated: 10;
+    /* Tier 2: reserved for Bootstrap framework elements — do not reuse */
+    --z-bootstrap-dropdown: 1000;
+    --z-bootstrap-sticky: 1020;
+    --z-bootstrap-fixed: 1030;
+    --z-bootstrap-modal-backdrop: 1040;
+    --z-bootstrap-modal: 1050;
+    --z-bootstrap-popover: 1060;
+    --z-bootstrap-tooltip: 1070;
+    /* Tier 3: application UI. Modals sit BELOW the header (2000) on purpose,
+       so the hamburger menu stays accessible while a modal is open. */
+    --z-modal-overlay: 1900;
+    --z-modal-content: 1910;
+    --z-modal-sidebar: 1920;
+    --z-drag-ghost: 1930;
+    --z-header: 2000;
+    --z-hamburger-dropdown: 2010;
+    --z-in-session-popup: 2020;
+    --z-search-dropdown: 2100;
+    --z-context-menu: 2500;
+    --z-loading-overlay: 2800;
+    --z-pull-to-refresh: 2850;
+    /* Tier 4: top layer — toasts only */
+    --z-toast: 9999;
+  }
+
+  /* The one spinner keyframe. Every spinner animates `spin`; do not redeclare. */
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   [data-theme="dark"] {
@@ -98,9 +175,19 @@
     --link-color: #4da6ff;
     --link-hover-color: #80c0ff;
     --input-bg: #2d2d2d;
-    --primary-color: #4da6ff;
     --secondary-text: #888;
     --table-header-bg: #3d3d3d;
+
+    --text-muted: #888;
+    --already-added-bg: #3a3a3a;
+    --already-added-hover-bg: #454545;
+    --modal-bg-secondary: #2a2a2a;
+    --modal-text-muted: #888;
+    --modal-primary-dark: #3385cc;
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.55);
   }
   *,
   *::before,

@@ -515,14 +515,11 @@ function showLoading(message = 'Loading...') {
                     animation: spin 0.8s linear infinite;"></div>
         <div style="color: #333; font-size: 16px;">${message}</div>
     `;
-    const style = document.createElement('style');
-    style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-    document.head.appendChild(style);
+    // @keyframes spin lives in theme.css
     document.body.appendChild(loadingDiv);
     return {
         hide: () => {
             if (loadingDiv.parentNode) loadingDiv.parentNode.removeChild(loadingDiv);
-            if (style.parentNode) style.parentNode.removeChild(style);
         }
     };
 }
