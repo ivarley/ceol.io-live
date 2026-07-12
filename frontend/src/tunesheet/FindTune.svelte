@@ -74,19 +74,12 @@
 
   function pick(tune) {
     close()
-    // 'session_instance' context renders the session_tune shape the session-agnostic
-    // /api/tunes/<id>/detail returns (no sessionPath/dateOrId — a global read view).
+    // The drawer derives everything from its payload (viewer flags, on-list
+    // state) and defaults its scope from the URL — so a pick on a session page
+    // opens session-scoped, and everywhere else opens the global view.
     window.TuneDetailModal.show({
-      context: 'session_instance',
       tuneId: tune.tune_id,
-      apiEndpoint: '/api/tunes/' + tune.tune_id + '/detail',
-      // CEOL_UID (base.html) is null for logged-out viewers: hide the add-to-list
-      // control instead of showing an Add that would 401.
-      additionalData: {
-        isUserLoggedIn: typeof CEOL_UID !== 'undefined' && CEOL_UID != null,
-        tuneName: tune.name,
-        global: true,
-      },
+      tuneName: tune.name,
     })
   }
 

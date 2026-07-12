@@ -619,7 +619,8 @@ PERSON_TUNE_COLS = """
     pt.created_date, pt.last_modified_date,
     COALESCE(pt.name_alias, t.name) AS tune_name,
     t.tune_type,
-    t.tunebook_count_cached AS tunebook_count
+    t.tunebook_count_cached AS tunebook_count,
+    t.tunebook_count_cached_date
 """
 
 PERSON_TUNE_FROM = "FROM person_tune pt LEFT JOIN tune t ON pt.tune_id = t.tune_id"
@@ -659,6 +660,11 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "tune_name": row["tune_name"],
         "tune_type": row["tune_type"],
         "tunebook_count": row["tunebook_count"],
+        # The drawer shows "Last Updated" beside the tunebook-count refresh;
+        # the global detail payload has always carried this — keep in sync.
+        "tunebook_count_cached_date": row["tunebook_count_cached_date"].isoformat()
+        if row["tunebook_count_cached_date"]
+        else None,
         "thesession_url": thesession_url,
     }
 
@@ -833,13 +839,11 @@ def build_my_tunes_payload(
     }
 
 
-def load_person_tune(conn, person_tune_id: int) -> Optional[Dict[str, Any]]:
-    """Single-record loader: same mapper and enrichments as the list."""
+def _load_person_tune_where(conn, where_sql: str, params: Tuple) -> Optional[Dict[str, Any]]:
+    """Single-record core shared by the ptid- and (person, tune)-keyed loaders:
+    same mapper and enrichments as the list."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute(
-        f"SELECT {PERSON_TUNE_COLS} {PERSON_TUNE_FROM} WHERE pt.person_tune_id = %s",
-        (person_tune_id,),
-    )
+    cur.execute(f"SELECT {PERSON_TUNE_COLS} {PERSON_TUNE_FROM} WHERE {where_sql}", params)
     row = cur.fetchone()
     if not row:
         return None
@@ -847,6 +851,18 @@ def load_person_tune(conn, person_tune_id: int) -> Optional[Dict[str, Any]]:
     _attach_instrument_overrides(cur, d["person_id"], [d])
     _attach_session_play_counts(cur, d["person_id"], [d])
     return d
+
+
+def load_person_tune(conn, person_tune_id: int) -> Optional[Dict[str, Any]]:
+    """Single-record loader keyed by person_tune_id."""
+    return _load_person_tune_where(conn, "pt.person_tune_id = %s", (person_tune_id,))
+
+
+def load_person_tune_by_tune(conn, person_id: int, tune_id: int) -> Optional[Dict[str, Any]]:
+    """Single-record loader keyed by (person, tune) — the tune-detail drawer's
+    person_tune_status block uses this so it carries the SAME core shape as
+    /api/my-tunes rows (no parallel queries to drift)."""
+    return _load_person_tune_where(conn, "pt.person_id = %s AND pt.tune_id = %s", (person_id, tune_id))
 
 
 def attach_person_tune_detail(conn, d: Dict[str, Any]) -> Dict[str, Any]:
@@ -900,3 +916,276 @@ def build_person_tune_detail(conn, person_tune_id: int) -> Optional[Dict[str, An
     if d is not None:
         attach_person_tune_detail(conn, d)
     return d
+
+# ---------------------------------------------------------------------------
+# The tune-detail drawer payload (GET /api/tunes/<id>/detail — THE drawer feed)
+#
+# The drawer derives its own mode (my-tunes variant / session / instance /
+# admin / read-only) from this one superset payload instead of trusting call
+# sites to hand-assemble configs:
+#   * viewer        — logged_in / is_admin / is_session_admin, from the session
+#                     cookie server-side: the source of truth for login-gated
+#                     affordances (status seg, Add, Generate Notation).
+#   * person_tune_status — the FULL person-tune core shape (same loader as
+#                     /api/my-tunes rows) when the viewer has the tune on their
+#                     list; a minimal on_list:false block when not; None anon.
+#   * session scope — ?session=<path> (+ &instance=<date-or-id>) merges in the
+#                     session_tune block the legacy per-session endpoints
+#                     return; those endpoints now delegate here too, so the
+#                     queries live once.
+# ---------------------------------------------------------------------------
+
+
+class SessionNotFound(Exception):
+    """?session= named a session path that doesn't exist."""
+
+
+class SessionInstanceNotFound(Exception):
+    """&instance= named a date/id with no instance for the session."""
+
+
+def _find_session_instance_id(cur, session_id: int, date_or_id: str) -> Optional[int]:
+    """date_or_id is either a YYYY-MM-DD date (first instance that day) or a
+    numeric instance id (verified to belong to the session)."""
+    import re as _re
+
+    if _re.match(r"^\d+$", str(date_or_id)) and not _re.match(r"^\d{4}-\d{2}-\d{2}$", str(date_or_id)):
+        cur.execute(
+            "SELECT session_instance_id FROM session_instance WHERE session_instance_id = %s AND session_id = %s",
+            (int(date_or_id), session_id),
+        )
+    else:
+        cur.execute(
+            """SELECT session_instance_id FROM session_instance
+               WHERE session_id = %s AND date = %s
+               ORDER BY session_instance_id ASC LIMIT 1""",
+            (session_id, date_or_id),
+        )
+    row = cur.fetchone()
+    return row["session_instance_id"] if row else None
+
+
+def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optional[str]) -> Dict[str, Any]:
+    """The session (and optional instance) scope block for the drawer payload."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+    srow = cur.fetchone()
+    if not srow:
+        raise SessionNotFound(session_path)
+    session_id = srow["session_id"]
+
+    scope: Dict[str, Any] = {
+        "path": session_path,
+        "session_id": session_id,
+        "date_or_id": date_or_id,
+        "alias": None,
+        "setting_id": None,
+        "key": None,
+        "aliases": [],
+        "in_repertoire": False,
+        "name_override": None,
+        "key_override": None,
+        "setting_override": None,
+    }
+
+    cur.execute(
+        "SELECT alias, setting_id, key FROM session_tune WHERE session_id = %s AND tune_id = %s",
+        (session_id, tune_id),
+    )
+    st = cur.fetchone()
+    if st:
+        scope.update(
+            {"alias": st["alias"], "setting_id": st["setting_id"], "key": st["key"], "in_repertoire": True}
+        )
+
+    cur.execute(
+        """SELECT alias FROM session_tune_alias
+           WHERE session_id = %s AND tune_id = %s ORDER BY created_date ASC""",
+        (session_id, tune_id),
+    )
+    scope["aliases"] = [r["alias"] for r in cur.fetchall()]
+
+    cur.execute(
+        """SELECT COUNT(*) AS n
+           FROM session_instance_tune sit
+           JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+           WHERE si.session_id = %s AND sit.tune_id = %s""",
+        (session_id, tune_id),
+    )
+    scope["times_played"] = cur.fetchone()["n"]
+
+    if date_or_id is not None:
+        instance_id = _find_session_instance_id(cur, session_id, date_or_id)
+        if instance_id is None:
+            raise SessionInstanceNotFound(date_or_id)
+        scope["session_instance_id"] = instance_id
+        cur.execute(
+            """SELECT name, key_override, setting_override
+               FROM session_instance_tune
+               WHERE session_instance_id = %s AND tune_id = %s""",
+            (instance_id, tune_id),
+        )
+        it = cur.fetchone()
+        if it:
+            scope.update(
+                {
+                    "name_override": it["name"],
+                    "key_override": it["key_override"],
+                    "setting_override": it["setting_override"],
+                }
+            )
+    return scope
+
+
+def _load_setting_notation(conn, tune_id: int, setting_id: Optional[int]) -> Dict[str, Any]:
+    """Notation for a specific setting, falling back to the tune's first setting.
+    setting_id in the result is the setting actually resolved."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if setting_id:
+        cur.execute(
+            "SELECT setting_id, abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
+            (setting_id,),
+        )
+    else:
+        cur.execute(
+            """SELECT setting_id, abc, incipit_abc, image, incipit_image, key
+               FROM tune_setting WHERE tune_id = %s
+               ORDER BY setting_id ASC LIMIT 1""",
+            (tune_id,),
+        )
+    row = cur.fetchone()
+    if not row:
+        return {"setting_id": None, "abc": None, "incipit_abc": None, "image": None, "incipit_image": None, "setting_key": None}
+    return {
+        "setting_id": row["setting_id"],
+        "abc": row["abc"],
+        "incipit_abc": row["incipit_abc"],
+        "image": bytea_to_base64(row["image"]),
+        "incipit_image": bytea_to_base64(row["incipit_image"]),
+        "setting_key": row["key"],
+    }
+
+
+def build_tune_detail_payload(
+    conn,
+    tune_id: int,
+    *,
+    person_id: Optional[int] = None,
+    logged_in: bool = False,
+    is_admin: bool = False,
+    session_path: Optional[str] = None,
+    date_or_id: Optional[str] = None,
+    redirected_from: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """The complete drawer payload. Returns None when the tune doesn't exist;
+    raises SessionNotFound / SessionInstanceNotFound for a bad scope."""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(
+        """SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
+           FROM tune WHERE tune_id = %s""",
+        (tune_id,),
+    )
+    t = cur.fetchone()
+    if not t:
+        return None
+
+    scope = _load_session_scope(conn, tune_id, session_path, date_or_id) if session_path else None
+
+    # The viewer's own relationship to the tune — full core shape when on-list.
+    person_tune_status = None
+    if logged_in and person_id:
+        pt = load_person_tune_by_tune(conn, person_id, tune_id)
+        if pt:
+            person_tune_status = dict(pt)
+            person_tune_status["on_list"] = True
+            person_tune_status["instruments"] = load_person_instruments(conn, person_id)
+        else:
+            person_tune_status = {
+                "on_list": False,
+                "person_tune_id": None,
+                "learn_status": None,
+                "heard_count": None,
+                "instruments": [],
+                "instrument_status": {},
+            }
+
+    # Session-admin flag (system admins administer every session).
+    is_session_admin = bool(is_admin)
+    if scope and person_id and not is_session_admin:
+        cur.execute(
+            "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+            (scope["session_id"], person_id),
+        )
+        m = cur.fetchone()
+        is_session_admin = bool(m and m["is_admin"])
+
+    # Notation precedence mirrors what each legacy variant showed: the instance
+    # override, else the session's setting, else the viewer's saved setting,
+    # else the tune's first setting.
+    effective_setting_id = None
+    if scope:
+        effective_setting_id = scope["setting_override"] or scope["setting_id"]
+    if not effective_setting_id and person_tune_status and person_tune_status.get("setting_id"):
+        effective_setting_id = person_tune_status["setting_id"]
+    notation = _load_setting_notation(conn, tune_id, effective_setting_id)
+
+    cur.execute("SELECT COUNT(*) AS n FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
+    global_play_count = cur.fetchone()["n"]
+    cur.execute("SELECT COUNT(*) AS n FROM person_tune WHERE tune_id = %s", (tune_id,))
+    person_list_count = cur.fetchone()["n"]
+    cur.execute("SELECT COUNT(DISTINCT session_id) AS n FROM session_tune WHERE tune_id = %s", (tune_id,))
+    session_count = cur.fetchone()["n"]
+
+    session_tune: Dict[str, Any] = {
+        "tune_id": tune_id,
+        "tune_name": t["name"],
+        "tune_type": t["tune_type"],
+        # Session scope (null / absent semantics match the legacy global shape)
+        "alias": scope["alias"] if scope else None,
+        "aliases": scope["aliases"] if scope else [],
+        "key": scope["key"] if scope else None,
+        "name": scope["name_override"] if scope else None,
+        "key_override": scope["key_override"] if scope else None,
+        "setting_override": scope["setting_override"] if scope else None,
+        # setting_id keeps each legacy variant's meaning: the session's setting
+        # under a session scope, else the setting the notation was resolved from
+        # (the viewer's saved setting when on-list, else the tune's first).
+        "setting_id": scope["setting_id"] if scope else notation["setting_id"],
+        "setting_key": notation["setting_key"],
+        "abc": notation["abc"],
+        "incipit_abc": notation["incipit_abc"],
+        "image": notation["image"],
+        "incipit_image": notation["incipit_image"],
+        "tunebook_count": t["tunebook_count_cached"],
+        "tunebook_count_cached_date": (
+            t["tunebook_count_cached_date"].isoformat() if t["tunebook_count_cached_date"] else None
+        ),
+        "times_played": scope["times_played"] if scope else 0,
+        "global_play_count": global_play_count,
+        "person_list_count": person_list_count,
+        "session_count": session_count,
+        "person_tune_status": person_tune_status,
+        # Scope marker the drawer derives its session wording from.
+        "session_scope": (
+            {
+                "path": scope["path"],
+                "instance": scope.get("session_instance_id"),
+                "date_or_id": scope["date_or_id"],
+                "in_repertoire": scope["in_repertoire"],
+            }
+            if scope
+            else None
+        ),
+    }
+
+    return {
+        "success": True,
+        "redirected_from": redirected_from,
+        "viewer": {
+            "logged_in": bool(logged_in),
+            "is_admin": bool(is_admin),
+            "is_session_admin": is_session_admin,
+        },
+        "session_tune": session_tune,
+    }

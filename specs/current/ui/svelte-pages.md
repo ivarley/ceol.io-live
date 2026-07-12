@@ -36,7 +36,19 @@ Plus three non-page bundles:
   tune-detail sheet + "Find a tune" overlay, loaded on every page by
   `base.html` (`{% block tune_detail_modal %}`). Installs the legacy-compatible
   `window.TuneDetailModal` and `window.FindTuneOverlay` globals; idempotent
-  (guards against double mount).
+  (guards against double mount). The drawer **derives its own variant**: one
+  payload endpoint — `GET /api/tunes/<id>/detail` (`?session=` / `&instance=`
+  for the session/instance scope; `serializers.build_tune_detail_payload`, the
+  same builder behind the legacy per-session GETs) — carries `viewer`
+  (logged_in / is_admin / is_session_admin), the FULL `person_tune_status`
+  core shape when on-list, and the scope block; the drawer maps those facts to
+  its my-tunes / session / instance / admin / read-only variants. Call sites
+  pass identity only: `show({ tuneId, scope?, ptid?, ...callbacks })`, scope
+  defaulting from the URL (session pages imply their path, `/admin/tunes`
+  implies admin). Old-style configs (context + apiEndpoint + additionalData,
+  from the quarantined pill logger, `admin_tunes.html`, `common_tunes.html`)
+  map through `normalizeShowConfig` unchanged. Offline, the drawer synthesizes
+  the same payload from the cached bundle + op queue (`offlinePayload`).
 - **`frontend/src/` (root) → `static/live/`** — the live logger (spec 024), the
   progenitor of this pattern. Its shell (`live_logging.html`) does *not* extend
   `base.html` and embeds `window.__LIVE_CONFIG__` instead.

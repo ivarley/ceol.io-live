@@ -1,20 +1,41 @@
 <script>
-  // Svelte 5 port of the unified tune-detail modal (spec 035 Step 3).
+  // The app-wide tune-detail drawer (spec 035 Step 3, derived-mode refactor).
   //
-  // A behavior-for-behavior port of the legacy vanilla tune-detail modal behind the same
-  // window.TuneDetailModal contract (installed by main.js). The DOM contract is
-  // unchanged — #tune-detail-modal / .modal-dialog / #tune-detail-content and every
-  // legacy section class — because static/css/tune_detail_modal.css, the live
-  // shell's dark scoping (frontend/src/app.css targets #tune-detail-modal) and the
-  // e2e suite all select on it. For the same reason this component has NO <style>
-  // block: Svelte scoping would detach it from the shared stylesheet.
+  // ONE payload feeds it — GET /api/tunes/<id>/detail (optionally ?session=
+  // &instance=) — and the drawer DERIVES its own variant from that payload
+  // instead of trusting call sites to hand-assemble configs:
   //
-  // Contexts: my_tunes / session / session_instance / admin, plus the read-only
-  // global lookup view (additionalData.global).
+  //   fact                                  gates
+  //   ------------------------------------  ------------------------------------
+  //   viewer.logged_in                      status seg / Add, heard count,
+  //                                         Generate Notation (login-gated API)
+  //   person_tune_status.on_list            the full my-tunes variant (notes,
+  //                                         name-alias config, My-sessions
+  //                                         history scope, remove link)
+  //   scope.session (+ scope.instance)      session/instance wording, session
+  //                                         stats, session config fields
+  //   scope.admin && viewer.is_admin        admin variant (name editing,
+  //                                         repertoire stats)
+  //   viewer.is_session_admin               "Remove From Session"
+  //
+  // The internal `mode` string (my_tunes / session / session_instance / admin /
+  // global) is a compat detail derived from those facts — it picks field sets,
+  // save endpoints, and wording; nothing outside this file passes it in.
+  // show({ tuneId, scope?, ...callbacks }) is the new API; old-style configs
+  // (context + apiEndpoint + additionalData, from the quarantined pill logger
+  // template, admin_tunes.html and common_tunes.html) are mapped by
+  // normalizeShowConfig and keep working.
+  //
+  // The DOM contract is unchanged — #tune-detail-modal / .modal-dialog /
+  // #tune-detail-content and every legacy section class — because
+  // static/css/tune_detail_modal.css, the live shell's dark scoping and the
+  // e2e suite all select on it. For the same reason this component has NO
+  // <style> block: Svelte scoping would detach it from the shared stylesheet.
   import { Chip, Dialog, Seg, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
-    extractTuneData,
+    normalizeShowConfig,
+    detailUrl,
     getDisplayName,
     extractSettingId,
     validateSettingInput,
@@ -27,7 +48,8 @@
     setInstrumentOverrides,
     resolveInstStatus,
     rollupStatus,
-    overlayOfflineOps,
+    offlinePayload,
+    personTunePayload,
     theSessionUrl,
     abcToolsUrl,
     notationInfo,
@@ -40,8 +62,9 @@
   let showCls = $state(false)
   let phase = $state('loading') // 'loading' | 'error' | 'ready'
   let errorMsg = $state('')
-  let config = $state(null) // current show() config
-  let tune = $state(null) // currentTuneData
+  let config = $state(null) // normalized show() config {tuneId, ptid, scope, callbacks, hints}
+  let viewer = $state(null) // payload viewer block {logged_in, is_admin, is_session_admin}
+  let tune = $state(null) // payload session_tune block (mutated optimistically)
   let mergedFrom = $state(null) // healed merged-tune permalink (spec 030)
   let modalShowTime = 0 // scrim-click guard (500ms)
   let hideTimer = null
@@ -69,41 +92,45 @@
 
   // History / Played With tabs: fetched lazily on first view, cached per scope
   // for this modal open. Value: {status: 'loading'|'ready'|'error'|'none', data}
-  let historyScope = $state('all')
+  // A null scope key means "the mode's default" (mode is only known post-fetch).
+  let historyScope = $state(null)
   let historyCache = $state({})
-  let playedWithScope = $state('all')
+  let playedWithScope = $state(null)
   let playedWithCache = $state({})
 
-  // ---- derived ----------------------------------------------------------------
-  const ctx = $derived(config?.context)
-  const addl = $derived(config?.additionalData || {})
-  const isGlobal = $derived(!!addl.global)
-  const isTitleClickable = $derived(ctx !== 'admin' && !isGlobal)
+  // ---- mode derivation ----------------------------------------------------------
+  const scope = $derived(config?.scope || null)
+  const loggedIn = $derived(!!viewer?.logged_in)
+  const isAdminView = $derived(!!(scope?.admin && viewer?.is_admin))
+  const pts = $derived(tune?.person_tune_status || null)
+  const onList = $derived(!!pts?.on_list)
+  const isSessionAdmin = $derived(!!viewer?.is_session_admin)
 
-  const displayName = $derived(tune ? getDisplayName(tune, ctx) : '')
-  const headerTuneType = $derived((tune && tune.tune_type) || addl.tuneType || '')
-
-  const onList = $derived.by(() => {
-    if (!tune) return false
-    if (ctx === 'my_tunes') return true
-    return tune.person_tune_status?.on_list || false
+  // The internal variant, derived — never passed in by a call site.
+  const mode = $derived.by(() => {
+    if (isAdminView) return 'admin'
+    if (scope?.instance != null && scope?.session) return 'session_instance'
+    if (scope?.session) return 'session'
+    if (loggedIn && onList) return 'my_tunes'
+    return 'global'
   })
-  const rollup = $derived(tune ? rollupStatus(tune, ctx) : 'want to learn')
-  const instruments = $derived(tune ? getInstrumentData(tune, ctx).instruments : [])
+
+  // ---- derived view state ---------------------------------------------------------
+  const displayName = $derived(tune ? getDisplayName(tune, mode) : '')
+  const headerTuneType = $derived((tune && tune.tune_type) || config?.tuneType || '')
+  const isTitleClickable = $derived(mode !== 'admin' && mode !== 'global')
+
+  const rollup = $derived(tune ? rollupStatus(tune) : 'want to learn')
+  const instruments = $derived(tune ? getInstrumentData(tune).instruments : [])
   const multiInstrument = $derived(instruments && instruments.length >= 2)
 
   const heardVisible = $derived.by(() => {
-    if (!tune || ctx === 'admin') return false
-    const status = tune.person_tune_status?.learn_status || tune.learn_status
-    if (!status || status === 'learned') return false
-    return ctx === 'my_tunes'
-      ? !!(tune.person_tune_id || addl.personTuneId)
-      : !!tune.person_tune_status?.person_tune_id
+    if (!tune || mode === 'admin' || !loggedIn) return false
+    if (!pts || !pts.person_tune_id) return false
+    return !!pts.learn_status && pts.learn_status !== 'learned'
   })
-  const heardCountView = $derived.by(() => {
-    if (!tune) return 0
-    return ctx === 'my_tunes' ? tune.heard_count || 0 : tune.person_tune_status?.heard_count || 0
-  })
+  const heardCountView = $derived((pts && pts.heard_count) || 0)
+  const myPlayCount = $derived((pts && pts.session_play_count) || 0)
 
   const notation = $derived(tune ? notationInfo(tune) : null)
   const notationView = $derived(tune ? notationDisplay(tune, notationMode, notationSize) : null)
@@ -114,20 +141,22 @@
     !!(tune && (tune.abc || tune.incipit_abc || tune.image || tune.incipit_image))
   )
   // The settings/cache endpoint is login-required, so the Generate Notation
-  // affordance only shows for logged-in viewers (admin context implies one).
-  const canGenerateNotation = $derived(!!tune && (ctx === 'admin' || !!addl.isUserLoggedIn))
+  // affordance only shows for logged-in viewers (payload-derived, so a call
+  // site can never forget the flag again).
+  const canGenerateNotation = $derived(!!tune && loggedIn)
+
   const fetchBtnLabel = $derived.by(() => {
     if (!tune) return 'Fetch'
     const value = (fields.setting || '').trim()
     const originalSettingId =
-      (ctx === 'session_instance' ? originals.setting_override : originals.setting_id) || null
+      (mode === 'session_instance' ? originals.setting_override : originals.setting_id) || null
     const settingIdsMatch = (!value && !originalSettingId) || extractSettingId(value) === originalSettingId
     return hasCachedNotation && settingIdsMatch ? 'Refresh' : 'Fetch'
   })
 
   const isDirty = $derived.by(() => {
     if (!tune || !config) return false
-    switch (ctx) {
+    switch (mode) {
       case 'my_tunes':
         return (
           fields.name_alias !== originals.name_alias ||
@@ -158,96 +187,113 @@
   )
   const saveBtnBg = $derived(saveState === 'saved' ? '#28a745' : saveState === 'error' ? '#dc3545' : '')
 
-  const historyOptions = $derived(config ? historyScopeOptions(config) : [])
-  const playedWithOptions = $derived(config ? playedWithScopeOptions(config) : [])
-  const historyState = $derived(historyCache[historyScope] || { status: 'loading' })
-  const playedWithState = $derived(playedWithCache[playedWithScope] || { status: 'loading' })
+  const historyOptions = $derived(historyScopeOptions(mode, scope))
+  const playedWithOptions = $derived(playedWithScopeOptions(mode, scope))
+  // null = "the mode's default scope" (mode is only known once the payload lands)
+  const historyScopeKey = $derived(historyScope ?? historyOptions[0].key)
+  const playedWithScopeKey = $derived(playedWithScope ?? playedWithOptions[0].key)
+  const historyState = $derived(historyCache[historyScopeKey] || { status: 'loading' })
+  const playedWithState = $derived(playedWithCache[playedWithScopeKey] || { status: 'loading' })
 
-  const hasAdditionalLinks = $derived(
-    ctx === 'my_tunes' || (ctx !== 'admin' && !isGlobal) || (ctx === 'session' && !!addl.isSessionAdmin)
-  )
+  const hasAdditionalLinks = $derived(mode === 'my_tunes' || mode === 'session' || mode === 'session_instance')
 
-  // ---- data application --------------------------------------------------------
+  // ---- fields / originals per mode ---------------------------------------------
 
-  function buildOriginals(tuneData, cfg) {
-    const o = { context: cfg.context }
-    switch (cfg.context) {
+  function buildOriginals() {
+    const o = { learn_status: (pts && pts.learn_status) || '' }
+    switch (mode) {
       case 'my_tunes':
-        o.name_alias = tuneData.name_alias || ''
-        o.setting_id = tuneData.setting_id || ''
-        o.notes = tuneData.notes || ''
-        o.learn_status = tuneData.learn_status || 'want to learn'
+        o.name_alias = (pts && pts.name_alias) || ''
+        o.setting_id = (pts && pts.setting_id) || ''
+        o.notes = (pts && pts.notes) || ''
         break
       case 'session':
-        o.alias = tuneData.alias || ''
-        o.setting_id = tuneData.setting_id || ''
-        o.key = tuneData.key || ''
-        o.learn_status = tuneData.person_tune_status?.learn_status || ''
+        o.alias = tune.alias || ''
+        o.setting_id = tune.setting_id || ''
+        o.key = tune.key || ''
         break
       case 'session_instance':
-        o.name = tuneData.name || ''
-        o.setting_override = tuneData.setting_override || ''
-        o.key_override = tuneData.key_override || ''
-        o.learn_status = tuneData.person_tune_status?.learn_status || ''
+        o.name = tune.name || ''
+        o.setting_override = tune.setting_override || ''
+        o.key_override = tune.key_override || ''
         break
       case 'admin':
-        o.name = tuneData.name || ''
+        o.name = tune.tune_name || ''
         break
     }
     return o
   }
 
-  function initFields(tuneData, cfg) {
-    switch (cfg.context) {
+  function initFields() {
+    switch (mode) {
       case 'my_tunes':
         return {
-          name_alias: tuneData.name_alias || '',
-          setting: String(tuneData.setting_id || ''),
-          notes: tuneData.notes || '',
+          name_alias: (pts && pts.name_alias) || '',
+          setting: String((pts && pts.setting_id) || ''),
+          notes: (pts && pts.notes) || '',
         }
       case 'session':
         return {
-          alias: tuneData.alias || '',
-          setting: String(tuneData.setting_id || ''),
-          key: tuneData.key || '',
+          alias: tune.alias || '',
+          setting: String(tune.setting_id || ''),
+          key: tune.key || '',
         }
       case 'session_instance':
         return {
-          alias: tuneData.name || '',
-          setting: String(tuneData.setting_override || ''),
-          key: tuneData.key_override || '',
+          alias: tune.name || '',
+          setting: String(tune.setting_override || ''),
+          key: tune.key_override || '',
         }
       case 'admin':
-        return { name: tuneData.name || '' }
+        return { name: tune.tune_name || '' }
       default:
         return {}
     }
   }
 
-  // Equivalent of the legacy renderModalContent: (re)apply tune data and reset
-  // all per-render section state (tabs back to Stats, notation back to initial,
-  // configure collapsed except admin, fields re-seeded).
-  function applyTuneData(data) {
-    tune = data
+  // ---- payload application --------------------------------------------------------
+
+  // (Re)apply a full payload and reset the per-render section state (tabs back
+  // to Stats unless asked to keep one, notation back to initial, configure
+  // collapsed except admin, fields re-seeded).
+  function applyPayload(data, opts = {}) {
+    viewer = data.viewer || viewer || { logged_in: false, is_admin: false, is_session_admin: false }
+    tune = data.session_tune
     mergedFrom = null
-    originals = buildOriginals(data, config)
-    fields = initFields(data, config)
+    originals = buildOriginals()
+    fields = initFields()
     settingError = ''
     saveState = 'idle'
     fetchBtnState = 'idle'
     refreshState = 'idle'
     statusSaving = false
-    isConfigVisible = config.context === 'admin'
-    // Tabs reset to Stats — except a show() that asked to keep a tab (the
-    // in-place add -> my_tunes variant upgrade preserves the user's tab).
-    activeTab = config.initialTab || 'stats'
+    isConfigVisible = mode === 'admin'
+    // Tabs reset to Stats — except a show()/re-apply that asked to keep a tab
+    // (the in-place add -> my_tunes upgrade preserves the user's tab).
+    activeTab = opts.keepTab || config.initialTab || 'stats'
     if (activeTab === 'history') loadHistory()
     else if (activeTab === 'played-with') loadPlayedWith()
-    const info = notationInfo(data)
+    // An explicit history/played-with scope choice survives a re-apply only if
+    // the (possibly changed) mode still offers it.
+    if (historyScope != null && !historyScopeOptions(mode, scope).some((o) => o.key === historyScope)) historyScope = null
+    if (playedWithScope != null && !playedWithScopeOptions(mode, scope).some((o) => o.key === playedWithScope))
+      playedWithScope = null
+    const info = notationInfo(data.session_tune)
     notationMode = info.initialMode
     notationSize = 'incipit'
     activeSess = window.activeSession || null
     phase = 'ready'
+    syncPtidUrl()
+  }
+
+  // On the my-tunes page the URL contract is ?ptid=<person_tune_id>. A drawer
+  // that arrived at the my-tunes variant without one (chaining, add-upgrade)
+  // learns it from the payload and fixes the URL.
+  function syncPtidUrl() {
+    if (mode !== 'my_tunes' || config.ptid || !pts?.person_tune_id) return
+    if (!window.location.pathname.includes('/my-tunes')) return
+    config.ptid = pts.person_tune_id
+    updateUrlWithTune(config.ptid, 'my_tunes')
   }
 
   function showErr(message) {
@@ -255,8 +301,9 @@
     phase = 'error'
   }
 
-  // Offline fallback: render the tune from the locally-cached bundle (incipit
-  // notation) + not-yet-synced ops so the drawer works without a connection.
+  // Offline fallback: derive the payload from the locally-cached bundle +
+  // not-yet-synced ops (offlinePayload synthesizes the viewer/on-list facts) so
+  // the drawer works without a connection.
   function renderTuneFromOffline(cfg, errMsg) {
     if (!window.CeolOffline || !cfg.tuneId) {
       showErr(errMsg || 'Failed to load tune details')
@@ -272,31 +319,31 @@
           showErr(errMsg || 'Failed to load tune details')
           return
         }
-        const t = overlayOfflineOps(cached, ops, cfg.tuneId)
-        // extractTuneData just picks a sub-key, so provide the tune under each.
-        applyTuneData(extractTuneData({ success: true, person_tune: t, session_tune: t, tune: t }, cfg.context))
+        applyPayload(offlinePayload(cached, ops, cfg.tuneId))
       })
       .catch(() => showErr(errMsg || 'Failed to load tune details'))
   }
 
   // ---- public API (wired to window.TuneDetailModal by main.js) ------------------
 
-  export function show(cfg) {
+  export function show(rawCfg) {
+    const cfg = normalizeShowConfig(rawCfg)
     config = cfg
     historyCache = {}
     playedWithCache = {}
-    historyScope = historyScopeOptions(cfg)[0].key
-    playedWithScope = playedWithScopeOptions(cfg)[0].key
+    historyScope = null
+    playedWithScope = null
     piExpanded = !!cfg.expandInstrumentStatus
     pendingHeard = 0
     mergedFrom = null
 
-    // For my_tunes, the URL param is the person_tune_id; otherwise the tune_id.
-    const urlParam =
-      cfg.context === 'my_tunes' && cfg.additionalData?.personTuneId
-        ? cfg.additionalData.personTuneId
-        : cfg.tuneId
-    updateUrlWithTune(urlParam, cfg.context)
+    // URL param: the my-tunes page deep-links by ptid; everything else by tune id
+    // (session/admin pages get path-based URLs inside updateUrlWithTune).
+    if (cfg.ptid && window.location.pathname.includes('/my-tunes')) {
+      updateUrlWithTune(cfg.ptid, 'my_tunes')
+    } else if (cfg.tuneId != null) {
+      updateUrlWithTune(cfg.tuneId, 'global')
+    }
 
     phase = 'loading'
     clearTimeout(hideTimer)
@@ -306,7 +353,15 @@
     }, 10)
     modalShowTime = Date.now()
 
-    fetch(cfg.apiEndpoint)
+    // ptid-only deep link (?ptid whose tune the host couldn't resolve): the
+    // my-tunes endpoint is the only ptid-keyed lookup — its 404 is the
+    // merged-away signal. The normal render path never calls it.
+    if (cfg.tuneId == null && cfg.ptid != null) {
+      resolveByPtid(cfg)
+      return
+    }
+
+    fetch(detailUrl(cfg.tuneId, cfg.scope))
       .then((response) => {
         if (!response.ok) {
           const err = new Error(`HTTP error! status: ${response.status}`)
@@ -317,31 +372,52 @@
       })
       .then((data) => {
         if (data.success) {
-          const td = extractTuneData(data, cfg.context)
-          if (data.redirected_from && td.tune_id) {
+          const td = data.session_tune
+          if (data.redirected_from && td && td.tune_id) {
             // The tune was merged away (spec 030): the server followed the redirect
             // and returned the canonical tune. Heal the stale id in our config +
             // the URL bar, and tell the user what happened.
             const oldId = data.redirected_from
-            const newId = td.tune_id
-            config.tuneId = newId
-            config.apiEndpoint = config.apiEndpoint.replace(`/tunes/${oldId}`, `/tunes/${newId}`)
-            if (cfg.context !== 'my_tunes') updateUrlWithTune(newId, cfg.context)
-            applyTuneData(td)
+            config.tuneId = td.tune_id
+            if (!window.location.pathname.includes('/my-tunes')) updateUrlWithTune(td.tune_id, 'global')
+            applyPayload(data)
             mergedFrom = oldId
           } else {
-            applyTuneData(td)
+            applyPayload(data)
           }
         } else {
-          renderTuneFromOffline(cfg, data.error)
+          renderTuneFromOffline(cfg, data.error || data.message)
         }
       })
       .catch((error) => {
         console.error('Error loading tune details:', error)
+        renderTuneFromOffline(cfg, 'Failed to load tune details')
+      })
+  }
+
+  function resolveByPtid(cfg) {
+    fetch(`/api/my-tunes/${cfg.ptid}`)
+      .then((response) => {
+        if (!response.ok) {
+          const err = new Error(`HTTP error! status: ${response.status}`)
+          err.status = response.status
+          throw err
+        }
+        return response.json()
+      })
+      .then((d) => {
+        if (d.success && d.person_tune) {
+          config.tuneId = d.person_tune.tune_id
+          applyPayload(personTunePayload(d.person_tune))
+        } else {
+          showErr('Failed to load tune details')
+        }
+      })
+      .catch((error) => {
         // A dead ptid deep-link (the row was conflict-deleted by a tune merge,
         // spec 030) degrades to a notice + a clean URL rather than a raw error.
-        if (error.status === 404 && cfg.context === 'my_tunes') {
-          removeUrlTuneParam(cfg.context)
+        if (error.status === 404) {
+          removeUrlTuneParam('my_tunes')
           showErr(
             'This tunebook entry no longer exists — it may have been merged into another tune. Check your tunebook list for the merged tune.'
           )
@@ -354,7 +430,7 @@
   export function close() {
     showCls = false
     pendingHeard = 0
-    removeUrlTuneParam(ctx)
+    removeUrlTuneParam(mode)
     clearTimeout(hideTimer)
     hideTimer = setTimeout(() => {
       visible = false
@@ -362,7 +438,7 @@
   }
 
   export function toggleConfigSection() {
-    if (ctx === 'admin') return // always visible on admin
+    if (mode === 'admin') return // always visible on admin
     isConfigVisible = !isConfigVisible
   }
 
@@ -372,7 +448,7 @@
     const tuneId = (config && config.tuneId) || (tune && tune.tune_id)
     if (!tuneId) return
     // Clean the modal's tune param off the URL so the back button is sane.
-    removeUrlTuneParam(ctx)
+    removeUrlTuneParam(mode)
     window.location.href = `/live/instances/${active.session_instance_id}?tune=${tuneId}`
   }
 
@@ -397,16 +473,13 @@
   // With navigation) enough identity to fetch the row and add one.
   function notifyStatusChange() {
     if (!config || typeof config.onStatusChange !== 'function' || !tune) return
-    const data = getInstrumentData(tune, ctx)
+    const data = getInstrumentData(tune)
     config.onStatusChange({
       tune_id: tune.tune_id,
-      learn_status: getModalLearnStatus(tune, ctx),
+      learn_status: getModalLearnStatus(tune),
       instrument_status: { ...data.overrides },
       on_list: onList,
-      person_tune_id:
-        (ctx === 'my_tunes'
-          ? tune.person_tune_id || addl.personTuneId
-          : tune.person_tune_status && tune.person_tune_status.person_tune_id) || null,
+      person_tune_id: (pts && pts.person_tune_id) || null,
     })
   }
 
@@ -420,8 +493,8 @@
   // overrides — snap-back); manual instruments are curated and left alone.
   export function setTunebookStatus(newStatus) {
     const tuneId = tune && tune.tune_id
-    if (!tuneId) return
-    const data = getInstrumentData(tune, ctx)
+    if (!tuneId || !pts) return
+    const data = getInstrumentData(tune)
     const autoOverridden = (data.instruments || []).filter(
       (i) => i.is_auto && Object.prototype.hasOwnProperty.call(data.overrides, i.instrument)
     )
@@ -434,9 +507,8 @@
 
     const applyUi = (status, overrides) => {
       originals.learn_status = status
-      tune.learn_status = status
       if (tune.person_tune_status) tune.person_tune_status.learn_status = status
-      setInstrumentOverrides(tune, ctx, overrides)
+      setInstrumentOverrides(tune, overrides)
       notifyStatusChange()
     }
 
@@ -464,11 +536,11 @@
   export function setInstrumentStatus(index, status) {
     const tuneId = tune && tune.tune_id
     if (!tuneId) return
-    const data = getInstrumentData(tune, ctx)
+    const data = getInstrumentData(tune)
     const inst = data.instruments[index]
     if (!inst) return
-    const learnStatus = getModalLearnStatus(tune, ctx)
-    const current = resolveInstStatus(tune, ctx, inst)
+    const learnStatus = getModalLearnStatus(tune)
+    const current = resolveInstStatus(tune, inst)
     let target = status
     if (status === current) {
       if (inst.is_auto) return // an auto instrument always has a status
@@ -479,11 +551,11 @@
     const updated = { ...data.overrides }
     if (shouldStore) updated[inst.instrument] = target
     else delete updated[inst.instrument]
-    setInstrumentOverrides(tune, ctx, updated)
+    setInstrumentOverrides(tune, updated)
     notifyStatusChange()
     submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: target }).catch(
       () => {
-        setInstrumentOverrides(tune, ctx, prev)
+        setInstrumentOverrides(tune, prev)
         notifyStatusChange()
       }
     )
@@ -493,23 +565,25 @@
   export function removeInstrumentTune(index) {
     const tuneId = tune && tune.tune_id
     if (!tuneId) return
-    const data = getInstrumentData(tune, ctx)
+    const data = getInstrumentData(tune)
     const inst = data.instruments[index]
     if (!inst || inst.is_auto) return
     const prev = { ...data.overrides }
     const updated = { ...data.overrides }
     delete updated[inst.instrument]
-    setInstrumentOverrides(tune, ctx, updated)
+    setInstrumentOverrides(tune, updated)
     notifyStatusChange()
     submitMyTunesOp({ type: 'set_instrument_status', tune_id: tuneId, instrument: inst.instrument, status: null }).catch(
       () => {
-        setInstrumentOverrides(tune, ctx, prev)
+        setInstrumentOverrides(tune, prev)
         notifyStatusChange()
       }
     )
   }
 
-  // Add the tune to the user's list as 'want to learn'.
+  // Add the tune to the user's list as 'want to learn'. Online, the refetched
+  // payload's on_list flips the derived mode, so a my-tunes-origin drawer
+  // upgrades to the full variant naturally — no special re-show plumbing.
   export function addToTunebook() {
     const tuneId = tune.tune_id
     const keepTab = activeTab // survives the refetch's per-render tab reset
@@ -518,35 +592,31 @@
       type: 'add',
       tune_id: tuneId,
       learn_status: 'want to learn',
-      name: tune.name || tune.tune_name,
+      name: tune.tune_name || tune.name,
       tune_type: tune.tune_type,
     })
       .then((res) => {
         if (res && res.queued) {
-          // Offline: send the user to their list (where the queued add shows as
-          // pending) and acknowledge with a toast there — not a blocking alert.
+          // Offline: no person_tune row exists yet to derive the full variant
+          // from — send the user to their list (where the queued add shows as
+          // pending) and acknowledge with a toast there, exactly as before.
           try {
             sessionStorage.setItem('myTunesToast', 'Added to your tunes. It will sync when you are back online.')
           } catch (e) {}
           window.location.href = '/my-tunes'
           return
         }
-        // Online: reload the modal to show the updated (in-collection) state.
-        if (config && config.apiEndpoint) {
-          fetch(config.apiEndpoint)
-            .then((response) => response.json())
-            .then((data) => {
-              if (data.success) {
-                applyTuneData(extractTuneData(data, ctx))
-                // The refetched payload carries the new person_tune identity, so
-                // the host can add a card for a tune it has none for (chained adds
-                // must live-update the underlying My Tunes list). Fires exactly
-                // once — the variant upgrade below never re-notifies.
-                notifyStatusChange()
-                maybeUpgradeToMyTunesVariant(keepTab)
-              }
-            })
-        }
+        // Online: reload the payload; the new person_tune identity notifies the
+        // host (chained adds live-update the underlying list) exactly once —
+        // the derived-mode upgrade is just this re-apply, it never re-notifies.
+        fetch(detailUrl(tuneId, scope))
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              applyPayload(data, { keepTab })
+              notifyStatusChange()
+            }
+          })
       })
       .catch((error) => {
         console.error('Error adding to tunebook:', error)
@@ -557,14 +627,13 @@
   // ---- heard count -------------------------------------------------------------------
 
   function bumpHeard(delta) {
-    if (ctx === 'admin') return
+    if (mode === 'admin' || !pts) return
     const currentCount = heardCountView
     if (delta < 0 && currentCount === 0) return
     const newCount = Math.max(0, currentCount + delta)
 
     const setLocal = (n) => {
-      if (ctx === 'my_tunes') tune.heard_count = n
-      else if (tune.person_tune_status) tune.person_tune_status.heard_count = n
+      if (tune.person_tune_status) tune.person_tune_status.heard_count = n
     }
     setLocal(newCount) // optimistic
 
@@ -572,8 +641,7 @@
     // replayed offline op can never double-count. Requires the tune to be in the
     // user's collection (a person_tune row must exist for the set to land).
     const tuneId = tune.tune_id
-    const inCollection = ctx === 'my_tunes' || !!tune.person_tune_status
-    if (!tuneId || !inCollection) {
+    if (!tuneId || !onList) {
       console.error('Cannot set heard count: tune is not in your collection')
       setLocal(currentCount)
       return
@@ -617,19 +685,44 @@
     }
   }
 
+  // The PUT target for the current variant's editable fields ('' = read-only).
+  function saveEndpointFor() {
+    switch (mode) {
+      case 'my_tunes':
+        return pts && pts.person_tune_id ? `/api/my-tunes/${pts.person_tune_id}` : ''
+      case 'session':
+        return `/api/sessions/${scope.session}/tunes/${tune.tune_id}`
+      case 'session_instance':
+        return `/api/sessions/${scope.session}/${scope.instance}/tunes/${tune.tune_id}`
+      case 'admin':
+        return `/api/admin/tunes/${tune.tune_id}`
+      default:
+        return ''
+    }
+  }
+
+  // Mirror a successful save's updates onto the local payload so originals
+  // rebuild from the truth we just wrote.
+  function applySavedUpdates(updates) {
+    if (mode === 'my_tunes' && tune.person_tune_status) {
+      Object.assign(tune.person_tune_status, updates)
+    } else if (mode === 'admin') {
+      if (updates.name !== undefined) tune.tune_name = updates.name
+    } else {
+      Object.assign(tune, updates)
+    }
+  }
+
   export function save() {
     if (!tune || !config || saveDisabled) return
 
     const updates = {}
-    let apiEndpoint = ''
-
-    switch (ctx) {
+    switch (mode) {
       case 'my_tunes': {
         if (fields.name_alias !== originals.name_alias) updates.name_alias = fields.name_alias.trim() || null
         const newSettingId = extractSettingId(fields.setting)
         if (newSettingId !== (originals.setting_id || null)) updates.setting_id = newSettingId
         if (fields.notes !== originals.notes) updates.notes = fields.notes.trim() || null
-        apiEndpoint = `/api/my-tunes/${config.additionalData.personTuneId}`
         break
       }
       case 'session': {
@@ -637,7 +730,6 @@
         const newSettingId = extractSettingId(fields.setting)
         if (newSettingId !== (originals.setting_id || null)) updates.setting_id = newSettingId
         if (fields.key !== originals.key) updates.key = fields.key || null
-        apiEndpoint = `/api/sessions/${config.additionalData.sessionPath}/tunes/${tune.tune_id}`
         break
       }
       case 'session_instance': {
@@ -645,7 +737,6 @@
         const newSettingId = extractSettingId(fields.setting)
         if (newSettingId !== (originals.setting_override || null)) updates.setting_override = newSettingId
         if (fields.key !== originals.key_override) updates.key_override = fields.key || null
-        apiEndpoint = `/api/sessions/${config.additionalData.sessionPath}/${config.additionalData.dateOrId}/tunes/${tune.tune_id}`
         break
       }
       case 'admin': {
@@ -654,10 +745,13 @@
           toast('Tune name cannot be empty', 'error')
           return
         }
-        apiEndpoint = `/api/admin/tunes/${tune.tune_id}`
         break
       }
+      default:
+        return
     }
+    const apiEndpoint = saveEndpointFor()
+    if (!apiEndpoint) return
 
     saveState = 'saving'
     const hasMainUpdates = Object.keys(updates).length > 0
@@ -674,9 +768,10 @@
         if (data.success) {
           saveState = 'saved'
           // Update original values to reflect saved state
-          originals = buildOriginals({ ...tune, ...updates }, config)
+          applySavedUpdates(updates)
+          originals = buildOriginals()
           // Remove tune parameter from URL first (before onSave which might reload)
-          removeUrlTuneParam(ctx)
+          removeUrlTuneParam(mode)
           if (config.onSave && typeof config.onSave === 'function') config.onSave()
           setTimeout(() => close(), 1000)
         } else {
@@ -696,9 +791,9 @@
       })
   }
 
-  // Fetch and cache setting from TheSession.org, save the setting id per context,
+  // Fetch and cache setting from TheSession.org, save the setting id per mode,
   // then re-render with the fetched notation. Resolves true when notation was
-  // fetched (even if the per-context setting-id save then warned), so callers
+  // fetched (even if the per-mode setting-id save then warned), so callers
   // like generateNotation can surface failures their own way.
   export function fetchSetting() {
     if (!tune || fetchBtnState === 'loading') return Promise.resolve(false)
@@ -720,6 +815,9 @@
       apiUrl += `?setting_id=${settingId}`
     }
 
+    // Re-render with the freshly cached notation, keeping the current tab.
+    const reapply = () => applyPayload({ viewer, session_tune: tune }, { keepTab: activeTab })
+
     return fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
       .then((response) => response.json())
       .then((data) => {
@@ -734,19 +832,10 @@
         tune.image = data.setting.image
         tune.incipit_image = data.setting.incipit_image
 
-        // Save the setting id to the database based on context (none on admin/global)
-        let saveEndpoint = ''
-        let savePayload = {}
-        if (ctx === 'my_tunes') {
-          saveEndpoint = `/api/my-tunes/${config.additionalData.personTuneId}`
-          savePayload = { setting_id: fetchedSettingId }
-        } else if (ctx === 'session') {
-          saveEndpoint = `/api/sessions/${config.additionalData.sessionPath}/tunes/${tune.tune_id}`
-          savePayload = { setting_id: fetchedSettingId }
-        } else if (ctx === 'session_instance') {
-          saveEndpoint = `/api/sessions/${config.additionalData.sessionPath}/${config.additionalData.dateOrId}/tunes/${tune.tune_id}`
-          savePayload = { setting_override: fetchedSettingId }
-        }
+        // Save the setting id per the current variant (none in the global view)
+        const saveEndpoint = mode === 'admin' ? '' : saveEndpointFor()
+        const savePayload =
+          mode === 'session_instance' ? { setting_override: fetchedSettingId } : { setting_id: fetchedSettingId }
 
         if (saveEndpoint) {
           return fetch(saveEndpoint, {
@@ -757,24 +846,24 @@
             .then((response) => response.json())
             .then((saveData) => {
               if (saveData.success) {
-                if (ctx === 'session_instance') tune.setting_override = fetchedSettingId
-                else tune.setting_id = fetchedSettingId
-                applyTuneData(tune) // legacy re-renders the modal here
+                applySavedUpdates(savePayload)
+                if (mode === 'my_tunes') tune.setting_id = fetchedSettingId
+                reapply() // legacy re-renders the modal here
                 feedback('ok')
               } else {
                 console.error('Error saving setting_id:', saveData.error)
-                applyTuneData(tune) // still re-render with the fetched data
+                reapply() // still re-render with the fetched data
                 feedback('warn')
               }
               return true
             })
             .catch((error) => {
               console.error('Error saving setting_id:', error)
-              applyTuneData(tune) // still re-render with the fetched data
+              reapply() // still re-render with the fetched data
               return true
             })
         }
-        applyTuneData(tune)
+        reapply()
         feedback('ok')
         return true
       })
@@ -790,13 +879,7 @@
   // surfaces through the drawer's toast pattern.
   export function generateNotation() {
     fetchSetting().then((ok) => {
-      if (!ok) {
-        toast('Could not fetch notation for this tune', 'error')
-        return
-      }
-      // If the fetch produced a rendered image, show the dots the user asked
-      // for instead of leaving them on the abc text view.
-      if (tune?.incipit_image || tune?.image) notationMode = 'dots'
+      if (!ok) toast('Could not fetch notation for this tune', 'error')
     })
   }
 
@@ -812,7 +895,7 @@
   }
 
   function doRemoveFromMyTunes() {
-    const personTuneId = config.additionalData?.personTuneId
+    const personTuneId = (pts && pts.person_tune_id) || config?.ptid
     if (!personTuneId) {
       toast('Unable to remove tune', 'error')
       return
@@ -821,7 +904,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          removeUrlTuneParam(ctx)
+          removeUrlTuneParam(mode)
           if (config.onSave && typeof config.onSave === 'function') config.onSave()
           close()
         } else {
@@ -840,7 +923,7 @@
   }
 
   function doRemoveFromSession() {
-    const sessionPath = config.additionalData?.sessionPath
+    const sessionPath = scope?.session
     const tuneId = tune?.tune_id
     if (!sessionPath || !tuneId) {
       toast('Unable to remove tune from session', 'error')
@@ -850,7 +933,7 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          removeUrlTuneParam(ctx)
+          removeUrlTuneParam(mode)
           if (config.onSave && typeof config.onSave === 'function') config.onSave()
           close()
         } else {
@@ -870,15 +953,12 @@
     if (!tune || refreshState !== 'idle') return
     const tuneId = tune.tune_id
     refreshState = 'loading'
-    let apiEndpoint
-    if (ctx === 'admin') {
-      apiEndpoint = `/api/admin/tunes/${tuneId}/refresh_tunebook_count`
-    } else if (ctx === 'session' || ctx === 'session_instance') {
-      apiEndpoint = `/api/sessions/${config.additionalData.sessionPath}/tunes/${tuneId}/refresh_tunebook_count`
-    } else {
-      // my_tunes uses the admin endpoint (same as the legacy modal)
-      apiEndpoint = `/api/admin/tunes/${tuneId}/refresh_tunebook_count`
-    }
+    // Session variants refresh through their session; everything else uses the
+    // admin-path endpoint (as the my-tunes variant always has).
+    const apiEndpoint =
+      mode === 'session' || mode === 'session_instance'
+        ? `/api/sessions/${scope.session}/tunes/${tuneId}/refresh_tunebook_count`
+        : `/api/admin/tunes/${tuneId}/refresh_tunebook_count`
     fetch(apiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
       .then((response) => response.json())
       .then((data) => {
@@ -910,198 +990,89 @@
     if (tabName === 'played-with') loadPlayedWith()
   }
 
-  export function setHistoryScope(scope) {
-    historyScope = scope
+  export function setHistoryScope(scopeKey) {
+    historyScope = scopeKey
     loadHistory()
   }
 
-  export function setPlayedWithScope(scope) {
-    playedWithScope = scope
+  export function setPlayedWithScope(scopeKey) {
+    playedWithScope = scopeKey
     loadPlayedWith()
   }
 
   function loadHistory() {
     if (!config) return
-    const scope = historyScope
+    const scopeKey = historyScopeKey
     const tuneId = config.tuneId || (tune && tune.tune_id)
     if (!tuneId) {
-      historyCache[scope] = { status: 'none' }
+      historyCache[scopeKey] = { status: 'none' }
       return
     }
-    if (historyCache[scope]?.status === 'ready') return
-    historyCache[scope] = { status: 'loading' }
+    if (historyCache[scopeKey]?.status === 'ready') return
+    historyCache[scopeKey] = { status: 'loading' }
     let url = `/api/tunes/${tuneId}/history`
-    if (scope === 'session') {
-      url += `?session_path=${encodeURIComponent(config.additionalData.sessionPath)}`
-    } else if (scope === 'mine') {
+    if (scopeKey === 'session') {
+      url += `?session_path=${encodeURIComponent(scope.session)}`
+    } else if (scopeKey === 'mine') {
       url += '?person=me'
     }
     fetch(url)
       .then((r) => r.json())
       .then((data) => {
-        if (scope !== historyScope) return // user toggled scope while loading
+        if (scopeKey !== historyScopeKey) return // user toggled scope while loading
         if (!data.success) {
-          historyCache[scope] = { status: 'error' }
+          historyCache[scopeKey] = { status: 'error' }
           return
         }
-        historyCache[scope] = { status: 'ready', data }
+        historyCache[scopeKey] = { status: 'ready', data }
       })
       .catch(() => {
-        if (scope === historyScope) historyCache[scope] = { status: 'error' }
+        if (scopeKey === historyScopeKey) historyCache[scopeKey] = { status: 'error' }
       })
   }
 
   function loadPlayedWith() {
     if (!config) return
-    const scope = playedWithScope
+    const scopeKey = playedWithScopeKey
     const tuneId = config.tuneId || (tune && tune.tune_id)
     if (!tuneId) {
-      playedWithCache[scope] = { status: 'none' }
+      playedWithCache[scopeKey] = { status: 'none' }
       return
     }
-    if (playedWithCache[scope]?.status === 'ready') return
-    playedWithCache[scope] = { status: 'loading' }
+    if (playedWithCache[scopeKey]?.status === 'ready') return
+    playedWithCache[scopeKey] = { status: 'loading' }
     let url = `/api/tunes/${tuneId}/played-with`
-    if (scope === 'session') {
-      url += `?session_path=${encodeURIComponent(config.additionalData.sessionPath)}`
+    if (scopeKey === 'session') {
+      url += `?session_path=${encodeURIComponent(scope.session)}`
     }
     fetch(url)
       .then((r) => r.json())
       .then((data) => {
-        if (scope !== playedWithScope) return
+        if (scopeKey !== playedWithScopeKey) return
         if (!data.success) {
-          playedWithCache[scope] = { status: 'error' }
+          playedWithCache[scopeKey] = { status: 'error' }
           return
         }
-        playedWithCache[scope] = { status: 'ready', data }
+        playedWithCache[scopeKey] = { status: 'ready', data }
       })
       .catch(() => {
-        if (scope === playedWithScope) playedWithCache[scope] = { status: 'error' }
+        if (scopeKey === playedWithScopeKey) playedWithCache[scopeKey] = { status: 'error' }
       })
   }
 
-  // Open a companion tune's detail modal in place of the current one, KEEPING
-  // the drawer's current "version": in-drawer navigation inherits the context
-  // (and the host callbacks — onSave/onStatusChange) so the user stays in the
-  // same variant however deep they chain.
-  //  * session-scoped drawers carry the session along (as a 'session' view —
-  //    the tune may not be in this particular instance's log) so the At This
-  //    Session / Globally toggles stay available.
-  //  * my_tunes drawers resolve the companion's person_tune row first: on-list
-  //    tunes reopen as the full my_tunes variant (notes/config/My-Sessions
-  //    history); not-on-list tunes degrade to the logged-in global view (with
-  //    the Add control), remembering the my_tunes chain (chainCtx) so a later
-  //    hop still resolves against the my_tunes variant.
-  //  * admin drawers chain as admin; the global lookup stays global.
-  function openPlayedWithTune(tuneId) {
-    if (!tuneId) return
-    const prev = config?.additionalData || {}
-    const loggedIn = prev.isUserLoggedIn ?? (ctx === 'my_tunes' || !!tune?.person_tune_status)
-    const inherited = { onSave: config?.onSave, onStatusChange: config?.onStatusChange }
-    const baseCtx = prev.chainCtx || ctx
-    const sessionPath = !prev.global && (ctx === 'session' || ctx === 'session_instance') ? prev.sessionPath : null
-    if (sessionPath) {
-      show({
-        context: 'session',
-        tuneId: tuneId,
-        apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tuneId}`,
-        ...inherited,
-        additionalData: {
-          sessionPath: sessionPath,
-          isUserLoggedIn: loggedIn,
-          isSessionAdmin: !!prev.isSessionAdmin,
-        },
-      })
-    } else if (baseCtx === 'my_tunes' && loggedIn) {
-      openMyTunesChained(tuneId, inherited)
-    } else if (baseCtx === 'admin') {
-      show({
-        context: 'admin',
-        tuneId: tuneId,
-        apiEndpoint: `/api/admin/tunes/${tuneId}`,
-        ...inherited,
-        additionalData: { isUserLoggedIn: loggedIn },
-      })
-    } else {
-      show({
-        context: 'session_instance',
-        tuneId: tuneId,
-        apiEndpoint: `/api/tunes/${tuneId}/detail`,
-        ...inherited,
-        additionalData: { isUserLoggedIn: loggedIn, global: true },
-      })
-    }
-  }
-
-  // my_tunes chaining: the global detail payload carries person_tune_status
-  // (incl. person_tune_id), which tells us whether the companion tune can open
-  // as the full my_tunes variant or must fall back to the global view.
-  function openMyTunesChained(tuneId, inherited) {
-    phase = 'loading'
-    const fallback = (st) =>
-      show({
-        context: 'session_instance',
-        tuneId: tuneId,
-        apiEndpoint: `/api/tunes/${tuneId}/detail`,
-        ...inherited,
-        additionalData: {
-          isUserLoggedIn: true,
-          global: true,
-          chainCtx: 'my_tunes',
-          tuneName: st && st.tune_name,
-          tuneType: st && st.tune_type,
-        },
-      })
-    fetch(`/api/tunes/${tuneId}/detail`)
-      .then((r) => r.json())
-      .then((data) => {
-        const st = (data && data.session_tune) || null
-        const ptid = st && st.person_tune_status && st.person_tune_status.person_tune_id
-        if (data && data.success && ptid) {
-          show({
-            context: 'my_tunes',
-            tuneId: st.tune_id || tuneId,
-            apiEndpoint: `/api/my-tunes/${ptid}`,
-            ...inherited,
-            additionalData: {
-              personTuneId: ptid,
-              tuneName: st.tune_name,
-              tuneType: st.tune_type,
-              isUserLoggedIn: true,
-            },
-          })
-        } else {
-          fallback(st)
-        }
-      })
-      .catch(() => fallback(null))
-  }
-
-  // A tune just added from an Add view whose ORIGIN is the my_tunes variant
-  // (Played With chaining carries chainCtx; the "Find a tune" global view opened
-  // on the /my-tunes page itself shares this path) upgrades the drawer IN PLACE
-  // to the full my_tunes variant it would have opened as had the tune already
-  // been on the list — keeping the tab the user was on. Called after the add's
-  // refetch + host notification; never re-notifies. Offline adds never get here
-  // (no person_tune_id exists yet — the queued-add flow redirects to /my-tunes).
-  function maybeUpgradeToMyTunesVariant(keepTab) {
-    if (ctx === 'my_tunes') return // already the full variant
-    const fromMyTunes = addl.chainCtx === 'my_tunes' || window.location.pathname.includes('/my-tunes')
-    const ptid = tune && tune.person_tune_status && tune.person_tune_status.person_tune_id
-    if (!fromMyTunes || !ptid) return
+  // Open a companion tune's detail modal in place of the current one. Chaining
+  // is just show() with the SAME scope and callbacks — the payload derives the
+  // variant, so an on-list companion opens as the full my-tunes variant, a
+  // session-scoped drawer keeps its session, and a not-on-list companion shows
+  // the Add view — however deep the chain goes.
+  function openPlayedWithTune(pwTune) {
+    if (!pwTune || !pwTune.tune_id) return
     show({
-      context: 'my_tunes',
-      tuneId: tune.tune_id,
-      apiEndpoint: `/api/my-tunes/${ptid}`,
+      tuneId: pwTune.tune_id,
+      scope: config?.scope || null,
       onSave: config?.onSave,
       onStatusChange: config?.onStatusChange,
-      initialTab: keepTab,
-      additionalData: {
-        personTuneId: ptid,
-        tuneName: tune.tune_name || tune.name,
-        tuneType: tune.tune_type,
-        isUserLoggedIn: true,
-      },
+      tuneName: pwTune.name,
     })
   }
 
@@ -1172,11 +1143,11 @@
         <table class="modal-header-section">
           <tbody>
             <tr>
-              {#if addl.tuneType}
-                <td class="modal-header-pill-cell"><Chip label={addl.tuneType} styled={false} chipClass="tune-type-pill" /></td>
+              {#if config?.tuneType}
+                <td class="modal-header-pill-cell"><Chip label={config.tuneType} styled={false} chipClass="tune-type-pill" /></td>
               {/if}
               <td class="modal-header-title-cell">
-                <h2 class="modal-tune-title">{addl.tuneName || 'Loading...'}</h2>
+                <h2 class="modal-tune-title">{config?.tuneName || 'Loading...'}</h2>
               </td>
               <td class="modal-header-spacer-cell"></td>
               <td class="modal-header-close-cell">
@@ -1257,8 +1228,9 @@
           </div>
         {/if}
 
-        <!-- Configure section (collapsible except on admin; not in the global lookup view) -->
-        {#if !isGlobal}
+        <!-- Configure section (collapsible except on admin; not in the read-only/Add
+             view, and never for anonymous viewers — saves would just 401) -->
+        {#if mode !== 'global' && loggedIn}
           <div id="configure-section" class="configure-section" style="display: {isConfigVisible ? 'block' : 'none'};">
             <div class="configure-field-group-inline">
               <div class="configure-label">Official Name:</div>
@@ -1268,7 +1240,7 @@
               <div class="configure-label">Tune ID:</div>
               <div class="configure-value">{tune.tune_id || 'Unknown'}</div>
             </div>
-            {#if ctx === 'my_tunes'}
+            {#if mode === 'my_tunes'}
               <div class="configure-field-group-inline">
                 <label class="configure-label" for="name-alias-input">I call this:</label>
                 <input
@@ -1319,10 +1291,10 @@
               <div id="setting-error" class="field-error" style="display: {settingError ? 'block' : 'none'};">
                 {settingError}
               </div>
-            {:else if ctx === 'session' || ctx === 'session_instance'}
+            {:else if mode === 'session' || mode === 'session_instance'}
               <div class="configure-field-group-inline">
                 <label class="configure-label" for="alias-input">
-                  {ctx === 'session' ? 'We call this:' : 'In this case, we called it:'}
+                  {mode === 'session' ? 'We call this:' : 'In this case, we called it:'}
                 </label>
                 <input
                   type="text"
@@ -1332,13 +1304,13 @@
                   autocorrect="off"
                   autocapitalize="off"
                   spellcheck="false"
-                  placeholder={ctx === 'session' ? 'Enter session name for this tune' : 'Enter name for this instance'}
+                  placeholder={mode === 'session' ? 'Enter session name for this tune' : 'Enter name for this instance'}
                   bind:value={fields.alias}
                 />
               </div>
               <div class="configure-field-group-inline">
                 <label class="configure-label" for="setting-input">
-                  {ctx === 'session' ? 'Our setting:' : 'This time, we played setting:'}
+                  {mode === 'session' ? 'Our setting:' : 'This time, we played setting:'}
                 </label>
                 <div class="input-with-button">
                   <input
@@ -1376,7 +1348,7 @@
               </div>
               <div class="configure-field-group-inline">
                 <label class="configure-label" for="key-select">
-                  {ctx === 'session' ? 'We play this in:' : 'This time, we played in:'}
+                  {mode === 'session' ? 'We play this in:' : 'This time, we played in:'}
                 </label>
                 <select id="key-select" class="configure-select" bind:value={fields.key}>
                   {#each MUSICAL_KEYS as key}
@@ -1384,7 +1356,7 @@
                   {/each}
                 </select>
               </div>
-            {:else if ctx === 'admin'}
+            {:else if mode === 'admin'}
               <div class="configure-field-group">
                 <label class="configure-label" for="tune-name-input">Tune Name:</label>
                 <input
@@ -1403,8 +1375,8 @@
           </div>
         {/if}
 
-        <!-- Tunebook status section (not on admin; only when logged in) -->
-        {#if ctx !== 'admin' && addl.isUserLoggedIn}
+        <!-- Tunebook status section (not on admin; only when the viewer is logged in) -->
+        {#if mode !== 'admin' && loggedIn}
           {#if !onList}
             <div class="tunebook-status-section tunebook-status-not-on-list">
               <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">
@@ -1437,7 +1409,7 @@
                 {#if piExpanded}
                   <div class="tsc-instruments">
                     {#each instruments as inst, i}
-                      {@const st = resolveInstStatus(tune, ctx, inst)}
+                      {@const st = resolveInstStatus(tune, inst)}
                       <div class="tsc-block tsc-inst-block">
                         <div class="tsc-label-line">
                           <span class="tsc-name"
@@ -1557,20 +1529,6 @@
                   >
                     abc
                   </button>
-                {:else if notation.hasAbc && !notation.hasDots && canGenerateNotation}
-                  <!-- abc text is cached but no rendered staff image: offer to
-                       generate the dots where the notes/abc toggle would sit. -->
-                  <button
-                    type="button"
-                    class="generate-notation-link"
-                    onclick={(e) => {
-                      e.stopPropagation()
-                      generateNotation()
-                    }}
-                    disabled={fetchBtnState === 'loading'}
-                  >
-                    {fetchBtnState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
-                  </button>
                 {/if}
               </div>
               <div class="notation-external-links">
@@ -1605,8 +1563,8 @@
           </div>
         {/if}
 
-        <!-- Notes (my_tunes only) -->
-        {#if ctx === 'my_tunes'}
+        <!-- Notes (the my-tunes variant only) -->
+        {#if mode === 'my_tunes'}
           <div class="notes-section">
             <textarea
               id="notes-textarea"
@@ -1617,8 +1575,8 @@
           </div>
         {/if}
 
-        <!-- Action buttons (none in the read-only global lookup view) -->
-        {#if !isGlobal}
+        <!-- Action buttons (none in the read-only/Add view) -->
+        {#if mode !== 'global'}
           <div class="modal-action-buttons">
             <button id="cancel-btn" class="btn-secondary" onclick={close}>Cancel</button>
             <button
@@ -1636,20 +1594,20 @@
         <!-- Additional links -->
         {#if hasAdditionalLinks}
           <div class="modal-additional-links">
-            {#if ctx === 'my_tunes'}<a
+            {#if mode === 'my_tunes'}<a
                 href="#"
                 class="remove-link"
                 onclick={(e) => {
                   e.preventDefault()
                   removeFromMyTunes()
                 }}>Remove From My Tunes</a
-              >{/if}{#if ctx !== 'admin' && !isGlobal}<a
+              >{/if}{#if loggedIn}<a
                 href="#"
                 onclick={(e) => {
                   e.preventDefault()
                   toggleConfigSection()
                 }}>Configure This Tune</a
-              >{/if}{#if ctx === 'session' && addl.isSessionAdmin}<a
+              >{/if}{#if mode === 'session' && isSessionAdmin}<a
                 href="#"
                 class="remove-link"
                 onclick={(e) => {
@@ -1709,11 +1667,11 @@
                     >{/if}
                 </div>
               </div>
-              {#if ctx === 'my_tunes'}
+              {#if mode === 'my_tunes'}
                 <div class="stat-card">
                   <div class="stat-line">
-                    Logged <span class="stat-number">{tune.session_play_count || 0}</span>
-                    {plural(tune.session_play_count || 0, 'time')} at my sessions
+                    Logged <span class="stat-number">{myPlayCount}</span>
+                    {plural(myPlayCount, 'time')} at my sessions
                   </div>
                 </div>
                 <div class="stat-card">
@@ -1722,22 +1680,20 @@
                     {plural(tune.global_play_count || 0, 'time')} at all sessions
                   </div>
                 </div>
-              {:else if ctx === 'session' || ctx === 'session_instance'}
-                {#if !isGlobal}
-                  <div class="stat-card">
-                    <div class="stat-line">
-                      Logged <span class="stat-number">{tune.times_played || 0}</span>
-                      {plural(tune.times_played || 0, 'time')} at this session
-                    </div>
+              {:else if mode === 'session' || mode === 'session_instance'}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{tune.times_played || 0}</span>
+                    {plural(tune.times_played || 0, 'time')} at this session
                   </div>
-                {/if}
+                </div>
                 <div class="stat-card">
                   <div class="stat-line">
                     Logged <span class="stat-number">{tune.global_play_count || 0}</span>
                     {plural(tune.global_play_count || 0, 'time')} at all sessions
                   </div>
                 </div>
-              {:else if ctx === 'admin'}
+              {:else if mode === 'admin'}
                 <div class="stat-card">
                   <div class="stat-line">
                     Logged <span class="stat-number">{tune.global_play_count || 0}</span>
@@ -1749,13 +1705,20 @@
                     In the repertoire of <span class="stat-number">{tune.session_count || 0}</span> sessions
                   </div>
                 </div>
+              {:else}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{tune.global_play_count || 0}</span>
+                    {plural(tune.global_play_count || 0, 'time')} at all sessions
+                  </div>
+                </div>
               {/if}
             </div>
             <div id="history-tab" class="modal-tab-pane{activeTab === 'history' ? ' active' : ''}">
               {#if historyOptions.length > 1}
                 <Seg
                   options={historyOptions.map((o) => ({ id: o.key, label: o.label }))}
-                  value={historyScope}
+                  value={historyScopeKey}
                   idAttr="data-scope"
                   styled={false}
                   segClass="history-scope-toggle"
@@ -1773,7 +1736,7 @@
                         <div class="history-item">
                           <div class="history-instance-name">
                             <a href={instance.link}>
-                              {historyScope !== 'session'
+                              {historyScopeKey !== 'session'
                                 ? instance.full_name || instance.date || 'Unknown'
                                 : instance.date || 'Unknown'}
                             </a>
@@ -1806,7 +1769,7 @@
               {#if playedWithOptions.length > 1}
                 <Seg
                   options={playedWithOptions.map((o) => ({ id: o.key, label: o.label }))}
-                  value={playedWithScope}
+                  value={playedWithScopeKey}
                   idAttr="data-scope"
                   styled={false}
                   segClass="history-scope-toggle"
@@ -1818,7 +1781,7 @@
                   {@const pwTunes = playedWithState.data.tunes || []}
                   {#if pwTunes.length === 0}
                     <div class="no-history">
-                      This tune has not been played in a set with any other tune{playedWithScope === 'session'
+                      This tune has not been played in a set with any other tune{playedWithScopeKey === 'session'
                         ? ' at this session'
                         : ''} yet.
                     </div>
@@ -1826,7 +1789,7 @@
                     <div class="played-with-list">
                       {#each pwTunes as t}
                         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-                        <div class="played-with-item" data-tune-id={t.tune_id} onclick={() => openPlayedWithTune(t.tune_id)}>
+                        <div class="played-with-item" data-tune-id={t.tune_id} onclick={() => openPlayedWithTune(t)}>
                           <span class="played-with-name">{t.name}</span>
                           <span class="played-with-count">{t.count}</span>
                         </div>

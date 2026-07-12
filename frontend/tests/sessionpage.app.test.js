@@ -284,9 +284,8 @@ describe('session detail page view', () => {
     await waitFor(() => {
       expect(window.TuneDetailModal.show).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: 'session',
           tuneId: 102,
-          apiEndpoint: '/api/sessions/test/tunes/102',
+          scope: { session: 'test' },
         })
       )
     })
@@ -296,7 +295,7 @@ describe('session detail page view', () => {
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('.tune-row[data-tune-id="101"]'))
     expect(window.TuneDetailModal.show).toHaveBeenCalledWith(
-      expect.objectContaining({ context: 'session', tuneId: 101 })
+      expect.objectContaining({ tuneId: 101, scope: { session: 'test' } })
     )
   })
 

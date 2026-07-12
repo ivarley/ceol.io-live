@@ -218,20 +218,16 @@
 
   // ---- tune detail / row clicks -----------------------------------------------------
   function showTuneDetail(tune) {
+    // The drawer derives its variant (session wording, admin remove link,
+    // login-gated affordances) from the payload; we pass only the scope.
     window.TuneDetailModal.show({
-      context: 'session',
       tuneId: tune.tune_id,
-      apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tune.tune_id}`,
+      scope: { session: sessionPath },
+      tuneName: tune.tune_name,
+      tuneType: tune.tune_type,
       onSave: function () {
         // Reload to refresh the tune list
         window.location.reload()
-      },
-      additionalData: {
-        sessionPath: sessionPath,
-        tuneName: tune.tune_name,
-        tuneType: tune.tune_type,
-        isUserLoggedIn: isLoggedIn,
-        isSessionAdmin: permissions.is_session_admin,
       },
     })
   }

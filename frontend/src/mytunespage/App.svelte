@@ -270,15 +270,20 @@
       })
   }
 
-  // ---- detail modal (Step 3 converts this; for now the shared legacy drawer) ----
+  // ---- detail modal (the drawer derives its variant from the payload; this
+  // page passes only identity + callbacks) ----
   function showTuneDetail(personTuneId) {
     // Loose compare: pending offline-added tunes have a string 'pending-<id>'
     // person_tune_id, real ones a number.
     const tune = allTunes.find((t) => String(t.person_tune_id) === String(personTuneId))
     window.TuneDetailModal.show({
-      context: 'my_tunes',
       tuneId: tune ? tune.tune_id : null,
-      apiEndpoint: `/api/my-tunes/${personTuneId}`,
+      // ptid keeps this page's ?ptid deep-link contract, and is the drawer's
+      // only lookup key when the tune_id couldn't be resolved locally.
+      ptid: personTuneId,
+      scope: null,
+      tuneName: tune ? tune.tune_name : 'Loading...',
+      tuneType: tune ? tune.tune_type : '',
       onSave: () => loadTunes(),
       // Filtering by an instrument means you care about per-instrument statuses,
       // so open the modal with those rows already revealed.
@@ -313,12 +318,6 @@
             })
             .catch(() => {})
         }
-      },
-      additionalData: {
-        personTuneId: personTuneId,
-        tuneName: tune ? tune.tune_name : 'Loading...',
-        tuneType: tune ? tune.tune_type : '',
-        isUserLoggedIn: true,
       },
     })
   }

@@ -20,6 +20,8 @@ Pattern rules (from the module docstring — deliberately different from
   keep owning the connection/transaction.
 
 Current builders: `build_my_tunes_payload`, `build_person_tune_detail`,
+`build_tune_detail_payload` (THE tune-drawer feed — `GET /api/tunes/<id>/detail`
+plus the legacy per-session tune-detail GETs all delegate to it),
 `build_sessions_directory_payload`, `build_session_detail_payload`,
 `build_person_details_payload`, `build_session_admin_payload`, plus shared
 helpers (`timezone_options`, `recurrence_readable` — also used by

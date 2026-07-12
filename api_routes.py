@@ -27,38 +27,6 @@ from fractional_indexing import generate_append_position, generate_position_betw
 from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
-def _person_instrument_status(cur, person_id, tune_id):
-    """Per-instrument data for the shared tune-detail modal's instrument panel.
-
-    Returns (instruments, overrides): instruments is [{'instrument','is_auto'}] and
-    overrides is {instrument: status} (sparse). The client resolves the rest (auto
-    instruments follow learn_status, manual-with-no-row is untracked).
-    """
-    cur.execute(
-        "SELECT instrument, is_auto FROM person_instrument WHERE person_id = %s ORDER BY instrument",
-        (person_id,),
-    )
-    instruments = [{"instrument": r[0], "is_auto": r[1]} for r in cur.fetchall()]
-    cur.execute(
-        "SELECT instrument, status FROM person_tune_instrument WHERE person_id = %s AND tune_id = %s",
-        (person_id, tune_id),
-    )
-    overrides = {r[0]: r[1] for r in cur.fetchall()}
-    return instruments, overrides
-
-
-# api_login_required lives in api_auth.py (shared with api_person_tune_routes.py)
-
-
-# One-way editor lock (spec 024 beta rollout): once the new live editor has claimed an
-# instance (session_instance.logging_mode='live'), the classic editor is read-only for it.
-LEGACY_LOCKED_MSG = (
-    "This session is being logged in the new (beta) live editor, so the classic editor "
-    "is read-only for it. Open the live editor to make changes, or ask a system admin to "
-    "reset this session to the classic editor."
-)
-
-
 def instance_logging_locked(cur, session_instance_id):
     """True if the live editor owns this instance (logging_mode='live'); the classic
     editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
@@ -87,71 +55,46 @@ def follow_tune_redirect(cur, tune_id):
     return tune_id, None
 
 
-@public_api  # "Find a tune" is offered to logged-out users; everything here is public
-# catalog data — the person_tune_status block below is already is_authenticated-guarded.
+@public_api  # THE tune-detail drawer feed, offered to logged-out users too; everything
+# here is public catalog data — the viewer/person_tune_status blocks are
+# is_authenticated-guarded personalization.
 def get_tune_detail_global(tune_id):
-    """Session-agnostic tune detail for the app-wide 'Find a tune' (spec 024). Returns the
-    `session_tune` shape the tune-detail modal renders (used with context 'session_instance'),
-    with no session/instance overrides — just the tune, a default setting's notation,
-    popularity, and the current user's list status."""
+    """The tune-detail drawer payload (see serializers.build_tune_detail_payload).
+
+    GET /api/tunes/<tune_id>/detail
+        ?session=<path>       — merge in that session's session_tune scope block
+        &instance=<date|id>   — plus that instance's overrides
+
+    The drawer derives its mode (my-tunes variant / session / instance / admin /
+    read-only) from viewer + person_tune_status + session_scope, so this one
+    endpoint replaces the per-context feeds the drawer used to pick between."""
+    from serializers import build_tune_detail_payload, SessionNotFound, SessionInstanceNotFound
+
+    session_path = request.args.get("session") or None
+    date_or_id = request.args.get("instance") or None
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
-        cur.execute(
-            "SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date FROM tune WHERE tune_id = %s",
-            (tune_id,),
-        )
-        t = cur.fetchone()
-        if not t:
+        person_id = current_user.person_id if current_user.is_authenticated else None
+        try:
+            payload = build_tune_detail_payload(
+                conn,
+                tune_id,
+                person_id=person_id,
+                logged_in=current_user.is_authenticated,
+                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                session_path=session_path,
+                date_or_id=date_or_id,
+                redirected_from=redirected_from,
+            )
+        except SessionNotFound:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        except SessionInstanceNotFound:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+        if payload is None:
             return jsonify({"success": False, "message": "Tune not found"}), 404
-        tune_name, tune_type, tunebook_count, tbc_date = t
-
-        # A default setting's notation (lowest setting_id) for the rendered incipit/full.
-        cur.execute(
-            "SELECT setting_id, abc, incipit_abc, image, incipit_image FROM tune_setting WHERE tune_id = %s ORDER BY setting_id LIMIT 1",
-            (tune_id,),
-        )
-        s = cur.fetchone()
-        setting_id, abc_notation, incipit_abc, abc_image, incipit_image = s if s else (None, None, None, None, None)
-
-        person_tune_status = None
-        if current_user.is_authenticated:
-            cur.execute("SELECT person_id FROM user_account WHERE user_id = %s", (current_user.user_id,))
-            pr = cur.fetchone()
-            if pr:
-                cur.execute(
-                    "SELECT person_tune_id, learn_status, heard_count FROM person_tune WHERE person_id = %s AND tune_id = %s",
-                    (pr[0], tune_id),
-                )
-                tr = cur.fetchone()
-                person_tune_status = {
-                    "on_list": bool(tr), "person_tune_id": tr[0] if tr else None,
-                    "learn_status": tr[1] if tr else None, "heard_count": tr[2] if tr else None,
-                    "instruments": [], "instrument_status": {},
-                }
-                if tr:
-                    (person_tune_status["instruments"],
-                     person_tune_status["instrument_status"]) = _person_instrument_status(cur, pr[0], tune_id)
-
-        cur.execute("SELECT COUNT(*) FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
-        global_play_count = cur.fetchone()[0]
-
-        cur.execute("SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,))
-        person_list_count = cur.fetchone()[0]
-
-        return jsonify({"success": True, "redirected_from": redirected_from, "session_tune": {
-            "tune_id": tune_id, "tune_name": tune_name, "tune_type": tune_type,
-            "alias": None, "setting_id": setting_id, "key": None, "setting_key": None,
-            "name": None, "key_override": None, "setting_override": None,
-            "abc": abc_notation, "incipit_abc": incipit_abc,
-            "image": bytea_to_base64(abc_image), "incipit_image": bytea_to_base64(incipit_image),
-            "tunebook_count": tunebook_count,
-            "tunebook_count_cached_date": tbc_date.isoformat() if tbc_date else None,
-            "times_played": 0, "global_play_count": global_play_count,
-            "person_list_count": person_list_count,
-            "person_tune_status": person_tune_status,
-        }})
+        return jsonify(payload)
     finally:
         conn.close()
 
@@ -1609,220 +1552,40 @@ def get_tune_incipit(tune_id):
         }), 500
 
 
-@public_api  # backs the tune-detail modal on the logged-out session Tunes tab (frontend/src/sessionpage/TunesTab.svelte); current_user use below is personalization only
+@public_api  # backs the tune-detail modal on the logged-out session Tunes tab; current_user use is personalization only
 def get_session_tune_detail(session_path, tune_id):
-    """Get detailed information about a tune in the context of a session"""
+    """Session-scoped tune detail — the same drawer payload as
+    /api/tunes/<id>/detail?session=<path> (one builder, so the shapes can't
+    drift); kept routed for legacy callers. Error bodies stay 200-with-message
+    as they always were here."""
+    from serializers import build_tune_detail_payload, SessionNotFound
+
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
-
-        # Get session_id
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-        session_result = cur.fetchone()
-        if not session_result:
-            cur.close()
-            conn.close()
-            return jsonify({"success": False, "message": "Session not found"})
-
-        session_id = session_result[0]
-
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
-
-        # Get tune basic info
-        cur.execute(
-            """
-            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
-            FROM tune
-            WHERE tune_id = %s
-        """,
-            (tune_id,),
-        )
-        tune_info = cur.fetchone()
-
-        if not tune_info:
-            cur.close()
-            conn.close()
+        person_id = current_user.person_id if current_user.is_authenticated else None
+        try:
+            payload = build_tune_detail_payload(
+                conn,
+                tune_id,
+                person_id=person_id,
+                logged_in=current_user.is_authenticated,
+                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                session_path=session_path,
+                redirected_from=redirected_from,
+            )
+        except SessionNotFound:
+            return jsonify({"success": False, "message": "Session not found"})
+        if payload is None:
             return jsonify({"success": False, "message": "Tune not found"})
-
-        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
-
-        # Get session-specific tune info
-        cur.execute(
-            """
-            SELECT alias, setting_id, key
-            FROM session_tune
-            WHERE session_id = %s AND tune_id = %s
-        """,
-            (session_id, tune_id),
-        )
-        session_tune_info = cur.fetchone()
-
-        alias = None
-        setting_id = None
-        key = None
-
-        if session_tune_info:
-            alias, setting_id, key = session_tune_info
-
-        # Get ABC notation from tune_setting
-        # If setting_id is specified, use that; otherwise, use the first setting for this tune
-        abc_notation = None
-        incipit_abc = None
-        abc_image = None
-        incipit_image = None
-        setting_key = None
-        if setting_id:
-            cur.execute(
-                "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
-                (setting_id,)
-            )
-        else:
-            # Fall back to the first setting for this tune (ordered by setting_id)
-            cur.execute(
-                """SELECT abc, incipit_abc, image, incipit_image, key
-                   FROM tune_setting
-                   WHERE tune_id = %s
-                   ORDER BY setting_id ASC
-                   LIMIT 1""",
-                (tune_id,)
-            )
-        abc_result = cur.fetchone()
-        if abc_result:
-            abc_notation = abc_result[0]
-            incipit_abc = abc_result[1]
-            abc_image = abc_result[2]
-            incipit_image = abc_result[3]
-            setting_key = abc_result[4]
-
-        # Get all aliases from session_tune_alias table
-        cur.execute(
-            """
-            SELECT alias
-            FROM session_tune_alias
-            WHERE session_id = %s AND tune_id = %s
-            ORDER BY created_date ASC
-        """,
-            (session_id, tune_id),
-        )
-        alias_rows = cur.fetchall()
-        aliases = [row[0] for row in alias_rows]
-
-        # Get play count for this session
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM session_instance_tune sit
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            WHERE si.session_id = %s AND sit.tune_id = %s
-        """,
-            (session_id, tune_id),
-        )
-        play_count_result = cur.fetchone()
-        times_played = play_count_result[0] if play_count_result else 0
-
-        # Play history is NOT fetched here — the modal lazily loads it from
-        # /api/tunes/<id>/history when the History tab is first viewed.
-
-        # Get person_tune status if user is logged in
-        person_tune_status = None
-        if current_user.is_authenticated:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT person_id FROM user_account WHERE user_id = %s",
-                (current_user.user_id,)
-            )
-            person_row = cur.fetchone()
-            if person_row:
-                person_id = person_row[0]
-                cur.execute(
-                    """
-                    SELECT person_tune_id, learn_status, heard_count
-                    FROM person_tune
-                    WHERE person_id = %s AND tune_id = %s
-                    """,
-                    (person_id, tune_id)
-                )
-                tune_row = cur.fetchone()
-                if tune_row:
-                    instruments, overrides = _person_instrument_status(cur, person_id, tune_id)
-                    person_tune_status = {
-                        "on_list": True,
-                        "person_tune_id": tune_row[0],
-                        "learn_status": tune_row[1],
-                        "heard_count": tune_row[2],
-                        "instruments": instruments,
-                        "instrument_status": overrides
-                    }
-                else:
-                    person_tune_status = {
-                        "on_list": False,
-                        "person_tune_id": None,
-                        "learn_status": None,
-                        "heard_count": None,
-                        "instruments": [],
-                        "instrument_status": {}
-                    }
-            cur.close()
-
-        # Get global play count (all sessions)
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM session_instance_tune
-            WHERE tune_id = %s
-        """,
-            (tune_id,),
-        )
-        global_play_result = cur.fetchone()
-        global_play_count = global_play_result[0] if global_play_result else 0
-
-        # How many people have this tune on their Ceol.io tune list
-        cur.execute(
-            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
-        )
-        person_list_result = cur.fetchone()
-        person_list_count = person_list_result[0] if person_list_result else 0
-        cur.close()
-
-        conn.close()
-
-        # Build response
-        return jsonify(
-            {
-                "success": True,
-                "redirected_from": redirected_from,
-                "session_tune": {
-                    "tune_id": tune_id,
-                    "tune_name": tune_name,
-                    "tune_type": tune_type,
-                    "alias": alias,
-                    "aliases": aliases,
-                    "setting_id": setting_id,
-                    "key": key,
-                    "setting_key": setting_key,
-                    "abc": abc_notation,
-                    "incipit_abc": incipit_abc,
-                    "image": bytea_to_base64(abc_image),
-                    "incipit_image": bytea_to_base64(incipit_image),
-                    "tunebook_count": tunebook_count,
-                    "tunebook_count_cached_date": (
-                        tunebook_count_cached_date.isoformat()
-                        if tunebook_count_cached_date
-                        else None
-                    ),
-                    "times_played": times_played,
-                    "global_play_count": global_play_count,
-                    "person_list_count": person_list_count,
-                    "person_tune_status": person_tune_status,
-                },
-            }
-        )
-
+        return jsonify(payload)
     except Exception as e:
         return jsonify(
             {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
         )
+    finally:
+        conn.close()
 
 
 @api_login_required
@@ -10747,252 +10510,57 @@ def cancel_merge_scan():
 # Session Instance Tune Detail Endpoints
 # ============================================================================
 
-@public_api  # backs the tune-detail modal on logged-out session-instance pages (tunesheet bundle config fetch); current_user use below is personalization only
+@public_api  # backs the tune-detail modal on logged-out session-instance pages; current_user use is personalization only
 def get_session_instance_tune_detail(session_path, date_or_id, tune_id):
-    """
-    Get detailed information about a tune in the context of a specific session instance.
+    """Instance-scoped tune detail — the same drawer payload as
+    /api/tunes/<id>/detail?session=<path>&instance=<date-or-id> (one builder);
+    kept routed for legacy callers (the quarantined pill logger)."""
+    from serializers import (
+        build_tune_detail_payload,
+        SessionNotFound,
+        SessionInstanceNotFound,
+    )
 
-    GET /api/sessions/<session_path>/<date_or_id>/tunes/<tune_id>
-
-    Returns tune details with session_instance_tune overrides and history.
-    """
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get session_id
-        # First try the session_path as-is
+        # Greedy-path fallback: "<path>/<segment>" may itself be the session path
+        # (e.g. oflahertys/2025), in which case this is a session-level request.
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-        session_result = cur.fetchone()
-
-        # If not found, check if session_path + date_or_id forms a valid session path
-        # This handles cases like "oflahertys/2025" where routing splits it incorrectly
-        if not session_result:
+        if not cur.fetchone():
             combined_path = f"{session_path}/{date_or_id}"
             cur.execute("SELECT session_id FROM session WHERE path = %s", (combined_path,))
-            combined_result = cur.fetchone()
-
-            if combined_result:
-                # The date_or_id was actually part of the session path
-                # Close this connection and redirect to session-level tune detail logic
-                cur.close()
-                conn.close()
+            if cur.fetchone():
                 return get_session_tune_detail(combined_path, tune_id)
-            else:
-                return jsonify({"success": False, "message": "Session not found"}), 404
-        else:
-            session_id = session_result[0]
-
-        # Get session_instance_id
-        session_instance_id = get_session_instance_id(cur, session_id, date_or_id)
-        if not session_instance_id:
-            return jsonify({"success": False, "message": "Session instance not found"}), 404
+            return jsonify({"success": False, "message": "Session not found"}), 404
 
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
-
-        # Get tune basic info
-        cur.execute(
-            """
-            SELECT name, tune_type, tunebook_count_cached, tunebook_count_cached_date
-            FROM tune
-            WHERE tune_id = %s
-        """,
-            (tune_id,),
-        )
-        tune_info = cur.fetchone()
-
-        if not tune_info:
+        person_id = current_user.person_id if current_user.is_authenticated else None
+        try:
+            payload = build_tune_detail_payload(
+                conn,
+                tune_id,
+                person_id=person_id,
+                logged_in=current_user.is_authenticated,
+                is_admin=bool(current_user.is_authenticated and current_user.is_system_admin),
+                session_path=session_path,
+                date_or_id=date_or_id,
+                redirected_from=redirected_from,
+            )
+        except SessionNotFound:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        except SessionInstanceNotFound:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+        if payload is None:
             return jsonify({"success": False, "message": "Tune not found"}), 404
-
-        tune_name, tune_type, tunebook_count, tunebook_count_cached_date = tune_info
-
-        # Get session-level defaults from session_tune
-        cur.execute(
-            """
-            SELECT alias, setting_id, key
-            FROM session_tune
-            WHERE session_id = %s AND tune_id = %s
-        """,
-            (session_id, tune_id),
-        )
-        session_tune_info = cur.fetchone()
-
-        session_alias = None
-        session_setting_id = None
-        session_key = None
-
-        if session_tune_info:
-            session_alias, session_setting_id, session_key = session_tune_info
-
-        # Get instance-specific overrides from session_instance_tune
-        cur.execute(
-            """
-            SELECT name, key_override, setting_override
-            FROM session_instance_tune
-            WHERE session_instance_id = %s AND tune_id = %s
-        """,
-            (session_instance_id, tune_id),
-        )
-        instance_tune_info = cur.fetchone()
-
-        name_override = None
-        key_override = None
-        setting_override = None
-
-        if instance_tune_info:
-            name_override, key_override, setting_override = instance_tune_info
-
-        # Get ABC notation from tune_setting
-        # Prefer setting_override if available, otherwise use session_setting_id, or fall back to first setting
-        abc_notation = None
-        incipit_abc = None
-        abc_image = None
-        incipit_image = None
-        setting_key = None
-        effective_setting_id = setting_override if setting_override else session_setting_id
-        if effective_setting_id:
-            cur.execute(
-                "SELECT abc, incipit_abc, image, incipit_image, key FROM tune_setting WHERE setting_id = %s",
-                (effective_setting_id,)
-            )
-        else:
-            # Fall back to the first setting for this tune (ordered by setting_id)
-            cur.execute(
-                """SELECT abc, incipit_abc, image, incipit_image, key
-                   FROM tune_setting
-                   WHERE tune_id = %s
-                   ORDER BY setting_id ASC
-                   LIMIT 1""",
-                (tune_id,)
-            )
-        abc_result = cur.fetchone()
-        if abc_result:
-            abc_notation = abc_result[0]
-            incipit_abc = abc_result[1]
-            abc_image = abc_result[2]
-            incipit_image = abc_result[3]
-            setting_key = abc_result[4]
-
-        # Get play count for this session (all instances)
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM session_instance_tune sit
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            WHERE si.session_id = %s AND sit.tune_id = %s
-        """,
-            (session_id, tune_id),
-        )
-        play_count_result = cur.fetchone()
-        times_played = play_count_result[0] if play_count_result else 0
-
-        # Play history is NOT fetched here — the modal lazily loads it from
-        # /api/tunes/<id>/history when the History tab is first viewed.
-
-        # Get person_tune status if user is logged in
-        person_tune_status = None
-        if current_user.is_authenticated:
-            cur.execute(
-                "SELECT person_id FROM user_account WHERE user_id = %s",
-                (current_user.user_id,)
-            )
-            person_row = cur.fetchone()
-            if person_row:
-                person_id = person_row[0]
-                cur.execute(
-                    """
-                    SELECT person_tune_id, learn_status, heard_count
-                    FROM person_tune
-                    WHERE person_id = %s AND tune_id = %s
-                    """,
-                    (person_id, tune_id)
-                )
-                tune_row = cur.fetchone()
-                if tune_row:
-                    instruments, overrides = _person_instrument_status(cur, person_id, tune_id)
-                    person_tune_status = {
-                        "on_list": True,
-                        "person_tune_id": tune_row[0],
-                        "learn_status": tune_row[1],
-                        "heard_count": tune_row[2],
-                        "instruments": instruments,
-                        "instrument_status": overrides
-                    }
-                else:
-                    person_tune_status = {
-                        "on_list": False,
-                        "person_tune_id": None,
-                        "learn_status": None,
-                        "heard_count": None,
-                        "instruments": [],
-                        "instrument_status": {}
-                    }
-
-        # Get global play count (all sessions)
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM session_instance_tune
-            WHERE tune_id = %s
-        """,
-            (tune_id,),
-        )
-        global_play_result = cur.fetchone()
-        global_play_count = global_play_result[0] if global_play_result else 0
-
-        # How many people have this tune on their Ceol.io tune list
-        cur.execute(
-            "SELECT COUNT(*) FROM person_tune WHERE tune_id = %s", (tune_id,)
-        )
-        person_list_result = cur.fetchone()
-        person_list_count = person_list_result[0] if person_list_result else 0
-        cur.close()
-
-        conn.close()
-
-        # Build response - includes both session defaults and instance overrides
-        return jsonify(
-            {
-                "success": True,
-                "redirected_from": redirected_from,
-                "session_tune": {
-                    "tune_id": tune_id,
-                    "tune_name": tune_name,
-                    "tune_type": tune_type,
-                    # Session-level defaults
-                    "alias": session_alias,
-                    "setting_id": session_setting_id,
-                    "key": session_key,
-                    "setting_key": setting_key,
-                    # Instance-specific overrides
-                    "name": name_override,
-                    "key_override": key_override,
-                    "setting_override": setting_override,
-                    # ABC notation
-                    "abc": abc_notation,
-                    "incipit_abc": incipit_abc,
-                    "image": bytea_to_base64(abc_image),
-                    "incipit_image": bytea_to_base64(incipit_image),
-                    # Stats
-                    "tunebook_count": tunebook_count,
-                    "tunebook_count_cached_date": (
-                        tunebook_count_cached_date.isoformat()
-                        if tunebook_count_cached_date
-                        else None
-                    ),
-                    "times_played": times_played,
-                    "global_play_count": global_play_count,
-                    "person_list_count": person_list_count,
-                    "person_tune_status": person_tune_status,
-                },
-            }
-        )
-
+        return jsonify(payload)
     except Exception as e:
         return jsonify(
             {"success": False, "message": f"Error retrieving tune details: {str(e)}"}
         ), 500
+    finally:
+        conn.close()
 
 
 @api_login_required

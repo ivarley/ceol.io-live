@@ -93,12 +93,12 @@ describe('My Tunes page view', () => {
     expect(JSON.parse(opCall[1].body)).toMatchObject({ type: 'set_status', tune_id: 101, learn_status: 'learning' })
   })
 
-  it('clicking a card opens the shared drawer with the my_tunes context', async () => {
+  it('clicking a card opens the shared drawer with the tune identity (+ ptid deep-link key)', async () => {
     const { container } = render(App, { pageData: payload() })
     await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="102"]')).toBeTruthy())
     await fireEvent.click(container.querySelector('.tune-card[data-tune-id="102"]'))
     expect(window.TuneDetailModal.show).toHaveBeenCalledWith(
-      expect.objectContaining({ context: 'my_tunes', apiEndpoint: '/api/my-tunes/12' })
+      expect.objectContaining({ tuneId: 102, ptid: 12, scope: null })
     )
   })
 

@@ -1449,15 +1449,11 @@
     }
     if (!window.TuneDetailModal) return
     window.TuneDetailModal.show({
-      context: 'session_instance',
       tuneId: r.tune_id,
-      apiEndpoint: `/api/sessions/${config.sessionPath}/${config.sessionInstanceId}/tunes/${r.tune_id}`,
-      // the modal builds its save/heard/popularity endpoints from additionalData
-      additionalData: {
-        sessionPath: config.sessionPath,
-        dateOrId: config.sessionInstanceId,
-        isUserLoggedIn: true,
-      },
+      // the instance scope keeps the session_instance variant (wording, stats,
+      // per-instance config); everything else the drawer derives from the payload
+      scope: { session: config.sessionPath, instance: config.sessionInstanceId },
+      tuneName: r.name,
     })
     // background-render+cache the notation (incipit + full) so the drawer shows dots
     // next time (the abc-renderer service does the rendering, never the client)

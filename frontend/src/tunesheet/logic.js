@@ -14,33 +14,83 @@ export const MUSICAL_KEYS = [
   'Fdorian', 'Gmixolydian', 'Emajor', 'Bdorian', 'Emixolydian',
 ]
 
-/** Extract tune data from an API response based on context. */
-export function extractTuneData(apiResponse, context) {
-  switch (context) {
-    case 'my_tunes':
-      return apiResponse.person_tune || {}
-    case 'session':
-    case 'session_instance':
-      return apiResponse.session_tune || {}
-    case 'admin':
-      return apiResponse.tune || {}
-    default:
-      return {}
+// ---- Derived-mode plumbing (the drawer derives its own variant) -----------------
+
+/**
+ * Scope implied by the page the drawer opened on: session pages imply their
+ * session path, the admin tunes page implies admin. Everything else is global.
+ */
+export function scopeFromUrl(pathname = window.location.pathname) {
+  if (/^\/admin\/tunes(\/\d+)?$/.test(pathname)) return { admin: true }
+  const m = pathname.match(/^\/sessions\/(.+)$/)
+  if (m) {
+    const p = m[1].replace(/\/tunes\/\d+$/, '').replace(/\/(tunes|logs|people)$/, '')
+    if (p) return { session: p }
+  }
+  return null
+}
+
+/**
+ * Normalize a show() config. New style is { tuneId, ptid?, scope?, ...callbacks };
+ * old-style configs (context + apiEndpoint + additionalData — the quarantined
+ * pill logger, admin_tunes.html, common_tunes.html) map onto it here so those
+ * templates keep working untouched.
+ */
+export function normalizeShowConfig(raw, pathname = typeof window !== 'undefined' ? window.location.pathname : '/') {
+  if (!raw) return raw
+  const base = {
+    onSave: raw.onSave,
+    onStatusChange: raw.onStatusChange,
+    expandInstrumentStatus: raw.expandInstrumentStatus,
+    initialTab: raw.initialTab,
+  }
+  if (raw.context !== undefined || raw.apiEndpoint !== undefined) {
+    const a = raw.additionalData || {}
+    let scope = null
+    if (raw.context === 'admin') scope = { admin: true }
+    else if (a.sessionPath && !a.global) {
+      scope = a.dateOrId ? { session: a.sessionPath, instance: a.dateOrId } : { session: a.sessionPath }
+    }
+    return {
+      ...base,
+      tuneId: raw.tuneId ?? null,
+      ptid: raw.context === 'my_tunes' ? (a.personTuneId ?? null) : null,
+      scope,
+      tuneName: a.tuneName,
+      tuneType: a.tuneType,
+    }
+  }
+  return {
+    ...base,
+    tuneId: raw.tuneId ?? null,
+    ptid: raw.ptid ?? null,
+    scope: raw.scope !== undefined ? raw.scope : scopeFromUrl(pathname),
+    tuneName: raw.tuneName,
+    tuneType: raw.tuneType,
   }
 }
 
-/** Display name for the header, per context. */
-export function getDisplayName(tuneData, context) {
-  switch (context) {
+/** THE drawer feed URL for a tune + scope. */
+export function detailUrl(tuneId, scope) {
+  const q = new URLSearchParams()
+  if (scope && scope.session) q.set('session', scope.session)
+  if (scope && scope.instance != null) q.set('instance', scope.instance)
+  const s = q.toString()
+  return `/api/tunes/${tuneId}/detail${s ? `?${s}` : ''}`
+}
+
+/** Display name for the header, per derived mode. */
+export function getDisplayName(tuneData, mode) {
+  if (!tuneData) return 'Unknown'
+  const pts = tuneData.person_tune_status
+  switch (mode) {
     case 'my_tunes':
-      return tuneData.name_alias || tuneData.tune_name || 'Unknown'
+      return (pts && pts.name_alias) || tuneData.tune_name || 'Unknown'
     case 'session':
     case 'session_instance':
       return tuneData.alias || tuneData.tune_name || 'Unknown'
-    case 'admin':
-      return tuneData.name || tuneData.tune_name || 'Unknown'
     default:
-      return 'Unknown'
+      return tuneData.tune_name || 'Unknown'
   }
 }
 
@@ -98,21 +148,15 @@ export function validateSettingInput(input, expectedTuneId) {
   return { valid: false, error: 'Please enter a number or paste a valid TheSession.org URL' }
 }
 
-/** History scopes for the context; first entry is the default. One entry = no toggle. */
-export function historyScopeOptions(config) {
-  if (config.context === 'admin' || config.additionalData?.global) {
-    return [{ key: 'all', label: 'All sessions' }]
-  }
-  if (
-    (config.context === 'session' || config.context === 'session_instance') &&
-    config.additionalData?.sessionPath
-  ) {
+/** History scopes for the derived mode; first entry is the default. One entry = no toggle. */
+export function historyScopeOptions(mode, scope) {
+  if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
     return [
       { key: 'session', label: 'This session' },
       { key: 'all', label: 'All sessions' },
     ]
   }
-  if (config.context === 'my_tunes') {
+  if (mode === 'my_tunes') {
     return [
       { key: 'mine', label: 'My sessions' },
       { key: 'all', label: 'All sessions' },
@@ -121,13 +165,9 @@ export function historyScopeOptions(config) {
   return [{ key: 'all', label: 'All sessions' }]
 }
 
-/** Played With scopes for the context; first entry is the default. */
-export function playedWithScopeOptions(config) {
-  if (
-    (config.context === 'session' || config.context === 'session_instance') &&
-    !config.additionalData?.global &&
-    config.additionalData?.sessionPath
-  ) {
+/** Played With scopes for the derived mode; first entry is the default. */
+export function playedWithScopeOptions(mode, scope) {
+  if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
     return [
       { key: 'session', label: 'At This Session' },
       { key: 'all', label: 'Globally' },
@@ -190,28 +230,21 @@ export function getTuneIdFromUrl() {
   return tuneParam ? parseInt(tuneParam, 10) : null
 }
 
-// --- Per-instrument status plumbing (shared shape across contexts) ---------------
+// --- Per-instrument status plumbing --------------------------------------------
+// The consolidated detail payload always nests person data under
+// person_tune_status, so the old per-context branching is gone.
 
-// Per-instrument data lives directly on tuneData for my_tunes, nested under
-// person_tune_status for session contexts (mirrors how learn_status is read).
-export function getInstrumentData(tuneData, context) {
-  if (context === 'my_tunes') {
-    return { instruments: tuneData.instruments || [], overrides: tuneData.instrument_status || {} }
-  }
-  const s = tuneData.person_tune_status || {}
+export function getInstrumentData(tuneData) {
+  const s = (tuneData && tuneData.person_tune_status) || {}
   return { instruments: s.instruments || [], overrides: s.instrument_status || {} }
 }
 
-export function getModalLearnStatus(tuneData, context) {
-  return context === 'my_tunes'
-    ? tuneData.learn_status || 'want to learn'
-    : (tuneData.person_tune_status && tuneData.person_tune_status.learn_status) || 'want to learn'
+export function getModalLearnStatus(tuneData) {
+  return (tuneData && tuneData.person_tune_status && tuneData.person_tune_status.learn_status) || 'want to learn'
 }
 
-export function setInstrumentOverrides(tuneData, context, overrides) {
-  if (context === 'my_tunes') {
-    tuneData.instrument_status = overrides
-  } else if (tuneData.person_tune_status) {
+export function setInstrumentOverrides(tuneData, overrides) {
+  if (tuneData && tuneData.person_tune_status) {
     tuneData.person_tune_status.instrument_status = overrides
   }
 }
@@ -220,10 +253,10 @@ export function setInstrumentOverrides(tuneData, context, overrides) {
 // manual without a row is untracked = null). Delegates to mylist.js — the
 // per-instrument blocks only render at 2+ instruments, where listStatus's
 // instrument scoping applies.
-export function resolveInstStatus(tuneData, context, inst) {
-  const { instruments, overrides } = getInstrumentData(tuneData, context)
+export function resolveInstStatus(tuneData, inst) {
+  const { instruments, overrides } = getInstrumentData(tuneData)
   const st = listStatus(
-    { learn_status: getModalLearnStatus(tuneData, context), instrument_status: overrides || {} },
+    { learn_status: getModalLearnStatus(tuneData), instrument_status: overrides || {} },
     instruments,
     inst.instrument
   )
@@ -232,10 +265,10 @@ export function resolveInstStatus(tuneData, context, inst) {
 
 // The tune's overall status = the roll-up: furthest-along status across all
 // instruments that have one (auto follow learn_status; manual only when tracked).
-export function rollupStatus(tuneData, context) {
-  const { instruments, overrides } = getInstrumentData(tuneData, context)
+export function rollupStatus(tuneData) {
+  const { instruments, overrides } = getInstrumentData(tuneData)
   return listStatus(
-    { learn_status: getModalLearnStatus(tuneData, context), instrument_status: overrides || {} },
+    { learn_status: getModalLearnStatus(tuneData), instrument_status: overrides || {} },
     instruments,
     'all'
   )
@@ -261,6 +294,109 @@ export function overlayOfflineOps(tune, ops, tuneId) {
       else if (o.type === 'add' && !t.learn_status) t.learn_status = o.learn_status || 'want to learn'
     })
   return t
+}
+
+/**
+ * Synthesize the drawer payload from an offline bundle tune + queued ops so the
+ * derived-mode rendering works without the API: a cached bundle implies an
+ * authenticated sync (logged_in true), and on-list = the overlaid tune carries
+ * a learn_status (bundle "my tunes" entries and queued adds do; popular-catalog
+ * entries don't, which renders the Add view exactly as online).
+ */
+export function offlinePayload(cachedTune, ops, tuneId) {
+  const t = overlayOfflineOps(cachedTune, ops, tuneId)
+  const onList = !!t.learn_status
+  return {
+    success: true,
+    viewer: { logged_in: true, is_admin: false },
+    session_tune: {
+      tune_id: t.tune_id != null ? t.tune_id : tuneId,
+      tune_name: t.tune_name || t.name,
+      tune_type: t.tune_type,
+      alias: null,
+      aliases: [],
+      key: null,
+      name: null,
+      key_override: null,
+      setting_override: null,
+      setting_id: t.setting_id || null,
+      setting_key: t.setting_key || null,
+      abc: t.abc || null,
+      incipit_abc: t.incipit_abc || null,
+      image: t.image || null,
+      incipit_image: t.incipit_image || null,
+      tunebook_count: t.tunebook_count || 0,
+      tunebook_count_cached_date: t.tunebook_count_cached_date || null,
+      times_played: 0,
+      global_play_count: t.global_play_count,
+      person_list_count: t.person_list_count != null ? t.person_list_count : null,
+      session_count: null,
+      session_scope: null,
+      person_tune_status: onList
+        ? {
+            on_list: true,
+            person_tune_id: t.person_tune_id != null ? t.person_tune_id : null,
+            learn_status: t.learn_status,
+            heard_count: t.heard_count || 0,
+            notes: t.notes || null,
+            name_alias: t.name_alias || null,
+            setting_id: t.setting_id || null,
+            instruments: t.instruments || [],
+            instrument_status: t.instrument_status || {},
+            session_play_count: t.session_play_count,
+          }
+        : {
+            on_list: false,
+            person_tune_id: null,
+            learn_status: null,
+            heard_count: null,
+            instruments: [],
+            instrument_status: {},
+          },
+    },
+  }
+}
+
+/**
+ * Synthesize the drawer payload from a GET /api/my-tunes/<ptid> response — the
+ * ptid-only deep-link resolution path (a ?ptid URL whose tune the host page
+ * couldn't map to a tune_id; the endpoint's 404 is the merged-away signal).
+ */
+export function personTunePayload(pt) {
+  return {
+    success: true,
+    viewer: { logged_in: true, is_admin: false },
+    session_tune: {
+      tune_id: pt.tune_id,
+      tune_name: pt.tune_name,
+      tune_type: pt.tune_type,
+      alias: null,
+      aliases: [],
+      key: null,
+      name: null,
+      key_override: null,
+      setting_override: null,
+      setting_id: pt.setting_id || null,
+      setting_key: pt.setting_key || null,
+      abc: pt.abc || null,
+      incipit_abc: pt.incipit_abc || null,
+      image: pt.image || null,
+      incipit_image: pt.incipit_image || null,
+      tunebook_count: pt.tunebook_count,
+      tunebook_count_cached_date: pt.tunebook_count_cached_date || null,
+      times_played: 0,
+      global_play_count: pt.global_play_count,
+      person_list_count: pt.person_list_count != null ? pt.person_list_count : null,
+      session_count: null,
+      session_scope: null,
+      person_tune_status: {
+        ...pt,
+        on_list: true,
+        instruments: pt.instruments || [],
+        instrument_status: pt.instrument_status || {},
+      },
+    },
+  }
 }
 
 // --- External links ---------------------------------------------------------------

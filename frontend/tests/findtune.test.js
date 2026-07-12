@@ -49,13 +49,10 @@ describe('FindTune overlay', () => {
     const { component } = render(FindTune)
     await openAndSearch(component, 'kesh')
     await fireEvent.click(document.querySelector('.ft-results .ft-item'))
+    // New show() API: identity only — the drawer derives its variant from the
+    // payload, and its scope from the URL (global here, off a session page).
     expect(window.TuneDetailModal.show).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: 'session_instance',
-        tuneId: 55,
-        apiEndpoint: '/api/tunes/55/detail',
-        additionalData: expect.objectContaining({ global: true }),
-      })
+      expect.objectContaining({ tuneId: 55, tuneName: 'Kesh, The' })
     )
     expect(document.querySelector('.ft-input')).toBeFalsy()
   })
