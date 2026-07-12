@@ -116,7 +116,9 @@
 
 <!-- Tabbed Interface: the kit Tabs engine with this page's legacy skin
      (.tab-buttons/.tab-button CSS + e2e select on these classes). Pane
-     components stay mounted across switches so their state survives. -->
+     components stay mounted across switches so their state survives.
+     mobileSelect stays 'auto': 2-3 tabs fit a phone, so this page keeps its
+     pre-unification visual tabs on mobile (it never had the select). -->
 <div class="tabs-container">
   <Tabs
     {tabs}

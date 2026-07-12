@@ -129,9 +129,12 @@
 
 <!-- Responsive tabs: the kit engine (bits-ui tablist on desktop, <select> on
      mobile) with this page's Bootstrap nav-tabs skin. listId keeps the
-     #profileTabs e2e/CSS hook; the select keeps its legacy id/class. -->
+     #profileTabs e2e/CSS hook; the select keeps its legacy id/class.
+     mobileSelect={true}: this page is where the mobile-select rule originated
+     (person_details.html), and its 4-5 tabs overflow a phone width. -->
 <Tabs
   tabs={profileTabs}
+  mobileSelect={true}
   bind:value={activeTab}
   onValueChange={(id) => activateTab(id)}
   styled={false}

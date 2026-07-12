@@ -47,10 +47,13 @@ test.describe("Add a tune", () => {
 
   test("selecting a result enables adding", async ({ page }) => {
     await page.goto("/my-tunes/add");
-    await page.fill("#tune-search", "Cooley");
-    await expect(page.locator("#autocomplete-results")).toContainText(/Cooley/i);
+    // Must be a tune NOT already on the regular user's seed list — clicking an
+    // already-added result redirects to /my-tunes?already=1 instead of filling
+    // the hidden field. Cooley's is on Sarah's list; the Butterfly is not.
+    await page.fill("#tune-search", "Butterfly");
+    await expect(page.locator("#autocomplete-results")).toContainText(/Butterfly/i);
 
-    await page.locator("#autocomplete-results").getByText(/Cooley/i).first().click();
+    await page.locator("#autocomplete-results").getByText(/Butterfly/i).first().click();
     // A tune id gets recorded in the hidden field once a result is chosen.
     await expect
       .poll(async () => page.locator("#selected-tune-id").inputValue())

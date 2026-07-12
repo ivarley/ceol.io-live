@@ -249,12 +249,14 @@ INSERT INTO person (person_id, first_name, last_name, email, city, state, countr
 -- Hash generated with bcrypt cost factor 12
 -- =============================================================================
 
-INSERT INTO user_account (user_id, person_id, username, user_email, hashed_password, timezone, is_active, is_system_admin, email_verified) VALUES
-(1, 1, 'ian', 'ian@ceol.io', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, TRUE, TRUE),
-(2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE),
-(3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE),
-(4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE),
-(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE);
+-- Ian gets the beta live logger (spec 024) so the admin login exercises the
+-- new logging UI locally.
+INSERT INTO user_account (user_id, person_id, username, user_email, hashed_password, timezone, is_active, is_system_admin, email_verified, beta_live_logging) VALUES
+(1, 1, 'ian', 'ian@ceol.io', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, TRUE, TRUE, TRUE),
+(2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, FALSE),
+(3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE, FALSE),
+(4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, FALSE),
+(5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE);
 
 -- =============================================================================
 -- PERSON INSTRUMENTS
@@ -1179,7 +1181,9 @@ INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes) V
 (1, 441, 'learned', 20, 'John Ryan''s Polka'),
 (1, 211, 'learning', 8, 'Inisheer - beautiful waltz'),
 (2, 27, 'learned', 60, 'Drowsy Maggie'),
-(2, 1, 'learned', 55, 'Cooley''s'),
+-- Cooley's stays 'want to learn' for Sarah: the offline e2e filters
+-- /my-tunes?status=want+to+learn and expects it there (offline.spec.ts).
+(2, 1, 'want to learn', 55, 'Cooley''s'),
 (2, 64, 'learning', 15, 'Maid Behind the Bar'),
 (2, 83, 'want to learn', 8, 'Rights of Man - need to learn this classic'),
 (2, 55, 'learned', 40, 'The Kesh'),

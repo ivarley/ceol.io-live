@@ -640,13 +640,16 @@
     background-color: #5a6268;
 }
 
-/* Additional links */
+/* Additional links. align-items keeps each anchor sized to its text — as
+   stretched (default) flex children the links hovered/fired from anywhere
+   horizontally level with them. */
 .modal-additional-links {
     font-size: 13px;
     color: var(--modal-text-muted);
     text-align: center;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 0;
 }
 
@@ -965,6 +968,30 @@
     border-radius: 4px;
     border: 1px solid var(--border-color);
     position: relative;
+}
+
+/* No cached notation: the section holds only the Generate Notation link */
+.abc-notation-section.abc-notation-empty {
+    padding-bottom: 6px;
+    text-align: center;
+}
+
+.generate-notation-link {
+    background: none;
+    border: none;
+    padding: 6px 8px;
+    font-size: 13px;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.generate-notation-link:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.generate-notation-link:disabled {
+    color: var(--modal-text-muted);
+    cursor: default;
 }
 
 /* Controls row - mode tabs on left, external links on right */

@@ -155,4 +155,4 @@ controls (search-mode inputs, action-pills).
 - `specs/changes/inprogress/035-svelte-ui-consolidation.md` — the migration spec
 
 
-> Kit adoption update: lib/Tabs is now THE tab engine across personpage, sessionpage, sessionadminpage, and the tunesheet (value mode + onValueChange URL sync, or navigate mode with href tabs); pages keep their existing skins via the class-passthrough props and styled={false}.
+> Kit adoption update: lib/Tabs is now THE tab engine across personpage, sessionpage, sessionadminpage, and the tunesheet (value mode + onValueChange URL sync, or navigate mode with href tabs); pages keep their existing skins via the class-passthrough props and styled={false}. The mobile `<select>` is a per-host knob (`mobileSelect`: true | false | 'auto' = select only above 4 tabs): personpage and sessionadminpage keep it (it originated there and their tab counts overflow a phone); sessionpage and the tunesheet keep visual tabs on mobile.

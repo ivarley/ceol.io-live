@@ -285,13 +285,34 @@
       expandInstrumentStatus: filters.instrument ? true : undefined,
       onStatusChange: (change) => {
         // Statuses auto-save in the modal — mirror into our data so the list
-        // behind the modal updates immediately.
+        // behind the modal updates immediately. Fires for ANY tune the drawer
+        // shows (chained Played With navigation inherits the callback), so it
+        // must also handle tunes we have no card for yet.
         const t = allTunes.find((x) => x.tune_id === change.tune_id)
-        if (!t) return
-        replaceTune(change.tune_id, {
-          learn_status: change.learn_status,
-          instrument_status: change.instrument_status,
-        })
+        if (t) {
+          if (change.on_list === false) {
+            allTunes = allTunes.filter((x) => x.tune_id !== change.tune_id)
+            return
+          }
+          replaceTune(change.tune_id, {
+            learn_status: change.learn_status,
+            instrument_status: change.instrument_status,
+          })
+          return
+        }
+        // A chained tune was just added to the list: the drawer's payload isn't
+        // a full list row, so fetch it (the detail response is a superset of
+        // the row shape) and add the card in place.
+        if (change.on_list && change.person_tune_id) {
+          fetch(`/api/my-tunes/${change.person_tune_id}`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (!d.success || !d.person_tune) return
+              if (allTunes.some((x) => x.tune_id === change.tune_id)) return
+              allTunes = [...allTunes, d.person_tune]
+            })
+            .catch(() => {})
+        }
       },
       additionalData: {
         personTuneId: personTuneId,

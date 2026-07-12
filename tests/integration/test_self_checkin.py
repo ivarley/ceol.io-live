@@ -121,9 +121,11 @@ class TestSelfCheckin:
         data = json.loads(response.data)
         assert data['success'] is True
 
-    def test_non_regular_user_self_checkin(self, client, authenticated_user, sample_session_instance_data):
+    def test_non_regular_user_self_checkin(self, client, authenticated_user, non_regular_session_instance_id):
         """Test that non-regular users can still check themselves into any session"""
-        session_instance_id = sample_session_instance_data['session_instance_id']
+        # A session the test user is NOT a seeded regular of, so the response's
+        # is_regular reflects an outsider checking in.
+        session_instance_id = non_regular_session_instance_id
         
         with authenticated_user:
             user_person_id = authenticated_user.person_id

@@ -42,6 +42,34 @@ RESET=false
 SEED_ONLY=false
 SCHEMA_ONLY=false
 
+# Point every serial sequence at MAX(column). The seed file inserts explicit
+# ids and its handful of setval calls doesn't cover every table, so anything
+# outside that list is left at 1 — the next app INSERT then dies on a
+# duplicate key (the classic "flaky test" that's really sequence drift).
+resync_sequences() {
+    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -q <<'SQL'
+DO $$
+DECLARE r RECORD; mx BIGINT;
+BEGIN
+  FOR r IN
+    SELECT seq.relname AS seqname, tab.relname AS tabname, attr.attname AS colname
+    FROM pg_class seq
+    JOIN pg_depend dep ON dep.objid = seq.oid
+    JOIN pg_class tab ON dep.refobjid = tab.oid
+    JOIN pg_attribute attr ON attr.attrelid = tab.oid AND attr.attnum = dep.refobjsubid
+    WHERE seq.relkind = 'S'
+  LOOP
+    EXECUTE format('SELECT COALESCE(MAX(%I),0) FROM %I', r.colname, r.tabname) INTO mx;
+    IF mx > 0 THEN
+      EXECUTE format('SELECT setval(%L, %s, true)', r.seqname, mx);
+    ELSE
+      EXECUTE format('SELECT setval(%L, 1, false)', r.seqname);
+    END IF;
+  END LOOP;
+END$$;
+SQL
+}
+
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
@@ -185,6 +213,12 @@ if [ "$SEED_ONLY" = true ]; then
 
     echo "Loading seed data..."
     PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SEED_FILE" > /dev/null
+    resync_sequences
+    # Seeded settings ship empty incipits; compute them like the app would so
+    # the drawer / offline bundle render notation from a fresh seed.
+    PGHOST=$DB_HOST PGPORT=$DB_PORT PGDATABASE=$DB_NAME PGUSER=$DB_USER PGPASSWORD=$DB_PASSWORD \
+        "$PROJECT_ROOT/venv/bin/python" "$SCRIPT_DIR/backfill_incipits.py" || \
+        echo -e "${YELLOW}Warning: incipit backfill failed (venv missing?) — drawer notation may be blank${NC}"
 
     echo -e "${GREEN}Seed data loaded successfully!${NC}"
     exit 0
@@ -242,6 +276,12 @@ if [ "$SCHEMA_ONLY" = false ]; then
     echo ""
     echo "Loading seed data..."
     PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$SEED_FILE" > /dev/null 2>&1
+    resync_sequences
+    # Seeded settings ship empty incipits; compute them like the app would so
+    # the drawer / offline bundle render notation from a fresh seed.
+    PGHOST=$DB_HOST PGPORT=$DB_PORT PGDATABASE=$DB_NAME PGUSER=$DB_USER PGPASSWORD=$DB_PASSWORD \
+        "$PROJECT_ROOT/venv/bin/python" "$SCRIPT_DIR/backfill_incipits.py" || \
+        echo -e "${YELLOW}Warning: incipit backfill failed (venv missing?) — drawer notation may be blank${NC}"
     echo -e "${GREEN}Seed data loaded successfully${NC}"
 fi
 

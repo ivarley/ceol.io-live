@@ -19,6 +19,8 @@ const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Reseed ceol_test when the run ends — specs commit real rows via the API.
+  globalTeardown: "./e2e/global.teardown.ts",
   // Each test file is independent; run files in parallel.
   fullyParallel: true,
   // Fail the build on CI if test.only is left in the source.

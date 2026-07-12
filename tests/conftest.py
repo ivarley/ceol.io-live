@@ -33,6 +33,29 @@ from database import get_db_connection
 from auth import User
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """Reseed ceol_test after the run.
+
+    The db_conn fixture rolls back, but tests that drive the Flask client hit
+    API endpoints that open their own connections and COMMIT — those rows leak
+    and pile up across runs (and stale sequences cause duplicate-key flakes).
+    A reseed takes ~0.2s, so just restore the known state every time.
+    Set KEEP_TEST_DB=1 to skip (e.g. to inspect what a failing test wrote).
+    """
+    if session.testscollected == 0 or os.environ.get("KEEP_TEST_DB"):
+        return
+    import subprocess
+
+    script = os.path.join(project_root, "scripts", "setup_local_db.sh")
+    result = subprocess.run(
+        [script, "--seed-only"], capture_output=True, text=True, timeout=60
+    )
+    if result.returncode == 0:
+        print("\n[conftest] test DB reseeded (KEEP_TEST_DB=1 to skip)")
+    else:
+        print(f"\n[conftest] WARNING: test DB reseed failed:\n{result.stderr}")
+
+
 @pytest.fixture(scope="session")
 def db_setup():
     """Set up test database schema once per test session."""
@@ -198,6 +221,17 @@ def sample_session_instance_data():
         "location_override": None,
         "log_complete_date": None,
     }
+
+
+@pytest.fixture
+def non_regular_session_instance_id():
+    """A seeded session instance where the test users are NOT regulars.
+
+    Persons 1 and 2 are seeded as regulars of sessions 1 and 2, so tests that
+    assert non-regular behavior (self check-in as an outsider) must target a
+    session neither belongs to: instance 30 = Boston Celtic Session (id 3).
+    """
+    return 30
 
 
 @pytest.fixture

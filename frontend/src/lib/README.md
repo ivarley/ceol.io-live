@@ -93,10 +93,13 @@ padding included), dismissible (the ONE sanctioned × glyph, U+00D7), or plain.
 
 
 ### Tabs — responsive tabs (bits-ui `Tabs`)
-Desktop: horizontal tab buttons. Under 768px: the same panes behind a
-`<select>`. Both controls always render; CSS picks one. THE tab engine —
-every tabbed surface (person page, session page, session admin, the tune
-sheet) uses it.
+Desktop: horizontal tab buttons. Under 768px the `mobileSelect` knob decides:
+`true` collapses the same panes behind a `<select>`, `false` keeps the visual
+tabs, `'auto'` (default) picks the select only when there are more than 4 tabs
+(few tabs fit a phone fine). Both controls always render; CSS picks one. THE
+tab engine — every tabbed surface (person page, session page, session admin,
+the tune sheet) uses it; the person page and session admin (where the select
+originated, and whose 4-5 tabs overflow a phone) pass `mobileSelect={true}`.
 
 | Prop | Default | |
 |---|---|---|
@@ -105,6 +108,7 @@ sheet) uses it.
 | `onValueChange` | noop | host hook: URL sync, lazy loads |
 | `navigate` | `false` | tabs are routes: real `<a href>` on desktop, the select navigates |
 | `onNavigate` | `location.href` | navigate-mode seam (tests) |
+| `mobileSelect` | `'auto'` | under 768px: `true` = `<select>`, `false` = visual tabs, `'auto'` = select only when more than 4 tabs |
 | `styled` | `true` | `false` = structural responsive rule only; skin comes from the page via the class props |
 | `listId`/`listClass`/`tabClass`/`selectId`/`selectClass`/`paneClass` | — | legacy skin + e2e/CSS hook passthrough; triggers always carry `data-tab` and an `active` class |
 | `selectLabel` | `'Section'` | aria-label for the mobile select |

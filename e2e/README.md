@@ -23,6 +23,13 @@ The suite expects the seeded **`ceol_test`** database to be up (`make
 setup-test-db` / `./start`). `playwright.config.ts` starts the dev server on
 port 5001 and reuses an already-running one locally.
 
+The run **reseeds the database when it ends** (`global.teardown.ts` — the
+specs commit real rows through the app's API, and without this they pile up
+across runs). Pytest does the same via `pytest_sessionfinish`. Set
+`KEEP_TEST_DB=1` to skip the reseed, e.g. to inspect what a failing test
+wrote. The reseed also resyncs every serial sequence, so stale-sequence
+duplicate-key flakes can't carry over between runs.
+
 ## Layout
 
 | Path | What it covers |

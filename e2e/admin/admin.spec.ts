@@ -79,7 +79,10 @@ test.describe("admin: merge tunes", () => {
     await page.fill("#old-tune-id", String(TUNES.butterfly.id));
     await page.fill("#new-tune-id", String(TUNES.cooleys.id));
     await page.locator("#preview-btn").click();
-    await expect(page.locator("#preview-results")).toBeVisible();
+    // The preview endpoint scans every referencing table; under a fully
+    // parallel run the single-process dev server can push it past the
+    // default 7s expect window, so give it longer.
+    await expect(page.locator("#preview-results")).toBeVisible({ timeout: 20_000 });
     await expect(page.locator("#new-tune-name")).toContainText(/Cooley/i);
   });
 });

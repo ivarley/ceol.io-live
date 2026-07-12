@@ -313,6 +313,10 @@ describe('TuneSheet component', () => {
   })
 
   it('not-on-list session view shows the red bar; Add posts an add op and refetches', async () => {
+    // On a non-my-tunes page (the generic Find-a-tune flow): an add refreshes
+    // the global view in place — my-tunes-page adds instead upgrade the variant
+    // (covered in the chaining describe below).
+    window.history.replaceState({}, '', '/')
     let onList = false
     stubFetch([
       ['/api/my-tunes/ops', () => ({ success: true })],
@@ -524,5 +528,284 @@ describe('TuneSheet component', () => {
     flushSync()
     expect(overlay.style.display).toBe('none')
     vi.useRealTimers()
+  })
+})
+
+describe('TuneSheet — in-drawer chaining, host notification, roll-up reset, generate notation', () => {
+  const playedWith = (ids) => ({
+    success: true,
+    tunes: ids.map((id) => ({ tune_id: id, name: `Tune #${id}`, count: 2 })),
+  })
+
+  it('Played With chaining from my_tunes reopens the SAME variant (notes/config/ptid) and inherits callbacks', async () => {
+    const onStatusChange = vi.fn()
+    stubFetch([
+      ['/api/my-tunes/ops', { success: true }],
+      ['/api/my-tunes/11', myTunesPayload()],
+      ['/api/my-tunes/55', myTunesPayload({ person_tune_id: 55, tune_id: 202, tune_name: 'Banish Misfortune', notes: 'chained notes' })],
+      ['/api/tunes/101/played-with', playedWith([202])],
+      ['/api/tunes/202/detail', sessionPayload()], // person_tune_status.person_tune_id: 55 (on list)
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      onStatusChange,
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.modal-tab[data-tab="played-with"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.modal-tab[data-tab="played-with"]'))
+    await waitFor(() => expect(container.querySelector('.played-with-item[data-tune-id="202"]')).toBeTruthy())
+
+    await fireEvent.click(container.querySelector('.played-with-item[data-tune-id="202"]'))
+    // resolves the ptid via the global detail endpoint, then opens the full my_tunes variant
+    await waitFor(() => expect(container.querySelector('#notes-textarea')).toBeTruthy())
+    expect(container.querySelector('#notes-textarea').value).toBe('chained notes')
+    expect(container.querySelector('#name-alias-input')).toBeTruthy()
+    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From My Tunes')
+    expect(new URL(window.location).searchParams.get('ptid')).toBe('55')
+
+    // the host callback was inherited: a status change on the CHAINED tune notifies it
+    await fireEvent.click(container.querySelector('.tsc-main-block .tunebook-status-opt[data-status="learned"]'))
+    await waitFor(() =>
+      expect(onStatusChange).toHaveBeenCalledWith(
+        expect.objectContaining({ tune_id: 202, learn_status: 'learned', on_list: true, person_tune_id: 55 })
+      )
+    )
+  })
+
+  it('chained not-on-list tune degrades to the Add view; adding notifies the host with the new identity', async () => {
+    const onStatusChange = vi.fn()
+    let onList = false
+    stubFetch([
+      ['/api/my-tunes/ops', { success: true }],
+      ['/api/my-tunes/77', myTunesPayload({ person_tune_id: 77, tune_id: 303, tune_name: 'The Chained', notes: 'now mine' })],
+      ['/api/my-tunes/11', myTunesPayload()],
+      ['/api/tunes/101/played-with', playedWith([303])],
+      ['/api/tunes/303/played-with', playedWith([])],
+      ['/api/tunes/303/history', { success: true, play_instances: [] }],
+      [
+        '/api/tunes/303/detail',
+        () =>
+          onList
+            ? sessionPayload({ tune_id: 303 }, { person_tune_id: 77, learn_status: 'want to learn' })
+            : sessionPayload({ tune_id: 303 }, { on_list: false, person_tune_id: null, learn_status: null }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      onStatusChange,
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.modal-tab[data-tab="played-with"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.modal-tab[data-tab="played-with"]'))
+    await waitFor(() => expect(container.querySelector('.played-with-item[data-tune-id="303"]')).toBeTruthy())
+
+    await fireEvent.click(container.querySelector('.played-with-item[data-tune-id="303"]'))
+    await waitFor(() => expect(container.querySelector('.tsc-notlist-add')).toBeTruthy())
+
+    // put the user on a non-default tab: the in-place upgrade must keep it
+    await fireEvent.click(container.querySelector('.modal-tab[data-tab="played-with"]'))
+
+    onList = true
+    await fireEvent.click(container.querySelector('.tsc-notlist-add'))
+    // the refetched payload carries the new person_tune identity -> host notified
+    await waitFor(() =>
+      expect(onStatusChange).toHaveBeenCalledWith(
+        expect.objectContaining({ tune_id: 303, on_list: true, person_tune_id: 77, learn_status: 'want to learn' })
+      )
+    )
+
+    // ...and the drawer upgrades IN PLACE (no close) to the full my_tunes
+    // variant the tune would have opened as had it been on the list.
+    await waitFor(() => expect(container.querySelector('#notes-textarea')).toBeTruthy())
+    expect(container.querySelector('#tune-detail-modal').style.display).toBe('flex')
+    expect(container.querySelector('#notes-textarea').value).toBe('now mine')
+    expect(container.querySelector('#name-alias-input')).toBeTruthy()
+    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From My Tunes')
+    expect(new URL(window.location).searchParams.get('ptid')).toBe('77')
+    // the tab the user was on survives the upgrade
+    expect(container.querySelector('#played-with-tab.active')).toBeTruthy()
+    // the my_tunes history scope toggle (My sessions / All sessions) is offered
+    await fireEvent.click(container.querySelector('.modal-tab[data-tab="history"]'))
+    await waitFor(() =>
+      expect([...container.querySelectorAll('#history-tab .history-scope-btn')].map((b) => b.textContent.trim())).toEqual([
+        'My sessions',
+        'All sessions',
+      ])
+    )
+    // the host was notified exactly once — the upgrade reload doesn't re-notify
+    expect(onStatusChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('session-scoped chaining still carries the session AND now the callbacks', async () => {
+    window.history.replaceState({}, '', '/sessions/austin/mueller/tunes')
+    const onSave = vi.fn()
+    stubFetch([
+      ['/api/tunes/202/played-with', playedWith([404])],
+      ['/api/sessions/austin/mueller/tunes/404', sessionPayload({ tune_id: 404, tune_name: 'The Chained' })],
+      ['/api/sessions/austin/mueller/tunes/202', sessionPayload()],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'session',
+      tuneId: 202,
+      apiEndpoint: '/api/sessions/austin/mueller/tunes/202',
+      onSave,
+      additionalData: { sessionPath: 'austin/mueller', isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.modal-tab[data-tab="played-with"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.modal-tab[data-tab="played-with"]'))
+    await waitFor(() => expect(container.querySelector('.played-with-item[data-tune-id="404"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.played-with-item[data-tune-id="404"]'))
+    await waitFor(() =>
+      expect(container.querySelector('.modal-tune-title').textContent.trim()).toBe('The Chained')
+    )
+    // still the session variant: the session-scoped history toggle is offered
+    expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/404')
+    expect(container.querySelector('#alias-input')).toBeTruthy()
+  })
+
+  it('the per-instrument roll-up resets to collapsed when the drawer shows another tune', async () => {
+    stubFetch([
+      ['/api/my-tunes/11', myTunesPayload()],
+      ['/api/my-tunes/12', myTunesPayload({ person_tune_id: 12, tune_id: 102, tune_name: 'The Second' })],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.tsc-expand-link')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.tsc-expand-link'))
+    expect(container.querySelector('.tsc-instruments')).toBeTruthy()
+
+    component.show({
+      context: 'my_tunes',
+      tuneId: 102,
+      apiEndpoint: '/api/my-tunes/12',
+      additionalData: { personTuneId: 12, isUserLoggedIn: true },
+    })
+    await waitFor(() =>
+      expect(container.querySelector('.modal-tune-title').textContent.trim()).toBe('The Second')
+    )
+    expect(container.querySelector('.tsc-instruments')).toBeFalsy()
+    expect(container.querySelector('.tsc-expand-link').textContent.trim()).toBe('View By Instrument')
+  })
+
+  it('expandInstrumentStatus still opens the roll-up pre-expanded', async () => {
+    stubFetch([['/api/my-tunes/11', myTunesPayload()]])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      expandInstrumentStatus: true,
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.tsc-instruments')).toBeTruthy())
+  })
+
+  it('no cached notation -> Generate Notation runs the settings-cache action and renders in place', async () => {
+    stubFetch([
+      [
+        '/api/tunes/101/settings/cache',
+        { success: true, setting: { setting_id: 9, abc: 'full!abc', incipit_abc: 'inc!abc', image: null, incipit_image: null } },
+      ],
+      [
+        '/api/my-tunes/11',
+        (url, opts) =>
+          opts.method === 'PUT'
+            ? { success: true }
+            : myTunesPayload({ abc: null, incipit_abc: null }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.generate-notation-link')).toBeTruthy())
+    expect(container.querySelector('.abc-notation-display')).toBeFalsy()
+
+    await fireEvent.click(container.querySelector('.generate-notation-link'))
+    await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
+    expect(container.querySelector('.abc-notation-text').textContent).toBe('inc\nabc')
+    // The empty-state section is gone; the fetch yielded abc but no rendered
+    // image, so the toggle spot (correctly) still offers Generate Notation.
+    expect(container.querySelector('.abc-notation-empty')).toBeFalsy()
+    expect(container.querySelector('.notation-mode-tabs .generate-notation-link')).toBeTruthy()
+    const cacheCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/settings/cache'))
+    expect(cacheCall[1].method).toBe('POST')
+  })
+
+  it('abc cached but no rendered image -> Generate Notation replaces the notes/abc toggle and switches to dots', async () => {
+    stubFetch([
+      [
+        '/api/tunes/101/settings/cache',
+        {
+          success: true,
+          setting: { setting_id: 9, abc: 'full!abc', incipit_abc: 'inc!abc', image: null, incipit_image: 'IMGDATA' },
+        },
+      ],
+      [
+        '/api/my-tunes/11',
+        (url, opts) =>
+          opts.method === 'PUT'
+            ? { success: true }
+            : myTunesPayload({ abc: 'full!abc', incipit_abc: 'inc!abc', image: null, incipit_image: null }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    // abc text renders, but with no dots view there's no notes/abc toggle —
+    // the Generate Notation affordance sits in its place.
+    await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
+    expect(container.querySelector('.notation-mode-tab')).toBeFalsy()
+    const link = container.querySelector('.notation-mode-tabs .generate-notation-link')
+    expect(link).toBeTruthy()
+
+    await fireEvent.click(link)
+    // The fetch produced an image: the drawer switches to dots and the real
+    // toggle takes the affordance's place.
+    await waitFor(() => expect(container.querySelector('.abc-notation-image')).toBeTruthy())
+    expect(container.querySelectorAll('.notation-mode-tab').length).toBe(2)
+    expect(container.querySelector('.generate-notation-link')).toBeFalsy()
+  })
+
+  it('Generate Notation failure surfaces through the toast pattern', async () => {
+    window.showMessage = vi.fn()
+    stubFetch([
+      ['/api/tunes/101/settings/cache', { success: false, message: 'nope' }],
+      ['/api/my-tunes/11', myTunesPayload({ abc: null, incipit_abc: null })],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({
+      context: 'my_tunes',
+      tuneId: 101,
+      apiEndpoint: '/api/my-tunes/11',
+      additionalData: { personTuneId: 11, isUserLoggedIn: true },
+    })
+    await waitFor(() => expect(container.querySelector('.generate-notation-link')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.generate-notation-link'))
+    await waitFor(() =>
+      expect(window.showMessage).toHaveBeenCalledWith('Could not fetch notation for this tune', 'error')
+    )
+    // the affordance stays for a retry
+    expect(container.querySelector('.generate-notation-link')).toBeTruthy()
+    delete window.showMessage
   })
 })

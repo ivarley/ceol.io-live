@@ -145,9 +145,11 @@ class TestAttendanceFlow:
             assert user_attendance is not None
             assert user_attendance['attendance'] == 'maybe'
 
-    def test_casual_user_discovery_and_checkin_workflow(self, client, authenticated_user, sample_session_instance_data):
+    def test_casual_user_discovery_and_checkin_workflow(self, client, authenticated_user, non_regular_session_instance_id):
         """Test casual user workflow: discover session → self check-in → appear in attendance"""
-        session_instance_id = sample_session_instance_data['session_instance_id']
+        # A session the test user is NOT a seeded regular of — the whole point
+        # of the casual-user flow.
+        session_instance_id = non_regular_session_instance_id
         
         with authenticated_user:
             user_person_id = authenticated_user.person_id

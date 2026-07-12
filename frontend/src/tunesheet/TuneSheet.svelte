@@ -46,7 +46,8 @@
   let modalShowTime = 0 // scrim-click guard (500ms)
   let hideTimer = null
 
-  // Persists across opens within the page (like the legacy module-level flag).
+  // Reset on every show(): the per-instrument roll-up must not stay expanded
+  // when the drawer moves to another tune (or reopens).
   let piExpanded = $state(false)
   let isConfigVisible = $state(false)
   let activeTab = $state('stats')
@@ -112,6 +113,9 @@
   const hasCachedNotation = $derived(
     !!(tune && (tune.abc || tune.incipit_abc || tune.image || tune.incipit_image))
   )
+  // The settings/cache endpoint is login-required, so the Generate Notation
+  // affordance only shows for logged-in viewers (admin context implies one).
+  const canGenerateNotation = $derived(!!tune && (ctx === 'admin' || !!addl.isUserLoggedIn))
   const fetchBtnLabel = $derived.by(() => {
     if (!tune) return 'Fetch'
     const value = (fields.setting || '').trim()
@@ -234,7 +238,11 @@
     refreshState = 'idle'
     statusSaving = false
     isConfigVisible = config.context === 'admin'
-    activeTab = 'stats'
+    // Tabs reset to Stats — except a show() that asked to keep a tab (the
+    // in-place add -> my_tunes variant upgrade preserves the user's tab).
+    activeTab = config.initialTab || 'stats'
+    if (activeTab === 'history') loadHistory()
+    else if (activeTab === 'played-with') loadPlayedWith()
     const info = notationInfo(data)
     notationMode = info.initialMode
     notationSize = 'incipit'
@@ -279,7 +287,7 @@
     playedWithCache = {}
     historyScope = historyScopeOptions(cfg)[0].key
     playedWithScope = playedWithScopeOptions(cfg)[0].key
-    if (cfg.expandInstrumentStatus !== undefined) piExpanded = !!cfg.expandInstrumentStatus
+    piExpanded = !!cfg.expandInstrumentStatus
     pendingHeard = 0
     mergedFrom = null
 
@@ -383,7 +391,10 @@
   // ---- tunebook status control ------------------------------------------------------
 
   // Tell the host page a status was changed (statuses auto-save in place, without
-  // the Save button / onSave), so it can update its own list immediately.
+  // the Save button / onSave), so it can update its own list immediately. Works
+  // for ANY tune shown in the drawer, not just the one it opened with: on_list +
+  // person_tune_id give a host that has no card for this tune (chained Played
+  // With navigation) enough identity to fetch the row and add one.
   function notifyStatusChange() {
     if (!config || typeof config.onStatusChange !== 'function' || !tune) return
     const data = getInstrumentData(tune, ctx)
@@ -391,6 +402,11 @@
       tune_id: tune.tune_id,
       learn_status: getModalLearnStatus(tune, ctx),
       instrument_status: { ...data.overrides },
+      on_list: onList,
+      person_tune_id:
+        (ctx === 'my_tunes'
+          ? tune.person_tune_id || addl.personTuneId
+          : tune.person_tune_status && tune.person_tune_status.person_tune_id) || null,
     })
   }
 
@@ -496,6 +512,7 @@
   // Add the tune to the user's list as 'want to learn'.
   export function addToTunebook() {
     const tuneId = tune.tune_id
+    const keepTab = activeTab // survives the refetch's per-render tab reset
     // name/tune_type ride along so an offline add shows in the My Tunes list while queued.
     submitMyTunesOp({
       type: 'add',
@@ -519,7 +536,15 @@
           fetch(config.apiEndpoint)
             .then((response) => response.json())
             .then((data) => {
-              if (data.success) applyTuneData(extractTuneData(data, ctx))
+              if (data.success) {
+                applyTuneData(extractTuneData(data, ctx))
+                // The refetched payload carries the new person_tune identity, so
+                // the host can add a card for a tune it has none for (chained adds
+                // must live-update the underlying My Tunes list). Fires exactly
+                // once — the variant upgrade below never re-notifies.
+                notifyStatusChange()
+                maybeUpgradeToMyTunesVariant(keepTab)
+              }
             })
         }
       })
@@ -672,9 +697,11 @@
   }
 
   // Fetch and cache setting from TheSession.org, save the setting id per context,
-  // then re-render with the fetched notation.
+  // then re-render with the fetched notation. Resolves true when notation was
+  // fetched (even if the per-context setting-id save then warned), so callers
+  // like generateNotation can surface failures their own way.
   export function fetchSetting() {
-    if (!tune || fetchBtnState === 'loading') return
+    if (!tune || fetchBtnState === 'loading') return Promise.resolve(false)
     const tuneId = tune.tune_id
     const settingIdValue = (fields.setting || '').trim()
     fetchBtnState = 'loading'
@@ -693,13 +720,13 @@
       apiUrl += `?setting_id=${settingId}`
     }
 
-    fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    return fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
           console.error('Error fetching setting:', data.message)
           feedback('err')
-          return
+          return false
         }
         const fetchedSettingId = data.setting.setting_id
         tune.abc = data.setting.abc
@@ -722,7 +749,7 @@
         }
 
         if (saveEndpoint) {
-          fetch(saveEndpoint, {
+          return fetch(saveEndpoint, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(savePayload),
@@ -739,20 +766,38 @@
                 applyTuneData(tune) // still re-render with the fetched data
                 feedback('warn')
               }
+              return true
             })
             .catch((error) => {
               console.error('Error saving setting_id:', error)
               applyTuneData(tune) // still re-render with the fetched data
+              return true
             })
-        } else {
-          applyTuneData(tune)
-          feedback('ok')
         }
+        applyTuneData(tune)
+        feedback('ok')
+        return true
       })
       .catch((error) => {
         console.error('Error:', error)
         feedback('err')
+        return false
       })
+  }
+
+  // "Generate Notation" (shown in the notation area when nothing is cached):
+  // the SAME action as the configure section's Fetch/Refresh button; a failure
+  // surfaces through the drawer's toast pattern.
+  export function generateNotation() {
+    fetchSetting().then((ok) => {
+      if (!ok) {
+        toast('Could not fetch notation for this tune', 'error')
+        return
+      }
+      // If the fetch produced a rendered image, show the dots the user asked
+      // for instead of leaving them on the abc text view.
+      if (tune?.incipit_image || tune?.image) notationMode = 'dots'
+    })
   }
 
   // ---- removals ---------------------------------------------------------------------
@@ -935,36 +980,129 @@
       })
   }
 
-  // Open a companion tune's detail modal in place of the current one. When the
-  // current modal is session-scoped, the session context is carried along (as a
-  // 'session' view — the tune may not be in this particular instance's log) so
-  // the At This Session / Globally toggles stay available. Otherwise it opens as
-  // a session-agnostic global view.
+  // Open a companion tune's detail modal in place of the current one, KEEPING
+  // the drawer's current "version": in-drawer navigation inherits the context
+  // (and the host callbacks — onSave/onStatusChange) so the user stays in the
+  // same variant however deep they chain.
+  //  * session-scoped drawers carry the session along (as a 'session' view —
+  //    the tune may not be in this particular instance's log) so the At This
+  //    Session / Globally toggles stay available.
+  //  * my_tunes drawers resolve the companion's person_tune row first: on-list
+  //    tunes reopen as the full my_tunes variant (notes/config/My-Sessions
+  //    history); not-on-list tunes degrade to the logged-in global view (with
+  //    the Add control), remembering the my_tunes chain (chainCtx) so a later
+  //    hop still resolves against the my_tunes variant.
+  //  * admin drawers chain as admin; the global lookup stays global.
   function openPlayedWithTune(tuneId) {
     if (!tuneId) return
     const prev = config?.additionalData || {}
     const loggedIn = prev.isUserLoggedIn ?? (ctx === 'my_tunes' || !!tune?.person_tune_status)
+    const inherited = { onSave: config?.onSave, onStatusChange: config?.onStatusChange }
+    const baseCtx = prev.chainCtx || ctx
     const sessionPath = !prev.global && (ctx === 'session' || ctx === 'session_instance') ? prev.sessionPath : null
     if (sessionPath) {
       show({
         context: 'session',
         tuneId: tuneId,
         apiEndpoint: `/api/sessions/${sessionPath}/tunes/${tuneId}`,
-        onSave: config.onSave,
+        ...inherited,
         additionalData: {
           sessionPath: sessionPath,
           isUserLoggedIn: loggedIn,
           isSessionAdmin: !!prev.isSessionAdmin,
         },
       })
+    } else if (baseCtx === 'my_tunes' && loggedIn) {
+      openMyTunesChained(tuneId, inherited)
+    } else if (baseCtx === 'admin') {
+      show({
+        context: 'admin',
+        tuneId: tuneId,
+        apiEndpoint: `/api/admin/tunes/${tuneId}`,
+        ...inherited,
+        additionalData: { isUserLoggedIn: loggedIn },
+      })
     } else {
       show({
         context: 'session_instance',
         tuneId: tuneId,
         apiEndpoint: `/api/tunes/${tuneId}/detail`,
+        ...inherited,
         additionalData: { isUserLoggedIn: loggedIn, global: true },
       })
     }
+  }
+
+  // my_tunes chaining: the global detail payload carries person_tune_status
+  // (incl. person_tune_id), which tells us whether the companion tune can open
+  // as the full my_tunes variant or must fall back to the global view.
+  function openMyTunesChained(tuneId, inherited) {
+    phase = 'loading'
+    const fallback = (st) =>
+      show({
+        context: 'session_instance',
+        tuneId: tuneId,
+        apiEndpoint: `/api/tunes/${tuneId}/detail`,
+        ...inherited,
+        additionalData: {
+          isUserLoggedIn: true,
+          global: true,
+          chainCtx: 'my_tunes',
+          tuneName: st && st.tune_name,
+          tuneType: st && st.tune_type,
+        },
+      })
+    fetch(`/api/tunes/${tuneId}/detail`)
+      .then((r) => r.json())
+      .then((data) => {
+        const st = (data && data.session_tune) || null
+        const ptid = st && st.person_tune_status && st.person_tune_status.person_tune_id
+        if (data && data.success && ptid) {
+          show({
+            context: 'my_tunes',
+            tuneId: st.tune_id || tuneId,
+            apiEndpoint: `/api/my-tunes/${ptid}`,
+            ...inherited,
+            additionalData: {
+              personTuneId: ptid,
+              tuneName: st.tune_name,
+              tuneType: st.tune_type,
+              isUserLoggedIn: true,
+            },
+          })
+        } else {
+          fallback(st)
+        }
+      })
+      .catch(() => fallback(null))
+  }
+
+  // A tune just added from an Add view whose ORIGIN is the my_tunes variant
+  // (Played With chaining carries chainCtx; the "Find a tune" global view opened
+  // on the /my-tunes page itself shares this path) upgrades the drawer IN PLACE
+  // to the full my_tunes variant it would have opened as had the tune already
+  // been on the list — keeping the tab the user was on. Called after the add's
+  // refetch + host notification; never re-notifies. Offline adds never get here
+  // (no person_tune_id exists yet — the queued-add flow redirects to /my-tunes).
+  function maybeUpgradeToMyTunesVariant(keepTab) {
+    if (ctx === 'my_tunes') return // already the full variant
+    const fromMyTunes = addl.chainCtx === 'my_tunes' || window.location.pathname.includes('/my-tunes')
+    const ptid = tune && tune.person_tune_status && tune.person_tune_status.person_tune_id
+    if (!fromMyTunes || !ptid) return
+    show({
+      context: 'my_tunes',
+      tuneId: tune.tune_id,
+      apiEndpoint: `/api/my-tunes/${ptid}`,
+      onSave: config?.onSave,
+      onStatusChange: config?.onStatusChange,
+      initialTab: keepTab,
+      additionalData: {
+        personTuneId: ptid,
+        tuneName: tune.tune_name || tune.name,
+        tuneType: tune.tune_type,
+        isUserLoggedIn: true,
+      },
+    })
   }
 
   // ---- ABC notation section -----------------------------------------------------------
@@ -1419,6 +1557,20 @@
                   >
                     abc
                   </button>
+                {:else if notation.hasAbc && !notation.hasDots && canGenerateNotation}
+                  <!-- abc text is cached but no rendered staff image: offer to
+                       generate the dots where the notes/abc toggle would sit. -->
+                  <button
+                    type="button"
+                    class="generate-notation-link"
+                    onclick={(e) => {
+                      e.stopPropagation()
+                      generateNotation()
+                    }}
+                    disabled={fetchBtnState === 'loading'}
+                  >
+                    {fetchBtnState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
+                  </button>
                 {/if}
               </div>
               <div class="notation-external-links">
@@ -1437,6 +1589,19 @@
                   >{/if}
               </div>
             </div>
+          </div>
+        {:else if canGenerateNotation}
+          <!-- No cached notation for this tune: offer to generate it in place
+               (same action as the configure section's Fetch/Refresh). -->
+          <div class="abc-notation-section abc-notation-empty">
+            <button
+              type="button"
+              class="generate-notation-link"
+              onclick={generateNotation}
+              disabled={fetchBtnState === 'loading'}
+            >
+              {fetchBtnState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
+            </button>
           </div>
         {/if}
 
@@ -1498,7 +1663,9 @@
         <!-- Tabs (Stats / History / Played With) -->
         <div class="modal-tabs-section">
           <!-- Kit Tabs engine with the drawer's legacy skin; switchTab (the
-               onValueChange handler) keeps the lazy History/Played-With loads. -->
+               onValueChange handler) keeps the lazy History/Played-With loads.
+               mobileSelect stays 'auto': 3 tabs fit a phone, so the drawer keeps
+               visual tabs at mobile width (it never had the select). -->
           <Tabs
             tabs={[
               { id: 'stats', label: 'Stats' },

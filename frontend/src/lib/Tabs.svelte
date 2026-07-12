@@ -1,10 +1,12 @@
 <script>
   import { Tabs as BitsTabs } from 'bits-ui'
 
-  // Tabs (spec 035): THE responsive tab rule — horizontal tab buttons on
-  // desktop, the SAME sections behind a <select> under 768px (promoted from
-  // person_details.html / admin_tabs.html). Both controls always render; CSS
-  // media queries pick which one shows.
+  // Tabs (spec 035): THE tab engine — horizontal tab buttons on desktop, and a
+  // design-time knob (mobileSelect) deciding whether the SAME sections collapse
+  // behind a <select> under 768px (promoted from person_details.html /
+  // admin_tabs.html). Both controls always render; CSS media queries pick which
+  // one shows. Few tabs fit a phone fine, so 'auto' (the default) only switches
+  // to the select when the tab count genuinely overflows a phone width.
   //
   // Two modes:
   //  * value mode (default): bits-ui Tabs — client-side switching, bind:value.
@@ -27,6 +29,9 @@
     navigate = false,
     // navigate-mode seam: replace to intercept (tests) — default is a real navigation
     onNavigate = (href) => (window.location.href = href),
+    // Mobile behavior under 768px: true = always the <select>, false = keep the
+    // visual tabs, 'auto' = select only when there are more than 4 tabs.
+    mobileSelect = 'auto',
     styled = true, // false: structural behavior only, skin comes from the page
     listId = undefined,
     listClass = '',
@@ -55,7 +60,10 @@
     handleChange(v)
   }
 
-  const rootClass = $derived('kit-tabs' + (styled ? ' kit-tabs--styled' : ''))
+  const useMobileSelect = $derived(mobileSelect === true || (mobileSelect === 'auto' && tabs.length > 4))
+  const rootClass = $derived(
+    'kit-tabs' + (styled ? ' kit-tabs--styled' : '') + (useMobileSelect ? ' kit-tabs--mselect' : '')
+  )
 </script>
 
 {#if navigate}
@@ -104,6 +112,16 @@
 {/if}
 
 <style>
+  /* A clicked tab shouldn't wear the browser's focus ring — that's for
+     keyboard navigation (:focus-visible) only. Applies to every skin. */
+  :global(.kit-tab:focus) {
+    outline: none;
+  }
+  :global(.kit-tab:focus-visible) {
+    outline: 2px solid var(--primary, #00a1e0);
+    outline-offset: -2px;
+  }
+
   /* Decorative skin — only under .kit-tabs--styled so pages with a legacy
      skin (tab-button / nav-link) aren't fought by kit rules. */
   :global(.kit-tabs--styled .kit-tabs-list) {
@@ -145,15 +163,16 @@
     padding-top: var(--sp-4, 16px);
   }
 
-  /* Structural responsive rule — ALWAYS applies, skinned or not. */
+  /* Structural responsive rule — applies skinned or not, but only for hosts
+     whose mobileSelect knob resolved to the select (.kit-tabs--mselect). */
   :global(.kit-tabs .kit-tabs-select) {
     display: none;
   }
   @media (max-width: 767.98px) {
-    :global(.kit-tabs .kit-tabs-list) {
+    :global(.kit-tabs--mselect .kit-tabs-list) {
       display: none;
     }
-    :global(.kit-tabs .kit-tabs-select) {
+    :global(.kit-tabs--mselect .kit-tabs-select) {
       display: block;
       width: 100%;
     }

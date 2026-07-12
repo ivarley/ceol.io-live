@@ -136,3 +136,70 @@ describe('My Tunes page view', () => {
     }
   })
 })
+
+describe('drawer status-change notifications (chained tunes)', () => {
+  it('updates the matching card for a tune already on the page', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"]'))
+    const config = window.TuneDetailModal.show.mock.calls[0][0]
+
+    config.onStatusChange({
+      tune_id: 101,
+      learn_status: 'learned',
+      instrument_status: {},
+      on_list: true,
+      person_tune_id: 11,
+    })
+    await waitFor(() =>
+      expect(container.querySelector('.tune-card[data-tune-id="101"] .status-badge').textContent).toBe('learned')
+    )
+  })
+
+  it('adds a card when a tune with no card (chained drawer navigation) joins the list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url, opts = {}) => {
+        if (String(url).includes('/api/my-tunes/77')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              success: true,
+              person_tune: {
+                person_tune_id: 77,
+                tune_id: 999,
+                tune_name: 'The Chained Reel',
+                tune_type: 'reel',
+                learn_status: 'want to learn',
+                heard_count: 0,
+                notes: null,
+                setting_id: null,
+                tunebook_count: 2,
+                session_play_count: 0,
+                instrument_status: {},
+              },
+            }),
+          })
+        }
+        return Promise.resolve({ ok: true, json: async () => payload() })
+      })
+    )
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="101"]')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.tune-card[data-tune-id="101"]'))
+    const config = window.TuneDetailModal.show.mock.calls[0][0]
+
+    // A tune 20 links deep in Played With chaining was added to the list: the
+    // host fetches its full row and the card appears without a reload.
+    config.onStatusChange({
+      tune_id: 999,
+      learn_status: 'want to learn',
+      instrument_status: {},
+      on_list: true,
+      person_tune_id: 77,
+    })
+    await waitFor(() => expect(container.querySelector('.tune-card[data-tune-id="999"]')).toBeTruthy())
+    expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(3)
+    expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('want to learn')
+  })
+})

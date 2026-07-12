@@ -153,6 +153,9 @@ export function updateUrlWithTune(tuneId, context) {
     const url = new URL(window.location)
     const paramName = context === 'my_tunes' ? 'ptid' : 'tune'
     url.searchParams.set(paramName, tuneId)
+    // In-drawer chaining can hop between contexts (my_tunes <-> global view);
+    // drop the other context's param so a stale one never lingers in the URL.
+    url.searchParams.delete(context === 'my_tunes' ? 'tune' : 'ptid')
     window.history.replaceState({}, '', url)
   }
 }
@@ -165,8 +168,9 @@ export function removeUrlTuneParam(context) {
     window.history.replaceState({}, '', '/admin/tunes')
   } else {
     const url = new URL(window.location)
-    const paramName = context === 'my_tunes' ? 'ptid' : 'tune'
-    url.searchParams.delete(paramName)
+    // Clear both drawer params: a chained drawer may have visited both contexts.
+    url.searchParams.delete('ptid')
+    url.searchParams.delete('tune')
     window.history.replaceState({}, '', url)
   }
 }

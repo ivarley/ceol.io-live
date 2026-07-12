@@ -56,6 +56,40 @@ describe('Tabs', () => {
   })
 })
 
+describe('Tabs — mobileSelect knob (visual tabs vs <select> under 768px)', () => {
+  // jsdom can't run the media query, so we assert the class that scopes the
+  // mobile-select CSS rule (.kit-tabs--mselect) is present exactly when the
+  // knob resolves to the select.
+  const sixTabs = [
+    { id: 'a', label: 'A' },
+    { id: 'b', label: 'B' },
+    { id: 'c', label: 'C' },
+    { id: 'd', label: 'D' },
+    { id: 'e', label: 'E' },
+    { id: 'f', label: 'F' },
+  ]
+
+  it("'auto' (default) keeps visual tabs when 4 or fewer tabs", () => {
+    render(TabsFixture, { props: { tabs } }) // 3 tabs
+    expect(document.querySelector('.kit-tabs').className).not.toContain('kit-tabs--mselect')
+  })
+
+  it("'auto' switches to the select when the tab count overflows a phone (>4)", () => {
+    render(TabsFixture, { props: { tabs: sixTabs } })
+    expect(document.querySelector('.kit-tabs').className).toContain('kit-tabs--mselect')
+  })
+
+  it('true forces the select rule regardless of tab count', () => {
+    render(TabsFixture, { props: { tabs, mobileSelect: true } })
+    expect(document.querySelector('.kit-tabs').className).toContain('kit-tabs--mselect')
+  })
+
+  it('false keeps visual tabs regardless of tab count', () => {
+    render(TabsFixture, { props: { tabs: sixTabs, mobileSelect: false } })
+    expect(document.querySelector('.kit-tabs').className).not.toContain('kit-tabs--mselect')
+  })
+})
+
 describe('Tabs — skin passthrough + navigate mode (spec 035 tabs unification)', () => {
   it('stamps data-tab and an `active` class on triggers, and appends custom classes', async () => {
     render(TabsFixture, { props: { tabs, tabClass: 'tab-button', listClass: 'tab-buttons' } })
