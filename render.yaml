@@ -12,8 +12,12 @@ services:
       # install. Must match the streaming + cron services.
       - key: PYTHON_VERSION
         value: "3.11.0"
+      # bits-ui (component kit, spec 035) requires Node >= 20; 22 is current LTS.
+      # NOTE: the service is dashboard-managed, so what actually pins the build's
+      # Node is the repo-root .nvmrc (no NODE_VERSION env var is set in the
+      # dashboard). Keep this and .nvmrc in sync.
       - key: NODE_VERSION
-        value: "18"
+        value: "22"
       # Public URL of the streaming sidecar (below), e.g. https://streaming.ceol.io
       - key: STREAMING_BASE_URL
         sync: false
