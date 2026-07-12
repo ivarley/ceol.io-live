@@ -20,6 +20,7 @@ F = f"http://localhost:{sys.argv[1] if len(sys.argv) > 1 else 5055}"
 INST = int(sys.argv[2] if len(sys.argv) > 2 else 1)
 PATH = sys.argv[3] if len(sys.argv) > 3 else "austin/mueller"
 SARAH_UID = 2  # non-beta test user
+IAN_UID = 1  # admin test user
 
 
 def db(sql, args=(), fetch=False):
@@ -93,13 +94,15 @@ def main():
         if rr.status_code != 200 or rn.status_code != 403:
             fail.append(f"reset should be admin-only: admin={rr.status_code} non-admin={rn.status_code}")
 
-        # 6) admin beta toggle — admin only
-        rt = ian.post(f"{F}/api/admin/users/{SARAH_UID}/beta-logging", json={"enabled": True})
+        # 6) beta toggle — admin or self: admin flips sarah, sarah flips herself,
+        #    but sarah may NOT flip someone else (ian)
+        rt = ian.post(f"{F}/api/users/{SARAH_UID}/beta-logging", json={"enabled": True})
         on = db("SELECT beta_live_logging FROM user_account WHERE user_id=%s", (SARAH_UID,), fetch=True)[0]
-        rtn = sarah.post(f"{F}/api/admin/users/{SARAH_UID}/beta-logging", json={"enabled": False})
-        print(f"6. admin toggle={rt.status_code} (sarah beta now {on}) / non-admin={rtn.status_code} (expect 403)")
-        if rt.status_code != 200 or on is not True or rtn.status_code != 403:
-            fail.append("beta toggle should be admin-only and flip the flag")
+        rself = sarah.post(f"{F}/api/users/{SARAH_UID}/beta-logging", json={"enabled": False})
+        rother = sarah.post(f"{F}/api/users/{IAN_UID}/beta-logging", json={"enabled": False})
+        print(f"6. beta toggle admin={rt.status_code} (sarah beta was {on}) / self={rself.status_code} (expect 200) / other={rother.status_code} (expect 403)")
+        if rt.status_code != 200 or on is not True or rself.status_code != 200 or rother.status_code != 403:
+            fail.append("beta toggle should allow admin and self, forbid others")
     finally:
         db("UPDATE session_instance SET logging_mode=%s, comments=%s WHERE session_instance_id=%s", (orig_mode, orig_notes, INST))
         db("UPDATE user_account SET beta_live_logging=FALSE WHERE user_id=%s", (SARAH_UID,))

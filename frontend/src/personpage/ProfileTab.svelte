@@ -1,7 +1,8 @@
 <script>
   // Profile tab: person + account cards with a display/edit mode toggle, the live
   // per-instrument profile editor (saves immediately, decoupled from the profile
-  // Save button), admin-only verify-email / beta-logging / danger-zone controls.
+  // Save button), admin-only verify-email / danger-zone controls, and the
+  // beta live-editor toggle (admin or self).
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
   import { Dialog, Sheet, toast } from '../lib/index.js'
@@ -153,13 +154,13 @@
       })
   }
 
-  // --- Beta live-editor toggle (system admin only) ----------------------------
+  // --- Beta live-editor toggle (admin or self) ---------------------------------
   let betaBusy = $state(false)
 
   function toggleBetaLogging() {
     const enable = !user.beta_live_logging
     betaBusy = true
-    fetch(`/api/admin/users/${user.user_id}/beta-logging`, {
+    fetch(`/api/users/${user.user_id}/beta-logging`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: enable }),
@@ -167,7 +168,7 @@
       .then((r) => r.json())
       .then((data) => {
         if (data.success) {
-          toast('Live editor (beta) ' + (enable ? 'enabled' : 'disabled') + ' for this user.', 'success')
+          toast('Live editor (beta) ' + (enable ? 'enabled' : 'disabled') + '.', 'success')
           setTimeout(() => window.location.reload(), 800)
         } else {
           toast('Error: ' + (data.error || 'failed'), 'error')
@@ -556,11 +557,9 @@
                 <span id="beta-logging-status">
                   {#if user.beta_live_logging}<span class="text-success">✓ On</span>{:else}<span class="text-muted">Off</span>{/if}
                 </span>
-                {#if !isUserProfile}
-                  <button id="beta-logging-btn" class="btn btn-sm btn-outline-primary ms-2" disabled={betaBusy} onclick={(e) => { e.preventDefault(); toggleBetaLogging() }}>
-                    {user.beta_live_logging ? 'Turn off' : 'Turn on'}
-                  </button>
-                {/if}
+                <button id="beta-logging-btn" class="btn btn-sm btn-outline-primary ms-2" disabled={betaBusy} onclick={(e) => { e.preventDefault(); toggleBetaLogging() }}>
+                  {user.beta_live_logging ? 'Turn off' : 'Turn on'}
+                </button>
               </dd>
             </dl>
           </div>

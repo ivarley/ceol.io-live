@@ -320,6 +320,20 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#logins-tab')).toBeNull()
     expect(container.querySelector('#user-edit')).toBeNull()
   })
+
+  it('the beta live-editor toggle is self-serve: the button shows and POSTs the flip', async () => {
+    fetchRoutes['/beta-logging'] = { success: true, user_id: 9, beta_live_logging: true }
+    const { container } = renderApp()
+    const btn = container.querySelector('#beta-logging-btn')
+    expect(btn.textContent.trim()).toBe('Turn on')
+    await fireEvent.click(btn)
+    await waitFor(() => {
+      const call = fetch.mock.calls.find(([u]) => String(u).includes('/beta-logging'))
+      expect(call).toBeTruthy()
+      expect(String(call[0])).toBe('/api/users/9/beta-logging')
+      expect(JSON.parse(call[1].body)).toEqual({ enabled: true })
+    })
+  })
 })
 
 describe('person details page view (admin flavor)', () => {
@@ -335,7 +349,8 @@ describe('person details page view (admin flavor)', () => {
     // Tabs use the admin labels.
     const tabs = [...container.querySelectorAll('#profileTabs [role="tab"]')].map((t) => t.textContent)
     expect(tabs).toEqual(['Profile', 'Sessions', 'Attended', 'Tunes', 'Logins'])
-    // Danger zone + verify email + beta toggle exist only on the admin flavor.
+    // Danger zone + verify email exist only on the admin flavor; the beta
+    // toggle shows on both (self-serve opt-in).
     expect(container.querySelector('#danger-zone')).toBeTruthy()
     expect(container.querySelector('#deactivate-person-btn').textContent.trim()).toBe('Deactivate Ian')
     expect(container.querySelector('#verify-email-btn')).toBeTruthy()

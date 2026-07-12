@@ -93,3 +93,39 @@ class TestPersonEndpointAuth:
         assert client.post("/api/person/tunes", json={"tune_id": 55}).status_code == 404
         assert client.put("/api/person/tunes/55/status", json={}).status_code == 404
         assert client.get("/api/person/1/tunes").status_code == 404
+
+
+class TestBetaLoggingToggleAuth:
+    """POST /api/users/<user_id>/beta-logging is admin-or-self: it started as the
+    admin-only beta-rollout switch (spec 024) and is now also the self-serve
+    opt-in on the profile page. Keyed on user_id, not person_id — the logged_in
+    helper logs in as user_id 2 (non-admin) / user_id 1 (admin)."""
+
+    def test_anonymous_gets_401(self, client):
+        resp = client.post("/api/users/2/beta-logging", json={"enabled": True})
+        assert resp.status_code == 401
+
+    def test_other_user_gets_403(self, client):
+        with logged_in(client, person_id=2, is_system_admin=False):  # user_id 2
+            resp = client.post("/api/users/1/beta-logging", json={"enabled": True})
+            assert resp.status_code == 403
+
+    def test_self_toggle_allowed_and_flips_flag(self, client):
+        with logged_in(client, person_id=2, is_system_admin=False):  # user_id 2
+            for enabled in (True, False):  # ends False = the seeded value
+                resp = client.post("/api/users/2/beta-logging", json={"enabled": enabled})
+                assert resp.status_code == 200
+                body = resp.get_json()
+                assert body["success"] is True
+                assert body["beta_live_logging"] is enabled
+
+    def test_admin_allowed_for_others(self, client):
+        with logged_in(client, person_id=1, is_system_admin=True):  # user_id 1
+            for enabled in (True, False):  # ends False = the seeded value
+                resp = client.post("/api/users/2/beta-logging", json={"enabled": enabled})
+                assert resp.status_code == 200
+
+    def test_old_admin_url_is_gone(self, client):
+        with logged_in(client, person_id=1, is_system_admin=True):
+            resp = client.post("/api/admin/users/2/beta-logging", json={"enabled": True})
+            assert resp.status_code == 404

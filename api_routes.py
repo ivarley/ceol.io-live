@@ -302,10 +302,12 @@ def get_tune_played_with(tune_id):
 
 
 @api_login_required
-def admin_set_beta_logging(user_id):
-    """System-admin only: turn the new live editor on/off for a user (beta rollout).
-    POST /api/admin/users/<user_id>/beta-logging  body {enabled: bool}"""
-    if not current_user.is_system_admin:
+def set_beta_logging(user_id):
+    """Turn the new live editor on/off for a user (beta rollout). System admins
+    can set it for anyone; users can opt themselves in/out.
+    POST /api/users/<user_id>/beta-logging  body {enabled: bool}"""
+    is_self = getattr(current_user, "user_id", None) == user_id
+    if not (current_user.is_system_admin or is_self):
         return jsonify({"success": False, "error": "Not authorized"}), 403
     enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
     conn = get_db_connection()
