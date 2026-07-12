@@ -49,4 +49,21 @@ test.describe("add a session", () => {
     await expectNoServerError(page);
     await expect(page).toHaveURL(/\/add-session/);
   });
+
+  test("the empty-session flow opens the review sheet and validates required fields", async ({ page }) => {
+    await page.goto("/add-session");
+    await page.getByRole("link", { name: /just add it here/i }).click();
+    await expect(page.locator("#sessionDetailsForm")).toBeVisible();
+    await expect(page.locator("#sessionName")).toHaveValue("");
+    // Saving the empty form surfaces validation instead of creating a row.
+    await page.locator("#saveSessionBtn").click();
+    await expect(page.locator(".session-sheet-actions .field-error")).toContainText(
+      /Name, Path, City, State, Country/
+    );
+    await expect(page).toHaveURL(/\/add-session/);
+    // Escape abandons the sheet and returns to the wizard.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#sessionDetailsForm")).not.toBeVisible();
+    await expect(page.locator("#sessionUrlForm")).toBeVisible();
+  });
 });

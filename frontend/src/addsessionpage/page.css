@@ -1,0 +1,323 @@
+/* Page styles for the /add-session wizard (spec 035 final migration).
+   Ported from the <style> block in the legacy templates/add_session.html;
+   the modal chrome rules died with the ModalManager overlays (the kit Sheet
+   and Dialog carry their own). Global on purpose: these style the legacy
+   class names the Svelte components emit. Theme-aware via theme.css vars. */
+
+/* Fix code elements for dark mode */
+.docs-article code {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+}
+
+/* Form controls (page + sheet) for dark mode */
+.docs-article .form-control,
+#sessionDetailsForm .form-control {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+.docs-article .form-control:focus,
+#sessionDetailsForm .form-control:focus {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem var(--dropdown-shadow);
+    outline: 0;
+}
+
+.docs-article .form-control::placeholder {
+    color: var(--disabled-text);
+    opacity: 1;
+}
+
+#errorAlert .error-link {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+/* ---- session-details sheet body ---------------------------------------- */
+
+#sessionDetailsForm label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+#sessionDetailsForm input[type="date"],
+#sessionDetailsForm input[type="text"],
+#sessionDetailsForm input[type="url"],
+#sessionDetailsForm select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 14px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+
+#sessionDetailsForm input:focus {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-color: var(--primary);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem var(--dropdown-shadow);
+}
+
+/* Form validation styling */
+#sessionDetailsForm input.is-invalid,
+#sessionDetailsForm select.is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.session-sheet-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+.session-sheet-actions .field-error {
+    color: #dc3545;
+    font-size: 13px;
+    flex: 1;
+}
+
+.btn-save-session {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    background-color: var(--primary);
+    color: white;
+}
+
+.btn-save-session:hover {
+    opacity: 0.9;
+}
+
+.btn-save-session:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---- search results ------------------------------------------------------ */
+
+#searchResults {
+    margin-top: 20px;
+}
+
+.search-results-container {
+    background-color: var(--light);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 15px;
+}
+
+.search-results-container #newSearchBtn {
+    margin-top: 10px;
+}
+
+.search-result-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.search-result-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.search-result-item:last-child {
+    margin-bottom: 0;
+}
+
+.search-result-item.existing {
+    background-color: var(--warning-bg, #fff3cd);
+    border-color: var(--warning-border, #ffeaa7);
+}
+
+.search-result-item.existing:hover {
+    background-color: var(--warning-hover, #ffeaa7);
+}
+
+.existing-indicator {
+    color: var(--warning-text, #856404);
+    font-size: 12px;
+    font-style: italic;
+    margin-top: 4px;
+}
+
+/* ---- recurrence editor ---------------------------------------------------- */
+
+.recurrence-section {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.recurrence-summary {
+    padding: 10px 12px;
+    background-color: var(--input-bg);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-color);
+}
+
+.recurrence-summary:hover {
+    background-color: var(--hover-bg);
+}
+
+.recurrence-toggle-icon {
+    font-size: 12px;
+    transition: transform 0.2s;
+}
+
+.recurrence-section.expanded .recurrence-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.recurrence-edit {
+    padding: 12px;
+    background-color: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+}
+
+.weekday-buttons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.weekday-btn {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 40px;
+}
+
+.weekday-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.weekday-btn.active {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.nth-checkboxes {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.nth-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+.recurrence-edit .form-label.small {
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: var(--secondary-text);
+    display: block;
+}
+
+.rec-times {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.rec-times > div {
+    flex: 1;
+}
+
+.rec-times input[type="time"] {
+    margin-bottom: 0;
+}
+
+.rec-done-btn {
+    margin-top: 10px;
+    padding: 4px 10px;
+    font-size: 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.rec-done-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.recurrence-unparsed {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--secondary-text);
+    border-top: 1px solid var(--border-color);
+}
+
+/* ---- "Add me as" control --------------------------------------------------- */
+
+.add-user-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.add-user-control .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.add-user-control .checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.add-user-control .form-control-inline {
+    width: auto !important;
+    display: inline-block;
+    padding: 4px 8px !important;
+    margin-bottom: 0 !important;
+    font-size: 14px;
+}
+
+.add-user-control select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

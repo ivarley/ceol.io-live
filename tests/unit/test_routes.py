@@ -416,31 +416,33 @@ class TestAdminRoutes:
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
+        # serializers.build_admin_people_payload opens a RealDictCursor as a
+        # context manager and reads rows by name.
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
         mock_get_conn.return_value = mock_conn
 
         # Mock people data query
         mock_cursor.fetchall.return_value = [
-            (
-                1,
-                "John",
-                "Doe",
-                "john@example.com",
-                "Austin",
-                "TX",
-                "USA",
-                None,
-                "johndoe",
-                False,
-                None,
-                2,
-                5,
-                datetime(2023, 8, 15).date(),
-                "Test Session",
-                7,  # tune_count
-                datetime(2023, 8, 15, 20, 30),  # last_logged_tune
-                None,  # last_tunebook_update
-            )
+            {
+                "person_id": 1,
+                "first_name": "John",
+                "last_name": "Doe",
+                "email": "john@example.com",
+                "city": "Austin",
+                "state": "TX",
+                "country": "USA",
+                "thesession_user_id": None,
+                "username": "johndoe",
+                "is_system_admin": False,
+                "last_login": None,
+                "session_count": 2,
+                "session_instance_count": 5,
+                "latest_date": datetime(2023, 8, 15).date(),
+                "session_name": "Test Session",
+                "tune_count": 7,
+                "last_logged_tune": datetime(2023, 8, 15, 20, 30),
+                "last_tunebook_update": None,
+            }
         ]
 
         with patch("web_routes.current_user", admin_user):

@@ -53,6 +53,32 @@ test.describe("admin: people", () => {
       .poll(async () => page.locator("#people-tbody tr:visible").count())
       .toBe(0);
   });
+
+  test("search narrows to a seeded person and the row links to their page", async ({ page }) => {
+    await page.goto("/admin/people");
+    await page.fill("#people-search", "Varley");
+    await expect(page.locator("#people-tbody tr")).toHaveCount(1);
+    await page.locator("#people-tbody .person-link").first().click();
+    await expect(page).toHaveURL(/\/admin\/people\/\d+/);
+    await expect(page.locator("body")).toContainText(/Varley/);
+    await expectNoServerError(page);
+  });
+
+  test("add-person wizard reaches step 2 with a parsed name, then abandons cleanly", async ({ page }) => {
+    await page.goto("/admin/people");
+    await page.locator("#add-person-btn").click();
+    await page.locator("#person-input").fill("Test Wizard");
+    await page.locator("#step1-next").click();
+    await expect(page.locator("#add-first-name")).toHaveValue("Test");
+    await expect(page.locator("#add-last-name")).toHaveValue("Wizard");
+    // Escape steps back to step 1, a second Escape closes the wizard —
+    // no person row is ever created.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#person-input")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#addPersonModal")).not.toBeVisible();
+    await expectNoServerError(page);
+  });
 });
 
 test.describe("admin: tunes", () => {

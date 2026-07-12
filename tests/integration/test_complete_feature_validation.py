@@ -346,11 +346,15 @@ class TestRequirement5_ManualTuneAddition:
     """Validate Requirement 5: Manual tune addition."""
     
     def test_5_1_provide_tune_addition_form(self, client, authenticated_user):
-        """WHEN user chooses to add tune THEN system SHALL provide form."""
+        """WHEN user chooses to add tune THEN system SHALL provide the add pane
+        (the legacy page redirects to My Tunes with ?add=1 auto-opening it)."""
         with authenticated_user:
-            response = client.get('/my-tunes/add')
+            response = client.get('/my-tunes/add', follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == '/my-tunes?add=1'
+            response = client.get('/my-tunes/add', follow_redirects=True)
             assert response.status_code == 200
-            assert b'add' in response.data.lower() or b'tune' in response.data.lower()
+            assert b'tune' in response.data.lower()
     
     def test_5_2_create_person_tune_record(self, client, authenticated_user, db_conn, db_cursor):
         """WHEN user chooses valid tune THEN system SHALL create person_tune record."""

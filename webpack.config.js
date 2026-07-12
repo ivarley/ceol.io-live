@@ -5,6 +5,9 @@ module.exports = {
     // NOT pill-logger code (spec 035 §1f): emitted to static/js/shared/ so that
     // static/js/dist/ holds only the pill editor and can be deleted wholesale.
     'shared/attendance': './src/ts/attendance.ts',
+    // modalManager's only remaining consumer IS now the pill logger
+    // (session_instance_detail.html) — it dies with it in spec 035 Step 6, but
+    // keeps its shared/ output path so the quarantined template stays untouched.
     'shared/modalManager': './src/ts/components/modalManager.ts',
     // Pill-logger modules — die with templates/session_instance_detail.html.
     'dist/stateManager': './src/ts/components/stateManager.ts',

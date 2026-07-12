@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { STORAGE } from "../support/data";
+import { SCRATCH_TUNES, STORAGE } from "../support/data";
 import { expectNoServerError } from "../support/nav";
 
-/** Personal tune collection: list/filter, the add page, and the sync page. */
+/** Personal tune collection: list/filter, the add pane, and the sync page. */
 
 test.use({ storageState: STORAGE.regular });
 
@@ -35,29 +35,50 @@ test.describe("My Tunes list", () => {
 });
 
 test.describe("Add a tune", () => {
-  test("autocomplete search surfaces matching tunes", async ({ page }) => {
-    await page.goto("/my-tunes/add");
-    await expect(page.locator("h1")).toContainText(/Add Tune/i);
+  // The legacy /my-tunes/add page is folded away: the URL now redirects to
+  // /my-tunes?add=1[&q=], which auto-opens the modern add pane (AddTuneApp)
+  // with the deep search prefilled. SCRATCH_TUNES.addPageSearch is this
+  // describe's dedicated tune — the pick test needs it OFF sarah's list (an
+  // on-list pick hands off to the ?already flow instead of configuring).
 
-    await page.fill("#tune-search", "Cooley");
-    // Results dropdown populates asynchronously.
-    await expect(page.locator("#autocomplete-results")).toBeVisible();
-    await expect(page.locator("#autocomplete-results")).toContainText(/Cooley/i);
+  test("the legacy add URL redirects to My Tunes with the pane open and q searched", async ({
+    page,
+  }) => {
+    const tune = SCRATCH_TUNES.addPageSearch;
+    await page.goto(`/my-tunes/add?q=${encodeURIComponent(tune.name)}`);
+    // Redirected to the list page (not the dead add page)…
+    await expect(page).toHaveURL(/\/my-tunes(\?|$)/);
+    // …with the pane open and the prefilled query already searched.
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await expect(pane.locator(".deep-field")).toHaveValue(tune.name);
+    await expect(pane.locator(".deep-card", { hasText: tune.name }).first()).toBeVisible();
+    // The one-shot params are stripped, so a refresh won't reopen the pane.
+    await expect(page).not.toHaveURL(/add=1/);
+    await expectNoServerError(page);
   });
 
-  test("selecting a result enables adding", async ({ page }) => {
-    await page.goto("/my-tunes/add");
-    // Must be a tune NOT already on the regular user's seed list — clicking an
-    // already-added result redirects to /my-tunes?already=1 instead of filling
-    // the hidden field. Cooley's is on Sarah's list; the Butterfly is not.
-    await page.fill("#tune-search", "Butterfly");
-    await expect(page.locator("#autocomplete-results")).toContainText(/Butterfly/i);
+  test("deep search surfaces matching tunes", async ({ page }) => {
+    await page.goto("/my-tunes?add=1");
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await pane.locator(".deep-field").fill("Cooley");
+    await expect(pane.locator(".deep-card", { hasText: /Cooley/i }).first()).toBeVisible();
+  });
 
-    await page.locator("#autocomplete-results").getByText(/Butterfly/i).first().click();
-    // A tune id gets recorded in the hidden field once a result is chosen.
-    await expect
-      .poll(async () => page.locator("#selected-tune-id").inputValue())
-      .not.toBe("");
+  test("picking a result opens the configure phase", async ({ page }) => {
+    const tune = SCRATCH_TUNES.addPageSearch;
+    // Reset to seed state (not on the list) so the pick configures, not ?already.
+    await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tune.id } });
+    await page.goto("/my-tunes?add=1");
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await pane.locator(".deep-field").fill(tune.name);
+    const card = pane.locator(".deep-card", { hasText: tune.name }).first();
+    await expect(card).toBeVisible();
+    await card.locator(".deep-quick").click(); // one-tap add -> configure phase
+    await expect(pane.locator(".mt-picked .deep-name")).toContainText(tune.name);
+    await expect(pane.locator(".mt-submit")).toBeEnabled();
   });
 });
 

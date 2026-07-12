@@ -21,7 +21,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v31'
+const VERSION = 'v32'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
@@ -128,7 +128,7 @@ self.addEventListener('message', (event) => {
   }
   if (data.type === 'cache-page' && data.url) {
     // Snapshot another same-origin page into this user's page cache so it's reachable
-    // offline even if never directly visited (e.g. /my-tunes pre-caching /my-tunes/add).
+    // offline even if never directly visited (e.g. the prefetch warm-up snapshotting /sessions).
     // Uses the worker's own credentialed fetch, so it stores the authed page, not a
     // login redirect.
     event.waitUntil(

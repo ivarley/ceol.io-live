@@ -11,7 +11,9 @@
   import { createPaneState } from './pane.svelte.js'
 
   // Personal flavor of the live search API (same request/response shapes).
-  const config = { searchApiBase: '/api/my-tunes' }
+  // offlineSearchFallback: offline, the deep search falls back to the CeolOffline
+  // bundle mirror (tunebook + popular) — the parity the legacy add page had.
+  const config = { searchApiBase: '/api/my-tunes', offlineSearchFallback: true }
 
   const STATUSES = ['want to learn', 'learning', 'learned']
   const LABELS = { 'want to learn': 'Want To Learn', learning: 'Learning', learned: 'Learned' }

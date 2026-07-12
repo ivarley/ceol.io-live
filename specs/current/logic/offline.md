@@ -54,11 +54,19 @@ the bundle.
 
 - **`GET /api/offline/bundle`** (`api_person_tune_routes.py`) returns, for the current user:
   - `tunes`: their whole tunebook, each with incipit notation (`incipit_abc` /
-    `incipit_image`, joined from `tune_setting`), learn status, heard count, notes,
-    `person_tune_id`, `tune_name` + `name`.
-  - `popular`: the top ~100 catalog tunes (with incipit notation) so tunes you don't own yet
-    are searchable and viewable offline.
+    `incipit_image` / `setting_key`, joined from `tune_setting`) plus every field the
+    tune-detail drawer renders offline: learn status, heard count, notes, `name_alias`,
+    `setting_id`, `learned_date`, `person_tune_id`, `tune_name` + `name`,
+    `tunebook_count` + `tunebook_count_cached_date`, `global_play_count`,
+    `person_list_count`, `session_play_count`, `instruments`, `instrument_status`.
+  - `popular`: the top ~100 catalog tunes (with incipit notation and the same
+    tunebook/play/list-count stats) so tunes you don't own yet are searchable and
+    viewable offline.
   Only *incipit* notation is bundled — full ABC/images stay online-only to bound the payload.
+  **Parity rule**: a bundle `tunes` entry must carry every field the drawer's offline path
+  (`offlinePayload` in `frontend/src/tunesheet/logic.js`) maps into the detail payload;
+  drift guards in `tests/integration/test_tune_detail_payload.py` (key coverage + values)
+  and `frontend/tests/tunesheet.test.js` (same rendered UI online vs offline) enforce it.
 - **`window.CeolOffline`** (`static/js/offline_data.js`) mirrors the bundle into IndexedDB
   (`ceol-offline`, stores `tunes` / `popular` / `meta`) on each load (throttled ~5 min) and
   on reconnect. It exposes `getTune(id)`, `getTunes()`, and `searchTunes(q)` (your tunes
@@ -66,8 +74,9 @@ the bundle.
 - **The UI falls back to it when a fetch fails** (the online path is unchanged):
   - Tune-detail drawer → `CeolOffline.getTune()` (renders incipit notation).
   - Global "Find a tune" (`frontend/src/tunesheet/FindTune.svelte`, opened via
-    `hamburger_menu.js`) + the legacy add pages' `TuneSearchComponent`
-    → `CeolOffline.searchTunes()`.
+    `hamburger_menu.js`) + the Add-to-My-Tunes pane's deep search
+    (`offlineDeepSearch` in `frontend/src/client.js`, opted in via the pane's
+    `offlineSearchFallback` config) → `CeolOffline.searchTunes()`.
   - Sessions list → the cached `/api/sessions/with-today-status` response.
 
 ### Tier 2 — Writes (op-queue)
@@ -109,7 +118,7 @@ page loads) and the pending-change count.
 ### Background warm-up (`static/js/prefetch.js`)
 
 `window.CeolPrefetch` warms a small, fixed set of page shells + their assets (home, sessions,
-my-tunes, add-tune, each of the user's session pages) and re-syncs the bundle, a couple of
+my-tunes, each of the user's session pages) and re-syncs the bundle, a couple of
 seconds after load and deduped to ~10 min. The list is fixed and predictable — not
 endpoint-guessing. It's gated off under automation (`navigator.webdriver`) so it can't flood
 the single-process test server.

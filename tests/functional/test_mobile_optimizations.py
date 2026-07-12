@@ -35,17 +35,13 @@ class TestMobileAssets:
             assert b'mytunespage/page.js' in response.data
             assert b'my_tunes_mobile.js' not in response.data
 
-    def test_add_tune_has_mobile_assets(self, client, authenticated_user):
-        """Test that add tune page loads mobile CSS and JS."""
+    def test_add_tune_redirects_to_pane(self, client, authenticated_user):
+        """The legacy add page is folded away: /my-tunes/add redirects to the
+        My Tunes page with the Svelte add pane auto-opened (?add=1)."""
         with authenticated_user:
-            response = client.get('/my-tunes/add')
-            assert response.status_code == 200
-            
-            # Check for mobile CSS
-            assert b'my_tunes_mobile.css' in response.data
-            
-            # Check for mobile JavaScript
-            assert b'my_tunes_mobile.js' in response.data
+            response = client.get('/my-tunes/add', follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == '/my-tunes?add=1'
 
     def test_sync_has_mobile_assets(self, client, authenticated_user):
         """Test that sync page loads mobile CSS and JS."""
@@ -122,15 +118,13 @@ class TestMobileJavaScriptFeatures:
             # Check for debounce implementation
             assert b'setTimeout' in response.data
 
-    def test_autocomplete_present(self, client, authenticated_user):
-        """Test that autocomplete is present on add tune page."""
+    def test_add_search_query_survives_redirect(self, client, authenticated_user):
+        """The old autocomplete page is gone; ?q= rides the redirect so the
+        Svelte add pane opens with its deep search prefilled."""
         with authenticated_user:
-            response = client.get('/my-tunes/add')
-            assert response.status_code == 200
-            
-            # Check for autocomplete container
-            assert b'autocomplete-container' in response.data
-            assert b'autocomplete-results' in response.data
+            response = client.get('/my-tunes/add?q=cooley', follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == '/my-tunes?add=1&q=cooley'
 
 
 class TestMobileLayout:

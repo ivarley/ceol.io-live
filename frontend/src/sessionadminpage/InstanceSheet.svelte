@@ -5,6 +5,7 @@
   // View/Edit/Delete actions and the inline delete confirmation) is ported
   // behavior-for-behavior: details come from the same admin logs endpoint,
   // delete calls the same DELETE route and reports through the site toast.
+  import { parseLocalDate } from '../shared/parse.js'
   import { Sheet, toast } from '../lib/index.js'
 
   let { onDeleted = () => {} } = $props()
@@ -53,7 +54,7 @@
   // title (computed from the passed date so it shows during the load too).
   const dateStr = $derived(
     currentDate
-      ? new Date(currentDate).toLocaleDateString('en-US', {
+      ? parseLocalDate(currentDate).toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',

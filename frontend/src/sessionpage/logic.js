@@ -6,7 +6,7 @@
 // extractTuneId ("search" also matches a bare thesession.org tune id or URL),
 // normalizeQuotes and formatTime/formatTimeRange now live in src/shared/ —
 // one tested copy for every page bundle.
-import { extractTuneId } from '../shared/parse.js'
+import { extractTuneId, parseLocalDate } from '../shared/parse.js'
 import { formatTime, formatTimeRange } from '../shared/format.js'
 
 // Sort functions keyed by type (alpha, session, everywhere) and direction.
@@ -147,9 +147,11 @@ export function instanceUrlId(instance) {
   return instance.multiple_on_date ? instance.session_instance_id : instance.date
 }
 
-// Festival day header, e.g. "Sunday, June 1, 2025" (legacy new Date(...) semantics).
+// Festival day header, e.g. "Sunday, June 1, 2025". Parsed as a LOCAL date —
+// the legacy new Date("YYYY-MM-DD") semantics rendered the previous day west
+// of UTC (same bug class as the admin logs tab).
 export function festivalDayLabel(dateStr) {
-  const dateObj = new Date(dateStr)
+  const dateObj = parseLocalDate(dateStr)
   return dateObj.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',

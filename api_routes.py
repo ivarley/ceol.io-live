@@ -12271,3 +12271,42 @@ def get_session_admin_detail(session_path):
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@public_api  # backs the public /add-session page shell (no @login_required there; only POST /api/add-session is gated)
+def get_add_session_payload():
+    """
+    GET /api/add-session — the add-session wizard payload (timezone options +
+    viewer flag). The /add-session page shell embeds the SAME serializer output
+    (serializers.build_add_session_payload). Same rule as POST /api/add-session,
+    different method/endpoint.
+    """
+    from serializers import build_add_session_payload
+
+    return jsonify(build_add_session_payload(current_user.is_authenticated))
+
+
+@api_login_required
+def get_admin_people_api():
+    """
+    GET /api/admin/people — the admin people-table payload (system-admin only):
+    every person with account/login info and activity roll-ups. The
+    /admin/people page shell embeds the SAME serializer output
+    (serializers.build_admin_people_payload).
+    """
+    try:
+        from serializers import build_admin_people_payload
+
+        if not current_user.is_system_admin:
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+
+        conn = get_db_connection()
+        try:
+            payload = build_admin_people_payload(conn)
+        finally:
+            conn.close()
+
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500

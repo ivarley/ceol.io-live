@@ -95,7 +95,7 @@ button.textContent = 'Saving...';
 
 **Check-In**: `POST /api/session_instance/<id>/attendees/checkin` - Button disabled, spinner | `partials/attendance_tab.html`
 
-**Tune Search**: `GET /api/tunes/search?q=<query>` - 300ms debounce, dropdown | `frontend/src/TuneSearch.svelte` (Svelte pages), `components/tune_search_input.html` (legacy)
+**Tune Search**: `GET /api/tunes/search?q=<query>` - 300ms debounce, dropdown | `frontend/src/TuneSearch.svelte` (Svelte pages), `TuneSearchComponent.js` (pill page only)
 
 **Save Tunes** (deprecated pill page): `POST /api/sessions/<path>/<date_or_id>/save_tunes` - Bulk save | `session_instance_detail.html`
 

@@ -368,6 +368,18 @@ app.add_url_rule(
     get_session_admin_detail,
     methods=["GET"],
 )
+app.add_url_rule(
+    "/api/add-session",
+    "get_add_session_payload",
+    get_add_session_payload,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/admin/people",
+    "get_admin_people_api",
+    get_admin_people_api,
+    methods=["GET"],
+)
 
 # Register API routes
 # Live logging (spec 024) -- referee op endpoints + screen shell (Phase 0)

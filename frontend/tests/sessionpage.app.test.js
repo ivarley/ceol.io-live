@@ -348,4 +348,14 @@ describe('session detail page view', () => {
     renderApp()
     expect(window.showMessage).toHaveBeenCalledWith('Successfully added "Cooley\'s" to the session!', 'success')
   })
+
+  it('?add=1&q= landing (the folded-away add page redirect) auto-opens the pane and strips the params', async () => {
+    window.history.replaceState({}, '', '/sessions/test/tunes?add=1&q=kesh')
+    renderApp()
+    await waitFor(() => expect(document.querySelector('.mt-add-pane')).toBeTruthy())
+    expect(document.querySelector('.mt-add-pane .deep-field').value).toBe('kesh')
+    // One-shot params are stripped so a refresh doesn't reopen the pane.
+    expect(window.location.search).not.toContain('add=1')
+    expect(window.location.search).not.toContain('q=kesh')
+  })
 })

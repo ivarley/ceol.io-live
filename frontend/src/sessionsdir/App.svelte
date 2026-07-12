@@ -6,6 +6,7 @@
   // payload; a background refetch of the same API keeps it fresh.
   import { untrack } from 'svelte'
   import { SearchField } from '../lib/index.js'
+  import { parseLocalDate } from '../shared/parse.js'
 
   let { pageData = null, isLoggedIn = false } = $props()
 
@@ -73,11 +74,11 @@
       if (currentFilter === 'my') {
         passes = session.user_is_member
       } else if (currentFilter === 'active') {
-        passes = !session.termination_date || new Date(session.termination_date) > today
+        passes = !session.termination_date || parseLocalDate(session.termination_date) > today
       } else if (currentFilter === 'all') {
         passes = true
       } else if (currentFilter === 'inactive') {
-        passes = !!session.termination_date && new Date(session.termination_date) <= today
+        passes = !!session.termination_date && parseLocalDate(session.termination_date) <= today
       }
       if (!passes) return false
       if (searchTerm) {

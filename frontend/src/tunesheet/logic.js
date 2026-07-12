@@ -338,6 +338,7 @@ export function offlinePayload(cachedTune, ops, tuneId) {
             person_tune_id: t.person_tune_id != null ? t.person_tune_id : null,
             learn_status: t.learn_status,
             heard_count: t.heard_count || 0,
+            learned_date: t.learned_date || null,
             notes: t.notes || null,
             name_alias: t.name_alias || null,
             setting_id: t.setting_id || null,

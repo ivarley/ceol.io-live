@@ -170,9 +170,33 @@ export async function deepSearch(config, q, type, preferType, mode) {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     })
-    if (!res.ok) return []
+    // 503 is the main-app service worker's offline cache-miss response.
+    if (!res.ok) return res.status === 503 ? offlineDeepSearch(config, q) : []
     const json = await res.json()
     return json.results || []
+  } catch {
+    return offlineDeepSearch(config, q)
+  }
+}
+
+// Offline fallback for the deep search, opted into per-surface (the Add-to-My-Tunes
+// pane — the same parity the folded-away legacy add page had): name-search the
+// CeolOffline bundle mirror (your tunebook first, then popular) and reshape the hits
+// into deep-search result cards. Name-only — the type filter and ABC mode need the
+// server. The live logger never opts in (it has its own offline model).
+async function offlineDeepSearch(config, q) {
+  if (!config.offlineSearchFallback || !window.CeolOffline) return []
+  try {
+    const hits = await window.CeolOffline.searchTunes(q || '', 30)
+    return (hits || []).map((t) => ({
+      tune_id: t.tune_id,
+      name: t.name || t.tune_name,
+      tune_type: t.tune_type || null,
+      incipit_image: t.incipit_image || null,
+      can_render: false, // rendering needs the server; show the cached incipit only
+      tunebook_count: t.tunebook_count ?? null,
+      on_list: t.person_tune_id != null || t.learn_status != null,
+    }))
   } catch {
     return []
   }

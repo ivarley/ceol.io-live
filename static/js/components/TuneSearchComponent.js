@@ -4,6 +4,11 @@
  * Provides local database search with TheSession.org fallback,
  * keyboard navigation, and configurable callbacks.
  *
+ * LEGACY: the quarantined pill logger (templates/session_instance_detail.html)
+ * is now this component's ONLY consumer — the fallback add pages
+ * (my_tunes_add.html / session_tune_add.html) were folded away into the
+ * Svelte add panes. This file dies with the pill logger (spec 035 Step 6).
+ *
  * @example
  * const search = new TuneSearchComponent({
  *   searchInputId: 'tune-search',

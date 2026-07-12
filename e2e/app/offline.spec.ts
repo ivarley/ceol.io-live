@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { STORAGE } from "../support/data";
+import { SCRATCH_TUNES, STORAGE } from "../support/data";
+
+/**
+ * Reset one scratch tune to its seed state (not on the regular user's list).
+ * Idempotent — run before a test mutates its tune so a previous aborted run
+ * (KEEP_TEST_DB=1 iterating) can't leave the row behind.
+ */
+async function resetScratchTune(page: any, tuneId: number) {
+  await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tuneId } });
+}
 
 /**
  * Tier 0 offline resilience (service worker at /sw.js).
@@ -105,17 +114,10 @@ test.describe("offline writes (Tier 2)", () => {
     await page.goto("/my-tunes");
     await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
 
-    // Find a real catalog tune the user does NOT already have. Read via page.request so
-    // it bypasses the service worker (Tier 1 caches GET /api/* and could serve stale).
-    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
-    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
-    let tid: number | null = null;
-    for (const q of ["reel", "jig", "the", "a", "e"]) {
-      const r = await (await page.request.get("/api/tunes/search?q=" + q)).json();
-      const hit = (r.tunes || []).find((t: any) => !owned.has(t.tune_id));
-      if (hit) { tid = hit.tune_id; break; }
-    }
-    expect(tid, "need a real un-owned tune for the test").toBeTruthy();
+    // This test's OWN seeded catalog tune (see SCRATCH_TUNES: a shared pick raced
+    // with other specs' add/remove cleanups under parallel workers).
+    const tid = SCRATCH_TUNES.addReplay.id;
+    await resetScratchTune(page, tid);
 
     // Offline: an add followed by two heard bumps should queue (not hit the server).
     await context.setOffline(true);
@@ -147,7 +149,15 @@ test.describe("offline writes (Tier 2)", () => {
     await page.evaluate(async (tid) => { await (window as any).MyTunesOffline.submit({ type: "remove", tune_id: tid }); }, tid);
   });
 
-  test("popular tunes cached on My Tunes make the add page searchable offline", async ({ page, context }) => {
+  test("popular tunes cached in the bundle make the add pane searchable offline", async ({ page, context }) => {
+    // The legacy /my-tunes/add page is gone (it redirects to /my-tunes?add=1,
+    // which auto-opens the Svelte add pane). Offline, the pane's deep search
+    // falls back to the CeolOffline bundle mirror — same parity the old page had.
+    // This test's OWN scratch tune (searched by name below, so the pick can't
+    // drift onto another spec's tune under parallel workers), reset before the
+    // bundle mirror so the cached copy shows it un-owned.
+    const tune = SCRATCH_TUNES.paneOfflineAdd;
+    await resetScratchTune(page, tune.id);
     // Warm the SW first so the My Tunes visit is controlled (and thus snapshotted for
     // offline), then load My Tunes.
     await page.goto("/");
@@ -155,47 +165,44 @@ test.describe("offline writes (Tier 2)", () => {
     await page.goto("/my-tunes");
     await page.waitForFunction(() => !!(window as any).MyTunesOffline && !!(window as any).CeolOffline, null, { timeout: 8000 });
 
-    // Mirror the offline bundle (tunebook + popular) so offline add-search works, and warm
-    // the add page (shell + assets) since the auto warm-up is disabled under automation.
+    // Mirror the offline bundle (tunebook + popular) so offline add-search works.
     await page.evaluate(() => (window as any).CeolOffline.sync(true));
-    await page.evaluate(() => (window as any).CeolPrefetch.warmPage("/my-tunes/add"));
     await expect
       .poll(async () => page.evaluate(async () => (await (window as any).CeolOffline.searchTunes("the")).length), { timeout: 8000 })
       .toBeGreaterThan(0);
     await page.waitForTimeout(2500);
 
-    let addedTid: number | null = null;
+    const addedTid: number = tune.id;
     await context.setOffline(true);
     try {
-      // The add page is reachable offline even though we only visited /my-tunes.
-      await page.goto("/my-tunes/add");
-      await expect(page.locator("h1")).toContainText(/Add Tune/i);
+      // The ?add=1 URL is reachable offline even though we only visited /my-tunes —
+      // the SW shares the /my-tunes snapshot across query variants (ignoreSearch).
+      await page.goto("/my-tunes?add=1");
       await expect(page.locator("body")).not.toContainText(/You're offline/i);
+      const pane = page.locator(".mt-add-pane");
+      await expect(pane).toBeVisible({ timeout: 8000 });
       // The offline dot must show here too (navigator.onLine can lie on this page).
       await expect(page.locator("#conn-status-dot.conn-offline")).toBeVisible({ timeout: 8000 });
       // The "offline since" timestamp is persisted so the duration accumulates across pages.
       const offlineSinceAdd = await page.evaluate(() => localStorage.getItem("ceol_offline_since"));
       expect(offlineSinceAdd).toBeTruthy();
 
-      // Offline search surfaces cached popular tunes.
-      await page.locator("#tune-search").fill("the");
-      const firstResult = page.locator("#autocomplete-results .autocomplete-item").first();
-      await expect(firstResult).toBeVisible({ timeout: 8000 });
-      addedTid = Number(await firstResult.getAttribute("data-tune-id"));
+      // Offline deep search surfaces cached popular tunes (searched by name so
+      // this test always lands on its own scratch tune).
+      await pane.locator(".deep-field").fill(tune.name);
+      const card = pane.locator(".deep-card", { hasText: tune.name }).first();
+      await expect(card).toBeVisible({ timeout: 8000 });
 
-      // Selecting + adding offline must QUEUE (the bug: it hit a failing network POST
-      // because navigator.onLine wrongly reported online), then navigate to the list.
-      await firstResult.click();
-      await expect(page.locator("#submit-btn")).toBeEnabled();
-      await Promise.all([
-        page.waitForURL(/\/my-tunes(\?|$)/),
-        page.locator("#submit-btn").click(),
-      ]);
+      // Picking + adding offline must QUEUE via the op-queue (never a failing
+      // network POST), leaving the user on the list with the new card showing.
+      await card.locator(".deep-quick").click(); // -> configure phase
+      await expect(pane.locator(".mt-submit")).toBeEnabled();
+      await pane.locator(".mt-submit").click();
 
       // The queued tune SHOWS in the list, marked "pending" (not vanished until sync).
-      const card = page.locator(`.tune-card[data-tune-id="${addedTid}"], .tune-card-swipe-container[data-tune-id="${addedTid}"]`).first();
-      await expect(card).toBeVisible({ timeout: 8000 });
-      await expect(card).toContainText(/pending/i);
+      const listCard = page.locator(`.tune-card[data-tune-id="${addedTid}"], .tune-card-swipe-container[data-tune-id="${addedTid}"]`).first();
+      await expect(listCard).toBeVisible({ timeout: 8000 });
+      await expect(listCard).toContainText(/pending/i);
       // The header connection dot shows offline, and tapping it explains the state.
       await expect(page.locator("#conn-status-dot.conn-offline")).toBeVisible({ timeout: 8000 });
       await page.locator("#conn-status-btn").click();
@@ -209,7 +216,7 @@ test.describe("offline writes (Tier 2)", () => {
       // Reconnect: the heartbeat/flush syncs automatically (no reload). The card drops
       // its "pending" marker and the dot flashes "caught up" (green) before hiding.
       await context.setOffline(false);
-      await expect(card).not.toContainText(/pending/i, { timeout: 10000 });
+      await expect(listCard).not.toContainText(/pending/i, { timeout: 10000 });
       await expect
         .poll(async () => page.evaluate(async () => (await (window as any).MyTunesOffline.pending()).length), { timeout: 8000 })
         .toBe(0);
@@ -225,6 +232,11 @@ test.describe("offline writes (Tier 2)", () => {
   });
 
   test("home dashboard counts reflect a pending offline add", async ({ page, context }) => {
+    // This test's OWN seeded catalog tune, reset BEFORE the home page is
+    // snapshotted so a leftover row can't skew the before-count.
+    const tid = SCRATCH_TUNES.homeDashboard.id;
+    await resetScratchTune(page, tid);
+
     // Warm the SW so the home page is snapshotted while controlled.
     await page.goto("/");
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
@@ -232,13 +244,6 @@ test.describe("offline writes (Tier 2)", () => {
     await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
 
     const before = Number((await page.locator("#stat-learning").innerText()).trim());
-
-    // A real catalog tune the user doesn't have.
-    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
-    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
-    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
-    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number | undefined;
-    expect(tid).toBeTruthy();
 
     await context.setOffline(true);
     try {
@@ -272,12 +277,10 @@ test.describe("offline status change (Tier 2)", () => {
     await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
 
-    // Add a throwaway catalog tune (want-to-learn) so we never mutate the asserted seed tunes.
-    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
-    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
-    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
-    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number;
-    expect(tid).toBeTruthy();
+    // Add a throwaway catalog tune (want-to-learn) so we never mutate the asserted
+    // seed tunes — this test's OWN scratch tune, so parallel specs can't race on it.
+    const tid = SCRATCH_TUNES.listStatusCycle.id;
+    await resetScratchTune(page, tid);
     await page.request.post("/api/my-tunes/ops", { data: { type: "add", tune_id: tid, learn_status: "want to learn" } });
 
     try {
@@ -315,12 +318,10 @@ test.describe("offline status change (Tier 2)", () => {
     await page.waitForFunction(() => !!(window as any).MyTunesOffline, null, { timeout: 8000 });
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 });
 
-    // Throwaway tune so we don't mutate seed data.
-    const mine = await (await page.request.get("/api/my-tunes?per_page=2000&sort=alpha-asc")).json();
-    const owned = new Set((mine.tunes || []).map((t: any) => t.tune_id));
-    const pop = await (await page.request.get("/api/tunes/popular?limit=100")).json();
-    const tid = (pop.tunes || []).find((t: any) => !owned.has(t.tune_id))?.tune_id as number;
-    expect(tid).toBeTruthy();
+    // Throwaway tune so we don't mutate seed data — this test's OWN scratch tune,
+    // so parallel specs can't add/remove it out from under the drawer.
+    const tid = SCRATCH_TUNES.drawerStatusSeg.id;
+    await resetScratchTune(page, tid);
     await page.request.post("/api/my-tunes/ops", { data: { type: "add", tune_id: tid, learn_status: "want to learn" } });
 
     try {
@@ -491,15 +492,18 @@ test.describe("offline bundle model", () => {
   });
 
   test("offline add-to-tunes from the drawer toasts on My Tunes (no blocking alert)", async ({ page, context }) => {
+    // This test's OWN scratch tune, reset BEFORE the bundle is mirrored so the
+    // cached copy shows it un-owned -> the drawer offline shows an "Add" button.
+    // (The old shared "first un-owned popular" pick raced with other specs'
+    // add/remove cleanups under parallel workers.)
+    await resetScratchTune(page, SCRATCH_TUNES.drawerOfflineAdd.id);
     await warmAndSync(page);
     await page.goto("/my-tunes"); // cache the list page so the post-add navigation works offline
     await page.waitForTimeout(1000);
 
-    // A popular tune the user does NOT own -> the drawer shows an "Add" button.
     const bundle = await (await page.request.get("/api/offline/bundle")).json();
-    const owned = new Set((bundle.tunes || []).map((t: any) => t.tune_id));
-    const cand = (bundle.popular || []).find((t: any) => !owned.has(t.tune_id));
-    expect(cand, "a popular un-owned tune exists in the bundle").toBeTruthy();
+    const cand = (bundle.popular || []).find((t: any) => t.tune_id === SCRATCH_TUNES.drawerOfflineAdd.id);
+    expect(cand, "the scratch tune is in the bundle's popular set").toBeTruthy();
 
     await page.goto("/"); // a page with no inline modal, to prove the app-wide drawer works
     await page.waitForFunction(() => !!(window as any).TuneDetailModal, null, { timeout: 8000 });
@@ -537,15 +541,16 @@ test.describe("offline bundle model", () => {
   });
 
   test("offline-added tune is clickable, shows notation, and reflects status changes", async ({ page, context }) => {
+    // This test's OWN scratch tune (with incipit notation), reset BEFORE the
+    // bundle mirror so the cached copy shows it un-owned.
+    await resetScratchTune(page, SCRATCH_TUNES.offlineAddedCard.id);
     await warmAndSync(page);
     await page.goto("/my-tunes"); // snapshot the list page + assets for offline
     await page.waitForTimeout(1500);
 
-    // Pick a popular tune the user does NOT already own that carries incipit notation.
     const bundle = await (await page.request.get("/api/offline/bundle")).json();
-    const owned = new Set((bundle.tunes || []).map((t: any) => t.tune_id));
-    const cand = (bundle.popular || []).find((t: any) => !owned.has(t.tune_id) && t.incipit_abc);
-    expect(cand, "a popular un-owned tune with notation exists in the bundle").toBeTruthy();
+    const cand = (bundle.popular || []).find((t: any) => t.tune_id === SCRATCH_TUNES.offlineAddedCard.id);
+    expect(cand?.incipit_abc, "the scratch tune carries incipit notation in the bundle").toBeTruthy();
     const tid = cand.tune_id;
     const sel = `.tune-card[data-tune-id="${tid}"], .tune-card-swipe-container[data-tune-id="${tid}"]`;
 

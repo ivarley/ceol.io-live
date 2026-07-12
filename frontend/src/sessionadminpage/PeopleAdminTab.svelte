@@ -2,7 +2,7 @@
   // People (Members) tab: session membership table with regulars/everyone
   // filter, name/email search (smart-quote normalized), and sortable columns.
   import { SearchField, Chip } from '../lib/index.js'
-  import { normalizeQuotes } from '../shared/parse.js'
+  import { normalizeQuotes, parseLocalDate } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
 
   let { sessionPath, load } = $props()
@@ -129,7 +129,7 @@
                 </td>
                 <td class="person-attendance">{person.attendance_count} sessions</td>
                 <td class="person-last-attended">
-                  {#if person.last_attended}{new Date(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
+                  {#if person.last_attended}{parseLocalDate(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
                 </td>
                 <td class="person-admin">
                   {#if person.is_admin}<Chip label="Session" styled={false} chipClass="badge bg-primary" />{/if}

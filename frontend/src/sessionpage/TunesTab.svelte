@@ -41,6 +41,12 @@
   let sort = $state(initial.sort)
   let myStatusInstrument = $state(initial.myStatusInstrument)
 
+  // ?add=1[&q=X] — the redirect target for the folded-away /tunes/add page:
+  // auto-open the add pane on mount, prefilling its search with ?q. Captured
+  // once here; the mount effect strips both params so refresh doesn't reopen.
+  const autoOpenAdd = new URLSearchParams(window.location.search).get('add') === '1'
+  const autoOpenAddQuery = (new URLSearchParams(window.location.search).get('q') || '').trim()
+
   // Bumped when TunebookStatus finishes loading so derived filtering re-runs.
   let tunebookVersion = $state(0)
   let tunebookLoading = $state(false)
@@ -141,6 +147,18 @@
           pendingTuneId = deepLinkTuneId
           loadRemainingTunes()
         }
+      }
+      // ?add=1 landing (the folded-away /tunes/add page's redirect target):
+      // strip the one-shot params, then open the pane once App has bound it
+      // (bind:this on the sibling SessionTuneAddApp settles during mount).
+      // Login-gated like the + button — anonymous viewers just land on the tab.
+      if (autoOpenAdd && isLoggedIn) {
+        const params = new URLSearchParams(window.location.search)
+        params.delete('add')
+        params.delete('q')
+        const q = params.toString()
+        window.history.replaceState({}, '', window.location.pathname + (q ? '?' + q : ''))
+        setTimeout(() => openAddPane(autoOpenAddQuery), 0)
       }
     })
   })
@@ -359,13 +377,12 @@
   }
 
   // ---- add-tune pane (bundled-in SessionTuneAddApp, via the addPane prop) ----------
-  function handleAddSessionTuneClick(event) {
+  function openAddPane(query) {
     const pane = addPane()
-    if (!pane) return // let the <a href> navigate to the legacy page
-    event.preventDefault()
+    if (!pane) return false
     pane.open({
       sessionPath: sessionPath,
-      query: rawSearch.trim(),
+      query,
       onAdded: function (tuneId, name) {
         // Land on the tunes tab with the existing toast + scroll/highlight flow.
         window.location.href =
@@ -375,6 +392,12 @@
         window.location.href = '/sessions/' + sessionPath + '/tunes?show=' + tuneId + '&already=1'
       },
     })
+    return true
+  }
+  function handleAddSessionTuneClick(event) {
+    // If the pane isn't mounted, let the <a href> navigate (?add=1 round-trips
+    // through the redirect and lands right back here with the pane opening).
+    if (openAddPane(rawSearch.trim())) event.preventDefault()
   }
 
   // ---- landing flows (?added / ?already / ?show) -----------------------------------
@@ -463,7 +486,7 @@
           onSearch={(q) => (filters.search = q.toLowerCase().trim())} />
         {#if isLoggedIn}
           <a
-            href="/sessions/{sessionPath}/tunes/add"
+            href="/sessions/{sessionPath}/tunes?add=1"
             class="filter-panel-toggle"
             id="add-session-tune-btn"
             title="Add tune"
@@ -593,7 +616,7 @@
           <p style="margin-bottom: 20px;">No tunes found matching "{filters.search}"</p>
           {#if isLoggedIn}
             <a
-              href="/sessions/{sessionPath}/tunes/add?q={encodeURIComponent(filters.search)}"
+              href="/sessions/{sessionPath}/tunes?add=1&q={encodeURIComponent(filters.search)}"
               class="btn btn-primary"
               style="padding: 12px 24px; background-color: var(--primary); color: white; text-decoration: none; border-radius: 4px; display: inline-block;"
               onclick={handleAddSessionTuneClick}>

@@ -879,7 +879,13 @@
   // surfaces through the drawer's toast pattern.
   export function generateNotation() {
     fetchSetting().then((ok) => {
-      if (!ok) toast('Could not fetch notation for this tune', 'error')
+      if (!ok) {
+        toast('Could not fetch notation for this tune', 'error')
+        return
+      }
+      // If the fetch produced a rendered image, show the dots the user asked
+      // for instead of leaving them on the abc text view.
+      if (tune?.incipit_image || tune?.image) notationMode = 'dots'
     })
   }
 
@@ -1528,6 +1534,20 @@
                     }}
                   >
                     abc
+                  </button>
+                {:else if notation.hasAbc && !notation.hasDots && canGenerateNotation}
+                  <!-- abc text is cached but no rendered staff image: offer to
+                       generate the dots where the notes/abc toggle would sit. -->
+                  <button
+                    type="button"
+                    class="generate-notation-link"
+                    onclick={(e) => {
+                      e.stopPropagation()
+                      generateNotation()
+                    }}
+                    disabled={fetchBtnState === 'loading'}
+                  >
+                    {fetchBtnState === 'loading' ? 'Generating notation…' : 'Generate Notation'}
                   </button>
                 {/if}
               </div>

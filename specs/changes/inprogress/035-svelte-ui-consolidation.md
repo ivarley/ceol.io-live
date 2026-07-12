@@ -6,9 +6,9 @@ e2e 88/88 desktop+mobile); uncommitted, awaiting user verification. Step 3 scope
 the tune-detail modal and the app-wide find-tune overlay are now Svelte
 (`frontend/src/tunesheet/`, behind the unchanged `window.TuneDetailModal` /
 `window.FindTuneOverlay` contracts; legacy `tune_detail_modal.js` deleted).
-`TuneSearchComponent.js` remains only on the legacy fallback add pages
-(`my_tunes_add`, `session_tune_add`) and the quarantined pill page — it dies with
-those pages rather than being consolidated.
+`TuneSearchComponent.js` remains only on the quarantined pill page — it dies
+with it rather than being consolidated (its other two consumers, the legacy
+fallback add pages, were folded away 2026-07-12, see Remaining below).
 **Step 4 also BUILT (2026-07-11):** `/sessions` (serializers.build_sessions_directory_payload
 + `frontend/src/sessionsdir/`) and `/sessions/<path>` (serializers.build_session_detail_payload,
 new GET `/api/sessions/<path>/detail` aggregate endpoint with permission flags /
@@ -39,11 +39,23 @@ pruned with evidence); recurrence_readable single helper; common_tunes.html thir
 (specs/current/ui/* incl. new svelte-pages.md, CLAUDE.md).
 Verified: pytest 796, vitest 316, 7 bundles, e2e 88/88 desktop+mobile, browser-checked
 (kit Dialog, decoupled add pane, light-mode parity, logged-out find-a-tune).
+**Final page migrations DONE (2026-07-12):** `/add-session`
+(build_add_session_payload, GET /api/add-session @public_api on the same rule as the
+gated create POST, `frontend/src/addsessionpage/` — thesession.org import + search,
+review Sheet with the ported recurrence editor, existing-session Dialog, empty-session
+flow) and `/admin/people` (build_admin_people_payload, GET /api/admin/people
+system-admin, `frontend/src/peopleadminpage/` — client-side search/sort table, 2-step
+add-person Sheets). Nine vite bundles. modalManager.js is now consumed ONLY by the
+quarantined pill logger and dies with it in Step 6.
 **Remaining, deliberately:** Step 6 (delete the pill logger — gated on promoting the
 beta logger); REST URL renaming (churn without payoff until the native client);
 Sheet/Tabs/SearchField visual unification pass; /api/sessions/list + /api/my-sessions +
 /api/user/admin-sessions collapse (needs frontend caller changes, documented in the
-sweep report); my_tunes_add/session_tune_add legacy fallback pages die with the pill work.
+sweep report). The my_tunes_add/session_tune_add legacy fallback pages are DONE early
+(2026-07-12, ahead of the pill work): templates deleted, `/my-tunes/add[?q=]` and
+`/sessions/<path>/tunes/add[?q=]` now 302 to their Svelte surfaces with the add pane
+auto-opened (`?add=1[&q=]`), and the My Tunes pane's deep search gained the offline
+bundle fallback the legacy page had.
 
 **Related:** [024](../024-live-logging-architecture.md) — the in-repo reference implementation
 we are extending. Read it first.
@@ -341,7 +353,7 @@ The risk is purely collateral: these live *next to* the pill code and would die 
 | Asset | Still needed by |
 |---|---|
 | `dist/modalManager.js` | `person_details`, `add_session`, `session_admin`, `session_detail`, `admin_people` — **biggest trap** |
-| `components/TuneSearchComponent.js` + `css/tune-search.css` | `my_tunes_add`, `session_tune_add` |
+| `components/TuneSearchComponent.js` + `css/tune-search.css` | the pill page only (`my_tunes_add`/`session_tune_add` folded away 2026-07-12) |
 | `tune_detail_modal.js` + `.css` | app-wide via `base.html:779` — **and the new Svelte logger calls `window.TuneDetailModal.show()`** (`frontend/src/App.svelte:1438`) |
 | `dist/attendance.js` + `css/attendance.css` | `session_instance_players` |
 

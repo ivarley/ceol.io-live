@@ -1,19 +1,17 @@
 /**
- * ModalManager - Site-wide Modal and UI Components Management
- * 
- * ARCHITECTURE:
+ * ModalManager - legacy modal show/hide utilities.
+ *
+ * QUARANTINED (spec 035): the ONLY remaining consumer is the legacy pill
+ * logger (templates/session_instance_detail.html), which dies in spec 035
+ * Step 6 — this file dies with it (same situation as TuneSearchComponent.js).
+ * The add-session and admin-people pages, its last other consumers, now run
+ * on kit Sheets/Dialogs in their Svelte bundles (frontend/src/lib/). Do not
+ * add new consumers.
+ *
+ * ARCHITECTURE (historical):
  * - Modal HTML stays in each template (page-specific)
  * - ModalManager provides generic utility functions (no page-specific knowledge)
  * - Each page configures its own modals using generic methods
- * 
- * USAGE:
- * 1. Include modalManager.js in your template
- * 2. Keep your modal HTML in the template
- * 3. Use ModalManager.showModal() or helper methods like showModalWithInput()
- * 4. Handle page-specific business logic in your template's functions
- * 
- * This maintains clean separation of concerns and avoids coupling the
- * ModalManager to specific page knowledge.
  */
 
 // Type definitions

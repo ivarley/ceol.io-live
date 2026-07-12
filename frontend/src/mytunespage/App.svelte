@@ -29,6 +29,12 @@
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
+  // /my-tunes?add=1[&q=X] — the redirect target for the folded-away /my-tunes/add
+  // page: auto-open the add pane on mount, prefilling its search with ?q.
+  // Captured here (before the URL-sync effect rewrites the URL from state, which
+  // strips the one-shot params) so a refresh after opening doesn't reopen.
+  const autoOpenAdd = new URLSearchParams(window.location.search).get('add') === '1'
+  const autoOpenAddQuery = (new URLSearchParams(window.location.search).get('q') || '').trim()
   let filters = $state(initial.filters)
   let sort = $state(initial.sort)
   let rawSearch = $state(initial.filters.search)
@@ -324,17 +330,21 @@
 
   // ---- add pane (bundled-in AddTuneApp; formerly window.MyTunesAddPane) ---------
   let addPane = $state(null)
-  function handleAddTuneClick(event) {
-    event.preventDefault()
+  function openAddPane(query) {
     addPane.open({
-      query: rawSearch.trim(),
+      query,
       instruments,
       onAdded: (tuneId, name) => afterPaneAdd(tuneId, name, false),
       onAlready: (tuneId, name) => afterPaneAdd(tuneId, name, true),
     })
   }
+  function handleAddTuneClick(event) {
+    event.preventDefault()
+    openAddPane(rawSearch.trim())
+  }
+  // No-JS fallback href = the same URL the folded-away /my-tunes/add redirects to.
   const addTuneHref = $derived(
-    rawSearch.trim() ? `/my-tunes/add?q=${encodeURIComponent(rawSearch.trim())}` : '/my-tunes/add'
+    rawSearch.trim() ? `/my-tunes?add=1&q=${encodeURIComponent(rawSearch.trim())}` : '/my-tunes?add=1'
   )
 
   // After the pane adds (or finds we already have) a tune: reuse the existing
@@ -432,6 +442,18 @@
       ? window.TuneDetailModal.getTuneIdFromUrl()
       : null
     if (ptid) waitForTuneAndOpen(ptid)
+    // ?add=1 landing (the folded-away add page's redirect target): open the pane.
+    // Instruments arrive via the async adopt(), so poll briefly (only when the
+    // embed says there are any) so the configure phase gets its per-instrument
+    // controls. The URL-sync effect strips ?add/?q, so refresh won't reopen.
+    if (autoOpenAdd) {
+      const expectInstruments = !!(pageData && pageData.instruments && pageData.instruments.length)
+      const openWhenReady = (n) => {
+        if (!expectInstruments || instruments.length || n >= 20) openAddPane(autoOpenAddQuery)
+        else setTimeout(() => openWhenReady(n + 1), 50)
+      }
+      openWhenReady(0)
+    }
   })
 
   // Swipe right on the shared drawer closes it (mobile) — ported from the legacy

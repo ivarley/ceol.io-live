@@ -840,12 +840,45 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     await fireEvent.click(container.querySelector('.generate-notation-link'))
     await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
     expect(container.querySelector('.abc-notation-text').textContent).toBe('inc\nabc')
-    expect(container.querySelector('.generate-notation-link')).toBeFalsy()
+    // The empty-state section is gone; the fetch yielded abc but no rendered
+    // image, so the toggle spot (correctly) still offers Generate Notation.
+    expect(container.querySelector('.abc-notation-empty')).toBeFalsy()
+    expect(container.querySelector('.notation-mode-tabs .generate-notation-link')).toBeTruthy()
     const cacheCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/settings/cache'))
     expect(cacheCall[1].method).toBe('POST')
     // the setting id was saved through the my-tunes variant's PUT target
     const put = fetchMock.mock.calls.find(([, opts]) => opts && opts.method === 'PUT')
     expect(put[0]).toBe('/api/my-tunes/11')
+  })
+
+  it('abc cached but no rendered image -> Generate Notation sits in the toggle spot and switches to dots', async () => {
+    // The DEFAULT payload is exactly this state (abc + incipit_abc, no images) —
+    // the same state every seeded tune is in, and the regression the user hit
+    // twice: the link must appear where the notes/abc toggle would sit.
+    stubFetch([
+      [
+        '/api/tunes/101/settings/cache',
+        {
+          success: true,
+          setting: { setting_id: 9, abc: 'full!abc', incipit_abc: 'inc!abc', image: null, incipit_image: 'IMGDATA' },
+        },
+      ],
+      ['/api/my-tunes/11', (url, opts) => (opts.method === 'PUT' ? { success: true } : { success: false })],
+      ['/api/tunes/101/detail', detailPayload()],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, ptid: 11, scope: null })
+    await waitFor(() => expect(container.querySelector('.abc-notation-text')).toBeTruthy())
+    expect(container.querySelector('.notation-mode-tab')).toBeFalsy()
+    const link = container.querySelector('.notation-mode-tabs .generate-notation-link')
+    expect(link).toBeTruthy()
+
+    await fireEvent.click(link)
+    // The fetch produced an image: the drawer switches to dots and the real
+    // toggle takes the affordance's place.
+    await waitFor(() => expect(container.querySelector('.abc-notation-image')).toBeTruthy())
+    expect(container.querySelectorAll('.notation-mode-tab').length).toBe(2)
+    expect(container.querySelector('.generate-notation-link')).toBeFalsy()
   })
 
   it('Generate Notation failure surfaces through the toast pattern', async () => {
@@ -864,5 +897,112 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     // the affordance stays for a retry
     expect(container.querySelector('.generate-notation-link')).toBeTruthy()
     delete window.showMessage
+  })
+})
+
+describe('DRIFT GUARD: offline bundle parity with the API detail payload', () => {
+  // ONE tune's facts, expressed both ways:
+  //   - as the API detail payload (GET /api/tunes/<id>/detail), and
+  //   - as an offline bundle entry (one GET /api/offline/bundle tunes[] dict, the
+  //     shape api_person_tune_routes.get_offline_bundle documents) fed through the
+  //     offline path (fetch fails -> CeolOffline.getTune -> offlinePayload).
+  // The drawer must render the SAME load-bearing UI from both. When a future
+  // drawer field exists online but the bundle silently lacks it, the two digests
+  // diverge and this test fails — instead of the user noticing a blank offline.
+  const bundleEntry = {
+    person_tune_id: 11,
+    tune_id: 101,
+    tune_name: "Cooley's",
+    name: "Cooley's",
+    tune_type: 'reel',
+    learn_status: 'want to learn',
+    heard_count: 2,
+    notes: 'first two bars',
+    name_alias: 'Cooleys (mine)',
+    setting_id: 4321,
+    learned_date: null,
+    tunebook_count: 9,
+    tunebook_count_cached_date: '2026-01-01',
+    setting_key: 'Edorian',
+    incipit_abc: 'EBBA!B2 EB',
+    incipit_image: null,
+    global_play_count: 7,
+    person_list_count: 4,
+    instruments: [
+      { instrument: 'Fiddle', is_auto: true },
+      { instrument: 'Flute', is_auto: false },
+    ],
+    instrument_status: {},
+    session_play_count: 3,
+  }
+
+  // The SAME facts as the online payload. Online-only extras (full-size abc/image,
+  // the session-scope fields) sit at their unscoped defaults — exactly what the
+  // offline path synthesizes, so any other difference is real drift.
+  const onlinePayload = detailPayload({
+    tune: { setting_id: 4321, setting_key: 'Edorian', abc: null, incipit_abc: 'EBBA!B2 EB' },
+    pts: fullPts({ name_alias: 'Cooleys (mine)', setting_id: 4321 }),
+  })
+
+  const norm = (s) => (s || '').replace(/\s+/g, ' ').trim()
+  const digest = (c) => ({
+    title: norm(c.querySelector('.modal-tune-title')?.textContent),
+    typePill: norm(c.querySelector('.tune-type-pill')?.textContent),
+    activeStatus: c.querySelector('.tsc-main-block .tunebook-status-opt.active')?.dataset.status,
+    statusTint: [...(c.querySelector('.tunebook-status-section')?.classList || [])]
+      .filter((cl) => cl.startsWith('tunebook-status-') && cl !== 'tunebook-status-section')
+      .join(' '),
+    instrumentExpand: norm(c.querySelector('.tsc-expand-link')?.textContent),
+    heard: norm(c.querySelector('#heard-count-value')?.textContent),
+    notation: c.querySelector('.abc-notation-text')?.textContent,
+    notes: c.querySelector('#notes-textarea')?.value,
+    nameAlias: c.querySelector('#name-alias-input')?.value,
+    settingField: c.querySelector('#setting-input')?.value,
+    removeLink: /Remove From My Tunes/.test(c.querySelector('.modal-additional-links')?.textContent || ''),
+    // The whole Stats tab: tunebook count row (incl. "Last Updated"), list count,
+    // my-sessions and all-sessions play counts.
+    statsTab: norm(c.querySelector('#stats-tab')?.textContent),
+  })
+
+  it('renders the same load-bearing UI online and offline', async () => {
+    // Online render: the API detail payload.
+    stubFetch([['/api/tunes/101/detail', onlinePayload]])
+    const online = render(TuneSheet)
+    online.component.show({ tuneId: 101, scope: null })
+    await waitFor(() =>
+      expect(online.container.querySelector('.modal-tune-title')?.textContent).toContain('Cooleys (mine)')
+    )
+    const onlineDigest = digest(online.container)
+    online.unmount()
+
+    // Sanity-pin the online side first so "both blank" can never pass.
+    expect(onlineDigest.activeStatus).toBe('want to learn')
+    expect(onlineDigest.statusTint).toBe('tunebook-status-want-to-learn')
+    expect(onlineDigest.instrumentExpand).toBe('View By Instrument')
+    expect(onlineDigest.heard).toBe('2')
+    expect(onlineDigest.notation).toBe('EBBA\nB2 EB')
+    expect(onlineDigest.notes).toBe('first two bars')
+    expect(onlineDigest.nameAlias).toBe('Cooleys (mine)')
+    expect(onlineDigest.settingField).toBe('4321')
+    expect(onlineDigest.statsTab).toContain('Saved in 4 tune lists on Ceol.io')
+    expect(onlineDigest.statsTab).toContain('Saved in 9 tunebooks on TheSession.org')
+    expect(onlineDigest.statsTab).toContain('Last Updated 2026-01-01')
+    expect(onlineDigest.statsTab).toContain('Logged 3 times at my sessions')
+    expect(onlineDigest.statsTab).toContain('Logged 7 times at all sessions')
+
+    // Offline render: network dead, the SAME tune served from the cached bundle.
+    fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+    window.CeolOffline = { getTune: vi.fn().mockResolvedValue({ ...bundleEntry }) }
+    window.MyTunesOffline = {
+      pending: vi.fn().mockResolvedValue([]),
+      submit: vi.fn().mockResolvedValue({ online: false, queued: true }),
+    }
+    const offline = render(TuneSheet)
+    offline.component.show({ tuneId: 101, scope: null })
+    await waitFor(() =>
+      expect(offline.container.querySelector('.modal-tune-title')?.textContent).toContain('Cooleys (mine)')
+    )
+    expect(digest(offline.container)).toEqual(onlineDigest)
   })
 })

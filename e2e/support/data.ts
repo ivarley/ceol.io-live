@@ -45,3 +45,26 @@ export const TUNES = {
   cooleys: { id: 1, name: "Cooley's" },
   butterfly: { id: 10, name: "The Butterfly" },
 } as const;
+
+/**
+ * Scratch tunes for tests that ADD/REMOVE rows on the regular user's (sarah's)
+ * tune list. Every mutating test owns its OWN tune, so parallel workers can
+ * never race on the same person_tune row — the old shared pick ("first
+ * un-owned popular tune") made concurrently-running specs add/remove each
+ * other's rows mid-test, which was the source of the offline-spec flakes.
+ *
+ * Contract for every entry (verified against schema/seed_data.sql + the
+ * incipit backfill the reseed runs): seeded, NOT on sarah's seed list
+ * (person 2 owns tunes 1, 27, 55, 64, 71, 83), inside the popular top 100
+ * (so it's in GET /api/offline/bundle's popular set), with incipit notation.
+ */
+export const SCRATCH_TUNES = {
+  addReplay: { id: 74, name: "Mason's Apron, The" },
+  addPageSearch: { id: 138, name: "Toss The Feathers" }, // my-tunes.spec.ts add-pane tests
+  paneOfflineAdd: { id: 21, name: "Castle Kelly" }, // offline.spec.ts add-pane offline search/add
+  homeDashboard: { id: 108, name: "Out On The Ocean" },
+  listStatusCycle: { id: 4195, name: "Bear Dance, The" },
+  drawerStatusSeg: { id: 19, name: "Connaughtman's Rambles, The" },
+  drawerOfflineAdd: { id: 75, name: "Miss McLeod's" },
+  offlineAddedCard: { id: 248, name: "Tam Lin" },
+} as const;

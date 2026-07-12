@@ -82,7 +82,6 @@
     return warmPage('/my-tunes')
       .then(function () { return warmApi('/api/my-tunes?per_page=2000&sort=alpha-asc') })
       .then(function () { return warmPage('/') })
-      .then(function () { return warmPage('/my-tunes/add') })
       .then(function () { return warmPage('/sessions') })
       .then(function () { return warmApi('/api/sessions/with-today-status') }) // what /sessions renders from
       .then(function () { return window.CeolOffline ? window.CeolOffline.sync(true) : null }) // tunebook + notation + popular

@@ -56,6 +56,8 @@ loads a page bundle in `{% block extra_js %}`. See
 - `session_detail.html` → `#session-detail-root` + `static/sessionpage/page.js` (also mounts `#session-tune-add-root` for the add pane)
 - `person_details.html` → `#person-details-root` + `static/personpage/page.js` (serves both `/me` and `/admin/people/<id>`)
 - `session_admin.html` → `#session-admin-root` + `static/sessionadminpage/page.js`
+- `add_session.html` → `#add-session-root` + `static/addsessionpage/page.js` (public page; only the create POST is gated)
+- `admin_people.html` → `#admin-people-root` + `static/peopleadminpage/page.js` (keeps the Jinja `admin_tabs.html` chrome above the mount)
 
 Several of these shells still carry large page `<style>` blocks; moving that
 CSS into the bundles (as `my_tunes.html` already does) is a known follow-up.
@@ -64,11 +66,15 @@ CSS into the bundles (as `my_tunes.html` already does) is a known follow-up.
 
 - **Auth**: `auth/login.html`, `auth/register.html`, `auth/reset_password.html`, …
 - **Help**: `help.html`, `help_*.html`
-- **Plain admin tables**: `admin_tabs.html`, `admin_sessions_list.html`, `admin_people.html`, `admin_tunes.html`, …
+- **Plain admin tables**: `admin_tabs.html`, `admin_sessions_list.html`, `admin_tunes.html`, … (`admin_people.html` is a thin Svelte shell now, see above)
 - **Home**: `home.html`
-- **Legacy fallback add pages**: `my_tunes_add.html`, `session_tune_add.html` — the last users of `static/js/components/TuneSearchComponent.js`; they die with the pill page rather than being converted
 - **Attendance page**: `session_instance_players.html` (+ `partials/attendance_tab.html`, `static/js/shared/attendance.js`)
-- **Quarantined**: `session_instance_detail.html` — the legacy pill editor, kept working untouched until spec 035 Step 6 deletes it (see [Session Logging UI](session-logging.md))
+- **Quarantined**: `session_instance_detail.html` — the legacy pill editor, kept working untouched until spec 035 Step 6 deletes it (see [Session Logging UI](session-logging.md)); now the only consumer of `static/js/components/TuneSearchComponent.js` AND `static/js/shared/modalManager.js`, both of which die with it
+
+The legacy fallback add pages (`my_tunes_add.html`, `session_tune_add.html`) are
+deleted: `/my-tunes/add` and `/sessions/<path>/tunes/add` now redirect to their
+modern Svelte surfaces with the add pane auto-opened (`?add=1[&q=]` — see
+[Svelte Pages](svelte-pages.md)).
 
 ## Header
 
@@ -99,8 +105,6 @@ CSS into the bundles (as `my_tunes.html` already does) is a known follow-up.
 ## Partials & Components
 
 **Attendance Tab**: `partials/attendance_tab.html` - Reusable attendance UI (`session_instance_players.html`)
-
-**Tune Search**: `components/tune_search_input.html` - Legacy autocomplete component (Jinja pages only; Svelte pages use `frontend/src/TuneSearch.svelte`)
 
 **Modals**: `modals/person_edit.html` - Person edit dialog
 

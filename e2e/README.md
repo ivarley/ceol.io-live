@@ -53,6 +53,12 @@ duplicate-key flakes can't carry over between runs.
 - **Seed data**: reference `support/data.ts`, which points only at the stable
   demo rows (`austin/mueller`, etc.) — never the randomly-named rows that other
   test suites leave behind.
+- **Mutating the regular user's tune list**: tests run fully parallel, so a test
+  that adds/removes a `person_tune` row must use its OWN entry from
+  `SCRATCH_TUNES` in `support/data.ts` (add one there if writing a new mutating
+  test). Never pick "the first un-owned popular tune" dynamically — concurrent
+  workers land on the same tune and each other's add/remove cleanups flake the
+  suite.
 - **SPA pages** (sessions detail, my-tunes, admin tunes) load content via AJAX;
   wait on the target element / `expect.poll` rather than a fixed timeout.
 - Mobile specs must be named `*.mobile.spec.ts` to be picked up by the `mobile`

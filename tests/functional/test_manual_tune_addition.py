@@ -31,10 +31,11 @@ class TestManualTuneAdditionWorkflow:
         with authenticated_user:
             person_id = authenticated_user.person_id
             
-            # Phase 1: User accesses add tune page
-            response = client.get("/my-tunes/add")
-            assert response.status_code == 200
-            assert b"Add Tune to Collection" in response.data
+            # Phase 1: User hits the legacy add URL — folded away into a redirect
+            # to My Tunes with the add pane auto-opened.
+            response = client.get("/my-tunes/add", follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == "/my-tunes?add=1"
             
             # Phase 2: User searches for a tune
             response = client.get(f"/api/tunes/search?q=butterfly {unique_id}")
@@ -260,22 +261,43 @@ class TestSearchPrioritization:
 
 
 @pytest.mark.functional
-class TestAddTunePageAccess:
-    """Test access control for add tune page."""
+class TestAddPageRedirects:
+    """The legacy fallback add pages are folded away: both URLs now redirect to
+    their modern Svelte surfaces with the add pane auto-opened (?add=1), passing
+    an optional ?q= search prefill through."""
 
-    def test_unauthenticated_user_redirected(self, client):
-        """Test that unauthenticated users are redirected to login."""
+    def test_unauthenticated_user_redirected_to_login(self, client):
+        """/my-tunes/add keeps its login gate (302 to login when anonymous)."""
         response = client.get("/my-tunes/add", follow_redirects=False)
         assert response.status_code == 302  # Redirect
         assert "/login" in response.location
 
-    def test_authenticated_user_can_access(self, client, authenticated_user):
-        """Test that authenticated users can access the add tune page."""
+    def test_my_tunes_add_redirects_to_pane(self, client, authenticated_user):
+        """/my-tunes/add -> /my-tunes?add=1 (the pane auto-opens client-side)."""
         with authenticated_user:
-            response = client.get("/my-tunes/add")
-            assert response.status_code == 200
-            assert b"Add Tune to Collection" in response.data
-            assert b"Search for Tune" in response.data
+            response = client.get("/my-tunes/add", follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == "/my-tunes?add=1"
+
+    def test_my_tunes_add_passes_query_through(self, client, authenticated_user):
+        """?q= survives the redirect so the pane's search is prefilled."""
+        with authenticated_user:
+            response = client.get("/my-tunes/add?q=kesh", follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == "/my-tunes?add=1&q=kesh"
+
+    def test_session_tune_add_redirects_to_tunes_tab(self, client):
+        """/sessions/<path>/tunes/add -> the session's Tunes tab with ?add=1."""
+        response = client.get("/sessions/austin/mueller/tunes/add", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.location == "/sessions/austin/mueller/tunes?add=1"
+
+    def test_session_tune_add_passes_query_through(self, client):
+        response = client.get(
+            "/sessions/austin/mueller/tunes/add?q=kesh", follow_redirects=False
+        )
+        assert response.status_code == 302
+        assert response.location == "/sessions/austin/mueller/tunes?add=1&q=kesh"
 
 
 @pytest.mark.functional

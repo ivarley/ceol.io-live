@@ -29,6 +29,8 @@ First paint needs no fetch — no loading flash.
 | `/sessions/<path>` | `session_detail.html` | `build_session_detail_payload` | `GET /api/sessions/<path>/detail` | `frontend/src/sessionpage/` | `static/sessionpage/` |
 | `/me`, `/admin/people/<id>` | `person_details.html` | `build_person_details_payload` | `GET /api/me/details`, `GET /api/admin/people/<id>/details` | `frontend/src/personpage/` | `static/personpage/` |
 | `/admin/sessions/<path>` (+ tab wrappers) | `session_admin.html` | `build_session_admin_payload` | `GET /api/admin/sessions/<path>/admin-detail` | `frontend/src/sessionadminpage/` | `static/sessionadminpage/` |
+| `/add-session` | `add_session.html` | `build_add_session_payload` | `GET /api/add-session` (PUBLIC — only the create POST is gated) | `frontend/src/addsessionpage/` | `static/addsessionpage/` |
+| `/admin/people` | `admin_people.html` | `build_admin_people_payload` | `GET /api/admin/people` (system-admin) | `frontend/src/peopleadminpage/` | `static/peopleadminpage/` |
 
 Plus three non-page bundles:
 
@@ -52,20 +54,29 @@ Plus three non-page bundles:
 - **`frontend/src/` (root) → `static/live/`** — the live logger (spec 024), the
   progenitor of this pattern. Its shell (`live_logging.html`) does *not* extend
   `base.html` and embeds `window.__LIVE_CONFIG__` instead.
-- **`frontend/src/mytunes/` → `static/mytunes/add.js`** — the add-tune pane.
-  Also compiled *into* the mytunespage bundle as a child component; the
-  standalone build currently serves `session_detail.html`'s
-  `#session-tune-add-root` and is being folded away.
+- **`frontend/src/mytunes/`** — the add-tune panes (`AddTuneApp` /
+  `SessionTuneAddApp`), compiled *into* the mytunespage and sessionpage bundles
+  as child components (no standalone build). The legacy fallback add pages are
+  gone: `/my-tunes/add[?q=]` and `/sessions/<path>/tunes/add[?q=]` now 302 to
+  `/my-tunes?add=1[&q=]` / `/sessions/<path>/tunes?add=1[&q=]`, where `?add=1`
+  auto-opens the pane on mount (`?q` prefills its deep search) and the params
+  are stripped via `replaceState` so refresh doesn't reopen. Offline, the
+  My Tunes pane's deep search falls back to the `CeolOffline` bundle mirror
+  (the parity the legacy page had).
 
 ## What stays Jinja
 
 Non-interactive surfaces, deliberately (spec 035 decision 2): `auth/*`,
-`help_*`, plain admin tables (`admin_people.html`, `admin_tunes.html`, …),
-`home.html`, the legacy fallback add pages (`my_tunes_add.html`,
-`session_tune_add.html` — the last users of `TuneSearchComponent.js`), the
-attendance page (`session_instance_players.html`), and the **quarantined**
-pill logger (`session_instance_detail.html` — dies in spec 035 Step 6, see
-[Session Logging UI](session-logging.md)).
+`help_*`, plain admin tables (`admin_sessions_list.html`, `admin_tunes.html`,
+…), `home.html`, the attendance page (`session_instance_players.html`), and
+the **quarantined** pill logger (`session_instance_detail.html` — dies in spec
+035 Step 6, see [Session Logging UI](session-logging.md); now the ONLY
+consumer of `TuneSearchComponent.js` AND of `modalManager.js`, both of which
+die with it). The legacy fallback add pages (`my_tunes_add.html`,
+`session_tune_add.html`) are deleted — their routes redirect to the modern add
+panes (see the `frontend/src/mytunes/` note above). `/add-session` and
+`/admin/people`, the last two interactive Jinja pages, were migrated
+2026-07-12 (their shells keep the old template filenames).
 
 ## Adding or changing a page — the checklist
 

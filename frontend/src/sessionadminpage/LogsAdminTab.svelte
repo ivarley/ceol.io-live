@@ -7,6 +7,7 @@
 
   import { Sheet, toast, Chip } from '../lib/index.js'
   import InstanceSheet from './InstanceSheet.svelte'
+  import { parseLocalDate } from '../shared/parse.js'
 
   let instanceSheet = $state(null) // bind:this of the bundled InstanceSheet
 
@@ -50,7 +51,7 @@
   })
 
   const fmtDate = (dateStr) => {
-    const date = new Date(dateStr)
+    const date = parseLocalDate(dateStr)
     return {
       main: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       weekday: date.toLocaleDateString('en-US', { weekday: 'long' }),

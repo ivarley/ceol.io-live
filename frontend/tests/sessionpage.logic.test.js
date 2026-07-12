@@ -1,6 +1,6 @@
 // Pure-logic tests for the session-detail page port (spec 035 Step 4b).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { extractTuneId, normalizeQuotes } from '../src/shared/parse.js'
+import { extractTuneId, normalizeQuotes, parseLocalDate } from '../src/shared/parse.js'
 import { formatTime } from '../src/shared/format.js'
 import {
   sortFunctions,
@@ -193,5 +193,20 @@ describe('people helpers', () => {
     expect(filterPeople(people, 'regulars', '')).toHaveLength(1)
     expect(filterPeople(people, 'all', 'flute').map((p) => p.person_id)).toEqual([2])
     expect(filterPeople(people, 'all', 'malone').map((p) => p.person_id)).toEqual([1])
+  })
+})
+
+describe('parseLocalDate', () => {
+  it('parses date-only strings as LOCAL dates (no UTC day shift)', () => {
+    const d = parseLocalDate('2026-01-27')
+    // Regardless of the machine timezone, the local calendar date must match.
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 0, 27])
+    expect(d.toLocaleDateString('en-US', { weekday: 'long' })).toBe('Tuesday')
+  })
+  it('passes timestamps and Date objects through to new Date()', () => {
+    const iso = '2026-01-27T15:30:00Z'
+    expect(parseLocalDate(iso).getTime()).toBe(new Date(iso).getTime())
+    const d = new Date()
+    expect(parseLocalDate(d).getTime()).toBe(d.getTime())
   })
 })

@@ -734,7 +734,14 @@ def session_instance_players(full_path):
 
 
 def add_session():
-    return render_template("add_session.html")
+    """Add-session wizard (spec 035 final migration): a thin shell embedding the
+    SAME payload GET /api/add-session returns (one serializer — they can't
+    drift). Deliberately public — anyone can browse the wizard; only the final
+    POST /api/add-session requires login."""
+    from serializers import build_add_session_payload
+
+    payload = build_add_session_payload(current_user.is_authenticated)
+    return render_template("add_session.html", payload=payload)
 
 
 def help_page():
@@ -2429,178 +2436,22 @@ def admin_login_history():
 
 @login_required
 def admin_people():
+    """Admin people table (spec 035 final migration): a thin shell embedding the
+    SAME payload GET /api/admin/people returns (one serializer — they can't
+    drift). Search/sort and the add-person wizard live in the Svelte bundle."""
     # Check if user is system admin
     if not current_user.is_system_admin:
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
+    from serializers import build_admin_people_payload
+
     conn = get_db_connection()
     try:
-        cur = conn.cursor()
-
-        # Get all people with outer join to user_account and their most recent login
-        # Also get session counts, latest session instance info, and person_tune counts
-        cur.execute(
-            """
-            SELECT
-                p.person_id,
-                p.first_name,
-                p.last_name,
-                p.email,
-                p.city,
-                p.state,
-                p.country,
-                p.thesession_user_id,
-                ua.username,
-                ua.is_system_admin,
-                us.last_login,
-                COALESCE(sp.session_count, 0) as session_count,
-                COALESCE(sip.session_instance_count, 0) as session_instance_count,
-                latest_si.latest_date,
-                latest_si.session_name,
-                COALESCE(pt.tune_count, 0) as tune_count,
-                llt.last_logged_tune,
-                pt.last_tunebook_update
-            FROM person p
-            LEFT JOIN user_account ua ON p.person_id = ua.person_id
-            -- login_history is append-only, so it survives logout and session
-            -- expiry. user_session rows are deleted on both, which made the old
-            -- MAX(user_session.last_accessed) read as "Never" for anyone without
-            -- a currently-live session.
-            LEFT JOIN (
-                SELECT
-                    user_id,
-                    MAX(timestamp) as last_login
-                FROM login_history
-                WHERE event_type = 'LOGIN_SUCCESS'
-                GROUP BY user_id
-            ) us ON ua.user_id = us.user_id
-            LEFT JOIN (
-                SELECT
-                    person_id,
-                    COUNT(*) as session_count
-                FROM session_person
-                GROUP BY person_id
-            ) sp ON p.person_id = sp.person_id
-            LEFT JOIN (
-                SELECT
-                    person_id,
-                    COUNT(*) as session_instance_count
-                FROM session_instance_person
-                GROUP BY person_id
-            ) sip ON p.person_id = sip.person_id
-            LEFT JOIN (
-                SELECT DISTINCT ON (sip.person_id)
-                    sip.person_id,
-                    si.date as latest_date,
-                    s.name as session_name
-                FROM session_instance_person sip
-                JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-                JOIN session s ON si.session_id = s.session_id
-                ORDER BY sip.person_id, si.date DESC
-            ) latest_si ON p.person_id = latest_si.person_id
-            LEFT JOIN (
-                SELECT
-                    person_id,
-                    COUNT(*) as tune_count,
-                    MAX(last_modified_date) as last_tunebook_update
-                FROM person_tune
-                GROUP BY person_id
-            ) pt ON p.person_id = pt.person_id
-            LEFT JOIN (
-                SELECT
-                    ua_l.person_id,
-                    MAX(sit.created_date) as last_logged_tune
-                FROM session_instance_tune sit
-                JOIN user_account ua_l ON sit.created_by_user_id = ua_l.user_id
-                WHERE sit.record_type <> 'break'
-                GROUP BY ua_l.person_id
-            ) llt ON p.person_id = llt.person_id
-            ORDER BY p.last_name, p.first_name
-        """
-        )
-
-        people = []
-        for row in cur.fetchall():
-            (
-                person_id,
-                first_name,
-                last_name,
-                email,
-                city,
-                state,
-                country,
-                thesession_user_id,
-                username,
-                is_system_admin,
-                last_login,
-                session_count,
-                session_instance_count,
-                latest_date,
-                session_name,
-                tune_count,
-                last_logged_tune,
-                last_tunebook_update,
-            ) = row
-
-            # Format full location for tooltip
-            location_parts = []
-            if city:
-                location_parts.append(city)
-            if state:
-                location_parts.append(state)
-            if country:
-                location_parts.append(country)
-            full_location = ", ".join(location_parts) if location_parts else "Unknown"
-
-            # Format last login
-            if last_login:
-                formatted_last_login = last_login.strftime("%Y-%m-%d %H:%M")
-            else:
-                formatted_last_login = "Never" if username else "N/A"
-
-            # Format latest session date
-            if latest_date:
-                formatted_latest_date = latest_date.strftime("%Y-%m-%d")
-                latest_session_info = f"{formatted_latest_date} - {session_name}"
-            else:
-                latest_session_info = "None"
-
-            people.append(
-                {
-                    "person_id": person_id,
-                    "name": f"{first_name} {last_name}",
-                    "email": email or "Not provided",
-                    "city": city or "Unknown",
-                    "full_location": full_location,
-                    "thesession_user_id": thesession_user_id,
-                    "username": username or "No account",
-                    "is_system_admin": is_system_admin,
-                    "last_login": formatted_last_login,
-                    # Sort keys: ISO timestamp for real dates, empty string for
-                    # missing ones so the table can push blanks to the bottom in
-                    # either sort direction.
-                    "last_login_sort": last_login.isoformat() if last_login else "",
-                    "session_count": session_count,
-                    "session_instance_count": session_instance_count,
-                    "latest_session_info": latest_session_info,
-                    "latest_session_sort": latest_date.isoformat() if latest_date else "",
-                    "tune_count": tune_count,
-                    "last_logged_tune": (
-                        last_logged_tune.strftime("%Y-%m-%d %H:%M") if last_logged_tune else "Never"
-                    ),
-                    "last_logged_tune_sort": (last_logged_tune.isoformat() if last_logged_tune else ""),
-                    "last_tunebook_update": (
-                        last_tunebook_update.strftime("%Y-%m-%d %H:%M") if last_tunebook_update else "Never"
-                    ),
-                    "last_tunebook_update_sort": (last_tunebook_update.isoformat() if last_tunebook_update else ""),
-                }
-            )
-
-        return render_template("admin_people.html", people=people, active_tab="people")
-
+        payload = build_admin_people_payload(conn)
     finally:
         conn.close()
+    return render_template("admin_people.html", payload=payload, active_tab="people")
 
 
 @login_required
@@ -3202,8 +3053,13 @@ def my_tunes():
 
 @login_required
 def add_my_tune_page():
-    """Add tune to personal collection page"""
-    return render_template("my_tunes_add.html")
+    """Folded-away legacy add page: redirect to My Tunes with the modern add
+    pane auto-opened (?add=1, optional ?q= prefilling the pane's search)."""
+    args = {"add": 1}
+    q = request.args.get("q", "").strip()
+    if q:
+        args["q"] = q
+    return redirect(url_for("my_tunes", **args))
 
 
 @login_required
@@ -3289,37 +3145,14 @@ def common_tunes(person_id):
 
 
 def add_session_tune_page(session_path):
-    """Add tune to session page"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Get session info
-        cur.execute(
-            "SELECT session_id, name FROM session WHERE path = %s",
-            (session_path,)
-        )
-        session_info = cur.fetchone()
-
-        if not session_info:
-            cur.close()
-            conn.close()
-            from app import render_error_page
-            return render_error_page(f"Session not found: {session_path}", 404)
-
-        session_id, session_name = session_info
-        cur.close()
-        conn.close()
-
-        return render_template(
-            "session_tune_add.html",
-            session_path=session_path,
-            session_name=session_name,
-            session_id=session_id
-        )
-
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
+    """Folded-away legacy add page: redirect to the session's Tunes tab with the
+    modern add pane auto-opened (?add=1, optional ?q= prefilling the pane's
+    search). A bad session_path 404s at the target, exactly as before."""
+    args = {"session_path": session_path, "add": 1}
+    q = request.args.get("q", "").strip()
+    if q:
+        args["q"] = q
+    return redirect(url_for("session_tunes", **args))
 
 
 # Category to entity type mapping for activity view

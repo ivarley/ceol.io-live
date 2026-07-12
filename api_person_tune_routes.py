@@ -15,10 +15,15 @@ from database import get_db_connection, get_current_user_id, normalize_quotes, n
 import base64
 
 
+import psycopg2.extras
+
 from serializers import (
     bytea_to_base64,
     build_my_tunes_payload,
     build_person_tune_detail,
+    load_person_instruments,
+    _attach_instrument_overrides,
+    _attach_session_play_counts,
     VALID_PERSON_TUNE_SORTS,
 )
 
@@ -1257,64 +1262,103 @@ def get_offline_bundle():
                  so the list, drawer, and offline search all work without per-tune fetches.
       - popular: top catalog tunes so offline add-search can find tunes not yet owned.
 
+    PARITY RULE: each tunes entry must carry every field the offline drawer path
+    (offlinePayload in frontend/src/tunesheet/logic.js) maps into the detail-payload
+    shape — the drift guards in tests/integration/test_tune_detail_payload.py and
+    frontend/tests/tunesheet.test.js fail when a rendered detail field is missing here.
     Full-size notation stays online-only to keep this bounded.
     """
     try:
         person_id = get_user_person_id()
         conn = get_db_connection()
         try:
-            cur = conn.cursor()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute(
                 """
                 SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
-                       pt.learn_status, pt.heard_count, pt.notes,
-                       t.tunebook_count_cached, ts.incipit_abc, ts.incipit_image
+                       pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
+                       pt.setting_id, pt.learned_date,
+                       t.tunebook_count_cached, t.tunebook_count_cached_date,
+                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+                       gp.n AS global_play_count, plc.n AS person_list_count
                 FROM person_tune pt
                 JOIN tune t ON t.tune_id = pt.tune_id
                 LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image
+                    SELECT incipit_abc, incipit_image, key
                     FROM tune_setting ts2
                     WHERE ts2.tune_id = pt.tune_id
                       AND (pt.setting_id IS NULL OR ts2.setting_id = pt.setting_id)
                     ORDER BY (ts2.setting_id = pt.setting_id) DESC, ts2.setting_id ASC
                     LIMIT 1
                 ) ts ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(*) AS n FROM session_instance_tune sit WHERE sit.tune_id = pt.tune_id
+                ) gp ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
+                ) plc ON TRUE
                 WHERE pt.person_id = %s
                 ORDER BY t.name ASC
                 """,
                 (person_id,),
             )
+            # The person's instrument list is per-person, not per-tune; embed it in
+            # each entry so the drawer's offline path reads one self-contained record.
+            instruments = load_person_instruments(conn, person_id)
             tunes = [
                 {
-                    "person_tune_id": r[0],
-                    "tune_id": r[1],
-                    "tune_name": r[2],
-                    "name": r[2],
-                    "tune_type": r[3],
-                    "learn_status": r[4],
-                    "heard_count": r[5] or 0,
-                    "notes": r[6],
-                    "tunebook_count": r[7] or 0,
-                    "incipit_abc": r[8],
-                    "incipit_image": bytea_to_base64(r[9]) if r[9] is not None else None,
+                    "person_tune_id": r["person_tune_id"],
+                    "tune_id": r["tune_id"],
+                    "tune_name": r["name"],
+                    "name": r["name"],
+                    "tune_type": r["tune_type"],
+                    "learn_status": r["learn_status"],
+                    "heard_count": r["heard_count"] or 0,
+                    "notes": r["notes"],
+                    "name_alias": r["name_alias"],
+                    "setting_id": r["setting_id"],
+                    "learned_date": r["learned_date"].isoformat() if r["learned_date"] else None,
+                    "tunebook_count": r["tunebook_count_cached"] or 0,
+                    "tunebook_count_cached_date": (
+                        r["tunebook_count_cached_date"].isoformat()
+                        if r["tunebook_count_cached_date"]
+                        else None
+                    ),
+                    "setting_key": r["setting_key"],
+                    "incipit_abc": r["incipit_abc"],
+                    "incipit_image": bytea_to_base64(r["incipit_image"]) if r["incipit_image"] is not None else None,
+                    "global_play_count": r["global_play_count"],
+                    "person_list_count": r["person_list_count"],
+                    "instruments": instruments,
                 }
                 for r in cur.fetchall()
             ]
+            _attach_instrument_overrides(cur, person_id, tunes)
+            _attach_session_play_counts(cur, person_id, tunes)
 
             # Popular tunes carry incipit notation too, so a popular tune added offline
-            # still shows its dots/ABC in the drawer.
+            # still shows its dots/ABC in the drawer — plus the same stats fields, so
+            # the drawer's not-on-list (Add) view renders the stats it shows online.
             cur.execute(
                 """
-                SELECT t.tune_id, t.name, t.tune_type, t.tunebook_count_cached,
-                       ts.incipit_abc, ts.incipit_image
+                SELECT t.tune_id, t.name, t.tune_type,
+                       t.tunebook_count_cached, t.tunebook_count_cached_date,
+                       ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
+                       gp.n AS global_play_count, plc.n AS person_list_count
                 FROM tune t
                 LEFT JOIN LATERAL (
-                    SELECT incipit_abc, incipit_image
+                    SELECT incipit_abc, incipit_image, key
                     FROM tune_setting ts2
                     WHERE ts2.tune_id = t.tune_id
                     ORDER BY ts2.setting_id ASC
                     LIMIT 1
                 ) ts ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(*) AS n FROM session_instance_tune sit WHERE sit.tune_id = t.tune_id
+                ) gp ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id
+                ) plc ON TRUE
                 WHERE t.redirect_to_tune_id IS NULL
                 ORDER BY t.tunebook_count_cached DESC NULLS LAST, t.name ASC
                 LIMIT 100
@@ -1322,12 +1366,20 @@ def get_offline_bundle():
             )
             popular = [
                 {
-                    "tune_id": r[0],
-                    "name": r[1],
-                    "tune_type": r[2],
-                    "tunebook_count": r[3] or 0,
-                    "incipit_abc": r[4],
-                    "incipit_image": bytea_to_base64(r[5]) if r[5] is not None else None,
+                    "tune_id": r["tune_id"],
+                    "name": r["name"],
+                    "tune_type": r["tune_type"],
+                    "tunebook_count": r["tunebook_count_cached"] or 0,
+                    "tunebook_count_cached_date": (
+                        r["tunebook_count_cached_date"].isoformat()
+                        if r["tunebook_count_cached_date"]
+                        else None
+                    ),
+                    "setting_key": r["setting_key"],
+                    "incipit_abc": r["incipit_abc"],
+                    "incipit_image": bytea_to_base64(r["incipit_image"]) if r["incipit_image"] is not None else None,
+                    "global_play_count": r["global_play_count"],
+                    "person_list_count": r["person_list_count"],
                 }
                 for r in cur.fetchall()
             ]

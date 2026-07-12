@@ -202,4 +202,24 @@ describe('drawer status-change notifications (chained tunes)', () => {
     expect(container.querySelectorAll('#tunes-grid .tune-card')).toHaveLength(3)
     expect(container.querySelector('.tune-card[data-tune-id="999"] .status-badge').textContent).toBe('want to learn')
   })
+
+  it('the add button opens the bundled-in add pane seeded with the current search', async () => {
+    const { container } = render(App, { pageData: payload() })
+    await waitFor(() => expect(container.querySelector('#add-tune-btn')).toBeTruthy())
+    // The no-JS fallback href is the folded-away add page's redirect target.
+    expect(container.querySelector('#add-tune-btn').getAttribute('href')).toBe('/my-tunes?add=1')
+    expect(document.querySelector('.mt-add-pane')).toBeNull()
+    await fireEvent.click(container.querySelector('#add-tune-btn'))
+    expect(document.querySelector('.mt-add-pane')).toBeTruthy()
+  })
+
+  it('?add=1&q= landing (the folded-away add page redirect) auto-opens the pane and strips the params', async () => {
+    window.history.replaceState({}, '', '/my-tunes?add=1&q=kesh')
+    render(App, { pageData: payload() })
+    await waitFor(() => expect(document.querySelector('.mt-add-pane')).toBeTruthy())
+    expect(document.querySelector('.mt-add-pane .deep-field').value).toBe('kesh')
+    // One-shot params are stripped so a refresh doesn't reopen the pane.
+    expect(window.location.search).not.toContain('add=1')
+    expect(window.location.search).not.toContain('q=kesh')
+  })
 })

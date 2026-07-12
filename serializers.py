@@ -50,6 +50,7 @@ _TIMEZONE_NAMES = [
     "America/New_York",
     "America/Chicago",
     "America/Denver",
+    "America/Phoenix",
     "America/Los_Angeles",
     "America/Anchorage",
     "Pacific/Honolulu",
@@ -106,6 +107,139 @@ def timezone_options() -> List[Dict[str, str]]:
         {"value": tz, "label": get_timezone_display_with_offset(tz)}
         for tz in _TIMEZONE_NAMES
     ]
+
+
+# ---------------------------------------------------------------------------
+# add-session — the public /add-session page and GET /api/add-session
+# ---------------------------------------------------------------------------
+
+
+def build_add_session_payload(logged_in: bool = False) -> Dict[str, Any]:
+    """The /add-session page payload (spec 035 final migration). The page is
+    payload-light — its data comes from thesession.org at interaction time —
+    but the shell==API invariant still holds: the shell embeds THIS dict and
+    GET /api/add-session returns it. `logged_in` drives the "Add me as" control
+    (anyone can browse the wizard; only the final POST /api/add-session is gated).
+    """
+    return {
+        "success": True,
+        "timezone_options": timezone_options(),
+        # The wizard's fallback when the country/state guess has no opinion.
+        "default_timezone": "America/Chicago",
+        "viewer": {"logged_in": bool(logged_in)},
+    }
+
+
+# ---------------------------------------------------------------------------
+# admin people — the /admin/people page and GET /api/admin/people
+# ---------------------------------------------------------------------------
+
+_ADMIN_PEOPLE_SQL = """
+    SELECT
+        p.person_id,
+        p.first_name,
+        p.last_name,
+        p.email,
+        p.city,
+        p.state,
+        p.country,
+        p.thesession_user_id,
+        ua.username,
+        ua.is_system_admin,
+        us.last_login,
+        COALESCE(sp.session_count, 0) AS session_count,
+        COALESCE(sip.session_instance_count, 0) AS session_instance_count,
+        latest_si.latest_date,
+        latest_si.session_name,
+        COALESCE(pt.tune_count, 0) AS tune_count,
+        llt.last_logged_tune,
+        pt.last_tunebook_update
+    FROM person p
+    LEFT JOIN user_account ua ON p.person_id = ua.person_id
+    -- login_history is append-only, so it survives logout and session expiry.
+    -- user_session rows are deleted on both, which made the old
+    -- MAX(user_session.last_accessed) read as "Never" for anyone without a
+    -- currently-live session.
+    LEFT JOIN (
+        SELECT user_id, MAX(timestamp) AS last_login
+        FROM login_history
+        WHERE event_type = 'LOGIN_SUCCESS'
+        GROUP BY user_id
+    ) us ON ua.user_id = us.user_id
+    LEFT JOIN (
+        SELECT person_id, COUNT(*) AS session_count
+        FROM session_person
+        GROUP BY person_id
+    ) sp ON p.person_id = sp.person_id
+    LEFT JOIN (
+        SELECT person_id, COUNT(*) AS session_instance_count
+        FROM session_instance_person
+        GROUP BY person_id
+    ) sip ON p.person_id = sip.person_id
+    LEFT JOIN (
+        SELECT DISTINCT ON (sip.person_id)
+            sip.person_id,
+            si.date AS latest_date,
+            s.name AS session_name
+        FROM session_instance_person sip
+        JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+        JOIN session s ON si.session_id = s.session_id
+        ORDER BY sip.person_id, si.date DESC
+    ) latest_si ON p.person_id = latest_si.person_id
+    LEFT JOIN (
+        SELECT person_id, COUNT(*) AS tune_count,
+               MAX(last_modified_date) AS last_tunebook_update
+        FROM person_tune
+        GROUP BY person_id
+    ) pt ON p.person_id = pt.person_id
+    LEFT JOIN (
+        SELECT ua_l.person_id, MAX(sit.created_date) AS last_logged_tune
+        FROM session_instance_tune sit
+        JOIN user_account ua_l ON sit.created_by_user_id = ua_l.user_id
+        WHERE sit.record_type <> 'break'
+        GROUP BY ua_l.person_id
+    ) llt ON p.person_id = llt.person_id
+    ORDER BY p.last_name, p.first_name
+"""
+
+
+def admin_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Pure mapper: one _ADMIN_PEOPLE_SQL row -> the wire dict. Raw values only
+    (ISO strings, nulls) — display strings ("Never", "No account", "date - name")
+    are the client's job."""
+    return {
+        "person_id": row["person_id"],
+        "name": f"{row['first_name']} {row['last_name']}",
+        "email": row["email"],
+        "city": row["city"],
+        "state": row["state"],
+        "country": row["country"],
+        "thesession_user_id": row["thesession_user_id"],
+        "username": row["username"],
+        "is_system_admin": bool(row["is_system_admin"]) if row["username"] else False,
+        # timestamps as naive-local ISO strings; date-only for latest_session_date
+        "last_login": row["last_login"].isoformat() if row["last_login"] else None,
+        "session_count": row["session_count"],
+        "session_instance_count": row["session_instance_count"],
+        "latest_session_date": row["latest_date"].isoformat() if row["latest_date"] else None,
+        "latest_session_name": row["session_name"],
+        "tune_count": row["tune_count"],
+        "last_logged_tune": row["last_logged_tune"].isoformat() if row["last_logged_tune"] else None,
+        "last_tunebook_update": (
+            row["last_tunebook_update"].isoformat() if row["last_tunebook_update"] else None
+        ),
+    }
+
+
+def build_admin_people_payload(conn) -> Dict[str, Any]:
+    """The /admin/people page payload (system-admin only): every person with
+    account/login info and activity roll-ups, one batched query. The page shell
+    embeds this dict and GET /api/admin/people returns it — one function, no
+    drift. Search/sort are client-side."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(_ADMIN_PEOPLE_SQL)
+        people = [admin_person_to_dict(r) for r in cur.fetchall()]
+    return {"success": True, "people": people}
 
 
 # ---------------------------------------------------------------------------
