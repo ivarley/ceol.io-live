@@ -1,20 +1,14 @@
 <script>
-  // Logs tab: session instance history table (row click opens the shared
-  // SessionInstanceModal from static/js/session_instance_modal.js), ?instance=
-  // deep link auto-open, and the Add Session Instance modal (suggestion-prefilled).
+  // Logs tab: session instance history table (row click opens the bundled
+  // InstanceSheet — the Svelte port of the old static/js/session_instance_modal.js),
+  // ?instance= deep link auto-open, and the Add Session Instance sheet
+  // (suggestion-prefilled).
   let { sessionPath, locationName, load } = $props()
 
-  import { toast, Chip } from '../lib/index.js'
+  import { Sheet, toast, Chip } from '../lib/index.js'
+  import InstanceSheet from './InstanceSheet.svelte'
 
-  // session_instance_modal.js declares `const SessionInstanceModal` — a global
-  // LEXICAL binding, not a window property. The legacy inline onclick handlers
-  // resolved it through the global scope chain; from module code we must do the
-  // same (the typeof guard keeps tests/jsdom safe when the script isn't loaded).
-  function instanceModal() {
-    if (window.SessionInstanceModal) return window.SessionInstanceModal
-    // eslint-disable-next-line no-undef
-    return typeof SessionInstanceModal !== 'undefined' ? SessionInstanceModal : null
-  }
+  let instanceSheet = $state(null) // bind:this of the bundled InstanceSheet
 
   let logs = $state(null) // null until loaded
   let loadError = $state(null)
@@ -30,15 +24,14 @@
         }
         logs = data.logs
 
-        // Check if we should auto-open a specific instance modal
+        // Check if we should auto-open a specific instance sheet
         const urlParams = new URLSearchParams(window.location.search)
         const instanceId = urlParams.get('instance')
         if (instanceId) {
           // Find the log with this instance ID to get the date
           const log = data.logs.find((l) => l.session_instance_id == instanceId)
-          const modal = instanceModal()
-          if (log && modal) {
-            modal.show(parseInt(instanceId), sessionPath, log.date)
+          if (log && instanceSheet) {
+            instanceSheet.show(parseInt(instanceId), sessionPath, log.date)
           }
           // Clear the querystring so refreshing doesn't re-open
           window.history.replaceState({}, '', window.location.pathname)
@@ -65,13 +58,10 @@
   }
 
   function openInstance(log) {
-    const modal = instanceModal()
-    if (modal) {
-      modal.show(log.session_instance_id, sessionPath, log.date)
-    }
+    instanceSheet?.show(log.session_instance_id, sessionPath, log.date)
   }
 
-  // --- Add Session Instance modal -----------------------------------------------
+  // --- Add Session Instance sheet -------------------------------------------------
   let addModalOpen = $state(false)
   let dateValue = $state('')
   let startTimeValue = $state('')
@@ -88,7 +78,6 @@
     commentsValue = ''
 
     addModalOpen = true
-    document.body.classList.add('modal-open')
 
     // Fetch the next suggested session instance from the API
     try {
@@ -108,14 +97,6 @@
 
   function hideAddSessionModal() {
     addModalOpen = false
-    document.body.classList.remove('modal-open')
-  }
-
-  function onWindowKeydown(event) {
-    // Legacy behavior: Escape always closes the add-instance modal.
-    if (event.key === 'Escape') {
-      hideAddSessionModal()
-    }
   }
 
   function addSessionInstance() {
@@ -159,8 +140,6 @@
       })
   }
 </script>
-
-<svelte:window onkeydown={onWindowKeydown} />
 
 <section class="docs-section">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -214,48 +193,40 @@
   </div>
 </section>
 
-<!-- Add Session Instance Modal -->
-{#if addModalOpen}
-  <!-- "show" matters: .modal-overlay (tune_detail_modal.css) is opacity:0 without it,
-       and legacy ModalManager.showModal always added it. -->
-  <div id="add-session-instance-modal" class="modal-overlay show" style="display: flex;">
-    <div class="modal-dialog">
-      <div class="modal-dialog-content">
-        <div class="modal-header">
-          <h3 class="modal-title">Add Session Instance</h3>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="session-date-input" class="form-label">Session Date:</label>
-            <input type="date" id="session-date-input" class="form-control" bind:value={dateValue} required />
-          </div>
+<!-- Add Session Instance Sheet (commit lives in the footer so a failed POST
+     keeps the form open, like the legacy modal) -->
+<Sheet bind:open={addModalOpen} title="Add Session Instance">
+  <div class="mb-3">
+    <label for="session-date-input" class="form-label">Session Date:</label>
+    <input type="date" id="session-date-input" class="form-control" bind:value={dateValue} required />
+  </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div class="mb-3">
-              <label for="session-start-time-input" class="form-label">Start Time:</label>
-              <input type="time" id="session-start-time-input" class="form-control" bind:value={startTimeValue} />
-            </div>
-            <div class="mb-3">
-              <label for="session-end-time-input" class="form-label">End Time:</label>
-              <input type="time" id="session-end-time-input" class="form-control" bind:value={endTimeValue} />
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label for="session-location-input" class="form-label">Location:</label>
-            <input type="text" id="session-location-input" class="form-control" placeholder="The usual: {locationName}" bind:value={locationValue} />
-          </div>
-
-          <div class="mb-3">
-            <label for="session-comments-input" class="form-label">Comments:</label>
-            <textarea id="session-comments-input" class="form-control" placeholder="Notes about this session" rows="3" style="resize: vertical;" bind:value={commentsValue}></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="add-session-cancel-btn" onclick={hideAddSessionModal}>Cancel</button>
-          <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
-        </div>
-      </div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div class="mb-3">
+      <label for="session-start-time-input" class="form-label">Start Time:</label>
+      <input type="time" id="session-start-time-input" class="form-control" bind:value={startTimeValue} />
+    </div>
+    <div class="mb-3">
+      <label for="session-end-time-input" class="form-label">End Time:</label>
+      <input type="time" id="session-end-time-input" class="form-control" bind:value={endTimeValue} />
     </div>
   </div>
-{/if}
+
+  <div class="mb-3">
+    <label for="session-location-input" class="form-label">Location:</label>
+    <input type="text" id="session-location-input" class="form-control" placeholder="The usual: {locationName}" bind:value={locationValue} />
+  </div>
+
+  <div class="mb-3">
+    <label for="session-comments-input" class="form-label">Comments:</label>
+    <textarea id="session-comments-input" class="form-control" placeholder="Notes about this session" rows="3" style="resize: vertical;" bind:value={commentsValue}></textarea>
+  </div>
+  {#snippet footer()}
+    <div style="text-align: right;">
+      <button type="button" class="btn btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<!-- Session instance detail (bundled port of the old vanilla SessionInstanceModal) -->
+<InstanceSheet bind:this={instanceSheet} onDeleted={loadLogsContent} />

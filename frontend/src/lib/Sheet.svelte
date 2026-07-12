@@ -94,16 +94,19 @@
 <style>
   /* Bits renders the scrim/content/title elements, so they need :global; the
      header/body/footer are authored here and scope normally. */
+  /* Above the fixed site header (--z-header 2000): a Sheet carries its own
+     header row (Cancel/title/Done), which the legacy under-the-header modal
+     tier (1900/1910) would hide. Fallbacks serve the theme-less live shell. */
   :global(.kit-sheet-scrim) {
     position: fixed;
     inset: 0;
-    z-index: var(--z-modal-overlay, 1900);
+    z-index: var(--z-sheet-overlay, 1900);
     background: var(--scrim, rgba(0, 0, 0, 0.5));
   }
   :global(.kit-sheet) {
     position: fixed;
     inset: 0;
-    z-index: var(--z-modal-content, 1910);
+    z-index: var(--z-sheet-content, 1910);
     display: flex;
     flex-direction: column;
     background: var(--bg-color, #fff);

@@ -194,21 +194,27 @@ describe('session detail page view', () => {
     expect(container.querySelector('.tune-select-checkbox[data-tune-id="101"]').checked).toBe(true)
     expect(container.querySelector('#copy-to-btn').disabled).toBe(false)
 
+    // The copy flow renders as kit Sheets (portaled to document.body).
     await fireEvent.click(container.querySelector('#copy-to-btn'))
     await waitFor(() => {
-      expect(container.querySelector('#copy-modal-overlay').classList.contains('hidden')).toBe(false)
-      expect(container.textContent).toContain('Other Session')
+      expect(document.querySelector('#copy-destinations')).toBeTruthy()
+      expect(document.body.textContent).toContain('Other Session')
     })
-    expect(container.querySelector('#copy-next-btn').disabled).toBe(true)
+    expect(document.querySelector('.kit-sheet-title').textContent).toBe('Copy 1 tune to…')
+    expect(document.querySelector('#copy-next-btn').disabled).toBe(true)
 
     // Pick My Tunes (learn-status step appears), go to confirmation, copy.
-    await fireEvent.click(container.querySelector('.copy-destination-option'))
-    expect(container.querySelector('#my-tunes-status-options').classList.contains('visible')).toBe(true)
-    await fireEvent.click(container.querySelector('#copy-next-btn'))
-    expect(container.querySelector('#copy-confirm-message').textContent).toContain(
-      '1 tune will be copied to My Tunes (as "want to learn")'
-    )
-    await fireEvent.click(container.querySelector('#copy-confirm-btn'))
+    await fireEvent.click(document.querySelector('.copy-destination-option'))
+    expect(document.querySelector('#my-tunes-status-options').classList.contains('visible')).toBe(true)
+    await fireEvent.click(document.querySelector('#copy-next-btn'))
+    // The confirm step stacks a second Sheet with a back chevron to the destinations.
+    await waitFor(() => {
+      expect(document.querySelector('#copy-confirm-message').textContent).toContain(
+        '1 tune will be copied to My Tunes (as "want to learn")'
+      )
+    })
+    expect(document.querySelector('.kit-sheet-back').textContent).toContain('Destinations')
+    await fireEvent.click(document.querySelector('#copy-confirm-btn'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/tunes/copy'))
       expect(call).toBeTruthy()
@@ -310,13 +316,16 @@ describe('session detail page view', () => {
     expect(container.querySelector('.person-attendance-badge').textContent).toBe('4')
   })
 
-  it('logged out: public tunes+logs, no People tab, no add/selection affordances', () => {
+  it('logged out: public tunes+logs, no People tab, no add/selection affordances', async () => {
     const { container } = renderApp(
       payload({ permissions: { is_logged_in: false, is_session_admin: false, is_session_member: false } })
     )
     expect(container.querySelector('.tab-button[data-tab="people"]')).toBeNull()
     expect(container.querySelector('#add-session-tune-btn')).toBeNull()
-    expect(container.querySelector('#copy-modal-overlay')).toBeNull()
+    // The filter panel offers no selection/copy affordances when logged out.
+    await fireEvent.click(container.querySelector('#filter-panel-toggle'))
+    expect(container.querySelector('#select-tunes-btn')).toBeNull()
+    expect(container.querySelector('#copy-to-btn')).toBeNull()
     expect(container.querySelectorAll('#tunes-list .tune-row')).toHaveLength(2)
   })
 

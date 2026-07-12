@@ -106,7 +106,6 @@ beforeEach(() => {
   }
   stubFetch()
   window.showMessage = vi.fn()
-  window.SessionInstanceModal = { show: vi.fn() }
   window.history.replaceState({}, '', '/admin/sessions/austin/mueller')
 })
 
@@ -114,8 +113,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   delete window.showMessage
-  delete window.SessionInstanceModal
-  document.body.classList.remove('modal-open')
 })
 
 const renderApp = (pageData = payload(), c = ctx()) => render(App, { pageData, ctx: c })
@@ -192,19 +189,21 @@ describe('session admin page view', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('termination flow: modal requires a date, then PUTs /terminate', async () => {
+  it('termination flow: sheet requires a date, then PUTs /terminate', async () => {
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('#deactivate-session-link'))
-    expect(container.querySelector('#terminationDateModal')).toBeTruthy()
-    // Empty date -> inline modal error, no request.
-    await fireEvent.click(container.querySelector('#save-termination-date'))
-    expect(container.querySelector('#modal-error-message').textContent).toBe('Please select a date.')
+    // Kit Sheet (portaled to document.body) with the destructive commit in the footer.
+    expect(document.querySelector('.kit-sheet-title').textContent).toBe('Set Session End Date')
+    expect(document.querySelector('#save-termination-date').textContent.trim()).toBe('Terminate session')
+    // Empty date -> inline sheet error, no request.
+    await fireEvent.click(document.querySelector('#save-termination-date'))
+    expect(document.querySelector('#modal-error-message').textContent).toBe('Please select a date.')
     expect(fetch.mock.calls.some(([u]) => String(u).includes('/terminate'))).toBe(false)
     // With a date -> PUT terminate.
-    const date = container.querySelector('#modal-termination-date')
+    const date = document.querySelector('#modal-termination-date')
     date.value = '2026-07-01'
     await fireEvent.input(date)
-    await fireEvent.click(container.querySelector('#save-termination-date'))
+    await fireEvent.click(document.querySelector('#save-termination-date'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/terminate'))
       expect(call).toBeTruthy()
@@ -308,39 +307,52 @@ describe('session admin page view', () => {
     expect(container.querySelector('.tune-name a').textContent.trim()).toBe('Banish Misfortune')
   })
 
-  it('logs tab: rows open SessionInstanceModal; the add-instance modal prefills the suggestion and POSTs', async () => {
+  it('logs tab: rows open the instance sheet; the add-instance sheet prefills the suggestion and POSTs', async () => {
     const { container } = renderApp(payload(), ctx({ activeTab: 'logs' }))
     await waitFor(() => {
       expect(container.querySelectorAll('#logs-table .log-row')).toHaveLength(2)
     })
     expect(container.querySelector('.log-row[data-instance-id="10"] .log-status').textContent).toContain('Cancelled')
+    // Row click opens the bundled InstanceSheet (kit Sheet, portaled to document.body),
+    // which loads its details from the same admin logs endpoint.
     await fireEvent.click(container.querySelector('.log-row[data-instance-id="11"]'))
-    expect(window.SessionInstanceModal.show).toHaveBeenCalledWith(11, 'austin/mueller', '2026-06-02')
+    await waitFor(() => {
+      expect(document.querySelector('.instance-info-value a')).toBeTruthy()
+    })
+    expect(document.querySelector('.instance-modal-subtitle').textContent).toBe('austin/mueller')
+    expect(document.querySelector('.instance-info-value a').textContent).toContain('14 tunes')
+    expect(document.querySelector('.instance-info-value a').getAttribute('href')).toBe('/sessions/austin/mueller/2026-06-02')
+    expect(document.querySelector('.instance-status-badge').textContent.trim()).toBe('Held')
+    // Close it (kit Cancel) before exercising the add-instance sheet.
+    await fireEvent.click(document.querySelector('.kit-sheet-cancel'))
 
     await fireEvent.click(container.querySelector('#add-session-instance-btn'))
     await waitFor(() => {
-      expect(container.querySelector('#session-date-input').value).toBe('2026-07-14')
-      expect(container.querySelector('#session-start-time-input').value).toBe('19:00')
+      expect(document.querySelector('#session-date-input').value).toBe('2026-07-14')
+      expect(document.querySelector('#session-start-time-input').value).toBe('19:00')
     })
-    expect(container.querySelector('#session-location-input').placeholder).toBe('The usual: B.D. Riley’s')
-    await fireEvent.click(container.querySelector('#add-session-confirm-btn'))
+    expect(document.querySelector('#session-location-input').placeholder).toBe('The usual: B.D. Riley’s')
+    await fireEvent.click(document.querySelector('#add-session-confirm-btn'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/add_instance'))
       expect(call).toBeTruthy()
       expect(JSON.parse(call[1].body)).toEqual({ date: '2026-07-14', start_time: '19:00', end_time: '22:00' })
       expect(window.showMessage).toHaveBeenCalledWith('Instance added', 'success')
     })
-    // Modal closed + logs re-fetched.
-    expect(container.querySelector('#add-session-instance-modal')).toBeNull()
-    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/logs')).length).toBe(2)
+    // Sheet closed + logs re-fetched (initial load, the instance sheet's detail
+    // fetch, then the reload after adding).
+    expect(document.querySelector('#session-date-input')).toBeNull()
+    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/admin/sessions/austin/mueller/logs')).length).toBe(3)
   })
 
-  it('logs tab: ?instance= deep link auto-opens the modal and clears the querystring', async () => {
+  it('logs tab: ?instance= deep link auto-opens the instance sheet and clears the querystring', async () => {
     window.history.replaceState({}, '', '/admin/sessions/austin/mueller/logs?instance=10')
     renderApp(payload(), ctx({ activeTab: 'logs' }))
     await waitFor(() => {
-      expect(window.SessionInstanceModal.show).toHaveBeenCalledWith(10, 'austin/mueller', '2026-05-26')
+      expect(document.querySelector('.instance-status-badge')).toBeTruthy()
     })
+    expect(document.querySelector('.instance-status-badge').textContent.trim()).toBe('Cancelled')
+    expect(document.querySelector('.instance-info-value a').getAttribute('href')).toBe('/sessions/austin/mueller/2026-05-26')
     expect(window.location.search).toBe('')
   })
 

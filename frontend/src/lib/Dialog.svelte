@@ -51,10 +51,12 @@
 </AlertDialog.Root>
 
 <style>
+  /* Same tier as the kit Sheet: above the fixed site header, so a Dialog
+     raised from an open Sheet stacks correctly and the scrim reads as one. */
   :global(.kit-dialog-scrim) {
     position: fixed;
     inset: 0;
-    z-index: var(--z-modal-overlay, 1900);
+    z-index: var(--z-sheet-overlay, 1900);
     background: var(--scrim, rgba(0, 0, 0, 0.5));
   }
   :global(.kit-dialog) {
@@ -62,7 +64,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: var(--z-modal-content, 1910);
+    z-index: var(--z-sheet-content, 1910);
     width: min(400px, calc(100vw - 32px));
     padding: var(--sp-5, 20px);
     background: var(--bg-color, #fff);

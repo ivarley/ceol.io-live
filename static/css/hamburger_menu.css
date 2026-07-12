@@ -71,33 +71,22 @@
     background-color: transparent;
 }
 
-/* 'Find a tune' search overlay (app-wide; opens the tune-detail modal on a result).
-   Fallback matters: the live-logging shell loads this file without theme.css. */
-#find-tune-overlay { position: fixed; inset: 0; z-index: var(--z-modal-overlay, 1900); }
-#find-tune-overlay .ft-scrim { position: absolute; inset: 0; background: var(--scrim, rgba(0,0,0,0.5)); }
-#find-tune-overlay .ft-panel {
-    position: absolute; left: 50%; top: 12%; transform: translateX(-50%);
-    width: min(440px, 92vw); max-height: 72vh; display: flex; flex-direction: column;
-    background: var(--dropdown-bg, #18181b); color: var(--text-color, #ececef);
-    border: 1px solid var(--dropdown-border, #2a2a30); border-radius: 12px;
-    box-shadow: 0 18px 50px rgba(0,0,0,0.5); overflow: hidden;
-}
-#find-tune-overlay .ft-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 14px; font-weight: 700; border-bottom: 1px solid var(--border-color, #2a2a30);
-}
-#find-tune-overlay .ft-close { background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; }
-#find-tune-overlay .ft-search-wrap { margin: 12px 14px; }
-#find-tune-overlay .ft-input {
-    padding: 10px 12px; font: inherit; width: 100%;
+/* 'Find a tune' sheet BODY (app-wide; opens the tune-detail modal on a result).
+   The overlay chrome (#find-tune-overlay/.ft-scrim/.ft-panel/.ft-head/.ft-close)
+   is the kit Sheet's now — only the body content classes remain.
+   Fallback matters: the live-logging shell loads this file without theme.css
+   (the live shell's app.css scopes the dark vars onto .kit-sheet). */
+.ft-search-wrap { margin: 0 0 10px; }
+.ft-input {
+    padding: 10px 12px; font: inherit; width: 100%; box-sizing: border-box;
     background: var(--bg-color, #0e0e10); color: var(--text-color, #ececef);
     border: 1px solid var(--border-color, #2a2a30); border-radius: 8px;
 }
-#find-tune-overlay .ft-results { list-style: none; margin: 0; padding: 0 6px 10px; overflow-y: auto; }
-#find-tune-overlay .ft-item {
+.ft-results { list-style: none; margin: 0; padding: 0; }
+.ft-item {
     display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
     padding: 10px 12px; border-radius: 8px; cursor: pointer;
 }
-#find-tune-overlay .ft-item:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); }
-#find-tune-overlay .ft-type { color: var(--disabled-text, #9a9aa3); font-size: 13px; flex: none; }
-#find-tune-overlay .ft-empty { padding: 10px 12px; color: var(--disabled-text, #9a9aa3); font-style: italic; }
+.ft-item:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); }
+.ft-type { color: var(--disabled-text, #9a9aa3); font-size: 13px; flex: none; }
+.ft-empty { padding: 10px 12px; color: var(--disabled-text, #9a9aa3); font-style: italic; }

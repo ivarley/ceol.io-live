@@ -1,12 +1,12 @@
 <script>
   // Sessions tab: the person's session memberships (filterable), leave-session
   // (user profile) / admin-toggle (system admin) affordances, and the
-  // add-to-session modal (search + role pick + add). The modal was driven by
-  // ModalManager in the legacy page; it's plain Svelte state now (same markup,
-  // same .modal CSS, body.modal-open kept for scroll-lock parity).
+  // add-to-session sheet (search + role pick + add). The kit Sheet owns the
+  // chrome (Cancel/scrim/Escape, scroll lock); picking Add on a row raises the
+  // kit Dialog confirm on top.
   let { initialSessions, person, personId, isUserProfile, isSystemAdmin } = $props()
 
-  import { Dialog, toast, Chip } from '../lib/index.js'
+  import { Dialog, Sheet, toast, Chip } from '../lib/index.js'
 
   let sessions = $state([...initialSessions])
   let sessionFilter = $state('all')
@@ -83,16 +83,10 @@
     searchValue = ''
     loadInitialSessions()
     modalOpen = true
-    document.body.classList.add('modal-open')
   }
 
   function closeSessionModal() {
     modalOpen = false
-    document.body.classList.remove('modal-open')
-  }
-
-  function onModalKeydown(e) {
-    if (e.key === 'Escape' && modalOpen) closeSessionModal()
   }
 
   function showLoading(show) {
@@ -200,8 +194,6 @@
   }
 </script>
 
-<svelte:window onkeydown={onModalKeydown} />
-
 <div class="mt-3">
   {#if sessions.length}
     <div class="mb-3">
@@ -302,93 +294,70 @@
   {/if}
 </div>
 
-<!-- Add to Session Modal -->
-<!-- "show" matters for parity: legacy ModalManager.showModal always added it. -->
-<div
-  id="addToSessionModal"
-  class="modal{modalOpen ? ' show' : ''}"
-  style:display={modalOpen ? 'flex' : 'none'}
-  role="presentation"
-  onclick={(e) => {
-    if (e.target === e.currentTarget) closeSessionModal()
-  }}>
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>{isUserProfile ? 'Add me to a Session' : `Add ${person.name} to a Session`}</h3>
-      <span
-        class="modal-close"
-        role="button"
-        tabindex="0"
-        onclick={closeSessionModal}
-        onkeydown={(e) => {
-          if (e.key === 'Enter') closeSessionModal()
-        }}>&times;</span>
-    </div>
-    <div class="modal-body">
-      <div class="search-section">
-        <div class="mb-3">
-          <label for="session-search" class="form-label">Search Sessions:</label>
-          <input
-            type="text"
-            id="session-search"
-            class="form-control"
-            placeholder="Type to search sessions..."
-            bind:value={searchValue}
-            oninput={onSearchInput} />
-        </div>
-      </div>
-      <div class="role-section mb-3">
-        <span class="form-label">{isUserProfile ? 'Add me as:' : 'Add as:'}</span>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="user-role" id="role-regular" value="regular" bind:group={selectedRole} />
-          <label class="form-check-label" for="role-regular">Regular</label>
-        </div>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="user-role" id="role-attendee" value="attendee" bind:group={selectedRole} />
-          <label class="form-check-label" for="role-attendee">Attendee</label>
-        </div>
-      </div>
-      <div id="sessions-loading" class="text-center" style:display={modalLoading ? 'block' : 'none'}>
-        <span class="loading-spinner"></span>
-        <span style="margin-left: 8px;">Loading sessions...</span>
-      </div>
-      <div id="sessions-results">
-        {#if modalError}
-          <div class="alert alert-danger">{modalError}</div>
-        {:else if modalSessions}
-          {#if modalSessions.length === 0}
-            <p class="text-muted">No sessions found.</p>
-          {:else}
-            <div class="sessions-list">
-              {#each modalSessions as session (session.session_id)}
-                <div class="session-item">
-                  <div class="session-info">
-                    <div class="session-name">{session.name}</div>
-                    <div class="session-location">{locationInfo(session)}</div>
-                  </div>
-                  <button
-                    class="btn btn-sm btn-primary add-session-btn"
-                    data-session-id={session.session_id}
-                    data-session-name={session.name}
-                    onclick={() => askAddPersonToSession(session.session_id, session.name)}>
-                    Add
-                  </button>
-                </div>
-              {/each}
-            </div>
-            {#if modalSessions.length === 10}
-              <p class="text-muted mt-2"><small>Showing top 10 results. Use search to narrow down.</small></p>
-            {/if}
-            <p class="mt-3">Don't see the session here? <a href="/add-session" target="_blank">Add it!</a></p>
-          {/if}
-        {/if}
-      </div>
-      <div id="no-sessions-message" style:display={noSessionsVisible ? 'block' : 'none'}>
-        <p>Don't see the session here? <a href="/add-session" target="_blank">Add it!</a></p>
-      </div>
+<!-- Add to Session Sheet (rows act via the Add button -> confirm Dialog on top) -->
+<Sheet bind:open={modalOpen} title={isUserProfile ? 'Add me to a Session' : `Add ${person.name} to a Session`}>
+  <div class="search-section">
+    <div class="mb-3">
+      <label for="session-search" class="form-label">Search Sessions:</label>
+      <input
+        type="text"
+        id="session-search"
+        class="form-control"
+        placeholder="Type to search sessions..."
+        bind:value={searchValue}
+        oninput={onSearchInput} />
     </div>
   </div>
-</div>
+  <div class="role-section mb-3">
+    <span class="form-label">{isUserProfile ? 'Add me as:' : 'Add as:'}</span>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="user-role" id="role-regular" value="regular" bind:group={selectedRole} />
+      <label class="form-check-label" for="role-regular">Regular</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="user-role" id="role-attendee" value="attendee" bind:group={selectedRole} />
+      <label class="form-check-label" for="role-attendee">Attendee</label>
+    </div>
+  </div>
+  <div id="sessions-loading" class="text-center" style:display={modalLoading ? 'block' : 'none'}>
+    <span class="loading-spinner"></span>
+    <span style="margin-left: 8px;">Loading sessions...</span>
+  </div>
+  <div id="sessions-results">
+    {#if modalError}
+      <div class="alert alert-danger">{modalError}</div>
+    {:else if modalSessions}
+      {#if modalSessions.length === 0}
+        <p class="text-muted">No sessions found.</p>
+      {:else}
+        <div class="sessions-list">
+          {#each modalSessions as session (session.session_id)}
+            <div class="session-item">
+              <div class="session-info">
+                <div class="session-name">{session.name}</div>
+                <div class="session-location">{locationInfo(session)}</div>
+              </div>
+              <button
+                class="btn btn-sm btn-primary add-session-btn"
+                data-session-id={session.session_id}
+                data-session-name={session.name}
+                onclick={() => askAddPersonToSession(session.session_id, session.name)}>
+                Add
+              </button>
+            </div>
+          {/each}
+        </div>
+        {#if modalSessions.length === 10}
+          <p class="text-muted mt-2"><small>Showing top 10 results. Use search to narrow down.</small></p>
+        {/if}
+        <p class="mt-3">Don't see the session here? <a href="/add-session" target="_blank">Add it!</a></p>
+      {/if}
+    {/if}
+  </div>
+  <div id="no-sessions-message" style:display={noSessionsVisible ? 'block' : 'none'}>
+    <p>Don't see the session here? <a href="/add-session" target="_blank">Add it!</a></p>
+  </div>
+</Sheet>
 
 <Dialog
   bind:open={leaveOpen}

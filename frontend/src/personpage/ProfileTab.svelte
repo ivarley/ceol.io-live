@@ -4,7 +4,7 @@
   // Save button), admin-only verify-email / beta-logging / danger-zone controls.
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
-  import { Dialog, toast } from '../lib/index.js'
+  import { Dialog, Sheet, toast } from '../lib/index.js'
 
   let editMode = $state(false)
 
@@ -182,7 +182,9 @@
 
   // --- Live instrument editor (changes save immediately) ----------------------
   let profileInstruments = $state([]) // [{instrument, is_auto, removal_loss_count}]
-  let configInstrument = $state(null) // instrument name open in the config modal
+  let configOpen = $state(false) // the per-instrument config sheet
+  let configInstrument = $state(null) // instrument name open in the config sheet
+  let removeConfirmOpen = $state(false) // the data-loss removal Dialog
   let pendingRemoveInstrument = $state(null) // instrument awaiting the data-loss confirmation
   let removeWarnParts = $state(null) // {name, tunesText}
   let typeaheadValue = $state('')
@@ -255,12 +257,13 @@
     if (typeaheadWrap && !typeaheadWrap.contains(e.target)) typeaheadOpen = false
   }
 
-  // Config modal (auto/manual + remove).
+  // Config sheet (auto/manual + remove).
   function openInstrumentConfig(name) {
     configInstrument = name
+    configOpen = true
   }
   function closeInstrumentConfig() {
-    configInstrument = null
+    configOpen = false
   }
   const configInst = $derived(profileInstruments.find((i) => i.instrument === configInstrument) || null)
 
@@ -292,6 +295,7 @@
         name: configInstrument,
         tunesText: loss === 1 ? '1 tune' : loss + ' tunes',
       }
+      removeConfirmOpen = true
       closeInstrumentConfig()
       return
     }
@@ -312,6 +316,7 @@
   function cancelRemoveInstrument() {
     pendingRemoveInstrument = null
     removeWarnParts = null
+    removeConfirmOpen = false
   }
 
   // --- Deactivate/Reactivate person (admin only) ------------------------------
@@ -694,79 +699,52 @@
   {/if}
 </div>
 
-<!-- Instrument config modal (auto/manual + remove) -->
-{#if configInstrument}
-  <div
-    id="instrument-config-modal"
-    class="pd-modal-overlay"
-    style="display:flex;"
-    role="presentation"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) closeInstrumentConfig()
-    }}>
-    <div class="pd-modal">
-      <div class="pd-modal-header">
-        <span id="instrument-config-title">{configInstrument}</span>
-        <button type="button" class="pd-modal-close" onclick={closeInstrumentConfig}>&times;</button>
-      </div>
-      <div class="pd-modal-body">
-        <div class="form-check">
-          <input
-            class="form-check-input"
-            type="radio"
-            name="instrument-auto"
-            id="inst-auto-radio"
-            value="auto"
-            checked={!!(configInst && configInst.is_auto)}
-            onchange={() => setInstrumentAutoFromModal(true)} />
-          <label class="form-check-label" for="inst-auto-radio"><strong>Auto</strong> — follows the tune's main status. When you mark a tune learned, it's learned on this instrument.</label>
-        </div>
-        <div class="form-check">
-          <input
-            class="form-check-input"
-            type="radio"
-            name="instrument-auto"
-            id="inst-manual-radio"
-            value="manual"
-            checked={!(configInst && configInst.is_auto)}
-            onchange={() => setInstrumentAutoFromModal(false)} />
-          <label class="form-check-label" for="inst-manual-radio"><strong>Manual</strong> — a curated list you set per tune. Starts empty; you add tunes to it one at a time.</label>
-        </div>
-      </div>
-      <div class="pd-modal-footer">
-        <a class="pd-modal-remove" href="#remove" onclick={(e) => { e.preventDefault(); removeInstrumentFromProfile() }}>Remove from profile</a>
-      </div>
+<!-- Instrument config sheet (auto/manual + remove; changes save immediately,
+     so there is no Done — Cancel/scrim/Escape just dismiss) -->
+<Sheet bind:open={configOpen} title={configInstrument || ''}>
+  <div class="inst-config-body">
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        name="instrument-auto"
+        id="inst-auto-radio"
+        value="auto"
+        checked={!!(configInst && configInst.is_auto)}
+        onchange={() => setInstrumentAutoFromModal(true)} />
+      <label class="form-check-label" for="inst-auto-radio"><strong>Auto</strong> — follows the tune's main status. When you mark a tune learned, it's learned on this instrument.</label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        name="instrument-auto"
+        id="inst-manual-radio"
+        value="manual"
+        checked={!(configInst && configInst.is_auto)}
+        onchange={() => setInstrumentAutoFromModal(false)} />
+      <label class="form-check-label" for="inst-manual-radio"><strong>Manual</strong> — a curated list you set per tune. Starts empty; you add tunes to it one at a time.</label>
     </div>
   </div>
-{/if}
+  {#snippet footer()}
+    <a class="pd-modal-remove" href="#remove" onclick={(e) => { e.preventDefault(); removeInstrumentFromProfile() }}>Remove from profile</a>
+  {/snippet}
+</Sheet>
 
-<!-- Instrument remove-confirm modal (data-loss warning) -->
-{#if removeWarnParts}
-  <div
-    id="instrument-remove-confirm-modal"
-    class="pd-modal-overlay"
-    style="display:flex;"
-    role="presentation"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) cancelRemoveInstrument()
-    }}>
-    <div class="pd-modal">
-      <div class="pd-modal-header">
-        <span>Remove instrument?</span>
-        <button type="button" class="pd-modal-close" onclick={cancelRemoveInstrument}>&times;</button>
-      </div>
-      <div class="pd-modal-body">
-        <p id="instrument-remove-warn" class="pd-modal-warn">
-          Removing <strong>{removeWarnParts.name}</strong> will delete its saved status for {removeWarnParts.tunesText} that you've customized away from your other instruments. Re-adding it later starts fresh on Auto. This can't be undone.
-        </p>
-      </div>
-      <div class="pd-modal-footer confirm">
-        <button type="button" class="pd-btn" onclick={cancelRemoveInstrument}>Cancel</button>
-        <button type="button" class="pd-btn pd-btn-danger" onclick={confirmRemoveInstrument}>Remove anyway</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<!-- Instrument removal is a destructive decision -> kit Dialog (data-loss warning) -->
+<Dialog
+  bind:open={removeConfirmOpen}
+  title="Remove instrument?"
+  confirmLabel="Remove anyway"
+  destructive={true}
+  onConfirm={confirmRemoveInstrument}
+  onCancel={cancelRemoveInstrument}>
+  {#if removeWarnParts}
+    <p id="instrument-remove-warn" class="pd-modal-warn">
+      Removing <strong>{removeWarnParts.name}</strong> will delete its saved status for {removeWarnParts.tunesText} that you've customized away from your other instruments. Re-adding it later starts fresh on Auto. This can't be undone.
+    </p>
+  {/if}
+</Dialog>
 
 <Dialog
   bind:open={verifyConfirmOpen}

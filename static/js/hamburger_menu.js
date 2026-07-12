@@ -68,9 +68,9 @@ function findTune() {
 }
 
 // The overlay itself is a Svelte component in the app-wide tunesheet bundle
-// (frontend/src/tunesheet/FindTune.svelte, spec 035 Step 3c) — same #find-tune-overlay
-// / .ft-* DOM, styled by hamburger_menu.css. ensureTuneModal loads the bundle lazily
-// on any page that somehow lacks it.
+// (frontend/src/tunesheet/FindTune.svelte, spec 035 Step 3c) — a kit Sheet whose
+// body keeps the .ft-* DOM, styled by hamburger_menu.css. ensureTuneModal loads
+// the bundle lazily on any page that somehow lacks it.
 function openFindTuneOverlay() {
     ensureTuneModal().then(function () {
         if (window.FindTuneOverlay) window.FindTuneOverlay.open();

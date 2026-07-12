@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast, SearchField, Chip, Seg } from '../lib/index.js'
+  import { toast, SearchField, Chip, Seg, Sheet } from '../lib/index.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -268,8 +268,11 @@
     selectedTuneIds.clear()
   }
 
+  // Copy To flow: two stacked kit Sheets (spec 035) — the destination list, then
+  // the confirm step on top. The confirm sheet's back chevron (or its scrim/Escape)
+  // closes just the top sheet, landing back on the destinations.
   let copyOpen = $state(false)
-  let copyStep = $state(1)
+  let confirmOpen = $state(false)
   let adminSessions = $state(null) // fetched once, cached
   let destLoading = $state(false)
   let destError = $state(false)
@@ -285,7 +288,7 @@
 
   async function showCopyModal() {
     if (selectedTuneIds.size === 0) return
-    copyStep = 1
+    confirmOpen = false
     selectedDestination = null
     copyOpen = true
     if (adminSessions === null && !destLoading) {
@@ -638,80 +641,72 @@
 
   <!-- Tune Detail Modal container is provided app-wide by base.html -->
 
-  <!-- Copy Tunes Modal -->
+  <!-- Copy Tunes flow: destination Sheet, then a stacked confirm Sheet whose
+       back chevron returns to the destinations. Commit lives in the footer so a
+       failed POST keeps the sheet open (toast + retry), like the legacy modal. -->
   {#if isLoggedIn}
-    <div
-      id="copy-modal-overlay"
-      class="copy-modal-overlay"
-      class:hidden={!copyOpen}
-      onclick={(e) => {
-        if (e.target === e.currentTarget) copyOpen = false
-      }}>
-      <div class="copy-modal">
-        {#if copyStep === 1}
-          <div id="copy-modal-step-1">
-            <h3 id="copy-modal-title">Copy the {selectedTuneIds.size} selected tune{selectedTuneIds.size !== 1 ? 's' : ''} to:</h3>
-            <div class="copy-modal-destinations" id="copy-destinations">
-              {#if destLoading}
-                <p style="color: var(--text-muted);">Loading destinations...</p>
-              {:else if destError}
-                <p style="color: #dc3545;">Failed to load destinations. Please try again.</p>
-              {:else}
-                <div
-                  class="copy-destination-option"
-                  class:selected={selectedDestination === 'my_tunes'}
-                  onclick={() => (selectedDestination = 'my_tunes')}>
-                  <input type="radio" name="destination" value="my_tunes" checked={selectedDestination === 'my_tunes'} />
-                  <span>My Tunes</span>
-                  <div
-                    class="my-tunes-status-options"
-                    id="my-tunes-status-options"
-                    class:visible={selectedDestination === 'my_tunes'}>
-                    {#each learnStatuses as [value, label] (value)}
-                      <label><input
-                          type="radio"
-                          name="learn_status"
-                          {value}
-                          checked={selectedLearnStatus === value}
-                          onclick={(e) => {
-                            e.stopPropagation()
-                            selectedLearnStatus = value
-                          }} /> {label}</label>
-                    {/each}
-                  </div>
-                </div>
-                {#each adminSessions || [] as dest (dest.path)}
-                  <div
-                    class="copy-destination-option"
-                    class:selected={selectedDestination === 'session:' + dest.path}
-                    onclick={() => (selectedDestination = 'session:' + dest.path)}>
-                    <input type="radio" name="destination" value={'session:' + dest.path} checked={selectedDestination === 'session:' + dest.path} />
-                    <span>{dest.name}</span>
-                  </div>
-                {/each}
-              {/if}
-            </div>
-            <div class="copy-modal-actions">
-              <button class="selection-btn" onclick={() => (copyOpen = false)}>Cancel</button>
-              <button id="copy-next-btn" class="selection-btn primary" disabled={!selectedDestination} onclick={() => (copyStep = 2)}>Next</button>
-            </div>
-          </div>
+    <Sheet
+      bind:open={copyOpen}
+      title="Copy {selectedTuneIds.size} tune{selectedTuneIds.size !== 1 ? 's' : ''} to…">
+      <div class="copy-modal-destinations" id="copy-destinations">
+        {#if destLoading}
+          <p style="color: var(--text-muted);">Loading destinations...</p>
+        {:else if destError}
+          <p style="color: #dc3545;">Failed to load destinations. Please try again.</p>
         {:else}
-          <div id="copy-modal-step-2">
-            <h3 id="copy-confirm-title">Confirm Copy</h3>
-            <p id="copy-confirm-message">{copyConfirmMessage}</p>
-            {#if copyWarning}
-              <div id="copy-warning" class="copy-modal-warning">{copyWarning}</div>
-            {/if}
-            <div class="copy-modal-actions">
-              <button class="selection-btn" onclick={() => (copyStep = 1)}>Back</button>
-              <button id="copy-confirm-btn" class="selection-btn primary" disabled={copying} onclick={executeCopy}>
-                {copying ? 'Copying...' : 'Copy Them!'}
-              </button>
+          <div
+            class="copy-destination-option"
+            class:selected={selectedDestination === 'my_tunes'}
+            onclick={() => (selectedDestination = 'my_tunes')}>
+            <input type="radio" name="destination" value="my_tunes" checked={selectedDestination === 'my_tunes'} />
+            <span>My Tunes</span>
+            <div
+              class="my-tunes-status-options"
+              id="my-tunes-status-options"
+              class:visible={selectedDestination === 'my_tunes'}>
+              {#each learnStatuses as [value, label] (value)}
+                <label><input
+                    type="radio"
+                    name="learn_status"
+                    {value}
+                    checked={selectedLearnStatus === value}
+                    onclick={(e) => {
+                      e.stopPropagation()
+                      selectedLearnStatus = value
+                    }} /> {label}</label>
+              {/each}
             </div>
           </div>
+          {#each adminSessions || [] as dest (dest.path)}
+            <div
+              class="copy-destination-option"
+              class:selected={selectedDestination === 'session:' + dest.path}
+              onclick={() => (selectedDestination = 'session:' + dest.path)}>
+              <input type="radio" name="destination" value={'session:' + dest.path} checked={selectedDestination === 'session:' + dest.path} />
+              <span>{dest.name}</span>
+            </div>
+          {/each}
         {/if}
       </div>
-    </div>
+      {#snippet footer()}
+        <div class="copy-modal-actions">
+          <button id="copy-next-btn" class="selection-btn primary" disabled={!selectedDestination} onclick={() => (confirmOpen = true)}>Next</button>
+        </div>
+      {/snippet}
+    </Sheet>
+
+    <Sheet bind:open={confirmOpen} title="Confirm Copy" back="Destinations">
+      <p id="copy-confirm-message">{copyConfirmMessage}</p>
+      {#if copyWarning}
+        <div id="copy-warning" class="copy-modal-warning">{copyWarning}</div>
+      {/if}
+      {#snippet footer()}
+        <div class="copy-modal-actions">
+          <button id="copy-confirm-btn" class="selection-btn primary" disabled={copying} onclick={executeCopy}>
+            {copying ? 'Copying...' : 'Copy Them!'}
+          </button>
+        </div>
+      {/snippet}
+    </Sheet>
   {/if}
 </div>

@@ -4,9 +4,9 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tune_detail_modal.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/session_instance_modal.css') }}">
 {# Page styles are built with the Svelte bundle (frontend/src/sessionadminpage/page.css);
-   linked after session_instance_modal.css to match the old <style>-block cascade order. #}
+   they include the session-instance sheet body styles (the old
+   css/session_instance_modal.css is gone — the sheet is a kit Sheet now). #}
 <link rel="stylesheet" href="{{ url_for('static', filename='sessionadminpage/page.css') }}">
 {% endblock %}
 
@@ -34,18 +34,8 @@
     </div>
 </div>
 
-<!-- Session Instance Detail Modal (managed by static/js/session_instance_modal.js) -->
-<div id="instance-detail-modal" class="instance-modal-overlay">
-    <div class="instance-modal-dialog">
-        <div id="instance-modal-content" class="instance-modal-content">
-            <!-- Content will be dynamically populated by JavaScript -->
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/session_instance_modal.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='sessionadminpage/page.js') }}"></script>
 {% endblock %}

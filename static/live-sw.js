@@ -14,7 +14,7 @@
 // (app.js) — cache-first would strand users on a stale build until a later load.
 // Online always gets the latest; the cache is purely the offline fallback.
 
-const CACHE = 'ceol-live-shell-v9'
+const CACHE = 'ceol-live-shell-v10'
 // The Svelte bundle PLUS the shared shell assets the live page pulls in directly
 // (the floated hamburger menu + the tune-detail modal). Without these in the cache,
 // an offline reload renders the menu unstyled (no CSS) and inert (no JS).

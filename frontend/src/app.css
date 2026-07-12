@@ -1620,12 +1620,15 @@ main.wide .sidepane { grid-area: pane; overflow-y: auto; min-height: 0; }
 .mylist-modal .ls-opt.ls-learning { background: #4a3f1f; color: #ffeaa7; }
 .mylist-modal .ls-opt.ls-learned { background: #1f4a2f; color: #c3e6cb; }
 
-/* ---------- kit Dialog (spec 035) ---------- */
-/* The mark-complete / re-open decisions use the shared kit Dialog, which themes
-   itself with theme.css variables. The live shell doesn't load theme.css, so
-   supply the same dark values here (mirrors the #tune-detail-modal block). */
+/* ---------- kit Dialog / Sheet (spec 035) ---------- */
+/* The mark-complete / re-open decisions use the shared kit Dialog, and the
+   hamburger "Find a tune" opens the shared kit Sheet; both theme themselves
+   with theme.css variables. The live shell doesn't load theme.css, so supply
+   the same dark values here (mirrors the #tune-detail-modal block). */
 .kit-dialog,
-.kit-dialog-scrim {
+.kit-dialog-scrim,
+.kit-sheet,
+.kit-sheet-scrim {
   --bg-color: #1a1a1a;
   --text-color: #e0e0e0;
   --border-color: #444;

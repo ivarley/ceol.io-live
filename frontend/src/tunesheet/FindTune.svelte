@@ -1,11 +1,13 @@
 <script>
-  // The app-wide "Find a tune" overlay (hamburger menu), ported from the vanilla
-  // implementation that lived in static/js/hamburger_menu.js (spec 035 Step 3c).
-  // Same DOM contract — #find-tune-overlay, .ft-* classes (styled by
-  // hamburger_menu.css, e2e-selected by offline.spec.ts) — and same behavior:
-  // 200ms debounce, min 2 chars, server search with offline-bundle fallback,
-  // stale-response guard, click a result -> the shared tune-detail sheet.
-  import { SearchField } from '../lib/index.js'
+  // The app-wide "Find a tune" sheet (hamburger menu), ported from the vanilla
+  // implementation that lived in static/js/hamburger_menu.js (spec 035 Step 3c);
+  // the bespoke overlay chrome (.ft-scrim/.ft-panel/.ft-head/.ft-close) became
+  // the kit Sheet in the Sheet-unification round. The BODY keeps the .ft-*
+  // contract (.ft-input / .ft-results .ft-item — styled by hamburger_menu.css,
+  // e2e-selected by offline.spec.ts) and the same behavior: 200ms debounce,
+  // min 2 chars, server search with offline-bundle fallback, stale-response
+  // guard, click a result -> the shared tune-detail sheet.
+  import { SearchField, Sheet } from '../lib/index.js'
 
   let open = $state(false)
   let query = $state('')
@@ -88,55 +90,40 @@
     })
   }
 
-  $effect(() => {
-    if (!open) return
-    const esc = (e) => {
-      if (e.key === 'Escape') close()
-    }
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  })
 </script>
 
-{#if open}
-  <div id="find-tune-overlay">
-    <div class="ft-scrim" onclick={close} role="presentation"></div>
-    <div class="ft-panel" role="dialog" aria-modal="true">
-      <div class="ft-head">
-        <span>Find a tune</span>
-        <button class="ft-close" aria-label="Close" onclick={close}>✕</button>
-      </div>
-      <SearchField
-        bind:this={searchField}
-        bind:value={query}
-        inputClass="ft-input"
-        wrapperClass="ft-search-wrap"
-        styled={false}
-        placeholder="Search tunes…"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        debounce={200}
-        onSearch={runSearch} />
-      <ul class="ft-results">
-        {#if results !== null}
-          {#if results.length}
-            {#each results as tune (tune.tune_id)}
-              <li
-                class="ft-item"
-                data-tune-id={tune.tune_id}
-                onclick={() => pick(tune)}
-                onkeydown={(e) => e.key === 'Enter' && pick(tune)}
-                role="option"
-                aria-selected="false"
-                tabindex="0">{tune.name}<span class="ft-type">{tune.tune_type || ''}</span></li>
-            {/each}
-          {:else}
-            <li class="ft-empty">No tunes match</li>
-          {/if}
-        {/if}
-      </ul>
-    </div>
-  </div>
-{/if}
+<!-- Escape/scrim dismissal is the Sheet's; closing (any path) invalidates
+     in-flight searches through onCancel. -->
+<Sheet bind:open title="Find a tune" onCancel={() => seq++}>
+  <SearchField
+    bind:this={searchField}
+    bind:value={query}
+    inputClass="ft-input"
+    wrapperClass="ft-search-wrap"
+    styled={false}
+    placeholder="Search tunes…"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    debounce={200}
+    onSearch={runSearch} />
+  <ul class="ft-results">
+    {#if results !== null}
+      {#if results.length}
+        {#each results as tune (tune.tune_id)}
+          <li
+            class="ft-item"
+            data-tune-id={tune.tune_id}
+            onclick={() => pick(tune)}
+            onkeydown={(e) => e.key === 'Enter' && pick(tune)}
+            role="option"
+            aria-selected="false"
+            tabindex="0">{tune.name}<span class="ft-type">{tune.tune_type || ''}</span></li>
+        {/each}
+      {:else}
+        <li class="ft-empty">No tunes match</li>
+      {/if}
+    {/if}
+  </ul>
+</Sheet>

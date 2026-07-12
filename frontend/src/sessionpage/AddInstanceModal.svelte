@@ -1,6 +1,6 @@
 <script>
-  // The Add Session Instance modal — the legacy #add-session-instance-modal,
-  // with the ModalManager.showModal/hideModal calls replaced by component state.
+  // The Add Session Instance sheet — kit Sheet chrome (spec 035: Cancel top-left,
+  // scrim/Escape cancel, commit in the footer so a failed POST keeps it open).
   // Opening prefills from GET next_instance_suggestion; adding POSTs add_instance
   // and redirects to the new instance in edit mode.
   let { sessionPath, locationName } = $props()
@@ -12,7 +12,7 @@
   let location = $state('')
   let comments = $state('')
 
-  import { toast } from '../lib/index.js'
+  import { Sheet, toast } from '../lib/index.js'
 
   export async function open() {
     // Defaults while we fetch the suggestion.
@@ -22,7 +22,6 @@
     location = ''
     comments = ''
     visible = true
-    document.body.classList.add('modal-open')
 
     try {
       const response = await fetch(`/api/sessions/${sessionPath}/next_instance_suggestion`)
@@ -40,7 +39,6 @@
 
   export function close() {
     visible = false
-    document.body.classList.remove('modal-open')
   }
 
   function addSessionInstance() {
@@ -79,67 +77,46 @@
         console.error('Error:', error)
       })
   }
-
-  function onKeydown(event) {
-    if (event.key !== 'Escape') return
-    // The shared tune-detail drawer closes itself on Escape; don't double-handle.
-    const tuneModal = document.getElementById('tune-detail-modal')
-    if (tuneModal && tuneModal.style.display === 'flex') return
-    if (visible) close()
-  }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Sheet bind:open={visible} title="Add Session Instance">
+  <!-- .modal-body keeps the page's label/input styling; the chrome is the Sheet's -->
+  <div class="modal-body">
+    <label for="session-date-input">Session Date:</label>
+    <input
+      type="date"
+      id="session-date-input"
+      required
+      bind:value={date}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' && visible) addSessionInstance()
+      }} />
 
-<!-- Add Session Instance Modal -->
-<div
-  id="add-session-instance-modal"
-  class="modal-overlay"
-  class:show={visible}
-  style:display={visible ? 'flex' : 'none'}
-  onclick={(e) => {
-    if (e.target === e.currentTarget) close()
-  }}>
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>Add Session Instance</h3>
-    </div>
-    <div class="modal-body">
-      <label for="session-date-input">Session Date:</label>
-      <input
-        type="date"
-        id="session-date-input"
-        required
-        bind:value={date}
-        onkeydown={(e) => {
-          if (e.key === 'Enter' && visible) addSessionInstance()
-        }} />
-
-      <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-        <div>
-          <label for="session-start-time-input">Start Time:</label>
-          <input type="time" id="session-start-time-input" bind:value={startTime} />
-        </div>
-        <div>
-          <label for="session-end-time-input">End Time:</label>
-          <input type="time" id="session-end-time-input" bind:value={endTime} />
-        </div>
+    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div>
+        <label for="session-start-time-input">Start Time:</label>
+        <input type="time" id="session-start-time-input" bind:value={startTime} />
       </div>
-
-      <label for="session-location-input" style="margin-top: 16px;">Location:</label>
-      <input type="text" id="session-location-input" placeholder="The usual: {locationName}" bind:value={location} />
-
-      <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
-      <textarea
-        id="session-comments-input"
-        placeholder="Notes about this session"
-        rows="3"
-        style="resize: vertical;"
-        bind:value={comments}></textarea>
+      <div>
+        <label for="session-end-time-input">End Time:</label>
+        <input type="time" id="session-end-time-input" bind:value={endTime} />
+      </div>
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn-secondary" id="add-session-cancel-btn" onclick={close}>Cancel</button>
-      <button type="button" class="btn-primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
-    </div>
+
+    <label for="session-location-input" style="margin-top: 16px;">Location:</label>
+    <input type="text" id="session-location-input" placeholder="The usual: {locationName}" bind:value={location} />
+
+    <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
+    <textarea
+      id="session-comments-input"
+      placeholder="Notes about this session"
+      rows="3"
+      style="resize: vertical;"
+      bind:value={comments}></textarea>
   </div>
-</div>
+  {#snippet footer()}
+    <div style="text-align: right;">
+      <button type="button" class="selection-btn primary" id="add-session-confirm-btn" onclick={addSessionInstance}>Add Session</button>
+    </div>
+  {/snippet}
+</Sheet>

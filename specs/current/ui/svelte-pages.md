@@ -115,12 +115,37 @@ the load-bearing ones:
 - Theme-aware, scroll-neutral CSS; `kit-` class prefix; one `×` glyph (U+00D7).
 - Device breakpoint 768px, handled inside each component.
 
-**Adoption status:** the page migrations pinned the legacy DOM/CSS, so the
-kit arrived mostly unused. Adoption is now underway — `Dialog` and `toast`
-are replacing the native `confirm()`/`alert()` calls and the copied
-`showMessage` helpers in the Svelte pages. Sheet/Tabs/SearchField adoption is
-the future visual-consolidation pass; until then pages keep their ported
-legacy markup.
+**Adoption status:** the visual-consolidation pass is DONE. `Dialog` + `toast`
+replaced every native `confirm()`/`alert()` and copied `showMessage`; then one
+component per round replaced its lookalikes, each keeping page skins via
+class-passthrough props + `styled={false}`:
+
+- **Tabs** — THE tab engine (personpage, sessionpage, sessionadminpage,
+  tunesheet); value mode with `onValueChange` URL sync, or navigate mode.
+- **SearchField** — every debounced search box (8 sites); Enter flushes the
+  debounce; `focus()` export.
+- **Chip** — every status badge / count pill / dismissible chip (~20 sites);
+  clickable non-dismissible chips render as ONE button.
+- **Seg** — all six segmented controls (tune-sheet status 3-ways main +
+  per-instrument, add-pane "Add as" + per-instrument, my-tunes status/sort
+  filters incl. the `secondary` two-level sort, session sort, both
+  history-scope toggles). Controlled: `onSelect` fires on every click,
+  including the active option (per-instrument toggle-off relies on it).
+- **Sheet** — every remaining hand-rolled modal (copy-to two-step with `back`
+  chevron, add-instance ×2, PeopleTab ×3, instrument-config, add-to-session,
+  termination) plus the ported vanilla `session_instance_modal.js`
+  (now `sessionadminpage/InstanceSheet.svelte`; the static js/css are gone)
+  and the "Find a tune" overlay. Unlike the other rounds, Sheet REPLACED the
+  bespoke chrome (scrim/frame/Cancel–title–Done header — the spec's dismiss
+  conventions); each modal's body content kept its markup and CSS. Commits
+  that can fail server-side use footer buttons, not header Done, so the sheet
+  stays open for retry.
+
+**Deliberate exceptions:** the tune-detail drawer (already the single shared
+implementation; its chrome + live-shell dark scoping stay as-is pending a
+future decision), the add pane (`.mt-add-pane` — a NON-modal desktop
+split-pane push; a Sheet would focus-trap it), and the live logger's bespoke
+controls (search-mode inputs, action-pills).
 
 ## Related
 

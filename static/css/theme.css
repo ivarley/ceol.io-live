@@ -130,6 +130,11 @@
     --z-header: 2000;
     --z-hamburger-dropdown: 2010;
     --z-in-session-popup: 2020;
+    /* Kit Sheet/Dialog (spec 035): full-screen sheet chrome carries its own
+       header (Cancel/title/Done), so unlike the legacy modals it must cover
+       the fixed header. Search dropdowns (2100) still float above sheets. */
+    --z-sheet-overlay: 2030;
+    --z-sheet-content: 2040;
     --z-search-dropdown: 2100;
     --z-context-menu: 2500;
     --z-loading-overlay: 2800;

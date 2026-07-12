@@ -3,8 +3,8 @@
   // from the legacy 1,300-line inline script in templates/session_admin.html.
   // Tab switching stays URL-based (each tab is its own wrapper route rendering
   // this same shell), exactly like the legacy <a>-tabs / mobile-dropdown page.
-  // showMessage and SessionInstanceModal are globals from base.html /
-  // static/js/session_instance_modal.js, as before.
+  // showMessage is a global from base.html, as before; the session-instance
+  // detail is the bundled InstanceSheet (LogsAdminTab) since the Sheet round.
   import { Tabs } from '../lib/index.js'
   import DetailsTab from './DetailsTab.svelte'
   import TunesAdminTab from './TunesAdminTab.svelte'

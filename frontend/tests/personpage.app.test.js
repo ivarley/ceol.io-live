@@ -272,18 +272,19 @@ describe('person details page view (user profile flavor)', () => {
     expect(window.showMessage).toHaveBeenCalledWith('You have left the session', 'success')
   })
 
-  it('the add-to-session modal searches and POSTs /api/add-person-to-session with the picked role', async () => {
+  it('the add-to-session sheet searches and POSTs /api/add-person-to-session with the picked role', async () => {
     fetchRoutes['/api/add-person-to-session'] = { success: true, message: 'Added!' }
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('#sessions-tab'))
     await fireEvent.click(container.querySelector('#add-to-session-link'))
-    expect(container.querySelector('#addToSessionModal').style.display).toBe('flex')
+    // Kit Sheet (portaled to document.body) with the legacy title + body markup.
+    expect(document.querySelector('.kit-sheet-title').textContent).toBe('Add me to a Session')
     await waitFor(() => {
-      expect(container.querySelector('#sessions-results .session-name').textContent).toBe('Other Session')
+      expect(document.querySelector('#sessions-results .session-name').textContent).toBe('Other Session')
     })
-    expect(container.querySelector('.session-location').textContent).toBe('The Pub - Dublin, Ireland')
-    await fireEvent.click(container.querySelector('#role-attendee'))
-    await fireEvent.click(container.querySelector('.add-session-btn'))
+    expect(document.querySelector('.session-location').textContent).toBe('The Pub - Dublin, Ireland')
+    await fireEvent.click(document.querySelector('#role-attendee'))
+    await fireEvent.click(document.querySelector('.add-session-btn'))
     // Decision -> kit Dialog (spec 035) carrying the person/session/role.
     expect(document.querySelector('.kit-dialog-title').textContent).toBe(
       'Add Ian Varley to "Other Session"?'

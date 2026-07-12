@@ -21,7 +21,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v30'
+const VERSION = 'v31'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.

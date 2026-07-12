@@ -6,7 +6,7 @@
 
   let { session, sessionPath, timezoneOptions = [] } = $props()
 
-  import { Dialog, toast } from '../lib/index.js'
+  import { Dialog, Sheet, toast } from '../lib/index.js'
 
   // --- Form fields ------------------------------------------------------------
   let name = $state(session.name || '')
@@ -89,16 +89,10 @@
     modalError = ''
     modalTerminationDate = ''
     terminationModalOpen = true
-    document.body.classList.add('modal-open')
   }
 
   function hideModal() {
     terminationModalOpen = false
-    document.body.classList.remove('modal-open')
-  }
-
-  function onWindowKeydown(e) {
-    if (e.key === 'Escape' && terminationModalOpen) hideModal()
   }
 
   function saveTerminationDate() {
@@ -323,8 +317,6 @@
 
   const capitalize3 = (day) => day.charAt(0).toUpperCase() + day.slice(1, 3)
 </script>
-
-<svelte:window onkeydown={onWindowKeydown} />
 
 <section class="docs-section">
   <h2 class="section-heading">Session Details</h2>
@@ -628,39 +620,22 @@
   </form>
 </section>
 
-<!-- Termination Date Modal -->
-{#if terminationModalOpen}
-  <div
-    class="modal show"
-    id="terminationDateModal"
-    aria-labelledby="terminationDateModalLabel"
-    style="display: flex;"
-    role="presentation"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) hideModal()
-    }}>
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="terminationDateModalLabel">Set Session End Date</h5>
-          <button type="button" class="btn-close" onclick={hideModal} aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-3">What was the last date of the session?</p>
-          <div class="mb-3">
-            <label for="modal-termination-date" class="form-label">Last Session Date</label>
-            <input type="date" class="form-control" id="modal-termination-date" bind:value={modalTerminationDate} required />
-          </div>
-          <div id="modal-error-message" class="alert alert-danger" style:display={modalError ? 'block' : 'none'}>{modalError}</div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick={hideModal}>Cancel</button>
-          <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate}>Save</button>
-        </div>
-      </div>
-    </div>
+<!-- Termination Date Sheet: a Sheet (not a Dialog) because the date field can
+     fail validation and must keep the form open with the inline error; the
+     destructive commit is an explicit verb in the footer. -->
+<Sheet bind:open={terminationModalOpen} title="Set Session End Date">
+  <p class="mb-3">What was the last date of the session?</p>
+  <div class="mb-3">
+    <label for="modal-termination-date" class="form-label">Last Session Date</label>
+    <input type="date" class="form-control" id="modal-termination-date" bind:value={modalTerminationDate} required />
   </div>
-{/if}
+  <div id="modal-error-message" class="alert alert-danger" style:display={modalError ? 'block' : 'none'}>{modalError}</div>
+  {#snippet footer()}
+    <div style="text-align: right;">
+      <button type="button" class="btn btn-danger" id="save-termination-date" onclick={saveTerminationDate}>Terminate session</button>
+    </div>
+  {/snippet}
+</Sheet>
 
 <Dialog
   bind:open={reactivateConfirmOpen}

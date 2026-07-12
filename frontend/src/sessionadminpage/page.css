@@ -161,101 +161,8 @@
     text-decoration: underline;
 }
 
-/* Modal styling for dark mode compatibility */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1900;
-}
-
-.modal-dialog {
-    position: relative;
-    margin: 1.75rem auto;
-    max-width: 500px;
-    pointer-events: none;
-}
-
-.modal-content {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    pointer-events: auto;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
-
-.modal-dialog-content {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-}
-
-/* Add Session Instance Modal specific styles */
-#add-session-instance-modal .modal-dialog {
-    background: var(--bg-color);
-    border-radius: 8px;
-    max-width: 500px;
-    width: 90%;
-    margin-top: 40px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-    pointer-events: auto;
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.modal-body {
-    position: relative;
-    flex: 1 1 auto;
-    padding: 1rem;
-    color: var(--text-color);
-}
-
-.modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: 0.75rem;
-    border-top: 1px solid var(--border-color);
-    gap: 0.5rem;
-}
-
-.modal-title {
-    margin-bottom: 0;
-    line-height: 1.5;
-    color: var(--text-color);
-}
-
-.btn-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--text-color);
-    opacity: 0.5;
-    cursor: pointer;
-}
-
-.btn-close:hover {
-    opacity: 0.75;
-}
-
-body.modal-open {
-    overflow: hidden;
-}
+/* (The add-instance / termination modal chrome — overlay, dialog, header,
+   footer, × — is the kit Sheet's now; only body content is styled here.) */
 
 /* Alert styling for dark mode compatibility */
 .alert-warning {
@@ -508,4 +415,261 @@ body.modal-open {
         padding: 0.75rem 1rem;
         font-size: 0.9rem;
     }
+}
+
+/* Session-instance detail sheet body styles (ported from the deleted
+   static/css/session_instance_modal.css; the overlay/dialog/close chrome those
+   rules also carried is the kit Sheet's now). */
+.instance-modal-subtitle {
+    font-size: 14px;
+    color: var(--secondary-text, #6c757d);
+}
+
+/* Status badge */
+.instance-status-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.instance-status-held {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+[data-theme="dark"] .instance-status-held {
+    background-color: #1f4a2f;
+    color: #c3e6cb;
+}
+
+.instance-status-cancelled {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+[data-theme="dark"] .instance-status-cancelled {
+    background-color: #4a1f1f;
+    color: #f8d7da;
+}
+
+/* Info section */
+.instance-info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    margin-top: 16px;
+    background-color: var(--modal-bg-secondary, #f8f9fa);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 6px;
+}
+
+[data-theme="dark"] .instance-info-section {
+    background-color: var(--modal-bg-secondary, #2a2a2a);
+}
+
+.instance-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+
+.instance-info-label {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.instance-info-value {
+    color: var(--secondary-text, #6c757d);
+}
+
+.instance-info-value a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.instance-info-value a:hover {
+    text-decoration: underline;
+}
+
+/* Comments section */
+.instance-comments-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.instance-comments-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.instance-comments-value {
+    font-size: 14px;
+    color: var(--text-color);
+    padding: 12px;
+    background-color: var(--modal-bg-secondary, #f8f9fa);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 4px;
+    line-height: 1.5;
+}
+
+[data-theme="dark"] .instance-comments-value {
+    background-color: var(--modal-bg-secondary, #2a2a2a);
+}
+
+/* Action buttons */
+.instance-modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.instance-action-btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.instance-action-btn-primary {
+    background-color: var(--primary);
+    color: white !important;
+    text-decoration: none;
+}
+
+.instance-action-btn-primary:hover {
+    background-color: var(--modal-primary-dark, #0056b3);
+    color: white !important;
+}
+
+.instance-action-btn-secondary {
+    background-color: transparent;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.instance-action-btn-secondary:hover {
+    background-color: var(--primary);
+    color: white;
+}
+
+.instance-action-btn-danger {
+    background-color: transparent;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+}
+
+.instance-action-btn-danger:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Delete confirmation section */
+.instance-delete-confirm {
+    padding: 16px;
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+[data-theme="dark"] .instance-delete-confirm {
+    background-color: #4a3f1f;
+    border-color: #ffc107;
+}
+
+.instance-delete-confirm-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #856404;
+    margin-bottom: 8px;
+}
+
+[data-theme="dark"] .instance-delete-confirm-title {
+    color: #ffeaa7;
+}
+
+.instance-delete-confirm-text {
+    font-size: 13px;
+    color: #856404;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .instance-delete-confirm-text {
+    color: #ffeaa7;
+}
+
+.instance-delete-confirm-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.instance-delete-confirm-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.instance-delete-cancel-btn {
+    background-color: var(--secondary-text, #6c757d);
+    color: white;
+}
+
+.instance-delete-cancel-btn:hover {
+    background-color: #5a6268;
+}
+
+.instance-delete-execute-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+.instance-delete-execute-btn:hover {
+    background-color: #c82333;
+}
+
+/* Loading state */
+.instance-modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 16px;
+}
+
+.instance-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color, #dee2e6);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* @keyframes spin lives in theme.css */
+
+.instance-modal-loading p {
+    color: var(--secondary-text, #6c757d);
+    font-size: 14px;
 }
