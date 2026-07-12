@@ -33,14 +33,14 @@ class TestSearchPeopleContract:
         
         if results:
             for person in results:
-                required_fields = ['person_id', 'display_name', 'instruments', 'is_regular']
+                required_fields = ['person_id', 'display_name', 'instruments', 'relationship']
                 for field in required_fields:
                     assert field in person
                 
                 assert isinstance(person['person_id'], int)
                 assert isinstance(person['display_name'], str)
                 assert isinstance(person['instruments'], list)
-                assert isinstance(person['is_regular'], bool)
+                assert person['relationship'] in ('member', 'visitor')
 
     def test_search_people_empty_query(self, client, admin_user, sample_session_data):
         """Test search with empty query parameter"""
@@ -148,25 +148,66 @@ class TestSearchPeopleContract:
         
         assert response.status_code in [400, 404]
 
-    def test_search_people_regulars_priority(self, client, admin_user, sample_session_data):
-        """Test that regular attendees appear first in search results"""
+    def test_search_people_orders_by_actual_attendance(self, client, admin_user, sample_session_data,
+                                                       db_conn, db_cursor):
+        """Spec 034: "regulars first" is COMPUTED from attendance, not a stored is_regular flag.
+
+        The people who actually turn up here lately sort to the top. The flag is gone, so
+        this asserts the real behaviour: whoever has attended more recent instances of THIS
+        session outranks whoever hasn't.
+        """
         session_id = sample_session_data['session_id']
-        search_query = "Te"  # Broad query to get multiple results (minimum 2 chars)
-        
+
+        # Two roster members; give exactly one of them a recent attendance record.
+        db_cursor.execute(
+            """
+            SELECT sp.person_id FROM session_person sp
+            WHERE sp.session_id = %s
+            ORDER BY sp.person_id LIMIT 2
+            """,
+            (session_id,),
+        )
+        rows = db_cursor.fetchall()
+        if len(rows) < 2:
+            pytest.skip("need at least two people on the session roster")
+        frequent_id, absent_id = rows[0][0], rows[1][0]
+
+        db_cursor.execute(
+            "SELECT session_instance_id FROM session_instance WHERE session_id = %s ORDER BY date DESC LIMIT 1",
+            (session_id,),
+        )
+        instance_row = db_cursor.fetchone()
+        if not instance_row:
+            pytest.skip("session has no instances")
+        instance_id = instance_row[0]
+
+        db_cursor.execute(
+            "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id IN (%s, %s)",
+            (instance_id, frequent_id, absent_id),
+        )
+        db_cursor.execute(
+            "UPDATE session_instance SET date = CURRENT_DATE WHERE session_instance_id = %s",
+            (instance_id,),
+        )
+        db_cursor.execute(
+            "INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES (%s, %s, 'yes')",
+            (instance_id, frequent_id),
+        )
+        db_conn.commit()
+
+        db_cursor.execute("SELECT first_name FROM person WHERE person_id = %s", (frequent_id,))
+        query = db_cursor.fetchone()[0][:2]
+
         with admin_user:
-            response = client.get(f'/api/session/{session_id}/people/search?q={search_query}')
-        
+            response = client.get(f'/api/session/{session_id}/people/search?q={query}')
+
         assert response.status_code == 200
-        data = json.loads(response.data)
-        
-        if len(data['data']) > 1:
-            # Check if regulars come first
-            results = data['data']
-            regular_indices = [i for i, person in enumerate(results) if person['is_regular']]
-            non_regular_indices = [i for i, person in enumerate(results) if not person['is_regular']]
-            
-            if regular_indices and non_regular_indices:
-                assert max(regular_indices) < min(non_regular_indices), "Regulars should appear before non-regulars"
+        results = json.loads(response.data)['data']
+        ids = [p['person_id'] for p in results]
+
+        if frequent_id in ids and absent_id in ids:
+            assert ids.index(frequent_id) < ids.index(absent_id), \
+                "whoever actually attends recently should sort above whoever doesn't"
 
     def test_search_people_instruments_included(self, client, admin_user, sample_session_data):
         """Test that search results include instrument information"""

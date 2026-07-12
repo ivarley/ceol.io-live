@@ -447,6 +447,25 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             (operation, user_id, session_instance_id, person_id),
         )
 
+    elif table_name == "session_person":
+        # record_id is a tuple (session_id, person_id). Until spec 034 this branch did not
+        # exist at all, so every save_to_history("session_person", ...) call was a silent
+        # no-op and session_person_history was never written.
+        session_id, person_id = record_id
+        cur.execute(
+            """
+            INSERT INTO session_person_history
+            (session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
+             gets_email_reminder, gets_email_followup, operation, changed_by_user_id, changed_at,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
+                   gets_email_reminder, gets_email_followup, %s, %s, (NOW() AT TIME ZONE 'UTC'),
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            FROM session_person WHERE session_id = %s AND person_id = %s
+        """,
+            (operation, user_id, session_id, person_id),
+        )
+
     elif table_name == "recording":
         cur.execute(
             """
@@ -589,121 +608,6 @@ def find_matching_tune(
 
 # Session Attendee Tracking Database Functions
 
-def get_session_attendees(session_instance_id):
-    """
-    Get all attendees for a session instance with their details and instruments.
-    
-    Returns tuple of (regulars, attendees) where each is a list of person dictionaries.
-    """
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    try:
-        # Get session_id from session_instance_id
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        session_result = cur.fetchone()
-        if not session_result:
-            return [], []
-        
-        session_id = session_result[0]
-        
-        # Get all people associated with this session instance
-        cur.execute("""
-            WITH session_people AS (
-                -- Get regular session members
-                SELECT p.person_id, p.first_name, p.last_name, p.email,
-                       sp.is_regular, sp.is_session_admin,
-                       COALESCE(sip.attendance, 'no') as attendance,
-                       COALESCE(sip.comment, '') as comment,
-                       TRUE as is_regular_member
-                FROM person p
-                JOIN session_person sp ON p.person_id = sp.person_id
-                LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id 
-                    AND sip.session_instance_id = %s
-                WHERE sp.session_id = %s AND sp.is_regular = TRUE
-                
-                UNION
-                
-                -- Get session admins who aren't regulars
-                SELECT p.person_id, p.first_name, p.last_name, p.email,
-                       sp.is_regular, sp.is_session_admin,
-                       COALESCE(sip.attendance, 'no') as attendance,
-                       COALESCE(sip.comment, '') as comment,
-                       sp.is_regular as is_regular_member
-                FROM person p
-                JOIN session_person sp ON p.person_id = sp.person_id
-                LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id 
-                    AND sip.session_instance_id = %s
-                WHERE sp.session_id = %s AND sp.is_session_admin = TRUE
-                    AND sp.is_regular = FALSE
-                
-                UNION
-                
-                -- Get attendees who aren't regular members or admins
-                SELECT p.person_id, p.first_name, p.last_name, p.email,
-                       FALSE as is_regular, FALSE as is_session_admin,
-                       sip.attendance, COALESCE(sip.comment, '') as comment,
-                       FALSE as is_regular_member
-                FROM person p
-                JOIN session_instance_person sip ON p.person_id = sip.person_id
-                LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
-                WHERE sip.session_instance_id = %s 
-                    AND (sp.person_id IS NULL OR (sp.is_regular = FALSE AND sp.is_session_admin = FALSE))
-            ),
-            person_instruments AS (
-                SELECT sp.person_id,
-                       COALESCE(
-                           array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
-                           '{}'::text[]
-                       ) as instruments
-                FROM session_people sp
-                LEFT JOIN person_instrument pi ON sp.person_id = pi.person_id
-                GROUP BY sp.person_id
-            )
-            SELECT sp.person_id, sp.first_name, sp.last_name, sp.email,
-                   sp.is_regular, sp.is_session_admin, sp.attendance, sp.comment,
-                   sp.is_regular_member, pi.instruments,
-                   CONCAT(sp.first_name, ' ', sp.last_name) as display_name
-            FROM session_people sp
-            JOIN person_instruments pi ON sp.person_id = pi.person_id
-            ORDER BY 
-                sp.is_regular_member DESC,  -- Regulars first
-                sp.display_name            -- Then alphabetical
-        """, (session_instance_id, session_id, session_instance_id, session_id, session_id, session_instance_id))
-        
-        results = cur.fetchall()
-        
-        regulars = []
-        attendees = []
-        
-        for row in results:
-            person_id, first_name, last_name, email, is_regular, is_session_admin, attendance, comment, is_regular_member, instruments, display_name = row
-            
-            person_data = {
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,  
-                'email': email,
-                'display_name': display_name,
-                'is_regular': is_regular,
-                'is_admin': is_session_admin,
-                'attendance': attendance,
-                'comment': comment,
-                'instruments': list(instruments) if instruments else []
-            }
-            
-            if is_regular_member or is_session_admin:
-                regulars.append(person_data)
-            else:
-                attendees.append(person_data)
-        
-        return regulars, attendees
-        
-    finally:
-        cur.close()
-        conn.close()
-
-
 def check_in_person(session_instance_id, person_id, attendance, comment='', user_id=None):
     """
     Check a person into a session instance or update their attendance status.
@@ -766,22 +670,31 @@ def check_in_person(session_instance_id, person_id, attendance, comment='', user
                 raise Exception(f"Session instance {session_instance_id} not found")
             
             session_id = session_id_result[0]
-            
-            # Ensure session_person record exists (create if it doesn't)
+
+            # Spec 034: check-in creates a session_person row if one is missing, as an
+            # UNCONFIRMED VISITOR. Being logged as present tonight says only that -- it is
+            # not a claim that this session is yours (relationship), and it is emphatically
+            # not the session vouching for you (confirmed). Confirming here would mean an
+            # admin logging a stranger's attendance thereby handed him every member's name.
+            #
+            # If a row already exists we touch NOTHING: we never downgrade a member to a
+            # visitor, never un-archive someone (a visit means "she's here tonight", not
+            # "she's back" -- only an admin states the second), and never confirm.
             cur.execute("""
-                SELECT COUNT(*) FROM session_person 
+                SELECT COUNT(*) FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
+
             session_person_exists = cur.fetchone()[0] > 0
-            
+
             if not session_person_exists:
-                # Create session_person record with is_regular=false by default
                 cur.execute("""
-                    INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (session_id, person_id, False, False, user_id))
-            
+                    INSERT INTO session_person
+                        (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+                    VALUES (%s, %s, 'visitor', FALSE, FALSE, FALSE, %s)
+                """, (session_id, person_id, user_id))
+                save_to_history(cur, 'session_person', 'INSERT', (session_id, person_id), user_id=user_id)
+
             # Insert new attendance record
             cur.execute("""
                 INSERT INTO session_instance_person (session_instance_id, person_id, attendance, comment, created_date, created_by_user_id)
@@ -1098,81 +1011,6 @@ def remove_person_attendance(session_instance_id, person_id, user_id=None):
     except Exception as e:
         cur.execute("ROLLBACK")
         return False, str(e), None
-    finally:
-        cur.close()
-        conn.close()
-
-
-def search_session_people(session_id, search_query, limit=20):
-    """
-    Search for people associated with a session.
-    
-    Returns list of people matching the search query.
-    """
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    try:
-        search_pattern = f"%{search_query.lower()}%"
-        
-        cur.execute("""
-            WITH session_people AS (
-                -- Get all people who have been associated with this session
-                SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
-                       COALESCE(sp.is_regular, FALSE) as is_regular,
-                       sp.is_session_admin
-                FROM person p
-                LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
-                LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
-                LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-                WHERE (sp.session_id = %s OR si.session_id = %s)
-                  AND p.active = TRUE
-                  AND (LOWER(p.first_name) LIKE %s
-                       OR LOWER(p.last_name) LIKE %s
-                       OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE %s)
-            ),
-            person_instruments AS (
-                -- Get instruments for these people
-                SELECT sp.person_id,
-                       COALESCE(
-                           array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
-                           '{}'::text[]
-                       ) as instruments
-                FROM session_people sp
-                LEFT JOIN person_instrument pi ON sp.person_id = pi.person_id
-                GROUP BY sp.person_id
-            )
-            SELECT sp.person_id, sp.first_name, sp.last_name, sp.email,
-                   sp.is_regular, sp.is_session_admin,
-                   pi.instruments,
-                   CONCAT(sp.first_name, ' ', sp.last_name) as display_name
-            FROM session_people sp
-            JOIN person_instruments pi ON sp.person_id = pi.person_id
-            ORDER BY 
-                sp.is_regular DESC,  -- Regulars first
-                sp.display_name      -- Then alphabetical
-            LIMIT %s
-        """, (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern, limit))
-        
-        results = cur.fetchall()
-        
-        people = []
-        for row in results:
-            person_id, first_name, last_name, email, is_regular, is_session_admin, instruments, display_name = row
-            
-            people.append({
-                'person_id': person_id,
-                'first_name': first_name,
-                'last_name': last_name,
-                'email': email,
-                'display_name': display_name,
-                'is_regular': is_regular,
-                'is_session_admin': is_session_admin or False,
-                'instruments': list(instruments) if instruments else []
-            })
-        
-        return people
-        
     finally:
         cur.close()
         conn.close()

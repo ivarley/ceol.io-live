@@ -49,10 +49,26 @@ Admin-sent app update emails (spec 027, sent from `/admin/email-updates`).
   for the sending pipeline.
 
 ### session_person
-Session membership (regular members and admins).
-- (session_id, person_id) composite PK
-- is_regular - Regular member (quick check-in)
-- is_admin - Session admin (can edit session, manage attendance)
+A person's relationship to a session (spec 034). Four orthogonal fields, each with one job.
+- (session_id, person_id) unique
+- `relationship` - `'member'` | `'visitor'`. **Whose session is this?** `visitor` = "I came
+  here, but it isn't one of my sessions." Set by the person **or** a session admin. Grants no
+  access; drives the "my sessions" lenses (spec 033 R2/R3) and the session's community tune
+  stats, both of which exclude visitors.
+- `confirmed` - **Does the session vouch for this person?** The *sole* gate on
+  people-visibility (People tab, person sheets, attendance lists): `is_admin OR confirmed`.
+  Admin-set only. TRUE when an admin adds or confirms someone; FALSE on self-join.
+  **Check-in never sets it** — logging who's in the room must not grant roster access.
+- `archived` - An admin's display preference about their own roster. Archived people are hidden
+  from default lists but still findable by typing (shown dimmed, marked *(archived)*). Never
+  inferred; check-in does not un-archive. One-sided: the person still sees the session as
+  theirs.
+- `is_admin` - Session admin (can edit session, manage attendance, confirm/archive people)
+
+There is no stored "regular" flag. **Regular-ness is computed** from actual attendance
+(distinct `attendance='yes'` instances in a trailing 6-month window, then lifetime, then
+alphabetical) and is **advisory only**: default sort order and quick-pick shortlists. It gates
+nothing and is never shown as a badge.
 
 ### session_instance_person
 Attendance records for specific instances.

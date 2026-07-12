@@ -337,11 +337,14 @@ def build_person_details_payload(
             "receive_update_emails": urow["receive_update_emails"],
         }
 
-    # Sessions this person is associated with, role derived from the flags.
+    # Sessions this person is associated with (spec 034). `relationship` and `is_admin` are
+    # orthogonal axes, and the tab filters on each independently -- so ship both raw. `role`
+    # is display sugar only: Admin outranks the relationship in the badge, but an admin is
+    # still a member or a visitor underneath.
     cur.execute(
         """
         SELECT s.name AS session_name, s.city, s.state, s.country,
-               sp.is_regular, sp.is_admin, s.path AS session_path
+               sp.relationship, sp.is_admin, sp.confirmed, s.path AS session_path
         FROM session_person sp
         JOIN session s ON sp.session_id = s.session_id
         WHERE sp.person_id = %s
@@ -353,10 +356,10 @@ def build_person_details_payload(
     for r in cur.fetchall():
         if r["is_admin"]:
             role = "Admin"
-        elif r["is_regular"]:
-            role = "Regular"
+        elif r["relationship"] == "visitor":
+            role = "Visitor"
         else:
-            role = "Attendee"
+            role = "Member"
         loc_parts = [p for p in (r["city"], r["state"], r["country"]) if p]
         sessions.append(
             {
@@ -364,7 +367,8 @@ def build_person_details_payload(
                 "location": ", ".join(loc_parts) if loc_parts else "Unknown",
                 "role": role,
                 "is_admin": r["is_admin"],
-                "is_regular": r["is_regular"],
+                "relationship": r["relationship"],
+                "confirmed": r["confirmed"],
                 "session_path": r["session_path"],
             }
         )
@@ -545,6 +549,115 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
 
 
 # ---------------------------------------------------------------------------
+# session people — the roster (spec 034)
+# ---------------------------------------------------------------------------
+
+# ONE query behind every roster surface: the session People tab, the live logger's
+# PersonPicker, and the session-admin people grid. Before 034 each of these had its own
+# hand-rolled tuple SQL with subtly different columns and ordering.
+#
+# "Regular-ness" is COMPUTED here, never stored: distinct instances attended in a trailing
+# 6-month window, then lifetime, then name. It is advisory only -- it decides sort order and
+# who appears in a quick-pick shortlist, and nothing else. A wrong guess costs two keystrokes.
+_SESSION_PEOPLE_SQL = """
+    WITH attendance AS (
+        SELECT sip.person_id,
+               COUNT(DISTINCT sip.session_instance_id)
+                   FILTER (WHERE sip.attendance = 'yes') AS lifetime_count,
+               COUNT(DISTINCT sip.session_instance_id)
+                   FILTER (WHERE sip.attendance = 'yes'
+                           AND si.date >= (CURRENT_DATE - INTERVAL '6 months')) AS recent_count,
+               MAX(si.date) FILTER (WHERE sip.attendance = 'yes') AS last_attended
+        FROM session_instance_person sip
+        JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+        WHERE si.session_id = %(session_id)s
+        GROUP BY sip.person_id
+    ),
+    instruments AS (
+        SELECT pi.person_id,
+               array_agg(pi.instrument ORDER BY pi.instrument) AS instruments
+        FROM person_instrument pi
+        GROUP BY pi.person_id
+    )
+    SELECT p.person_id, p.first_name, p.last_name, p.email,
+           p.city, p.state, p.country, p.thesession_user_id,
+           (u.user_id IS NOT NULL) AS has_user_account,
+           COALESCE(i.instruments, '{}'::text[]) AS instruments,
+           sp.relationship, sp.confirmed, sp.archived,
+           COALESCE(sp.is_admin, FALSE) AS is_admin,
+           COALESCE(a.lifetime_count, 0) AS attendance_count,
+           COALESCE(a.recent_count, 0) AS recent_attendance_count,
+           a.last_attended,
+           EXISTS (
+               SELECT 1 FROM session_instance_person me
+               WHERE me.person_id = p.person_id
+                 AND me.session_instance_id = %(instance_id)s
+                 AND me.attendance = 'yes'
+           ) AS attending
+    FROM session_person sp
+    JOIN person p ON sp.person_id = p.person_id
+    LEFT JOIN user_account u ON p.person_id = u.person_id
+    LEFT JOIN instruments i ON p.person_id = i.person_id
+    LEFT JOIN attendance a ON p.person_id = a.person_id
+    WHERE sp.session_id = %(session_id)s
+      AND p.active = TRUE
+    ORDER BY COALESCE(a.recent_count, 0) DESC,
+             COALESCE(a.lifetime_count, 0) DESC,
+             p.first_name, p.last_name
+"""
+
+
+def session_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Pure mapper: one _SESSION_PEOPLE_SQL row -> the wire dict."""
+    return {
+        "person_id": row["person_id"],
+        "first_name": row["first_name"],
+        "last_name": row["last_name"],
+        "display_name": f"{row['first_name']} {row['last_name']}".strip(),
+        "email": row["email"],
+        "city": row["city"],
+        "state": row["state"],
+        "country": row["country"],
+        "thesession_user_id": row["thesession_user_id"],
+        "has_user_account": row["has_user_account"],
+        "instruments": list(row["instruments"] or []),
+        "relationship": row["relationship"],
+        "confirmed": row["confirmed"],
+        "archived": row["archived"],
+        "is_admin": row["is_admin"],
+        "attendance_count": row["attendance_count"],
+        "recent_attendance_count": row["recent_attendance_count"],
+        "last_attended": row["last_attended"].isoformat() if row["last_attended"] else None,
+        "attending": row["attending"],
+    }
+
+
+def load_session_people(
+    conn,
+    session_id: int,
+    *,
+    instance_id: Optional[int] = None,
+    include_archived: bool = True,
+) -> List[Dict[str, Any]]:
+    """This session's roster, ordered by computed regular-ness.
+
+    `instance_id` fills each row's `attending` flag (checked in to that instance) — the
+    PersonPicker's tier-1/tier-2 split. Without it, `attending` is always False.
+
+    `include_archived=False` drops archived people. Callers showing a DEFAULT list pass
+    False; callers responding to a typed query pass True, because archived must mean
+    "hidden", never "unfindable" — otherwise a member back for one night is invisible in
+    the picker and whoever's logging creates a duplicate person for her.
+    """
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(_SESSION_PEOPLE_SQL, {"session_id": session_id, "instance_id": instance_id})
+        people = [session_person_to_dict(r) for r in cur.fetchall()]
+    if not include_archived:
+        people = [p for p in people if not p["archived"]]
+    return people
+
+
+# ---------------------------------------------------------------------------
 # session detail — the /sessions/<path> page and GET /api/sessions/<path>/detail
 # ---------------------------------------------------------------------------
 
@@ -668,18 +781,33 @@ def build_session_detail_payload(
     session_id = session["session_id"]
 
     # Permission flags (formerly Jinja-only).
+    #
+    # Spec 034: three distinct things, deliberately not collapsed.
+    #   is_session_member -- any session_person row (member OR visitor). Association.
+    #   relationship      -- the viewer's own 'member'/'visitor', for the role badge.
+    #   can_view_people   -- is_admin OR confirmed. The SOLE gate on the People tab.
+    # A member is not automatically allowed to see people: joining a session must not hand
+    # you its roster.
     is_session_admin = bool(is_system_admin)
     is_session_member = False
+    relationship = None
+    is_confirmed = False
     if person_id:
         cur.execute(
-            "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
+            """
+            SELECT is_admin, relationship, confirmed
+            FROM session_person WHERE session_id = %s AND person_id = %s
+            """,
             (session_id, person_id),
         )
         member_row = cur.fetchone()
         if member_row is not None:
             is_session_member = True
+            relationship = member_row["relationship"]
+            is_confirmed = bool(member_row["confirmed"])
             if member_row["is_admin"]:
                 is_session_admin = True
+    can_view_people = is_session_admin or is_confirmed
 
     # Today in the SESSION's timezone (drives the logs tab's add-instance default).
     try:
@@ -732,6 +860,9 @@ def build_session_detail_payload(
             "is_logged_in": is_logged_in,
             "is_session_admin": is_session_admin,
             "is_session_member": is_session_member,
+            "relationship": relationship,  # 'member' | 'visitor' | None — drives the badge
+            "is_confirmed": is_confirmed,
+            "can_view_people": can_view_people,  # is_admin OR confirmed — gates the People tab
         },
         "today_in_session_tz": today_in_session_tz.isoformat(),
         "default_tab": "logs" if session["session_type"] == "festival" else "tunes",

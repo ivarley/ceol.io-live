@@ -141,7 +141,9 @@ export async function tuneDetail(config, tuneId) {
   return res.json()
 }
 
-// Candidate people for the "started by" picker (§19): instance attendees.
+// This session's whole roster, with tonight's check-in flags (spec 034). ONE fetch drives
+// the entire PersonPicker: since there is no global person search any more, the picker's
+// universe IS the roster, so it is small enough to filter locally with zero latency.
 export async function livePeople(config) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people`, {
     headers: { Accept: 'application/json' },
@@ -358,16 +360,9 @@ export async function myTunesOp(op) {
   return j
 }
 
-// Search people to add to attendance (§F editor); flags who's already checked in.
-export async function peopleSearch(config, q) {
-  const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/people/search?q=${encodeURIComponent(q)}`, {
-    headers: { Accept: 'application/json' },
-    credentials: 'same-origin',
-  })
-  if (!res.ok) return []
-  const json = await res.json()
-  return json.people || []
-}
+// (Spec 034 deleted peopleSearch: /people/search ILIKE'd across every active person in the
+// database, so anyone could type three letters and enumerate people from sessions they had
+// nothing to do with. The PersonPicker filters the roster locally instead.)
 
 // Open the downstream SSE stream. The bootstrap high-water mark rides in as a
 // query param so the first connect only streams the delta; EventSource sends the

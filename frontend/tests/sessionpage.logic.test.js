@@ -185,14 +185,32 @@ describe('people helpers', () => {
     expect(normalizeQuotes('O’Neill “the”')).toBe('O\'Neill "the"')
   })
 
-  it('filterPeople applies regulars + search over name/instruments', () => {
-    const people = [
-      { person_id: 1, first_name: 'Ann', last_name: 'Malone', is_regular: true, instruments: ['Fiddle'] },
-      { person_id: 2, first_name: 'Bob', last_name: 'Kelly', is_regular: false, instruments: ['Flute'] },
-    ]
-    expect(filterPeople(people, 'regulars', '')).toHaveLength(1)
-    expect(filterPeople(people, 'all', 'flute').map((p) => p.person_id)).toEqual([2])
-    expect(filterPeople(people, 'all', 'malone').map((p) => p.person_id)).toEqual([1])
+  // Spec 034: members / visitors / archived, not regulars/all.
+  const people = [
+    { person_id: 1, first_name: 'Ann', last_name: 'Malone', relationship: 'member', archived: false, instruments: ['Fiddle'] },
+    { person_id: 2, first_name: 'Bob', last_name: 'Kelly', relationship: 'visitor', archived: false, instruments: ['Flute'] },
+    { person_id: 3, first_name: 'Maura', last_name: 'Gone', relationship: 'member', archived: true, instruments: ['Harp'] },
+  ]
+
+  it('filterPeople splits members / visitors / archived', () => {
+    expect(filterPeople(people, 'members', '').map((p) => p.person_id)).toEqual([1])
+    expect(filterPeople(people, 'visitors', '').map((p) => p.person_id)).toEqual([2])
+    expect(filterPeople(people, 'archived', '').map((p) => p.person_id)).toEqual([3])
+  })
+
+  it('excludes archived people from the members view — they have gone', () => {
+    expect(filterPeople(people, 'members', '').map((p) => p.person_id)).not.toContain(3)
+  })
+
+  it('but a SEARCH finds archived people regardless of the active filter', () => {
+    // Archived means hidden, never unfindable: a member you cannot find is a member someone
+    // re-creates as a duplicate person.
+    expect(filterPeople(people, 'members', 'maura').map((p) => p.person_id)).toEqual([3])
+  })
+
+  it('searches over name and instruments', () => {
+    expect(filterPeople(people, 'members', 'flute').map((p) => p.person_id)).toEqual([2])
+    expect(filterPeople(people, 'members', 'malone').map((p) => p.person_id)).toEqual([1])
   })
 })
 

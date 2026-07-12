@@ -1,19 +1,37 @@
 <script>
-  // Sessions tab: the person's session memberships (filterable), leave-session
-  // (user profile) / admin-toggle (system admin) affordances, and the
-  // add-to-session sheet (search + role pick + add). The kit Sheet owns the
-  // chrome (Cancel/scrim/Escape, scroll lock); picking Add on a row raises the
-  // kit Dialog confirm on top.
+  /**
+   * Sessions tab (spec 034, Change 3): the person's sessions, filterable by relationship;
+   * leave-session (own profile) / admin-toggle (system admin); and the add-to-session sheet.
+   *
+   * Filter chips replaced the All/Regular <select>. `relationship` and `is_admin` are
+   * ORTHOGONAL axes -- you can be an admin of a session you only visit -- so they filter
+   * independently. The old select got this wrong: it matched the rendered role STRING against
+   * "Regular", so an Admin row (whose badge said "Admin") vanished under the Regular filter
+   * even when the person was a regular.
+   */
   let { initialSessions, person, personId, isUserProfile, isSystemAdmin } = $props()
 
-  import { Dialog, Sheet, toast, Chip } from '../lib/index.js'
+  import { Dialog, Sheet, SearchField, Seg, toast, Chip } from '../lib/index.js'
 
   let sessions = $state([...initialSessions])
-  let sessionFilter = $state('all')
+  let sessionFilter = $state(null) // null = unfiltered; click the active chip to clear
 
-  // Legacy filterSessions matched the card's small text ("<location> · <role>")
-  // against 'Regular', so an Admin row hides under the Regular filter.
-  const isVisible = (s) => sessionFilter === 'all' || `${s.location} · ${s.role}`.includes('Regular')
+  const FILTERS = [
+    { id: 'member', label: 'Member' },
+    { id: 'visitor', label: 'Visitor' },
+    { id: 'admin', label: 'Admin' },
+  ]
+
+  // Chips are single-select and toggle OFF -- clicking the active one goes back to everything.
+  function pickFilter(id) {
+    sessionFilter = sessionFilter === id ? null : id
+  }
+
+  const isVisible = (s) => {
+    if (!sessionFilter) return true
+    if (sessionFilter === 'admin') return !!s.is_admin
+    return s.relationship === sessionFilter
+  }
 
   // Leaving is a decision -> kit Dialog with an explicit verb (spec 035).
   let leaveOpen = $state(false)
@@ -54,8 +72,9 @@
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          // Update the role badge
-          s.role = isAdmin ? 'Admin' : s.is_regular ? 'Regular' : 'Attendee'
+          // Re-derive the badge. Admin outranks the relationship in the LABEL, but the
+          // relationship underneath is untouched -- separate axes.
+          s.role = isAdmin ? 'Admin' : s.relationship === 'visitor' ? 'Visitor' : 'Member'
           s.is_admin = isAdmin
           sessions = [...sessions]
         } else {
@@ -76,12 +95,20 @@
   let modalError = $state(null)
   let modalSessions = $state(null) // null until first load
   let noSessionsVisible = $state(false)
-  let selectedRole = $state('regular')
-  let searchTimeout
+  let selectedRelationship = $state('member')
 
+  const RELATIONSHIPS = [
+    { id: 'member', label: isUserProfile ? 'I attend it' : 'Member' },
+    { id: 'visitor', label: isUserProfile ? "I've visited" : 'Visitor' },
+  ]
+
+  // Search-FIRST (spec 034): no prefetched list. Twenty location-ranked sessions shown before
+  // you typed anything was a filter pretending to be a search -- it buried the one you wanted.
   function openSessionModal() {
     searchValue = ''
-    loadInitialSessions()
+    modalSessions = null
+    modalError = null
+    noSessionsVisible = false
     modalOpen = true
   }
 
@@ -102,24 +129,6 @@
     modalError = null
     modalSessions = list
     noSessionsVisible = list.length === 0
-  }
-
-  function loadInitialSessions() {
-    showLoading(true)
-    fetch(`/api/person/${personId}/available-sessions`)
-      .then((response) => response.json())
-      .then((data) => {
-        showLoading(false)
-        if (data.success) {
-          displaySessions(data.sessions)
-        } else {
-          modalError = 'Failed to load sessions: ' + data.message
-        }
-      })
-      .catch((error) => {
-        showLoading(false)
-        modalError = 'Error loading sessions: ' + error.message
-      })
   }
 
   function searchSessions(searchTerm) {
@@ -144,12 +153,16 @@
       })
   }
 
-  function onSearchInput() {
-    clearTimeout(searchTimeout)
-    const term = searchValue.trim()
-    searchTimeout = setTimeout(() => {
-      searchSessions(term)
-    }, 300)
+  // SearchField owns the debounce; an empty box goes back to the blank slate.
+  function onSearch(term) {
+    const q = (term || '').trim()
+    if (!q) {
+      modalSessions = null
+      modalError = null
+      noSessionsVisible = false
+      return
+    }
+    searchSessions(q)
   }
 
   const locationInfo = (session) =>
@@ -173,7 +186,7 @@
       body: JSON.stringify({
         person_id: personId,
         session_id: parseInt(sessionId),
-        role: selectedRole,
+        relationship: selectedRelationship,
       }),
     })
       .then((response) => response.json())
@@ -196,18 +209,31 @@
 
 <div class="mt-3">
   {#if sessions.length}
-    <div class="mb-3">
-      <select id="session-filter" class="form-select" bind:value={sessionFilter}>
-        <option value="all">All Sessions</option>
-        <option value="regular">Regular Sessions Only</option>
-      </select>
+    <div class="sessions-toolbar mb-3">
+      <div class="sessions-filters" role="group" aria-label="Filter sessions">
+        {#each FILTERS as f (f.id)}
+          <Chip
+            label={f.label}
+            active={sessionFilter === f.id}
+            variant={sessionFilter === f.id ? 'primary' : 'default'}
+            onclick={() => pickFilter(f.id)}
+            data-session-filter={f.id} />
+        {/each}
+      </div>
+      <button
+        type="button"
+        class="sessions-add-btn"
+        id="add-to-session-link"
+        title={isUserProfile ? 'Add a session' : `Add ${person.name} to a session`}
+        aria-label={isUserProfile ? 'Add a session' : `Add ${person.name} to a session`}
+        onclick={openSessionModal}>+</button>
     </div>
     <div class="sessions-card-list">
       {#each sessions as session, i (session.session_path)}
         <div
           class="session-card card mb-2"
           data-session-path={session.session_path}
-          data-is-regular={String(session.is_regular).toLowerCase()}
+          data-relationship={session.relationship}
           style:display={isVisible(session) ? '' : 'none'}>
           <div class="card-body d-flex justify-content-between align-items-center py-2 px-3">
             <div class="session-info">
@@ -243,29 +269,6 @@
         </div>
       {/each}
     </div>
-    {#if isUserProfile}
-      <div class="mt-3">
-        <a
-          href="#add"
-          id="add-to-session-link"
-          class="btn btn-outline-primary btn-sm"
-          onclick={(e) => {
-            e.preventDefault()
-            openSessionModal()
-          }}>Add another session I've been to</a>
-      </div>
-    {:else}
-      <div class="mt-3">
-        <a
-          href="#add"
-          id="add-to-session-link"
-          class="btn btn-outline-primary btn-sm"
-          onclick={(e) => {
-            e.preventDefault()
-            openSessionModal()
-          }}>Add this person to a session</a>
-      </div>
-    {/if}
   {:else if isUserProfile}
     <div class="alert alert-info" role="alert">
       <a
@@ -296,28 +299,29 @@
 
 <!-- Add to Session Sheet (rows act via the Add button -> confirm Dialog on top) -->
 <Sheet bind:open={modalOpen} title={isUserProfile ? 'Add me to a Session' : `Add ${person.name} to a Session`}>
-  <div class="search-section">
-    <div class="mb-3">
-      <label for="session-search" class="form-label">Search Sessions:</label>
-      <input
-        type="text"
-        id="session-search"
-        class="form-control"
-        placeholder="Type to search sessions..."
-        bind:value={searchValue}
-        oninput={onSearchInput} />
-    </div>
+  <div class="search-section mb-3">
+    <SearchField
+      bind:value={searchValue}
+      id="session-search"
+      placeholder="Type to search sessions..."
+      onSearch={onSearch} />
   </div>
   <div class="role-section mb-3">
     <span class="form-label">{isUserProfile ? 'Add me as:' : 'Add as:'}</span>
-    <div class="form-check">
-      <input class="form-check-input" type="radio" name="user-role" id="role-regular" value="regular" bind:group={selectedRole} />
-      <label class="form-check-label" for="role-regular">Regular</label>
-    </div>
-    <div class="form-check">
-      <input class="form-check-input" type="radio" name="user-role" id="role-attendee" value="attendee" bind:group={selectedRole} />
-      <label class="form-check-label" for="role-attendee">Attendee</label>
-    </div>
+    <Seg
+      options={RELATIONSHIPS}
+      value={selectedRelationship}
+      onSelect={(id) => (selectedRelationship = id)}
+      idAttr="data-relationship" />
+    <p class="role-hint">
+      {#if selectedRelationship === 'member'}
+        {isUserProfile ? 'Its' : "The session's"} tunes count as
+        {isUserProfile ? 'yours' : `${person.name}'s`}.
+      {:else}
+        Records the visit without making the session
+        {isUserProfile ? 'yours' : `${person.name}'s`}.
+      {/if}
+    </p>
   </div>
   <div id="sessions-loading" class="text-center" style:display={modalLoading ? 'block' : 'none'}>
     <span class="loading-spinner"></span>
@@ -371,7 +375,43 @@
 <Dialog
   bind:open={addConfirmOpen}
   title={`Add ${person.name} to "${addTarget ? addTarget.sessionName : ''}"?`}
-  description={`${person.name} will be added as a ${selectedRole}.`}
+  description={`${person.name} will be added as a ${selectedRelationship}.`}
   confirmLabel="Add to session"
   onConfirm={() => addPersonToSession(addTarget.sessionId)}
   onCancel={() => (addTarget = null)} />
+
+<style>
+  .sessions-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .sessions-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  /* The standard "+" affordance, top-right of the results (spec 034 Change 3). */
+  .sessions-add-btn {
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    line-height: 1;
+    font-size: 1.15rem;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 50%;
+    background: var(--bg-secondary, transparent);
+    color: inherit;
+    cursor: pointer;
+  }
+  .sessions-add-btn:hover {
+    border-color: var(--primary, #007bff);
+    color: var(--primary, #007bff);
+  }
+  .role-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted, #6c757d);
+    margin: 0.5rem 0 0;
+  }
+</style>

@@ -12,11 +12,17 @@ Track who attends each session instance with attendance status and instruments.
 ## Data Model
 
 ### Tables
-- `session_person` - Session membership (is_regular, is_admin flags)
+- `session_person` - A person's relationship to a session: `relationship` ('member'|'visitor'),
+  `confirmed`, `archived`, `is_admin` (spec 034)
 - `session_instance_person` - Attendance records per instance
 - `person_instrument` - Instruments a person plays
 
 See [People Model](../data/people-model.md) for schema details.
+
+**Check-in auto-creates a `session_person` row** if none exists, as
+`relationship='visitor', confirmed=FALSE`. It never confirms, never un-archives, and never
+downgrades an existing member — being logged as present tonight is not a claim about
+belonging.
 
 ## API Endpoints
 
@@ -33,14 +39,14 @@ Returns list of attendees for a session instance.
     "first_name": "John",
     "last_name": "Doe",
     "attendance": "yes",
-    "is_regular": true,
+    "relationship": "member",
     "is_admin": false,
     "instruments": ["fiddle", "guitar"]
   }
 ]
 ```
 
-**Permissions**: Regulars and admins can view
+**Permissions**: `is_admin OR confirmed` (see Business Rules)
 
 ### POST `/api/session_instance/<id>/attendees/checkin`
 Check in a person (creates attendance record).
@@ -81,7 +87,9 @@ Remove attendance record.
 **Permissions**: Admins only
 
 ### GET `/api/session/<id>/people/search?q=<query>`
-Search people associated with a session (past attendees, regulars).
+Search people **on this session's roster**. There is no global person search: you can never
+discover people from other sessions (spec 034). Archived people are excluded from the default
+list but returned by an explicit query.
 
 **Returns**: Array of person objects matching query
 
@@ -89,11 +97,17 @@ Search people associated with a session (past attendees, regulars).
 
 ### Permissions
 
-**View Attendance** (GET attendees):
+**People-visibility** — the People tab, person detail sheets, and all attendance lists:
 - System admins: Always
-- Session admins: If is_admin for this session
-- Session regulars: If is_regular for this session
-- Others: No access
+- Session admins (`is_admin`): Always
+- Anyone whose `session_person.confirmed` is TRUE — member **or** visitor
+- Everyone else, *including unconfirmed members*: No access
+
+One predicate, `is_admin OR confirmed`, replacing the two contradictory gates that used to
+exist. People-visibility is granted **by the session**, never claimed by joining it: self-join
+lands `confirmed = FALSE`, and check-in never confirms anyone.
+
+Everything else about a session — tunes, logs, history — stays visible to everyone.
 
 **Edit Attendance** (POST/DELETE):
 - System admins: Always
@@ -101,14 +115,6 @@ Search people associated with a session (past attendees, regulars).
 - Others: No access
 
 **Implementation**: `auth.py:can_view_attendance()`, `auth.py:can_manage_attendance()`
-
-**Note**: There's also `api_routes.py:can_view_attendance()` with different signature (takes session_instance_id instead of session_id)
-
-### Regular Members
-
-- Tracked in `session_person.is_regular`
-- One-click check-in available in UI
-- Displayed prominently in attendance UI
 
 ### Instruments
 

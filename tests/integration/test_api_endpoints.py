@@ -752,17 +752,17 @@ class TestAdminAPI:
         # Add players to session
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, %s), (%s, %s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin)
+            VALUES (%s, %s, %s, TRUE, %s), (%s, %s, %s, TRUE, %s)
         """,
             (
                 session_id,
                 person_ids[0][0],
-                True,
+                'member',
                 False,
                 session_id,
                 person_ids[1][0],
-                False,
+                'visitor',
                 True,
             ),
         )
@@ -825,18 +825,18 @@ class TestAdminAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular)
-            VALUES (%s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed)
+            VALUES (%s, %s, 'visitor', TRUE)
         """,
-            (session_id, person_id, False),
+            (session_id, person_id),
         )
         db_conn.commit()
 
         # Update regular status
         with admin_user:
             response = client.put(
-                f"/api/admin/sessions/{session_path}/people/{person_id}/regular",
-                json={"is_regular": True},
+                f"/api/sessions/{session_path}/people/{person_id}/relationship",
+                json={"relationship": "member"},
             )
 
         assert response.status_code == 200
@@ -846,15 +846,14 @@ class TestAdminAPI:
         # Verify status was updated
         db_cursor.execute(
             """
-            SELECT is_regular
+            SELECT relationship
             FROM session_person
             WHERE session_id = %s AND person_id = %s
         """,
             (session_id, person_id),
         )
 
-        is_regular = db_cursor.fetchone()[0]
-        assert is_regular is True
+        assert db_cursor.fetchone()[0] == "member"
 
     def test_update_session_player_details_without_user_account(
         self, client, admin_user, db_conn, db_cursor
@@ -892,10 +891,10 @@ class TestAdminAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular)
-            VALUES (%s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed)
+            VALUES (%s, %s, 'visitor', TRUE)
         """,
-            (session_id, person_id, False),
+            (session_id, person_id),
         )
         db_conn.commit()
 
@@ -909,7 +908,7 @@ class TestAdminAPI:
             "country": "USA",
             "sms_number": "555-1234",
             "thesession_user_id": 12345,
-            "is_regular": True
+            "relationship": "member"
         }
 
         with admin_user:
@@ -945,15 +944,14 @@ class TestAdminAPI:
         # Verify regular status was updated
         db_cursor.execute(
             """
-            SELECT is_regular
+            SELECT relationship
             FROM session_person
             WHERE session_id = %s AND person_id = %s
         """,
             (session_id, person_id),
         )
         
-        is_regular = db_cursor.fetchone()[0]
-        assert is_regular is True
+        assert db_cursor.fetchone()[0] == "member"
 
     def test_update_session_player_details_with_user_account(
         self, client, admin_user, db_conn, db_cursor
@@ -1000,10 +998,10 @@ class TestAdminAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular)
-            VALUES (%s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed)
+            VALUES (%s, %s, 'visitor', TRUE)
         """,
-            (session_id, person_id, False),
+            (session_id, person_id),
         )
         db_conn.commit()
 
@@ -1012,7 +1010,7 @@ class TestAdminAPI:
             "first_name": "Bob",  # This should be ignored
             "last_name": "Changed",  # This should be ignored
             "email": f"changed{unique_id}@example.com",  # This should be ignored
-            "is_regular": True  # This should be updated
+            "relationship": "member"  # This should be updated
         }
 
         with admin_user:
@@ -1043,15 +1041,14 @@ class TestAdminAPI:
         # Verify regular status WAS updated
         db_cursor.execute(
             """
-            SELECT is_regular
+            SELECT relationship
             FROM session_person
             WHERE session_id = %s AND person_id = %s
         """,
             (session_id, person_id),
         )
         
-        is_regular = db_cursor.fetchone()[0]
-        assert is_regular is True
+        assert db_cursor.fetchone()[0] == "member"
 
     def test_update_session_player_details_unauthorized(
         self, client, authenticated_regular_user, db_conn, db_cursor
@@ -1088,17 +1085,17 @@ class TestAdminAPI:
 
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular)
-            VALUES (%s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed)
+            VALUES (%s, %s, 'visitor', TRUE)
         """,
-            (session_id, person_id, False),
+            (session_id, person_id),
         )
         db_conn.commit()
 
         # Try to update as regular user (not admin)
         update_data = {
             "first_name": "Hacker",
-            "is_regular": True
+            "relationship": "member"
         }
 
         with authenticated_regular_user:
@@ -1242,10 +1239,10 @@ class TestAdminAPI:
         # Add person to session
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin)
+            VALUES (%s, %s, 'member', TRUE, FALSE)
             """,
-            (session_id, person_id, True, False),
+            (session_id, person_id),
         )
 
         # Add some instruments
@@ -1359,10 +1356,10 @@ class TestAdminAPI:
         # Add person to session
         db_cursor.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin)
+            VALUES (%s, %s, 'visitor', TRUE, FALSE)
             """,
-            (session_id, person_id, False, False),
+            (session_id, person_id),
         )
         db_conn.commit()
 

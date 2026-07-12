@@ -3,9 +3,9 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, peopleSearch, deepSearch, fetchIncipit, openStream, tuneDetail, myTunesList, myTunesOp } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, tuneDetail, myTunesList, myTunesOp } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
-  import { Dialog } from './lib/index.js'
+  import { Dialog, PersonPicker } from './lib/index.js'
   import SidePane from './SidePane.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -651,91 +651,70 @@
   let editingName = $state('') // its name, for the editing banner label
   let openTrayId = $state(null) // set whose info tray (started-by / logged-by) is open
   let starterFlashId = $state(null) // set whose starter pill is briefly flashing (confirm)
-  function toggleTray(id) { openTrayId = openTrayId === id ? null : id; starterPickerSet = null }
+  function toggleTray(id) { openTrayId = openTrayId === id ? null : id }
 
-  // "Started by" picker (§19): which set's picker is open, + cached attendee list.
-  let starterPickerSet = $state(null) // first-tune id of the set being attributed
-  let starterFilter = $state('')
-  let attendees = $state([]) // [{person_id, display_name}] for this instance
-  let attendeesLoaded = $state(false) // read reactively in the starter tray ("Loading…" vs "No one checked in")
+  // --- People: ONE PersonPicker for both the starter picker and attendance (spec 034) ---
+  //
+  // These used to be two UIs. The starter picker could only see people already checked in,
+  // so attributing a set to someone who'd just walked in meant leaving the picker, opening a
+  // separate drawer, adding them, and coming back. Now it's one component and one gesture:
+  // type "Sar", tap Sarah, she's checked in AND credited with the set.
+  let pickerOpen = $state(false)
+  let pickerMode = $state('attendance') // 'attendance' | 'starter'
+  let pickerSet = $state(null)          // starter mode: the set (first-tune id) being attributed
+  let attendees = $state([])            // the whole session roster + tonight's flags
+  let attendeesLoaded = $state(false)
+  const canonicalInstruments = $derived(config.canonicalInstruments || [])
+
   // the set's recorded starter name (first tune that carries one)
   function setStarterName(seg) {
     for (const t of seg.tunes) if (t.started_by_name) return t.started_by_name
     return null
   }
-  const filteredAttendees = $derived.by(() => {
-    const f = starterFilter.trim().toLowerCase()
-    return f ? attendees.filter((p) => p.display_name.toLowerCase().includes(f)) : attendees
+  const pickerStarterName = $derived.by(() => {
+    if (pickerMode !== 'starter' || pickerSet == null) return null
+    const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === pickerSet)
+    return seg ? setStarterName(seg) : null
   })
-  async function openStarterPicker(firstId) {
-    starterPickerSet = starterPickerSet === firstId ? null : firstId
-    starterFilter = ''
-    if (starterPickerSet && !attendeesLoaded) {
-      try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep empty */ }
-    }
-  }
-  // --- attendance editor (§F) ---
-  let attendanceOpen = $state(false)
-  let personQuery = $state('')
-  let personResults = $state([])
-  let personSearchTimer = null
-  let showCreate = $state(false)
-  let newFirst = $state('')
-  let newLast = $state('')
-  // Optional instrument picker for the create-person form (parity with the old logger).
-  let showInstruments = $state(false)
-  let newInstruments = $state([]) // selected instrument names (canonical + free-text "other")
-  let newOther = $state('')
-  const canonicalInstruments = $derived(config.canonicalInstruments || [])
-  // The free-text picks, shown as removable chips (canonical picks live in their checkboxes).
-  const otherPicks = $derived(newInstruments.filter(
-    (i) => !canonicalInstruments.some((c) => c.toLowerCase() === i.toLowerCase())
-  ))
-  let pendingStarterFirstId = null // set we were attributing when the drawer was opened from the starter picker
+  // Who's actually here — for the header's attendance line.
+  const checkedIn = $derived(attendees.filter((p) => p.attending))
 
-  function toggleInstrument(name) {
-    newInstruments = newInstruments.includes(name)
-      ? newInstruments.filter((i) => i !== name)
-      : [...newInstruments, name]
-  }
-  function addOtherInstrument() {
-    const v = newOther.trim()
-    if (v && !newInstruments.some((i) => i.toLowerCase() === v.toLowerCase())) {
-      newInstruments = [...newInstruments, v]
-    }
-    newOther = ''
-  }
-  function removeInstrument(name) {
-    newInstruments = newInstruments.filter((i) => i !== name)
-  }
-  function resetCreateForm() {
-    newFirst = ''; newLast = ''; showCreate = false
-    newInstruments = []; newOther = ''; showInstruments = false
-  }
+  /**
+   * Tense. A session happening tonight (or not yet) has people "Attending"; one already in
+   * the past had people who "Attended". Both dates are plain YYYY-MM-DD, so a string compare
+   * is the whole comparison — no Date parsing, no timezone arithmetic.
+   *
+   * "Today" is the logger's own local date, which is the right frame: whoever is running this
+   * is standing in the room.
+   */
+  const attendanceLabel = $derived.by(() => {
+    const date = config.instanceDate
+    if (!date) return 'Attending'
+    const today = new Date()
+    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    return date < localToday ? 'Attended' : 'Attending'
+  })
 
   async function refreshAttendees() {
     try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
   }
-  function openAttendance() {
-    starterPickerSet = null
-    attendanceOpen = true
-    personQuery = ''; personResults = []; resetCreateForm()
-    if (!attendeesLoaded) refreshAttendees()
+  async function ensureAttendees() {
+    if (!attendeesLoaded) await refreshAttendees()
   }
-  const closeAttendance = () => { attendanceOpen = false; pendingStarterFirstId = null }
-  // "＋ Add a player" in the starter picker opens the attendance editor. Remember which
-  // set's picker we came from (before openAttendance clears it) so the person we add
-  // gets logged as that set's starter.
-  function addPlayer() { pendingStarterFirstId = starterPickerSet; openAttendance() }
-  // If the drawer was opened from a set's starter picker, log this person as that set's
-  // starter and close everything. Returns true if it acted.
-  function applyPendingStarter(person) {
-    if (pendingStarterFirstId == null) return false
-    const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === pendingStarterFirstId)
-    if (seg) setStarter(seg, { person_id: person.person_id, display_name: person.display_name })
-    closeAttendance() // also nulls pendingStarterFirstId
-    return true
+
+  async function openStarterPicker(firstId) {
+    pickerMode = 'starter'
+    pickerSet = firstId
+    pickerOpen = true
+    await ensureAttendees()
   }
+  async function openAttendance() {
+    pickerMode = 'attendance'
+    pickerSet = null
+    pickerOpen = true
+    await ensureAttendees()
+  }
+  function closePicker() { pickerOpen = false; pickerSet = null }
 
   // Attendance ops need a connection (not in the offline op model); surface rejections.
   async function attendanceOp(op_type, payload, label) {
@@ -752,31 +731,68 @@
       return false
     }
   }
-  async function checkIn(p) {
-    if (await attendanceOp('attendance_add', { person_id: p.person_id }, 'Check in')) {
-      if (!applyPendingStarter(p)) searchPeople() // refresh "in" flags
+
+  /**
+   * Attribute a set to someone. Takes the set id EXPLICITLY rather than reading `pickerSet`:
+   * in starter mode the picker calls onSelect() and then closes itself synchronously, which
+   * nulls pickerSet -- so by the time an awaited check-in resolves, the state that says which
+   * set we were attributing is already gone. (That race silently dropped the attribution
+   * while still checking the person in: the exact half-done outcome this flow exists to
+   * avoid.) Capture the target before the first await; never re-read it after.
+   */
+  function attributeTo(setId, person) {
+    if (setId == null) return
+    const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === setId)
+    if (seg) setStarter(seg, { person_id: person.person_id, display_name: person.display_name })
+  }
+
+  /**
+   * Tapping a row. The single gesture that motivated this whole change: in starter mode, a
+   * person who isn't checked in yet gets checked in FIRST, then credited with the set.
+   */
+  async function pickPerson(person) {
+    if (pickerMode === 'starter') {
+      const setId = pickerSet // capture: the picker closes out from under us
+      if (!person.attending) {
+        const ok = await attendanceOp('attendance_add', { person_id: person.person_id }, 'Check in')
+        if (!ok) return
+      }
+      attributeTo(setId, person)
+      return
+    }
+    // Attendance mode: the row toggles. (Check-out has its own ✕; tapping a checked-in row
+    // is a no-op rather than a surprise removal.)
+    if (!person.attending) {
+      await attendanceOp('attendance_add', { person_id: person.person_id }, 'Check in')
     }
   }
-  function checkOut(p) { attendanceOp('attendance_remove', { person_id: p.person_id }, 'Remove') }
-  async function createPerson() {
-    const first = newFirst.trim()
-    if (!first) return
-    // Include picked instruments plus any leftover typed-but-not-added "other" text.
-    const instruments = [...newInstruments]
-    if (newOther.trim()) instruments.push(newOther.trim())
-    const res = await attendanceOp('attendance_create_person', { first_name: first, last_name: newLast.trim(), instruments }, 'Add person')
-    if (res) {
-      resetCreateForm(); personQuery = ''; personResults = []
-      if (res.person) applyPendingStarter(res.person)
-    }
+
+  function checkOutPerson(person) {
+    attendanceOp('attendance_remove', { person_id: person.person_id }, 'Remove')
   }
-  function searchPeople() {
-    const q = personQuery.trim()
-    if (q.length < 2) { personResults = []; return }
-    if (personSearchTimer) clearTimeout(personSearchTimer)
-    personSearchTimer = setTimeout(async () => {
-      try { personResults = await peopleSearch(config, q) } catch { personResults = [] }
-    }, 180)
+
+  function clearStarter() {
+    if (pickerSet == null) return
+    const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === pickerSet)
+    if (seg) setStarter(seg, null)
+  }
+
+  async function createPerson({ first_name, last_name, email, instruments }) {
+    // Capture before the await, for the same reason as pickPerson: closePicker() below (and
+    // any close the user triggers meanwhile) nulls pickerSet.
+    const setId = pickerSet
+    const wasStarter = pickerMode === 'starter'
+    const res = await attendanceOp(
+      'attendance_create_person',
+      { first_name, last_name, email, instruments },
+      'Add person'
+    )
+    // The new person is checked in by the op. In starter mode, credit them with the set and
+    // close -- that is the "a visitor shows up mid-tune" path, and it should cost one gesture.
+    if (res && res.person && wasStarter) {
+      attributeTo(setId, { person_id: res.person.person_id, display_name: res.person.display_name })
+      closePicker()
+    }
   }
 
   // --- session notes (header §F) ---
@@ -868,9 +884,9 @@
     }
     const op_id = crypto.randomUUID()
     trySend({ op_id, op_type: 'attribute_set_starter', payload: { record_id: firstId, person_id: personOrNull?.person_id ?? null }, status: 'sending', ts: Date.now(), prevRecords })
-    // Close the whole tray immediately; flash the new starter pill (top-right) as
-    // confirmation (only when one was set, not on clear).
-    starterPickerSet = null
+    // Close the picker and the whole tray immediately; flash the new starter pill (top-right)
+    // as confirmation (only when one was set, not on clear).
+    closePicker()
     openTrayId = null
     if (personOrNull) {
       starterFlashId = firstId
@@ -896,7 +912,9 @@
   let assignFilter = $state('')
   const assignAttendees = $derived.by(() => {
     const f = assignFilter.trim().toLowerCase()
-    return f ? attendees.filter((p) => p.display_name.toLowerCase().includes(f)) : attendees
+    // Only people actually checked in tonight -- `attendees` is now the whole roster.
+    const here = attendees.filter((p) => p.attending)
+    return f ? here.filter((p) => p.display_name.toLowerCase().includes(f)) : here
   })
 
   // Transient success feedback (copied/pasted/assigned): rides the same `notice` slot
@@ -1008,7 +1026,7 @@
     // composer is a trap. Selection always starts empty. The cursor seam carries over.
     selectedId = null
     openTrayId = null
-    starterPickerSet = null
+    closePicker()
     if (editingId != null) cancelEdit()
     selected.clear()
     shiftAnchor = null
@@ -1320,7 +1338,7 @@
       else clearEntry()
       selectedId = null
       insertAfterId = null
-      starterPickerSet = null
+      closePicker()
       openTrayId = null
       expanded = false
     }
@@ -2842,6 +2860,10 @@
       if (highlightId) highlightFromUrl(highlightId)
       else if (autoTuneId) autoLogTune(autoTuneId)
     }) // bootstraps records, then hydrateQueue() re-applies any queued ops
+    // Load the roster up front. The header's "Attendance (n)" reads it, so leaving it lazy
+    // (fetched only when the picker opens) made the header claim "no one checked in yet"
+    // while the picker itself listed four people under "Checked in".
+    refreshAttendees()
     // The shared app menu's 'Find a tune' calls this in the live context -> insert.
     window.__liveFindTune = () => openDeep()
     window.addEventListener('pagehide', onPageHide)
@@ -2970,8 +2992,8 @@
           </div>
           <div class="header-stat header-attend">
             <span class="ha-text">
-              <span class="ha-label">Attendance ({attendees.length}):</span>
-              {attendees.length ? attendees.map((a) => a.display_name).join(', ') : 'no one checked in yet'}
+              <span class="ha-label">{attendanceLabel}: {checkedIn.length}</span>
+              {checkedIn.length ? `(${checkedIn.map((a) => a.display_name).join(', ')})` : '— no one checked in yet'}
             </span>
             <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
           </div>
@@ -3106,7 +3128,7 @@
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
         {#if setStarterName(seg)}
-          <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id; starterPickerSet = null }}>▸ {setStarterName(seg)}</button>
+          <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
         {/if}
         {#if openTrayId === seg.tunes[0].session_instance_tune_id}
           <div class="set-tray">
@@ -3118,27 +3140,10 @@
                 <button
                   class="starter-value"
                   class:set={setStarterName(seg)}
-                  class:open={starterPickerSet === seg.tunes[0].session_instance_tune_id}
                   onclick={() => openStarterPicker(seg.tunes[0].session_instance_tune_id)}
                 >{setStarterName(seg) || 'Not set'}</button>
               {/if}
             </div>
-            {#if canEdit && starterPickerSet === seg.tunes[0].session_instance_tune_id}
-              <div class="starter-picker">
-                <input class="starter-filter" placeholder="Filter players…" bind:value={starterFilter} />
-                <div class="starter-list">
-                  {#if setStarterName(seg)}
-                    <button class="starter-item clear" onclick={() => setStarter(seg, null)}>— Clear —</button>
-                  {/if}
-                  {#each filteredAttendees as p (p.person_id)}
-                    <button class="starter-item" onclick={() => setStarter(seg, p)}>{p.display_name}</button>
-                  {:else}
-                    {#if attendeesLoaded}<p class="starter-empty">No one checked in yet.</p>{:else}<p class="starter-empty">Loading…</p>{/if}
-                  {/each}
-                  <button class="starter-item add-player" onclick={() => addPlayer()}>＋ Add a player</button>
-                </div>
-              </div>
-            {/if}
             {#if loggedInfo(seg.tunes)}
               {@const li = loggedInfo(seg.tunes)}
               <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>
@@ -3520,78 +3525,25 @@
     </div>
   {/if}
 
-  {#if attendanceOpen}
-    <div class="drawer-scrim" role="button" tabindex="-1" aria-label="Close" onclick={closeAttendance} onkeydown={(e) => activate(e, closeAttendance)}></div>
-    <aside class="drawer">
-      <div class="drawer-head">
-        <div class="drawer-title">Attendance</div>
-        <button class="drawer-done" onclick={closeAttendance}>Done</button>
-      </div>
-      <div class="drawer-body">
-        <div class="d-label">Checked in ({attendees.length})</div>
-        <ul class="att-list">
-          {#each attendees as a (a.person_id)}
-            <li><span class="att-name">{a.display_name}</span><button class="att-x" title="Check out" onclick={() => checkOut(a)}>✕</button></li>
-          {:else}
-            <li class="att-empty">No one checked in yet.</li>
-          {/each}
-        </ul>
-
-        <div class="d-label">Add someone</div>
-        <input class="att-search" placeholder="Search people…" bind:value={personQuery} oninput={searchPeople} />
-        {#if personResults.length}
-          <ul class="att-results">
-            {#each personResults as r (r.person_id)}
-              <li>
-                <button class="att-result" class:attending={r.attending} disabled={r.attending} onclick={() => checkIn(r)} title={r.attending ? 'Already checked in' : 'Tap to check in'}>
-                  <span class="att-name">{r.display_name}</span>
-                  {#if r.attending}<span class="att-in">✓ in</span>{/if}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {:else if personQuery.trim().length >= 2}
-          <p class="att-empty">No matches — create them below.</p>
-        {/if}
-
-        <button class="att-create-toggle" onclick={() => (showCreate ? resetCreateForm() : (showCreate = true))}>{showCreate ? '× Cancel' : '＋ Create new person'}</button>
-        {#if showCreate}
-          <div class="att-create">
-            <input placeholder="First name" bind:value={newFirst} />
-            <input placeholder="Last name" bind:value={newLast} />
-            <button class="att-add" disabled={!newFirst.trim()} onclick={createPerson}>Add</button>
-          </div>
-          <button class="att-inst-toggle" onclick={() => (showInstruments = !showInstruments)}>
-            {showInstruments ? '× Instruments' : '＋ Add instruments (optional)'}
-          </button>
-          {#if showInstruments}
-            <div class="att-inst">
-              <div class="att-inst-grid">
-                {#each canonicalInstruments as inst}
-                  <label class="att-inst-item">
-                    <input type="checkbox" checked={newInstruments.includes(inst)} onchange={() => toggleInstrument(inst)} />
-                    <span>{inst}</span>
-                  </label>
-                {/each}
-              </div>
-              <div class="att-inst-other">
-                <input placeholder="Other instrument…" bind:value={newOther}
-                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOtherInstrument() } }} />
-                <button class="att-add" disabled={!newOther.trim()} onclick={addOtherInstrument}>Add</button>
-              </div>
-              {#if otherPicks.length}
-                <div class="att-inst-chips">
-                  {#each otherPicks as o}
-                    <span class="att-chip">{o}<button aria-label={'Remove ' + o} onclick={() => removeInstrument(o)}>×</button></span>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        {/if}
-      </div>
-    </aside>
-  {/if}
+  <!--
+    ONE picker, two entry points (spec 034). This replaced the bespoke .drawer AND the inline
+    starter list. Sheet desktop="dock" gives full-screen under 768px / a right-docked pane
+    above, which is exactly the presentation the spec asks for -- and it comes from the kit,
+    so it behaves like every other sheet in the app.
+  -->
+  <PersonPicker
+    bind:open={pickerOpen}
+    scope="instance"
+    mode={pickerMode}
+    people={attendees}
+    canonicalInstruments={canonicalInstruments}
+    currentStarterName={pickerStarterName}
+    onSelect={pickPerson}
+    onCheckOut={checkOutPerson}
+    onClear={clearStarter}
+    onCreate={createPerson}
+    onClose={closePicker}
+  />
 
   {#if wide}
     <SidePane

@@ -83,7 +83,7 @@
   }
   const breadcrumbTabName = $derived(tabDisplayNames[activeTab] || null)
 
-  const sessionsTabLabel = isUserProfile ? 'My Sessions' : 'Sessions'
+  const sessionsTabLabel = 'Sessions' // spec 034: was "My Sessions" on your own profile
   const attendedTabLabel = isUserProfile ? "I've Attended" : 'Attended'
 
   $effect(() => {

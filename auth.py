@@ -420,21 +420,27 @@ def log_login_event(
 
 def can_view_attendance(user, session_id):
     """
-    Check if a user can view attendance for a session.
-    
-    Args:
-        user: User object with is_system_admin property
-        session_id: Session ID to check permissions for
-        
-    Returns:
-        bool: True if user can view attendance, False otherwise
+    Check if a user can see this session's PEOPLE -- the People tab, person detail
+    sheets, and every attendance list.
+
+    Spec 034: the predicate is `is_admin OR confirmed`, and it is the SOLE gate. It
+    replaces two contradictory ones (this function used to grant access to any member;
+    api_routes had its own copy requiring `is_regular OR is_admin`).
+
+    People-visibility is granted BY THE SESSION, never claimed by joining it: self-join
+    lands confirmed=FALSE, and check-in never confirms anyone. `confirmed` is orthogonal
+    to member/visitor -- a confirmed visitor (a known friend of the session who lives
+    elsewhere) can see people; an unconfirmed member cannot.
+
+    Everything else about a session -- tunes, logs, history -- stays visible to everyone.
     """
     # System admins can view any attendance
     if user.is_system_admin:
         return True
-    
-    # Check if user is a regular or admin for this session
-    return is_session_regular(user.person_id, session_id) or is_session_admin(user.person_id, session_id)
+
+    return is_session_confirmed(user.person_id, session_id) or is_session_admin(
+        user.person_id, session_id
+    )
 
 
 def can_manage_attendance(user, session_id):
@@ -456,24 +462,44 @@ def can_manage_attendance(user, session_id):
     return is_session_admin(user.person_id, session_id)
 
 
-def is_session_regular(person_id, session_id):
+def is_session_member(person_id, session_id):
     """
-    Check if a person is a regular for a given session.
-    
-    Args:
-        person_id: Person ID to check
-        session_id: Session ID to check against
-        
-    Returns:
-        bool: True if person is a regular for the session, False otherwise
+    Does this person have any relationship to this session at all -- member OR visitor?
+
+    (Formerly `is_session_regular`, which was a misnomer: it never read is_regular, it
+    only checked that a session_person row existed. Spec 034 gives it the honest name.)
+
+    This is association, NOT access. To gate people-visibility use is_session_confirmed.
     """
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT 1 FROM session_person 
+            SELECT 1 FROM session_person
             WHERE person_id = %s AND session_id = %s
+        """,
+            (person_id, session_id)
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def is_session_confirmed(person_id, session_id):
+    """
+    Has the session vouched for this person? (spec 034)
+
+    The gate on people-visibility. Deliberately independent of member/visitor: an admin
+    confirms a person, not a category.
+    """
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1 FROM session_person
+            WHERE person_id = %s AND session_id = %s AND confirmed = TRUE
         """,
             (person_id, session_id)
         )

@@ -91,7 +91,8 @@ class TestAddNewPerson:
             # Instruments are canonicalized to Title Case (see instruments.py)
             assert 'Bodhrán' in new_person['instruments']
             assert 'Guitar' in new_person['instruments']
-            assert new_person['is_regular'] is False
+            # Spec 034: check-in creates an unconfirmed visitor.
+            assert new_person['relationship'] == 'visitor'
 
     def test_new_person_with_duplicate_instruments_handled(self, client, authenticated_admin_user, sample_session_instance_data):
         """Test that duplicate instruments in creation request are handled properly"""

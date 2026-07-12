@@ -120,16 +120,16 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
             assert data["success"]
             assert len(data["processed_people"]) == 2
             
-            # Check first person with regular flag
+            # Spec 034: the CSV's "Regular" column is now ignored -- is_regular is gone, and
+            # "regular-ness" is computed from attendance. Everything else still parses.
             person1 = data["processed_people"][0]
-            assert person1["is_regular"] == True
+            assert "is_regular" not in person1
             assert person1["city"] == "Dallas"
             assert person1["state"] == "TX"
             assert person1["country"] == "USA"
-            
-            # Check second person
+
             person2 = data["processed_people"][1]
-            assert person2["is_regular"] == False
+            assert person2["first_name"] == "Jane"
 
     def test_bulk_import_preprocess_duplicate_detection(self, client, db_conn, db_cursor, authenticated_admin_user):
         """Test duplicate detection in preprocess endpoint."""
@@ -204,7 +204,6 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
                 "state": "TX",
                 "country": "USA",
                 "instruments": ["fiddle", "flute"],
-                "is_regular": True,
                 "is_duplicate": False
             },
             {
@@ -215,7 +214,6 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
                 "state": "TX", 
                 "country": "USA",
                 "instruments": ["guitar"],
-                "is_regular": False,
                 "is_duplicate": False
             }
         ]
@@ -249,15 +247,19 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
             instruments = [row[0] for row in db_cursor.fetchall()]
             assert set(instruments) == {"Fiddle", "Flute"}
             
-            # Verify session_person records were created
+            # Verify session_person records were created. Spec 034: a bulk import is an admin
+            # populating their own roster -- a deliberate vouch -- so these land as confirmed
+            # members.
             db_cursor.execute(
-                """SELECT sp.is_regular FROM session_person sp 
-                   JOIN person p ON sp.person_id = p.person_id 
+                """SELECT sp.relationship, sp.confirmed, sp.archived FROM session_person sp
+                   JOIN person p ON sp.person_id = p.person_id
                    WHERE sp.session_id = %s AND p.email = %s""",
                 (session_id, f"john-save-{unique_id}@bulktest.com")
             )
-            is_regular = db_cursor.fetchone()[0]
-            assert is_regular == True
+            relationship, confirmed, archived = db_cursor.fetchone()
+            assert relationship == "member"
+            assert confirmed is True
+            assert archived is False
 
     def test_bulk_import_save_skip_duplicates(self, client, db_conn, db_cursor, authenticated_admin_user):
         """Test bulk save skips duplicates correctly."""
@@ -285,7 +287,6 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
                 "last_name": "Smith", 
                 "email": test_email,
                 "instruments": ["fiddle"],
-                "is_regular": True,
                 "is_duplicate": True,
                 "existing_person_id": existing_person_id
             },
@@ -294,7 +295,6 @@ Jane,Doe,jane@example.com,no,Houston,TX,USA,Guitar"""
                 "last_name": "Doe",
                 "email": f"jane-skip-{unique_id}@example.com",
                 "instruments": ["guitar"],
-                "is_regular": False,
                 "is_duplicate": False
             }
         ]

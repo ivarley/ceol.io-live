@@ -509,12 +509,12 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
 
                 # Check if current user is an admin of this session
                 is_session_admin = False
-                is_regular = False
+                can_view_people = False
                 if current_user.is_authenticated:
                     # session_instance[8] is the session_id from our updated query
                     # Use request.session to access Flask session data
                     from flask import session as flask_session
-                    from auth import is_session_regular
+                    from auth import is_session_confirmed
 
                     is_session_admin = flask_session.get(
                         "is_system_admin", False
@@ -522,10 +522,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                         "admin_session_ids", []
                     )
 
-                    # Check if user is a regular for this session
+                    # Spec 034: seeing this session's people requires the session to have
+                    # vouched for you (confirmed), not merely to have joined it.
                     user_person_id = getattr(current_user, 'person_id', None)
                     if user_person_id:
-                        is_regular = is_session_regular(user_person_id, session_instance[8])
+                        can_view_people = is_session_confirmed(user_person_id, session_instance[8])
 
                 resp = make_response(
                     render_template(
@@ -533,7 +534,7 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
                         session_instance=session_instance_dict,
                         tune_sets=sets,
                         is_session_admin=is_session_admin,
-                        is_session_regular=is_regular,
+                        can_view_people=can_view_people,
                         attendees=attendees_list,
                         logging_mode=logging_mode,
                     )
@@ -692,12 +693,12 @@ def session_instance_players(full_path):
                 "session_id": session_instance[8],
             }
 
-            # Check if current user is an admin or regular of this session
+            # Check if current user is an admin of this session, or may see its people
             is_session_admin = False
-            is_regular = False
+            can_view_people = False
             if current_user.is_authenticated:
                 from flask import session as flask_session
-                from auth import is_session_regular
+                from auth import is_session_confirmed
 
                 is_session_admin = flask_session.get(
                     "is_system_admin", False
@@ -705,10 +706,10 @@ def session_instance_players(full_path):
                     "admin_session_ids", []
                 )
 
-                # Check if user is a regular for this session
+                # Spec 034: confirmed, not merely a member.
                 user_person_id = getattr(current_user, 'person_id', None)
                 if user_person_id:
-                    is_regular = is_session_regular(user_person_id, session_instance[8])
+                    can_view_people = is_session_confirmed(user_person_id, session_instance[8])
 
             cur.close()
             conn.close()
@@ -717,7 +718,7 @@ def session_instance_players(full_path):
                 "session_instance_players.html",
                 session_instance=session_instance_dict,
                 is_session_admin=is_session_admin,
-                is_session_regular=is_regular,
+                can_view_people=can_view_people,
             )
         else:
             cur.close()
@@ -2290,7 +2291,7 @@ def admin_sessions_list():
                 s.last_modified_date,
                 COALESCE(si_counts.instance_count, 0) as instance_count,
                 COALESCE(player_counts.total_players, 0) as total_players,
-                COALESCE(player_counts.regular_players, 0) as regular_players,
+                COALESCE(player_counts.member_players, 0) as member_players,
                 latest_si.latest_instance_date
             FROM session s
             LEFT JOIN (
@@ -2304,7 +2305,8 @@ def admin_sessions_list():
                 SELECT
                     sp.session_id,
                     COUNT(*) as total_players,
-                    COUNT(CASE WHEN sp.is_regular = TRUE THEN 1 END) as regular_players
+                    COUNT(CASE WHEN sp.relationship = 'member' AND sp.archived = FALSE
+                               THEN 1 END) as member_players
                 FROM session_person sp
                 GROUP BY sp.session_id
             ) player_counts ON s.session_id = player_counts.session_id
@@ -2349,7 +2351,7 @@ def admin_sessions_list():
                 last_modified_date,
                 instance_count,
                 total_players,
-                regular_players,
+                member_players,
                 latest_instance_date,
             ) = row
 
@@ -2363,10 +2365,11 @@ def admin_sessions_list():
                 location_parts.append(country)
             location_display = ", ".join(location_parts) if location_parts else "Unknown"
 
-            # Format player count display like "65 (12 regulars)"
+            # Format player count display like "65 (12 members)". Spec 034: the roster's
+            # meaningful split is member-vs-visitor, not the old is_regular flag.
             player_count_display = f"{total_players}"
-            if regular_players > 0:
-                player_count_display += f" ({regular_players} regulars)"
+            if member_players > 0:
+                player_count_display += f" ({member_players} members)"
 
             # Format latest instance date
             latest_instance_display = ""
@@ -2395,7 +2398,7 @@ def admin_sessions_list():
                     "location_display": location_display,
                     "instance_count": instance_count,
                     "total_players": total_players,
-                    "regular_players": regular_players,
+                    "member_players": member_players,
                     "player_count_display": player_count_display,
                     "latest_instance_display": latest_instance_display,
                 }
@@ -2898,7 +2901,7 @@ def session_admin_person(session_path, person_id):
                 p.state,
                 p.country,
                 p.thesession_user_id,
-                sp.is_regular,
+                sp.relationship,
                 sp.is_admin,
                 sp.gets_email_reminder,
                 sp.gets_email_followup,
@@ -2928,7 +2931,7 @@ def session_admin_person(session_path, person_id):
             "state": person_row[6],
             "country": person_row[7],
             "thesession_user_id": person_row[8],
-            "is_regular": person_row[9],
+            "relationship": person_row[9],
             "is_admin": person_row[10],
             "gets_email_reminder": person_row[11],
             "gets_email_followup": person_row[12],
@@ -3394,12 +3397,14 @@ def live_logging_screen(session_instance_id):
     """
     import os
 
+    from instruments import CANONICAL_INSTRUMENTS
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT s.path FROM session_instance si
+            SELECT s.path, s.session_id, si.date FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -3408,7 +3413,7 @@ def live_logging_screen(session_instance_id):
         row = cur.fetchone()
         if not row:
             return render_template("error.html", error_message="Session instance not found"), 404
-        session_path = row[0]
+        session_path, session_id, instance_date = row
     finally:
         conn.close()
 
@@ -3416,8 +3421,18 @@ def live_logging_screen(session_instance_id):
     return render_template(
         "live_logging.html",
         session_instance_id=session_instance_id,
+        # session_id: the PersonPicker needs it at first paint and offline. It used to arrive
+        # only via /bootstrap, so it was unavailable in both cases.
+        session_id=session_id,
+        # Raw ISO date (the bootstrap's session_date is a pre-formatted display string). The
+        # header uses it to pick its tense: a session tonight or later has people "Attending";
+        # one in the past had people who "Attended".
+        instance_date=instance_date.isoformat() if instance_date else None,
         session_path=session_path,
         streaming_base_url=streaming_base_url,
+        # The template has always referenced this, but the route never passed it -- so the
+        # create-person form's instrument checkboxes rendered empty.
+        canonical_instruments=CANONICAL_INSTRUMENTS,
         current_person={
             "person_id": current_user.person_id,
             "first_name": current_user.first_name,

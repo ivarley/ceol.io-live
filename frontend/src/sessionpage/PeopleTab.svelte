@@ -1,12 +1,26 @@
 <script>
-  // The People tab (session members only): lazy-loaded list with regulars/all
-  // filter + search, the add-person flow (search existing people → add, or create
-  // a new person), and the person-detail modal with its /people/<id> deep link.
+  /**
+   * The People tab — this session's roster (spec 034).
+   *
+   * Gated on can_view_people (is_admin OR confirmed), NOT membership: joining a session must
+   * not hand you its roster. The tab isn't even rendered for an unconfirmed member.
+   *
+   * What changed in 034:
+   *  - The All/Regulars toggle is gone with is_regular. Ordering is computed from actual
+   *    attendance (server-side), so who actually turns up is who you see first; nobody is
+   *    hidden by a filter, and nobody is labelled with a rank.
+   *  - The two stacked sheets (search-all-people → create-person) became ONE PersonPicker.
+   *    Its search is local, because there is nothing to search but this roster: 034 removed
+   *    global person search entirely, so you can't discover people from other sessions.
+   *  - Visitors and archived people are behind filter chips rather than in your face.
+   *  - The person sheet gained the admin controls: Confirm (which grants people-visibility,
+   *    and says so at the point of click) and Archive (roster hygiene).
+   */
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { toast, SearchField, Chip, Sheet } from '../lib/index.js'
+  import { toast, SearchField, Chip, Sheet, Seg, PersonPicker } from '../lib/index.js'
   import { normalizeQuotes } from '../shared/parse.js'
-  import { parseTheSessionId, filterPeople } from './logic.js'
+  import { filterPeople } from './logic.js'
 
   let {
     active,
@@ -15,20 +29,30 @@
     canonicalInstruments = [],
     currentUserId = null,
     initialPersonId = null,
+    isSessionAdmin = false,
   } = $props()
 
   // ---- people list -----------------------------------------------------------
   let peopleData = $state([])
   let peopleLoaded = $state(false)
   let peopleError = $state('')
-  let currentPeopleFilter = $state('all') // 'all' | 'regulars'
+  let currentPeopleFilter = $state('members') // 'members' | 'visitors' | 'archived'
   let searchText = $state('')
 
   const searchQuery = $derived(normalizeQuotes(searchText.toLowerCase().trim()))
   const filteredPeople = $derived(filterPeople(peopleData, currentPeopleFilter, searchQuery))
 
-  // Fetch when the tab first becomes active (or immediately when it's the
-  // landing tab) — legacy initializePeopleTab semantics.
+  const FILTERS = [
+    { id: 'members', label: 'Members' },
+    { id: 'visitors', label: 'Visitors' },
+    { id: 'archived', label: 'Archived' },
+  ]
+
+  // People an admin has yet to vouch for. Until they're confirmed they can't see anyone here.
+  const awaitingConfirmation = $derived(
+    peopleData.filter((p) => !p.confirmed && !p.archived && p.has_user_account)
+  )
+
   let fetchStarted = false
   $effect(() => {
     if (active && !fetchStarted) {
@@ -57,29 +81,54 @@
       })
   }
 
-  function togglePeopleFilter() {
-    currentPeopleFilter = currentPeopleFilter === 'regulars' ? 'all' : 'regulars'
+  // ---- add person (ONE PersonPicker; no global search — see the header comment) ----
+  let pickerOpen = $state(false)
+  let saving = $state(false)
+
+  function openAddPerson() {
+    pickerOpen = true
   }
 
-  // ---- modal open state (kit Sheets own show/hide, scrim, Escape) --------------
-  let detailOpen = $state(false)
-  let searchOpen = $state(false)
-  let createOpen = $state(false)
-
-  function closeSearchPersonModal() {
-    searchOpen = false
-  }
-  function closeAddPersonModal() {
-    createOpen = false
+  async function createPerson({ first_name, last_name, email, instruments }) {
+    saving = true
+    try {
+      const res = await fetch(`/api/sessions/${sessionPath}/people/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name,
+          last_name,
+          email,
+          instruments,
+          relationship: 'member',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.message || 'Could not add person')
+      toast(`${first_name} ${last_name} added to session`, 'success')
+      pickerOpen = false
+      fetchPeople()
+    } catch (e) {
+      toast(e.message, 'error')
+    } finally {
+      saving = false
+    }
   }
 
   // ---- person detail sheet -----------------------------------------------------
+  let detailOpen = $state(false)
   let detailLoading = $state(false)
   let detailFailed = $state(false)
   let detailPerson = $state(null)
+  let detailBusy = $state(false)
+
+  // The roster row for the person in the sheet — carries relationship/confirmed/archived,
+  // which the /people/<id> detail endpoint doesn't return.
+  const detailRow = $derived(
+    detailPerson ? peopleData.find((p) => p.person_id === detailPerson.person_id) : null
+  )
 
   export function showPersonDetail(personId) {
-    // Deep-linkable URL: .../people/<id>
     let basePath = window.location.pathname
     basePath = basePath.replace(/\/people\/\d+$/, '').replace(/\/(tunes|logs|people)$/, '')
     window.history.pushState({}, '', `${basePath}/people/${personId}`)
@@ -103,7 +152,6 @@
       })
   }
 
-  // Cancel/scrim/Escape on the detail sheet: restore the deep-linkable URL.
   function onDetailClosed() {
     const newPath = window.location.pathname.replace(/\/people\/\d+$/, '/people')
     window.history.pushState({}, '', newPath)
@@ -117,152 +165,63 @@
     return parts
   }
 
-  // ---- add person: search step ---------------------------------------------------
-  let personSearchText = $state('')
-  let searchResults = $state(null) // null until a search ran
-  let searchMessage = $state('Type to search for existing people')
-  let addingPersonId = $state(null)
+  const nameOf = (p) => `${p.first_name} ${p.last_name}`.trim()
 
-  function openAddPersonModal() {
-    personSearchText = ''
-    searchResults = null
-    searchMessage = 'Type to search for existing people'
-    searchOpen = true
-  }
-
-
-  function performPersonSearch() {
-    const query = personSearchText.trim()
-    if (query.length === 0) {
-      searchResults = null
-      searchMessage = 'Type to search for existing people'
-      return
+  async function setField(personId, field, value) {
+    detailBusy = true
+    try {
+      const res = await fetch(`/api/sessions/${sessionPath}/people/${personId}/${field}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.message || 'Could not save')
+      // Patch the roster row in place so the list and the sheet agree without a refetch.
+      peopleData = peopleData.map((p) =>
+        p.person_id === personId ? { ...p, [field]: value } : p
+      )
+      return true
+    } catch (e) {
+      toast(e.message, 'error')
+      return false
+    } finally {
+      detailBusy = false
     }
-    if (query.length < 2) {
-      searchResults = null
-      searchMessage = 'Type at least 2 characters to search'
-      return
+  }
+
+  async function toggleConfirmed() {
+    if (!detailRow) return
+    const next = !detailRow.confirmed
+    if (await setField(detailRow.person_id, 'confirmed', next)) {
+      toast(
+        next
+          ? `${nameOf(detailRow)} can now see this session's people and attendance.`
+          : `${nameOf(detailRow)} can no longer see this session's people.`,
+        'success'
+      )
     }
-    searchResults = null
-    searchMessage = 'Searching...'
-    fetch(`/api/sessions/${sessionPath}/people/search?q=${encodeURIComponent(query)}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.success) {
-          searchResults = data.people
-          if (data.people.length === 0) searchMessage = 'No matching people found'
-        } else {
-          searchMessage = `Error: ${data.message}`
-        }
-      })
-      .catch((error) => {
-        console.error('Search error:', error)
-        searchMessage = 'Error searching people'
-      })
   }
 
-  function addExistingPersonToSession(personId) {
-    addingPersonId = personId
-    const isRegular = sessionType === 'festival'
-    fetch(`/api/sessions/${sessionPath}/people/add-existing`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person_id: personId, is_regular: isRegular }),
-    })
-      .then((response) => response.json())
-      .then((result) => {
-        addingPersonId = null
-        if (result.success) {
-          closeSearchPersonModal()
-          peopleData = []
-          fetchPeople()
-        } else {
-          toast('Failed to add person: ' + (result.message || 'Unknown error'), 'error')
-        }
-      })
-      .catch((error) => {
-        console.error('Error adding person:', error)
-        addingPersonId = null
-        toast('Error adding person', 'error')
-      })
-  }
-
-  // ---- add person: create step ---------------------------------------------------
-  let newFirstName = $state('')
-  let newLastName = $state('')
-  let newEmail = $state('')
-  let newTheSession = $state('')
-  let newOtherInstrument = $state('')
-  let newIsRegular = $state(false)
-  const newInstruments = new SvelteSet()
-  let savingPerson = $state(false)
-
-  function openCreatePersonModal() {
-    closeSearchPersonModal()
-    newFirstName = ''
-    newLastName = ''
-    newEmail = ''
-    newTheSession = ''
-    newOtherInstrument = ''
-    newIsRegular = false
-    newInstruments.clear()
-    createOpen = true
-  }
-
-  function saveNewPerson() {
-    const firstName = newFirstName.trim()
-    const lastName = newLastName.trim()
-    if (!firstName || !lastName) {
-      toast('First name and last name are required', 'error')
-      return
+  async function toggleArchived() {
+    if (!detailRow) return
+    const next = !detailRow.archived
+    if (await setField(detailRow.person_id, 'archived', next)) {
+      toast(next ? `${nameOf(detailRow)} archived.` : `${nameOf(detailRow)} restored.`, 'success')
     }
-
-    const instruments = [...newInstruments]
-    // Any "Other" free-text instrument(s), comma-separated; server re-canonicalizes.
-    if (newOtherInstrument.trim()) {
-      newOtherInstrument.split(',').forEach((inst) => {
-        const trimmed = inst.trim()
-        if (trimmed) instruments.push(trimmed)
-      })
-    }
-
-    const isRegular = sessionType === 'festival' ? true : newIsRegular
-
-    savingPerson = true
-    fetch(`/api/sessions/${sessionPath}/people/add`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email: newEmail.trim() || null,
-        instruments: instruments,
-        thesession_user_id: parseTheSessionId(newTheSession),
-        is_regular: isRegular,
-      }),
-    })
-      .then((response) => response.json())
-      .then((result) => {
-        if (result.success) {
-          closeAddPersonModal()
-          peopleData = []
-          fetchPeople()
-        } else {
-          toast('Failed to add person: ' + (result.message || 'Unknown error'), 'error')
-        }
-      })
-      .catch((error) => {
-        console.error('Error adding person:', error)
-        toast('Error adding person', 'error')
-      })
-      .finally(() => {
-        savingPerson = false
-      })
   }
+
+  async function setRelationship(value) {
+    if (!detailRow || detailRow.relationship === value) return
+    await setField(detailRow.person_id, 'relationship', value)
+  }
+
+  const RELATIONSHIPS = [
+    { id: 'member', label: 'Member' },
+    { id: 'visitor', label: 'Visitor' },
+  ]
 
   // ---- deep link ---------------------------------------------------------------
-  // (Escape / scrim dismissal is the kit Sheet's job now — the legacy Escape
-  // priority chain and the 500ms backdrop grace period died with the chrome.)
   $effect(() => {
     untrack(() => {
       if (initialPersonId) {
@@ -283,13 +242,26 @@
         wrapperClass="people-search-wrap"
         styled={false}
         placeholder="Search people..." />
-      {#if sessionType !== 'festival'}
-        <button id="people-filter-btn" class="people-filter-btn" onclick={togglePeopleFilter}>
-          {currentPeopleFilter === 'regulars' ? 'Regulars' : 'All'}
-        </button>
-      {/if}
-      <button class="people-add-btn" onclick={openAddPersonModal}>Add</button>
+      <button class="people-add-btn" onclick={openAddPerson}>Add</button>
     </div>
+
+    <Seg
+      options={FILTERS}
+      value={currentPeopleFilter}
+      onSelect={(id) => (currentPeopleFilter = id)}
+      idAttr="data-people-filter"
+      aria-label="Filter people" />
+
+    {#if isSessionAdmin && awaitingConfirmation.length > 0}
+      <!-- Confirming is the ONLY way people-visibility is granted, so an admin needs to know
+           someone is waiting on it. -->
+      <p class="people-nudge">
+        {awaitingConfirmation.length}
+        {awaitingConfirmation.length === 1 ? 'person has' : 'people have'} joined and can't see
+        who plays here yet. Open them to confirm.
+      </p>
+    {/if}
+
     <div class="people-list" id="people-list">
       {#if !peopleLoaded}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
@@ -302,34 +274,51 @@
       {:else if filteredPeople.length === 0}
         <div style="padding: 40px 20px; text-align: center; color: var(--text-muted, #6c757d);">
           <p>
-            {searchQuery
-              ? 'No people found matching your search'
-              : currentPeopleFilter === 'regulars'
-                ? 'No regulars in this session yet'
-                : 'No people in this session yet'}
+            {#if searchQuery}
+              No people found matching your search
+            {:else if currentPeopleFilter === 'visitors'}
+              No visitors to this session yet
+            {:else if currentPeopleFilter === 'archived'}
+              Nobody archived
+            {:else}
+              No people in this session yet
+            {/if}
           </p>
           {#if searchQuery}
-            <button
-              onclick={openAddPersonModal}
-              style="margin-top: 16px; padding: 10px 20px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+            <button class="people-empty-add" onclick={openAddPerson}>
               Add Someone To This Session
             </button>
           {/if}
         </div>
       {:else}
         {#each filteredPeople as person (person.person_id)}
-          <div class="person-row" onclick={() => showPersonDetail(person.person_id)}>
+          <div class="person-row" class:archived={person.archived} onclick={() => showPersonDetail(person.person_id)}>
             <div class="person-icon {person.has_user_account ? 'has-account' : 'no-account'}">
               <i class="fa fa-user-circle"></i>
             </div>
             <div class="person-info">
+              <!-- Badges are SIBLINGS of .person-name, not children: the name element's text
+                   content should be the name, nothing else. -->
               <div class="person-name">{person.first_name} {person.last_name}</div>
+              {#if person.relationship === 'visitor' || person.archived || (!person.confirmed && person.has_user_account)}
+                <div class="person-badges">
+                  {#if person.relationship === 'visitor'}
+                    <Chip label="Visitor" variant="warning" />
+                  {/if}
+                  {#if person.archived}
+                    <Chip label="Archived" />
+                  {/if}
+                  {#if !person.confirmed && person.has_user_account}
+                    <Chip label="Unconfirmed" variant="warning" title="Can't see this session's people yet" />
+                  {/if}
+                </div>
+              {/if}
               <div class="person-instruments">
                 {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
               </div>
             </div>
             <div class="person-meta">
-              <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" />
+              <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
             </div>
           </div>
         {/each}
@@ -337,8 +326,8 @@
     </div>
   </div>
 
-  <!-- Person Detail Sheet (read view: no Done; Cancel/scrim/Escape dismiss) -->
-  <Sheet bind:open={detailOpen} title={detailPerson ? `${detailPerson.first_name} ${detailPerson.last_name}` : ''} onCancel={onDetailClosed}>
+  <!-- Person Detail Sheet -->
+  <Sheet bind:open={detailOpen} title={detailPerson ? nameOf(detailPerson) : ''} onCancel={onDetailClosed}>
     <div id="person-detail-content">
       {#if detailLoading}
         <div style="padding: 40px 20px; text-align: center;">
@@ -355,6 +344,50 @@
         {#if detailPerson.has_user_account && detailPerson.person_id !== currentUserId}
           <div style="margin-bottom: 16px;"><a href="/me/and/{detailPerson.person_id}" class="person-detail-link">Common Tunes?</a></div>
         {/if}
+
+        {#if detailRow && (isSessionAdmin || detailPerson.person_id === currentUserId)}
+          <div class="person-detail-section">
+            <h3>Relationship to this session</h3>
+            <Seg
+              options={RELATIONSHIPS}
+              value={detailRow.relationship}
+              onSelect={setRelationship}
+              idAttr="data-relationship" />
+            <p class="pd-hint">
+              {#if detailRow.relationship === 'visitor'}
+                Came here, but this isn't one of their sessions.
+              {:else}
+                This is one of their sessions — its tunes count towards their stats.
+              {/if}
+            </p>
+          </div>
+        {/if}
+
+        {#if detailRow && isSessionAdmin}
+          <div class="person-detail-section">
+            <h3>Session admin</h3>
+            <!-- The copy has to say what confirming DOES, at the point of click. A bare
+                 "Confirmed" toggle would be an admin handing over the roster without
+                 realising it. -->
+            <button class="pd-action" disabled={detailBusy} onclick={toggleConfirmed}>
+              {#if detailRow.confirmed}
+                Un-confirm {nameOf(detailPerson)} — they'll no longer see this session's
+                people list and attendance records
+              {:else}
+                Confirm {nameOf(detailPerson)} — they'll be able to see this session's people
+                list and attendance records
+              {/if}
+            </button>
+            <button class="pd-action" disabled={detailBusy} onclick={toggleArchived}>
+              {#if detailRow.archived}
+                Restore {nameOf(detailPerson)} to the roster
+              {:else}
+                Archive {nameOf(detailPerson)} — hide them from lists (still findable by name)
+              {/if}
+            </button>
+          </div>
+        {/if}
+
         <div class="person-detail-location">
           {locationStringOf(detailPerson).length > 0 ? locationStringOf(detailPerson).join(', ') : 'No location specified'}
         </div>
@@ -403,107 +436,60 @@
     </div>
   </Sheet>
 
-  <!-- Search Person Sheet (picking a result adds immediately) -->
-  <Sheet bind:open={searchOpen} title="Add Person to Session">
-    <p style="margin: 0 0 16px 0; color: var(--secondary-text); font-size: 14px;">Search people who are members of other sessions, or add someone new.</p>
-
-    <SearchField
-      bind:value={personSearchText}
-      id="search-person-input"
-      inputClass="search-person-input"
-      styled={false}
-      placeholder="Search by name..."
-      autocomplete="off"
-      debounce={1000}
-      onSearch={performPersonSearch} />
-
-    <div class="search-results-container" id="search-results-container">
-      {#if searchResults && searchResults.length > 0}
-        {#each searchResults as person (person.person_id)}
-          <div class="search-result-row" data-person-id={person.person_id} onclick={() => addExistingPersonToSession(person.person_id)}>
-            <div class="search-result-content">
-              <div class="search-result-name">{person.first_name} {person.last_name}</div>
-              {#if [person.city, person.state, person.country].filter(Boolean).length > 0}
-                <div class="search-result-details">{[person.city, person.state, person.country].filter(Boolean).join(', ')}</div>
-              {/if}
-              {#if person.instruments && person.instruments.length > 0}
-                <div class="search-result-instruments">{person.instruments.join(', ')}</div>
-              {/if}
-            </div>
-            {#if addingPersonId === person.person_id}
-              <div class="search-result-spinner"></div>
-            {/if}
-          </div>
-        {/each}
-      {:else}
-        <div class="search-no-results">{searchMessage}</div>
-      {/if}
-    </div>
-    {#snippet footer()}
-      <div class="search-person-actions">
-        <button class="add-person-btn-save" onclick={openCreatePersonModal}>Add New Person</button>
-      </div>
-    {/snippet}
-  </Sheet>
-
-  <!-- Create Person Sheet (commit lives in the footer so a failed POST keeps
-       the form open, like the legacy modal) -->
-  <Sheet bind:open={createOpen} title="Add Person to Session">
-    <div class="add-person-form-group">
-      <label for="add-person-first-name">First Name *</label>
-      <input type="text" id="add-person-first-name" required bind:value={newFirstName} />
-    </div>
-
-    <div class="add-person-form-group">
-      <label for="add-person-last-name">Last Name *</label>
-      <input type="text" id="add-person-last-name" required bind:value={newLastName} />
-    </div>
-
-    <div class="add-person-form-group">
-      <label for="add-person-email">Email (optional)</label>
-      <input type="email" id="add-person-email" bind:value={newEmail} />
-    </div>
-
-    <div class="add-person-form-group">
-      <label>Instruments</label>
-      <div class="instruments-checkboxes" id="add-person-instruments">
-        {#each canonicalInstruments as instrument, i (instrument)}
-          <div class="instrument-checkbox-item">
-            <input
-              type="checkbox"
-              id="add-person-inst-{i + 1}"
-              value={instrument}
-              checked={newInstruments.has(instrument)}
-              onchange={(e) => {
-                if (e.target.checked) newInstruments.add(instrument)
-                else newInstruments.delete(instrument)
-              }} />
-            <label for="add-person-inst-{i + 1}">{instrument}</label>
-          </div>
-        {/each}
-      </div>
-      <input type="text" id="add-person-other-instrument" placeholder="Other instrument(s)..." style="margin-top: 8px;" bind:value={newOtherInstrument} />
-    </div>
-
-    <div class="add-person-form-group">
-      <label for="add-person-thesession">TheSession.org ID or URL (optional)</label>
-      <input type="text" id="add-person-thesession" placeholder="e.g. 12345 or thesession.org URL" bind:value={newTheSession} />
-    </div>
-
-    {#if sessionType !== 'festival'}
-      <div class="add-person-form-group">
-        <div class="instrument-checkbox-item">
-          <input type="checkbox" id="add-person-is-regular" bind:checked={newIsRegular} />
-          <label for="add-person-is-regular">Regular?</label>
-        </div>
-      </div>
-    {/if}
-    {#snippet footer()}
-      <div class="add-person-actions">
-        <button class="add-person-btn-save" disabled={savingPerson} onclick={saveNewPerson}>
-          {savingPerson ? 'Adding...' : 'Create person'}
-        </button>
-      </div>
-    {/snippet}
-  </Sheet>
+  <!--
+    ONE add flow. Filtering is over this session's roster only; anyone else is typed in fresh
+    and deduped on email server-side. (Before 034 this was two stacked sheets, the first of
+    which searched every person in the database.)
+  -->
+  <PersonPicker
+    bind:open={pickerOpen}
+    scope="session"
+    mode="attendance"
+    title="Add someone to this session"
+    people={peopleData}
+    {canonicalInstruments}
+    busy={saving}
+    onSelect={(p) => showPersonDetail(p.person_id)}
+    onCreate={createPerson}
+    onClose={() => (pickerOpen = false)} />
 </div>
+
+<style>
+  .people-nudge {
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--warning-bg, #fff3cd);
+    color: var(--warning-text, #856404);
+    font-size: 0.86rem;
+  }
+  .person-row.archived { opacity: 0.55; }
+  .person-badges { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 2px; }
+  .pd-hint { font-size: 0.82rem; color: var(--text-muted, #6c757d); margin: 8px 0 0; }
+  .pd-action {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 6px;
+    background: var(--bg-secondary, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+  .pd-action:hover { border-color: var(--primary, #007bff); }
+  .pd-action:disabled { opacity: 0.5; cursor: default; }
+  .people-empty-add {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background-color: var(--primary, #007bff);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+</style>

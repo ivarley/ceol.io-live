@@ -5,7 +5,8 @@ History: an earlier feature (T047) pre-populated the list with every session
 regular under an "unknown" status. That was intentionally reversed — the
 attendee endpoint now only returns people who have actually been added/checked
 in (it returns an empty `regulars` section and lists attendees in `attendees`,
-each carrying their `is_regular` flag). These tests verify that current contract.
+each carrying their `relationship` -- 'member' or 'visitor', spec 034). These tests
+verify that current contract.
 
 Rows are created with DB-assigned IDs (RETURNING) and torn down in FK order so
 the tests don't collide with seed data or leak state between runs.
@@ -47,7 +48,7 @@ def _make_session_with_regular(cur, *, with_attendance=None, extra_regular=False
     )
     regular_id = cur.fetchone()[0]
     cur.execute(
-        "INSERT INTO session_person (session_id, person_id, is_regular, is_admin) VALUES (%s, %s, true, false)",
+        "INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin) VALUES (%s, %s, 'member', true, false)",
         (session_id, regular_id),
     )
     if with_attendance is not None:
@@ -67,7 +68,7 @@ def _make_session_with_regular(cur, *, with_attendance=None, extra_regular=False
         )
         second_id = cur.fetchone()[0]
         cur.execute(
-            "INSERT INTO session_person (session_id, person_id, is_regular, is_admin) VALUES (%s, %s, true, false)",
+            "INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin) VALUES (%s, %s, 'member', true, false)",
             (session_id, second_id),
         )
 
@@ -134,7 +135,7 @@ class TestAttendeeList:
             match = next((a for a in attendees if a["person_id"] == ids["regular_id"]), None)
             assert match is not None
             assert match["attendance"] == "yes"
-            assert match["is_regular"] is True
+            assert match["relationship"] == "member"
         finally:
             if ids is not None:
                 _cleanup(cur, ids)

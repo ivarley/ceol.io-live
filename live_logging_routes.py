@@ -1309,60 +1309,74 @@ def _disambiguate(people):
 
 @api_login_required
 def live_people(session_instance_id):
-    """Who's checked in to this instance (attendance='yes') — the 'started by' picker
-    candidates and the header attendance list, with disambiguated display names."""
+    """This session's whole roster, with tonight's check-in flags (spec 034).
+
+    ONE fetch drives the entire PersonPicker. There is deliberately no companion search
+    endpoint: since 034 there is no global person search anywhere, so the picker's entire
+    universe IS this session's roster -- a list small enough to hold client-side and filter
+    with zero latency (and offline). `live_people_search`, which used to ILIKE across every
+    active person in the database, is gone: it let anyone type three letters and enumerate
+    people from sessions they have nothing to do with.
+
+    Each row carries what the picker's tiers need:
+      attending  -- checked in tonight            -> tier 1
+      archived   -- hidden from the default list, but STILL RETURNED so typing finds them.
+                    Never omit these: a member back for one night who can't be found is a
+                    member someone re-creates as a duplicate person.
+      recent_attendance_count -- computed regular-ness; orders tier 2.
+
+    Anyone checked in tonight is included even if they somehow have no roster row.
+    """
+    from serializers import load_session_people
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "message": "Session instance not found"}), 404
+        session_id = row[0]
+
+        people = load_session_people(conn, session_id, instance_id=session_instance_id)
+
+        # Safety net: an attendee with no session_person row (legacy data) must still show.
+        known = {p["person_id"] for p in people}
+        cur.execute(
             """
-            SELECT DISTINCT p.person_id, p.first_name, p.last_name
-            FROM person p JOIN session_instance_person sip ON p.person_id = sip.person_id
+            SELECT p.person_id, p.first_name, p.last_name
+            FROM person p
+            JOIN session_instance_person sip ON p.person_id = sip.person_id
             WHERE sip.session_instance_id = %s AND sip.attendance = 'yes'
-            ORDER BY p.first_name, p.last_name
             """,
             (session_instance_id,),
         )
-        rows = cur.fetchall()
-        people = _disambiguate([{"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}"} for r in rows])
-        return jsonify({"success": True, "people": people})
+        for pid, first, last in cur.fetchall():
+            if pid not in known:
+                people.append({
+                    "person_id": pid,
+                    "first_name": first,
+                    "last_name": last,
+                    "display_name": _display_name(first, last) or f"#{pid}",
+                    "instruments": [],
+                    "relationship": "visitor",
+                    "confirmed": False,
+                    "archived": False,
+                    "attending": True,
+                    "attendance_count": 0,
+                    "recent_attendance_count": 0,
+                })
+
+        for pp in people:
+            pp["display_name"] = _display_name(pp["first_name"], pp["last_name"]) or f"#{pp['person_id']}"
+
+        return jsonify({"success": True, "people": _disambiguate(people)})
     finally:
         conn.close()
 
-
-@api_login_required
-def live_people_search(session_instance_id):
-    """Search people to add to attendance (§F editor). Matches active people by name;
-    flags who's already checked in to this instance. Empty q -> []."""
-    q = (request.args.get("q") or "").strip()
-    if len(q) < 2:
-        return jsonify({"success": True, "people": []})
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        like = f"%{q}%"
-        cur.execute(
-            """
-            SELECT p.person_id, p.first_name, p.last_name,
-                   COALESCE((SELECT sip.attendance = 'yes' FROM session_instance_person sip
-                             WHERE sip.person_id = p.person_id AND sip.session_instance_id = %s), FALSE) AS attending
-            FROM person p
-            WHERE p.active = TRUE
-              AND (p.first_name ILIKE %s OR p.last_name ILIKE %s
-                   OR (COALESCE(p.first_name,'') || ' ' || COALESCE(p.last_name,'')) ILIKE %s)
-            ORDER BY attending DESC, p.first_name, p.last_name
-            LIMIT 15
-            """,
-            (session_instance_id, like, like, like),
-        )
-        rows = cur.fetchall()
-        people = _disambiguate([
-            {"person_id": r[0], "display_name": _display_name(r[1], r[2]) or f"#{r[0]}", "attending": r[3]}
-            for r in rows
-        ])
-        return jsonify({"success": True, "people": people})
-    finally:
-        conn.close()
 
 
 # Default meter per tune type, so the incipit ABC bars correctly for abcjs (§D deep search).

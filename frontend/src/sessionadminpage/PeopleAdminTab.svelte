@@ -1,5 +1,6 @@
 <script>
-  // People (Members) tab: session membership table with regulars/everyone
+  // People (Members) tab: session membership table with members/everyone (spec 034:
+  // is_regular is gone -- the meaningful split is member vs visitor)
   // filter, name/email search (smart-quote normalized), and sortable columns.
   import { SearchField, Chip } from '../lib/index.js'
   import { normalizeQuotes, parseLocalDate } from '../shared/parse.js'
@@ -9,7 +10,7 @@
 
   let allPeople = $state(null) // null until loaded
   let loadError = $state(null)
-  let filter = $state('regulars')
+  let filter = $state('members')
   let search = $state('')
   let sortColumn = $state('name')
   let sortDirection = $state('asc')
@@ -47,9 +48,12 @@
   const filteredPeople = $derived.by(() => {
     if (!allPeople) return []
     let filtered = allPeople
-    // Apply regular/everyone filter
-    if (filter === 'regulars') {
-      filtered = filtered.filter((person) => person.is_regular)
+    // Members-vs-everyone. Archived people are the ones who've genuinely gone, so they only
+    // show under "Everyone".
+    if (filter === 'members') {
+      filtered = filtered.filter(
+        (person) => person.relationship !== 'visitor' && !person.archived
+      )
     }
     // Apply name search
     const q = normalizeQuotes(search.toLowerCase())
@@ -85,7 +89,7 @@
       </div>
       <div class="ms-auto">
         <select class="form-select people-filter-select" id="people-filter" bind:value={filter}>
-          <option value="regulars">Regulars Only</option>
+          <option value="members">Members Only</option>
           <option value="everyone">Everyone</option>
         </select>
       </div>
@@ -124,7 +128,9 @@
                 </td>
                 <td class="person-email">{#if person.email}{person.email}{:else}<span class="text-muted">No email</span>{/if}</td>
                 <td class="person-status">
-                  {#if person.is_regular}<Chip label="Regular" styled={false} chipClass="badge bg-success" />{/if}
+                  {#if person.relationship === 'visitor'}<Chip label="Visitor" styled={false} chipClass="badge bg-warning" />{/if}
+                  {#if person.archived}<Chip label="Archived" styled={false} chipClass="badge bg-secondary" />{/if}
+                  {#if person.username && !person.confirmed}<Chip label="Unconfirmed" styled={false} chipClass="badge bg-warning" title="Can't see this session's people yet" />{/if}
                   {#if person.username}<Chip label="User" styled={false} chipClass="badge bg-info" />{/if}
                 </td>
                 <td class="person-attendance">{person.attendance_count} sessions</td>

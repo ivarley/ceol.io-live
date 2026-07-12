@@ -253,7 +253,7 @@ def sample_regular_attendee():
         "first_name": "Regular",
         "last_name": "Player",
         "email": "regular@example.com",
-        "is_regular": True,
+        "relationship": "member",
         "instruments": ["fiddle", "tin whistle"],
     }
 

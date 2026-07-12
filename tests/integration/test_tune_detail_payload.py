@@ -149,7 +149,7 @@ class TestTuneDetailPayload:
         tune_id = self._mk_tune(db_cursor, db_conn)
         session_id, path = self._mk_session(db_cursor, db_conn, tune_id)
         db_cursor.execute(
-            "INSERT INTO session_person (session_id, person_id, is_admin, is_regular) VALUES (%s, %s, true, true)",
+            "INSERT INTO session_person (session_id, person_id, is_admin, relationship, confirmed) VALUES (%s, %s, true, 'member', true)",
             (session_id, self.PERSON_ID),
         )
         db_conn.commit()

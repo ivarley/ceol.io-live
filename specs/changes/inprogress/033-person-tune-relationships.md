@@ -12,16 +12,16 @@ user wasn't checked in on those nights.
 
 | Name | Table | Meaning |
 |---|---|---|
-| **Membership** ("My Sessions") | `session_person` | I am a member of this session. `is_regular` refines it (no behavior yet, will later). Dynamic — joined/left at will. |
-| **Attendance** ("Sessions I Attended") | `session_instance_person` | I was at this specific instance. Membership NOT required (a future spec will model "visiting" concretely). Only rows with `attendance = 'yes'` count as attended; `'maybe'`/`'no'` never count toward any tune relationship. |
+| **Membership** ("My Sessions") | `session_person` **with `relationship = 'member'`** | This is one of *my* sessions. Dynamic — joined/left at will. A `session_person` row with `relationship = 'visitor'` is **not** membership: it records that I turned up, not that the session is mine (spec [034](034-session-person-changes.md)). |
+| **Attendance** ("Sessions I Attended") | `session_instance_person` | I was at this specific instance. Membership NOT required — a visitor still gets credit for the nights she was there. Only rows with `attendance = 'yes'` count as attended; `'maybe'`/`'no'` never count toward any tune relationship. |
 
 ### Person ↔ Tune (four relationships)
 
 | Key | Canonical name | Definition (SQL shape) |
 |---|---|---|
 | **R1** | `tunebook` — "In my tunebook" | `person_tune` row exists |
-| **R2** | `repertoire` — "In my sessions' repertoire" | `session_tune st JOIN session_person sp ON st.session_id = sp.session_id AND sp.person_id = :me` |
-| **R3** | `member_plays` — "Played at my sessions" | `session_instance_tune sit JOIN session_instance si JOIN session_person sp ON si.session_id = sp.session_id AND sp.person_id = :me` |
+| **R2** | `repertoire` — "In my sessions' repertoire" | `session_tune st JOIN session_person sp ON st.session_id = sp.session_id AND sp.person_id = :me AND sp.relationship = 'member'` |
+| **R3** | `member_plays` — "Played at my sessions" | `session_instance_tune sit JOIN session_instance si JOIN session_person sp ON si.session_id = sp.session_id AND sp.person_id = :me AND sp.relationship = 'member'` |
 | **R4** | `attended_plays` — "Played while I was there" | `session_instance_tune sit JOIN session_instance_person sip ON sip.session_instance_id = sit.session_instance_id AND sip.person_id = :me AND sip.attendance = 'yes'` |
 
 R3/R4 counts always exclude `deleted = TRUE` rows and `record_type = 'break'` rows (spec 023),
@@ -43,11 +43,10 @@ existing `session_play_count` behavior).
 
 ### Known interactions / dependencies
 
-- **Check-in auto-creates membership** (`database.py:check_in_person` ~L770-783 inserts a
-  `session_person` row if missing). This contradicts "attendance doesn't require membership"
-  and silently makes R3 ⊇ R4 for anyone who ever checked in. **Open decision** (see §4) —
-  proposed: stop auto-creating membership on check-in, in the future "visiting" spec; not
-  changed by 033 itself, but 033's copy must not assume R4 ⊆ R3.
+- **Check-in auto-creates a `session_person` row** (`database.py:check_in_person`). **Resolved
+  by spec [034](034-session-person-changes.md):** the auto-created row is a `visitor`, which is
+  excluded from R2/R3 by definition. So check-in no longer implies membership, and R3 ⊉ R4 —
+  exactly the property this section worried about. 033 must still not assume R4 ⊆ R3.
 - **Spec 025 (session_tune enrollment backfill)** — the live logger doesn't enroll logged
   tunes into `session_tune`, so R2 undercounts until 025 lands. 025 is a data dependency for
   R2-based filters being trustworthy.
@@ -128,14 +127,17 @@ existing `session_play_count` behavior).
 
 ### Out of scope / follow-ups
 
-- "Visiting" model + stopping check-in auto-membership (future spec; decision recorded in §4).
+- The "visiting" model — **now spec [034](034-session-person-changes.md)**, which is a
+  prerequisite: R2/R3 depend on `session_person.relationship` existing.
 - Spec 025 backfill (R2 data completeness) — prerequisite for prominent R2 filters.
-- `is_regular` behavior differences.
+- ~~`is_regular` behavior differences~~ — `is_regular` is deleted by 034. "Regular-ness" is a
+  computed, advisory sort signal with no semantics.
 
 ## 4. Open decisions
 
-1. **Check-in auto-membership** — proposed: remove in the future visiting spec; 033 leaves
-   behavior but makes no copy assume R4 ⊆ R3. *(Confirm.)*
+1. ~~**Check-in auto-membership**~~ — **RESOLVED by spec 034.** Check-in still auto-creates a
+   `session_person` row, but as a `visitor`, which R2/R3 exclude. Membership is now an explicit
+   claim (`relationship = 'member'`), so R3 is no longer a superset of R4.
 2. **`attendance='maybe'`** — proposed: never counts as attended for tune relationships;
    only authorization (`can_view_attendance`) keeps its yes/maybe rule. *(Confirm.)*
 3. **API naming** — proposed params/fields: `scope=member|attended|session|all`,

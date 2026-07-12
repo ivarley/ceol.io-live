@@ -43,7 +43,7 @@ class TestGetAttendeesContract:
         
         if data['data']['regulars']:
             regular = data['data']['regulars'][0]
-            required_fields = ['person_id', 'display_name', 'instruments', 'attendance', 'is_regular']
+            required_fields = ['person_id', 'display_name', 'instruments', 'attendance', 'relationship']
             for field in required_fields:
                 assert field in regular
             
@@ -51,7 +51,7 @@ class TestGetAttendeesContract:
             assert isinstance(regular['display_name'], str)
             assert isinstance(regular['instruments'], list)
             assert regular['attendance'] in ['yes', 'maybe', 'no', None]
-            assert regular['is_regular'] is True
+            assert regular['relationship'] in ('member', 'visitor')
 
     def test_get_attendees_unauthorized_access(self, client, sample_session_instance_data):
         """Test that unauthorized users get 403 Forbidden"""

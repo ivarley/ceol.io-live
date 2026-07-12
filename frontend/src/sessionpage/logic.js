@@ -176,14 +176,32 @@ export function parseTheSessionId(input) {
   return null
 }
 
-// Regulars/all + free-text search over "First Last" and the instruments list.
+/**
+ * People-tab filter (spec 034): members / visitors / archived, plus free-text search over
+ * "First Last" and the instruments list.
+ *
+ * The old All/Regulars toggle died with is_regular. Note the axes are NOT parallel:
+ * archived is orthogonal to member/visitor (you can archive either), so the members and
+ * visitors views both exclude archived people, and "archived" is its own view that shows
+ * them regardless of relationship. Otherwise someone archived would simply vanish.
+ *
+ * Search always wins over the archived rule: a search that matched nothing because the
+ * person was archived is exactly how duplicate people get created.
+ */
 export function filterPeople(peopleData, currentFilter, searchQuery) {
   let filtered = peopleData
-  if (currentFilter === 'regulars') {
-    filtered = filtered.filter((person) => person.is_regular)
+
+  if (currentFilter === 'archived') {
+    filtered = filtered.filter((person) => person.archived)
+  } else if (currentFilter === 'visitors') {
+    filtered = filtered.filter((person) => person.relationship === 'visitor' && !person.archived)
+  } else {
+    filtered = filtered.filter((person) => person.relationship !== 'visitor' && !person.archived)
   }
+
   if (searchQuery) {
-    filtered = filtered.filter((person) => {
+    // Search the WHOLE roster, archived included — hidden must never mean unfindable.
+    filtered = peopleData.filter((person) => {
       const fullName = `${person.first_name} ${person.last_name}`.toLowerCase()
       const instruments = person.instruments ? person.instruments.join(' ').toLowerCase() : ''
       return fullName.includes(searchQuery) || instruments.includes(searchQuery)

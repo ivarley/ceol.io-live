@@ -45,9 +45,10 @@ const payload = (over = {}) => ({
     {
       session_name: 'Mueller Session',
       location: 'Austin, TX, USA',
-      role: 'Regular',
+      role: 'Member',
       is_admin: false,
-      is_regular: true,
+      relationship: 'member',
+      confirmed: true,
       session_path: 'austin/mueller',
     },
     {
@@ -55,7 +56,8 @@ const payload = (over = {}) => ({
       location: 'Austin, TX, USA',
       role: 'Admin',
       is_admin: true,
-      is_regular: false,
+      relationship: 'visitor',
+      confirmed: true,
       session_path: 'austin/bdrileys',
     },
   ],
@@ -101,7 +103,7 @@ beforeEach(() => {
       },
     },
     '/logins': { success: true, logins: [] },
-    '/available-sessions': {
+    '/search-sessions': {
       success: true,
       sessions: [{ session_id: 42, name: 'Other Session', location_name: 'The Pub', location_display: 'Dublin, Ireland' }],
     },
@@ -131,7 +133,7 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#profileTabs')).toBeTruthy()
     // Desktop = real ARIA tabs; mobile fallback = a <select>.
     const tabs = container.querySelectorAll('#profileTabs [role="tab"]')
-    expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'My Sessions', "I've Attended", 'Tunes', 'Logins'])
+    expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'Sessions', "I've Attended", 'Tunes', 'Logins'])
     expect(container.querySelector('#profile-tab-select')).toBeTruthy()
     // Profile pane active; person + account info rendered from the embed.
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
@@ -272,31 +274,42 @@ describe('person details page view (user profile flavor)', () => {
     expect(window.showMessage).toHaveBeenCalledWith('You have left the session', 'success')
   })
 
-  it('the add-to-session sheet searches and POSTs /api/add-person-to-session with the picked role', async () => {
+  it('the add-to-session sheet is SEARCH-FIRST and POSTs the picked relationship', async () => {
+    // Spec 034: no prefetched list. Nothing shows until you type -- a pre-populated list of
+    // 20 location-ranked sessions was a filter pretending to be a search.
     fetchRoutes['/api/add-person-to-session'] = { success: true, message: 'Added!' }
     const { container } = renderApp()
     await fireEvent.click(container.querySelector('#sessions-tab'))
     await fireEvent.click(container.querySelector('#add-to-session-link'))
-    // Kit Sheet (portaled to document.body) with the legacy title + body markup.
     expect(document.querySelector('.kit-sheet-title').textContent).toBe('Add me to a Session')
+
+    // Nothing yet, and nothing fetched.
+    expect(document.querySelector('#sessions-results .session-name')).toBeNull()
+    expect(fetch.mock.calls.some(([u]) => String(u).includes('available-sessions'))).toBe(false)
+
+    const search = document.querySelector('#session-search')
+    search.value = 'other'
+    await fireEvent.input(search)
     await waitFor(() => {
       expect(document.querySelector('#sessions-results .session-name').textContent).toBe('Other Session')
     })
     expect(document.querySelector('.session-location').textContent).toBe('The Pub - Dublin, Ireland')
-    await fireEvent.click(document.querySelector('#role-attendee'))
+
+    // Relationship is a Seg now, not radios.
+    // Scope to the Seg: the session CARDS also carry data-relationship.
+    await fireEvent.click(document.querySelector('.kit-seg-opt[data-relationship="visitor"]'))
     await fireEvent.click(document.querySelector('.add-session-btn'))
-    // Decision -> kit Dialog (spec 035) carrying the person/session/role.
     expect(document.querySelector('.kit-dialog-title').textContent).toBe(
       'Add Ian Varley to "Other Session"?'
     )
     expect(document.querySelector('.kit-dialog-desc').textContent).toBe(
-      'Ian Varley will be added as a attendee.'
+      'Ian Varley will be added as a visitor.'
     )
     await fireEvent.click(document.querySelector('.kit-dialog-confirm'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-person-to-session'))
       expect(call).toBeTruthy()
-      expect(JSON.parse(call[1].body)).toEqual({ person_id: 5, session_id: 42, role: 'attendee' })
+      expect(JSON.parse(call[1].body)).toEqual({ person_id: 5, session_id: 42, relationship: 'visitor' })
       expect(sessionStorage.getItem('personSavedMessage')).toBe('Added!')
     })
   })

@@ -517,11 +517,22 @@ CREATE TRIGGER trigger_person_tune_instrument_last_modified_date
 -- -----------------------------------------------------------------------------
 -- Session Person table (depends on session, person)
 -- -----------------------------------------------------------------------------
+-- Spec 034: four orthogonal fields, each answering exactly one question.
+--   relationship -- whose session is this? Set by the person OR a session admin. Grants no
+--                   access; drives the "my sessions" lenses and community tune stats.
+--   confirmed    -- does the session vouch for them? The SOLE gate on people-visibility
+--                   (is_admin OR confirmed). Admin-set. Check-in never sets it.
+--   archived     -- an admin's display preference: hidden from default lists, still findable
+--                   by typing. Never inferred; check-in does not un-archive.
+-- There is no is_regular: "regular-ness" is computed from attendance and is advisory only.
 CREATE TABLE session_person (
     session_person_id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES session(session_id) ON DELETE CASCADE,
     person_id INTEGER NOT NULL REFERENCES person(person_id) ON DELETE CASCADE,
-    is_regular BOOLEAN DEFAULT FALSE,
+    relationship VARCHAR(10) NOT NULL DEFAULT 'member'
+        CHECK (relationship IN ('member', 'visitor')),
+    confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+    archived BOOLEAN NOT NULL DEFAULT FALSE,
     is_admin BOOLEAN DEFAULT FALSE,
     gets_email_reminder BOOLEAN DEFAULT FALSE,
     gets_email_followup BOOLEAN DEFAULT FALSE,
@@ -534,7 +545,8 @@ CREATE TABLE session_person (
 ALTER TABLE session_person ADD CONSTRAINT uk_session_person UNIQUE (session_id, person_id);
 CREATE INDEX idx_session_person_session_id ON session_person (session_id);
 CREATE INDEX idx_session_person_person_id ON session_person (person_id);
-CREATE INDEX idx_session_person_is_regular ON session_person (is_regular);
+CREATE INDEX idx_session_person_relationship ON session_person (session_id, relationship)
+    WHERE archived = FALSE;
 CREATE INDEX idx_session_person_is_admin ON session_person (is_admin);
 
 -- Live-logging color (spec 024 §F): a person's stable palette color at a session,
@@ -975,7 +987,9 @@ CREATE TABLE session_person_history (
     changed_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     session_id INTEGER,
     person_id INTEGER,
-    is_regular BOOLEAN,
+    relationship VARCHAR(10),
+    confirmed BOOLEAN,
+    archived BOOLEAN,
     is_admin BOOLEAN,
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,

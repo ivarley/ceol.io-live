@@ -30,7 +30,7 @@ from api_person_tune_routes import (
     update_my_profile,
     get_common_tunes
 )
-from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_people_search, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
+from live_logging_routes import live_bootstrap, live_vocabulary, live_op, live_issue_token, live_tune_detail, live_people, live_deep_search, live_incipit, live_match, live_thesession_search, my_tunes_deep_search, my_tunes_thesession_search, my_tunes_incipit, session_tunes_deep_search, session_tunes_thesession_search, session_tunes_incipit, live_tune_preview, my_tunes_tune_preview, session_tunes_tune_preview, live_setting_image, my_tunes_setting_image, session_tunes_setting_image, live_thesession_preview, my_tunes_thesession_preview, session_tunes_thesession_preview, live_render_abc, my_tunes_render_abc, session_tunes_render_abc
 from timezone_utils import format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 
@@ -419,12 +419,9 @@ app.add_url_rule(
     live_people,
     methods=["GET"],
 )
-app.add_url_rule(
-    "/api/live/instances/<int:session_instance_id>/people/search",
-    "live_people_search",
-    live_people_search,
-    methods=["GET"],
-)
+# Spec 034: /people/search is GONE. It ILIKE'd across every active person in the database,
+# so anyone could enumerate people from sessions they had nothing to do with. The picker's
+# universe is now this session's roster (returned whole by /people) and it filters locally.
 app.add_url_rule(
     "/api/live/instances/<int:session_instance_id>/deep-search",
     "live_deep_search",
@@ -850,12 +847,9 @@ app.add_url_rule(
     "get_session_players_ajax",
     get_session_players_ajax,
 )
-app.add_url_rule(
-    "/api/admin/sessions/<path:session_path>/people/<int:person_id>/regular",
-    "update_session_player_regular_status",
-    update_session_player_regular_status,
-    methods=["PUT"],
-)
+# Spec 034: .../people/<id>/regular is GONE. is_regular no longer exists; its successor is
+# the session-scoped /people/<id>/relationship setter (below), which any session admin may
+# use -- not just system admins, which was an oversight rather than a decision.
 app.add_url_rule(
     "/api/admin/sessions/<path:session_path>/people/<int:person_id>/admin",
     "update_session_player_admin_status",
@@ -989,17 +983,27 @@ app.add_url_rule(
     add_person_to_session_people_tab,
     methods=["POST"],
 )
+# Spec 034: /people/search and /people/add-existing are GONE. They searched every person in
+# the system (minus this session's roster), which let anyone with an account enumerate people
+# from other sessions. There is no global person search: you filter this session's roster, and
+# anyone else you type in fresh.
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/people/search",
-    "search_people_for_session",
-    search_people_for_session,
-    methods=["GET"],
+    "/api/sessions/<path:session_path>/people/<int:person_id>/relationship",
+    "set_session_person_relationship",
+    set_session_person_relationship,
+    methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/people/add-existing",
-    "add_existing_person_to_session",
-    add_existing_person_to_session,
-    methods=["POST"],
+    "/api/sessions/<path:session_path>/people/<int:person_id>/confirmed",
+    "set_session_person_confirmed",
+    set_session_person_confirmed,
+    methods=["PUT"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/people/<int:person_id>/archived",
+    "set_session_person_archived",
+    set_session_person_archived,
+    methods=["PUT"],
 )
 app.add_url_rule(
     "/api/sessions/<path:session_path>/join",

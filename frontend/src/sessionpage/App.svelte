@@ -21,7 +21,10 @@
   const sessionPath = session.path
   const isFestival = session.session_type === 'festival'
   const defaultTab = pageData.default_tab
-  const showPeopleTab = permissions.is_logged_in && permissions.is_session_member
+  // Spec 034: seeing the People tab requires the SESSION to have vouched for you
+  // (is_admin OR confirmed), not merely that you joined it. Anyone with an account can
+  // self-join any session, so gating on membership would hand a stranger the roster.
+  const showPeopleTab = permissions.is_logged_in && permissions.can_view_people
 
   // Festival sessions label the logs tab "Sessions" and order it first.
   const tabs = (() => {
@@ -77,39 +80,6 @@
         setTimeout(() => existingMessage.classList.add('show'), 10)
       }
 
-      // The join-session link lives in the server-rendered header chrome.
-      const joinSessionLink = document.getElementById('join-session-link')
-      if (joinSessionLink) {
-        joinSessionLink.addEventListener('click', function (e) {
-          e.preventDefault()
-          joinSessionLink.style.pointerEvents = 'none'
-          joinSessionLink.textContent = 'Joining...'
-          fetch(`/api/sessions/${sessionPath}/join`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              if (data.success) {
-                toast('You have been added to this session!', 'success')
-                // Reload to show the People tab (membership is server-rendered).
-                setTimeout(() => {
-                  window.location.href =
-                    window.location.pathname.replace(/\/(tunes|logs)$/, '') + '/people'
-                }, 1500)
-              } else {
-                toast(data.message || 'Failed to join session', 'error')
-                joinSessionLink.style.pointerEvents = ''
-                joinSessionLink.textContent = 'Yes, Add Me'
-              }
-            })
-            .catch(() => {
-              toast('An error occurred. Please try again.', 'error')
-              joinSessionLink.style.pointerEvents = ''
-              joinSessionLink.textContent = 'Yes, Add Me'
-            })
-        })
-      }
     })
   })
 </script>
@@ -151,7 +121,8 @@
       sessionType={session.session_type}
       canonicalInstruments={ctx.canonicalInstruments || []}
       currentUserId={ctx.currentUserPersonId ?? null}
-      initialPersonId={ctx.personId || null} />
+      initialPersonId={ctx.personId || null}
+      isSessionAdmin={permissions.is_session_admin} />
   {/if}
     {/snippet}
   </Tabs>

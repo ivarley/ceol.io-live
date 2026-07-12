@@ -12,7 +12,7 @@
                 </div>
                 <div id="search-results" class="search-results-dropdown"></div>
             </div>
-            {% elif is_session_regular %}
+            {% elif can_view_people %}
             <div class="attendance-actions">
                 <button class="btn btn-success btn-sm" id="quick-checkin-btn" onclick="window.attendanceManagerInstance && window.attendanceManagerInstance.quickCheckin()">
                     <i class="fas fa-check"></i> Check In
@@ -64,7 +64,7 @@
     </div>
 </template>
 
-{% if current_user.is_authenticated and (is_session_admin or is_session_regular) %}
+{% if current_user.is_authenticated and (is_session_admin or can_view_people) %}
 <script>
 // Initialize attendance management when the tab is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sessionId: {{ session_instance.session_id|default('null') }},
             sessionPath: '{{ session_instance.session_path|default('') }}',
             canManage: {{ (is_session_admin|default(false))|lower }},
-            isRegular: {{ (is_session_regular|default(false))|lower }},
+            canViewPeople: {{ (can_view_people|default(false))|lower }},
             currentPersonId: {{ current_user.person_id if current_user.is_authenticated else 'null' }}
         });
     }

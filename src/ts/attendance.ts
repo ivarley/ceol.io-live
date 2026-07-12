@@ -9,7 +9,7 @@ interface AttendanceConfig {
     sessionId: number;
     sessionPath: string;
     currentPersonId?: number;
-    isRegular?: boolean;
+    canViewPeople?: boolean;
     canManage: boolean;
 }
 
@@ -22,7 +22,7 @@ interface Person {
     instruments: string[];
     attendance?: AttendanceStatus;
     attendance_status?: AttendanceStatus;
-    is_regular?: boolean;
+    relationship?: string;
     is_admin?: boolean;
     comment?: string;
 }
@@ -262,7 +262,7 @@ class AttendanceManager {
     }
 
     private initializeQuickCheckin(): void {
-        if (this.config?.isRegular) {
+        if (this.config?.canViewPeople) {
             this.updateQuickCheckinButton();
         }
     }
@@ -777,7 +777,7 @@ class AttendanceManager {
                             display_name: fullName,
                             attendance: 'yes',
                             instruments: instruments,
-                            is_regular: false, // Default to false since we're adding them
+                            relationship: 'visitor', // check-in creates an unconfirmed visitor (spec 034)
                             is_admin: false,
                             comment: ''
                         };
@@ -972,7 +972,7 @@ class AttendanceManager {
             instruments: instruments,
             attendance: attendanceStatus,
             is_admin: false,
-            is_regular: false
+            relationship: 'visitor'
         };
 
         // Optimistic update: Add person to UI immediately

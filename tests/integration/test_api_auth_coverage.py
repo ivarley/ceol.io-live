@@ -28,12 +28,12 @@ INLINE_AUTH = {
     "session_tune_cache_preview": "inline 401 + system/session-admin check",
     "get_session_players_ajax": "inline 401 + system/session-admin check",
     "get_session_tunes_grid_ajax": "inline 401 + system/session-admin check",
-    # People tab (session-scoped): inline 401, then session-membership checks
-    "get_session_people_list": "inline 401 + session-membership check",
+    # People tab (session-scoped): inline 401, then can_view_session_people() (spec 034:
+    # is_admin OR confirmed -- membership alone is NOT enough to see a session's people).
+    # /people/search and /people/add-existing are gone: there is no global person search.
+    "get_session_people_list": "inline 401 + can_view_session_people()",
     "get_session_person_detail": "inline 401",
-    "add_person_to_session_people_tab": "inline 401",
-    "add_existing_person_to_session": "inline 401",
-    "search_people_for_session": "inline 401",
+    "add_person_to_session_people_tab": "inline 401 + can_view_session_people()",
     # user preference toggle
     "update_auto_save_preference": "inline 401",
     # Recording endpoints (feature 022): all call _require_system_admin()

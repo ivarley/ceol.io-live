@@ -177,13 +177,15 @@ class TestAttendanceFlow:
             
             attendance_data = json.loads(attendance_response.data)
             
-            # Step 4: User should appear in attendance list as non-regular
+            # Step 4: the casual user appears in the attendance list as a VISITOR.
+            # Spec 034: checking yourself in creates session_person(visitor, unconfirmed) --
+            # you turned up, but the session isn't yours and hasn't vouched for you.
             all_attendees = attendance_data['data']['regulars'] + attendance_data['data']['attendees']
             user_attendance = next((a for a in all_attendees if a['person_id'] == user_person_id), None)
-            
+
             assert user_attendance is not None
             assert user_attendance['attendance'] == 'yes'
-            assert user_attendance['is_regular'] is False
+            assert user_attendance['relationship'] == 'visitor'
             
             # Step 5: User can remove themselves if needed
             removal_response = client.delete(f'/api/session_instance/{session_instance_id}/attendees/{user_person_id}')

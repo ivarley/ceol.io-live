@@ -8,6 +8,42 @@
   --border: #2a2a30;
   --attention: #e0b341; /* amber: unlinked / needs-attention */
   --set-bg: #222227; /* set card — a hair lighter than --panel for contrast vs --bg */
+
+  /* The kit (src/lib) reads theme.css's variable NAMES, which this screen never loads —
+     it hardcodes its own dark palette above under different names. Without this bridge a
+     kit component falls back to its LIGHT defaults, which is why the PersonPicker's filter
+     box rendered white-on-dark. Map once here so EVERY kit component mounted in the logger
+     is themed, not just the ones we happen to have noticed. */
+  --bg-color: var(--bg);
+  --input-bg: var(--panel);
+  --dropdown-bg: var(--panel);
+  --dropdown-border: var(--border);
+  --text-color: var(--text);
+  --text-muted: var(--muted);
+  --border-color: var(--border);
+  --bg-secondary: var(--set-bg);
+  --hover-bg: var(--set-bg);
+  --disabled-text: var(--muted);
+  --primary: var(--accent);
+  --primary-dark: #2f7fe0;
+  --danger: #e5534b;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --success-bg: #1d3524;
+  --success-border: #2c5137;
+  --success-text: #9fe0b0;
+  --warning-bg: #3a2f14;
+  --warning-border: #5b4820;
+  --warning-text: var(--attention);
+  --error-bg: #3a1e1e;
+  --error-border: #5b2b2b;
+  --error-text: #f0a3a0;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --r-sm: 5px;
+  --r: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
 }
 
 * { box-sizing: border-box; }

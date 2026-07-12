@@ -12,14 +12,33 @@ import '../mytunes/mytunes-add.css'
 // Both are emitted into static/sessionpage/page.css.
 import './page.css'
 import App from './App.svelte'
+import SessionRole from './SessionRole.svelte'
+import SessionJoin from './SessionJoin.svelte'
+
+const pageData = window.__PAGE_DATA__
+const ctx = window.__PAGE_CTX__ || {}
 
 const target = document.getElementById('session-detail-root')
-if (target && window.__PAGE_DATA__) {
-  mount(App, {
-    target,
-    props: {
-      pageData: window.__PAGE_DATA__,
-      ctx: window.__PAGE_CTX__ || {},
-    },
-  })
+if (target && pageData) {
+  mount(App, { target, props: { pageData, ctx } })
+}
+
+// Spec 034: the role badge and the join prompt live in the page header, above the tab
+// interface, so they mount separately. They were the last two Jinja holdouts on this page
+// (App.svelte used to reach into the shell DOM to wire the join link).
+if (pageData) {
+  const permissions = { ...pageData.permissions, person_id: ctx.currentUserPersonId }
+
+  const roleTarget = document.getElementById('session-role-root')
+  if (roleTarget && permissions.is_logged_in && permissions.is_session_member) {
+    mount(SessionRole, {
+      target: roleTarget,
+      props: { sessionPath: pageData.session.path, permissions },
+    })
+  }
+
+  const joinTarget = document.getElementById('session-join-root')
+  if (joinTarget && permissions.is_logged_in && !permissions.is_session_member) {
+    mount(SessionJoin, { target: joinTarget, props: { sessionPath: pageData.session.path } })
+  }
 }

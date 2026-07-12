@@ -38,7 +38,7 @@ class TestCheckinAttendeeContract:
         
         # Validate attendee info structure
         attendee_info = data['data']
-        required_fields = ['person_id', 'display_name', 'instruments', 'attendance', 'is_regular']
+        required_fields = ['person_id', 'display_name', 'instruments', 'attendance', 'relationship']
         for field in required_fields:
             assert field in attendee_info
         

@@ -71,8 +71,8 @@ beforeEach(() => {
     '/people': {
       success: true,
       players: [
-        { person_id: 1, name: 'Ann Malone', email: 'ann@x.com', is_regular: true, is_admin: true, is_system_admin: false, username: 'ann', attendance_count: 9, last_attended: '2026-06-01' },
-        { person_id: 2, name: 'Bob Casey', email: null, is_regular: false, is_admin: false, is_system_admin: false, username: null, attendance_count: 2, last_attended: null },
+        { person_id: 1, name: 'Ann Malone', email: 'ann@x.com', relationship: 'member', confirmed: true, archived: false, is_admin: true, is_system_admin: false, username: 'ann', attendance_count: 9, last_attended: '2026-06-01' },
+        { person_id: 2, name: 'Bob Casey', email: null, relationship: 'visitor', confirmed: false, archived: false, is_admin: false, is_system_admin: false, username: null, attendance_count: 2, last_attended: null },
       ],
     },
     '/tunes': {
@@ -248,14 +248,15 @@ describe('session admin page view', () => {
     })
   })
 
-  it('people tab: fetches once, defaults to Regulars Only, search + Everyone widen/narrow the table', async () => {
+  it('people tab: fetches once, defaults to Members Only, search + Everyone widen/narrow the table', async () => {
     const { container } = renderApp(payload(), ctx({ activeTab: 'people' }))
     await waitFor(() => {
       expect(container.querySelectorAll('#people-content tbody tr')).toHaveLength(1)
     })
     expect(container.querySelector('.person-link').textContent.trim()).toBe('Ann Malone')
     expect(container.querySelector('.person-link').getAttribute('href')).toBe('/admin/sessions/austin/mueller/people/1')
-    expect(container.querySelector('.person-status').textContent).toContain('Regular')
+    // Spec 034: no "Regular" badge any more -- Ann is simply a member, which is the default view.
+    expect(container.querySelector('.person-status').textContent).not.toContain('Regular')
     expect(container.querySelector('.person-admin').textContent).toContain('Session')
     // Everyone shows Bob too (null email renders "No email").
     const filter = container.querySelector('#people-filter')

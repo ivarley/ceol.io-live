@@ -16,13 +16,8 @@
         <h1 class="session-title-heading">{{ session.name }} <a href="/sessions" style="color: var(--border-color, #dee2e6); text-decoration: none; margin-left: 10px; font-size: 0.6em; transition: color 0.2s ease;" onmouseover="this.style.color='var(--primary, #007bff)'" onmouseout="this.style.color='var(--border-color, #dee2e6)'">⮐</a>{% if is_session_admin %}<a href="/admin/sessions/{{ session.path }}" class="add-link">Admin</a>{% endif %}</h1>
 
         <div class="session-details">
-            {% if is_logged_in %}
-                {% if is_session_admin %}
-                <span class="badge bg-primary session-role-badge">Admin</span>
-                {% elif is_session_member %}
-                <span class="badge bg-success session-role-badge">Member</span>
-                {% endif %}
-            {% endif %}
+            {# Role badge (Admin / Member / Visitor) -- mounted by the Svelte bundle. #}
+            <div id="session-role-root"></div>
             {% if session.location_name and session.location_name != session.name %}
             <p><strong>Location:</strong> {{ session.location_name }}</p>
             {% endif %}
@@ -38,14 +33,8 @@
             {% endif %}
         </div>
 
-        {% if is_logged_in and not is_session_member %}
-        <div class="session-join-message" style="background-color: #e7f3ff; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #b3d9ff;">
-            <p style="margin: 0; color: #004085;">
-                Do you attend this session?
-                <a href="#" id="join-session-link" style="color: #0056b3; font-weight: 500; text-decoration: underline; cursor: pointer;">Yes, Add Me</a>
-            </p>
-        </div>
-        {% endif %}
+        {# "Do you attend this session?" -- mounted by the Svelte bundle. #}
+        <div id="session-join-root"></div>
 
         <div id="message-container">
             {% with messages = get_flashed_messages() %}

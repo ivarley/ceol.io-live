@@ -64,16 +64,21 @@ class TestSessionPersonManagement:
             
             assert response.status_code in [200, 201]
             
-            # Check that session_person record was created with is_regular=false
+            # Spec 034: check-in auto-creates the row as an UNCONFIRMED VISITOR. Being logged
+            # as present tonight is not a claim that the session is yours (relationship), and
+            # it is emphatically not the session vouching for you (confirmed) -- otherwise an
+            # admin logging a stranger's attendance would hand him every member's name.
             cur.execute("""
-                SELECT is_regular, is_admin FROM session_person 
+                SELECT relationship, confirmed, archived, is_admin FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
+
             session_person_record = cur.fetchone()
             assert session_person_record is not None, "Session person record should be created"
-            assert session_person_record[0] is False, "is_regular should be False by default"
-            assert session_person_record[1] is False, "is_admin should be False by default"
+            assert session_person_record[0] == 'visitor', "check-in creates a visitor, not a member"
+            assert session_person_record[1] is False, "check-in must NEVER confirm anyone"
+            assert session_person_record[2] is False, "archived should default False"
+            assert session_person_record[3] is False, "is_admin should be False by default"
             
             cur.close()
             conn.close()
@@ -99,13 +104,13 @@ class TestSessionPersonManagement:
                 AND si.session_id = %s AND sip.person_id = %s
             """, (session_id, person_id))
             
-            # Manually create a session_person record with is_regular=true
+            # An established, ARCHIVED member: check-in must touch none of this.
             cur.execute("""
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (session_id, person_id) 
-                DO UPDATE SET is_regular = %s, is_admin = %s
-            """, (session_id, person_id, True, False, True, False))
+                INSERT INTO session_person (session_id, person_id, relationship, confirmed, archived, is_admin)
+                VALUES (%s, %s, 'member', TRUE, TRUE, FALSE)
+                ON CONFLICT (session_id, person_id)
+                DO UPDATE SET relationship = 'member', confirmed = TRUE, archived = TRUE, is_admin = FALSE
+            """, (session_id, person_id))
             conn.commit()
             
             # Add the person as attending the session instance
@@ -122,16 +127,20 @@ class TestSessionPersonManagement:
             
             assert response.status_code in [200, 201]
             
-            # Check that existing session_person record was NOT changed
+            # Spec 034: an existing row is left completely alone.
             cur.execute("""
-                SELECT is_regular, is_admin FROM session_person 
+                SELECT relationship, confirmed, archived, is_admin FROM session_person
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
-            
+
             session_person_record = cur.fetchone()
             assert session_person_record is not None, "Session person record should still exist"
-            assert session_person_record[0] is True, "is_regular should remain True"
-            assert session_person_record[1] is False, "is_admin should remain False"
+            assert session_person_record[0] == 'member', "check-in must not downgrade a member to a visitor"
+            assert session_person_record[1] is True, "check-in must not change confirmed"
+            # The Maura case: a member who moved away, back for one night. Turning up means
+            # "she's here tonight", not "she's back" -- only an admin states the second.
+            assert session_person_record[2] is True, "check-in must NOT un-archive anyone"
+            assert session_person_record[3] is False, "is_admin should remain False"
             
             cur.close()
             conn.close()
@@ -330,14 +339,20 @@ class TestSessionPersonManagement:
                 WHERE session_id = %s AND person_id = %s
             """, (session_id, person_id))
 
-            # Create a session_person record for a different session
-            different_session_id = 13  # Using a different session ID
+            # Create a session_person record for a DIFFERENT session. Pick a real one rather
+            # than hardcoding an id -- the old literal (13) only existed because the test DB
+            # had drifted, and it FK-violates against a freshly seeded database.
+            cur.execute(
+                "SELECT session_id FROM session WHERE session_id <> %s ORDER BY session_id LIMIT 1",
+                (session_id,),
+            )
+            different_session_id = cur.fetchone()[0]
             cur.execute("""
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin)
+                VALUES (%s, %s, 'member', TRUE, TRUE)
                 ON CONFLICT (session_id, person_id)
-                DO UPDATE SET is_regular = %s, is_admin = %s
-            """, (different_session_id, person_id, True, True, True, True))
+                DO UPDATE SET relationship = 'member', confirmed = TRUE, is_admin = TRUE
+            """, (different_session_id, person_id))
             conn.commit()
             
             # Add person to our test session instance
@@ -352,7 +367,7 @@ class TestSessionPersonManagement:
             
             # Verify both session_person records exist
             cur.execute("""
-                SELECT session_id, is_regular, is_admin FROM session_person 
+                SELECT session_id, relationship, is_admin FROM session_person
                 WHERE person_id = %s ORDER BY session_id
             """, (person_id,))
             
@@ -364,11 +379,11 @@ class TestSessionPersonManagement:
             other_session_record = next((r for r in session_person_records if r[0] == different_session_id), None)
             
             assert our_session_record is not None, "Should have record for our session"
-            assert our_session_record[1] is False, "Our session record should have is_regular=False"
+            assert our_session_record[1] == 'visitor', "Our session record should be a visitor (created by check-in)"
             assert our_session_record[2] is False, "Our session record should have is_admin=False"
             
             assert other_session_record is not None, "Should have record for other session"
-            assert other_session_record[1] is True, "Other session record should remain is_regular=True"
+            assert other_session_record[1] == 'member', "Other session's membership must be untouched"
             assert other_session_record[2] is True, "Other session record should remain is_admin=True"
             
             # Remove from our session instance
@@ -379,7 +394,7 @@ class TestSessionPersonManagement:
             
             # Verify only our session_person record was deleted
             cur.execute("""
-                SELECT session_id, is_regular, is_admin FROM session_person 
+                SELECT session_id, relationship, is_admin FROM session_person
                 WHERE person_id = %s ORDER BY session_id
             """, (person_id,))
             
@@ -390,7 +405,7 @@ class TestSessionPersonManagement:
             # Removing attendance no longer deletes membership for either session.
             assert len(other_session_remaining) == 1, "Should still have record for the other session"
             assert len(our_session_remaining) == 1, "Membership for our session persists after removing attendance"
-            assert other_session_remaining[0][1] is True, "Other session record should still be is_regular=True"
+            assert other_session_remaining[0][1] == 'member', "Other session's membership must still be untouched"
             assert other_session_remaining[0][2] is True, "Other session record should still be is_admin=True"
             
             cur.close()

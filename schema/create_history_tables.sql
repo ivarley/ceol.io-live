@@ -159,7 +159,9 @@ CREATE TABLE session_person_history (
     -- Copy of all session_person fields at time of change
     session_id INTEGER,
     person_id INTEGER,
-    is_regular BOOLEAN,
+    relationship VARCHAR(10),
+    confirmed BOOLEAN,
+    archived BOOLEAN,
     is_admin BOOLEAN,
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,

@@ -27,6 +27,54 @@ from fractional_indexing import generate_append_position, generate_position_betw
 from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
+def can_view_session_people(cur, session_id, person_id):
+    """May this person see the session's PEOPLE? (spec 034)
+
+    `is_admin OR confirmed` — the single gate on the People tab, person detail sheets, and
+    every attendance list. It replaced two contradictory predicates: auth.py granted access
+    to any member, while this module required `is_regular OR is_admin`.
+
+    Note what it is NOT: membership. Anyone with an account can self-join any session, so if
+    membership granted roster access, joining would hand a stranger every member's name.
+    People-visibility is granted BY the session (an admin confirms you), never claimed by
+    joining it. `confirmed` is orthogonal to member/visitor — a confirmed visitor (a known
+    friend of the session who lives elsewhere) can see people; an unconfirmed member cannot.
+
+    System admins bypass this, as everywhere.
+    """
+    from flask import session as flask_session
+
+    if flask_session.get("is_system_admin", False):
+        return True
+    if not person_id:
+        return False
+    cur.execute(
+        """
+        SELECT 1 FROM session_person
+        WHERE session_id = %s AND person_id = %s
+          AND (confirmed = TRUE OR is_admin = TRUE)
+        """,
+        (session_id, person_id),
+    )
+    return cur.fetchone() is not None
+
+
+def is_session_admin_for(cur, session_id, person_id):
+    """Session admin (or system admin) — the gate on confirming, archiving, and managing
+    other people's relationship to the session."""
+    from flask import session as flask_session
+
+    if flask_session.get("is_system_admin", False):
+        return True
+    if not person_id:
+        return False
+    cur.execute(
+        "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s AND is_admin = TRUE",
+        (session_id, person_id),
+    )
+    return cur.fetchone() is not None
+
+
 def instance_logging_locked(cur, session_instance_id):
     """True if the live editor owns this instance (logging_mode='live'); the classic
     editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
@@ -3176,20 +3224,20 @@ def add_session_ajax():
         add_current_user = data.get("add_current_user", True)  # Default to True for backwards compatibility
         if add_current_user and user_id and hasattr(current_user, 'person_id') and current_user.person_id:
             role = data.get("add_current_user_role", "admin")  # Default to admin
-            # Determine is_regular and is_admin based on role
-            # member: just in session_person (is_regular=false, is_admin=false)
-            # regular: is_regular=true, is_admin=false
-            # admin: is_regular=true, is_admin=true
-            is_regular = role in ("regular", "admin")
+            # Spec 034: whoever creates a session is by definition a confirmed member of it.
+            # The only axis the caller still chooses is whether they're also an admin.
             is_admin = role == "admin"
             cur.execute(
                 """
-                INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO session_person
+                    (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+                VALUES (%s, %s, 'member', TRUE, FALSE, %s, %s)
                 """,
-                (session_id, current_user.person_id, is_regular, is_admin, user_id)
+                (session_id, current_user.person_id, is_admin, user_id)
             )
-            save_to_history(cur, "session_person", "INSERT", None, user_id=user_id)
+            save_to_history(
+                cur, "session_person", "INSERT", (session_id, current_user.person_id), user_id=user_id
+            )
 
         conn.commit()
         cur.close()
@@ -3811,102 +3859,53 @@ def get_session_tunes_ajax(session_path, date):
 
 
 def get_session_people_list(session_path):
-    """
-    Get list of people in a session.
+    """This session's roster (spec 034).
 
     GET /api/sessions/<session_path>/people
 
-    Returns:
-    {
-        "success": true,
-        "people": [
-            {
-                "person_id": int,
-                "first_name": str,
-                "last_name": str,
-                "city": str or null,
-                "state": str or null,
-                "country": str or null,
-                "thesession_user_id": int or null,
-                "has_user_account": bool,
-                "instruments": [str],
-                "attendance_count": int
-            }
-        ]
-    }
+    Gated on people-visibility -- is_admin OR confirmed -- NOT on mere membership. Joining
+    a session does not hand you its roster; the session has to vouch for you first.
+
+    Rows come from the one shared loader (serializers.load_session_people), ordered by
+    computed regular-ness. Archived people ARE included; hiding them is the client's job,
+    because archived means "not in the default list", never "unfindable".
     """
-    # Check authentication
     if not current_user.is_authenticated:
         return jsonify({"success": False, "message": "Authentication required"}), 401
+
+    from serializers import load_session_people
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get session ID from path
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
-
         if not session_result:
+            cur.close()
+            conn.close()
             return jsonify({"success": False, "message": "Session not found"}), 404
 
         session_id = session_result[0]
 
-        # Verify current user is a member of this session
-        user_person_id = getattr(current_user, 'person_id', None)
+        user_person_id = getattr(current_user, "person_id", None)
         if not user_person_id:
+            cur.close()
+            conn.close()
             return jsonify({"success": False, "message": "User not linked to person"}), 403
 
-        cur.execute(
-            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
-        )
-        if not cur.fetchone():
-            return jsonify({"success": False, "message": "Not a member of this session"}), 403
-
-        # Fetch people list
-        cur.execute(
-            """
-            SELECT p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id,
-                   CASE WHEN u.user_id IS NOT NULL THEN true ELSE false END as has_user_account,
-                   COALESCE(
-                       array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
-                       '{}'::text[]
-                   ) as instruments,
-                   COUNT(DISTINCT sip.session_instance_person_id) FILTER (WHERE sip.attendance = 'yes' AND si.session_id = %s) as attendance_count,
-                   sp.is_regular
-            FROM session_person sp
-            JOIN person p ON sp.person_id = p.person_id
-            LEFT JOIN user_account u ON p.person_id = u.person_id
-            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            LEFT JOIN session_instance_person sip ON p.person_id = sip.person_id
-            LEFT JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-            WHERE sp.session_id = %s AND p.active = TRUE
-            GROUP BY p.person_id, p.first_name, p.last_name, p.city, p.state, p.country, p.thesession_user_id, u.user_id, sp.is_regular
-            ORDER BY p.first_name, p.last_name
-            """,
-            (session_id, session_id)
-        )
-
-        people_data = cur.fetchall()
-        people = []
-
-        for row in people_data:
-            people.append({
-                'person_id': row[0],
-                'first_name': row[1],
-                'last_name': row[2],
-                'city': row[3],
-                'state': row[4],
-                'country': row[5],
-                'thesession_user_id': row[6],
-                'has_user_account': row[7],
-                'instruments': row[8] if row[8] else [],
-                'attendance_count': row[9] or 0,
-                'is_regular': row[10] or False
-            })
+        if not can_view_session_people(cur, session_id, user_person_id):
+            cur.close()
+            conn.close()
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "A session admin needs to confirm you before you can see this session's people.",
+                }
+            ), 403
 
         cur.close()
+        people = load_session_people(conn, session_id)
         conn.close()
 
         return jsonify({"success": True, "people": people})
@@ -4027,28 +4026,26 @@ def get_session_person_detail(session_path, person_id):
 
 
 def add_person_to_session_people_tab(session_path):
-    """
-    Add a new person to a session from the People tab.
+    """Add a person to this session's roster (spec 034).
 
     POST /api/sessions/<session_path>/people/add
+    Body: {first_name, last_name, email?, instruments?[], thesession_user_id?, relationship?}
 
-    Request body:
-    {
-        "first_name": str,
-        "last_name": str,
-        "email": str or null (optional),
-        "instruments": [str],
-        "thesession_user_id": int or null
-    }
+    Two rules worth stating, because both changed in 034:
 
-    Returns:
-    {
-        "success": true,
-        "person_id": int,
-        "message": str
-    }
+    1. DEDUPE ON EMAIL ONLY. This used to match an existing person by case-insensitive
+       first+last name, silently reusing that row. That was cross-session person discovery
+       through the back door (type a name, learn whether they exist) and it merged two
+       different John Smiths into one human. Email is now the sole identity key; a name
+       collision creates a genuinely new person. (merge_person_ids exists for cleanup.)
+
+    2. CONFIRMED IS A VOUCH, so only a session admin can grant it. A confirmed non-admin
+       member may still add people -- they just land unconfirmed, for an admin to confirm.
+       Otherwise a confirmed member could confirm their friend, and the gate would mean
+       nothing.
+
+    Roster-adds are always members; `visitor` arises from check-in, not from here.
     """
-    # Check authentication
     if not current_user.is_authenticated:
         return jsonify({"success": False, "message": "Authentication required"}), 401
 
@@ -4062,71 +4059,64 @@ def add_person_to_session_people_tab(session_path):
         email = data.get('email', '').strip() if data.get('email') else None
         instruments = data.get('instruments', [])
         thesession_user_id = data.get('thesession_user_id')
-        is_regular = data.get('is_regular', False)
+        relationship = data.get('relationship', 'member')
+        if relationship not in ('member', 'visitor'):
+            return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
 
-        # Validate required fields
         if not first_name or not last_name:
             return jsonify({"success": False, "message": "First name and last name are required"}), 400
 
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Get session ID from path
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
         session_result = cur.fetchone()
-
         if not session_result:
             return jsonify({"success": False, "message": "Session not found"}), 404
-
         session_id = session_result[0]
 
-        # Verify current user is a member of this session (only members can add people)
         user_person_id = getattr(current_user, 'person_id', None)
         if not user_person_id:
             return jsonify({"success": False, "message": "User not linked to person"}), 403
 
-        cur.execute(
-            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
-        )
-        if not cur.fetchone():
-            return jsonify({"success": False, "message": "Not a member of this session"}), 403
+        if not can_view_session_people(cur, session_id, user_person_id):
+            return jsonify({"success": False, "message": "Not allowed to manage this session's people"}), 403
 
-        # Check if person already exists (by name)
-        cur.execute(
-            "SELECT person_id, active FROM person WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)",
-            (first_name, last_name)
-        )
-        existing_person = cur.fetchone()
+        # The adder vouches only if they are an admin of this session.
+        confirmed = is_session_admin_for(cur, session_id, user_person_id)
 
-        if existing_person:
-            person_id, active = existing_person
+        person_id = None
+        if email:
+            cur.execute("SELECT person_id, active FROM person WHERE LOWER(email) = LOWER(%s)", (email,))
+            existing = cur.fetchone()
+            if existing:
+                person_id, active = existing
+                if not active:
+                    return jsonify({
+                        "success": False,
+                        "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions",
+                    }), 400
+                cur.execute(
+                    "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+                    (session_id, person_id),
+                )
+                if cur.fetchone():
+                    return jsonify({
+                        "success": False,
+                        "message": f"{first_name} {last_name} is already in this session",
+                    }), 400
 
-            # Check if the existing person is deactivated
-            if not active:
-                return jsonify({"success": False, "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions"}), 400
-
-            # Check if already in this session
-            cur.execute(
-                "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-                (session_id, person_id)
-            )
-            if cur.fetchone():
-                return jsonify({"success": False, "message": f"{first_name} {last_name} is already in this session"}), 400
-
-        else:
-            # Create new person
+        if person_id is None:
             cur.execute(
                 """
                 INSERT INTO person (first_name, last_name, email, thesession_user_id, created_by_user_id)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING person_id
                 """,
-                (first_name, last_name, email, thesession_user_id, get_current_user_id())
+                (first_name, last_name, email, thesession_user_id, get_current_user_id()),
             )
             person_id = cur.fetchone()[0]
 
-            # Add instruments (canonicalized against one shared vocabulary)
             for instrument in normalize_instruments(instruments):
                 cur.execute(
                     """
@@ -4134,17 +4124,19 @@ def add_person_to_session_people_tab(session_path):
                     VALUES (%s, %s, %s)
                     ON CONFLICT (person_id, instrument) DO NOTHING
                     """,
-                    (person_id, instrument, get_current_user_id())
+                    (person_id, instrument, get_current_user_id()),
                 )
 
-        # Add person to session with specified is_regular value
         cur.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-            VALUES (%s, %s, %s, false, %s)
+            INSERT INTO session_person
+                (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, %s, FALSE, FALSE, %s)
             """,
-            (session_id, person_id, is_regular, get_current_user_id())
+            (session_id, person_id, relationship, confirmed, get_current_user_id()),
         )
+        save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
+                        user_id=get_current_user_id())
 
         conn.commit()
         cur.close()
@@ -4153,215 +4145,8 @@ def add_person_to_session_people_tab(session_path):
         return jsonify({
             "success": True,
             "person_id": person_id,
-            "message": f"{first_name} {last_name} added to session"
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to add person: {str(e)}"}), 500
-
-
-def search_people_for_session(session_path):
-    """
-    Search for people to add to a session.
-    Excludes people already in this session.
-
-    GET /api/sessions/<session_path>/people/search?q=<query>
-
-    Returns:
-    {
-        "success": true,
-        "people": [
-            {
-                "person_id": int,
-                "first_name": str,
-                "last_name": str,
-                "email": str or null,
-                "city": str or null,
-                "state": str or null,
-                "country": str or null,
-                "instruments": [str]
-            }
-        ]
-    }
-    """
-    # Check authentication
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
-
-    try:
-        query = request.args.get('q', '').strip()
-
-        if not query or len(query) < 2:
-            return jsonify({"success": True, "people": []})
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Get session ID from path
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-        session_result = cur.fetchone()
-
-        if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
-
-        session_id = session_result[0]
-
-        # Verify current user is a member of this session
-        user_person_id = getattr(current_user, 'person_id', None)
-        if not user_person_id:
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
-
-        cur.execute(
-            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
-        )
-        if not cur.fetchone():
-            return jsonify({"success": False, "message": "Not a member of this session"}), 403
-
-        # Search for active people not already in this session
-        search_pattern = f"%{query}%"
-        cur.execute(
-            """
-            SELECT p.person_id, p.first_name, p.last_name, p.email, p.city, p.state, p.country,
-                   COALESCE(
-                       array_agg(DISTINCT pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
-                       '{}'::text[]
-                   ) as instruments
-            FROM person p
-            LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
-            WHERE (
-                LOWER(p.first_name) LIKE LOWER(%s)
-                OR LOWER(p.last_name) LIKE LOWER(%s)
-                OR LOWER(CONCAT(p.first_name, ' ', p.last_name)) LIKE LOWER(%s)
-            )
-            AND p.active = TRUE
-            AND p.person_id NOT IN (
-                SELECT person_id FROM session_person WHERE session_id = %s
-            )
-            GROUP BY p.person_id, p.first_name, p.last_name, p.email, p.city, p.state, p.country
-            ORDER BY p.first_name, p.last_name
-            LIMIT 20
-            """,
-            (search_pattern, search_pattern, search_pattern, session_id)
-        )
-
-        people_data = cur.fetchall()
-        people = []
-
-        for row in people_data:
-            people.append({
-                'person_id': row[0],
-                'first_name': row[1],
-                'last_name': row[2],
-                'email': row[3],
-                'city': row[4],
-                'state': row[5],
-                'country': row[6],
-                'instruments': row[7] if row[7] else []
-            })
-
-        cur.close()
-        conn.close()
-
-        return jsonify({"success": True, "people": people})
-
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Failed to search people: {str(e)}"}), 500
-
-
-def add_existing_person_to_session(session_path):
-    """
-    Add an existing person to a session.
-
-    POST /api/sessions/<session_path>/people/add-existing
-
-    Request body:
-    {
-        "person_id": int,
-        "is_regular": bool
-    }
-
-    Returns:
-    {
-        "success": true,
-        "message": str
-    }
-    """
-    # Check authentication
-    if not current_user.is_authenticated:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
-
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
-
-        person_id = data.get('person_id')
-        is_regular = data.get('is_regular', False)
-
-        if not person_id:
-            return jsonify({"success": False, "message": "person_id is required"}), 400
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Get session ID from path
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-        session_result = cur.fetchone()
-
-        if not session_result:
-            return jsonify({"success": False, "message": "Session not found"}), 404
-
-        session_id = session_result[0]
-
-        # Verify current user is a member of this session
-        user_person_id = getattr(current_user, 'person_id', None)
-        if not user_person_id:
-            return jsonify({"success": False, "message": "User not linked to person"}), 403
-
-        cur.execute(
-            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, user_person_id)
-        )
-        if not cur.fetchone():
-            return jsonify({"success": False, "message": "Not a member of this session"}), 403
-
-        # Verify person exists and is active
-        cur.execute("SELECT first_name, last_name, active FROM person WHERE person_id = %s", (person_id,))
-        person_result = cur.fetchone()
-
-        if not person_result:
-            return jsonify({"success": False, "message": "Person not found"}), 404
-
-        first_name, last_name, active = person_result
-
-        if not active:
-            return jsonify({"success": False, "message": f"{first_name} {last_name} is deactivated and cannot be added to sessions"}), 400
-
-        # Check if person is already in this session
-        cur.execute(
-            "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
-            (session_id, person_id)
-        )
-        if cur.fetchone():
-            return jsonify({"success": False, "message": f"{first_name} {last_name} is already in this session"}), 400
-
-        # Add person to session
-        cur.execute(
-            """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-            VALUES (%s, %s, %s, false, %s)
-            """,
-            (session_id, person_id, is_regular, get_current_user_id())
-        )
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            "success": True,
-            "message": f"{first_name} {last_name} added to session"
+            "confirmed": confirmed,
+            "message": f"{first_name} {last_name} added to session",
         })
 
     except Exception as e:
@@ -5006,14 +4791,16 @@ def get_session_players_ajax(session_path):
                 p.first_name,
                 p.last_name,
                 p.email,
-                sp.is_regular,
+                sp.relationship,
                 sp.is_admin,
                 sp.gets_email_reminder,
                 sp.gets_email_followup,
                 u.username,
                 u.is_system_admin,
                 COALESCE(person_session_count.attendance_count, 0) as attendance_count,
-                person_session_count.last_attended
+                person_session_count.last_attended,
+                sp.confirmed,
+                sp.archived
             FROM session_person sp
             INNER JOIN person p ON sp.person_id = p.person_id
             LEFT OUTER JOIN user_account u ON p.person_id = u.person_id
@@ -5029,7 +4816,9 @@ def get_session_players_ajax(session_path):
                 GROUP BY sip.person_id, si.session_id
             ) person_session_count ON p.person_id = person_session_count.person_id
             WHERE sp.session_id = %s
-            ORDER BY sp.is_regular DESC, p.last_name, p.first_name
+            -- Spec 034: "regulars first" is now computed from attendance, not a stored flag.
+            ORDER BY sp.archived, COALESCE(person_session_count.attendance_count, 0) DESC,
+                     p.last_name, p.first_name
         """,
             (session_id, session_id),
         )
@@ -5042,7 +4831,7 @@ def get_session_players_ajax(session_path):
                     "person_id": row[1],
                     "name": f"{row[2]} {row[3]}",
                     "email": row[4] or "",
-                    "is_regular": row[5],
+                    "relationship": row[5],
                     "is_admin": row[6],
                     "gets_email_reminder": row[7],
                     "gets_email_followup": row[8],
@@ -5050,6 +4839,8 @@ def get_session_players_ajax(session_path):
                     "is_system_admin": row[10] or False,
                     "attendance_count": row[11] or 0,
                     "last_attended": row[12].isoformat() if row[12] else None,
+                    "confirmed": row[13],
+                    "archived": row[14],
                 }
             )
 
@@ -5177,21 +4968,25 @@ def get_session_tunes_grid_ajax(session_path):
                 WHERE si.session_id = %s AND sit.tune_id IS NOT NULL
                 GROUP BY sit.tune_id
             ),
-            session_regulars AS (
-                -- Get the list of regular players for this session
+            session_members AS (
+                -- Spec 034: the session's community -- everyone who belongs to it and is
+                -- still around. Visitors are excluded (this session isn't theirs, so their
+                -- tunebook says nothing about what this session is learning); archived people
+                -- are excluded (they're gone). It used to be regulars-only, which undercounted:
+                -- someone who comes twice a month is exactly whose learning you want to see.
                 SELECT person_id
                 FROM session_person
-                WHERE session_id = %s AND is_regular = true
+                WHERE session_id = %s AND relationship = 'member' AND archived = FALSE
             ),
             tunebook_stats AS (
-                -- Count how many session regulars have each tune in their tunebook by status
+                -- How many of this session's members have each tune, by status
                 SELECT
                     pt.tune_id,
                     COUNT(CASE WHEN pt.learn_status = 'want to learn' THEN 1 END) as want_to_learn_count,
                     COUNT(CASE WHEN pt.learn_status = 'learning' THEN 1 END) as learning_count,
                     COUNT(CASE WHEN pt.learn_status = 'learned' THEN 1 END) as learned_count
                 FROM person_tune pt
-                INNER JOIN session_regulars sr ON pt.person_id = sr.person_id
+                INNER JOIN session_members sm ON pt.person_id = sm.person_id
                 GROUP BY pt.tune_id
             )
             SELECT
@@ -5998,7 +5793,14 @@ def add_person_to_session():
         data = request.get_json()
         person_id = data.get("person_id")
         session_id = data.get("session_id")
-        role = data.get("role", "attendee")  # 'regular' or 'attendee'
+        # Spec 034: 'member' | 'visitor'. This is a self-declaration (or an admin acting for
+        # someone), so it does NOT confirm -- see below.
+        relationship = data.get("relationship", "member")
+        if relationship not in ("member", "visitor"):
+            return (
+                jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}),
+                400,
+            )
 
         if not person_id or not session_id:
             return (
@@ -6058,24 +5860,20 @@ def add_person_to_session():
             session_path,
         ) = session_row
 
-        # Add person to session
-        is_regular = role == "regular"
-        is_admin = False
-
-        save_to_history(
-            cur,
-            "session_person",
-            "INSERT",
-            None,
-            user_id=get_current_user_id(),
-        )
+        # Add person to session. confirmed=FALSE: this is someone adding THEMSELVES to a
+        # session (or a system admin adding them), which is exactly the path that must not
+        # grant people-visibility -- otherwise anyone could join a session and read its
+        # roster. A session admin confirms them afterwards.
         cur.execute(
             """
-            INSERT INTO session_person (person_id, session_id, is_regular, is_admin, created_by_user_id)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO session_person
+                (person_id, session_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, FALSE, FALSE, FALSE, %s)
         """,
-            (person_id, session_id, is_regular, is_admin, get_current_user_id()),
+            (person_id, session_id, relationship, get_current_user_id()),
         )
+        save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
+                        user_id=get_current_user_id())
 
         # Get session admins for email notification
         cur.execute(
@@ -6128,7 +5926,7 @@ def add_person_to_session():
 
                 body = f"""Hello {admin_name},
 
-{person_name} has been added to the session "{session_name}" in {session_location} as a {role}.
+{person_name} has been added to the session "{session_name}" in {session_location} as a {relationship}.
 
 Person Details:
 - Name: {person_name}
@@ -6147,7 +5945,7 @@ The Ceol.io Session Management System"""
         return jsonify(
             {
                 "success": True,
-                "message": f"{person_name} has been added to {session_name} as a {role}",
+                "message": f"{person_name} has been added to {session_name} as a {relationship}",
             }
         )
 
@@ -6366,22 +6164,19 @@ def create_new_person():
             # Save to history after INSERT (we now have person_id)
             save_to_history(cur, "person", "INSERT", person_id, user_id=audit_user_id)
 
-            # Add to session if specified
+            # Add to session if specified. An admin creating a person against a session is a
+            # deliberate roster act, so it vouches for them (spec 034).
             if session_id:
-                save_to_history(
-                    cur,
-                    "session_person",
-                    "INSERT",
-                    None,
-                    user_id=audit_user_id,
-                )
                 cur.execute(
                     """
-                    INSERT INTO session_person (person_id, session_id, is_regular, is_admin, created_by_user_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO session_person
+                        (person_id, session_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+                    VALUES (%s, %s, 'member', TRUE, FALSE, FALSE, %s)
                 """,
-                    (person_id, session_id, False, False, audit_user_id),
-                )  # Default to attendee, not admin
+                    (person_id, session_id, audit_user_id),
+                )
+                save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
+                                user_id=audit_user_id)
 
             conn.commit()
 
@@ -6478,67 +6273,112 @@ def get_available_sessions():
 
 
 @api_login_required
-def update_session_player_regular_status(session_path, person_id):
-    """Update the regular status for a person in a specific session"""
-    # Check if current user is a system admin
+def _set_session_person_field(session_path, person_id, column, value, *, admin_only):
+    """Shared body for the three session_person setters (spec 034).
+
+    `admin_only` distinguishes the two write policies:
+      * relationship -- the person themselves OR a session admin. It says whose session this
+        is, and that is a claim the person is entitled to make about their own life.
+      * confirmed / archived -- session admins only. These are the SESSION's statements about
+        its own roster (who it vouches for, who it still counts as around), so letting the
+        subject set them would be self-dealing: confirming yourself would defeat the gate.
+    """
     conn = get_db_connection()
     cur = conn.cursor()
-    
     try:
-        cur.execute(
-            "SELECT is_system_admin FROM user_account WHERE user_id = %s",
-            (current_user.user_id,)
-        )
-        user_row = cur.fetchone()
-        if not user_row or not user_row[0]:
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        session_id = row[0]
+
+        actor_person_id = getattr(current_user, "person_id", None)
+        is_admin = is_session_admin_for(cur, session_id, actor_person_id)
+        is_self = actor_person_id is not None and actor_person_id == person_id
+
+        if admin_only:
+            allowed = is_admin
+        else:
+            allowed = is_admin or is_self
+        if not allowed:
             return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
-        data = request.get_json()
-        is_regular = data.get("is_regular", False)
+        # History BEFORE the update -- it snapshots the pre-change row.
+        save_to_history(cur, "session_person", "UPDATE", (session_id, person_id),
+                        user_id=get_current_user_id())
 
-        # Get session ID first
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
-        session_result = cur.fetchone()
-        if not session_result:
-            return jsonify({"success": False, "error": "Session not found"}), 404
-
-        session_id = session_result[0]
-
-        # Update the regular status
         cur.execute(
-            """
+            f"""
             UPDATE session_person
-            SET is_regular = %s
+            SET {column} = %s, last_modified_date = (NOW() AT TIME ZONE 'UTC'),
+                last_modified_user_id = %s
             WHERE session_id = %s AND person_id = %s
-        """,
-            (is_regular, session_id, person_id),
+            """,
+            (value, get_current_user_id(), session_id, person_id),
         )
-
         if cur.rowcount == 0:
-            return (
-                jsonify(
-                    {"success": False, "error": "Person not found in this session"}
-                ),
-                404,
-            )
-
-        # Save to history
-        save_to_history(
-            cur,
-            "session_person",
-            "UPDATE",
-            None,
-            user_id=get_current_user_id(),
-        )
+            conn.rollback()
+            return jsonify({"success": False, "message": "Person not found in this session"}), 404
 
         conn.commit()
+        return jsonify({"success": True, column: value})
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
         cur.close()
         conn.close()
 
-        return jsonify({"success": True})
 
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+@api_login_required
+def set_session_person_relationship(session_path, person_id):
+    """PUT /api/sessions/<path>/people/<person_id>/relationship  {relationship}
+
+    'member' | 'visitor' -- whose session is this? Settable by the person OR a session admin
+    (a walk-in lands as a visitor and needs someone to promote her; she may have no account
+    at all, so requiring her consent would leave rosters permanently wrong).
+
+    Grants no access. Access is `confirmed`, which is a different question and a different
+    endpoint.
+    """
+    data = request.get_json() or {}
+    relationship = data.get("relationship")
+    if relationship not in ("member", "visitor"):
+        return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+    return _set_session_person_field(
+        session_path, person_id, "relationship", relationship, admin_only=False
+    )
+
+
+@api_login_required
+def set_session_person_confirmed(session_path, person_id):
+    """PUT /api/sessions/<path>/people/<person_id>/confirmed  {confirmed}
+
+    Does the session vouch for this person? Admin-only, and the ONLY way people-visibility is
+    granted. The UI must say what it does at the point of click ("...she'll be able to see
+    this session's people list and attendance records"), never a bare toggle.
+    """
+    data = request.get_json() or {}
+    confirmed = bool(data.get("confirmed", False))
+    return _set_session_person_field(
+        session_path, person_id, "confirmed", confirmed, admin_only=True
+    )
+
+
+@api_login_required
+def set_session_person_archived(session_path, person_id):
+    """PUT /api/sessions/<path>/people/<person_id>/archived  {archived}
+
+    Admin roster hygiene: hide someone who moved away. Hidden from DEFAULT lists only --
+    still findable by typing, everywhere, always. Check-in never clears this: a visit means
+    "she's here tonight", not "she's back".
+    """
+    data = request.get_json() or {}
+    archived = bool(data.get("archived", False))
+    return _set_session_person_field(
+        session_path, person_id, "archived", archived, admin_only=True
+    )
 
 
 @api_login_required
@@ -6568,6 +6408,15 @@ def update_session_player_admin_status(session_path, person_id):
 
         session_id = session_result[0]
 
+        # History BEFORE the update -- it snapshots the pre-change row.
+        save_to_history(
+            cur,
+            "session_person",
+            "UPDATE",
+            (session_id, person_id),
+            user_id=get_current_user_id(),
+        )
+
         # Update the admin status
         cur.execute(
             """
@@ -6585,15 +6434,6 @@ def update_session_player_admin_status(session_path, person_id):
                 ),
                 404,
             )
-
-        # Save to history
-        save_to_history(
-            cur,
-            "session_person",
-            "UPDATE",
-            None,
-            user_id=get_current_user_id(),
-        )
 
         conn.commit()
         cur.close()
@@ -6665,19 +6505,23 @@ def update_session_player_details(session_path, person_id):
         
         # If person has user account, only allow updating regular status
         if has_user_account:
-            if 'is_regular' in data:
-                # Update regular status in session_person table
-                cur.execute(
-                    """UPDATE session_person SET is_regular = %s, last_modified_user_id = %s
-                       WHERE session_id = %s AND person_id = %s""",
-                    (data['is_regular'], get_current_user_id(), session_id, person_id)
-                )
+            # Spec 034: relationship replaces is_regular. (This UPDATE is duplicated in the
+            # has-account / no-account branches of this one function -- change both.)
+            if 'relationship' in data:
+                if data['relationship'] not in ('member', 'visitor'):
+                    return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+                # History BEFORE the update -- it snapshots the pre-change row.
                 save_to_history(
                     cur,
                     "session_person",
                     "UPDATE",
-                    None,
+                    (session_id, person_id),
                     user_id=get_current_user_id(),
+                )
+                cur.execute(
+                    """UPDATE session_person SET relationship = %s, last_modified_user_id = %s
+                       WHERE session_id = %s AND person_id = %s""",
+                    (data['relationship'], get_current_user_id(), session_id, person_id)
                 )
         else:
             # Person doesn't have user account - allow updating additional fields
@@ -6713,19 +6557,23 @@ def update_session_player_details(session_path, person_id):
                     user_id=get_current_user_id(),
                 )
 
-            # Also update regular status if provided
-            if 'is_regular' in data:
-                cur.execute(
-                    """UPDATE session_person SET is_regular = %s, last_modified_user_id = %s
-                       WHERE session_id = %s AND person_id = %s""",
-                    (data['is_regular'], get_current_user_id(), session_id, person_id)
-                )
+            # Spec 034: relationship replaces is_regular. (This UPDATE is duplicated in the
+            # has-account / no-account branches of this one function -- change both.)
+            if 'relationship' in data:
+                if data['relationship'] not in ('member', 'visitor'):
+                    return jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}), 400
+                # History BEFORE the update -- it snapshots the pre-change row.
                 save_to_history(
                     cur,
                     "session_person",
                     "UPDATE",
-                    None,
+                    (session_id, person_id),
                     user_id=get_current_user_id(),
+                )
+                cur.execute(
+                    """UPDATE session_person SET relationship = %s, last_modified_user_id = %s
+                       WHERE session_id = %s AND person_id = %s""",
+                    (data['relationship'], get_current_user_id(), session_id, person_id)
                 )
 
         conn.commit()
@@ -7846,49 +7694,44 @@ def update_auto_save_preference():
 # Session Attendance API Endpoints
 
 def can_view_attendance(session_instance_id, user_person_id):
-    """Check if user can view attendance for a session instance"""
+    """May this user see who was at this instance? (spec 034)
+
+    `is_admin OR confirmed` on the parent session -- the same single predicate as
+    can_view_session_people, just reached via an instance id.
+
+    Two clauses were removed here, and both were self-grants:
+      * `is_regular OR is_admin` -- is_regular is gone, and it disagreed with auth.py's
+        version of this same check, which granted access to any member.
+      * "...or you are attending this instance" -- checking IN to a session must not hand you
+        its attendance list. Self-check-in exists, so that clause let anyone who turned up
+        (or said they might) read the roster. Being present is not the session vouching for
+        you; only an admin confirming you is.
+    """
     if not current_user.is_authenticated:
         return False
-    
-    # System admins can view any attendance
+
     if current_user.is_system_admin:
         return True
-    
+
+    conn = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        # Get session_id from session_instance_id
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+
+        cur.execute(
+            "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+            (session_instance_id,),
+        )
         session_result = cur.fetchone()
         if not session_result:
             return False
-        
-        session_id = session_result[0]
-        
-        # Check if user is regular or admin for this session
-        cur.execute("""
-            SELECT is_regular, is_admin FROM session_person 
-            WHERE session_id = %s AND person_id = %s
-        """, (session_id, user_person_id))
-        
-        session_person = cur.fetchone()
-        if session_person and (session_person[0] or session_person[1]):  # is_regular or is_admin
-            return True
-        
-        # Check if user is attending this specific instance
-        cur.execute("""
-            SELECT 1 FROM session_instance_person 
-            WHERE session_instance_id = %s AND person_id = %s AND attendance IN ('yes', 'maybe')
-        """, (session_instance_id, user_person_id))
-        
-        attending = cur.fetchone()
-        return attending is not None
-        
+
+        return can_view_session_people(cur, session_result[0], user_person_id)
+
     except Exception:
         return False
     finally:
-        if 'conn' in locals():
+        if conn is not None:
             conn.close()
 
 
@@ -7922,7 +7765,7 @@ def get_session_attendees(session_instance_id):
                 p.last_name,
                 sip.attendance,
                 sip.comment,
-                COALESCE(sp.is_regular, false) as is_regular,
+                COALESCE(sp.relationship, 'visitor') as relationship,
                 COALESCE(sp.is_admin, false) as is_admin,
                 ARRAY_AGG(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL) as instruments
             FROM person p
@@ -7930,7 +7773,7 @@ def get_session_attendees(session_instance_id):
             LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
             LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
             WHERE sip.session_instance_id = %s
-            GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.is_regular, sp.is_admin
+            GROUP BY p.person_id, p.first_name, p.last_name, sip.attendance, sip.comment, sp.relationship, sp.is_admin
             ORDER BY p.first_name, p.last_name
         """, (session_id, session_instance_id))
 
@@ -7938,7 +7781,7 @@ def get_session_attendees(session_instance_id):
         attendees = []
 
         for row in attendees_data:
-            person_id, first_name, last_name, attendance, comment, is_regular, is_admin, instruments = row
+            person_id, first_name, last_name, attendance, comment, relationship, is_admin, instruments = row
             attendees.append({
                 'person_id': person_id,
                 'first_name': first_name,
@@ -7946,7 +7789,7 @@ def get_session_attendees(session_instance_id):
                 'display_name': f"{first_name} {last_name[0]}" if last_name else first_name,
                 'instruments': instruments or [],
                 'attendance': attendance,
-                'is_regular': is_regular,
+                'relationship': relationship,
                 'is_admin': is_admin,
                 'comment': comment
             })
@@ -8118,7 +7961,7 @@ def check_in_person(session_instance_id):
             # Get person details and instruments
             cur.execute("""
                 SELECT p.person_id, p.first_name, p.last_name, p.email,
-                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       COALESCE(sp.relationship, 'visitor') as relationship,
                        COALESCE(
                            array_agg(pi.instrument ORDER BY pi.instrument) FILTER (WHERE pi.instrument IS NOT NULL),
                            '{}'::text[]
@@ -8127,7 +7970,7 @@ def check_in_person(session_instance_id):
                 LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
                 LEFT JOIN person_instrument pi ON p.person_id = pi.person_id
                 WHERE p.person_id = %s
-                GROUP BY p.person_id, p.first_name, p.last_name, p.email, sp.is_regular
+                GROUP BY p.person_id, p.first_name, p.last_name, p.email, sp.relationship
             """, (session_id, person_id))
             
             attendee_data = cur.fetchone()
@@ -8146,7 +7989,7 @@ def check_in_person(session_instance_id):
                     "display_name": display_name,
                     "instruments": list(attendee_data[5]),
                     "attendance": attendance,
-                    "is_regular": attendee_data[4]
+                    "relationship": attendee_data[4]
                 }
             })
             
@@ -8791,16 +8634,18 @@ def search_session_people(session_id):
                 conn.close()
                 return jsonify({"success": False, "message": "Insufficient permissions to search people in this session"}), 403
         
-        # Search for people associated with this session
-        # Priority order: regulars first, then attendees, then alphabetical within each group
+        # People associated with THIS session (roster or past attendance). Never a global
+        # person search -- see spec 034.
+        # Spec 034: "regulars first" is computed from attendance now, not a stored flag.
         search_pattern = f"%{search_query.lower()}%"
-        
+
         cur.execute(
             """
             WITH session_people AS (
                 -- Get all people who have been associated with this session
                 SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
-                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       COALESCE(sp.relationship, 'visitor') as relationship,
+                       COALESCE(sp.archived, FALSE) as archived,
                        COALESCE(sp.is_admin, FALSE) as is_session_admin
                 FROM person p
                 LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
@@ -8822,38 +8667,57 @@ def search_session_people(session_id):
                 FROM session_people sp
                 LEFT JOIN person_instrument pi ON sp.person_id = pi.person_id
                 GROUP BY sp.person_id
+            ),
+            attendance_rank AS (
+                -- Computed regular-ness: how often they've actually turned up here lately.
+                SELECT sip.person_id,
+                       COUNT(DISTINCT sip.session_instance_id) FILTER (
+                           WHERE sip.attendance = 'yes'
+                             AND si.date >= (CURRENT_DATE - INTERVAL '6 months')
+                       ) AS recent_count,
+                       COUNT(DISTINCT sip.session_instance_id) FILTER (
+                           WHERE sip.attendance = 'yes'
+                       ) AS lifetime_count
+                FROM session_instance_person sip
+                JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                WHERE si.session_id = %s
+                GROUP BY sip.person_id
             )
             SELECT sp.person_id, sp.first_name, sp.last_name, sp.email,
-                   sp.is_regular, sp.is_session_admin,
+                   sp.relationship, sp.is_session_admin,
                    pi.instruments,
-                   CASE 
+                   CASE
                        WHEN sp.first_name = sp.last_name THEN sp.first_name
                        ELSE CONCAT(sp.first_name, ' ', sp.last_name)
                    END as display_name
             FROM session_people sp
             JOIN person_instruments pi ON sp.person_id = pi.person_id
-            ORDER BY 
-                sp.is_regular DESC,  -- Regulars first
-                display_name         -- Then alphabetical
+            LEFT JOIN attendance_rank ar ON sp.person_id = ar.person_id
+            ORDER BY
+                sp.archived,                              -- archived sink to the bottom
+                COALESCE(ar.recent_count, 0) DESC,        -- then who actually comes here
+                COALESCE(ar.lifetime_count, 0) DESC,
+                display_name
             LIMIT %s
             """,
-            (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern, limit)
+            (session_id, session_id, session_id, search_pattern, search_pattern, search_pattern,
+             session_id, limit)
         )
-        
+
         results = cur.fetchall()
-        
+
         # Format results
         people = []
         for row in results:
-            person_id, first_name, last_name, email, is_regular, is_session_admin, instruments, display_name = row
-            
+            person_id, first_name, last_name, email, relationship, is_session_admin, instruments, display_name = row
+
             people.append({
                 'person_id': person_id,
                 'first_name': first_name,
                 'last_name': last_name,
                 'email': email,
                 'display_name': display_name,
-                'is_regular': is_regular,
+                'relationship': relationship,
                 'is_session_admin': is_session_admin or False,
                 'instruments': list(instruments) if instruments else []
             })
@@ -8940,9 +8804,10 @@ def get_session_people(session_id):
         cur.execute(
             """
             WITH session_all_people AS (
-                -- Get all active people who are associated with this session (regulars, admins, or have attended)
+                -- Everyone associated with this session: on the roster, or has attended it
                 SELECT DISTINCT p.person_id, p.first_name, p.last_name, p.email,
-                       COALESCE(sp.is_regular, FALSE) as is_regular,
+                       COALESCE(sp.relationship, 'visitor') as relationship,
+                       COALESCE(sp.archived, FALSE) as archived,
                        COALESCE(sp.is_admin, FALSE) as is_session_admin
                 FROM person p
                 LEFT JOIN session_person sp ON p.person_id = sp.person_id AND sp.session_id = %s
@@ -8961,9 +8826,24 @@ def get_session_people(session_id):
                 FROM session_all_people sap
                 LEFT JOIN person_instrument pi ON sap.person_id = pi.person_id
                 GROUP BY sap.person_id
+            ),
+            attendance_rank AS (
+                -- Computed regular-ness (spec 034): advisory sort order only.
+                SELECT sip.person_id,
+                       COUNT(DISTINCT sip.session_instance_id) FILTER (
+                           WHERE sip.attendance = 'yes'
+                             AND si.date >= (CURRENT_DATE - INTERVAL '6 months')
+                       ) AS recent_count,
+                       COUNT(DISTINCT sip.session_instance_id) FILTER (
+                           WHERE sip.attendance = 'yes'
+                       ) AS lifetime_count
+                FROM session_instance_person sip
+                JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+                WHERE si.session_id = %s
+                GROUP BY sip.person_id
             )
             SELECT sap.person_id, sap.first_name, sap.last_name, sap.email,
-                   sap.is_regular, sap.is_session_admin,
+                   sap.relationship, sap.is_session_admin,
                    pi.instruments,
                    CASE
                        WHEN sap.first_name = sap.last_name THEN sap.first_name
@@ -8971,27 +8851,30 @@ def get_session_people(session_id):
                    END as display_name
             FROM session_all_people sap
             JOIN person_instruments pi ON sap.person_id = pi.person_id
+            LEFT JOIN attendance_rank ar ON sap.person_id = ar.person_id
             ORDER BY
-                sap.is_regular DESC,  -- Regulars first
-                display_name          -- Then alphabetical
+                sap.archived,
+                COALESCE(ar.recent_count, 0) DESC,
+                COALESCE(ar.lifetime_count, 0) DESC,
+                display_name
             """,
-            (session_id, session_id, session_id)
+            (session_id, session_id, session_id, session_id)
         )
-        
+
         results = cur.fetchall()
-        
+
         # Format results
         people = []
         for row in results:
-            person_id, first_name, last_name, email, is_regular, is_session_admin, instruments, display_name = row
-            
+            person_id, first_name, last_name, email, relationship, is_session_admin, instruments, display_name = row
+
             people.append({
                 'person_id': person_id,
                 'first_name': first_name,
                 'last_name': last_name,
                 'email': email,
                 'display_name': display_name,
-                'is_regular': is_regular,
+                'relationship': relationship,
                 'is_session_admin': is_session_admin or False,
                 'instruments': list(instruments) if instruments else []
             })
@@ -9094,7 +8977,6 @@ def parse_csv_row(row, headers, session_city=None, session_state=None, session_c
         'state': session_state,
         'country': session_country,
         'instruments': [],
-        'is_regular': False
     }
     
     if headers:
@@ -9131,8 +9013,6 @@ def parse_csv_row(row, headers, session_city=None, session_state=None, session_c
                 person['state'] = value
             elif 'country' in header:
                 person['country'] = value
-            elif 'regular' in header:
-                person['is_regular'] = value.lower().strip() in ['x', 'true', 'yes', 't', '1']
             elif 'instrument' in header:
                 instruments = parse_instruments(value)
                 person['instruments'] = instruments
@@ -9499,14 +9379,15 @@ def bulk_import_save_session(session_id):
                     save_to_history(cur, 'person_instrument', 'INSERT',
                                   (person_id, instrument), user_id=current_user.user_id)
 
-                # Create session_person record
-                is_regular = person_data.get('is_regular', False)
+                # Create session_person record. A bulk import is an admin populating their
+                # own roster -- a deliberate vouch -- so these land confirmed (spec 034).
                 cur.execute(
                     """
-                    INSERT INTO session_person (session_id, person_id, is_regular, created_date, created_by_user_id)
-                    VALUES (%s, %s, %s, (NOW() AT TIME ZONE 'UTC'), %s)
+                    INSERT INTO session_person
+                        (session_id, person_id, relationship, confirmed, archived, created_date, created_by_user_id)
+                    VALUES (%s, %s, 'member', TRUE, FALSE, (NOW() AT TIME ZONE 'UTC'), %s)
                     """,
-                    (session_id, person_id, is_regular, current_user.user_id)
+                    (session_id, person_id, current_user.user_id)
                 )
 
                 # Log session_person creation
@@ -9520,7 +9401,7 @@ def bulk_import_save_session(session_id):
                     "last_name": person_data.get('last_name', ''),
                     "email": person_data.get('email'),
                     "instruments": instruments,
-                    "is_regular": is_regular
+                    "relationship": "member"
                 })
             
             # Commit transaction
@@ -11376,15 +11257,25 @@ def get_session_tunes_remaining(session_path):
 
 @api_login_required
 def join_session(session_path):
-    """
-    Allow a logged-in user to add themselves as a member (non-regular) of a session.
+    """Join a session yourself (spec 034).
 
-    POST /api/sessions/<session_path>/join
+    POST /api/sessions/<session_path>/join   Body: {relationship: 'member'|'visitor'}
 
-    Returns:
-        JSON response with success status
+    The UI asks one question -- "Are you a local, or just visiting?" -- and that is all this
+    endpoint decides. It lands `confirmed = FALSE`, always: this is the self-serve path, and
+    the whole point of `confirmed` is that people-visibility is granted by the session, never
+    claimed by joining it. Otherwise anyone with an account could join any session and read
+    every member's name off the People tab.
     """
     try:
+        data = request.get_json(silent=True) or {}
+        relationship = data.get("relationship", "member")
+        if relationship not in ("member", "visitor"):
+            return (
+                jsonify({"success": False, "message": "relationship must be 'member' or 'visitor'"}),
+                400,
+            )
+
         # Get user's person_id
         user_person_id = getattr(current_user, 'person_id', None)
         if not user_person_id:
@@ -11413,21 +11304,20 @@ def join_session(session_path):
             conn.close()
             return jsonify({"success": False, "message": "Already a member of this session"}), 400
 
-        # Add user as a member (not regular, not admin)
+        # Unconfirmed, always. See the docstring.
         cur.execute(
             """
-            INSERT INTO session_person (session_id, person_id, is_regular, is_admin, created_by_user_id)
-            VALUES (%s, %s, false, false, %s)
+            INSERT INTO session_person
+                (session_id, person_id, relationship, confirmed, archived, is_admin, created_by_user_id)
+            VALUES (%s, %s, %s, FALSE, FALSE, FALSE, %s)
             """,
-            (session_id, user_person_id, get_current_user_id())
+            (session_id, user_person_id, relationship, get_current_user_id())
         )
-
-        # Save to history
         save_to_history(
             cur,
             "session_person",
             "INSERT",
-            None,
+            (session_id, user_person_id),
             user_id=get_current_user_id(),
         )
 
@@ -11435,7 +11325,14 @@ def join_session(session_path):
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "message": "Successfully joined session"})
+        return jsonify(
+            {
+                "success": True,
+                "message": "Successfully joined session",
+                "relationship": relationship,
+                "confirmed": False,
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "message": f"Failed to join session: {str(e)}"}), 500
@@ -11454,7 +11351,8 @@ HISTORY_TABLE_MAP = {
     'user_account': ('user_account_history', 'user_id', ['username', 'is_active']),
     'person_instrument': ('person_instrument_history', 'person_id', ['instrument']),  # composite key
     'person_tune': ('person_tune_history', 'person_id', ['status']),  # composite key
-    'session_person': ('session_person_history', 'session_id', ['is_regular', 'is_admin']),  # composite key
+    'session_person': ('session_person_history', 'session_id',
+                       ['relationship', 'confirmed', 'archived', 'is_admin']),  # composite key
     'session_instance_person': ('session_instance_person_history', 'session_instance_id', ['attendance', 'comment']),  # composite key
 }
 

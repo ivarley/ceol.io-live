@@ -10,4 +10,7 @@ export { default as List } from './List.svelte'
 export { default as Pager } from './Pager.svelte'
 export { default as SearchField } from './SearchField.svelte'
 export { default as Seg } from './Seg.svelte'
+// PersonPicker (spec 034): the one find-or-add-a-person flow. Composed from the kit above
+// rather than being a primitive, but shared by the logger and the session page alike.
+export { default as PersonPicker } from './PersonPicker.svelte'
 export { toast } from './toast.js'

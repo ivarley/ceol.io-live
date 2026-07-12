@@ -16,6 +16,8 @@ const COMPONENTS = {
   Pager: { index: 0, count: 0 },
   SearchField: {},
   Seg: { options: [{ id: 'a', label: 'A' }] },
+  // Composed from the kit rather than a primitive, but shared app-wide (spec 034).
+  PersonPicker: { open: false, people: [] },
 }
 
 describe('kit exports', () => {

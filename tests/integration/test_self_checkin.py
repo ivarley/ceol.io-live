@@ -35,14 +35,15 @@ class TestSelfCheckin:
         data = json.loads(response.data)
         assert data['success'] is True
         assert data['data']['attendance'] == 'yes'
-        assert data['data']['is_regular'] is True
+        # Seeded roster people are members (spec 034).
+        assert data['data']['relationship'] == 'member'
 
-    def test_regular_attendee_appears_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
-        """A regular who checks in appears in the attendee list, flagged as a regular.
+    def test_member_appears_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
+        """A member who checks in appears in the attendee list, carrying their relationship.
 
-        The attendance list no longer pre-populates regulars; people appear only
-        after they are actually added/checked in (endpoint returns an empty
-        `regulars` section by design), but their is_regular flag is preserved.
+        The attendance list no longer pre-populates anyone; people appear only after they
+        are actually added/checked in (the endpoint returns an empty `regulars` section by
+        design). Spec 034: checking in must NOT downgrade an existing member to a visitor.
         """
         session_instance_id = sample_session_instance_data['session_instance_id']
         user_person_id = authenticated_regular_user.person_id
@@ -61,7 +62,7 @@ class TestSelfCheckin:
             attendees = data['data']['attendees']
             match = next((a for a in attendees if a['person_id'] == user_person_id), None)
             assert match is not None
-            assert match['is_regular'] is True
+            assert match['relationship'] == 'member'
 
     def test_regular_can_change_attendance_status(self, client, authenticated_regular_user, sample_session_instance_data):
         """Test that regulars can change their attendance status multiple times"""
@@ -121,10 +122,13 @@ class TestSelfCheckin:
         data = json.loads(response.data)
         assert data['success'] is True
 
-    def test_non_regular_user_self_checkin(self, client, authenticated_user, non_regular_session_instance_id):
-        """Test that non-regular users can still check themselves into any session"""
-        # A session the test user is NOT a seeded regular of, so the response's
-        # is_regular reflects an outsider checking in.
+    def test_outsider_self_checkin_creates_a_visitor(self, client, authenticated_user, non_regular_session_instance_id):
+        """An outsider can check themselves into any session -- and lands as a VISITOR.
+
+        Spec 034: self-check-in creates session_person(relationship='visitor', confirmed=FALSE).
+        It must not make the session "one of yours", and it must not grant you the roster.
+        """
+        # A session the test user has no prior relationship with.
         session_instance_id = non_regular_session_instance_id
         
         with authenticated_user:
@@ -144,7 +148,7 @@ class TestSelfCheckin:
         assert response.status_code in [200, 201]
         data = json.loads(response.data)
         assert data['success'] is True
-        assert data['data']['is_regular'] is False  # Not a regular for this session
+        assert data['data']['relationship'] == 'visitor'  # turning up != membership
 
     def test_self_checkin_updates_attendance_list(self, client, authenticated_user, sample_session_instance_data):
         """Test that self check-in immediately updates the attendance list"""
@@ -174,12 +178,11 @@ class TestSelfCheckin:
             
             assert user_person_id in attendee_ids
 
-    def test_regular_is_flagged_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
-        """A regular is identifiable via the is_regular flag in the attendee list.
+    def test_relationship_is_exposed_in_attendance_list(self, client, authenticated_regular_user, sample_session_instance_data):
+        """Each attendee carries their `relationship` ('member' | 'visitor'), spec 034.
 
-        The list no longer has a separately pre-populated "regulars" section the
-        UI sorts to the top; instead each attendee carries an is_regular flag the
-        UI uses to order/group them.
+        There is no separately pre-populated "regulars" section, and no is_regular flag.
+        Ordering by "regular-ness" is computed from actual attendance, not carried here.
         """
         session_instance_id = sample_session_instance_data['session_instance_id']
 
@@ -197,7 +200,7 @@ class TestSelfCheckin:
             all_attendees = data['data']['regulars'] + data['data']['attendees']
             match = next((a for a in all_attendees if a['person_id'] == user_person_id), None)
             assert match is not None
-            assert match['is_regular'] is True
+            assert match['relationship'] == 'member'
 
     def test_self_checkin_persistence_across_requests(self, client, authenticated_user, sample_session_instance_data):
         """Test that self check-in persists across multiple requests"""

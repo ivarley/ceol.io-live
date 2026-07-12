@@ -17,7 +17,14 @@ const payload = (over = {}) => ({
     location_name: 'The Pub',
     timezone: 'UTC',
   },
-  permissions: { is_logged_in: true, is_session_admin: false, is_session_member: true },
+  permissions: {
+    is_logged_in: true,
+    is_session_admin: false,
+    is_session_member: true,
+    relationship: 'member',
+    is_confirmed: true,
+    can_view_people: true, // spec 034: is_admin OR confirmed -- NOT mere membership
+  },
   today_in_session_tz: '2026-07-10',
   default_tab: 'tunes',
   tunes: [
@@ -299,11 +306,11 @@ describe('session detail page view', () => {
     )
   })
 
-  it('the People tab (members only) fetches and renders people on first view', async () => {
+  it('the People tab (confirmed only) fetches and renders people on first view', async () => {
     fetchRoutes['/people'] = {
       success: true,
       people: [
-        { person_id: 1, first_name: 'Ann', last_name: 'Malone', instruments: ['Fiddle'], is_regular: true, has_user_account: true, attendance_count: 4 },
+        { person_id: 1, first_name: 'Ann', last_name: 'Malone', instruments: ['Fiddle'], relationship: 'member', confirmed: true, archived: false, has_user_account: true, attendance_count: 4 },
       ],
     }
     const { container } = renderApp()
@@ -317,7 +324,7 @@ describe('session detail page view', () => {
 
   it('logged out: public tunes+logs, no People tab, no add/selection affordances', async () => {
     const { container } = renderApp(
-      payload({ permissions: { is_logged_in: false, is_session_admin: false, is_session_member: false } })
+      payload({ permissions: { is_logged_in: false, is_session_admin: false, is_session_member: false, can_view_people: false } })
     )
     expect(container.querySelector('.tab-button[data-tab="people"]')).toBeNull()
     expect(container.querySelector('#add-session-tune-btn')).toBeNull()

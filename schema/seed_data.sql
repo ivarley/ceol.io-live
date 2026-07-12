@@ -241,7 +241,15 @@ INSERT INTO person (person_id, first_name, last_name, email, city, state, countr
 (17, 'Grainne', 'Nolan', 'grainne.n@example.com', 'Boston', 'MA', 'USA'),
 (18, 'Cathal', 'Power', 'cathal.p@example.com', 'Chicago', 'IL', 'USA'),
 (19, 'Aisling', 'Burke', 'aisling.burke@example.com', 'Austin', 'TX', 'USA'),
-(20, 'Liam', 'Casey', 'liam.casey@example.com', 'San Francisco', 'CA', 'USA');
+(20, 'Liam', 'Casey', 'liam.casey@example.com', 'San Francisco', 'CA', 'USA'),
+-- Spec 034 states, so every one is exercisable in local dev without hand-editing the DB.
+-- Maura is the case the "archived" rules exist for: a member who moved away. She must be
+-- HIDDEN from the default People list and from the check-in picker's pre-populated tier,
+-- but STILL FOUND when you type her name -- otherwise she'd be re-created as a duplicate
+-- person the next time she's back for a night.
+(21, 'Maura', 'Gone', 'maura.gone@example.com', 'Doolin', 'Clare', 'Ireland'),
+-- James walked in once and got checked in. Visitor, unconfirmed: he can't see the roster.
+(22, 'James', 'Quinn', 'james.quinn@example.com', 'Galway', 'Galway', 'Ireland');
 
 -- =============================================================================
 -- USER ACCOUNTS
@@ -285,21 +293,34 @@ INSERT INTO person_instrument (person_id, instrument) VALUES
 (20, 'guitar');
 
 -- =============================================================================
--- SESSION PERSONS (regulars and admins)
+-- SESSION PERSONS (spec 034: relationship / confirmed / archived / is_admin)
+-- All seeded people are confirmed members -- the state every pre-034 row migrates to.
 -- =============================================================================
 
-INSERT INTO session_person (session_id, person_id, is_regular, is_admin) VALUES
--- Mueller Session regulars
-(1, 1, TRUE, TRUE), (1, 2, TRUE, FALSE), (1, 3, TRUE, FALSE), (1, 4, TRUE, FALSE),
-(1, 5, TRUE, FALSE), (1, 15, TRUE, FALSE), (1, 16, TRUE, FALSE), (1, 19, TRUE, FALSE),
+INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin) VALUES
+-- Mueller Session
+(1, 1, 'member', TRUE, TRUE), (1, 2, 'member', TRUE, FALSE), (1, 3, 'member', TRUE, FALSE),
+(1, 4, 'member', TRUE, FALSE), (1, 5, 'member', TRUE, FALSE), (1, 15, 'member', TRUE, FALSE),
+(1, 16, 'member', TRUE, FALSE), (1, 19, 'member', TRUE, FALSE),
 -- Downtown Session
-(2, 1, TRUE, TRUE), (2, 2, TRUE, FALSE), (2, 4, TRUE, FALSE),
+(2, 1, 'member', TRUE, TRUE), (2, 2, 'member', TRUE, FALSE), (2, 4, 'member', TRUE, FALSE),
 -- Boston Celtic
-(3, 6, TRUE, TRUE), (3, 7, TRUE, FALSE), (3, 8, TRUE, FALSE), (3, 17, TRUE, FALSE),
+(3, 6, 'member', TRUE, TRUE), (3, 7, 'member', TRUE, FALSE), (3, 8, 'member', TRUE, FALSE),
+(3, 17, 'member', TRUE, FALSE),
 -- Chicago Traditional
-(4, 9, TRUE, TRUE), (4, 10, TRUE, FALSE), (4, 11, TRUE, FALSE), (4, 18, TRUE, FALSE),
+(4, 9, 'member', TRUE, TRUE), (4, 10, 'member', TRUE, FALSE), (4, 11, 'member', TRUE, FALSE),
+(4, 18, 'member', TRUE, FALSE),
 -- San Francisco
-(5, 12, TRUE, TRUE), (5, 13, TRUE, FALSE), (5, 14, TRUE, FALSE), (5, 20, TRUE, FALSE);
+(5, 12, 'member', TRUE, TRUE), (5, 13, 'member', TRUE, FALSE), (5, 14, 'member', TRUE, FALSE),
+(5, 20, 'member', TRUE, FALSE);
+
+-- Spec 034 states at Mueller (session 1), so the new rules are testable out of the box.
+INSERT INTO session_person (session_id, person_id, relationship, confirmed, archived, is_admin) VALUES
+-- Maura: a member who moved away. Hidden from default lists; MUST still be found by typing.
+(1, 21, 'member', TRUE, TRUE, FALSE),
+-- James: a walk-in. Exactly what check-in creates -- visitor, unconfirmed, so he cannot see
+-- the session's people list even though he has a session_person row.
+(1, 22, 'visitor', FALSE, FALSE, FALSE);
 
 -- =============================================================================
 -- SESSION INSTANCES (past 3 months)
@@ -1065,6 +1086,15 @@ INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position,
 -- =============================================================================
 -- SESSION INSTANCE PERSON (attendance records)
 -- =============================================================================
+
+-- Spec 034: Maura (21) came for years and then stopped -- she's an ARCHIVED member, so her
+-- attendance is all OLD (instances 1-3). That makes her the honest test of the archived rule:
+-- absent from the default lists and from the picker's pre-populated tier, but findable the
+-- moment you type her name. James (22) walked in exactly once (instance 3) -- an unconfirmed
+-- visitor, which is precisely what check-in creates.
+INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
+(1, 21, 'yes'), (2, 21, 'yes'), (3, 21, 'yes'),
+(3, 22, 'yes');
 
 -- Mueller Session attendance (all instances)
 INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
