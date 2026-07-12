@@ -25,7 +25,7 @@
 
   let { pageData = null } = $props()
 
-  import { toast, SearchField, Chip } from '../lib/index.js'
+  import { toast, SearchField, Chip, Seg } from '../lib/index.js'
 
   // ---- state -----------------------------------------------------------------
   const initial = stateFromParams(new URLSearchParams(window.location.search))
@@ -534,15 +534,19 @@
       {#if panelVisible}
         <div id="filter-panel" class="filter-panel {panelAnim}">
           <div class="filter-panel-row">
-            <div class="filter-button-group">
-              {#each [['', 'All'], ['learned', 'Learned'], ['learning', 'Learning'], ['want to learn', 'Want To Learn']] as [value, label] (value)}
-                <button
-                  class="filter-status-btn"
-                  class:active={filters.status === value}
-                  data-status={value}
-                  onclick={() => (filters.status = value)}>{label}</button>
-              {/each}
-            </div>
+            <Seg
+              options={[
+                { id: '', label: 'All' },
+                { id: 'learned', label: 'Learned' },
+                { id: 'learning', label: 'Learning' },
+                { id: 'want to learn', label: 'Want To Learn' },
+              ]}
+              value={filters.status}
+              idAttr="data-status"
+              styled={false}
+              segClass="filter-button-group"
+              optClass="filter-status-btn"
+              onSelect={(v) => (filters.status = v)} />
           </div>
           <div class="filter-panel-row">
             <button
@@ -552,16 +556,20 @@
               onclick={() => (sort.dir = sort.dir === 'asc' ? 'desc' : 'asc')}>
               <span id="sort-direction-icon">{sort.dir === 'desc' ? '↓' : '↑'}</span>
             </button>
-            <div class="filter-button-group">
-              {#each [['alpha', 'a-z'], ['popularity', 'popularity'], ['plays', 'plays'], ['heard', 'heard']] as [value, label] (value)}
-                <button
-                  class="filter-sort-btn"
-                  class:active={sort.type === value}
-                  class:active-secondary={sort.type2 === value && sort.type !== value}
-                  data-sort={value}
-                  onclick={() => setSortMode(value)}>{label}</button>
-              {/each}
-            </div>
+            <Seg
+              options={[
+                { id: 'alpha', label: 'a-z' },
+                { id: 'popularity', label: 'popularity' },
+                { id: 'plays', label: 'plays' },
+                { id: 'heard', label: 'heard' },
+              ]}
+              value={sort.type}
+              secondary={sort.type2}
+              idAttr="data-sort"
+              styled={false}
+              segClass="filter-button-group"
+              optClass="filter-sort-btn"
+              onSelect={setSortMode} />
           </div>
           <div class="filter-panel-row">
             <div class="inst-select" class:open={typeMenuOpen} id="type-filter">

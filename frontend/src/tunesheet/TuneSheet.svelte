@@ -11,7 +11,7 @@
   //
   // Contexts: my_tunes / session / session_instance / admin, plus the read-only
   // global lookup view (additionalData.global).
-  import { Chip, Dialog, Tabs, toast } from '../lib/index.js'
+  import { Chip, Dialog, Seg, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     extractTuneData,
@@ -1280,18 +1280,20 @@
                 <div class="tsc-label-line">
                   <span class="tsc-name tunebook-status-label">This tune is on your list as</span>
                 </div>
-                <div class="tunebook-status-seg{statusSaving ? ' saving' : ''}" role="group" aria-label="Status">
-                  {#each [['want to learn', 'Want To Learn'], ['learning', 'Learning'], ['learned', 'Learned']] as [val, label]}
-                    <button
-                      type="button"
-                      class="tunebook-status-opt{rollup === val ? ' active' : ''}"
-                      data-status={val}
-                      onclick={() => setTunebookStatus(val)}
-                    >
-                      {label}
-                    </button>
-                  {/each}
-                </div>
+                <Seg
+                  options={[
+                    { id: 'want to learn', label: 'Want To Learn' },
+                    { id: 'learning', label: 'Learning' },
+                    { id: 'learned', label: 'Learned' },
+                  ]}
+                  value={rollup}
+                  idAttr="data-status"
+                  styled={false}
+                  segClass="tunebook-status-seg{statusSaving ? ' saving' : ''}"
+                  optClass="tunebook-status-opt"
+                  role="group"
+                  aria-label="Status"
+                  onSelect={setTunebookStatus} />
               </div>
               {#if multiInstrument}
                 {#if piExpanded}
@@ -1320,18 +1322,20 @@
                             >
                           </div>
                         {:else}
-                          <div class="tunebook-status-seg" role="group" aria-label="Status">
-                            {#each [['want to learn', 'Want To Learn'], ['learning', 'Learning'], ['learned', 'Learned']] as [val, label]}
-                              <button
-                                type="button"
-                                class="tunebook-status-opt{st === val ? ' active' : ''}"
-                                data-status={val}
-                                onclick={() => setInstrumentStatus(i, val)}
-                              >
-                                {label}
-                              </button>
-                            {/each}
-                          </div>
+                          <Seg
+                            options={[
+                              { id: 'want to learn', label: 'Want To Learn' },
+                              { id: 'learning', label: 'Learning' },
+                              { id: 'learned', label: 'Learned' },
+                            ]}
+                            value={st}
+                            idAttr="data-status"
+                            styled={false}
+                            segClass="tunebook-status-seg"
+                            optClass="tunebook-status-opt"
+                            role="group"
+                            aria-label="Status"
+                            onSelect={(val) => setInstrumentStatus(i, val)} />
                         {/if}
                       </div>
                     {/each}
@@ -1582,15 +1586,14 @@
             </div>
             <div id="history-tab" class="modal-tab-pane{activeTab === 'history' ? ' active' : ''}">
               {#if historyOptions.length > 1}
-                <div class="history-scope-toggle">
-                  {#each historyOptions as o}
-                    <button
-                      class="history-scope-btn{o.key === historyScope ? ' active' : ''}"
-                      data-scope={o.key}
-                      onclick={() => setHistoryScope(o.key)}>{o.label}</button
-                    >
-                  {/each}
-                </div>
+                <Seg
+                  options={historyOptions.map((o) => ({ id: o.key, label: o.label }))}
+                  value={historyScope}
+                  idAttr="data-scope"
+                  styled={false}
+                  segClass="history-scope-toggle"
+                  optClass="history-scope-btn"
+                  onSelect={setHistoryScope} />
               {/if}
               <div id="history-list-container">
                 {#if historyState.status === 'ready'}
@@ -1634,15 +1637,14 @@
             </div>
             <div id="played-with-tab" class="modal-tab-pane{activeTab === 'played-with' ? ' active' : ''}">
               {#if playedWithOptions.length > 1}
-                <div class="history-scope-toggle">
-                  {#each playedWithOptions as o}
-                    <button
-                      class="played-with-scope-btn history-scope-btn{o.key === playedWithScope ? ' active' : ''}"
-                      data-scope={o.key}
-                      onclick={() => setPlayedWithScope(o.key)}>{o.label}</button
-                    >
-                  {/each}
-                </div>
+                <Seg
+                  options={playedWithOptions.map((o) => ({ id: o.key, label: o.label }))}
+                  value={playedWithScope}
+                  idAttr="data-scope"
+                  styled={false}
+                  segClass="history-scope-toggle"
+                  optClass="played-with-scope-btn history-scope-btn"
+                  onSelect={setPlayedWithScope} />
               {/if}
               <div id="played-with-container">
                 {#if playedWithState.status === 'ready'}

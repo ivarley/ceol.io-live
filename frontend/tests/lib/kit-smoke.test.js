@@ -15,6 +15,7 @@ const COMPONENTS = {
   List: { items: [] },
   Pager: { index: 0, count: 0 },
   SearchField: {},
+  Seg: { options: [{ id: 'a', label: 'A' }] },
 }
 
 describe('kit exports', () => {

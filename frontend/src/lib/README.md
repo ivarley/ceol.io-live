@@ -158,3 +158,21 @@ casing, and what "search" means.
 `bind:this` exposes `focus()`. For instant client-side filters, just
 `bind:value` and derive — the debounce only gates `onSearch`.
 
+
+### Seg — segmented control
+THE seg — the status 3-ways (tune sheet + add pane), the sort/status filter
+groups, and the history-scope toggles. CONTROLLED: the host owns `value`; Seg
+paints the active option and reports clicks. `onSelect` fires on EVERY option
+click — including the active one — because some hosts toggle-off on that
+(per-instrument status).
+
+| Prop | Default | |
+|---|---|---|
+| `options` | `[]` | `[{ id, label }]` |
+| `value` | — | active option id (host-owned; not self-mutating) |
+| `onSelect` | noop | fires on every option click |
+| `idAttr` | `'data-seg'` | attribute name the option id is stamped under (`data-status`, `data-sort`…) |
+| `secondary` | `null` | option id marked `active-secondary` (two-level sort) |
+| `styled` | `true` | `false` = structure only; skin via `segClass`/`optClass` |
+| `segClass`/`optClass` | — | legacy skin + e2e/CSS hook passthrough; options always carry an `active` class |
+| `...rest` | — | `role`, `aria-label`… pass to the container |

@@ -27,7 +27,7 @@
   const sessionPath = session.path
   const isLoggedIn = permissions.is_logged_in
 
-  import { toast, SearchField, Chip } from '../lib/index.js'
+  import { toast, SearchField, Chip, Seg } from '../lib/index.js'
 
   // ---- state ---------------------------------------------------------------
   let allTunes = $state([...initialTunes])
@@ -502,11 +502,18 @@
             </select>
           </div>
           <div class="filter-panel-row">
-            <div class="filter-button-group">
-              <button class="filter-sort-btn" class:active={sort.type === 'alpha'} data-sort="alpha" onclick={() => setSortMode('alpha')}>a-z</button>
-              <button class="filter-sort-btn" class:active={sort.type === 'session'} data-sort="session" onclick={() => setSortMode('session')}>session</button>
-              <button class="filter-sort-btn" class:active={sort.type === 'everywhere'} data-sort="everywhere" onclick={() => setSortMode('everywhere')}>everywhere</button>
-            </div>
+            <Seg
+              options={[
+                { id: 'alpha', label: 'a-z' },
+                { id: 'session', label: 'session' },
+                { id: 'everywhere', label: 'everywhere' },
+              ]}
+              value={sort.type}
+              idAttr="data-sort"
+              styled={false}
+              segClass="filter-button-group"
+              optClass="filter-sort-btn"
+              onSelect={setSortMode} />
             <button
               id="sort-direction-toggle"
               class="filter-sort-direction-btn"

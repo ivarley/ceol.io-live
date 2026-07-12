@@ -5,7 +5,7 @@
   // instrument statuses (collapsed roll-up like the detail modal), notes, and an
   // Advanced setting field. Mounted once by my_tunes.html; the page opens/closes it
   // through the exported open()/close() (window.MyTunesAddPane).
-  import { Chip } from '../lib/index.js'
+  import { Chip, Seg } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
   import { createPaneState } from './pane.svelte.js'
@@ -294,16 +294,14 @@
 
         <div class="mt-section">
           <div class="tsc-label-line mt-label">Add as</div>
-          <div class="tunebook-status-seg">
-            {#each STATUSES as st}
-              <button
-                class="tunebook-status-opt"
-                class:active={baseStatus === st}
-                data-status={st}
-                onclick={() => (baseStatus = st)}
-              >{LABELS[st]}</button>
-            {/each}
-          </div>
+          <Seg
+            options={STATUSES.map((st) => ({ id: st, label: LABELS[st] }))}
+            value={baseStatus}
+            idAttr="data-status"
+            styled={false}
+            segClass="tunebook-status-seg"
+            optClass="tunebook-status-opt"
+            onSelect={(st) => (baseStatus = st)} />
           {#if instruments.length >= 2}
             <button class="tsc-expand-link mt-expand" onclick={() => (instOpen = !instOpen)}>
               {instOpen ? 'Hide Instruments' : 'View By Instrument'}
@@ -317,16 +315,14 @@
                       {#if !inst.is_auto}<Chip label="manual" styled={false} chipClass="mt-manual-badge" />{/if}
                       {#if effectiveStatus(inst) === null}<Chip label="not tracking" styled={false} chipClass="mt-untracked" />{/if}
                     </div>
-                    <div class="tunebook-status-seg">
-                      {#each STATUSES as st}
-                        <button
-                          class="tunebook-status-opt"
-                          class:active={effectiveStatus(inst) === st}
-                          data-status={st}
-                          onclick={() => tapInstStatus(inst, st)}
-                        >{LABELS[st]}</button>
-                      {/each}
-                    </div>
+                    <Seg
+                      options={STATUSES.map((st) => ({ id: st, label: LABELS[st] }))}
+                      value={effectiveStatus(inst)}
+                      idAttr="data-status"
+                      styled={false}
+                      segClass="tunebook-status-seg"
+                      optClass="tunebook-status-opt"
+                      onSelect={(st) => tapInstStatus(inst, st)} />
                   </div>
                 {/each}
               </div>
