@@ -1,50 +1,21 @@
-# Dark Mode & Theming
+# Theming (Dark-Only)
 
-CSS custom properties system for light/dark theme switching.
+The app is dark-only. There is no light mode, no theme toggle, no `data-theme`
+attribute, and no `localStorage['theme']` — all of that was removed when light
+mode was ripped out. Theming is a single set of CSS custom properties.
 
-## Implementation
+## CSS Variables
 
-### Theme Switching
+Defined in `static/css/theme.css` (the `:root` block at the top of the file —
+NOT in `templates/base.html`, which only loads the stylesheet). This is the
+single token source: colors, plus the radius (`--r-sm/--r/--r-lg/--r-pill`),
+shadow (`--shadow-sm/-md/-lg`), scrim (`--scrim`), spacing (`--sp-1`…`--sp-8`),
+motion (`--dur-quick/--dur/--ease`), and z-index (`--z-*`) scales, and the one
+global `@keyframes spin`.
 
-**Storage**: `localStorage.getItem('theme')` - "light" or "dark"
-
-**Application**: `[data-theme="dark"]` attribute on `<html>` element
-
-**Toggle**: JavaScript in `templates/base.html` inline script
-
-### CSS Variables
-
-Defined in `static/css/theme.css` (the `:root` and `[data-theme="dark"]` blocks
-at the top of the file — NOT in `templates/base.html`, which only loads the
-stylesheet). As of spec 035 this is the single token source: colors, plus the
-radius (`--r-sm/--r/--r-lg/--r-pill`), shadow (`--shadow-sm/-md/-lg`), scrim
-(`--scrim`), spacing (`--sp-1`…`--sp-8`), motion (`--dur-quick/--dur/--ease`),
-and z-index (`--z-*`) scales, and the one global `@keyframes spin`.
-
-**Light Theme** (excerpt):
+**Palette** (excerpt):
 ```css
 :root {
-  --bg-color: #fff;
-  --text-color: #252930;
-  --primary: #00a1e0;
-  --secondary-text: #adb4c0;
-  --text-muted: #6c757d;
-  --border-color: #ddd;
-  --input-bg: #fff;
-  --hover-bg: #f8f9fa;
-  --link-color: #00a1e0;
-  --link-hover-color: #005b7f;
-  --table-header-bg: #f5f6f8;
-  --header-bg: #fff;
-  --dropdown-bg: #fff;
-  --dropdown-border: #ddd;
-  --dropdown-shadow: rgba(0,0,0,0.15);
-}
-```
-
-**Dark Theme** (excerpt):
-```css
-[data-theme="dark"] {
   --bg-color: #1a1a1a;
   --text-color: #e0e0e0;
   --primary: #4da6ff;
@@ -65,36 +36,13 @@ and z-index (`--z-*`) scales, and the one global `@keyframes spin`.
 
 Note: `--primary-color` was removed in spec 035 — `--primary` is the one name.
 
-### Logo Switching
+## The `:root <selector>` pattern
 
-**Light**: `static/images/logo2-1.png`
-**Dark**: `static/images/logo2-dark-1.png`
-
-**Implementation**: JavaScript updates `<img src>` on theme change (in `base.html` head script).
-
-## FOUC Prevention
-
-Flash of Unstyled Content prevented by inline script in `<head>`:
-
-```javascript
-// Runs before page render
-(function() {
-  const theme = localStorage.getItem('theme') || 'dark';  // Default: dark
-  document.documentElement.setAttribute('data-theme', theme);
-})();
-```
-
-**Location**: `templates/base.html` - before any CSS loads
-
-## Theme Toggle UI
-
-**Location**: Navigation bar in `base.html`
-
-**Elements**:
-- Moon icon (☾) for dark mode activation
-- Sun icon (☀) for light mode activation
-- Toggle updates localStorage and `data-theme` attribute
-- Logo src updated dynamically
+`theme.css` (and a few page CSS files) contain component overrides written as
+`:root .card { … }`. The `:root` prefix is deliberate: these rules were
+previously `[data-theme="dark"] .card { … }` and the prefix preserves their
+specificity (0,1,1+), so they still beat single-class component rules. Don't
+"simplify" them to bare selectors — that changes the cascade.
 
 ## Usage in Components
 
@@ -110,10 +58,9 @@ All colors reference CSS variables:
 
 **Never hard-code colors** - always use variables.
 
-## Browser Support
-
-- Modern browsers with CSS custom properties support
-- Fallback: Light theme for browsers without localStorage
+The live-logging shell (`templates/live_logging.html` + `frontend/src/app.css`)
+deliberately does not load `theme.css`; it carries its own copy of the dark
+palette variables so the bundle is self-contained.
 
 ## Mobile/Responsive Standards
 
@@ -126,7 +73,7 @@ All colors reference CSS variables:
 - Mobile (≤767.98px): `1rem` (16px) for content areas
 
 **Form Inputs**:
-All form inputs must use CSS variables for dark mode compatibility:
+All form inputs must use CSS variables:
 ```css
 .form-control {
   background-color: var(--input-bg);

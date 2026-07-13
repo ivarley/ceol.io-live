@@ -39,7 +39,7 @@ duplicate-key flakes can't carry over between runs.
 | `support/nav.ts` | Shared helpers (hamburger menu, error-page assertion) |
 | `public/` | Logged-out smoke tests + auth gating |
 | `auth/` | Two-step login UI, logout, access-control matrix |
-| `app/` | Navigation menu, dark mode, dashboard |
+| `app/` | Navigation menu, dashboard |
 | `sessions/` | Sessions directory + session-detail SPA |
 | `my-tunes/` | Personal collection: list/filter, add, sync |
 | `admin/` | Every admin tab + people/tunes/merge/activity/cache tools |

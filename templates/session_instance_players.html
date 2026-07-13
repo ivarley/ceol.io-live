@@ -34,24 +34,24 @@
         opacity: 1;
     }
 
-    /* Dark mode tab navigation fixes */
-    [data-theme="dark"] .nav-tabs .nav-link.active {
+    /* Tab navigation theming (overrides Bootstrap defaults) */
+    :root .nav-tabs .nav-link.active {
         background-color: var(--bg-color) !important;
         color: var(--text-color) !important;
         border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
     }
 
-    [data-theme="dark"] .nav-tabs .nav-link {
+    :root .nav-tabs .nav-link {
         color: var(--text-color);
         border-color: transparent;
     }
 
-    [data-theme="dark"] .nav-tabs .nav-link:hover {
+    :root .nav-tabs .nav-link:hover {
         border-color: var(--border-color) var(--border-color) var(--bg-color);
         color: var(--text-color);
     }
 
-    [data-theme="dark"] .nav-tabs {
+    :root .nav-tabs {
         border-bottom: 1px solid var(--border-color);
     }
 </style>

@@ -151,23 +151,9 @@
             opacity: 0.8;
         }
 
-        [data-theme="dark"] .view-mode .tune-pill.linked,
-        [data-theme="dark"] .view-mode .tune-pill.loading {
-            background-color: #003366;
-            color: white;
-            border: none;
-        }
-
         /* Unlinked and unmatched tunes should be gray in view mode */
         .view-mode .tune-pill.unlinked,
         .view-mode .tune-pill.unmatched {
-            background-color: #6c757d;
-            color: white;
-            border: none;
-        }
-
-        [data-theme="dark"] .view-mode .tune-pill.unlinked,
-        [data-theme="dark"] .view-mode .tune-pill.unmatched {
             background-color: #6c757d;
             color: white;
             border: none;
@@ -218,15 +204,15 @@
         }
         
         .tune-pill.unlinked {
-            background-color: #cbcbcb;
-            color: black;
-            border: 1px solid #7a7a7a;
+            background-color: #4a4e52;
+            color: white;
+            border: 1px solid #4a4e52;
         }
-        
+
         .tune-pill.unmatched {
-            background-color: #e88a91;
-            color: black;
-            border: 1px solid #a04e53;
+            background-color: #8b2c31;
+            color: white;
+            border: 1px solid #8b2c31;
         }
         
         .tune-pill.loading {
@@ -236,9 +222,9 @@
         }
         
         .tune-pill.linked {
-            background-color: #cbe6ff;
-            color: black;
-            border: 1px solid #6994bb;
+            background-color: #1e5896;
+            color: white;
+            border: 1px solid #1e5896;
         }
         
         .tune-pill.error {
@@ -248,7 +234,7 @@
         }
         
         .tune-pill.selected {
-            box-shadow: 0 0 0 3px #ffd500;
+            box-shadow: 0 0 0 2px #ff9500;
         }
         
         .tune-pill.dragging {
@@ -358,12 +344,7 @@
             transform: translateY(-50%);
             box-shadow: 0 0 4px rgba(0, 122, 255, 0.5);
         }
-        
-        /* Ensure dark mode doesn't override */
-        [data-theme="dark"] #tune-pills-container.mobile-drop-target {
-            background-color: rgba(0, 122, 255, 0.3) !important;
-        }
-        
+
         .tune-pill.just-landed {
             background-color: #ffc107 !important;
             border-color: #ffc107 !important;
@@ -566,7 +547,7 @@
         
         .tune-context-menu {
             position: absolute;
-            background: white;
+            background: var(--dropdown-bg);
             border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 4px 0;
@@ -607,49 +588,6 @@
             padding-bottom: 0;
         }
         
-        /* Dark mode adjustments */
-        [data-theme="dark"] .tune-pill.unlinked {
-            background-color: #4a4e52;
-            color: white;
-            border: 1px solid #4a4e52;
-        }
-        
-        [data-theme="dark"] .tune-pill.unmatched {
-            background-color: #8b2c31;
-            color: white;
-            border: 1px solid #8b2c31;
-        }
-        
-        [data-theme="dark"] .tune-pill.linked {
-            background-color: #1e5896;
-            color: white;
-            border: 1px solid #1e5896;
-        }
-
-        [data-theme="dark"] .tune-pill.selected {
-            box-shadow: 0 0 0 2px #ff9500;
-        }
-
-        [data-theme="dark"] .tune-pills-container {
-            background: var(--bg-color);
-            border-color: var(--border-color);
-        }
-        
-        [data-theme="dark"] .tune-context-menu {
-            background: var(--dropdown-bg);
-            border-color: var(--border-color);
-            color: var(--text-color);
-        }
-        
-        [data-theme="dark"] .tune-context-menu a {
-            color: var(--text-color);
-        }
-        
-        [data-theme="dark"] .tune-context-menu a:hover {
-            background-color: var(--hover-bg);
-            color: var(--primary);
-        }
-
         /* Modals for linking and editing tunes */
         /* When modal is open, make everything inert */
         body.modal-open #tune-pills-container {
@@ -749,11 +687,7 @@
         
         /* Auto-save countdown styling */
         #auto-save-countdown {
-            color: #c3e6cb; /* Light green, subtle in light mode */
-        }
-        
-        [data-theme="dark"] #auto-save-countdown {
-            color: #3d4f42; /* Dark grey-green, subtle in dark mode */
+            color: #3d4f42; /* Dark grey-green, subtle against the dark background */
         }
         
         /* Cancel link inherits color from parent countdown text */
@@ -839,24 +773,24 @@
             }
         }
         
-        /* Dark mode tab navigation fixes */
-        [data-theme="dark"] .nav-tabs .nav-link.active {
+        /* Tab navigation theming (overrides Bootstrap defaults) */
+        :root .nav-tabs .nav-link.active {
             background-color: var(--bg-color) !important;
             color: var(--text-color) !important;
             border-color: var(--border-color) var(--border-color) var(--bg-color) !important;
         }
-        
-        [data-theme="dark"] .nav-tabs .nav-link {
+
+        :root .nav-tabs .nav-link {
             color: var(--text-color);
             border-color: transparent;
         }
-        
-        [data-theme="dark"] .nav-tabs .nav-link:hover {
+
+        :root .nav-tabs .nav-link:hover {
             border-color: var(--border-color) var(--border-color) var(--bg-color);
             color: var(--text-color);
         }
-        
-        [data-theme="dark"] .nav-tabs {
+
+        :root .nav-tabs {
             border-bottom: 1px solid var(--border-color);
         }
 
@@ -1021,11 +955,6 @@
             vertical-align: middle;
             margin-left: 10px;
             white-space: nowrap;
-        }
-
-        [data-theme="dark"] .on-now-badge {
-            background-color: #28a745;
-            color: white;
         }
 
         /* Tune Detail Modal Styles */
@@ -1229,30 +1158,30 @@
 
         /* Tune list status box styles */
         .tune-list-box-not-on-list {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
+            background-color: #4a1f1f;
+            border: 1px solid #6a2d2d;
+            color: #f8a5a5;
         }
 
         /* Want to Learn - Yellow */
         .tune-list-box-want-to-learn {
-            background-color: #fef3cd;
+            background-color: #4a3f1f;
             border: 1px solid #f0ad4e;
-            color: #856404;
+            color: #ffd97d;
         }
 
         /* Learning - Blue */
         .tune-list-box-learning {
-            background-color: #d1ecf1;
+            background-color: #1f3a4a;
             border: 1px solid #5bc0de;
-            color: #0c5460;
+            color: #7dd3e8;
         }
 
         /* Learned - Green */
         .tune-list-box-learned {
-            background-color: #d4edda;
+            background-color: #1e4620;
             border: 1px solid #5cb85c;
-            color: #155724;
+            color: #7dda8b;
         }
 
         .tune-list-select {
@@ -1288,31 +1217,6 @@
         .heard-count-line {
             display: flex;
             align-items: center;
-        }
-
-        /* Dark mode styles for tune list boxes */
-        [data-theme="dark"] .tune-list-box-not-on-list {
-            background-color: #4a1f1f;
-            border-color: #6a2d2d;
-            color: #f8a5a5;
-        }
-
-        [data-theme="dark"] .tune-list-box-want-to-learn {
-            background-color: #4a3f1f;
-            border-color: #f0ad4e;
-            color: #ffd97d;
-        }
-
-        [data-theme="dark"] .tune-list-box-learning {
-            background-color: #1f3a4a;
-            border-color: #5bc0de;
-            color: #7dd3e8;
-        }
-
-        [data-theme="dark"] .tune-list-box-learned {
-            background-color: #1e4620;
-            border-color: #5cb85c;
-            color: #7dda8b;
         }
 
         /* Recording UI */

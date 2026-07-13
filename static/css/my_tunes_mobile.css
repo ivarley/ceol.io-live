@@ -477,18 +477,18 @@
 /* Status colors match the tune detail modal (tunebook-status-*): want to learn = blue,
    learning = yellow, learned = green */
 .status-want-to-learn {
-    background-color: #e6f3ff;
-    color: #004085;
+    background-color: #1f3a4a;
+    color: #cce5ff;
 }
 
 .status-learning {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: #4a3f1f;
+    color: #ffeaa7;
 }
 
 .status-learned {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: #1f4a2f;
+    color: #c3e6cb;
 }
 
 .tune-actions {
@@ -791,7 +791,7 @@
 }
 
 .modal-save-btn:disabled {
-    background-color: var(--secondary, #6c757d);
+    background-color: #555;
     cursor: not-allowed;
     opacity: 0.5;
 }
@@ -868,7 +868,7 @@
 .modal-notes-textarea:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background-color: var(--light, #f8f9fa);
+    background-color: #2a2a2a;
 }
 
 /* Setting ID and Name Alias field styles */
@@ -902,7 +902,7 @@
 .modal-field-input:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background-color: var(--light, #f8f9fa);
+    background-color: #2a2a2a;
 }
 
 .modal-tune-title-editable {
@@ -935,7 +935,7 @@
     gap: 12px;
     margin-bottom: 12px;
     padding: 12px;
-    background-color: var(--light, #f8f9fa);
+    background-color: #2a2a2a;
     border-radius: 4px;
 }
 
@@ -1001,41 +1001,6 @@
     color: var(--text-color);
     min-width: 30px;
     text-align: center;
-}
-
-/* ============================================
-   DARK MODE ADJUSTMENTS
-   ============================================ */
-
-[data-theme="dark"] .status-want-to-learn {
-    background-color: #1f3a4a;
-    color: #cce5ff;
-}
-
-[data-theme="dark"] .status-learning {
-    background-color: #4a3f1f;
-    color: #ffeaa7;
-}
-
-[data-theme="dark"] .status-learned {
-    background-color: #1f4a2f;
-    color: #c3e6cb;
-}
-
-[data-theme="dark"] .modal-save-btn:disabled {
-    background-color: #555;
-}
-
-[data-theme="dark"] .modal-notes-textarea:disabled {
-    background-color: #2a2a2a;
-}
-
-[data-theme="dark"] .modal-field-input:disabled {
-    background-color: #2a2a2a;
-}
-
-[data-theme="dark"] .heard-count-row {
-    background-color: #2a2a2a;
 }
 
 /* ============================================
@@ -1763,7 +1728,7 @@
 
 .modal-remove-link {
     font-size: 14px;
-    color: #dc3545;
+    color: #ff6b6b;
     text-decoration: none;
     transition: opacity 0.2s;
 }
@@ -1771,8 +1736,4 @@
 .modal-remove-link:hover {
     text-decoration: underline;
     opacity: 0.8;
-}
-
-[data-theme="dark"] .modal-remove-link {
-    color: #ff6b6b;
 }

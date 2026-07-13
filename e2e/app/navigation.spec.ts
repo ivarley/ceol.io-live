@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { STORAGE } from "../support/data";
 import { openMenu, expectNoServerError } from "../support/nav";
 
-/** Primary navigation: the hamburger menu, dark-mode toggle, and find-a-tune. */
+/** Primary navigation: the hamburger menu and find-a-tune. */
 
 test.describe("authenticated navigation", () => {
   test.use({ storageState: STORAGE.regular });
@@ -30,23 +30,6 @@ test.describe("authenticated navigation", () => {
     await expect(menu.getByRole("link", { name: /^Admin$/ })).toHaveCount(0);
   });
 
-  test("dark mode toggle flips the theme and persists", async ({ page }) => {
-    await page.goto("/");
-    const html = page.locator("html");
-    const before = await html.getAttribute("data-theme");
-
-    const menu = await openMenu(page);
-    await menu.getByText(/Dark Mode|Light Mode/i).click();
-
-    await expect
-      .poll(async () => html.getAttribute("data-theme"))
-      .not.toBe(before);
-
-    // Survives a reload (persisted to storage).
-    const afterToggle = await html.getAttribute("data-theme");
-    await page.reload();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", afterToggle!);
-  });
 });
 
 test.describe("admin navigation", () => {

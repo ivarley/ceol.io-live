@@ -22,7 +22,7 @@ Frontend, templates, interactions, theming
 - [Svelte Pages](specs/current/ui/svelte-pages.md) - Thin shell + `__PAGE_DATA__` + page bundle; how to add/change a page; the component kit
 - [Templates & Pages](specs/current/ui/templates.md) - HTML structure, base layouts, shells vs. Jinja pages
 - [Session Logging UI](specs/current/ui/session-logging.md) - QUARANTINED legacy pill editor (spec 035 Step 6 deletes it)
-- [Dark Mode & Theming](specs/current/ui/theming.md) - CSS variables, theme switching
+- [Theming](specs/current/ui/theming.md) - CSS variables (dark-only palette)
 - [AJAX Patterns](specs/current/ui/ajax.md) - Serializer layer, API auth decorators, Bearer tokens
 
 ### [Data Layer](specs/current/data/README.md)

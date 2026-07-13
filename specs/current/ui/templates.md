@@ -8,7 +8,6 @@ Flask/Jinja2 template hierarchy and shared components.
 
 **Provides**:
 - HTML structure, header, navigation
-- Theme system (dark/light mode)
 - Flash messages (toasts) — `showMessage()` at `base.html:365`
 - In-session badge
 - PWA features (service worker, pull-to-refresh)
@@ -41,7 +40,7 @@ out; today no page does (`common_tunes.html` used to, but now uses the shared
 sheet).
 
 The one template that does **not** extend `base.html` is `live_logging.html`
-(the live logger's always-dark standalone shell, spec 024).
+(the live logger's standalone shell, spec 024).
 
 ## Thin Svelte shells
 
@@ -78,21 +77,19 @@ modern Svelte surfaces with the add pane auto-opened (`?add=1[&q=]` — see
 
 ## Header
 
-**Logo**: `#logo-img` (`base.html:306`) - Responsive, theme-aware
+**Logo**: `#logo-img` (`base.html:306`) - Responsive
 
 **In Session Badge**: `#inSessionBadge` (`base.html:327`) - "Live" indicator when a session is on, popup on hover/click
 
-**Hamburger Menu**: `static/js/hamburger_menu.js` + `templates/hamburger_menu.html` - Profile, Admin, My Tunes, Find a tune, Dark Mode, Log Out (authenticated) | Log In, Session Logs (unauthenticated)
+**Hamburger Menu**: `static/js/hamburger_menu.js` + `templates/hamburger_menu.html` - Profile, Admin, My Tunes, Find a tune, Log Out (authenticated) | Log In, Session Logs (unauthenticated)
 
 ## Theme
 
-**Default**: Dark mode (localStorage 'theme')
-
-**FOUC Prevention**: Inline script in `<head>` before any CSS loads
+The app is dark-only — no toggle, no `data-theme` attribute.
 
 **CSS**: `static/css/theme.css` - The single token source (colors + radius/shadow/spacing/motion/z-index scales)
 
-**See**: [Dark Mode & Theming](theming.md)
+**See**: [Theming](theming.md)
 
 ## Messages
 
@@ -140,7 +137,7 @@ modern Svelte surfaces with the add pane auto-opened (`?add=1[&q=]` — see
 
 ## JavaScript
 
-**Inline**: Base template (theme, menu, badge)
+**Inline**: Base template (menu, badge)
 
 **Page**: `{% block extra_js %}` — Svelte page bundles (`static/<page>/page.js`) on migrated pages
 

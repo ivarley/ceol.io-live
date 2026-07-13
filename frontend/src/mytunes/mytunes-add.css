@@ -4,7 +4,7 @@
    the site's theme variables and scopes every rule under .mt-add-pane. */
 
 .mt-add-pane {
-  /* live-app variable names -> site theme (flips automatically with [data-theme=dark]) */
+  /* live-app variable names -> site theme (theme.css vars; the app is dark-only) */
   --bg: var(--bg-color, #fff);
   --panel: var(--hover-bg, #f8f9fa);
   --text: var(--text-color, #252930);
@@ -69,8 +69,7 @@
   width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer;
   background: transparent; color: var(--muted); font-size: 19px; line-height: 1; padding: 0;
 }
-.mt-add-pane .deep-clear:hover { background: rgba(0, 0, 0, 0.06); color: var(--text); }
-[data-theme="dark"] .mt-add-pane .deep-clear:hover { background: rgba(255, 255, 255, 0.08); }
+.mt-add-pane .deep-clear:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .mt-add-pane .deep-tab {
   font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 8px; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); color: var(--muted);
@@ -133,11 +132,9 @@
 .mt-add-pane .deep-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
 .mt-add-pane .deep-badge {
   font-weight: 600; padding: 2px 8px; border-radius: 10px;
-  background: rgba(0, 0, 0, 0.06); color: var(--muted);
+  background: rgba(255, 255, 255, 0.08); color: var(--muted);
 }
-[data-theme="dark"] .mt-add-pane .deep-badge { background: rgba(255, 255, 255, 0.08); }
-.mt-add-pane .deep-badge.star { background: rgba(238, 191, 65, 0.22); color: #8a6d1a; }
-[data-theme="dark"] .mt-add-pane .deep-badge.star { color: #e8d28a; }
+.mt-add-pane .deep-badge.star { background: rgba(238, 191, 65, 0.22); color: #e8d28a; }
 .mt-add-pane .deep-books { color: var(--muted); margin-left: auto; }
 .mt-add-pane .deep-remote { padding: 4px 14px 20px; display: flex; flex-direction: column; gap: 10px; }
 .mt-add-pane .deep-remote-head {
@@ -200,8 +197,7 @@
   text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 2px;
 }
 .mt-add-pane .pv-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 13px; }
-.mt-add-pane .pv-fact-here { color: #8a6d1a; font-weight: 600; }
-[data-theme="dark"] .mt-add-pane .pv-fact-here { color: #e8d28a; }
+.mt-add-pane .pv-fact-here { color: #e8d28a; font-weight: 600; }
 .mt-add-pane .pv-fact-none { color: var(--muted); font-style: italic; }
 .mt-add-pane .pv-fact-pop { color: var(--muted); }
 .mt-add-pane .pv-fact-pop b { color: var(--accent); font-weight: 700; }
@@ -252,8 +248,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* the session's preferred setting — same voice as .deep-badge.star on this theme */
-.mt-add-pane .pv-sesset { color: #8a6d1a; font-weight: 600; }
-[data-theme="dark"] .mt-add-pane .pv-sesset { color: #e8d28a; }
+.mt-add-pane .pv-sesset { color: #e8d28a; font-weight: 600; }
 .mt-add-pane .pv-import-note {
   font-size: 12px; padding: 8px 11px; border-radius: 8px;
   background: rgba(0, 161, 224, 0.08); border: 1px solid var(--accent); color: var(--text);

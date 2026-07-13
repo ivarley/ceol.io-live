@@ -423,12 +423,8 @@ async function saveSelectedPlayers() {
     overflow-y: auto;
 }
 
-/* Dark mode compatible duplicate row highlighting */
+/* Duplicate row highlighting */
 .duplicate-row {
-    background-color: #fff3cd;
-}
-
-[data-theme="dark"] .duplicate-row {
     background-color: #664d03;
     color: #fff;
 }
@@ -443,7 +439,7 @@ async function saveSelectedPlayers() {
     font-size: 0.75em;
     display: inline-block;
     font-weight: bold;
-    color: #6c757d;
+    color: #adb5bd;
     width: 12px;
     text-align: center;
 }
@@ -452,39 +448,35 @@ async function saveSelectedPlayers() {
     transform: rotate(90deg);
 }
 
-[data-theme="dark"] .chevron-icon {
-    color: #adb5bd;
-}
-
 .format-help-content {
     transition: opacity 0.3s ease;
 }
 
-/* Dark mode support for alerts */
-[data-theme="dark"] .alert-info {
+/* Alert theming (overrides Bootstrap defaults) */
+:root .alert-info {
     background-color: #0f2537;
     border-color: #1c5a7e;
     color: #9fd3f3;
 }
 
-[data-theme="dark"] .alert-secondary {
+:root .alert-secondary {
     background-color: #2d2d2d;
     border-color: #495057;
     color: #e9ecef;
 }
 
-[data-theme="dark"] .alert-info h6,
-[data-theme="dark"] .alert-secondary h6 {
+:root .alert-info h6,
+:root .alert-secondary h6 {
     color: #ffffff;
 }
 
-[data-theme="dark"] .bg-light {
+:root .bg-light {
     background-color: #343a40 !important;
     color: #e9ecef;
 }
 
-/* Improve monospace readability in dark mode */
-[data-theme="dark"] .font-monospace {
+/* Improve monospace readability */
+:root .font-monospace {
     color: #e9ecef;
 }
 
@@ -510,27 +502,18 @@ async function saveSelectedPlayers() {
 /* Instrument badge styling */
 .instrument-badge {
     display: inline-block;
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: #495057;
+    color: #e9ecef;
     padding: 0.25em 0.5em;
     font-size: 0.75rem;
     border-radius: 0.25rem;
     font-weight: 500;
 }
 
-[data-theme="dark"] .instrument-badge {
-    background-color: #495057;
-    color: #e9ecef;
-}
-
 .instrument-comma {
-    color: #6c757d;
+    color: #adb5bd;
     font-size: 0.75rem;
     margin: 0 0.1em;
-}
-
-[data-theme="dark"] .instrument-comma {
-    color: #adb5bd;
 }
 </style>
 {% endblock %}

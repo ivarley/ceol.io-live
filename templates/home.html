@@ -23,9 +23,6 @@
     }
     .home-card:hover {
         border-color: var(--primary);
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-    [data-theme="dark"] .home-card:hover {
         box-shadow: 0 2px 16px rgba(0,0,0,0.3);
     }
 
@@ -194,8 +191,8 @@
         font-weight: 500;
         font-size: 1rem;
         color: #fff;
-        /* Fixed darker-blue (brand family) so white text has strong contrast in both
-           themes — the light-ish --primary washed the label out. */
+        /* Fixed darker-blue (brand family) so white text has strong contrast —
+           the lighter --primary washed the label out. */
         background: #006aa0;
         border: none;
         border-radius: 6px;

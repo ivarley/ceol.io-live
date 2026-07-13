@@ -5,6 +5,8 @@
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
  :root {
+    /* Dark-only app: render native controls (selects, scrollbars, pickers) dark */
+    color-scheme: dark;
     --blue: #007bff;
     --indigo: #6610f2;
     --purple: #6f42c1;
@@ -18,14 +20,14 @@
     --white: #fff;
     --gray: #adb4c0;
     --gray-dark: #747f94;
-    --primary: #00a1e0;
-    --secondary: #5d6778;
-    --success: #5cb377;
+    --primary: #4da6ff;
+    --secondary: #8a95a8;
+    --success: #4daf5a;
     --info: #5b99ea;
-    --warning: #eebf41;
-    --danger: #d26d69;
-    --light: #fff;
-    --dark: #747f94;
+    --warning: #f5c842;
+    --danger: #e85a5a;
+    --light: #2d2d2d;
+    --dark: #e0e0e0;
     --breakpoint-xs: 0;
     --breakpoint-sm: 576px;
     --breakpoint-md: 768px;
@@ -37,47 +39,47 @@
     --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
       "Liberation Mono", "Courier New", monospace;
     
-    /* Dark mode variables */
-    --bg-color: #fff;
-    --text-color: #252930;
-    --header-bg: #fff;
-    --border-color: #ddd;
-    --dropdown-bg: #fff;
-    --dropdown-border: #ddd;
-    --dropdown-shadow: rgba(0,0,0,0.15);
-    --hover-bg: #f8f9fa;
-    --disabled-text: #adb4c0;
-    --hamburger-line-color: #747f94;
-    --success: #28a745;
-    --danger: #dc3545;
-    --warning: #ffc107;
-    --success-bg: #d4edda;
-    --success-border: #c3e6cb;
-    --success-text: #155724;
-    --error-bg: #f8d7da;
-    --error-border: #f5c6cb;
-    --error-text: #721c24;
-    --warning-bg: #fff3cd;
-    --warning-border: #ffeaa7;
-    --warning-text: #856404;
-    --link-color: #00a1e0;
-    --link-hover-color: #005b7f;
-    --input-bg: #fff;
-    --secondary-text: #adb4c0;
-    --table-header-bg: #f5f6f8;
+    /* Theme surface/text variables (the app is dark-only) */
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --header-bg: #2d2d2d;
+    --border-color: #444;
+    --dropdown-bg: #2d2d2d;
+    --dropdown-border: #444;
+    --dropdown-shadow: rgba(0,0,0,0.3);
+    --hover-bg: #3d3d3d;
+    --disabled-text: #888;
+    --hamburger-line-color: #e0e0e0;
+    --success-bg: #2d5a32;
+    --success-border: #3d6e42;
+    --success-text: #90ee90;
+    --error-bg: #5a2d2d;
+    --error-border: #6e3d3d;
+    --error-text: #ffb3b3;
+    --warning-bg: #5a4a2d;
+    --warning-border: #6e5a3d;
+    --warning-text: #ffd700;
+    --info-bg: #2d4a5a;
+    --info-border: #3d5e6e;
+    --info-text: #b3e0ff;
+    --link-color: #4da6ff;
+    --link-hover-color: #80c0ff;
+    --input-bg: #2d2d2d;
+    --secondary-text: #888;
+    --table-header-bg: #3d3d3d;
 
-    /* Muted text (formerly a phantom var; matches the #6c757d fallbacks in use) */
-    --text-muted: #6c757d;
+    /* Muted text (formerly a phantom var) */
+    --text-muted: #888;
     /* Hover-state darks (formerly phantom vars; values match the fallbacks in use) */
     --primary-dark: #0056b3;
     --secondary-dark: #5a6268;
     /* Already-added rows in tune search */
-    --already-added-bg: #f5f5f5;
-    --already-added-hover-bg: #e8e8e8;
+    --already-added-bg: #3a3a3a;
+    --already-added-hover-bg: #454545;
     /* Modal surfaces (moved from tune_detail_modal.css so load order doesn't matter) */
-    --modal-bg-secondary: #f8f9fa;
-    --modal-text-muted: #6c757d;
-    --modal-primary-dark: #0056b3;
+    --modal-bg-secondary: #2a2a2a;
+    --modal-text-muted: #888;
+    --modal-primary-dark: #3385cc;
 
     /* ============ Design token scales (spec 035) ============ */
     /* Radius */
@@ -86,9 +88,9 @@
     --r-lg: 12px;
     --r-pill: 999px;
     /* Shadow: sm = dropdowns, md = cards, lg = modals/sheets */
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
-    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.12);
-    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.2);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.55);
     /* Scrim behind modals/sheets */
     --scrim: rgba(0, 0, 0, 0.5);
     /* Spacing: 4px base scale */
@@ -150,50 +152,6 @@
     }
   }
 
-  [data-theme="dark"] {
-    --bg-color: #1a1a1a;
-    --text-color: #e0e0e0;
-    --header-bg: #2d2d2d;
-    --border-color: #444;
-    --dropdown-bg: #2d2d2d;
-    --dropdown-border: #444;
-    --dropdown-shadow: rgba(0,0,0,0.3);
-    --hover-bg: #3d3d3d;
-    --disabled-text: #888;
-    --hamburger-line-color: #e0e0e0;
-    --primary: #4da6ff;
-    --secondary: #8a95a8;
-    --light: #2d2d2d;
-    --dark: #e0e0e0;
-    --success: #4daf5a;
-    --danger: #e85a5a;
-    --warning: #f5c842;
-    --success-bg: #2d5a32;
-    --success-border: #3d6e42;
-    --success-text: #90ee90;
-    --error-bg: #5a2d2d;
-    --error-border: #6e3d3d;
-    --error-text: #ffb3b3;
-    --warning-bg: #5a4a2d;
-    --warning-border: #6e5a3d;
-    --warning-text: #ffd700;
-    --link-color: #4da6ff;
-    --link-hover-color: #80c0ff;
-    --input-bg: #2d2d2d;
-    --secondary-text: #888;
-    --table-header-bg: #3d3d3d;
-
-    --text-muted: #888;
-    --already-added-bg: #3a3a3a;
-    --already-added-hover-bg: #454545;
-    --modal-bg-secondary: #2a2a2a;
-    --modal-text-muted: #888;
-    --modal-primary-dark: #3385cc;
-
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
-    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.55);
-  }
   *,
   *::before,
   *::after {
@@ -228,7 +186,6 @@
     color: var(--text-color);
     text-align: left;
     background-color: var(--bg-color);
-    transition: background-color 0.3s ease, color 0.3s ease;
   }
   [tabindex="-1"]:focus:not(:focus-visible) {
     outline: 0 !important;
@@ -4815,92 +4772,92 @@
     color: inherit;
   }
   .alert-primary {
-    color: #155f38;
-    background-color: #d4f1e1;
-    border-color: #c3ebd6;
+    color: var(--success-text);
+    background-color: var(--success-bg);
+    border-color: var(--success-border);
   }
   .alert-primary hr {
-    border-top-color: #b0e5c9;
+    border-top-color: var(--success-border);
   }
   .alert-primary .alert-link {
-    color: #0c351f;
+    color: var(--success-text);
   }
   .alert-secondary {
-    color: #30353e;
-    background-color: #dfe1e4;
-    border-color: #d2d4d9;
+    color: var(--text-color);
+    background-color: var(--hover-bg);
+    border-color: var(--border-color);
   }
   .alert-secondary hr {
-    border-top-color: #c4c7cd;
+    border-top-color: var(--border-color);
   }
   .alert-secondary .alert-link {
-    color: #1a1c21;
+    color: var(--text-color);
   }
   .alert-success {
-    color: #305d3e;
-    background-color: #def0e4;
-    border-color: #d1ead9;
+    color: var(--success-text);
+    background-color: var(--success-bg);
+    border-color: var(--success-border);
   }
   .alert-success hr {
-    border-top-color: #bfe2cb;
+    border-top-color: var(--success-border);
   }
   .alert-success .alert-link {
-    color: #1f3b28;
+    color: var(--success-text);
   }
   .alert-info {
-    color: #2f507a;
-    background-color: #deebfb;
-    border-color: #d1e2f9;
+    color: var(--info-text);
+    background-color: var(--info-bg);
+    border-color: var(--info-border);
   }
   .alert-info hr {
-    border-top-color: #bad4f6;
+    border-top-color: var(--info-border);
   }
   .alert-info .alert-link {
-    color: #213855;
+    color: var(--info-text);
   }
   .alert-warning {
-    color: #7c6322;
-    background-color: #fcf2d9;
-    border-color: #faedca;
+    color: var(--warning-text);
+    background-color: var(--warning-bg);
+    border-color: var(--warning-border);
   }
   .alert-warning hr {
-    border-top-color: #f8e5b3;
+    border-top-color: var(--warning-border);
   }
   .alert-warning .alert-link {
-    color: #544317;
+    color: var(--warning-text);
   }
   .alert-danger {
-    color: #6d3937;
-    background-color: #f6e2e1;
-    border-color: #f2d6d5;
+    color: var(--error-text);
+    background-color: var(--error-bg);
+    border-color: var(--error-border);
   }
   .alert-danger hr {
-    border-top-color: #ecc3c2;
+    border-top-color: var(--error-border);
   }
   .alert-danger .alert-link {
-    color: #4b2726;
+    color: var(--error-text);
   }
   .alert-light {
-    color: #858585;
-    background-color: #fff;
-    border-color: #fff;
+    color: var(--text-color);
+    background-color: var(--hover-bg);
+    border-color: var(--border-color);
   }
   .alert-light hr {
-    border-top-color: #f2f2f2;
+    border-top-color: var(--border-color);
   }
   .alert-light .alert-link {
-    color: #6c6c6c;
+    color: var(--text-color);
   }
   .alert-dark {
-    color: #3c424d;
-    background-color: #e3e5ea;
-    border-color: #d8dbe1;
+    color: var(--text-color);
+    background-color: var(--header-bg);
+    border-color: var(--border-color);
   }
   .alert-dark hr {
-    border-top-color: #caced6;
+    border-top-color: var(--border-color);
   }
   .alert-dark .alert-link {
-    color: #262930;
+    color: var(--text-color);
   }
   @-webkit-keyframes progress-bar-stripes {
     from {
@@ -9787,114 +9744,116 @@
     }
   }
 
-  /* Additional dark mode styles */
-  [data-theme="dark"] .card {
+  /* Bootstrap component overrides for the dark palette. The `:root` prefix is
+     deliberate: it keeps the specificity these rules had as [data-theme="dark"]
+     selectors, so they still beat single-class component rules. */
+  :root .card {
     background-color: var(--dropdown-bg);
     border-color: var(--border-color);
   }
 
-  [data-theme="dark"] .table {
+  :root .table {
     color: var(--text-color);
   }
 
-  [data-theme="dark"] .table th,
-  [data-theme="dark"] .table td {
+  :root .table th,
+  :root .table td {
     border-color: var(--border-color);
   }
 
   /* Fix table striping for dark mode */
-  [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
+  :root .table-striped tbody tr:nth-of-type(odd) {
     background-color: rgba(255, 255, 255, 0.05);
   }
 
-  [data-theme="dark"] .table-hover tbody tr:hover {
+  :root .table-hover tbody tr:hover {
     color: var(--text-color);
     background-color: rgba(255, 255, 255, 0.075);
   }
 
   /* Fix nav-tabs active background for dark mode */
-  [data-theme="dark"] .nav-tabs .nav-link.active,
-  [data-theme="dark"] .nav-tabs .nav-item.show .nav-link {
+  :root .nav-tabs .nav-link.active,
+  :root .nav-tabs .nav-item.show .nav-link {
     background-color: var(--bg-color);
     color: var(--text-color);
     border-color: var(--border-color) var(--border-color) var(--bg-color);
   }
 
   /* Fix heading visibility in dark mode */
-  [data-theme="dark"] h1,
-  [data-theme="dark"] h2,
-  [data-theme="dark"] h3,
-  [data-theme="dark"] h4,
-  [data-theme="dark"] h5,
-  [data-theme="dark"] h6,
-  [data-theme="dark"] .h1,
-  [data-theme="dark"] .h2,
-  [data-theme="dark"] .h3,
-  [data-theme="dark"] .h4,
-  [data-theme="dark"] .h5,
-  [data-theme="dark"] .h6,
-  [data-theme="dark"] .docs-heading {
+  :root h1,
+  :root h2,
+  :root h3,
+  :root h4,
+  :root h5,
+  :root h6,
+  :root .h1,
+  :root .h2,
+  :root .h3,
+  :root .h4,
+  :root .h5,
+  :root .h6,
+  :root .docs-heading {
     color: var(--text-color);
   }
 
-  [data-theme="dark"] .docs-article strong {
+  :root .docs-article strong {
     color: var(--text-color);
   }
 
   /* Fix logo text visibility in dark mode */
-  [data-theme="dark"] .site-logo .logo-text {
+  :root .site-logo .logo-text {
     color: var(--text-color);
   }
 
-  [data-theme="dark"] .btn-outline-primary {
+  :root .btn-outline-primary {
     color: var(--primary);
     border-color: var(--primary);
   }
 
-  [data-theme="dark"] .btn-outline-primary:hover {
+  :root .btn-outline-primary:hover {
     background-color: var(--primary);
     border-color: var(--primary);
   }
 
-  [data-theme="dark"] .form-control {
+  :root .form-control {
     background-color: var(--dropdown-bg);
     border-color: var(--border-color);
     color: var(--text-color);
   }
 
-  [data-theme="dark"] .form-control:focus {
+  :root .form-control:focus {
     background-color: var(--dropdown-bg);
     border-color: var(--primary);
     color: var(--text-color);
   }
 
   /* Dark mode text improvements */
-  [data-theme="dark"] .landing-page p {
+  :root .landing-page p {
     color: #b8b8b8; /* Lighter text for welcome paragraphs */
   }
 
-  [data-theme="dark"] h2#subcategories,
-  [data-theme="dark"] .section-heading,
-  [data-theme="dark"] h2 {
+  :root h2#subcategories,
+  :root .section-heading,
+  :root h2 {
     color: #c8c8c8; /* Slightly darker than main text for section headings */
   }
 
   /* Lighter blue hyperlinks for dark mode */
-  [data-theme="dark"] a {
+  :root a {
     color: #66b3ff; /* Lighter shade of blue */
   }
 
-  [data-theme="dark"] a:hover {
+  :root a:hover {
     color: #80c1ff; /* Even lighter on hover */
   }
 
   /* Ensure visited links are also light blue in dark mode */
-  [data-theme="dark"] a:visited {
+  :root a:visited {
     color: #66b3ff;
   }
 
   /* Make modal headers lighter in dark mode */
-  [data-theme="dark"] .modal-header h3 {
+  :root .modal-header h3 {
     color: #d0d0d0; /* Lighter than main text for better readability */
   }
   

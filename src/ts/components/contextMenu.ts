@@ -378,17 +378,9 @@ export class ContextMenu {
         menu.style.minWidth = Math.max(200, rect.width) + 'px';
         menu.style.maxWidth = Math.min(600, window.innerWidth - rect.left - 20) + 'px';
         
-        // Use theme-aware styling for the menu
-        const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-        if (isDarkMode) {
-            menu.style.backgroundColor = 'var(--dropdown-bg)';
-            menu.style.color = 'var(--text-color)';
-            menu.style.border = '1px solid var(--border-color)';
-        } else {
-            menu.style.backgroundColor = 'white';
-            menu.style.color = '#212529';
-            menu.style.border = '1px solid #dee2e6';
-        }
+        menu.style.backgroundColor = 'var(--dropdown-bg)';
+        menu.style.color = 'var(--text-color)';
+        menu.style.border = '1px solid var(--border-color)';
         menu.style.borderRadius = '4px';
         menu.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
         
@@ -398,8 +390,8 @@ export class ContextMenu {
             item.style.display = 'block';
             item.style.padding = '8px 12px';
             item.style.cursor = 'pointer';
-            item.style.borderBottom = isDarkMode ? '1px solid var(--border-color)' : '1px solid #f0f0f0';
-            item.style.color = isDarkMode ? 'var(--text-color)' : '#212529';
+            item.style.borderBottom = '1px solid var(--border-color)';
+            item.style.color = 'var(--text-color)';
             item.style.textDecoration = 'none';
             
             // Show tune name and type
@@ -411,14 +403,14 @@ export class ContextMenu {
             if (result.tune_type) {
                 const typeSpan = document.createElement('span');
                 typeSpan.textContent = ` (${result.tune_type})`;
-                typeSpan.style.color = isDarkMode ? 'var(--disabled-text)' : '#6c757d';
+                typeSpan.style.color = 'var(--disabled-text)';
                 typeSpan.style.fontSize = '0.9em';
                 item.appendChild(typeSpan);
             }
             
             // Hover effect
             item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = isDarkMode ? 'var(--hover-bg)' : '#f8f9fa';
+                item.style.backgroundColor = 'var(--hover-bg)';
             });
             item.addEventListener('mouseleave', () => {
                 item.style.backgroundColor = 'transparent';

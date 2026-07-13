@@ -64,34 +64,6 @@
     <script src="{{ url_for('static', filename='js/prefetch.js') }}" defer></script>
     {% endif %}
 
-    <!-- Prevent FOUC (Flash of Unstyled Content) for dark mode -->
-    <script>
-        (function() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-
-            // Set logo based on theme once DOM is ready
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
-                    updateLogo(savedTheme);
-                });
-            } else {
-                updateLogo(savedTheme);
-            }
-
-            function updateLogo(theme) {
-                const logoImg = document.getElementById('logo-img');
-                if (logoImg) {
-                    if (theme === 'dark') {
-                        logoImg.src = logoImg.src.replace('logo2-1.png', 'logo2-dark-1.png');
-                    } else {
-                        logoImg.src = logoImg.src.replace('logo2-dark-1.png', 'logo2-1.png');
-                    }
-                }
-            }
-        })();
-    </script>
-
     <style>
         /* Header customization for new logo */
         body {

@@ -2,9 +2,9 @@
    Ported from the <style> block in the legacy templates/add_session.html;
    the modal chrome rules died with the ModalManager overlays (the kit Sheet
    and Dialog carry their own). Global on purpose: these style the legacy
-   class names the Svelte components emit. Theme-aware via theme.css vars. */
+   class names the Svelte components emit. Themed via theme.css vars (dark-only). */
 
-/* Fix code elements for dark mode */
+/* Code elements on the dark theme */
 .docs-article code {
     background-color: var(--hover-bg);
     color: var(--text-color);
@@ -13,7 +13,7 @@
     border: 1px solid var(--border-color);
 }
 
-/* Form controls (page + sheet) for dark mode */
+/* Form controls (page + sheet) */
 .docs-article .form-control,
 #sessionDetailsForm .form-control {
     background-color: var(--bg-color);

@@ -17,7 +17,7 @@
 }
 .session-details {
     position: relative;
-    background-color: #f5f5f5;
+    background-color: #2a2a2a;
     padding: 10px;
     border-radius: 8px;
     margin-bottom: 10px;
@@ -33,20 +33,18 @@
     margin-bottom: 6px;
 }
 
-[data-theme="dark"] .session-details {
-    background-color: #2a2a2a;
-}
-
-[data-theme="dark"] .session-join-message {
+/* :root prefix keeps the old override specificity against the inline-styled
+   shell markup (the app is dark-only; these were the dark-theme values). */
+:root .session-join-message {
     background-color: #1a3a52 !important;
     border-color: #2a5a7a !important;
 }
 
-[data-theme="dark"] .session-join-message p {
+:root .session-join-message p {
     color: #b3d9ff !important;
 }
 
-[data-theme="dark"] .session-join-message a {
+:root .session-join-message a {
     color: #6db3ff !important;
 }
 
@@ -207,8 +205,8 @@
 }
 
 /* My-tunebook status highlighting (same palette as the tune-detail modal's
-   tunebook-status-* tints, both themes). Chip = solid status color; row
-   gets a subtle same-hue wash (alpha works on light and dark). */
+   tunebook-status-* tints). Chip = solid status color; row gets a subtle
+   same-hue wash. */
 .ls-chip {
     font-size: 11px;
     font-weight: 700;
@@ -217,14 +215,10 @@
     text-transform: capitalize;
     white-space: nowrap;
 }
-.ls-chip.ls-want-to-learn { background-color: #e6f3ff; color: #004085; }
-.ls-chip.ls-learning { background-color: #fff3cd; color: #856404; }
-.ls-chip.ls-learned { background-color: #d4edda; color: #155724; }
-.ls-chip.ls-not-on-list { background-color: #ffe6e6; color: #721c24; }
-[data-theme="dark"] .ls-chip.ls-want-to-learn { background-color: #1f3a4a; color: #cce5ff; }
-[data-theme="dark"] .ls-chip.ls-learning { background-color: #4a3f1f; color: #ffeaa7; }
-[data-theme="dark"] .ls-chip.ls-learned { background-color: #1f4a2f; color: #c3e6cb; }
-[data-theme="dark"] .ls-chip.ls-not-on-list { background-color: #4a1f1f; color: #f8d7da; }
+.ls-chip.ls-want-to-learn { background-color: #1f3a4a; color: #cce5ff; }
+.ls-chip.ls-learning { background-color: #4a3f1f; color: #ffeaa7; }
+.ls-chip.ls-learned { background-color: #1f4a2f; color: #c3e6cb; }
+.ls-chip.ls-not-on-list { background-color: #4a1f1f; color: #f8d7da; }
 .tune-row.ls-want-to-learn { background-color: rgba(79, 157, 255, 0.09); }
 .tune-row.ls-learning { background-color: rgba(245, 197, 24, 0.09); }
 .tune-row.ls-learned { background-color: rgba(70, 210, 122, 0.10); }
@@ -397,6 +391,8 @@
     font-size: 14px;
     box-sizing: border-box;
     font-family: inherit;
+    background-color: var(--dropdown-bg);
+    color: var(--text-color);
 }
 .add-link {
     color: var(--primary);
@@ -422,26 +418,7 @@
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-/* Dark mode styles for modal form elements */
-[data-theme="dark"] .modal-body input[type="date"],
-[data-theme="dark"] .modal-body input[type="time"],
-[data-theme="dark"] .modal-body input[type="text"],
-[data-theme="dark"] .modal-body textarea {
     background-color: var(--dropdown-bg);
-    border-color: var(--border-color);
-    color: var(--text-color);
-}
-
-[data-theme="dark"] .modal-body input:focus,
-[data-theme="dark"] .modal-body textarea:focus {
-    background-color: var(--dropdown-bg);
-    border-color: var(--primary);
-    color: var(--text-color);
-}
-
-[data-theme="dark"] .modal-body label {
     color: var(--text-color);
 }
 
@@ -618,9 +595,9 @@ a.empty-log {
     height: 20px;
     min-width: 20px;
     min-height: 20px;
-    border: 2px solid var(--border-color, #dee2e6);
+    border: 2px solid var(--border-color, #495057);
     border-radius: 50%;
-    background-color: var(--bg-color, white);
+    background-color: var(--bg-color, #2d2d2d);
     cursor: pointer;
     flex-shrink: 0;
     margin: 0;
@@ -647,17 +624,6 @@ a.empty-log {
 }
 
 .tune-select-checkbox:hover {
-    border-color: var(--primary);
-}
-
-/* Dark mode checkbox styles */
-[data-theme="dark"] .tune-select-checkbox {
-    border-color: var(--border-color, #495057);
-    background-color: var(--bg-color, #2d2d2d);
-}
-
-[data-theme="dark"] .tune-select-checkbox:checked {
-    background-color: var(--primary);
     border-color: var(--primary);
 }
 
@@ -794,19 +760,13 @@ a.empty-log {
 }
 
 .copy-modal-warning {
-    background-color: #fff3cd;
-    border: 1px solid #ffc107;
+    background-color: #3d3200;
+    border: 1px solid #665200;
     border-radius: 4px;
     padding: 12px;
     margin-bottom: 16px;
-    color: #856404;
-    font-size: 13px;
-}
-
-[data-theme="dark"] .copy-modal-warning {
-    background-color: #3d3200;
-    border-color: #665200;
     color: #ffc107;
+    font-size: 13px;
 }
 
 .copy-modal-actions {

@@ -53,8 +53,8 @@
     left: 0;
     right: 0;
     max-width: 400px;
-    background: var(--bg-color, white);
-    border: 1px solid var(--border-color, #ccc);
+    background: var(--bg-color, #2d3748);
+    border: 1px solid var(--border-color, #4a5568);
     border-top: none;
     border-radius: 0 0 4px 4px;
     max-height: 300px;
@@ -76,7 +76,7 @@
 }
 
 .search-result-item:hover {
-    background-color: var(--light, #f8f9fa);
+    background-color: var(--light, #374151);
 }
 
 .search-result-item .person-name {
@@ -100,16 +100,17 @@
     justify-content: space-between;
     align-items: center;
     padding: 12px 20px;
-    border: 1px solid var(--border-color, #dee2e6);
+    border: 1px solid var(--border-color, #4a5568);
     border-radius: 8px;
     margin-bottom: 12px;
-    background: var(--bg-color, white);
+    background: var(--bg-color, #2d3748);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .attendance-item:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     border-color: var(--primary, #007bff);
+    background: var(--light, #374151);
 }
 
 .attendance-info {
@@ -268,16 +269,18 @@
     border-radius: 8px;
     border: none;
     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    background: var(--bg-color, #2d3748);
+    color: var(--text-color, #e2e8f0);
 }
 
 .modal-header {
-    border-bottom: 1px solid var(--border-color, #dee2e6);
-    background: var(--light, #f8f9fa);
+    border-bottom: 1px solid var(--border-color, #4a5568);
+    background: var(--light, #374151);
 }
 
 .modal-footer {
-    border-top: 1px solid var(--border-color, #dee2e6);
-    background: var(--light, #f8f9fa);
+    border-top: 1px solid var(--border-color, #4a5568);
+    background: var(--light, #374151);
 }
 
 /* Form Controls in Modals */
@@ -305,10 +308,10 @@
 #instruments-container {
     max-height: 200px;
     overflow-y: auto;
-    border: 1px solid var(--border-color, #dee2e6);
+    border: 1px solid var(--border-color, #4a5568);
     border-radius: 4px;
     padding: 12px;
-    background: var(--light, #f8f9fa);
+    background: var(--light, #374151);
 }
 
 #add-instruments-container .form-check,
@@ -460,44 +463,6 @@
     }
 }
 
-/* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-    .attendance-item {
-        background: var(--bg-color, #2d3748);
-        border-color: var(--border-color, #4a5568);
-    }
-    
-    .attendance-item:hover {
-        background: var(--light, #374151);
-    }
-    
-    .search-results-dropdown {
-        background: var(--bg-color, #2d3748);
-        border-color: var(--border-color, #4a5568);
-    }
-    
-    .search-result-item:hover {
-        background: var(--light, #374151);
-    }
-    
-    .modal-content {
-        background: var(--bg-color, #2d3748);
-        color: var(--text-color, #e2e8f0);
-    }
-    
-    .modal-header,
-    .modal-footer {
-        background: var(--light, #374151);
-        border-color: var(--border-color, #4a5568);
-    }
-    
-    #add-instruments-container,
-    #instruments-container {
-        background: var(--light, #374151);
-        border-color: var(--border-color, #4a5568);
-    }
-}
-
 /* High contrast mode support */
 @media (prefers-contrast: high) {
     .attendance-item {
@@ -567,6 +532,9 @@
     padding: 6px 12px;
     border-radius: 4px;
     border: 2px solid transparent;
+    border-color: var(--border-color, #4a5568);
+    background-color: var(--bg-color, #2d3748);
+    color: var(--text-color, #e2e8f0);
     transition: all 0.2s ease;
     cursor: pointer;
     min-width: 120px;
@@ -616,14 +584,14 @@
 
 /* Clickable person name */
 .person-name.person-edit-link {
-    color: var(--primary, #007bff);
+    color: var(--primary, #63b3ed);
     text-decoration: none;
     cursor: pointer;
     transition: color 0.2s ease;
 }
 
 .person-name.person-edit-link:hover {
-    color: var(--primary, #0056b3);
+    color: var(--primary, #90cdf4);
     text-decoration: underline;
 }
 
@@ -643,23 +611,6 @@
         font-size: 0.85em;
         padding: 5px 8px;
         min-width: 110px;
-    }
-}
-
-/* Dark mode support for dropdown */
-@media (prefers-color-scheme: dark) {
-    .attendance-status-select {
-        background-color: var(--bg-color, #2d3748);
-        color: var(--text-color, #e2e8f0);
-        border-color: var(--border-color, #4a5568);
-    }
-
-    .person-name.person-edit-link {
-        color: var(--primary, #63b3ed);
-    }
-
-    .person-name.person-edit-link:hover {
-        color: var(--primary, #90cdf4);
     }
 }
 

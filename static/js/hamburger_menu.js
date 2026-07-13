@@ -23,36 +23,9 @@ document.addEventListener('click', function (event) {
     }
 });
 
-// --- Dark mode (app-wide data-theme system; a no-op where the page is always dark) ---
-function toggleDarkMode() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateDarkModeText(newTheme);
-    updateLogo(newTheme);
-}
-
-function updateLogo(theme) {
-    // Kept for parity / future per-theme logos (currently one logo).
-    void theme;
-}
-
-function updateDarkModeText(theme) {
-    const darkModeText = document.getElementById('dark-mode-text');
-    if (!darkModeText) return; // hidden in always-dark contexts (e.g. the live editor)
-    darkModeText.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-}
-
 function shareCurrentPage() {
     window.location.href = '/share?url=' + encodeURIComponent(window.location.href);
 }
-
-document.addEventListener('DOMContentLoaded', function () {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    updateDarkModeText(savedTheme);
-    updateLogo(savedTheme);
-});
 
 // --- 'Find a tune' (context-aware) ---------------------------------------
 // In the live editor, App.svelte sets window.__liveFindTune to insert into the current

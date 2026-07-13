@@ -1,7 +1,5 @@
 <!doctype html>
-<!-- Always-dark shell: set data-theme so shared components (e.g. the legacy tune-detail
-     modal) that key off [data-theme="dark"] render in their dark palette. -->
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <!-- maximum-scale=1 stops mobile browsers auto-zooming when a text field gains focus (app-like locked viewport) -->
@@ -56,7 +54,7 @@
 </head>
 <body>
   <div id="app"></div>
-  <div class="live-menu">{% with hide_dark_mode = True %}{% include 'hamburger_menu.html' %}{% endwith %}</div>
+  <div class="live-menu">{% include 'hamburger_menu.html' %}</div>
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
   <script src="/static/js/mytunes_offline.js"></script>
   <!-- Tune-detail sheet (Svelte, spec 035 Step 3): renders its own #tune-detail-modal

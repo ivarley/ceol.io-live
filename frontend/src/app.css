@@ -1170,9 +1170,9 @@ button.nb-pend { cursor: pointer; } /* mid-render it's still a working incipitâ‡
 .results .result-ts { color: var(--accent); font-weight: 600; }
 
 /* ---------- reused legacy tune-detail modal ---------- */
-/* The live shell doesn't load theme.css, so supply the legacy DARK-theme variables
+/* The live shell doesn't load theme.css, so supply the legacy dark-palette variables
    (scoped to the modal) â€” otherwise its text/borders are undefined and wash out on
-   white. These mirror theme.css [data-theme="dark"] so it matches the legacy dark
+   white. These mirror theme.css's :root dark palette so it matches the legacy dark
    drawer and sits naturally on the dark live screen. */
 #tune-detail-modal {
   --bg-color: #1a1a1a;

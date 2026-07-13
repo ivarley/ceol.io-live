@@ -34,8 +34,8 @@ HTML structure, base layouts, thin shells vs. full Jinja pages
 ### [Live Logging](../logic/live-logging.md)
 Real-time multi-user logger (Feature 024) — Svelte 5 PWA, incremental ops over SSE, no explicit save. Bundle under `static/live/`, source in `frontend/`
 
-### [Dark Mode & Theming](theming.md)
-CSS custom properties, theme switching, FOUC prevention
+### [Theming](theming.md)
+CSS custom properties (dark-only palette)
 
 ### [AJAX Patterns](ajax.md)
 Serializer layer, API auth decorators, Bearer tokens, error handling, loading states
@@ -45,7 +45,7 @@ Standard form controls, search boxes, CSS variables
 
 ## Key Locations
 
-- `templates/base.html` - Base layout: navigation, theme switching, and the app-wide tune-detail sheet bundle (`static/tunesheet/sheet.js` → `window.TuneDetailModal` / `window.FindTuneOverlay`)
+- `templates/base.html` - Base layout: navigation and the app-wide tune-detail sheet bundle (`static/tunesheet/sheet.js` → `window.TuneDetailModal` / `window.FindTuneOverlay`)
 - `frontend/src/` - Svelte sources (page dirs + `lib/` kit); one Vite config per bundle
 - `serializers.py` - One function per page/API payload (the embed==API invariant)
 - `templates/session_instance_detail.html` - Quarantined legacy pill editor (spec 035 Step 6 deletes it)
