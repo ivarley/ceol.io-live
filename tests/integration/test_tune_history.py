@@ -131,34 +131,129 @@ class TestTuneHistory:
         )
         assert play["full_name"] == "History Test Session B - 2026-03-05"
 
-    def test_person_scope_requires_login(self, client, history_data):
-        resp, data = _get(client, TGT, person="me")
-        assert resp.status_code == 401
+    def test_person_scopes_require_login(self, client, history_data):
+        for params in ({"person": "me"}, {"scope": "member"}, {"scope": "attended"}):
+            resp, data = _get(client, TGT, **params)
+            assert resp.status_code == 401
+            assert data["success"] is False
+
+    def test_invalid_scope_rejected(self, client, history_data):
+        resp, data = _get(client, TGT, scope="bogus")
+        assert resp.status_code == 400
         assert data["success"] is False
 
-    def test_person_scope_filters_to_attended_instances(self, authenticated_user, history_data):
-        conn = get_db_connection()
-        cur = conn.cursor()
-        try:
-            # The endpoint resolves person_id from the DB row for the logged-in
-            # user_id (1 = the seeded admin), not from the mocked session user.
-            cur.execute("SELECT person_id FROM user_account WHERE user_id = %s",
-                        (authenticated_user.user_id,))
-            row = cur.fetchone()
-            if not row or row[0] is None:
-                pytest.skip("seeded user has no person record")
-            # Attach that person to instance A only.
+
+@pytest.fixture
+def scoped_person(authenticated_user):
+    """The logged-in user's person_id, with helpers to relate them to the seeded
+    sessions/instances (spec 033 predicate tests). Cleans up every row it added."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT person_id FROM user_account WHERE user_id = %s",
+                (authenticated_user.user_id,))
+    row = cur.fetchone()
+    if not row or row[0] is None:
+        cur.close()
+        conn.close()
+        pytest.skip("seeded user has no person record")
+    person_id = row[0]
+
+    class Rel:
+        def __init__(self):
+            self.person_id = person_id
+
+        def join(self, session_id, relationship):
             cur.execute(
-                "INSERT INTO session_instance_person (session_instance_id, person_id) VALUES (%s, %s)",
-                (INST_A, row[0]),
+                """INSERT INTO session_person (session_id, person_id, relationship)
+                   VALUES (%s, %s, %s)""",
+                (session_id, person_id, relationship),
             )
             conn.commit()
-            with authenticated_user:
-                resp, data = _get(authenticated_user.client, TGT, person="me")
+
+        def check_in(self, instance_id, attendance="yes"):
+            cur.execute(
+                """INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+                   VALUES (%s, %s, %s)""",
+                (instance_id, person_id, attendance),
+            )
+            conn.commit()
+
+    yield Rel()
+
+    cur.execute("DELETE FROM session_instance_person WHERE person_id = %s AND session_instance_id IN (%s, %s)",
+                (person_id, INST_A, INST_B))
+    cur.execute("DELETE FROM session_instance_person_history WHERE person_id = %s AND session_instance_id IN (%s, %s)",
+                (person_id, INST_A, INST_B))
+    cur.execute("DELETE FROM session_person WHERE person_id = %s AND session_id IN (%s, %s)",
+                (person_id, SID_A, SID_B))
+    cur.execute("DELETE FROM session_person_history WHERE person_id = %s AND session_id IN (%s, %s)",
+                (person_id, SID_A, SID_B))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+class TestTuneHistoryScopes:
+    """The spec 033 lenses on ?scope=: member (R3) vs attended (R4)."""
+
+    def test_member_scope_includes_nights_not_checked_in(self, authenticated_user, history_data, scoped_person):
+        # The Piper's Picnic regression: member of session A, never checked in
+        # anywhere -> A's plays are "at my sessions" even with no attendance row.
+        scoped_person.join(SID_A, "member")
+        with authenticated_user:
+            resp, data = _get(authenticated_user.client, TGT, scope="member")
             assert resp.status_code == 200 and data["success"]
             assert {p["session_instance_id"] for p in data["play_instances"]} == {INST_A}
-        finally:
-            cur.execute("DELETE FROM session_instance_person WHERE session_instance_id = %s", (INST_A,))
-            conn.commit()
-            cur.close()
-            conn.close()
+            # ?person=me is the deprecated alias of scope=member
+            resp, alias = _get(authenticated_user.client, TGT, person="me")
+            assert {p["session_instance_id"] for p in alias["play_instances"]} == {INST_A}
+            # ...and none of it counts as attended
+            resp, att = _get(authenticated_user.client, TGT, scope="attended")
+            assert att["play_instances"] == []
+
+    def test_visitor_attendance_counts_only_as_attended(self, authenticated_user, history_data, scoped_person):
+        # Visitor row (e.g. auto-created by check-in, spec 034) is NOT membership.
+        scoped_person.join(SID_B, "visitor")
+        scoped_person.check_in(INST_B, "yes")
+        with authenticated_user:
+            resp, member = _get(authenticated_user.client, TGT, scope="member")
+            assert member["play_instances"] == []
+            resp, att = _get(authenticated_user.client, TGT, scope="attended")
+            assert {p["session_instance_id"] for p in att["play_instances"]} == {INST_B}
+
+    def test_no_and_maybe_rsvps_never_count(self, authenticated_user, history_data, scoped_person):
+        scoped_person.check_in(INST_A, "no")
+        scoped_person.check_in(INST_B, "maybe")
+        with authenticated_user:
+            resp, att = _get(authenticated_user.client, TGT, scope="attended")
+            assert att["play_instances"] == []
+
+
+def _get_played_with(client, tune_id, **params):
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    resp = client.get(f"/api/tunes/{tune_id}/played-with" + (f"?{qs}" if qs else ""))
+    return resp, resp.get_json()
+
+
+class TestPlayedWithScopes:
+    """The same lenses on /played-with (companions counted within scoped sets)."""
+
+    def test_member_scope(self, authenticated_user, history_data, scoped_person):
+        scoped_person.join(SID_A, "member")
+        with authenticated_user:
+            resp, data = _get_played_with(authenticated_user.client, TGT, scope="member")
+        assert resp.status_code == 200 and data["success"]
+        # Instance A only: set 1 pairs TGT with OTHER1, set 2 with OTHER2.
+        assert {(t["tune_id"], t["count"]) for t in data["tunes"]} == {(OTHER1, 1), (OTHER2, 1)}
+
+    def test_attended_scope(self, authenticated_user, history_data, scoped_person):
+        scoped_person.check_in(INST_B, "yes")
+        with authenticated_user:
+            resp, data = _get_played_with(authenticated_user.client, TGT, scope="attended")
+        assert resp.status_code == 200 and data["success"]
+        # Instance B's single set pairs TGT with OTHER2 (OTHER1's row is deleted).
+        assert {(t["tune_id"], t["count"]) for t in data["tunes"]} == {(OTHER2, 1)}
+
+    def test_scope_requires_login(self, client, history_data):
+        resp, data = _get_played_with(client, TGT, scope="member")
+        assert resp.status_code == 401

@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2.extras
 
+from services import person_scope
+
 
 def bytea_to_base64(data):
     """Convert PostgreSQL bytea data to a base64 string (bytes/memoryview/hex str)."""
@@ -172,8 +174,10 @@ _ADMIN_PEOPLE_SQL = """
         GROUP BY person_id
     ) sp ON p.person_id = sp.person_id
     LEFT JOIN (
+        -- Real check-ins only (spec 033): a 'no'/'maybe' RSVP is not a sighting.
         SELECT person_id, COUNT(*) AS session_instance_count
         FROM session_instance_person
+        WHERE attendance = 'yes'
         GROUP BY person_id
     ) sip ON p.person_id = sip.person_id
     LEFT JOIN (
@@ -184,6 +188,7 @@ _ADMIN_PEOPLE_SQL = """
         FROM session_instance_person sip
         JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
         JOIN session s ON si.session_id = s.session_id
+        WHERE sip.attendance = 'yes'
         ORDER BY sip.person_id, si.date DESC
     ) latest_si ON p.person_id = latest_si.person_id
     LEFT JOIN (
@@ -494,7 +499,9 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
         SELECT
             s.session_id, s.name, s.path, s.city, s.state, s.country,
             s.termination_date, s.recurrence, s.timezone,
-            CASE WHEN sp.person_id IS NOT NULL THEN TRUE ELSE FALSE END AS user_is_member,
+            -- Member-strict (spec 033): a visitor row is an association, not membership.
+            CASE WHEN sp.relationship = 'member' THEN TRUE ELSE FALSE END AS user_is_member,
+            sp.relationship AS user_relationship,
             s.location_name
         FROM session s
         LEFT JOIN session_person sp ON s.session_id = sp.session_id AND sp.person_id = %s
@@ -535,6 +542,7 @@ def build_sessions_directory_payload(conn, person_id, user_timezone="UTC"):
             "termination_date": r["termination_date"].isoformat() if r["termination_date"] else None,
             "recurrence": r["recurrence"],
             "user_is_member": r["user_is_member"],
+            "user_relationship": r["user_relationship"],
             "location_name": r["location_name"],
             "active_instances": active_by_session.get(r["session_id"], []),
         }
@@ -698,8 +706,40 @@ def session_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def load_session_tunes(conn, session_id: int, *, limit: Optional[int] = None, offset: int = 0) -> List[Dict[str, Any]]:
-    """A session's repertoire, ordered by play count / popularity / name."""
+def _attach_session_attended_counts(cur, session_id: int, person_id: int, tunes: List[Dict[str, Any]]) -> None:
+    """Attach attended_play_count (spec 033 R4, scoped to THIS session): distinct
+    instances of this session the person attended (attendance='yes') where each
+    tune was played. One batched query, bounded by the person's check-ins here."""
+    tune_ids = [t["tune_id"] for t in tunes if t["tune_id"] is not None]
+    counts: Dict[int, int] = {}
+    if tune_ids:
+        cur.execute(
+            f"""SELECT sit.tune_id, COUNT(DISTINCT sit.session_instance_id) AS n
+               FROM session_instance_tune sit
+               JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                   AND si.session_id = %(session_id)s
+               JOIN session_instance_person sip ON sip.session_instance_id = sit.session_instance_id
+                   AND sip.person_id = %(person_id)s AND sip.attendance = 'yes'
+               WHERE sit.tune_id = ANY(%(tune_ids)s) AND {person_scope.SIT_COUNTABLE}
+               GROUP BY sit.tune_id""",
+            {"session_id": session_id, "person_id": person_id, "tune_ids": tune_ids},
+        )
+        counts = {r["tune_id"]: r["n"] for r in cur.fetchall()}
+    for t in tunes:
+        t["attended_play_count"] = counts.get(t["tune_id"], 0)
+
+
+def load_session_tunes(
+    conn,
+    session_id: int,
+    *,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    person_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """A session's repertoire, ordered by play count / popularity / name.
+    With a person_id, each row also carries attended_play_count (spec 033 R4,
+    this-session scope) for the Tunes tab's "Nights I attended" filter."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     sql = _SESSION_TUNES_SQL
     params: List[Any] = [session_id, session_id]
@@ -710,7 +750,10 @@ def load_session_tunes(conn, session_id: int, *, limit: Optional[int] = None, of
         sql += " OFFSET %s"
         params.append(offset)
     cur.execute(sql, params)
-    return [session_tune_to_dict(r) for r in cur.fetchall()]
+    tunes = [session_tune_to_dict(r) for r in cur.fetchall()]
+    if person_id:
+        _attach_session_attended_counts(cur, session_id, person_id, tunes)
+    return tunes
 
 
 def build_session_detail_payload(
@@ -851,7 +894,7 @@ def build_session_detail_payload(
     cur.execute("SELECT COUNT(DISTINCT tune_id) AS n FROM session_tune WHERE session_id = %s", (session_id,))
     total_tunes_count = cur.fetchone()["n"]
 
-    tunes = load_session_tunes(conn, session_id, limit=first_page)
+    tunes = load_session_tunes(conn, session_id, limit=first_page, person_id=person_id)
 
     return {
         "success": True,
@@ -890,15 +933,11 @@ PERSON_TUNE_COLS = """
 
 PERSON_TUNE_FROM = "FROM person_tune pt LEFT JOIN tune t ON pt.tune_id = t.tune_id"
 
-# Times played at sessions the person attended (distinct instances). Correlated
-# subquery per row of the filtered set; index lookups, fine at this app's scale.
-PLAYS_SORT_EXPR = (
-    "(SELECT COUNT(DISTINCT sit.session_instance_id)"
-    " FROM session_instance_tune sit"
-    " INNER JOIN session_instance_person sip"
-    " ON sit.session_instance_id = sip.session_instance_id"
-    " WHERE sip.person_id = pt.person_id AND sit.tune_id = pt.tune_id)"
-)
+# Times played under the spec 033 lenses (distinct instances; correlated subquery
+# per row of the filtered set — see person_scope.plays_sort_expr for the join
+# rewrite if this ever measures slow). 'plays' = R3 member lens; 'attended' = R4.
+MEMBER_PLAYS_SORT_EXPR = person_scope.plays_sort_expr("member")
+ATTENDED_PLAYS_SORT_EXPR = person_scope.plays_sort_expr("attended")
 
 
 def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -956,23 +995,33 @@ def _attach_instrument_overrides(cur, person_id: int, tunes: List[Dict[str, Any]
         t["instrument_status"] = overrides_by_tune.get(t["tune_id"], {})
 
 
-def _attach_session_play_counts(cur, person_id: int, tunes: List[Dict[str, Any]]) -> None:
-    """Attach session_play_count (distinct instances the person attended), batched."""
+def _attach_person_play_counts(cur, person_id: int, tunes: List[Dict[str, Any]]) -> None:
+    """Attach the spec 033 play-count lenses, batched in ONE query:
+
+    member_play_count   — R3: distinct instances of sessions the person is a MEMBER of
+    attended_play_count — R4: distinct instances the person ATTENDED (attendance='yes')
+    session_play_count  — deprecated alias of member_play_count; remove with the
+                          ?person=me alias once no stale offline caches remain
+    """
     tune_ids = [t["tune_id"] for t in tunes if t["tune_id"] is not None]
-    play_counts: Dict[int, int] = {}
+    counts: Dict[int, Dict[str, int]] = {}
     if tune_ids:
         cur.execute(
-            """SELECT sit.tune_id, COUNT(DISTINCT sit.session_instance_id) AS n
-               FROM session_instance_tune sit
-               INNER JOIN session_instance_person sip
-                   ON sit.session_instance_id = sip.session_instance_id
-               WHERE sip.person_id = %s AND sit.tune_id = ANY(%s)
-               GROUP BY sit.tune_id""",
-            (person_id, tune_ids),
+            person_scope.person_tune_play_counts_sql(),
+            {"person_id": person_id, "tune_ids": tune_ids},
         )
-        play_counts = {r["tune_id"]: r["n"] for r in cur.fetchall()}
+        counts = {
+            r["tune_id"]: {
+                "member": r["member_play_count"],
+                "attended": r["attended_play_count"],
+            }
+            for r in cur.fetchall()
+        }
     for t in tunes:
-        t["session_play_count"] = play_counts.get(t["tune_id"], 0)
+        c = counts.get(t["tune_id"], {})
+        t["member_play_count"] = c.get("member", 0)
+        t["attended_play_count"] = c.get("attended", 0)
+        t["session_play_count"] = t["member_play_count"]
 
 
 # Accent- and quote-insensitive match, applied identically to both sides.
@@ -992,8 +1041,10 @@ _SORT_MAP = {
     "popularity-asc": "t.tunebook_count_cached ASC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
     "heard-desc": "pt.heard_count DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
     "heard-asc": "pt.heard_count ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
-    "plays-desc": f"{PLAYS_SORT_EXPR} DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
-    "plays-asc": f"{PLAYS_SORT_EXPR} ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
+    "plays-desc": f"{MEMBER_PLAYS_SORT_EXPR} DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
+    "plays-asc": f"{MEMBER_PLAYS_SORT_EXPR} ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
+    "attended-desc": f"{ATTENDED_PLAYS_SORT_EXPR} DESC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
+    "attended-asc": f"{ATTENDED_PLAYS_SORT_EXPR} ASC, t.tunebook_count_cached DESC NULLS LAST, LOWER(COALESCE(pt.name_alias, t.name)) ASC",
 }
 
 VALID_PERSON_TUNE_SORTS = tuple(_SORT_MAP)
@@ -1043,7 +1094,7 @@ def load_person_tunes(
     tunes = [person_tune_to_dict(row) for row in cur.fetchall()]
 
     _attach_instrument_overrides(cur, person_id, tunes)
-    _attach_session_play_counts(cur, person_id, tunes)
+    _attach_person_play_counts(cur, person_id, tunes)
     return tunes, total_count
 
 
@@ -1114,7 +1165,7 @@ def _load_person_tune_where(conn, where_sql: str, params: Tuple) -> Optional[Dic
         return None
     d = person_tune_to_dict(row)
     _attach_instrument_overrides(cur, d["person_id"], [d])
-    _attach_session_play_counts(cur, d["person_id"], [d])
+    _attach_person_play_counts(cur, d["person_id"], [d])
     return d
 
 
@@ -1402,6 +1453,20 @@ def build_tune_detail_payload(
     cur.execute("SELECT COUNT(DISTINCT session_id) AS n FROM session_tune WHERE tune_id = %s", (tune_id,))
     session_count = cur.fetchone()["n"]
 
+    # The viewer's spec 033 lenses: R3 (member sessions) / R4 (attended nights).
+    # Only for logged-in viewers; the keys are absent for anonymous ones and the
+    # drawer's stats cards key off their presence.
+    member_play_count = None
+    attended_play_count = None
+    if logged_in and person_id:
+        cur.execute(
+            person_scope.person_tune_play_counts_sql(),
+            {"person_id": person_id, "tune_ids": [tune_id]},
+        )
+        pc = cur.fetchone()
+        member_play_count = pc["member_play_count"] if pc else 0
+        attended_play_count = pc["attended_play_count"] if pc else 0
+
     session_tune: Dict[str, Any] = {
         "tune_id": tune_id,
         "tune_name": t["name"],
@@ -1431,6 +1496,11 @@ def build_tune_detail_payload(
         "person_list_count": person_list_count,
         "session_count": session_count,
         "person_tune_status": person_tune_status,
+        **(
+            {"member_play_count": member_play_count, "attended_play_count": attended_play_count}
+            if member_play_count is not None
+            else {}
+        ),
         # Scope marker the drawer derives its session wording from.
         "session_scope": (
             {

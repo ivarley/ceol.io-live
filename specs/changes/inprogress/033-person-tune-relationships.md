@@ -1,6 +1,17 @@
 # 033 — Canonical Person ↔ Session ↔ Tune Relationships
 
-**Status:** Draft / definitions agreed, implementation not started
+**Status:** Built (all three phases, 2026-07-13) — awaiting user verification.
+Predicates live in `services/person_scope.py`; API adds `?scope=member|attended` on
+/history and /played-with, `member_play_count`/`attended_play_count` fields
+(`session_play_count` kept as deprecated alias = member), `user_relationship` in
+the sessions directory, and per-tune `attended_play_count` on the session-detail
+payload. `person=me` is a deprecated alias of `scope=member`.
+
+**R2 dropped as a user-facing lens (decision 2026-07-13):** plays auto-enroll tunes
+into `session_tune`, so R2 only differs from R3 for on-list-but-never-played tunes
+— not a useful question. R2 remains a definition here but has no filter, field, or
+predicate helper; the surfaced lenses are R1 (the My Tunes page itself), R3
+("Played at my sessions"), and R4 ("While I was there").
 **Motivating bug:** Piper's Picnic (tune 5042) shows 2 plays at BD Riley's (Mueller), but the
 My Tunes History tab's "My sessions" scope shows 0 — because that scope filters by per-night
 check-ins (`session_instance_person`), not session membership (`session_person`), and the
@@ -82,7 +93,7 @@ existing `session_play_count` behavior).
 | Modal Stats tab (session/session_instance context) | No "my" aggregate at all (only this-session + global); add R3/R4 cards for logged-in users |
 | Modal History tab | Scopes: session ctx = [This session, All]; my_tunes = [My sessions, All]. Target: offer This session (when in session ctx), My sessions (R3), Sessions I attended (R4), All — for any logged-in user |
 | Modal Played With tab | Scopes: [At This Session, Globally] only. Add "At My Sessions" (R3) and "While I Was There" (R4) for logged-in users |
-| My Tunes filter/sort panel | `plays` sort only (ambiguous). Target: sort by plays-at-my-sessions (R3) and plays-attended (R4); filter chips "played at my sessions" / "played while I was there" / "in my sessions' repertoire" (R2) |
+| My Tunes filter/sort panel | `plays` sort only (ambiguous). Target: sort by plays-at-my-sessions (R3) and plays-attended (R4); filter chips "played at my sessions" / "played while I was there" (~~R2 repertoire chip~~ — dropped, see status note) |
 | Session detail page | `mystatus` filter covers R1 ✓; add filter "played on nights I attended" (R4) and expose R2 trivially (the page IS R2 for members). Play-count badge swaps meaning with sort — label it |
 | My Tunes card badge | Badge silently swaps meaning with active sort (plays/popularity/heard) — label it |
 | `my_tunes.html` legacy in-page modal (~L2084-2141) | Duplicate "Play count at your sessions" copy — confirm dead and delete, or align |
@@ -120,7 +131,7 @@ existing `session_play_count` behavior).
    Backend: `?scope=` param on `/api/tunes/<id>/history` and `/api/tunes/<id>/played-with`.
 2. Modal Stats (session/session_instance ctx): add R3/R4 cards for logged-in users
    (requires the detail endpoints or a small separate fetch to supply the counts).
-3. My Tunes list: R3/R4 sorts; relationship filter chips (R2/R3/R4; R1 is the page itself).
+3. My Tunes list: R3/R4 sorts; relationship filter chips (R3/R4; R1 is the page itself; R2 dropped — see status note).
 4. Session detail page: R4 filter ("played on nights I attended"); labeled count badges.
 5. Live logger: no semantic change (badges are R1/R2/this-session and correctly labeled);
    optionally add R4 dot later — out of scope for 033.

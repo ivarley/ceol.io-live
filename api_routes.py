@@ -24,6 +24,7 @@ import qrcode
 from io import BytesIO
 from recurrence_utils import validate_recurrence_json, to_human_readable
 from fractional_indexing import generate_append_position, generate_position_between
+from services import person_scope
 from recording import upload_chunk_to_s3, generate_presigned_url, get_recording_timeline, compute_checksum, chunk_audio_file
 
 
@@ -147,22 +148,31 @@ def get_tune_detail_global(tune_id):
         conn.close()
 
 
-@public_api  # backs the tune-detail modal's History tab (tunesheet bundle, loaded app-wide via base.html incl. logged-out session pages); the ?person=me variant has an inline 401 below
+@public_api  # backs the tune-detail modal's History tab (tunesheet bundle, loaded app-wide via base.html incl. logged-out session pages); the ?scope= variants have an inline 401 below
 def get_tune_history(tune_id):
     """Play history for the tune-detail modal's History tab, fetched lazily on first
     view (the set/position windowing below is too expensive to run on every modal open).
 
     GET /api/tunes/<tune_id>/history
         ?session_path=<path>  — only plays at that session
-        ?person=me            — only plays at instances the current user attended (my_tunes)
+        ?scope=member         — only plays at the viewer's sessions (spec 033 R3:
+                                session_person.relationship='member')
+        ?scope=attended       — only plays at instances the viewer attended (R4:
+                                session_instance_person.attendance='yes')
+        ?person=me            — deprecated alias of scope=member (its old
+                                bare-attendance meaning was the spec 033 bug)
 
     Positions are humane 'Set N, Tune M' coordinates: rows are ordered by the
     fractional order_position, break records split the sets (spec 023) and are
     excluded from the tune numbering.
     """
     session_path = request.args.get("session_path") or None
-    mine = request.args.get("person") == "me"
-    if mine and not current_user.is_authenticated:
+    scope = request.args.get("scope") or None
+    if scope is None and request.args.get("person") == "me":
+        scope = "member"
+    if scope is not None and scope not in ("member", "attended"):
+        return jsonify({"success": False, "error": f"Invalid scope: {scope}"}), 400
+    if scope and not current_user.is_authenticated:
         return jsonify({"success": False, "error": "Login required"}), 401
 
     conn = get_db_connection()
@@ -171,7 +181,7 @@ def get_tune_history(tune_id):
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
 
         person_id = None
-        if mine:
+        if scope:
             cur.execute(
                 "SELECT person_id FROM user_account WHERE user_id = %s",
                 (current_user.user_id,),
@@ -181,9 +191,12 @@ def get_tune_history(tune_id):
                 return jsonify({"success": False, "error": "No person record"}), 403
             person_id = pr[0]
 
+        scope_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
+        scope_filter = f"AND ({scope_pred})" if scope_pred else ""
+
         instance_limit = 100
         cur.execute(
-            """
+            f"""
             WITH target_instances AS (
                 SELECT si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path
                 FROM session_instance si
@@ -194,11 +207,7 @@ def get_tune_history(tune_id):
                             AND x.tune_id = %(tune_id)s AND x.deleted = FALSE
                       )
                   AND (%(session_path)s::text IS NULL OR s.path = %(session_path)s)
-                  AND (%(person_id)s::int IS NULL OR EXISTS (
-                          SELECT 1 FROM session_instance_person sip
-                          WHERE sip.session_instance_id = si.session_instance_id
-                            AND sip.person_id = %(person_id)s
-                      ))
+                  {scope_filter}
                 ORDER BY si.date DESC, si.session_instance_id DESC
                 LIMIT %(instance_limit)s
             ),
@@ -283,6 +292,8 @@ def get_tune_played_with(tune_id):
 
     GET /api/tunes/<tune_id>/played-with
         ?session_path=<path>  — only count sets played at that session
+        ?scope=member         — only sets at the viewer's sessions (spec 033 R3)
+        ?scope=attended       — only sets at instances the viewer attended (R4)
 
     Counts how often each other tune appeared in the same set as this one (sets are
     delimited by break records within an instance, spec 023).
@@ -290,14 +301,33 @@ def get_tune_played_with(tune_id):
     tune's detail modal, which needs a canonical tune.
     """
     session_path = request.args.get("session_path") or None
+    scope = request.args.get("scope") or None
+    if scope is not None and scope not in ("member", "attended"):
+        return jsonify({"success": False, "error": f"Invalid scope: {scope}"}), 400
+    if scope and not current_user.is_authenticated:
+        return jsonify({"success": False, "error": "Login required"}), 401
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
 
+        person_id = None
+        if scope:
+            cur.execute(
+                "SELECT person_id FROM user_account WHERE user_id = %s",
+                (current_user.user_id,),
+            )
+            pr = cur.fetchone()
+            if not pr:
+                return jsonify({"success": False, "error": "No person record"}), 403
+            person_id = pr[0]
+
+        scope_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
+        scope_filter = f"AND ({scope_pred})" if scope_pred else ""
+
         cur.execute(
-            """
+            f"""
             WITH target_instances AS (
                 SELECT DISTINCT sit.session_instance_id
                 FROM session_instance_tune sit
@@ -305,6 +335,7 @@ def get_tune_played_with(tune_id):
                 JOIN session s ON s.session_id = si.session_id
                 WHERE sit.tune_id = %(tune_id)s AND sit.deleted = FALSE
                   AND (%(session_path)s::text IS NULL OR s.path = %(session_path)s)
+                  {scope_filter}
             ),
             instance_rows AS (
                 SELECT sit.session_instance_id, sit.tune_id, sit.record_type,
@@ -331,7 +362,7 @@ def get_tune_played_with(tune_id):
             GROUP BY r.tune_id, t.name, t.tune_type
             ORDER BY times_together DESC, t.name
             """,
-            {"tune_id": tune_id, "session_path": session_path},
+            {"tune_id": tune_id, "session_path": session_path, "person_id": person_id},
         )
         tunes = [
             {"tune_id": row[0], "name": row[1], "tune_type": row[2], "count": row[3]}
@@ -11242,7 +11273,18 @@ def get_session_tunes_remaining(session_path):
             if not session_result:
                 return jsonify({"success": False, "message": "Session not found"}), 404
 
-            tunes_list = load_session_tunes(conn, session_result[0], offset=20)
+            # Same shape as the embedded first page: logged-in viewers also get
+            # the per-tune attended_play_count (spec 033 R4) their filter needs.
+            person_id = None
+            if current_user.is_authenticated:
+                cur.execute(
+                    "SELECT person_id FROM user_account WHERE user_id = %s",
+                    (current_user.user_id,),
+                )
+                pr = cur.fetchone()
+                person_id = pr[0] if pr else None
+
+            tunes_list = load_session_tunes(conn, session_result[0], offset=20, person_id=person_id)
         finally:
             conn.close()
 

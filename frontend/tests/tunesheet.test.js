@@ -19,7 +19,41 @@ import {
   scopeFromUrl,
   normalizeShowConfig,
   detailUrl,
+  historyScopeOptions,
+  playedWithScopeOptions,
 } from '../src/tunesheet/logic.js'
+
+// ---- spec 033 scope matrices (pure) ----------------------------------------------
+
+describe('scope option matrices (spec 033)', () => {
+  const keys = (opts) => opts.map((o) => o.key)
+  const sessScope = { session: 'austin/mueller' }
+
+  it('history: session modes lead with This session; personal lenses need login', () => {
+    expect(keys(historyScopeOptions('session', sessScope, true))).toEqual([
+      'session', 'member', 'attended', 'all',
+    ])
+    expect(keys(historyScopeOptions('session_instance', sessScope, false))).toEqual(['session', 'all'])
+  })
+
+  it('history: my_tunes defaults to member; global/admin default to all', () => {
+    expect(keys(historyScopeOptions('my_tunes', null, true))).toEqual(['member', 'attended', 'all'])
+    expect(keys(historyScopeOptions('global', null, true))).toEqual(['all', 'member', 'attended'])
+    expect(keys(historyScopeOptions('global', null, false))).toEqual(['all'])
+    expect(keys(historyScopeOptions('admin', null, true))).toEqual(['all', 'member', 'attended'])
+  })
+
+  it('played-with mirrors the matrix with its own labels', () => {
+    expect(keys(playedWithScopeOptions('session', sessScope, true))).toEqual([
+      'session', 'member', 'attended', 'all',
+    ])
+    expect(keys(playedWithScopeOptions('session', sessScope, false))).toEqual(['session', 'all'])
+    expect(keys(playedWithScopeOptions('my_tunes', null, true))).toEqual(['member', 'attended', 'all'])
+    expect(keys(playedWithScopeOptions('global', null, false))).toEqual(['all'])
+    const labels = playedWithScopeOptions('session', sessScope, true).map((o) => o.label)
+    expect(labels).toEqual(['At This Session', 'At My Sessions', 'While I Was There', 'Globally'])
+  })
+})
 
 // ---- payload builders (the ONE drawer feed shape) --------------------------------
 
@@ -742,11 +776,12 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     expect(new URL(window.location).searchParams.get('ptid')).toBe('77')
     // the tab the user was on survives the upgrade
     expect(container.querySelector('#played-with-tab.active')).toBeTruthy()
-    // the my-tunes history scope toggle (My sessions / All sessions) is offered
+    // the my-tunes history scope toggle (My sessions / Attended / All sessions) is offered
     await fireEvent.click(container.querySelector('.modal-tab[data-tab="history"]'))
     await waitFor(() =>
       expect([...container.querySelectorAll('#history-tab .history-scope-btn')].map((b) => b.textContent.trim())).toEqual([
         'My sessions',
+        'Attended',
         'All sessions',
       ])
     )

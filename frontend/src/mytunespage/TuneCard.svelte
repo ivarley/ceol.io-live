@@ -19,6 +19,7 @@
     displayStatus,
     cycleIsInstrument,
     typeLabel,
+    typeTitle = '',
     onshow,
     oncycle,
     onincrement,
@@ -141,7 +142,7 @@
         title="Queued - will sync when you are back online"
         style="flex:0 0 auto;white-space:nowrap;font-size:11px;font-weight:600;color:#b58900;" />
     {/if}
-    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" />{/if}
+    {#if typeLabel}<Chip label={typeLabel} styled={false} chipClass="tune-type" title={typeTitle || undefined} />{/if}
   </div>
   <div class="tune-meta">
     <div class="tune-meta-item">

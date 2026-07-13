@@ -31,6 +31,8 @@ export const MYSTATUS_OPTIONS = ['', 'all', 'not on list', 'want to learn', 'lea
 // Filter + sort the repertoire. `filters.search` is lowercased/trimmed; the name
 // match is accent-insensitive via the app-wide AccentUtils when present. The
 // my-tunebook filter reads window.TunebookStatus ('all' colors without filtering).
+// filters.attended keeps only tunes played on nights the viewer checked in to
+// (spec 033 R4 — attended_play_count comes from the serializer, logged-in only).
 export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) {
   const tb = typeof window !== 'undefined' ? window.TunebookStatus : null
   const accent = typeof window !== 'undefined' ? window.AccentUtils : null
@@ -45,6 +47,7 @@ export function filterAndSortTunes(allTunes, filters, sort, myStatusInstrument) 
       if (!nameMatch && !tuneIdMatch) return false
     }
     if (filters.type && tune.tune_type !== filters.type) return false
+    if (filters.attended && !(tune.attended_play_count > 0)) return false
     if (
       filters.mystatus &&
       filters.mystatus !== 'all' &&
@@ -72,7 +75,7 @@ export function resultsCountLabel(filteredCount, totalCount) {
 // mystatus applies only when logged in (the control doesn't exist otherwise).
 export function stateFromParams(params, isLoggedIn) {
   const state = {
-    filters: { search: '', type: '', mystatus: '' },
+    filters: { search: '', type: '', mystatus: '', attended: false },
     rawSearch: '',
     myStatusInstrument: 'all',
     sort: { type: 'session', dir: 'desc' },
@@ -90,6 +93,7 @@ export function stateFromParams(params, isLoggedIn) {
     const instParam = params.get('myinst')
     if (instParam) state.myStatusInstrument = instParam // validated once instruments load
   }
+  if (params.get('attended') === '1' && isLoggedIn) state.filters.attended = true
   if (params.has('sortType')) state.sort.type = params.get('sortType')
   if (params.has('sortDir')) state.sort.dir = params.get('sortDir')
   return state
@@ -106,6 +110,8 @@ export function applyStateToParams(params, filters, sort, myStatusInstrument) {
   else params.delete('mystatus')
   if (filters.mystatus && myStatusInstrument !== 'all') params.set('myinst', myStatusInstrument)
   else params.delete('myinst')
+  if (filters.attended) params.set('attended', '1')
+  else params.delete('attended')
   if (sort.type !== 'session' || sort.dir !== 'desc') {
     params.set('sortType', sort.type)
     params.set('sortDir', sort.dir)

@@ -148,32 +148,44 @@ export function validateSettingInput(input, expectedTuneId) {
   return { valid: false, error: 'Please enter a number or paste a valid TheSession.org URL' }
 }
 
-/** History scopes for the derived mode; first entry is the default. One entry = no toggle. */
-export function historyScopeOptions(mode, scope) {
+/**
+ * History scopes for the derived mode; first entry is the default. One entry =
+ * no toggle. Logged-in viewers get the spec 033 personal lenses everywhere:
+ * 'member' (R3, plays at sessions I'm a member of) and 'attended' (R4, plays
+ * at instances I checked in to with attendance='yes').
+ */
+export function historyScopeOptions(mode, scope, loggedIn = false) {
+  const mine = loggedIn
+    ? [
+        { key: 'member', label: 'My sessions' },
+        { key: 'attended', label: 'Attended' },
+      ]
+    : []
   if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
-    return [
-      { key: 'session', label: 'This session' },
-      { key: 'all', label: 'All sessions' },
-    ]
+    return [{ key: 'session', label: 'This session' }, ...mine, { key: 'all', label: 'All sessions' }]
   }
   if (mode === 'my_tunes') {
-    return [
-      { key: 'mine', label: 'My sessions' },
-      { key: 'all', label: 'All sessions' },
-    ]
+    return [...mine, { key: 'all', label: 'All sessions' }]
   }
-  return [{ key: 'all', label: 'All sessions' }]
+  // Global / admin views keep 'all' as the default (first) scope.
+  return [{ key: 'all', label: 'All sessions' }, ...mine]
 }
 
 /** Played With scopes for the derived mode; first entry is the default. */
-export function playedWithScopeOptions(mode, scope) {
+export function playedWithScopeOptions(mode, scope, loggedIn = false) {
+  const mine = loggedIn
+    ? [
+        { key: 'member', label: 'At My Sessions' },
+        { key: 'attended', label: 'While I Was There' },
+      ]
+    : []
   if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
-    return [
-      { key: 'session', label: 'At This Session' },
-      { key: 'all', label: 'Globally' },
-    ]
+    return [{ key: 'session', label: 'At This Session' }, ...mine, { key: 'all', label: 'Globally' }]
   }
-  return [{ key: 'all', label: 'Globally' }]
+  if (mode === 'my_tunes') {
+    return [...mine, { key: 'all', label: 'Globally' }]
+  }
+  return [{ key: 'all', label: 'Globally' }, ...mine]
 }
 
 // --- URL param management (identical to the legacy modal) ------------------------
@@ -345,6 +357,8 @@ export function offlinePayload(cachedTune, ops, tuneId) {
             instruments: t.instruments || [],
             instrument_status: t.instrument_status || {},
             session_play_count: t.session_play_count,
+            member_play_count: t.member_play_count,
+            attended_play_count: t.attended_play_count,
           }
         : {
             on_list: false,

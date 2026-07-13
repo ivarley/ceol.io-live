@@ -23,12 +23,22 @@ export function resolveTuneInstrumentStatus(tune, instruments, instrumentName) {
   return inst.is_auto ? tune.learn_status : null
 }
 
+// Spec 033 count lenses; ?? session_play_count covers stale offline caches
+// (deprecated alias of the member count).
+export function memberPlays(tune) {
+  return tune.member_play_count ?? tune.session_play_count ?? 0
+}
+export function attendedPlays(tune) {
+  return tune.attended_play_count ?? 0
+}
+
 // Sort comparators — single-concern, no hardcoded tiebreakers.
 const sortComparators = {
   alpha: (a, b) => (a.tune_name || '').localeCompare(b.tune_name || ''),
   popularity: (a, b) => (a.tunebook_count || 0) - (b.tunebook_count || 0),
   heard: (a, b) => (a.heard_count || 0) - (b.heard_count || 0),
-  plays: (a, b) => (a.session_play_count || 0) - (b.session_play_count || 0),
+  plays: (a, b) => memberPlays(a) - memberPlays(b),
+  attended: (a, b) => attendedPlays(a) - attendedPlays(b),
 }
 
 // Compose primary + optional secondary sort into one compare function.
@@ -74,6 +84,11 @@ export function filterAndSort(allTunes, filters, sort, instruments) {
       if (!tuneIdMatch && !nameMatch && !notesMatch) continue
     }
     if (filters.type && tune.tune_type !== filters.type) continue
+
+    // Relationship chips (spec 033): member = played at my sessions (R3),
+    // attended = played while I was there (R4).
+    if (filters.rel === 'member' && memberPlays(tune) === 0) continue
+    if (filters.rel === 'attended' && attendedPlays(tune) === 0) continue
 
     if (filters.instrument) {
       const instStatus = resolveTuneInstrumentStatus(tune, instruments, filters.instrument)
@@ -135,8 +150,19 @@ export function resultsCountText(filtered, total, filters) {
 export function typeBadgeLabel(tune, sortType) {
   if (sortType === 'popularity') return String(tune.tunebook_count || 0)
   if (sortType === 'heard') return String(tune.heard_count || 0)
-  if (sortType === 'plays') return String(tune.session_play_count || 0)
+  if (sortType === 'plays') return String(memberPlays(tune))
+  if (sortType === 'attended') return String(attendedPlays(tune))
   return tune.tune_type || ''
+}
+
+// What the badge's number means under each count sort — the tooltip that keeps
+// the badge from silently swapping meaning with the active sort.
+export function typeBadgeTitle(sortType) {
+  if (sortType === 'popularity') return 'TheSession.org tunebooks'
+  if (sortType === 'heard') return 'Times heard'
+  if (sortType === 'plays') return 'Times logged at my sessions'
+  if (sortType === 'attended') return 'Times logged while I was there'
+  return ''
 }
 
 // --- URL state (filters + sort mirrored via replaceState) --------------------
@@ -147,6 +173,7 @@ export function stateFromParams(params) {
     type: params.get('type') || '',
     status: params.get('status') || '',
     instrument: params.get('instrument') || '',
+    rel: params.get('rel') || '',
   }
   const sort = {
     type: params.get('sortType') || 'alpha',
@@ -163,6 +190,7 @@ export function paramsFromState(filters, sort) {
   if (filters.type) params.set('type', filters.type)
   if (filters.status) params.set('status', filters.status)
   if (filters.instrument) params.set('instrument', filters.instrument)
+  if (filters.rel) params.set('rel', filters.rel)
   if (sort.type !== 'alpha' || sort.dir !== 'asc') {
     params.set('sortType', sort.type)
     params.set('sortDir', sort.dir)

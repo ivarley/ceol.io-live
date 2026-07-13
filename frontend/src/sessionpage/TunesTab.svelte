@@ -64,7 +64,7 @@
     return filterAndSortTunes(allTunes, filters, sort, myStatusInstrument)
   })
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
-  const hasActiveFilters = $derived(!!(filters.type || filters.mystatus))
+  const hasActiveFilters = $derived(!!(filters.type || filters.mystatus || filters.attended))
   const allVisibleSelected = $derived(
     filteredTunes.length > 0 && filteredTunes.every((t) => selectedTuneIds.has(t.tune_id))
   )
@@ -193,6 +193,7 @@
     // Preserves the current search (legacy behavior).
     filters.type = ''
     filters.mystatus = ''
+    filters.attended = false
     myStatusInstrument = 'all'
   }
 
@@ -545,6 +546,17 @@
             </button>
           </div>
           {#if isLoggedIn}
+            <!-- "Nights I attended" (spec 033 R4): keep only tunes played on
+                 instances the viewer checked in to (attendance='yes'). -->
+            <div class="filter-panel-row">
+              <Chip
+                label="Nights I attended"
+                active={filters.attended}
+                styled={false}
+                chipClass="filter-rel-chip{filters.attended ? ' active' : ''}"
+                title="Only tunes played on nights you checked in to"
+                onclick={() => (filters.attended = !filters.attended)} />
+            </div>
             <!-- My-tunebook status: colors every row by MY learn status (roll-up,
                  same rules as the tune-detail modal) and, past "all", filters to
                  one status. Instrument scope appears for 2+ instrument players. -->
@@ -646,10 +658,24 @@
             <div class="tune-meta">
               {#if st}<Chip label={st.status} styled={false} chipClass="ls-chip {st.cls}" />{/if}
               {#if tune.tune_type}<Chip label={tune.tune_type} styled={false} chipClass="tune-type" />{/if}
-              {#if sort.type === 'session'}
-                <Chip label={String(tune.play_count || 0)} styled={false} chipClass="tune-count-badge" />
+              {#if filters.attended}
+                <Chip
+                  label="{tune.attended_play_count || 0} attended"
+                  styled={false}
+                  chipClass="tune-count-badge"
+                  title="Times played on nights you attended" />
+              {:else if sort.type === 'session'}
+                <Chip
+                  label={String(tune.play_count || 0)}
+                  styled={false}
+                  chipClass="tune-count-badge"
+                  title="Times played at this session" />
               {:else if sort.type === 'everywhere'}
-                <Chip label={String(tune.tunebook_count || 0)} styled={false} chipClass="tune-count-badge" />
+                <Chip
+                  label={String(tune.tunebook_count || 0)}
+                  styled={false}
+                  chipClass="tune-count-badge"
+                  title="TheSession.org tunebooks" />
               {/if}
             </div>
           </div>

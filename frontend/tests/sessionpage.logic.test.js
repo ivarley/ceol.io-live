@@ -76,6 +76,18 @@ describe('filterAndSortTunes', () => {
     ).toEqual([103, 101])
   })
 
+  it('attended filter (spec 033 R4) keeps only tunes with attended plays', () => {
+    const withAttended = [
+      { ...tunes[0], attended_play_count: 2 },
+      { ...tunes[1], attended_play_count: 0 },
+      { ...tunes[2] }, // field absent (anonymous / stale payload) -> filtered out
+    ]
+    expect(
+      filterAndSortTunes(withAttended, { ...noFilters, attended: true }, sessionDesc, 'all').map((t) => t.tune_id)
+    ).toEqual([101])
+    expect(filterAndSortTunes(withAttended, { ...noFilters, attended: false }, sessionDesc, 'all')).toHaveLength(3)
+  })
+
   describe('my-tunebook status filter', () => {
     beforeEach(() => {
       window.TunebookStatus = {
@@ -109,7 +121,7 @@ describe('URL state round-trip', () => {
   it('reads legacy params (mystatus only when logged in)', () => {
     const params = new URLSearchParams('search=Fred&type=jig&mystatus=learned&myinst=Fiddle&sortType=alpha&sortDir=asc')
     const s = stateFromParams(params, true)
-    expect(s.filters).toEqual({ search: 'fred', type: 'jig', mystatus: 'learned' })
+    expect(s.filters).toEqual({ search: 'fred', type: 'jig', mystatus: 'learned', attended: false })
     expect(s.rawSearch).toBe('Fred')
     expect(s.myStatusInstrument).toBe('Fiddle')
     expect(s.sort).toEqual({ type: 'alpha', dir: 'asc' })
@@ -131,6 +143,7 @@ describe('URL state round-trip', () => {
     expect(params.get('myinst')).toBe('Fiddle')
     expect(params.has('sortType')).toBe(false)
     expect(params.get('show')).toBe('101')
+    expect(params.has('attended')).toBe(false)
     expect(params.get('tune')).toBe('5')
 
     const cleared = applyStateToParams(
@@ -143,6 +156,26 @@ describe('URL state round-trip', () => {
     expect(cleared.has('myinst')).toBe(false)
     expect(cleared.get('sortType')).toBe('alpha')
     expect(cleared.get('sortDir')).toBe('asc')
+  })
+
+  it('the attended flag (spec 033 R4) round-trips and is logged-in only', () => {
+    const params = applyStateToParams(
+      new URLSearchParams(),
+      { search: '', type: '', mystatus: '', attended: true },
+      { type: 'session', dir: 'desc' },
+      'all'
+    )
+    expect(params.get('attended')).toBe('1')
+    expect(stateFromParams(params, true).filters.attended).toBe(true)
+    expect(stateFromParams(params, false).filters.attended).toBe(false)
+
+    const cleared = applyStateToParams(
+      params,
+      { search: '', type: '', mystatus: '', attended: false },
+      { type: 'session', dir: 'desc' },
+      'all'
+    )
+    expect(cleared.has('attended')).toBe(false)
   })
 })
 

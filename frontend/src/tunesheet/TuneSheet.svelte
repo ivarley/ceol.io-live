@@ -130,7 +130,19 @@
     return !!pts.learn_status && pts.learn_status !== 'learned'
   })
   const heardCountView = $derived((pts && pts.heard_count) || 0)
-  const myPlayCount = $derived((pts && pts.session_play_count) || 0)
+  // Spec 033 lenses. The detail payload carries them on the tune block for any
+  // logged-in viewer; on-list tunes also carry them on person_tune_status. The
+  // session_play_count fallback covers stale offline snapshots (deprecated alias).
+  const myPlayCount = $derived(
+    tune?.member_play_count ?? pts?.member_play_count ?? pts?.session_play_count ?? 0
+  )
+  const myAttendedCount = $derived(tune?.attended_play_count ?? pts?.attended_play_count ?? 0)
+  const hasMyCounts = $derived(
+    loggedIn &&
+      (tune?.member_play_count != null ||
+        pts?.member_play_count != null ||
+        pts?.session_play_count != null)
+  )
 
   const notation = $derived(tune ? notationInfo(tune) : null)
   const notationView = $derived(tune ? notationDisplay(tune, notationMode, notationSize) : null)
@@ -187,8 +199,8 @@
   )
   const saveBtnBg = $derived(saveState === 'saved' ? '#28a745' : saveState === 'error' ? '#dc3545' : '')
 
-  const historyOptions = $derived(historyScopeOptions(mode, scope))
-  const playedWithOptions = $derived(playedWithScopeOptions(mode, scope))
+  const historyOptions = $derived(historyScopeOptions(mode, scope, loggedIn))
+  const playedWithOptions = $derived(playedWithScopeOptions(mode, scope, loggedIn))
   // null = "the mode's default scope" (mode is only known once the payload lands)
   const historyScopeKey = $derived(historyScope ?? historyOptions[0].key)
   const playedWithScopeKey = $derived(playedWithScope ?? playedWithOptions[0].key)
@@ -275,8 +287,9 @@
     else if (activeTab === 'played-with') loadPlayedWith()
     // An explicit history/played-with scope choice survives a re-apply only if
     // the (possibly changed) mode still offers it.
-    if (historyScope != null && !historyScopeOptions(mode, scope).some((o) => o.key === historyScope)) historyScope = null
-    if (playedWithScope != null && !playedWithScopeOptions(mode, scope).some((o) => o.key === playedWithScope))
+    if (historyScope != null && !historyScopeOptions(mode, scope, loggedIn).some((o) => o.key === historyScope))
+      historyScope = null
+    if (playedWithScope != null && !playedWithScopeOptions(mode, scope, loggedIn).some((o) => o.key === playedWithScope))
       playedWithScope = null
     const info = notationInfo(data.session_tune)
     notationMode = info.initialMode
@@ -1019,8 +1032,8 @@
     let url = `/api/tunes/${tuneId}/history`
     if (scopeKey === 'session') {
       url += `?session_path=${encodeURIComponent(scope.session)}`
-    } else if (scopeKey === 'mine') {
-      url += '?person=me'
+    } else if (scopeKey === 'member' || scopeKey === 'attended') {
+      url += `?scope=${scopeKey}`
     }
     fetch(url)
       .then((r) => r.json())
@@ -1050,6 +1063,8 @@
     let url = `/api/tunes/${tuneId}/played-with`
     if (scopeKey === 'session') {
       url += `?session_path=${encodeURIComponent(scope.session)}`
+    } else if (scopeKey === 'member' || scopeKey === 'attended') {
+      url += `?scope=${scopeKey}`
     }
     fetch(url)
       .then((r) => r.json())
@@ -1687,7 +1702,19 @@
                     >{/if}
                 </div>
               </div>
-              {#if mode === 'my_tunes'}
+              <!-- Logged-count cards, in scope order: this session -> my sessions
+                   (spec 033 R3) -> while I was there (R4) -> all sessions. The
+                   personal pair shows for any logged-in viewer whose payload
+                   carries the lens fields (stale offline snapshots may not). -->
+              {#if mode === 'session' || mode === 'session_instance'}
+                <div class="stat-card">
+                  <div class="stat-line">
+                    Logged <span class="stat-number">{tune.times_played || 0}</span>
+                    {plural(tune.times_played || 0, 'time')} at this session
+                  </div>
+                </div>
+              {/if}
+              {#if mode !== 'admin' && hasMyCounts}
                 <div class="stat-card">
                   <div class="stat-line">
                     Logged <span class="stat-number">{myPlayCount}</span>
@@ -1696,40 +1723,21 @@
                 </div>
                 <div class="stat-card">
                   <div class="stat-line">
-                    Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                    {plural(tune.global_play_count || 0, 'time')} at all sessions
+                    Logged <span class="stat-number">{myAttendedCount}</span>
+                    {plural(myAttendedCount, 'time')} while I was there
                   </div>
                 </div>
-              {:else if mode === 'session' || mode === 'session_instance'}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{tune.times_played || 0}</span>
-                    {plural(tune.times_played || 0, 'time')} at this session
-                  </div>
+              {/if}
+              <div class="stat-card">
+                <div class="stat-line">
+                  Logged <span class="stat-number">{tune.global_play_count || 0}</span>
+                  {plural(tune.global_play_count || 0, 'time')} at all sessions
                 </div>
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                    {plural(tune.global_play_count || 0, 'time')} at all sessions
-                  </div>
-                </div>
-              {:else if mode === 'admin'}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                    {plural(tune.global_play_count || 0, 'time')} at all sessions
-                  </div>
-                </div>
+              </div>
+              {#if mode === 'admin'}
                 <div class="stat-card">
                   <div class="stat-line">
                     In the repertoire of <span class="stat-number">{tune.session_count || 0}</span> sessions
-                  </div>
-                </div>
-              {:else}
-                <div class="stat-card">
-                  <div class="stat-line">
-                    Logged <span class="stat-number">{tune.global_play_count || 0}</span>
-                    {plural(tune.global_play_count || 0, 'time')} at all sessions
                   </div>
                 </div>
               {/if}

@@ -263,8 +263,16 @@ class TestOfflineBundleParity:
             "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position) VALUES (%s, %s, '1')",
             (instance_id, tune_id),
         )
+        # Member of the session AND checked in (spec 033: session_play_count is
+        # the member lens, and only attendance='yes' counts as attended).
         db_cursor.execute(
-            "INSERT INTO session_instance_person (session_instance_id, person_id) VALUES (%s, %s)",
+            "INSERT INTO session_person (session_id, person_id, relationship)"
+            " VALUES (%s, %s, 'member') ON CONFLICT DO NOTHING",
+            (session_id, self.PERSON_ID),
+        )
+        db_cursor.execute(
+            "INSERT INTO session_instance_person (session_instance_id, person_id, attendance)"
+            " VALUES (%s, %s, 'yes')",
             (instance_id, self.PERSON_ID),
         )
         db_conn.commit()

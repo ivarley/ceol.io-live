@@ -9,12 +9,15 @@ import {
   noResultsMessage,
   resultsCountText,
   typeBadgeLabel,
+  typeBadgeTitle,
   stateFromParams,
   paramsFromState,
   applyPendingOps,
   nextStatus,
   cycleInstrumentOverride,
   fetchAllTunes,
+  memberPlays,
+  attendedPlays,
 } from '../src/mytunespage/logic.js'
 
 const tune = (over = {}) => ({
@@ -133,6 +136,56 @@ describe('messages and badges', () => {
   })
 })
 
+describe('spec 033 relationship lenses', () => {
+  it('memberPlays prefers member_play_count, falls back to the deprecated alias', () => {
+    expect(memberPlays(tune({ member_play_count: 4, session_play_count: 9 }))).toBe(4)
+    expect(memberPlays(tune({ session_play_count: 9 }))).toBe(9) // stale offline cache
+    expect(memberPlays(tune({ member_play_count: 0, session_play_count: 9 }))).toBe(0)
+    expect(attendedPlays(tune({ attended_play_count: 3 }))).toBe(3)
+    expect(attendedPlays(tune({}))).toBe(0)
+  })
+
+  it('the plays sort uses the member lens and attended sorts by check-ins', () => {
+    const a = tune({ tune_id: 1, member_play_count: 5, attended_play_count: 0 })
+    const b = tune({ tune_id: 2, member_play_count: 1, attended_play_count: 7 })
+    const byPlays = buildSortFunction({ type: 'plays', dir: 'desc' })
+    const byAttended = buildSortFunction({ type: 'attended', dir: 'desc' })
+    expect([a, b].sort(byPlays)[0].tune_id).toBe(1)
+    expect([a, b].sort(byAttended)[0].tune_id).toBe(2)
+  })
+
+  it('badge label + title follow the attended sort', () => {
+    const t = tune({ member_play_count: 2, attended_play_count: 6 })
+    expect(typeBadgeLabel(t, 'plays')).toBe('2')
+    expect(typeBadgeLabel(t, 'attended')).toBe('6')
+    expect(typeBadgeTitle('plays')).toMatch(/my sessions/)
+    expect(typeBadgeTitle('attended')).toMatch(/while I was there/i)
+    expect(typeBadgeTitle('alpha')).toBe('')
+  })
+
+  it('rel chips filter by member plays and attended plays', () => {
+    const tunes = [
+      tune({ tune_id: 1, member_play_count: 2, attended_play_count: 0 }),
+      tune({ tune_id: 2, member_play_count: 0, attended_play_count: 1 }),
+      tune({ tune_id: 3, member_play_count: 0, attended_play_count: 0 }),
+    ]
+    const base = { search: '', type: '', status: '', instrument: '' }
+    const sort = { type: 'alpha', dir: 'asc' }
+    expect(filterAndSort(tunes, { ...base, rel: 'member' }, sort, []).map((t) => t.tune_id)).toEqual([1])
+    expect(filterAndSort(tunes, { ...base, rel: 'attended' }, sort, []).map((t) => t.tune_id)).toEqual([2])
+    expect(filterAndSort(tunes, { ...base, rel: '' }, sort, []).length).toBe(3)
+  })
+
+  it('rel round-trips through the URL', () => {
+    const params = paramsFromState(
+      { search: '', type: '', status: '', instrument: '', rel: 'attended' },
+      { type: 'alpha', dir: 'asc', type2: null, dir2: null }
+    )
+    expect(params.get('rel')).toBe('attended')
+    expect(stateFromParams(params).filters.rel).toBe('attended')
+  })
+})
+
 describe('URL state round-trip', () => {
   it('restores filters + primary/secondary sort and omits defaults', () => {
     const params = paramsFromState(
@@ -140,7 +193,7 @@ describe('URL state round-trip', () => {
       { type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' }
     )
     const { filters, sort } = stateFromParams(params)
-    expect(filters).toEqual({ search: 'x', type: 'jig', status: 'learned', instrument: 'Fiddle' })
+    expect(filters).toEqual({ search: 'x', type: 'jig', status: 'learned', instrument: 'Fiddle', rel: '' })
     expect(sort).toEqual({ type: 'heard', dir: 'desc', type2: 'alpha', dir2: 'asc' })
     // alpha-asc default writes nothing
     expect(paramsFromState({ search: '', type: '', status: '', instrument: '' }, { type: 'alpha', dir: 'asc', type2: null, dir2: null }).toString()).toBe('')

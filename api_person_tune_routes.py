@@ -23,7 +23,7 @@ from serializers import (
     build_person_tune_detail,
     load_person_instruments,
     _attach_instrument_overrides,
-    _attach_session_play_counts,
+    _attach_person_play_counts,
     VALID_PERSON_TUNE_SORTS,
 )
 
@@ -1334,7 +1334,7 @@ def get_offline_bundle():
                 for r in cur.fetchall()
             ]
             _attach_instrument_overrides(cur, person_id, tunes)
-            _attach_session_play_counts(cur, person_id, tunes)
+            _attach_person_play_counts(cur, person_id, tunes)
 
             # Popular tunes carry incipit notation too, so a popular tune added offline
             # still shows its dots/ABC in the drawer — plus the same stats fields, so
@@ -1409,6 +1409,9 @@ def get_my_sessions():
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            # Deliberately NOT filtered to relationship='member' (spec 033): a
+            # visitor legitimately revisits the session pages of sessions they've
+            # been to, and prefetching them for offline is a feature, not a leak.
             cur.execute(
                 """
                 SELECT s.path, s.name, MAX(si.date) AS last_date

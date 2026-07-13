@@ -266,6 +266,11 @@
     margin-bottom: 0;
 }
 
+/* The relationship-chip row can hold three pills — let them wrap on phones. */
+#rel-filter-row {
+    flex-wrap: wrap;
+}
+
 .filter-panel-select {
     flex: 1;
     padding: 8px 10px;
@@ -592,6 +597,31 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 10px;
+}
+
+/* Relationship filter chips in the filter panel (spec 033): single-select
+   toggle-off pills — outlined when idle, filled like the active sort when on. */
+.filter-rel-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-rel-chip:hover {
+    border-color: var(--primary);
+}
+
+.filter-rel-chip.active {
+    border-color: var(--primary);
+    background-color: var(--primary);
+    color: white;
 }
 
 .filter-pill {

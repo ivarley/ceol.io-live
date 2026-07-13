@@ -736,8 +736,9 @@ class TestPersonTuneAPI:
         """, (session_id,))
         session_instance_id = db_cursor.fetchone()[0]
 
-        # session_play_count counts instances the person *attended*
-        # (session_instance_person), not just sessions they belong to.
+        # Check in too, so this fixture exercises BOTH spec 033 lenses:
+        # member_play_count (session_person membership) and attended_play_count
+        # (session_instance_person attendance='yes').
         db_cursor.execute("""
             INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
             VALUES (%s, %s, 'yes')
@@ -770,4 +771,74 @@ class TestPersonTuneAPI:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
-        assert data["person_tune"]["session_play_count"] >= 1
+        # Member of the session AND checked in -> both lenses count the play;
+        # session_play_count is the deprecated alias of member_play_count.
+        assert data["person_tune"]["member_play_count"] >= 1
+        assert data["person_tune"]["attended_play_count"] >= 1
+        assert data["person_tune"]["session_play_count"] == data["person_tune"]["member_play_count"]
+
+    def test_play_count_lenses_diverge(self, client, authenticated_user, db_conn, db_cursor):
+        """Spec 033: member_play_count (R3) and attended_play_count (R4) are
+        different relationships and must diverge in both directions.
+
+        Session M: person is a MEMBER, never checked in (the Piper's Picnic bug).
+        Session V: person is a VISITOR but checked in with attendance='yes'.
+        The tune was played once at each.
+        """
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 60000
+        person_id = 2
+        sid_m = int(unique_id[2:6], 16) % 10000 + 20000
+        sid_v = sid_m + 1
+
+        for sid, suffix in ((sid_m, "m"), (sid_v, "v")):
+            db_cursor.execute(
+                "INSERT INTO session (session_id, name, path) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                (sid, f"Lens Session {suffix} {unique_id}", f"lens-{suffix}-{unique_id}"),
+            )
+        db_cursor.execute(
+            """INSERT INTO session_person (session_id, person_id, relationship)
+               VALUES (%s, %s, 'member') ON CONFLICT DO NOTHING""",
+            (sid_m, person_id),
+        )
+        db_cursor.execute(
+            """INSERT INTO session_person (session_id, person_id, relationship)
+               VALUES (%s, %s, 'visitor') ON CONFLICT DO NOTHING""",
+            (sid_v, person_id),
+        )
+        db_cursor.execute(
+            "INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel') ON CONFLICT DO NOTHING",
+            (tune_id, f"Lens Tune {unique_id}"),
+        )
+        inst = {}
+        for sid, key in ((sid_m, "m"), (sid_v, "v")):
+            db_cursor.execute(
+                "INSERT INTO session_instance (session_id, date) VALUES (%s, CURRENT_DATE) RETURNING session_instance_id",
+                (sid,),
+            )
+            inst[key] = db_cursor.fetchone()[0]
+            db_cursor.execute(
+                "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position) VALUES (%s, %s, 'V')",
+                (inst[key], tune_id),
+            )
+        # Checked in at the VISITED session only.
+        db_cursor.execute(
+            """INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+               VALUES (%s, %s, 'yes') ON CONFLICT DO NOTHING""",
+            (inst["v"], person_id),
+        )
+        db_cursor.execute(
+            "INSERT INTO person_tune (person_id, tune_id, learn_status) VALUES (%s, %s, 'learning') RETURNING person_tune_id",
+            (person_id, tune_id),
+        )
+        person_tune_id = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.get(f"/api/my-tunes/{person_tune_id}")
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["person_tune"]
+        assert data["member_play_count"] == 1     # session M's play, despite no check-in
+        assert data["attended_play_count"] == 1   # session V's play, despite visitor status
+        assert data["session_play_count"] == 1    # alias of member

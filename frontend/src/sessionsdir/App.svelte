@@ -10,16 +10,22 @@
 
   let { pageData = null, isLoggedIn = false } = $props()
 
-  // Filter states cycle on the toggle button; logged-out users have no "My Sessions".
-  const filterStates = isLoggedIn ? ['my', 'active', 'all', 'inactive'] : ['active', 'all', 'inactive']
+  // Filter states cycle on the toggle button; logged-out users have no "My
+  // Sessions"/"Visited". 'my' is member-strict (spec 033); 'visited' shows the
+  // sessions the viewer has a visitor relationship with (spec 034).
+  const filterStates = isLoggedIn
+    ? ['my', 'visited', 'active', 'all', 'inactive']
+    : ['active', 'all', 'inactive']
   const filterButtonLabels = {
     my: 'My Sessions',
+    visited: 'Visited',
     active: 'All Active',
     all: 'All',
     inactive: 'Inactive',
   }
   const countLabels = {
     my: 'sessions in your list',
+    visited: "sessions you've visited",
     active: 'active sessions',
     all: 'sessions',
     inactive: 'inactive sessions',
@@ -73,6 +79,8 @@
       let passes = false
       if (currentFilter === 'my') {
         passes = session.user_is_member
+      } else if (currentFilter === 'visited') {
+        passes = session.user_relationship === 'visitor'
       } else if (currentFilter === 'active') {
         passes = !session.termination_date || parseLocalDate(session.termination_date) > today
       } else if (currentFilter === 'all') {

@@ -65,15 +65,18 @@ def home():
             learning_count = learning_counts.get("learning", 0)
             want_to_learn_count = learning_counts.get("want to learn", 0)
 
-            # Suggested tune: most played at user's sessions, not already in their list
+            # Suggested tune: most played at user's sessions (spec 033 R3 — member
+            # sessions only, a visited session isn't "yours"), not already on their list
             cur.execute(
                 """
                 SELECT t.tune_id, t.name, t.tune_type, COUNT(sit.session_instance_tune_id) AS play_count
                 FROM session_instance_tune sit
                 JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                JOIN session_person sp ON si.session_id = sp.session_id AND sp.person_id = %s
+                JOIN session_person sp ON si.session_id = sp.session_id
+                    AND sp.person_id = %s AND sp.relationship = 'member'
                 JOIN tune t ON sit.tune_id = t.tune_id
                 WHERE sit.tune_id IS NOT NULL
+                  AND sit.deleted = FALSE AND sit.record_type <> 'break'
                   AND t.redirect_to_tune_id IS NULL
                   AND NOT EXISTS (
                     SELECT 1 FROM person_tune pt WHERE pt.person_id = %s AND pt.tune_id = sit.tune_id
@@ -105,7 +108,7 @@ def home():
                 FROM session_person sp
                 JOIN session s ON sp.session_id = s.session_id
                 JOIN session_instance si ON s.session_id = si.session_id
-                WHERE sp.person_id = %s
+                WHERE sp.person_id = %s AND sp.relationship = 'member'
                   AND si.date BETWEEN %s AND %s
                   AND si.is_cancelled = FALSE
                 ORDER BY si.date, si.start_time

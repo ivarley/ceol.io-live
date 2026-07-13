@@ -48,7 +48,7 @@
     { id: 'thesession', label: 'TheSession.org', type: 'number', key: (p) => p.thesession_user_id || 0 },
     { id: 'username', label: 'Username', type: 'text', key: (p) => (p.username || 'no account').toLowerCase() },
     { id: 'sessions', label: 'Sessions', type: 'number', key: (p) => p.session_count },
-    { id: 'instances', label: 'Instances', type: 'number', key: (p) => p.session_instance_count },
+    { id: 'instances', label: 'Checked In', type: 'number', key: (p) => p.session_instance_count },
     { id: 'tunes', label: 'Tunes', type: 'number', key: (p) => p.tune_count },
     { id: 'latest', label: 'Latest Session', type: 'date', key: (p) => p.latest_session_date || '' },
     { id: 'logged', label: 'Last Logged A Tune', type: 'date', key: (p) => p.last_logged_tune || '' },

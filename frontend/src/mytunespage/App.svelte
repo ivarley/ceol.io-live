@@ -14,6 +14,7 @@
     noResultsMessage,
     resultsCountText,
     typeBadgeLabel,
+    typeBadgeTitle,
     stateFromParams,
     paramsFromState,
     overlayPendingOps,
@@ -54,7 +55,16 @@
   // ---- derived ----------------------------------------------------------------
   const visible = $derived(filterAndSort(allTunes, filters, sort, instruments))
   const tuneTypes = $derived([...new Set(allTunes.map((t) => t.tune_type).filter(Boolean))].sort())
-  const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument))
+  const hasActiveFilters = $derived(!!(filters.type || filters.status || filters.instrument || filters.rel))
+
+  // Relationship chips (spec 033) — single-select, click the active one to clear.
+  // (R2 "in my sessions' repertoire" was deliberately dropped: plays auto-enroll
+  // into session_tune, so it only differed for on-list-but-never-played tunes.)
+  const REL_CHIPS = [
+    { id: 'member', label: 'Played at my sessions' },
+    { id: 'attended', label: 'While I was there' },
+  ]
+  const relLabel = (id) => REL_CHIPS.find((c) => c.id === id)?.label || id
   const matches = $derived(visible.filter((t) => !t._instDimmed))
   const dimmedTunes = $derived(visible.filter((t) => t._instDimmed))
 
@@ -180,12 +190,14 @@
     if (filters.status) out.push({ key: 'status', label: cap(filters.status) })
     if (filters.type) out.push({ key: 'type', label: cap(filters.type) })
     if (filters.instrument) out.push({ key: 'instrument', label: filters.instrument })
+    if (filters.rel) out.push({ key: 'rel', label: relLabel(filters.rel) })
     return out
   })
   function removeFilterPill(key) {
     if (key === 'status') filters.status = ''
     else if (key === 'type') filters.type = ''
     else if (key === 'instrument') filters.instrument = ''
+    else if (key === 'rel') filters.rel = ''
   }
 
   function clearFilters() {
@@ -193,6 +205,7 @@
     filters.type = ''
     filters.status = ''
     filters.instrument = ''
+    filters.rel = ''
     sort.type2 = null
     sort.dir2 = null
   }
@@ -207,7 +220,7 @@
     sort.type2 = sort.type
     sort.dir2 = sort.dir
     sort.type = type
-    sort.dir = type === 'popularity' || type === 'heard' || type === 'plays' ? 'desc' : 'asc'
+    sort.dir = type === 'alpha' ? 'asc' : 'desc' // count sorts default to descending
   }
 
   // ---- writes -------------------------------------------------------------------
@@ -602,7 +615,8 @@
               options={[
                 { id: 'alpha', label: 'a-z' },
                 { id: 'popularity', label: 'popularity' },
-                { id: 'plays', label: 'plays' },
+                { id: 'plays', label: 'my plays' },
+                { id: 'attended', label: 'attended' },
                 { id: 'heard', label: 'heard' },
               ]}
               value={sort.type}
@@ -612,6 +626,16 @@
               segClass="filter-button-group"
               optClass="filter-sort-btn"
               onSelect={setSortMode} />
+          </div>
+          <div class="filter-panel-row" id="rel-filter-row">
+            {#each REL_CHIPS as chip (chip.id)}
+              <Chip
+                label={chip.label}
+                active={filters.rel === chip.id}
+                styled={false}
+                chipClass="filter-rel-chip{filters.rel === chip.id ? ' active' : ''}"
+                onclick={() => (filters.rel = filters.rel === chip.id ? '' : chip.id)} />
+            {/each}
           </div>
           <div class="filter-panel-row">
             <div class="inst-select" class:open={typeMenuOpen} id="type-filter">
@@ -753,6 +777,7 @@
             displayStatus={d.status}
             cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             oncycle={cycleStatus}
             onincrement={incrementHeard} />
@@ -766,6 +791,7 @@
             displayStatus={d.status}
             cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             oncycle={cycleStatus}
             onincrement={incrementHeard} />
@@ -779,6 +805,7 @@
             displayStatus={d.status}
             cycleIsInstrument={d.isInstrument}
             typeLabel={typeBadgeLabel(tune, sort.type)}
+            typeTitle={typeBadgeTitle(sort.type)}
             onshow={(t) => showTuneDetail(t.person_tune_id)}
             oncycle={cycleStatus}
             onincrement={incrementHeard} />

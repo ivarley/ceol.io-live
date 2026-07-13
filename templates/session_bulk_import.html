@@ -34,7 +34,7 @@
                         <ul class="mb-3 small">
                             <li><strong>Basic:</strong> Name, Email, Instruments</li>
                             <li><strong>With headers:</strong> First Name, Last Name, Email, Instruments</li>
-                            <li><strong>Extended:</strong> Name, Email, Phone, City, State, Country, Instruments, Regular</li>
+                            <li><strong>Extended:</strong> Name, Email, Phone, City, State, Country, Instruments</li>
                         </ul>
                         
                         <p class="mb-2"><strong>Field Notes:</strong></p>
@@ -42,7 +42,6 @@
                             <li><strong>Name:</strong> Can be "First Last" or separate First/Last columns</li>
                             <li><strong>Contact:</strong> Email addresses or phone numbers are auto-detected</li>
                             <li><strong>Instruments:</strong> Comma-separated list (e.g., "Fiddle,Flute" or "Guitar")</li>
-                            <li><strong>Regular:</strong> "yes", "true", "1" marks as regular session member</li>
                             <li><strong>Location:</strong> Missing city/state/country will default from session settings</li>
                         </ul>
                         
@@ -53,9 +52,9 @@
                             Jane Doe,jane@example.com,Guitar<br><br>
                             
                             <strong>With headers:</strong><br>
-                            First Name,Last Name,Email,Regular,Instruments<br>
-                            John,Smith,john@example.com,yes,"Fiddle,Flute"<br>
-                            Jane,Doe,jane@example.com,no,Guitar
+                            First Name,Last Name,Email,Instruments<br>
+                            John,Smith,john@example.com,"Fiddle,Flute"<br>
+                            Jane,Doe,jane@example.com,Guitar
                         </div>
                     </div>
                 </div>
@@ -107,7 +106,6 @@
                                 <th>Phone</th>
                                 <th>Location</th>
                                 <th>Instruments</th>
-                                <th>Regular</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -308,7 +306,6 @@ function populatePreviewTable() {
             <td>${person.sms_number || ''}</td>
             <td><small class="text-muted">${location}</small></td>
             <td>${instrumentsHtml}</td>
-            <td>${person.is_regular ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-light text-dark">No</span>'}</td>
             <td>
                 ${person.is_duplicate 
                     ? `<span class="badge bg-warning duplicate-badge">Duplicate (${person.duplicate_reason})</span>`
