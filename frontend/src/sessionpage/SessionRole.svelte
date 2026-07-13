@@ -102,9 +102,9 @@
   .sr-save {
     width: 100%;
     padding: 0.5rem 0.9rem;
-    border: 1px solid var(--border-color, #ccc);
-    border-radius: var(--r, 6px);
-    background: var(--primary, #007bff);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--primary);
     color: #fff;
     font: inherit;
     cursor: pointer;

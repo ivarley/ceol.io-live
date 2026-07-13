@@ -329,9 +329,9 @@
   .pp-field input, .pp-other input {
     width: 100%;
     padding: 0.45rem 0.55rem;
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--r, 6px);
-    background: var(--bg, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-color);
     color: inherit;
     font: inherit;
   }
@@ -346,9 +346,9 @@
   .pp-other { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
   .pp-other button, .pp-commit {
     padding: 0.45rem 0.8rem;
-    border: 1px solid var(--border, #ccc);
-    border-radius: var(--r, 6px);
-    background: var(--bg-secondary, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--hover-bg);
     color: inherit;
     cursor: pointer;
     font: inherit;

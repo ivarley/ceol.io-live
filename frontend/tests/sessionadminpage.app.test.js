@@ -248,6 +248,44 @@ describe('session admin page view', () => {
     })
   })
 
+  it('people tab: select mode bulk-archives, PUTs each person, and patches the rows', async () => {
+    // Spec 034: roster hygiene is a BULK job. An admin tidying up after a few years archives
+    // a dozen people who moved away -- doing that one person-page at a time is the chore
+    // nobody does, which is how rosters rot in the first place.
+    const { container } = renderApp(payload(), ctx({ activeTab: 'people' }))
+    await waitFor(() => expect(container.querySelector('#people-content tbody tr')).toBeTruthy())
+
+    // Everyone, so both fixture people are on screen.
+    const filter = container.querySelector('#people-filter')
+    filter.value = 'everyone'
+    await fireEvent.change(filter)
+
+    await fireEvent.click(container.querySelector('#people-select-btn'))
+    const boxes = container.querySelectorAll('#people-content tbody input[type="checkbox"]')
+    expect(boxes).toHaveLength(2)
+    await fireEvent.click(boxes[0])
+    await fireEvent.click(boxes[1])
+    expect(container.querySelector('#people-actions').textContent).toContain('2 selected')
+
+    const archiveBtn = [...container.querySelectorAll('#people-actions button')].find(
+      (b) => b.textContent.trim() === 'Archive'
+    )
+    await fireEvent.click(archiveBtn)
+
+    await waitFor(() => {
+      const puts = fetch.mock.calls.filter(
+        ([u, o]) => String(u).includes('/archived') && o?.method === 'PUT'
+      )
+      expect(puts).toHaveLength(2)
+      expect(JSON.parse(puts[0][1].body)).toEqual({ archived: true })
+    })
+    // The rows are patched in place -- both now light their `archived` flag.
+    await waitFor(() => {
+      const row = container.querySelectorAll('#people-content tbody tr')[0]
+      expect(row.querySelector('[data-flag="archived"]').getAttribute('data-on')).toBe('true')
+    })
+  })
+
   it('people tab: fetches once, defaults to Members Only, search + Everyone widen/narrow the table', async () => {
     const { container } = renderApp(payload(), ctx({ activeTab: 'people' }))
     await waitFor(() => {
@@ -255,9 +293,18 @@ describe('session admin page view', () => {
     })
     expect(container.querySelector('.person-link').textContent.trim()).toBe('Ann Malone')
     expect(container.querySelector('.person-link').getAttribute('href')).toBe('/admin/sessions/austin/mueller/people/1')
-    // Spec 034: no "Regular" badge any more -- Ann is simply a member, which is the default view.
-    expect(container.querySelector('.person-status').textContent).not.toContain('Regular')
-    expect(container.querySelector('.person-admin').textContent).toContain('Session')
+    // Spec 034: one fixed seven-icon column. Ann is a confirmed member + session admin, and
+    // crucially the icons that are FALSE are still rendered (dimmed) -- "not confirmed" must
+    // be visible, not just absent.
+    const flags = container.querySelector('.person-status')
+    const on = (k) => flags.querySelector(`[data-flag="${k}"]`).getAttribute('data-on')
+    expect(on('member')).toBe('true')
+    expect(on('confirmed')).toBe('true')
+    expect(on('session-admin')).toBe('true')
+    expect(on('visitor')).toBe('false')
+    expect(on('archived')).toBe('false')
+    // All seven always render, lit or not.
+    expect(flags.querySelectorAll('[data-flag]')).toHaveLength(7)
     // Everyone shows Bob too (null email renders "No email").
     const filter = container.querySelector('#people-filter')
     filter.value = 'everyone'

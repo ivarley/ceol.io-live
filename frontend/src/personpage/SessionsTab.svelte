@@ -399,15 +399,15 @@
     height: 2rem;
     line-height: 1;
     font-size: 1.15rem;
-    border: 1px solid var(--border-color, #dee2e6);
+    border: 1px solid var(--border-color);
     border-radius: 50%;
-    background: var(--bg-secondary, transparent);
+    background: var(--hover-bg);
     color: inherit;
     cursor: pointer;
   }
   .sessions-add-btn:hover {
-    border-color: var(--primary, #007bff);
-    color: var(--primary, #007bff);
+    border-color: var(--primary);
+    color: var(--primary);
   }
   .role-hint {
     font-size: 0.82rem;

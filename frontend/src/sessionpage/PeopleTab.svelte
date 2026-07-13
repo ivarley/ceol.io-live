@@ -459,8 +459,8 @@
     margin: 8px 0;
     padding: 8px 12px;
     border-radius: 6px;
-    background: var(--warning-bg, #fff3cd);
-    color: var(--warning-text, #856404);
+    background: var(--warning-bg);
+    color: var(--text-color);
     font-size: 0.86rem;
   }
   .person-row.archived { opacity: 0.55; }
@@ -472,20 +472,20 @@
     text-align: left;
     margin-top: 8px;
     padding: 10px 12px;
-    border: 1px solid var(--border-color, #dee2e6);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
-    background: var(--bg-secondary, transparent);
+    background: var(--hover-bg);
     color: inherit;
     font: inherit;
     font-size: 0.86rem;
     cursor: pointer;
   }
-  .pd-action:hover { border-color: var(--primary, #007bff); }
+  .pd-action:hover { border-color: var(--primary); }
   .pd-action:disabled { opacity: 0.5; cursor: default; }
   .people-empty-add {
     margin-top: 16px;
     padding: 10px 20px;
-    background-color: var(--primary, #007bff);
+    background-color: var(--primary);
     color: white;
     border: none;
     border-radius: 4px;

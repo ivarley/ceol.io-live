@@ -174,15 +174,48 @@
                             <input type="hidden" id="person-id" value="{{ person.person_id }}">
                             <input type="hidden" id="session-path" value="{{ session_path }}">
                             
+                            {# Spec 034: three orthogonal fields, each answering one question.
+                               "Regular Member" is gone -- is_regular was deleted, and its
+                               checkbox here was PUTting to an endpoint that no longer exists. #}
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-check mb-3">
-                                        <input class="form-check-input" type="checkbox" id="is-regular" {{ 'checked' if person.is_regular }}>
-                                        <label class="form-check-label" for="is-regular">
-                                            <strong>Regular Member</strong>
-                                        </label>
-                                        <div class="form-text">Mark as a regular member of this session</div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="relationship"><strong>Relationship</strong></label>
+                                        <select class="form-select" id="relationship">
+                                            <option value="member" {{ 'selected' if person.relationship != 'visitor' }}>Member</option>
+                                            <option value="visitor" {{ 'selected' if person.relationship == 'visitor' }}>Visitor</option>
+                                        </select>
+                                        <div class="form-text">
+                                            Whose session is this? A <strong>member</strong> counts this session's
+                                            tunes as their own; a <strong>visitor</strong> came, but it isn't one of
+                                            their sessions. Grants no access.
+                                        </div>
                                     </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="is-confirmed" {{ 'checked' if person.confirmed }}>
+                                        <label class="form-check-label" for="is-confirmed">
+                                            <strong>Confirmed</strong>
+                                        </label>
+                                        <div class="form-text">
+                                            Lets them see this session's <strong>people list and attendance
+                                            records</strong>. Nothing else grants that — joining a session doesn't,
+                                            and neither does being checked in.
+                                        </div>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="is-archived" {{ 'checked' if person.archived }}>
+                                        <label class="form-check-label" for="is-archived">
+                                            <strong>Archived</strong>
+                                        </label>
+                                        <div class="form-text">
+                                            Hide someone who's moved away. They drop out of the default lists but
+                                            stay findable by typing their name, so nobody re-creates them as a
+                                            duplicate person.
+                                        </div>
+                                    </div>
+
                                     <div class="form-check mb-3">
                                         <input class="form-check-input" type="checkbox" id="is-admin" {{ 'checked' if person.is_admin }}>
                                         <label class="form-check-label" for="is-admin">
@@ -615,49 +648,70 @@ dl.row dd {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const isRegularCheckbox = document.getElementById('is-regular');
     const saveStatus = document.getElementById('save-status');
     const savePersonDetailsBtn = document.getElementById('save-person-details');
     const personSaveStatus = document.getElementById('person-save-status');
-    
-    // Handle regular status changes
-    if (isRegularCheckbox) {
-        isRegularCheckbox.addEventListener('change', function() {
-            const personId = document.getElementById('person-id').value;
-            const sessionPath = document.getElementById('session-path').value;
-            const isRegular = this.checked;
 
-            // Show loading state
-            saveStatus.style.display = 'block';
-            saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+    function flash(msg, ok) {
+        saveStatus.style.display = 'block';
+        saveStatus.innerHTML = '<div class="alert alert-' + (ok ? 'success' : 'danger') + '">' + msg + '</div>';
+        if (ok) setTimeout(() => { saveStatus.style.display = 'none'; }, 3000);
+    }
 
-            // Make API call to update regular status
-            fetch(`/api/admin/sessions/${sessionPath}/people/${personId}/regular`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    is_regular: isRegular
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    saveStatus.innerHTML = '<div class="alert alert-success">Regular status updated successfully!</div>';
-                    setTimeout(() => {
-                        saveStatus.style.display = 'none';
-                    }, 3000);
-                } else {
-                    throw new Error(data.error || 'Failed to update regular status');
-                }
-            })
-            .catch(error => {
-                console.error('Error updating regular status:', error);
-                saveStatus.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
-                // Revert checkbox state
-                this.checked = !isRegular;
-            });
+    // Spec 034: relationship / confirmed / archived each have their own setter, and each is
+    // saved the moment you change it. (The old "Regular Member" checkbox PUT to
+    // /people/<id>/regular, an endpoint that no longer exists.)
+    const personId = document.getElementById('person-id').value;
+    const sessionPath = document.getElementById('session-path').value;
+
+    function setField(field, value, label, revert) {
+        saveStatus.style.display = 'block';
+        saveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';
+        fetch(`/api/sessions/${sessionPath}/people/${personId}/${field}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: value })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) throw new Error(data.message || ('Failed to update ' + label));
+            flash(label + ' updated.', true);
+        })
+        .catch(err => {
+            flash('Error: ' + err.message, false);
+            if (revert) revert();
+        });
+    }
+
+    const relationshipSelect = document.getElementById('relationship');
+    if (relationshipSelect) {
+        let previous = relationshipSelect.value;
+        relationshipSelect.addEventListener('change', function () {
+            const value = this.value;
+            setField('relationship', value, 'Relationship', () => { this.value = previous; });
+            previous = value;
+        });
+    }
+
+    const isConfirmedCheckbox = document.getElementById('is-confirmed');
+    if (isConfirmedCheckbox) {
+        isConfirmedCheckbox.addEventListener('change', function () {
+            const value = this.checked;
+            // Say what it does, at the point of click -- confirming hands over the roster.
+            const name = document.querySelector('h1')?.textContent.trim() || 'This person';
+            if (value && !window.confirm(name + ' will be able to see this session\'s people list and attendance records. Confirm them?')) {
+                this.checked = false;
+                return;
+            }
+            setField('confirmed', value, 'Confirmed', () => { this.checked = !value; });
+        });
+    }
+
+    const isArchivedCheckbox = document.getElementById('is-archived');
+    if (isArchivedCheckbox) {
+        isArchivedCheckbox.addEventListener('change', function () {
+            const value = this.checked;
+            setField('archived', value, 'Archived', () => { this.checked = !value; });
         });
     }
 
@@ -868,11 +922,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (thesessionUserId) formData.thesession_user_id = parseInt(thesessionUserId);
             }
             
-            // Always include regular status if checkbox exists
-            if (isRegularCheckbox) {
-                formData.is_regular = isRegularCheckbox.checked;
-            }
-            
+            // Spec 034: relationship/confirmed/archived each save themselves the moment they
+            // change (see setField above), so this form is person details only. It used to
+            // smuggle is_regular in here as well, which meant the same value had two owners.
+
             // Show loading state
             personSaveStatus.style.display = 'block';
             personSaveStatus.innerHTML = '<div class="alert alert-info">Saving...</div>';

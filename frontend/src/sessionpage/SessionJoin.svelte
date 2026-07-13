@@ -70,18 +70,18 @@
 
 <style>
   .sj {
-    background-color: var(--info-bg, #e7f3ff);
+    background-color: var(--hover-bg);
     padding: 12px;
     border-radius: 8px;
     margin-bottom: 10px;
-    border: 1px solid var(--info-border, #b3d9ff);
+    border: 1px solid var(--border-color);
   }
-  .sj p { margin: 0; color: var(--info-text, #004085); }
+  .sj p { margin: 0; color: var(--text-color); }
   .sj-link {
     background: none;
     border: 0;
     padding: 0;
-    color: var(--primary, #0056b3);
+    color: var(--primary);
     font: inherit;
     font-weight: 500;
     text-decoration: underline;
@@ -95,14 +95,14 @@
     text-align: left;
     padding: 0.8rem 0.9rem;
     margin-bottom: 0.6rem;
-    border: 1px solid var(--border-color, #ccc);
-    border-radius: var(--r, 8px);
-    background: var(--bg-secondary, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--hover-bg);
     color: inherit;
     font: inherit;
     cursor: pointer;
   }
-  .sj-choice:hover { border-color: var(--primary, #007bff); }
+  .sj-choice:hover { border-color: var(--primary); }
   .sj-choice:disabled { opacity: 0.5; cursor: default; }
   .sj-choice strong { display: block; margin-bottom: 0.15rem; }
   .sj-choice span { font-size: 0.85rem; opacity: 0.75; }

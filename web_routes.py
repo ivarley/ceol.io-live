@@ -2905,6 +2905,8 @@ def session_admin_person(session_path, person_id):
                 sp.is_admin,
                 sp.gets_email_reminder,
                 sp.gets_email_followup,
+                sp.confirmed,
+                sp.archived,
                 u.username,
                 u.is_system_admin
             FROM person p
@@ -2935,8 +2937,12 @@ def session_admin_person(session_path, person_id):
             "is_admin": person_row[10],
             "gets_email_reminder": person_row[11],
             "gets_email_followup": person_row[12],
-            "username": person_row[13],
-            "is_system_admin": person_row[14],
+            # confirmed/archived were appended to the SELECT AFTER gets_email_followup, so
+            # they land here and push username/is_system_admin down two.
+            "confirmed": person_row[13],
+            "archived": person_row[14],
+            "username": person_row[15],
+            "is_system_admin": person_row[16],
         }
 
         # Get instruments for this person
