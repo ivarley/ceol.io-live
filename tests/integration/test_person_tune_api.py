@@ -347,10 +347,13 @@ class TestPersonTuneAPI:
             ON CONFLICT (tune_id) DO NOTHING
         """, (tune_id, f"Duplicate Tune {unique_id}", "Reel"))
         
-        # Add tune to collection first
+        # Add tune to collection first. The hash-derived tune_id above can
+        # collide with one from a sibling test (same formula, 100k space), so
+        # tolerate the row already existing — the test only needs it present.
         db_cursor.execute("""
             INSERT INTO person_tune (person_id, tune_id, learn_status)
             VALUES (%s, %s, %s)
+            ON CONFLICT (person_id, tune_id) DO NOTHING
         """, (person_id, tune_id, 'want to learn'))
         db_conn.commit()
         
@@ -436,6 +439,8 @@ class TestPersonTuneAPI:
 
     def test_update_tune_status_unauthorized(self, client, authenticated_user, db_conn, db_cursor):
         """Test that users cannot update other users' tunes."""
+        # The gate here is person-level OWNERSHIP (require_person_tune_ownership),
+        # which even system admins do not bypass.
         # Create another user's tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000
@@ -545,6 +550,8 @@ class TestPersonTuneAPI:
 
     def test_increment_heard_count_unauthorized(self, client, authenticated_user, db_conn, db_cursor):
         """Test that users cannot increment heard count for other users' tunes."""
+        # The gate here is person-level OWNERSHIP (require_person_tune_ownership),
+        # which even system admins do not bypass.
         # Create another user's tune
         unique_id = str(uuid.uuid4())[:8]
         tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000

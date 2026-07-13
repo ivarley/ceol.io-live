@@ -430,13 +430,37 @@ class TestRequirement7_Security:
     
     def test_7_3_verify_ownership_on_modify(self, client, authenticated_user, db_conn, db_cursor):
         """WHEN user modifies tune THEN system SHALL verify ownership."""
+        # A person_tune owned by person 1 (NOT the authenticated person 2)
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (6002, 'Ownership Tune', 'Reel')
+            ON CONFLICT (tune_id) DO NOTHING
+        """)
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status)
+            VALUES (1, 6002, 'learning')
+            ON CONFLICT (person_id, tune_id) DO NOTHING
+        """)
+        db_cursor.execute(
+            "SELECT person_tune_id FROM person_tune WHERE person_id = 1 AND tune_id = 6002"
+        )
+        other_person_tune_id = db_cursor.fetchone()[0]
+        db_conn.commit()
+
         with authenticated_user:
-            # Try to modify non-existent tune (simulates other user's tune)
+            # Someone else's tune -> 403 (ownership check, which admins do NOT bypass)
+            response = client.put(
+                f'/api/my-tunes/{other_person_tune_id}',
+                json={'learn_status': 'learned'}
+            )
+            assert response.status_code == 403
+
+            # Nonexistent tune -> 404
             response = client.put(
                 '/api/my-tunes/999999',
                 json={'learn_status': 'learned'}
             )
-            assert response.status_code in [403, 404]
+            assert response.status_code == 404
     
     def test_7_4_redirect_unauthenticated_to_login(self, client):
         """IF unauthenticated user tries to access THEN system SHALL redirect to login."""
@@ -444,18 +468,44 @@ class TestRequirement7_Security:
         assert response.status_code == 302
         assert '/login' in response.location
     
-    def test_7_5_forbid_access_to_other_users_data(self, client, authenticated_user):
-        """IF user tries to access other's data THEN system SHALL return 403."""
+    def test_7_5_forbid_access_to_other_users_data(self, client, authenticated_user, db_conn, db_cursor):
+        """IF user tries to access other's data THEN system SHALL not return it."""
+        # /api/my-tunes has NO person_id override — the param is ignored and the
+        # endpoint always serves the logged-in person's own collection. Prove it:
+        # give person 1 a distinctive tune and show it never comes back.
+        db_cursor.execute("""
+            INSERT INTO tune (tune_id, name, tune_type)
+            VALUES (6003, 'Someone Elses Tune', 'Reel')
+            ON CONFLICT (tune_id) DO NOTHING
+        """)
+        db_cursor.execute("""
+            INSERT INTO person_tune (person_id, tune_id, learn_status)
+            VALUES (1, 6003, 'learned')
+            ON CONFLICT (person_id, tune_id) DO NOTHING
+        """)
+        db_cursor.execute(
+            "DELETE FROM person_tune WHERE person_id = %s AND tune_id = 6003",
+            (authenticated_user.person_id,),
+        )
+        db_conn.commit()
+
         with authenticated_user:
-            # Try to access with different person_id (admin only feature)
-            response = client.get('/api/my-tunes?person_id=999999')
-            # Non-admin should not be able to access other users' data
-            assert response.status_code in [200, 403]  # 200 if admin, 403 if not
-    
+            response = client.get('/api/my-tunes?person_id=1')
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert 6003 not in [t['tune_id'] for t in data['tunes']]
+
+            # Cross-person reads live behind @api_admin_or_self_required,
+            # which 403s a non-admin asking about someone else.
+            response = client.get('/api/person/1/tunes-stats')
+            assert response.status_code == 403
+
     def test_7_6_admin_can_access_any_collection(self, client, admin_user):
         """WHEN admin accesses tune data THEN system SHALL allow viewing any collection."""
         with admin_user:
-            response = client.get('/api/my-tunes?person_id=1')
+            # person 6 is not the admin's own person_id — this exercises the
+            # admin branch of @api_admin_or_self_required.
+            response = client.get('/api/person/6/tunes-stats')
             assert response.status_code == 200
 
 

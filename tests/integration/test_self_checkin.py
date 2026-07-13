@@ -257,24 +257,27 @@ class TestSelfCheckin:
 
         with authenticated_user:
             # Check into instance A only
-            client.post(
+            checkin_response = client.post(
                 f'/api/session_instance/{instance_a}/attendees/checkin',
                 data=json.dumps({'person_id': user_person_id, 'attendance': 'yes'}),
                 content_type='application/json'
             )
+            assert checkin_response.status_code in [200, 201]
 
-            # Instance A shows attendance
-            response_a = client.get(f'/api/session_instance/{instance_a}/attendees')
-            data_a = json.loads(response_a.data)
-            ids_a = [a['person_id'] for a in data_a['data']['attendees']]
-            assert user_person_id in ids_a
+        # Verify in the DB: the user is an unconfirmed visitor of this brand-new
+        # session, so they cannot read its people list (spec 034).
+        # Instance A shows attendance
+        db_cursor.execute(
+            "SELECT attendance FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
+            (instance_a, user_person_id),
+        )
+        row_a = db_cursor.fetchone()
+        assert row_a is not None
+        assert row_a[0] == 'yes'
 
-            # Instance B does not
-            response_b = client.get(f'/api/session_instance/{instance_b}/attendees')
-            assert response_b.status_code == 200
-            data_b = json.loads(response_b.data)
-            attending_b = [
-                a for a in data_b['data']['attendees']
-                if a['person_id'] == user_person_id and a['attendance'] in ['yes', 'maybe']
-            ]
-            assert len(attending_b) == 0
+        # Instance B does not
+        db_cursor.execute(
+            "SELECT attendance FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
+            (instance_b, user_person_id),
+        )
+        assert db_cursor.fetchone() is None

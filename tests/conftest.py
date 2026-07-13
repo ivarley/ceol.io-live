@@ -137,16 +137,24 @@ def mock_sendgrid():
 
 @pytest.fixture
 def sample_user_data():
-    """Sample user data for testing."""
+    """Sample NON-ADMIN user data for testing.
+
+    Mirrors the seeded sarah_fiddle row (user_id=2 -> person_id=2,
+    is_system_admin=FALSE). The user_id must stay a seeded non-admin: several
+    endpoints re-check admin status with a fresh `SELECT is_system_admin FROM
+    user_account WHERE user_id = %s`, so a user_id that is admin in the DB
+    (like 1) would be treated as admin regardless of what the mocked session
+    says. Admin tests must use admin_user / authenticated_admin_user.
+    """
     return {
-        "user_id": 1,
+        "user_id": 2,
         "person_id": 2,  # Match the sample_person_data person_id for self check-in tests
         "username": "testuser",
         "email": "test@example.com",
         "first_name": "Test",
         "last_name": "User",
         "is_active": True,
-        "is_system_admin": True,
+        "is_system_admin": False,
         "timezone": "America/New_York",
         "email_verified": True,
         "auto_save_tunes": False,
@@ -295,43 +303,9 @@ def sample_person_with_multiple_instruments():
 
 
 @pytest.fixture
-def authenticated_non_admin_user(client, sample_user_data):
-    """Create an authenticated non-admin user session. This is the same as authenticated_user."""
-    # This fixture is identical to authenticated_user since sample_user_data already has is_system_admin=False
-    class AuthenticatedUserContext:
-        def __init__(self, client, user_data):
-            self.client = client
-            self.user_data = user_data
-            self.user = None
-            self.mock_get_user = None
-            # Set attributes that tests expect to be available outside context
-            self.person_id = user_data["person_id"]
-            self.user_id = user_data["user_id"]
-            self.is_system_admin = user_data.get("is_system_admin", False)
-
-        def __enter__(self):
-            self.mock_get_user = patch("auth.User.get_by_id")
-            mock_get_user = self.mock_get_user.start()
-            self.user = User(**self.user_data)
-            mock_get_user.return_value = self.user
-            
-            # Add attributes that tests expect
-            self.person_id = self.user_data["person_id"]
-            self.user_id = self.user_data["user_id"]
-
-            with self.client.session_transaction() as sess:
-                sess["_user_id"] = str(self.user_data["user_id"])
-                sess["_fresh"] = True
-                sess["is_system_admin"] = self.user_data["is_system_admin"]
-                sess["admin_session_ids"] = []
-                
-            return self.user
-            
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            if self.mock_get_user:
-                self.mock_get_user.stop()
-    
-    return AuthenticatedUserContext(client, sample_user_data)
+def authenticated_non_admin_user(authenticated_user):
+    """Alias for authenticated_user (a genuine non-admin, seeded user_id=2)."""
+    return authenticated_user
 
 
 @pytest.fixture  
@@ -347,7 +321,9 @@ def sample_person_not_attending():
 
 @pytest.fixture
 def authenticated_user(client, sample_user_data):
-    """Create an authenticated user session."""
+    """Create an authenticated NON-ADMIN user session (seeded sarah_fiddle,
+    user_id=2 / person_id=2). Tests that need admin powers must use
+    admin_user / authenticated_admin_user instead."""
     class AuthenticatedUserContext:
         def __init__(self, client, user_data):
             self.client = client
@@ -490,6 +466,12 @@ def authenticated_regular_user(client, sample_user_data, sample_regular_attendee
     regular_data = sample_user_data.copy()
     regular_data["is_system_admin"] = False  # Explicitly ensure non-admin
     regular_data["username"] = "regular_user"
+    # KNOWN MISMATCH: seeded user_id=3 is siobhan_flute -> person_id=6, but this
+    # fixture claims person_id=3 (which has no user_account row). The mocked
+    # session/User carry person_id=3, so endpoints trusting current_user work,
+    # but any endpoint that re-derives person_id from user_account for user 3
+    # will see person 6 instead. user_id=3 is at least non-admin in the DB,
+    # which is what the fresh `SELECT is_system_admin` re-checks care about.
     regular_data["user_id"] = 3
     regular_data["person_id"] = sample_regular_attendee["person_id"]  # Use regular attendee person_id
     regular_data["first_name"] = sample_regular_attendee["first_name"]

@@ -105,30 +105,38 @@ class TestAttendancePermissions:
             )
             assert response.status_code in [200, 201]
 
-    def test_current_attendee_can_see_attendance(self, client, authenticated_user, session_instance_with_user_attending):
-        """Test that users currently attending a session can view attendance"""
+    def test_confirmed_member_can_see_attendance(self, client, authenticated_user, session_instance_with_user_attending):
+        """Confirmed session members can view attendance (spec 034: is_admin OR confirmed).
+
+        The authenticated user (person 2) is a seeded CONFIRMED member of session 1 —
+        that, not attendance, is what grants people-visibility.
+        """
         session_instance_id = session_instance_with_user_attending['session_instance_id']
-        
+
         with authenticated_user:
-            user_person_id = authenticated_user.person_id
-            
-            # First check the user into the session to make them an attendee
-            checkin_data = {
-                'person_id': user_person_id,
-                'attendance': 'yes'
-            }
-            checkin_response = client.post(
-                f'/api/session_instance/{session_instance_id}/attendees/checkin',
-                data=json.dumps(checkin_data),
-                content_type='application/json'
-            )
-            assert checkin_response.status_code in [200, 201]
-            
-            # Now they should be able to see attendance
             response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data['success'] is True
+
+    def test_unconfirmed_attendee_cannot_see_attendance(self, client, authenticated_user, non_regular_session_instance_id):
+        """Checking in never grants people-visibility (spec 034: self-join lands
+        confirmed=FALSE, and check-in never confirms anyone)."""
+        session_instance_id = non_regular_session_instance_id
+
+        with authenticated_user:
+            user_person_id = authenticated_user.person_id
+
+            checkin_response = client.post(
+                f'/api/session_instance/{session_instance_id}/attendees/checkin',
+                data=json.dumps({'person_id': user_person_id, 'attendance': 'yes'}),
+                content_type='application/json'
+            )
+            assert checkin_response.status_code in [200, 201]
+
+            # Attending tonight does not make the session vouch for you
+            response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
+            assert response.status_code == 403
 
     def test_regular_user_cannot_check_in_others(self, client, authenticated_regular_user, authenticated_admin_user, sample_session_instance_data):
         """Test that non-admin regulars cannot check in other people"""

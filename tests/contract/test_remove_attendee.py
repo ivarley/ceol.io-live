@@ -42,16 +42,28 @@ class TestRemoveAttendeeContract:
         assert 'success' in data
         assert data['success'] is False
 
-    def test_remove_attendee_admin_permission_required(self, client, authenticated_non_admin_user, sample_session_instance_data, sample_person_data):
-        """Test that non-admin users cannot remove others"""
-        session_instance_id = sample_session_instance_data['session_instance_id']
-        person_id = sample_person_data['person_id']  # Different person from authenticated user
-        
+    def test_remove_attendee_admin_permission_required(self, client, authenticated_non_admin_user, non_regular_session_instance_id, db_conn, db_cursor):
+        """Test that outsiders cannot remove someone else's attendance.
+
+        The removal gate is: system admin OR session member OR self. The
+        authenticated user (person 2) is not a member of session 3, so target a
+        person who IS attending instance 30 (session 3) to hit the 403 path —
+        an absent target would short-circuit to 404 before the permission check.
+        """
+        session_instance_id = non_regular_session_instance_id
+        target_person_id = 6  # siobhan, attends session 3; not the authenticated user
+
+        db_cursor.execute("""
+            INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+            VALUES (%s, %s, 'yes')
+            ON CONFLICT (session_instance_id, person_id) DO NOTHING
+        """, (session_instance_id, target_person_id))
+        db_conn.commit()
+
         with authenticated_non_admin_user:
-            response = client.delete(f'/api/session_instance/{session_instance_id}/attendees/{person_id}')
-        
-        # Should be forbidden unless user is admin or removing themselves, or 404 if not attending
-        assert response.status_code in [403, 404]  # 403 for permission denied, 404 if not attending
+            response = client.delete(f'/api/session_instance/{session_instance_id}/attendees/{target_person_id}')
+
+        assert response.status_code == 403
 
     def test_remove_attendee_nonexistent_session(self, client, authenticated_user, sample_person_data):
         """Test removal from nonexistent session returns 404"""

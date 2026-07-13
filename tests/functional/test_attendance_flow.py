@@ -145,20 +145,20 @@ class TestAttendanceFlow:
             assert user_attendance is not None
             assert user_attendance['attendance'] == 'maybe'
 
-    def test_casual_user_discovery_and_checkin_workflow(self, client, authenticated_user, non_regular_session_instance_id):
-        """Test casual user workflow: discover session → self check-in → appear in attendance"""
-        # A session the test user is NOT a seeded regular of — the whole point
+    def test_casual_user_discovery_and_checkin_workflow(self, client, authenticated_user, non_regular_session_instance_id, db_cursor):
+        """Test casual user workflow: discover session → self check-in → logged as visitor"""
+        # A session the test user is NOT a seeded member of — the whole point
         # of the casual-user flow.
         session_instance_id = non_regular_session_instance_id
-        
+
         with authenticated_user:
             user_person_id = authenticated_user.person_id
-            
-            # Step 1: User discovers they can check into any session
-            # Verify they can see attendance (once they're attending or regular)
+
+            # Step 1: An outsider cannot see the session's people (spec 034:
+            # visibility is is_admin OR confirmed, and this user is neither)
             initial_response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
-            # May be 403 initially if not associated with session
-            
+            assert initial_response.status_code == 403
+
             # Step 2: Self check-in to the session
             checkin_response = client.post(
                 f'/api/session_instance/{session_instance_id}/attendees/checkin',
@@ -170,23 +170,29 @@ class TestAttendanceFlow:
                 content_type='application/json'
             )
             assert checkin_response.status_code in [200, 201]
-            
-            # Step 3: Now should be able to see attendance (as attendee)
+
+            # Step 3: Check-in does NOT grant people-visibility (spec 034:
+            # self-join lands confirmed=FALSE, and check-in never confirms anyone)
             attendance_response = client.get(f'/api/session_instance/{session_instance_id}/attendees')
-            assert attendance_response.status_code == 200
-            
-            attendance_data = json.loads(attendance_response.data)
-            
-            # Step 4: the casual user appears in the attendance list as a VISITOR.
+            assert attendance_response.status_code == 403
+
+            # Step 4: but the attendance WAS recorded, as an unconfirmed VISITOR.
             # Spec 034: checking yourself in creates session_person(visitor, unconfirmed) --
             # you turned up, but the session isn't yours and hasn't vouched for you.
-            all_attendees = attendance_data['data']['regulars'] + attendance_data['data']['attendees']
-            user_attendance = next((a for a in all_attendees if a['person_id'] == user_person_id), None)
+            # (Verified in the DB since the visitor can't read the people list.)
+            db_cursor.execute("""
+                SELECT sip.attendance, sp.relationship, sp.confirmed
+                FROM session_instance_person sip
+                JOIN session_instance si ON si.session_instance_id = sip.session_instance_id
+                JOIN session_person sp ON sp.session_id = si.session_id AND sp.person_id = sip.person_id
+                WHERE sip.session_instance_id = %s AND sip.person_id = %s
+            """, (session_instance_id, user_person_id))
+            row = db_cursor.fetchone()
+            assert row is not None
+            assert row[0] == 'yes'
+            assert row[1] == 'visitor'
+            assert row[2] is False
 
-            assert user_attendance is not None
-            assert user_attendance['attendance'] == 'yes'
-            assert user_attendance['relationship'] == 'visitor'
-            
             # Step 5: User can remove themselves if needed
             removal_response = client.delete(f'/api/session_instance/{session_instance_id}/attendees/{user_person_id}')
             assert removal_response.status_code in [200, 204]
