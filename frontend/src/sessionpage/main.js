@@ -12,6 +12,7 @@ import '../mytunes/mytunes-add.css'
 // Both are emitted into static/sessionpage/page.css.
 import './page.css'
 import App from './App.svelte'
+import SessionAbout from './SessionAbout.svelte'
 import SessionRole from './SessionRole.svelte'
 import SessionJoin from './SessionJoin.svelte'
 
@@ -28,6 +29,14 @@ if (target && pageData) {
 // (App.svelte used to reach into the shell DOM to wire the join link).
 if (pageData) {
   const permissions = { ...pageData.permissions, person_id: ctx.currentUserPersonId }
+
+  // The shell server-renders the description inside this root (no flash of missing text);
+  // we drop that copy and let SessionAbout own it, clamped to two lines with a toggle.
+  const aboutTarget = document.getElementById('session-about-root')
+  if (aboutTarget && pageData.session.comments) {
+    aboutTarget.textContent = ''
+    mount(SessionAbout, { target: aboutTarget, props: { comments: pageData.session.comments } })
+  }
 
   const roleTarget = document.getElementById('session-role-root')
   if (roleTarget && permissions.is_logged_in && permissions.is_session_member) {

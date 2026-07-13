@@ -28,8 +28,13 @@
             <p><strong>Schedule:</strong> {{ session.recurrence_readable }}</p>
             {% endif %}
 
+            {# The description is server-rendered here so it's present before the bundle
+               loads; SessionAbout.svelte replaces it with a two-line-clamped version
+               plus a "more" toggle (long descriptions used to fill a phone screen). #}
             {% if session.comments %}
-            <p><strong>About this session:</strong> {{ session.comments }}</p>
+            <div id="session-about-root">
+                <p><strong>About this session:</strong> {{ session.comments }}</p>
+            </div>
             {% endif %}
         </div>
 
