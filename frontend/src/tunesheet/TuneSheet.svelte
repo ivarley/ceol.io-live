@@ -785,7 +785,10 @@
           originals = buildOriginals()
           // Remove tune parameter from URL first (before onSave which might reload)
           removeUrlTuneParam(mode)
-          if (config.onSave && typeof config.onSave === 'function') config.onSave()
+          // The response carries the saved record(s) in the session_instance scope, so a
+          // host screen can patch its rows now instead of waiting for the change to come
+          // back around through the live feed.
+          if (config.onSave && typeof config.onSave === 'function') config.onSave(data)
           setTimeout(() => close(), 1000)
         } else {
           saveState = 'error'

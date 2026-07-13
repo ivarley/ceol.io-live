@@ -10555,6 +10555,7 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         # Build dynamic update - only update fields that are explicitly present in request
         update_fields = []
         update_values = []
+        updated_records = []  # returned to the caller so a live logger can patch its rows
 
         # Handle name if present in request
         if "name" in data:
@@ -10611,8 +10612,11 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
             # (spec 024): emit a change_tune feed event per affected record + NOTIFY,
             # in the same transaction, so they update in real time. Best-effort — a
             # failure here must not block the edit itself.
+            #
+            # The same records go back in the response: the editor's own screen must
+            # not have to wait for its edit to make the round trip through the feed.
             try:
-                from live_logging_routes import emit_change_tune
+                from live_logging_routes import emit_change_tune, _reselect
                 cur.execute(
                     "SELECT session_instance_tune_id FROM session_instance_tune "
                     "WHERE session_instance_id = %s AND tune_id = %s AND record_type = 'tune' AND deleted = FALSE",
@@ -10620,6 +10624,7 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                 )
                 for (rid,) in cur.fetchall():
                     emit_change_tune(cur, session_instance_id, rid, get_current_user_id())
+                    updated_records.append(_reselect(cur, rid))
             except Exception as e:
                 print(f"live broadcast (change_tune) failed: {e}")
 
@@ -10628,7 +10633,8 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
 
         return jsonify({
             "success": True,
-            "message": "Tune details updated successfully"
+            "message": "Tune details updated successfully",
+            "records": updated_records,
         })
 
     except Exception as e:

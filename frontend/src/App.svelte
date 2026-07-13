@@ -1472,6 +1472,12 @@
       // per-instance config); everything else the drawer derives from the payload
       scope: { session: config.sessionPath, instance: config.sessionInstanceId },
       tuneName: r.name,
+      // Apply the sheet's edit (key override, name, setting) to the log immediately.
+      // The save also broadcasts a change_tune event, but the editor's own screen must
+      // not depend on the round trip: offline, or with the stream down, that never
+      // arrives and the row would keep showing the old key until a reload. put() is
+      // idempotent, so the echo that follows is a no-op.
+      onSave: (data) => { for (const rec of data?.records || []) put(rec) },
     })
     // background-render+cache the notation (incipit + full) so the drawer shows dots
     // next time (the abc-renderer service does the rendering, never the client)
@@ -3186,7 +3192,7 @@
             onclick={(e) => rowClick(r, e)}
             onkeydown={(e) => activate(e, () => rowClick(r))}
           >
-            <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}</span>
+            <span class="name">{#if searchMode && searchText.trim() && tuneNameMatches(r, searchText.trim().toLowerCase())}{@const p = suggestionParts(r.name, searchText.trim())}{p.pre}<span class="search-hit">{p.mid}</span>{p.post}{:else}{r.name || (r.tune_id ? `#${r.tune_id}` : '(unnamed)')}{/if}{#if r.key_override}<span class="key-override">(in {r.key_override})</span>{/if}</span>
             {#if lst}<span class="ls-chip {statusClass(lst)}">{lst}</span>{/if}
             {#if r._temp}
               {#if r._resolving}
