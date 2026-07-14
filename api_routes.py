@@ -186,11 +186,20 @@ def get_tune_history(tune_id):
     """
     session_path = request.args.get("session_path") or None
     scope = request.args.get("scope") or None
+    # "While I was there" is a FILTER, not a scope (spec 037). It ANDs on top of whatever
+    # else is selected, so "nights at Mueller I was actually there for" is expressible —
+    # it wasn't when attended was one of a set of mutually-exclusive scopes.
+    # ?scope=attended is still accepted, and means the same as ?attended=1 with no other
+    # person filter.
+    attended_only = request.args.get("attended") in ("1", "true", "yes")
+    if scope == "attended":
+        scope, attended_only = None, True
     if scope is None and request.args.get("person") == "me":
         scope = "member"
-    if scope is not None and scope not in ("member", "attended"):
+    if scope is not None and scope not in ("member",):
         return jsonify({"success": False, "error": f"Invalid scope: {scope}"}), 400
-    if scope and not current_user.is_authenticated:
+    needs_person = bool(scope) or attended_only
+    if needs_person and not current_user.is_authenticated:
         return jsonify({"success": False, "error": "Login required"}), 401
 
     conn = get_db_connection()
@@ -199,24 +208,34 @@ def get_tune_history(tune_id):
         tune_id, redirected_from = follow_tune_redirect(cur, tune_id)
 
         person_id = None
-        if scope:
+        if current_user.is_authenticated:
             cur.execute(
                 "SELECT person_id FROM user_account WHERE user_id = %s",
                 (current_user.user_id,),
             )
             pr = cur.fetchone()
-            if not pr:
+            if not pr and needs_person:
                 return jsonify({"success": False, "error": "No person record"}), 403
-            person_id = pr[0]
+            person_id = pr[0] if pr else None
 
-        scope_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
-        scope_filter = f"AND ({scope_pred})" if scope_pred else ""
+        attended_pred = person_scope.attended_instance_predicate("si.session_instance_id")
+        preds = []
+        member_pred = person_scope.scope_instance_predicate(scope, "si.session_instance_id")
+        if member_pred:
+            preds.append(member_pred)
+        if attended_only:
+            preds.append(attended_pred)
+        scope_filter = "".join(f"AND ({p}) " for p in preds)
+        # The same predicate, selected rather than filtered, so the list can MARK the
+        # nights you were there instead of only hiding the ones you weren't.
+        attended_select = f"({attended_pred})" if person_id else "FALSE"
 
         instance_limit = 100
         cur.execute(
             f"""
             WITH target_instances AS (
-                SELECT si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path
+                SELECT si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path,
+                       {attended_select} AS attended
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
                 WHERE EXISTS (
@@ -248,7 +267,7 @@ def get_tune_history(tune_id):
                 FROM instance_rows
                 WHERE record_type <> 'break'
             )
-            SELECT ti.session_name, ti.session_path, ti.date,
+            SELECT ti.session_name, ti.session_path, ti.date, ti.attended,
                    p.name, p.key_override, p.setting_override,
                    p.session_instance_id, p.session_instance_tune_id,
                    p.set_number, p.position_in_set
@@ -268,7 +287,7 @@ def get_tune_history(tune_id):
 
         play_instances = []
         instance_ids = set()
-        for (session_name, s_path, date, name_override, key_override, setting_override,
+        for (session_name, s_path, date, attended, name_override, key_override, setting_override,
              session_instance_id, session_instance_tune_id, set_number, position_in_set) in rows:
             instance_ids.add(session_instance_id)
             date_str = date.strftime("%Y-%m-%d") if date else None
@@ -284,6 +303,9 @@ def get_tune_history(tune_id):
                 "setting_id_override": setting_override,
                 "session_instance_id": session_instance_id,
                 "session_instance_tune_id": session_instance_tune_id,
+                # Was I there? Marks the night in the list, rather than only being able to
+                # hide the ones I wasn't at.
+                "attended": bool(attended),
                 # highlight= scrolls to the exact record; tune= lets the legacy
                 # page (no per-record ids client-side) highlight by tune instead.
                 "link": f"/sessions/{s_path}/{session_instance_id}"

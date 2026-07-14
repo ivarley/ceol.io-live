@@ -20,30 +20,73 @@ import {
   normalizeShowConfig,
   detailUrl,
   historyScopeOptions,
+  isEditableScope,
+  historyUrl,
   playedWithScopeOptions,
 } from '../src/tunesheet/logic.js'
 
 // ---- spec 033 scope matrices (pure) ----------------------------------------------
 
+describe('the History droplist — the ONE scope control (spec 037)', () => {
+  const ids = (opts) => opts.map((o) => o.id)
+  const instances = [
+    { session_instance_id: 9, date: '2026-01-01', start_time: null, location_override: null, positions: [] },
+  ]
+
+  it('reads as one sentence: the session, then its nights, then the wide lenses', () => {
+    const opts = historyScopeOptions(instances, 'The Cobblestone', { inSession: true, loggedIn: true })
+    expect(opts.map((o) => o.label)).toEqual([
+      'At The Cobblestone',
+      '… on Thu 1 Jan 2026',
+      'At a different session …',
+      'All My Sessions',
+      'All Sessions',
+    ])
+  })
+
+  it('drops the session rows when no session is in scope, and My Sessions when logged out', () => {
+    expect(ids(historyScopeOptions([], null, { inSession: false, loggedIn: true }))).toEqual(['member', 'all'])
+    expect(ids(historyScopeOptions([], null, { inSession: false, loggedIn: false }))).toEqual(['all'])
+    expect(ids(historyScopeOptions(instances, 'X', { inSession: true, loggedIn: false }))).toEqual([
+      'general', '9', '__other__', 'all',
+    ])
+  })
+
+  it('marks only a session and its instances as editable', () => {
+    // "What we call it" is a fact about a session or a performance. It means nothing
+    // across all of them, so the wide lenses carry no form.
+    const opts = historyScopeOptions(instances, 'X', { inSession: true, loggedIn: true })
+    const editable = opts.filter((o) => o.editable).map((o) => o.id)
+    expect(editable).toEqual(['general', '9'])
+    expect(isEditableScope('general')).toBe(true)
+    expect(isEditableScope('9')).toBe(true)
+    expect(isEditableScope('member')).toBe(false)
+    expect(isEditableScope('all')).toBe(false)
+    expect(isEditableScope('__other__')).toBe(false)
+  })
+
+  it('builds the request for each scope, with "while I was there" as a FILTER on top', () => {
+    // The filter ANDs onto any scope — which is the whole reason it stopped being one of a
+    // set of mutually-exclusive Seg options. "Nights at Mueller I was actually there for"
+    // was not expressible before.
+    expect(historyUrl(7, 'general', 'austin/mueller', false)).toBe(
+      '/api/tunes/7/history?session_path=austin%2Fmueller'
+    )
+    expect(historyUrl(7, 'general', 'austin/mueller', true)).toBe(
+      '/api/tunes/7/history?session_path=austin%2Fmueller&attended=1'
+    )
+    expect(historyUrl(7, 'member', null, false)).toBe('/api/tunes/7/history?scope=member')
+    expect(historyUrl(7, 'member', null, true)).toBe('/api/tunes/7/history?scope=member&attended=1')
+    expect(historyUrl(7, 'all', null, false)).toBe('/api/tunes/7/history')
+    expect(historyUrl(7, 'all', null, true)).toBe('/api/tunes/7/history?attended=1')
+  })
+})
+
 describe('scope option matrices (spec 033)', () => {
   const keys = (opts) => opts.map((o) => o.key)
   const sessScope = { session: 'austin/mueller' }
 
-  it('history: session modes lead with This session; personal lenses need login', () => {
-    expect(keys(historyScopeOptions('session', sessScope, true))).toEqual([
-      'session', 'member', 'attended', 'all',
-    ])
-    expect(keys(historyScopeOptions('session_instance', sessScope, false))).toEqual(['session', 'all'])
-  })
-
-  it('history: my_tunes defaults to member; global/admin default to all', () => {
-    expect(keys(historyScopeOptions('my_tunes', null, true))).toEqual(['member', 'attended', 'all'])
-    expect(keys(historyScopeOptions('global', null, true))).toEqual(['all', 'member', 'attended'])
-    expect(keys(historyScopeOptions('global', null, false))).toEqual(['all'])
-    expect(keys(historyScopeOptions('admin', null, true))).toEqual(['all', 'member', 'attended'])
-  })
-
-  it('played-with mirrors the matrix with its own labels', () => {
+  it('played-with keeps its own Seg (coupling it to the History droplist would over-fit)', () => {
     expect(keys(playedWithScopeOptions('session', sessScope, true))).toEqual([
       'session', 'member', 'attended', 'all',
     ])
@@ -327,9 +370,13 @@ describe('TuneSheet component', () => {
     // Remove From My Tunes moved out of the footer links and into the action row.
     expect(container.querySelector('.tsc-action-row .tsc-action-danger').textContent).toContain('Remove From My Tunes')
     expect(container.querySelector('.modal-additional-links')).toBeFalsy()
-    // No session in scope -> no Session tab, so the leftmost tab is Stats.
-    expect(container.querySelector('.modal-tab[data-tab="session"]')).toBeFalsy()
-    expect(container.querySelector('#stats-tab.active')).toBeTruthy()
+    // The drawer always opens on History now; with no session in scope the droplist
+    // offers only the wide lenses.
+    expect(container.querySelector('#history-tab.active')).toBeTruthy()
+    expect([...container.querySelector('#sess-scope-select').options].map((o) => o.value)).toEqual([
+      'member',
+      'all',
+    ])
     expect(container.querySelector('#tunebook-count').textContent).toBe('9')
     expect(container.querySelector('.stat-note').textContent).toContain('Last Updated 2026-01-01')
     // The canonical name + id moved out of the config header and into Stats.
@@ -360,13 +407,13 @@ describe('TuneSheet component', () => {
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 101, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#history-tab')).toBeTruthy())
     expect(container.querySelector('.abc-notation-section')).toBeTruthy()
     // Anyone may see what a session plays; only an admin may change it.
     expect(container.querySelector('.sess-form-readonly')).toBeTruthy()
     expect(container.querySelector('#sess-alias-input')).toBeFalsy()
-    expect(container.querySelector('#session-tab').textContent).toContain('The Cooley')
-    expect(container.querySelector('#session-tab').textContent).toContain('Edorian')
+    expect(container.querySelector('#history-tab').textContent).toContain('The Cooley')
+    expect(container.querySelector('#history-tab').textContent).toContain('Edorian')
     // Nothing writable for an anon: no personal config, no removes.
     expect(container.querySelector('#configure-section')).toBeFalsy()
     expect(container.querySelector('.tsc-action-row')).toBeFalsy()
@@ -580,23 +627,29 @@ describe('TuneSheet component', () => {
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 202, scope: { session: 'austin/mueller' }, onSave })
-    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#history-tab')).toBeTruthy())
     expect(fetchMock.mock.calls[0][0]).toBe('/api/tunes/202/detail?session=austin%2Fmueller')
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/202')
 
     // Session is leftmost and the drawer opened on it. The droplist IS the heading —
     // it names the session, and the rest of the list continues the sentence downward.
-    expect(container.querySelectorAll('.modal-tab')[0].dataset.tab).toBe('session')
-    expect(container.querySelector('#session-tab.active')).toBeTruthy()
+    expect(container.querySelectorAll('.modal-tab')[0].dataset.tab).toBe('history')
+    expect(container.querySelector('#history-tab.active')).toBeTruthy()
     const scopeSel = container.querySelector('#sess-scope-select')
     expect(scopeSel.value).toBe('general')
     expect(scopeSel.options[0].text).toBe('At Mueller Session')
-    expect(scopeSel.options[scopeSel.options.length - 1].text).toBe('At a different session …')
+    expect([...scopeSel.options].map((o) => o.text)).toEqual([
+      'At Mueller Session',
+      'At a different session …',
+      'All My Sessions',
+      'All Sessions',
+    ])
     expect(container.querySelector('.sess-name')).toBeFalsy() // the old linked title is gone
 
-    // The context line: how often, linking over to History already filtered to this session.
-    expect(container.querySelector('.sess-context-link').textContent.trim()).toBe(
-      '4 times at this session'
+    // The count line above the list. (There's no longer a link "over to History" — the
+    // history is right here; that was the whole point of merging the two tabs.)
+    expect(container.querySelector('.hist-summary').textContent.trim()).toBe(
+      'Played 4 times at this session'
     )
 
     // The personal form is still here, on a session surface — that's the point of 037.
@@ -608,7 +661,7 @@ describe('TuneSheet component', () => {
       'Update name, setting or key for this tune at this session'
     )
     await fireEvent.click(container.querySelector('.sess-edit-link'))
-    expect(container.querySelector('#session-tab').textContent).toContain('We call this:') // present tense
+    expect(container.querySelector('#history-tab').textContent).toContain('We call this:') // present tense
 
     const save = () => container.querySelector('.sess-form .btn-primary')
     expect(save().disabled).toBe(true)
@@ -621,27 +674,114 @@ describe('TuneSheet component', () => {
     expect(JSON.parse(put[1].body)).toEqual({ alias: 'The Banish' })
   })
 
-  it('the History link jumps to the History tab already scoped to this session', async () => {
+  it('the list loads for the selected scope; "while I was there" filters it and marks the nights', async () => {
+    const night = (id, attended) => ({
+      full_name: `Mueller - 2026-0${id}-01`,
+      session_name: 'Mueller Session',
+      session_path: 'austin/mueller',
+      date: `2026-0${id}-01`,
+      set_number: 1,
+      position_in_set: 2,
+      session_instance_id: id,
+      session_instance_tune_id: 500 + id,
+      attended,
+      link: `/sessions/austin/mueller/${id}?highlight=${500 + id}&tune=202`,
+    })
     stubFetch([
-      ['/api/tunes/202/history', { success: true, play_instances: [], truncated: false }],
+      // The filter is a separate request, not a client-side sieve — the 100-instance cap
+      // means filtering in the client would silently drop nights past the cap.
+      [
+        'history?session_path=austin%2Fmueller&attended=1',
+        { success: true, play_instances: [night(2, true)], truncated: false },
+      ],
+      [
+        'history?session_path=austin%2Fmueller',
+        { success: true, play_instances: [night(1, false), night(2, true)], truncated: false },
+      ],
       [
         '/api/tunes/202/detail',
         detailPayload({
-          tune: {
-            tune_id: 202,
-            times_played: 4,
-            session_scope: sessScope({ can_edit_session: true }),
-          },
+          tune: { tune_id: 202, times_played: 2, session_scope: sessScope({ can_edit_session: true }) },
         }),
       ],
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(container.querySelector('.sess-context-link')).toBeTruthy())
-    await fireEvent.click(container.querySelector('.sess-context-link'))
-    await waitFor(() => expect(container.querySelector('#history-tab.active')).toBeTruthy())
-    const activeScope = container.querySelector('#history-tab .history-scope-btn.active')
-    expect(activeScope.textContent.trim()).toBe('This session')
+
+    // The drawer opens straight onto History and the list arrives async.
+    await waitFor(() => expect(container.querySelectorAll('.history-item').length).toBe(2))
+    expect(container.querySelector('.hist-summary').textContent.trim()).toBe(
+      'Played 2 times at this session'
+    )
+    // The night I was there is MARKED, not merely filterable — a quiet check on the row,
+    // with the words behind hover/tap rather than shouted in a chip.
+    const items = [...container.querySelectorAll('.history-item')]
+    expect(items[0].querySelector('.history-attended-mark')).toBeFalsy()
+    const mark = items[1].querySelector('.history-attended-mark')
+    expect(mark).toBeTruthy()
+    expect(mark.getAttribute('title')).toBe('You were there')
+    expect(mark.getAttribute('aria-label')).toBe('You were there')
+
+    // Flipping the filter re-asks the question at the same scope.
+    await fireEvent.click(container.querySelector('.hist-filter input'))
+    await waitFor(() => expect(container.querySelectorAll('.history-item').length).toBe(1))
+    // The payload's counts don't know about the filter, so the summary steps aside. (That
+    // the filter holds the right edge rather than sliding into the gap is a CSS concern —
+    // margin-left:auto on .hist-filter — and this component has no <style> block, so the
+    // stylesheet isn't loaded here. Verified in the browser, not asserted here.)
+    expect(container.querySelector('.hist-summary')).toBeFalsy()
+    expect(container.querySelector('.hist-filter')).toBeTruthy()
+  })
+
+  it('an instance scope answers from the payload — no history request at all', async () => {
+    stubFetch([
+      [
+        '/api/tunes/202/detail',
+        detailPayload({
+          tune: {
+            tune_id: 202,
+            session_scope: sessScope({
+              instance: 9,
+              can_edit_instance: true,
+              played_instances: [
+                {
+                  session_instance_id: 9,
+                  date: '2026-01-01',
+                  start_time: null,
+                  location_override: null,
+                  positions: [{ session_instance_tune_id: 501, set_number: 3, position_in_set: 2 }],
+                },
+              ],
+            }),
+          },
+        }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller', instance: 9 } })
+    await waitFor(() => expect(container.querySelector('.history-item')).toBeTruthy())
+    expect(container.querySelector('.history-item a').textContent.trim()).toBe('Set 3, tune 2')
+    // The payload already carries that night's coordinates, so nothing was fetched for it.
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/history'))).toBe(false)
+  })
+
+  it('offline, the history says so rather than failing', async () => {
+    stubFetch([
+      ['/api/tunes/202/detail', detailPayload({ tune: { tune_id: 202, session_scope: null } })],
+    ])
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      const { container, component } = render(TuneSheet)
+      component.show({ tuneId: 202, scope: null })
+      await waitFor(() => expect(container.querySelector('#history-list-container')).toBeTruthy())
+      expect(container.querySelector('.no-history').textContent).toContain(
+        "Play history isn't available offline"
+      )
+      // ...and it didn't even try: history is a live query, not part of the offline bundle.
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/history'))).toBe(false)
+    } finally {
+      onLine.mockRestore()
+    }
   })
 
   it('"At a different session ..." re-scopes the whole drawer, and excludes visitor sessions', async () => {
@@ -705,7 +845,7 @@ describe('TuneSheet component', () => {
     await waitFor(() =>
       expect(container.querySelector('#sess-scope-select').options[0].text).toBe('At The Cobblestone')
     )
-    expect(container.querySelector('.sess-context').textContent).toContain('9 times at this session')
+    expect(container.querySelector('.hist-summary').textContent).toContain('Played 9 times at this session')
     // ...and it does NOT rewrite the URL — the page behind the drawer is still Mueller.
     expect(window.location.pathname).not.toContain('cobblestone')
   })
@@ -720,14 +860,14 @@ describe('TuneSheet component', () => {
     stubFetch([['/api/tunes/202/detail', payload({ can_edit_session: true, can_remove_from_session: false })]])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#history-tab')).toBeTruthy())
     expect(container.textContent).not.toContain('Remove From Session')
 
     cleanup()
     stubFetch([['/api/tunes/202/detail', payload({ can_edit_session: true, can_remove_from_session: true })]])
     const second = render(TuneSheet)
     second.component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(second.container.querySelector('#session-tab')).toBeTruthy())
+    await waitFor(() => expect(second.container.querySelector('#history-tab')).toBeTruthy())
     expect(second.container.textContent).toContain('Remove From Session')
   })
 
@@ -771,7 +911,7 @@ describe('TuneSheet component', () => {
       apiEndpoint: '/api/sessions/austin/mueller/2026-01-01/tunes/202',
       additionalData: { sessionPath: 'austin/mueller', dateOrId: '2026-01-01', isUserLoggedIn: true },
     })
-    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#history-tab')).toBeTruthy())
     // the shim built the scoped feed URL
     expect(fetchMock.mock.calls[0][0]).toContain('/api/tunes/202/detail?session=austin%2Fmueller&instance=2026-01-01')
 
@@ -780,8 +920,10 @@ describe('TuneSheet component', () => {
     expect(scopeSel.value).toBe('9')
     expect(scopeSel.options[1].text).toBe('… on Thu 1 Jan 2026')
 
-    // Where it came round that night — each linking into the logger at that exact record.
-    const positions = [...container.querySelectorAll('.sess-position')]
+    // At an instance scope the "history" IS where it came round that night — the same
+    // thing at finer granularity, which is the point of the merge. Each links into the
+    // logger at that exact record.
+    const positions = [...container.querySelectorAll('.history-item a')]
     expect(positions.map((p) => p.textContent.trim())).toEqual(['Set 3, tune 2', 'Set 17, tune 1'])
     expect(positions[0].getAttribute('href')).toBe(
       '/sessions/austin/mueller/9?highlight=501&tune=202'
@@ -792,7 +934,7 @@ describe('TuneSheet component', () => {
       'Update name, setting or key for this tune on this date'
     )
     await fireEvent.click(container.querySelector('.sess-edit-link'))
-    expect(container.querySelector('#session-tab').textContent).toContain('We called it:')
+    expect(container.querySelector('#history-tab').textContent).toContain('We called it:')
     expect(container.querySelector('#sess-alias-input').value).toBe('That Night')
 
     // The NAME chain: a name is a label, so the most personal one wins — my alias beats
@@ -982,13 +1124,12 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     expect(new URL(window.location).searchParams.get('ptid')).toBe('77')
     // the tab the user was on survives the upgrade
     expect(container.querySelector('#played-with-tab.active')).toBeTruthy()
-    // the my-tunes history scope toggle (My sessions / Attended / All sessions) is offered
+    // the History droplist offers the wide lenses (no session in scope here)
     await fireEvent.click(container.querySelector('.modal-tab[data-tab="history"]'))
     await waitFor(() =>
-      expect([...container.querySelectorAll('#history-tab .history-scope-btn')].map((b) => b.textContent.trim())).toEqual([
-        'My sessions',
-        'Attended',
-        'All sessions',
+      expect([...container.querySelector('#sess-scope-select').options].map((o) => o.text)).toEqual([
+        'All My Sessions',
+        'All Sessions',
       ])
     )
     // the host was notified exactly once — the derived upgrade doesn't re-notify

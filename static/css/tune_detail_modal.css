@@ -1277,30 +1277,74 @@
     padding: 9px 11px;
 }
 
-/* What the tab is mostly FOR: telling you where this tune has been. */
-.sess-context {
+/* The count line + the "while I was there" filter, sitting just above the list. */
+.hist-controls {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 14px 0 10px;
+}
+.hist-summary {
     font-size: 13px;
     color: var(--secondary-text, #888);
-    line-height: 1.5;
-    margin-bottom: 14px;
 }
-.sess-context-link,
-.sess-position {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    color: var(--link-color, #4da6ff);
+/* margin-left:auto on the PAIR, not justify-content:space-between on the row — the filter
+   must hold its place on the right whether or not the summary line is there, or it jumps
+   left the moment the filter is switched on and the count steps aside. Anchoring the pair
+   (hint + filter) means the transient hint grows leftward and the checkbox never moves. */
+.hist-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.hist-attended-hint {
+    font-size: 12px;
+    color: var(--success-text, #90ee90);
+    white-space: nowrap;
+    animation: hist-hint-fade 1.6s ease-out forwards;
+}
+@keyframes hist-hint-fade {
+    0%, 55% { opacity: 1; }
+    100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hist-attended-hint { animation: none; }
+}
+.hist-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-muted, #888);
     cursor: pointer;
-    text-decoration: underline;
+    white-space: nowrap;
 }
-.sess-context-link:hover,
-.sess-position:hover { color: var(--link-hover-color, #80c0ff); }
-.sess-position-sep {
-    margin-right: 6px;
+.hist-filter input { accent-color: var(--primary, #4da6ff); cursor: pointer; }
+.hist-filter:hover { color: var(--text-color, #e0e0e0); }
+
+/* Were you there? A quiet mark on the row, not a label competing with it. */
+.history-attended-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 7px;
+    padding: 0;
+    border: 1px solid var(--success-border, #3d6e42);
+    border-radius: 50%;
+    background: var(--success-bg, #2d5a32);
+    color: var(--success-text, #90ee90);
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    vertical-align: middle;
 }
-.sess-context-empty {
-    font-style: italic;
+.history-attended-mark:hover {
+    border-color: var(--success, #4daf5a);
 }
 
 /* Editing is the rarer errand on this tab, so the form waits until it's asked for. */

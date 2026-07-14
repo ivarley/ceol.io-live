@@ -40,12 +40,13 @@
     detailUrl,
     getDisplayName,
     getAkaName,
-    sessionScopeOptions,
+    historyScopeOptions,
+    isEditableScope,
+    historyUrl,
     instancePositions,
     initialSessionScope,
     extractSettingId,
     validateSettingInput,
-    historyScopeOptions,
     playedWithScopeOptions,
     updateUrlWithTune,
     removeUrlTuneParam,
@@ -103,12 +104,22 @@
   // both layers editable at once. The form itself is collapsed until asked for — the
   // tab's job is mostly to TELL you things (how often, in which sets), and editing is
   // the rarer errand.
-  let sessScopeId = $state('general') // 'general' | String(session_instance_id)
+  // 'general' | String(session_instance_id) | 'member' | 'all'. The ONE scope control:
+  // which plays of this tune am I looking at — and, when the answer is a session or one of
+  // its instances, what am I editing.
+  let scopeId = $state('all')
   // The last value the droplist was really ON. The "At a different session ..." row is an
   // errand, not a target: picking it opens the picker and the select must snap back, or a
   // cancelled pick strands it on a row that means nothing. Plain variable, not $state —
   // it exists only to be read inside the change handler.
-  let lastRealScope = 'general'
+  let lastRealScope = 'all'
+  // "While I was there" is a FILTER, not a scope — it ANDs on top of whatever is selected,
+  // so "nights at Mueller I was actually there for" is expressible. It wasn't when
+  // attended was one of a set of mutually-exclusive Seg options.
+  let attendedOnly = $state(false)
+  // The transient "You attended" beside the filter, shown by tapping a row's ✓.
+  let attendedHint = $state(false)
+  let attendedHintTimer = null
   let sessFields = $state({ alias: '', setting: '', key: '' })
   let sessOriginals = $state({})
   let sessSettingError = $state('')
@@ -157,10 +168,10 @@
   let myNotation = $state(null) // {setting_id, abc, incipit_abc, image, incipit_image}
   let showingMyVersion = $state(false)
 
-  // History / Played With tabs: fetched lazily on first view, cached per scope
-  // for this modal open. Value: {status: 'loading'|'ready'|'error'|'none', data}
-  // A null scope key means "the mode's default" (mode is only known post-fetch).
-  let historyScope = $state(null)
+  // History / Played With: fetched lazily and asynchronously, cached for this modal open.
+  // Value: {status: 'loading'|'ready'|'error'|'none'|'offline', data}. History is keyed by
+  // (scope + attended filter) — flipping the filter asks a different question and must not
+  // read the cached answer to the other one.
   let historyCache = $state({})
   let playedWithScope = $state(null)
   let playedWithCache = $state({})
@@ -193,26 +204,50 @@
   const sessionScope = $derived(tune?.session_scope || null)
   const inSession = $derived(!!sessionScope)
   const playedInstances = $derived(sessionScope?.played_instances || [])
-  const sessOptions = $derived(sessionScopeOptions(playedInstances, sessionScope?.session_name))
-  const editingInstance = $derived(sessScopeId !== 'general' && sessScopeId !== OTHER_SESSION)
+  const scopeOptions = $derived(
+    historyScopeOptions(playedInstances, sessionScope?.session_name, { inSession, loggedIn })
+  )
+  // Only a session's own row or one of its instances can be edited: "what we call it" is a
+  // fact about a session or a performance, and means nothing across all of them.
+  const editableScope = $derived(isEditableScope(scopeId))
+  const editingInstance = $derived(editableScope && scopeId !== 'general')
 
   // "Set 3, tune 2" — where the tune came round that night, each linking into the logger
   // at that exact record. Usually one; a tune played twice that night has two.
   const positions = $derived(
     editingInstance && tune
-      ? instancePositions(playedInstances, sessScopeId, sessionScope.path, tune.tune_id)
+      ? instancePositions(playedInstances, scopeId, sessionScope.path, tune.tune_id)
       : []
   )
 
   // Who may write which layer. The session's own alias/setting/key is the session
   // making a canonical statement about its repertoire (admins); a specific instance is
-  // a record of what happened in a room the member was in (any member).
+  // a record of what happened in a room the member was in (any member). Neither applies
+  // to a wide lens, hence the editableScope gate.
   const canEditSessionLayer = $derived(
-    editingInstance ? !!sessionScope?.can_edit_instance : !!sessionScope?.can_edit_session
+    !editableScope
+      ? false
+      : editingInstance
+        ? !!sessionScope?.can_edit_instance
+        : !!sessionScope?.can_edit_session
   )
   // Un-enrolling only ever means "a tune that was never actually played here". With
   // plays present the link is simply absent — no explanation, it just isn't an option.
   const canRemoveFromSession = $derived(!!sessionScope?.can_remove_from_session)
+
+  // A one-line count above the list. The payload's counts don't know about the "while I
+  // was there" filter, so the line steps aside when the filter is on — the list is then
+  // the honest answer.
+  const summaryLine = $derived.by(() => {
+    if (!tune || attendedOnly || editingInstance) return ''
+    if (scopeId === 'general')
+      return `Played ${tune.times_played || 0} ${plural(tune.times_played || 0, 'time')} at this session`
+    if (scopeId === 'member')
+      return `Played ${myPlayCount} ${plural(myPlayCount, 'time')} at my sessions`
+    if (scopeId === 'all')
+      return `Played ${tune.global_play_count || 0} ${plural(tune.global_play_count || 0, 'time')} at all sessions`
+    return ''
+  })
 
   // The empty option in a key select isn't "blank", it's "inherit" — so it names what
   // it would fall back to. An instance falls back to the session's key; the session
@@ -324,25 +359,25 @@
     s === 'saving' ? 'Saving...' : s === 'saved' ? 'Saved!' : s === 'error' ? 'Error' : 'Save'
   const saveBgFor = (s) => (s === 'saved' ? '#28a745' : s === 'error' ? '#dc3545' : '')
 
-  const historyOptions = $derived(historyScopeOptions(mode, scope, loggedIn))
   const playedWithOptions = $derived(playedWithScopeOptions(mode, scope, loggedIn))
-  // null = "the mode's default scope" (mode is only known once the payload lands)
-  const historyScopeKey = $derived(historyScope ?? historyOptions[0].key)
   const playedWithScopeKey = $derived(playedWithScope ?? playedWithOptions[0].key)
-  const historyState = $derived(historyCache[historyScopeKey] || { status: 'loading' })
   const playedWithState = $derived(playedWithCache[playedWithScopeKey] || { status: 'loading' })
 
-  // Tabs. Session is LEFTMOST when a session is in scope, and the drawer always opens
-  // on its leftmost tab — which is the whole reason the old "which tab do we land on"
-  // fork disappears: Session when scoped, Stats when not. One rule, no per-surface
-  // special case. Labelled just "Session" so four tabs still fit a phone.
-  const tabList = $derived([
-    ...(inSession ? [{ id: 'session', label: 'Session' }] : []),
-    { id: 'stats', label: 'Stats' },
+  // History is cached per (scope + filter): flipping the filter is a different question,
+  // so it must not read a cached answer to the other one.
+  const historyKey = $derived(`${scopeId}|${attendedOnly ? 'att' : 'any'}`)
+  const historyState = $derived(historyCache[historyKey] || { status: 'loading' })
+
+  // Tabs. History absorbed the Session tab (spec 037): after the merge they were asking
+  // the same question — which plays of this tune am I looking at — so they became one
+  // droplist. The drawer ALWAYS opens on History; the list loads async, so the drawer
+  // paints immediately either way.
+  const tabList = [
     { id: 'history', label: 'History' },
+    { id: 'stats', label: 'Stats' },
     { id: 'played-with', label: 'Played With' },
-  ])
-  const defaultTab = $derived(tabList[0].id)
+  ]
+  const defaultTab = 'history'
 
   // ---- form seeding -------------------------------------------------------------
 
@@ -372,7 +407,7 @@
     if (editingInstance) {
       // Instance rows only exist for the instance in scope, so the payload can only
       // describe THAT one. Selecting a different instance loads it (loadInstance).
-      const isScoped = String(sessionScope.instance ?? '') === String(sessScopeId)
+      const isScoped = String(sessionScope.instance ?? '') === String(scopeId)
       sessOriginals = {
         alias: (isScoped && tune.name) || '',
         setting_id: (isScoped && tune.setting_override) || '',
@@ -412,16 +447,20 @@
     mergedFrom = null
 
     learnStatusOriginal = (tune.person_tune_status && tune.person_tune_status.learn_status) || ''
-    // The Session form points at the instance the drawer was opened in (the live
-    // logger), else ?siid= / ?date=, else the session in general.
-    sessScopeId = tune.session_scope
+    // Where the droplist lands: the instance the drawer was opened in (the live logger),
+    // else ?siid= / ?date=, else the session in general — and with no session in scope at
+    // all, the widest lens the viewer is entitled to.
+    scopeId = tune.session_scope
       ? initialSessionScope(
           tune.session_scope.played_instances,
           tune.session_scope.instance,
           typeof window !== 'undefined' ? window.location.search : ''
         )
-      : 'general'
-    lastRealScope = sessScopeId
+      : viewer.logged_in
+        ? 'member'
+        : 'all'
+    lastRealScope = scopeId
+    attendedOnly = false
     sessFormOpen = false
     seedPersonalForm()
     seedSessionForm()
@@ -433,16 +472,13 @@
     showingMyVersion = false
     // Personal config starts collapsed; admin's canonical-name editor is always open.
     isConfigVisible = mode === 'admin'
-    // The drawer opens on its LEFTMOST tab — Session when a session is in scope, Stats
-    // otherwise. A re-apply can ask to keep the tab the user was on (the in-place
-    // add -> my_tunes upgrade).
+    // The drawer ALWAYS opens on History now. The list is fetched async and renders its
+    // own loading state, so the drawer paints immediately regardless.
     activeTab = opts.keepTab || config.initialTab || defaultTab
     if (activeTab === 'history') loadHistory()
     else if (activeTab === 'played-with') loadPlayedWith()
-    // An explicit history/played-with scope choice survives a re-apply only if
-    // the (possibly changed) mode still offers it.
-    if (historyScope != null && !historyScopeOptions(mode, scope, loggedIn).some((o) => o.key === historyScope))
-      historyScope = null
+    // An explicit played-with scope choice survives a re-apply only if the (possibly
+    // changed) mode still offers it. (History's scope is the droplist, reset above.)
     if (playedWithScope != null && !playedWithScopeOptions(mode, scope, loggedIn).some((o) => o.key === playedWithScope))
       playedWithScope = null
     const info = notationInfo(data.session_tune)
@@ -498,7 +534,6 @@
     config = cfg
     historyCache = {}
     playedWithCache = {}
-    historyScope = null
     playedWithScope = null
     piExpanded = !!cfg.expandInstrumentStatus
     pendingHeard = 0
@@ -902,7 +937,7 @@
     if (!inSession || !tune) return ''
     const path = sessionScope.path
     return editingInstance
-      ? `/api/sessions/${path}/${sessScopeId}/tunes/${tune.tune_id}`
+      ? `/api/sessions/${path}/${scopeId}/tunes/${tune.tune_id}`
       : `/api/sessions/${path}/tunes/${tune.tune_id}`
   }
 
@@ -997,7 +1032,7 @@
         // Mirror onto the payload so the form's originals rebuild from what we wrote,
         // and the title/aka recompute against the new session alias.
         if (editingInstance) {
-          if (String(sessionScope.instance ?? '') === String(sessScopeId)) Object.assign(tune, updates)
+          if (String(sessionScope.instance ?? '') === String(scopeId)) Object.assign(tune, updates)
         } else {
           Object.assign(tune, updates)
           if (tune.session_scope) tune.session_scope.in_repertoire = true
@@ -1039,9 +1074,9 @@
    */
   function scopeToSession(session) {
     if (!session || !tune) return
-    const cfg = { ...config, scope: { session: session.path }, initialTab: 'session' }
+    const cfg = { ...config, scope: { session: session.path }, initialTab: 'history' }
     config = cfg
-    sessScopeId = 'general'
+    scopeId = 'general'
     lastRealScope = 'general'
     sessFormOpen = false
     phase = 'loading'
@@ -1049,7 +1084,7 @@
       .then((r) => r.json())
       .then((data) => {
         if (!data.success) throw new Error(data.message || 'Could not load that session')
-        applyPayload(data, { keepTab: 'session' })
+        applyPayload(data, { keepTab: 'history' })
       })
       .catch((error) => {
         console.error('Error re-scoping to session:', error)
@@ -1057,34 +1092,44 @@
       })
   }
 
-  /** The context line's link: over to History, already filtered to this session. */
-  export function showSessionHistory() {
-    switchTab('history')
-    setHistoryScope('session')
+  /** "While I was there" — a filter over whatever scope is selected, not a scope of its own. */
+  export function toggleAttendedOnly() {
+    attendedOnly = !attendedOnly
+    loadHistory()
   }
 
-  // Point the Session form at a different target. 'general' is already in the payload;
-  // a specific instance has to be fetched, since the payload only ever describes the
-  // instance the drawer was opened in.
+  // Tapping the ✓ says what it means, beside the filter, then fades. A `title` never shows
+  // on touch, and a toast is too loud for a footnote on one row.
+  export function showAttendedHint() {
+    attendedHint = true
+    clearTimeout(attendedHintTimer)
+    attendedHintTimer = setTimeout(() => (attendedHint = false), 1600)
+  }
+
+  // THE scope control. It chooses what history we're looking at AND — when the answer is a
+  // session or one of its instances — what the form below writes to.
   export function selectSessionScope(id) {
-    // The last row isn't a target, it's an errand: open the picker and snap the select
-    // back, so a cancelled pick doesn't strand it on a row that means nothing.
+    // The "different session" row isn't a target, it's an errand: open the picker and snap
+    // the select back, so a cancelled pick doesn't strand it on a row that means nothing.
     if (String(id) === OTHER_SESSION) {
       openSessionPicker()
-      sessScopeId = lastRealScope
+      scopeId = lastRealScope
       return
     }
 
-    sessScopeId = String(id)
-    lastRealScope = sessScopeId
+    scopeId = String(id)
+    lastRealScope = scopeId
     sessFormOpen = false
-    if (!editingInstance || String(sessionScope?.instance ?? '') === String(sessScopeId)) {
+    loadHistory()
+
+    if (!editableScope) return
+    if (!editingInstance || String(sessionScope?.instance ?? '') === String(scopeId)) {
       seedSessionForm()
       return
     }
     sessFields = { alias: '', setting: '', key: '' }
     sessOriginals = { alias: '', setting_id: '', key: '' }
-    fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: sessScopeId }))
+    fetch(detailUrl(tune.tune_id, { session: sessionScope.path, instance: scopeId }))
       .then((r) => r.json())
       .then((data) => {
         if (!data.success) return
@@ -1363,44 +1408,41 @@
     if (tabName === 'played-with') loadPlayedWith()
   }
 
-  export function setHistoryScope(scopeKey) {
-    historyScope = scopeKey
-    loadHistory()
-  }
-
   export function setPlayedWithScope(scopeKey) {
     playedWithScope = scopeKey
     loadPlayedWith()
   }
 
+  // History is fetched lazily and asynchronously — the drawer never waits on it, which is
+  // why it can be the default tab without costing anything at open.
+  //
+  // An instance scope needs NO request: the payload already carries that night's Set/tune
+  // coordinates, so selecting a date answers instantly.
   function loadHistory() {
     if (!config) return
-    const scopeKey = historyScopeKey
+    const key = historyKey
+    const requested = scopeId
     const tuneId = config.tuneId || (tune && tune.tune_id)
-    if (!tuneId) {
-      historyCache[scopeKey] = { status: 'none' }
+    if (!tuneId || requested === OTHER_SESSION) return
+    if (editingInstance) return // answered from the payload
+    if (historyCache[key]?.status === 'ready') return
+
+    // Offline, the history simply isn't there — it's a live query, not part of the offline
+    // bundle. Say so rather than showing a failed-request error.
+    if (isOffline) {
+      historyCache[key] = { status: 'offline' }
       return
     }
-    if (historyCache[scopeKey]?.status === 'ready') return
-    historyCache[scopeKey] = { status: 'loading' }
-    let url = `/api/tunes/${tuneId}/history`
-    if (scopeKey === 'session') {
-      url += `?session_path=${encodeURIComponent(scope.session)}`
-    } else if (scopeKey === 'member' || scopeKey === 'attended') {
-      url += `?scope=${scopeKey}`
-    }
-    fetch(url)
+
+    historyCache[key] = { status: 'loading' }
+    fetch(historyUrl(tuneId, requested, sessionScope?.path, attendedOnly))
       .then((r) => r.json())
       .then((data) => {
-        if (scopeKey !== historyScopeKey) return // user toggled scope while loading
-        if (!data.success) {
-          historyCache[scopeKey] = { status: 'error' }
-          return
-        }
-        historyCache[scopeKey] = { status: 'ready', data }
+        if (key !== historyKey) return // scope/filter changed while loading
+        historyCache[key] = data.success ? { status: 'ready', data } : { status: 'error' }
       })
       .catch(() => {
-        if (scopeKey === historyScopeKey) historyCache[scopeKey] = { status: 'error' }
+        if (key === historyKey) historyCache[key] = { status: isOffline ? 'offline' : 'error' }
       })
   }
 
@@ -1986,181 +2028,260 @@
             tabClass="modal-tab"
             selectLabel="Tune info section" />
           <div class="modal-tabs-content">
-            {#if inSession}
-              <div id="session-tab" class="modal-tab-pane{activeTab === 'session' ? ' active' : ''}">
-                <!-- The droplist IS the heading: it names the session ("At The
-                     Cobblestone") and the list continues the sentence downward ("… on Tue
-                     8 Jul"). It also picks what the form below writes to — the session's
-                     own row, or one night's — so you never see both layers editable at
-                     once, which was the confusing part. -->
-                <div class="sess-scope-row">
-                  <!-- Two-way bound on purpose: picking the "different session" row must be
-                       able to snap the select BACK, and a one-way `value=` only writes the
-                       DOM when the state actually changes. -->
-                  <select
-                    id="sess-scope-select"
-                    class="configure-select"
-                    aria-label="Which session, or which night"
-                    bind:value={sessScopeId}
-                    onchange={(e) => selectSessionScope(e.currentTarget.value)}
-                  >
-                    {#each sessOptions as opt}
-                      <option value={opt.id}>{opt.label}</option>
-                    {/each}
-                  </select>
-                </div>
+            <!-- HISTORY — which plays of this tune am I looking at, and (when the answer
+                 is a session or one of its instances) what am I editing. The old Session
+                 tab and the old History tab were asking the same question, so they became
+                 one droplist. Loads async: the drawer never waits on it. -->
+            <div id="history-tab" class="modal-tab-pane{activeTab === 'history' ? ' active' : ''}">
+              <!-- The droplist IS the heading. It names the scope ("At The Cobblestone")
+                   and the list continues the sentence downward ("… on Tue 8 Jul"). -->
+              <div class="sess-scope-row">
+                <!-- Two-way bound on purpose: picking the "different session" row must be
+                     able to snap the select BACK, and a one-way `value=` only writes the
+                     DOM when the state actually changes. -->
+                <select
+                  id="sess-scope-select"
+                  class="configure-select"
+                  aria-label="Which plays of this tune"
+                  bind:value={scopeId}
+                  onchange={(e) => selectSessionScope(e.currentTarget.value)}
+                >
+                  {#each scopeOptions as opt}
+                    <option value={opt.id}>{opt.label}</option>
+                  {/each}
+                </select>
+              </div>
 
-                <!-- What the tab is mostly FOR: telling you where this tune has been. -->
-                <div class="sess-context">
-                  {#if editingInstance}
-                    {#if positions.length}
-                      {#each positions as p, i}
-                        <a class="sess-position" href={p.href}>{p.label}</a>{#if i < positions.length - 1}<span
-                            class="sess-position-sep">;</span
-                          >{/if}
-                      {/each}
-                    {:else}
-                      <span class="sess-context-empty">Not played that night.</span>
-                    {/if}
-                  {:else if tune.times_played}
-                    This tune has been played
-                    <button type="button" class="sess-context-link" onclick={showSessionHistory}>
-                      {tune.times_played} {plural(tune.times_played, 'time')} at this session
-                    </button>
-                  {:else}
-                    <span class="sess-context-empty">This tune has never been played at this session.</span>
-                  {/if}
-                </div>
+              <!-- Editing lives here because an instance's name/key/setting IS a fact of
+                   that performance, and a session's is a fact about that session. Neither
+                   means anything across a wide lens, so both vanish for one. -->
+              {#if canEditSessionLayer && !sessFormOpen}
+                <button type="button" class="sess-edit-link" onclick={() => (sessFormOpen = true)}>
+                  Update name, setting or key for this tune {editingInstance
+                    ? 'on this date'
+                    : 'at this session'}
+                </button>
+              {/if}
 
-                {#if canEditSessionLayer && !sessFormOpen}
-                  <button type="button" class="sess-edit-link" onclick={() => (sessFormOpen = true)}>
-                    Update name, setting or key for this tune {editingInstance
-                      ? 'on this date'
-                      : 'at this session'}
-                  </button>
-                {/if}
-
-                {#if canEditSessionLayer && sessFormOpen}
-                  <div class="configure-section sess-form">
-                    <div class="configure-field-group-inline">
-                      <label class="configure-label" for="sess-alias-input">
-                        {editingInstance ? 'We called it:' : 'We call this:'}
-                      </label>
+              {#if canEditSessionLayer && sessFormOpen}
+                <div class="configure-section sess-form">
+                  <div class="configure-field-group-inline">
+                    <label class="configure-label" for="sess-alias-input">
+                      {editingInstance ? 'We called it:' : 'We call this:'}
+                    </label>
+                    <input
+                      type="text"
+                      id="sess-alias-input"
+                      class="configure-input"
+                      autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      placeholder={editingInstance ? tune.alias || tune.tune_name || '' : tune.tune_name || ''}
+                      bind:value={sessFields.alias}
+                    />
+                  </div>
+                  <div class="configure-field-group-inline">
+                    <label class="configure-label" for="sess-setting-input">
+                      {editingInstance ? 'We played setting:' : 'Our setting:'}
+                    </label>
+                    <div class="input-with-button">
                       <input
                         type="text"
-                        id="sess-alias-input"
+                        id="sess-setting-input"
                         class="configure-input"
                         autocomplete="off"
                         autocorrect="off"
                         autocapitalize="off"
                         spellcheck="false"
-                        placeholder={editingInstance ? tune.alias || tune.tune_name || '' : tune.tune_name || ''}
-                        bind:value={sessFields.alias}
+                        placeholder="e.g., 123 or paste URL"
+                        style:border-color={sessSettingError ? '#dc3545' : ''}
+                        bind:value={sessFields.setting}
+                        oninput={() => validateSettingField('session')}
                       />
-                    </div>
-                    <div class="configure-field-group-inline">
-                      <label class="configure-label" for="sess-setting-input">
-                        {editingInstance ? 'We played setting:' : 'Our setting:'}
-                      </label>
-                      <div class="input-with-button">
-                        <input
-                          type="text"
-                          id="sess-setting-input"
-                          class="configure-input"
-                          autocomplete="off"
-                          autocorrect="off"
-                          autocapitalize="off"
-                          spellcheck="false"
-                          placeholder="e.g., 123 or paste URL"
-                          style:border-color={sessSettingError ? '#dc3545' : ''}
-                          bind:value={sessFields.setting}
-                          oninput={() => validateSettingField('session')}
-                        />
-                        <button
-                          type="button"
-                          class="fetch-setting-btn{sessFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
-                          onclick={() => fetchSetting('session')}
-                          disabled={sessFetchState !== 'idle'}
-                          style:background-color={sessFetchState === 'ok' ? '#28a745' : sessFetchState === 'warn' ? '#f0ad4e' : sessFetchState === 'err' ? '#dc3545' : ''}
-                          style:color={sessFetchState === 'ok' || sessFetchState === 'warn' || sessFetchState === 'err' ? 'white' : ''}
-                          title="Fetch setting from TheSession.org"
-                        >
-                          {#if sessFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
-                          {:else if sessFetchState === 'ok'}✓
-                          {:else if sessFetchState === 'warn'}⚠
-                          {:else if sessFetchState === 'err'}✗
-                          {:else}{sessFetchLabel}{/if}
-                        </button>
-                      </div>
-                    </div>
-                    <div class="field-error" style="display: {sessSettingError ? 'block' : 'none'};">
-                      {sessSettingError}
-                    </div>
-                    <div class="configure-field-group-inline">
-                      <label class="configure-label" for="sess-key-select">
-                        {editingInstance ? 'We played it in:' : 'We play this in:'}
-                      </label>
-                      <select id="sess-key-select" class="configure-select" bind:value={sessFields.key}>
-                        {#each MUSICAL_KEYS as key}
-                          <option value={key}>{key || inheritKeyLabel}</option>
-                        {/each}
-                      </select>
-                    </div>
-                    <div class="modal-action-buttons">
                       <button
-                        class="btn-secondary"
-                        onclick={() => {
-                          seedSessionForm()
-                          sessFormOpen = false
-                        }}
+                        type="button"
+                        class="fetch-setting-btn{sessFetchState === 'loading' ? ' fetch-setting-btn-loading' : ''}"
+                        onclick={() => fetchSetting('session')}
+                        disabled={sessFetchState !== 'idle'}
+                        style:background-color={sessFetchState === 'ok' ? '#28a745' : sessFetchState === 'warn' ? '#f0ad4e' : sessFetchState === 'err' ? '#dc3545' : ''}
+                        style:color={sessFetchState === 'ok' || sessFetchState === 'warn' || sessFetchState === 'err' ? 'white' : ''}
+                        title="Fetch setting from TheSession.org"
                       >
-                        Cancel
-                      </button>
-                      <button
-                        class="btn-primary"
-                        onclick={saveSession}
-                        disabled={sessSaveDisabled}
-                        style:background-color={saveBgFor(sessSaveState)}
-                      >
-                        {saveLabelFor(sessSaveState)}
+                        {#if sessFetchState === 'loading'}<span class="fetch-setting-spinner"></span>
+                        {:else if sessFetchState === 'ok'}✓
+                        {:else if sessFetchState === 'warn'}⚠
+                        {:else if sessFetchState === 'err'}✗
+                        {:else}{sessFetchLabel}{/if}
                       </button>
                     </div>
                   </div>
-                {:else if !canEditSessionLayer}
-                  <!-- Read-only: anyone can see what a session plays, including logged-out
-                       visitors. Editing 'In General' is admin-only; an instance is open to
-                       any member. Someone who CAN edit sees nothing here until they ask —
-                       the values live inside the form they're about to open. -->
-                  <div class="configure-section sess-form sess-form-readonly">
-                    <div class="configure-field-group-inline">
-                      <div class="configure-label">{editingInstance ? 'We called it:' : 'We call this:'}</div>
-                      <div class="configure-value">{sessOriginals.alias || '—'}</div>
-                    </div>
-                    <div class="configure-field-group-inline">
-                      <div class="configure-label">{editingInstance ? 'We played setting:' : 'Our setting:'}</div>
-                      <div class="configure-value">{sessOriginals.setting_id || '—'}</div>
-                    </div>
-                    <div class="configure-field-group-inline">
-                      <div class="configure-label">{editingInstance ? 'We played it in:' : 'We play this in:'}</div>
-                      <div class="configure-value">{sessOriginals.key || '—'}</div>
-                    </div>
+                  <div class="field-error" style="display: {sessSettingError ? 'block' : 'none'};">
+                    {sessSettingError}
                   </div>
-                {/if}
-
-                <!-- Un-enrolling a tune from the repertoire. Only ever available for a
-                     tune with NO plays here: every tune played at an instance belongs to
-                     the session, and this endpoint used to break that by deleting the
-                     session_tune row and orphaning the plays. With plays present the link
-                     is simply absent — no explanation, it just isn't an option. -->
-                {#if canRemoveFromSession}
-                  <div class="sess-danger-foot">
-                    <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromSession}>
-                      Remove From Session
+                  <div class="configure-field-group-inline">
+                    <label class="configure-label" for="sess-key-select">
+                      {editingInstance ? 'We played it in:' : 'We play this in:'}
+                    </label>
+                    <select id="sess-key-select" class="configure-select" bind:value={sessFields.key}>
+                      {#each MUSICAL_KEYS as key}
+                        <option value={key}>{key || inheritKeyLabel}</option>
+                      {/each}
+                    </select>
+                  </div>
+                  <div class="modal-action-buttons">
+                    <button
+                      class="btn-secondary"
+                      onclick={() => {
+                        seedSessionForm()
+                        sessFormOpen = false
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      class="btn-primary"
+                      onclick={saveSession}
+                      disabled={sessSaveDisabled}
+                      style:background-color={saveBgFor(sessSaveState)}
+                    >
+                      {saveLabelFor(sessSaveState)}
                     </button>
                   </div>
-                {/if}
+                </div>
+              {:else if editableScope && inSession && !canEditSessionLayer}
+                <!-- Read-only: anyone can see what a session plays, including logged-out
+                     visitors. Editing the session's own row is admin-only; an instance is
+                     open to any member. -->
+                <div class="configure-section sess-form sess-form-readonly">
+                  <div class="configure-field-group-inline">
+                    <div class="configure-label">{editingInstance ? 'We called it:' : 'We call this:'}</div>
+                    <div class="configure-value">{sessOriginals.alias || '—'}</div>
+                  </div>
+                  <div class="configure-field-group-inline">
+                    <div class="configure-label">{editingInstance ? 'We played setting:' : 'Our setting:'}</div>
+                    <div class="configure-value">{sessOriginals.setting_id || '—'}</div>
+                  </div>
+                  <div class="configure-field-group-inline">
+                    <div class="configure-label">{editingInstance ? 'We played it in:' : 'We play this in:'}</div>
+                    <div class="configure-value">{sessOriginals.key || '—'}</div>
+                  </div>
+                </div>
+              {/if}
+
+              <!-- ...and under it, the plays themselves. -->
+              <div class="hist-controls">
+                {#if summaryLine}<span class="hist-summary">{summaryLine}</span>{/if}
+                <!-- The hint and the filter travel together as a right-anchored pair, so the
+                     checkbox holds its place whether or not either neighbour is there. (It
+                     can't go to the RIGHT of the checkbox: that's the drawer's edge, so it
+                     would overflow — or shove the control, which is the jump we just fixed.) -->
+                <span class="hist-right">
+                  {#if attendedHint}
+                    <span class="hist-attended-hint" aria-live="polite">You attended</span>
+                  {/if}
+                  {#if loggedIn && !editingInstance}
+                    <label class="hist-filter">
+                      <input type="checkbox" checked={attendedOnly} onchange={toggleAttendedOnly} />
+                      Only when I was there
+                    </label>
+                  {/if}
+                </span>
               </div>
-            {/if}
+
+              {#if editingInstance}
+                <!-- One night: the history IS where it came round. No request needed — the
+                     payload already carries the coordinates. -->
+                <div id="history-list-container">
+                  {#if positions.length}
+                    <div class="history-list">
+                      {#each positions as p}
+                        <div class="history-item">
+                          <div class="history-instance-name"><a href={p.href}>{p.label}</a></div>
+                        </div>
+                      {/each}
+                    </div>
+                  {:else}
+                    <div class="no-history">Not played that night.</div>
+                  {/if}
+                </div>
+              {:else}
+                <div id="history-list-container">
+                  {#if historyState.status === 'ready'}
+                    {@const playInstances = historyState.data.play_instances || []}
+                    {#if playInstances.length === 0}
+                      <div class="no-history">
+                        {attendedOnly
+                          ? "You weren't there for any of this tune's plays here."
+                          : 'No play history recorded yet.'}
+                      </div>
+                    {:else}
+                      <div class="history-list">
+                        {#each playInstances as instance}
+                          <div class="history-item">
+                            <div class="history-instance-name">
+                              <a href={instance.link}>
+                                {scopeId === 'general'
+                                  ? instance.date || 'Unknown'
+                                  : instance.full_name || instance.date || 'Unknown'}
+                              </a>
+                              {#if instance.attended}
+                                <!-- A quiet mark, not a label: it's a footnote on the row, not
+                                     the point of it. `title` covers hover; tapping shows the
+                                     words beside the filter and fades them out, since a title
+                                     never appears on touch. -->
+                                <button
+                                  type="button"
+                                  class="history-attended-mark"
+                                  title="You were there"
+                                  aria-label="You were there"
+                                  onclick={(e) => {
+                                    e.preventDefault()
+                                    showAttendedHint()
+                                  }}>✓</button
+                                >
+                              {/if}
+                            </div>
+                            {#if instance.set_number && instance.position_in_set}
+                              <div class="history-position">
+                                Set {instance.set_number}, Tune {instance.position_in_set}
+                              </div>
+                            {/if}
+                            {#if instance.setting_id_override}
+                              <div class="history-setting">Setting: #{instance.setting_id_override}</div>
+                            {/if}
+                          </div>
+                        {/each}
+                      </div>
+                      {#if historyState.data.truncated}
+                        <div class="history-truncated">Showing the 100 most recent sessions.</div>
+                      {/if}
+                    {/if}
+                  {:else if historyState.status === 'offline'}
+                    <div class="no-history">Play history isn't available offline.</div>
+                  {:else if historyState.status === 'error'}
+                    <div class="no-history">Could not load play history.</div>
+                  {:else if historyState.status === 'none'}
+                    <div class="no-history">No play history recorded yet.</div>
+                  {:else}
+                    <div class="history-loading">Loading play history…</div>
+                  {/if}
+                </div>
+              {/if}
+
+              <!-- Un-enrolling a tune from the repertoire. Only ever available for a tune
+                   with NO plays here: every tune played at an instance belongs to the
+                   session, and this endpoint used to break that by deleting the
+                   session_tune row and orphaning the plays. With plays present the link is
+                   simply absent — no explanation, it just isn't an option. -->
+              {#if canRemoveFromSession && editableScope}
+                <div class="sess-danger-foot">
+                  <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromSession}>
+                    Remove From Session
+                  </button>
+                </div>
+              {/if}
+            </div>
             <div id="stats-tab" class="modal-tab-pane{activeTab === 'stats' ? ' active' : ''}">
               {#if tune.person_list_count != null}
                 <div class="stat-card">
@@ -2235,57 +2356,6 @@
                    about the tune, so they belong with the other facts. -->
               <div class="stat-canonical">
                 Canonical name: {tune.tune_name || 'Unknown'} (#{tune.tune_id})
-              </div>
-            </div>
-            <div id="history-tab" class="modal-tab-pane{activeTab === 'history' ? ' active' : ''}">
-              {#if historyOptions.length > 1}
-                <Seg
-                  options={historyOptions.map((o) => ({ id: o.key, label: o.label }))}
-                  value={historyScopeKey}
-                  idAttr="data-scope"
-                  styled={false}
-                  segClass="history-scope-toggle"
-                  optClass="history-scope-btn"
-                  onSelect={setHistoryScope} />
-              {/if}
-              <div id="history-list-container">
-                {#if historyState.status === 'ready'}
-                  {@const playInstances = historyState.data.play_instances || []}
-                  {#if playInstances.length === 0}
-                    <div class="no-history">No play history recorded yet.</div>
-                  {:else}
-                    <div class="history-list">
-                      {#each playInstances as instance}
-                        <div class="history-item">
-                          <div class="history-instance-name">
-                            <a href={instance.link}>
-                              {historyScopeKey !== 'session'
-                                ? instance.full_name || instance.date || 'Unknown'
-                                : instance.date || 'Unknown'}
-                            </a>
-                          </div>
-                          {#if instance.set_number && instance.position_in_set}
-                            <div class="history-position">
-                              Set {instance.set_number}, Tune {instance.position_in_set}
-                            </div>
-                          {/if}
-                          {#if instance.setting_id_override}
-                            <div class="history-setting">Setting: #{instance.setting_id_override}</div>
-                          {/if}
-                        </div>
-                      {/each}
-                    </div>
-                    {#if historyState.data.truncated}
-                      <div class="history-truncated">Showing the 100 most recent sessions.</div>
-                    {/if}
-                  {/if}
-                {:else if historyState.status === 'error'}
-                  <div class="no-history">Could not load play history.</div>
-                {:else if historyState.status === 'none'}
-                  <div class="no-history">No play history recorded yet.</div>
-                {:else}
-                  <div class="history-loading">Loading play history…</div>
-                {/if}
               </div>
             </div>
             <div id="played-with-tab" class="modal-tab-pane{activeTab === 'played-with' ? ' active' : ''}">

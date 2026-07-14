@@ -140,53 +140,79 @@ function formatInstanceTime(t) {
   return `${h12}:${min || '00'}${suffix}`
 }
 
-/** The droplist's last row: re-scope the drawer to one of my other sessions. */
+/** The droplist row that re-scopes the drawer to one of my other sessions. */
 export const OTHER_SESSION = '__other__'
 
 /**
- * The Session tab's droplist. It reads as one sentence continued down the list:
+ * The History tab's droplist — the ONE scope control (spec 037). It replaced the History
+ * tab's Seg and the Session tab's separate droplist, because after the merge they were
+ * asking the same question: *which plays of this tune am I looking at?*
  *
- *   At The Cobblestone
- *   … on Tue 8 Jul 2026
- *   … on Sat 14 Feb 2026 · Gus O'Connor's
- *   At a different session …
+ *   At The Cobblestone            <- the session's own row; editable
+ *   … on Tue 8 Jul 2026           <- one instance; editable
+ *   … on Sat 14 Feb · Gus O'Connor's
+ *   At a different session …      <- an errand, not a target
+ *   All My Sessions               <- read-only lens
+ *   All Sessions
  *
- * The first row is the session's own alias/setting/key; the rest are the instances
- * this tune was actually played at (the only ones session_instance_tune can hold
- * overrides for).
+ * It reads as one sentence continued down the list. The session rows appear only when a
+ * session is in scope; the wide lenses always do. Only the session rows are EDITABLE —
+ * "what we call it" is a fact about a session or a performance, and means nothing across
+ * all of them.
  *
- * Labelling an instance: the date, plus location_override when it's set — that's what
- * tells two same-date instances apart at a festival, and it's how the session's Logs
- * tab already labels them. The start time is appended ONLY to break a remaining tie,
- * so the ordinary weekly session stays clean.
+ * Labelling an instance: the date, plus location_override when set — that's what tells
+ * two same-date instances apart at a festival, and how the session's Logs tab already
+ * labels them. start_time is appended ONLY to break a remaining tie, so the ordinary
+ * weekly session stays clean.
  */
-export function sessionScopeOptions(playedInstances, sessionName) {
-  const options = [{ id: 'general', label: `At ${sessionName || 'this session'}`, instanceId: null }]
-  const instances = playedInstances || []
+export function historyScopeOptions(playedInstances, sessionName, { inSession = false, loggedIn = false } = {}) {
+  const options = []
 
-  // Which labels would still collide once the date and venue are shown?
-  const counts = {}
-  for (const i of instances) {
-    const k = `${i.date}|${i.location_override || ''}`
-    counts[k] = (counts[k] || 0) + 1
-  }
+  if (inSession) {
+    options.push({ id: 'general', label: `At ${sessionName || 'this session'}`, editable: true })
 
-  for (const i of instances) {
-    const parts = [formatInstanceDate(i.date)]
-    if (i.location_override) parts.push(i.location_override)
-    if (counts[`${i.date}|${i.location_override || ''}`] > 1) {
-      const t = formatInstanceTime(i.start_time)
-      if (t) parts.push(t)
+    const instances = playedInstances || []
+    // Which labels would still collide once the date and venue are shown?
+    const counts = {}
+    for (const i of instances) {
+      const k = `${i.date}|${i.location_override || ''}`
+      counts[k] = (counts[k] || 0) + 1
     }
-    options.push({
-      id: String(i.session_instance_id),
-      label: `… on ${parts.join(' · ')}`,
-      instanceId: i.session_instance_id,
-    })
+    for (const i of instances) {
+      const parts = [formatInstanceDate(i.date)]
+      if (i.location_override) parts.push(i.location_override)
+      if (counts[`${i.date}|${i.location_override || ''}`] > 1) {
+        const t = formatInstanceTime(i.start_time)
+        if (t) parts.push(t)
+      }
+      options.push({
+        id: String(i.session_instance_id),
+        label: `… on ${parts.join(' · ')}`,
+        editable: true,
+      })
+    }
+
+    options.push({ id: OTHER_SESSION, label: 'At a different session …', editable: false })
   }
 
-  options.push({ id: OTHER_SESSION, label: 'At a different session …', instanceId: null })
+  if (loggedIn) options.push({ id: 'member', label: 'All My Sessions', editable: false })
+  options.push({ id: 'all', label: 'All Sessions', editable: false })
   return options
+}
+
+/** Is this droplist row one you can edit? Only a session's own row, or one instance. */
+export function isEditableScope(id) {
+  return id === 'general' || /^\d+$/.test(String(id))
+}
+
+/** The history request for a droplist row + the "while I was there" filter. */
+export function historyUrl(tuneId, scopeId, sessionPath, attendedOnly) {
+  const q = new URLSearchParams()
+  if (scopeId === 'general' && sessionPath) q.set('session_path', sessionPath)
+  else if (scopeId === 'member') q.set('scope', 'member')
+  if (attendedOnly) q.set('attended', '1')
+  const s = q.toString()
+  return `/api/tunes/${tuneId}/history${s ? `?${s}` : ''}`
 }
 
 /**
@@ -284,30 +310,9 @@ export function validateSettingInput(input, expectedTuneId) {
   return { valid: false, error: 'Please enter a number or paste a valid TheSession.org URL' }
 }
 
-/**
- * History scopes for the derived mode; first entry is the default. One entry =
- * no toggle. Logged-in viewers get the spec 033 personal lenses everywhere:
- * 'member' (R3, plays at sessions I'm a member of) and 'attended' (R4, plays
- * at instances I checked in to with attendance='yes').
- */
-export function historyScopeOptions(mode, scope, loggedIn = false) {
-  const mine = loggedIn
-    ? [
-        { key: 'member', label: 'My sessions' },
-        { key: 'attended', label: 'Attended' },
-      ]
-    : []
-  if ((mode === 'session' || mode === 'session_instance') && scope && scope.session) {
-    return [{ key: 'session', label: 'This session' }, ...mine, { key: 'all', label: 'All sessions' }]
-  }
-  if (mode === 'my_tunes') {
-    return [...mine, { key: 'all', label: 'All sessions' }]
-  }
-  // Global / admin views keep 'all' as the default (first) scope.
-  return [{ key: 'all', label: 'All sessions' }, ...mine]
-}
-
-/** Played With scopes for the derived mode; first entry is the default. */
+/** Played With scopes for the derived mode; first entry is the default.
+ *  (History's Seg is gone — its scopes became the merged droplist above. Played With
+ *  keeps its own: coupling it to the History scope would be over-fitting.) */
 export function playedWithScopeOptions(mode, scope, loggedIn = false) {
   const mine = loggedIn
     ? [

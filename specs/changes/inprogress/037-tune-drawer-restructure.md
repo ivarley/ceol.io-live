@@ -36,11 +36,9 @@ Never of which page opened it.
 5. **My-list status** — the status Seg, per-instrument roll-up, heard count, and the action row
    (Configure / View By Instrument / Remove From My Tunes) with the personal Configure form
    beneath it.
-6. **Tabs** — `Session` (only in a session scope, and leftmost when present) · `Stats` ·
-   `History` · `Played With`.
+6. **Tabs** — `History` · `Stats` · `Played With`.
 
-**The drawer opens on its leftmost tab.** That single rule gives Session when a session is in
-scope and Stats when it isn't — no per-surface special case.
+**The drawer always opens on History**, which loads asynchronously so nothing waits on it.
 
 ## Names vs. settings — two different precedences, on purpose
 
@@ -196,81 +194,125 @@ where someone types a note about a tune.
 So: Save while offline can only ever be committing notes → enqueue `set_notes`. Save while
 online → the single `PUT /api/my-tunes/<ptid>` with every dirty field.
 
-## The Session tab
+## The History tab (which absorbed the Session tab)
 
-Present only when a session is in scope. Leftmost. Labelled **"Session"** (short enough that
-four tabs fit a phone).
+Tabs are `History · Stats · Played With`, and **the drawer always opens on History**. It loads
+asynchronously, so the drawer paints immediately either way; offline it doesn't even try (see
+below).
 
-The tab's job is mostly to **tell you things** — where this tune has been at this session.
-Editing is the rarer errand, so the form waits until it's asked for.
+The Session tab and the History tab were asking the same question — *which plays of this tune am
+I looking at?* — so they became one, with one scope control. The tab is called **History** rather
+than "At This Session" because the droplist can select scopes that aren't a session at all. The
+cost, accepted deliberately: "History" doesn't advertise that it's where you edit a session's
+alias/key/setting. That's tolerable because the session-level setting flow is likely to move to a
+carousel chooser (as in search) before long, and the key would blend into that.
 
-### The droplist IS the heading
+### The droplist IS the heading, and the ONE scope control
 
-There is no separate title. The droplist names the session and the list continues the sentence
-downward:
+There is no separate title. It names the scope and the list continues the sentence downward:
 
 ```
-At The Cobblestone            → writes session_tune
-… on Tue 8 Jul 2026           → writes that instance's session_instance_tune
+At The Cobblestone            → editable: writes session_tune
+… on Tue 8 Jul 2026           → editable: writes that instance's session_instance_tune
 … on Sat 14 Feb 2026 · Gus O'Connor's
 At a different session …      → not a target; an errand (see below)
+All My Sessions               → read-only lens
+All Sessions
 ```
 
-It also picks what the form writes to, so you never see the session's values and one night's
-values editable at the same time — the confusing part of the first design.
+Session rows appear only when a session is in scope; the wide lenses always do (`All My Sessions`
+needs a login). **Only the session rows are editable** — "what we call it" is a fact about a
+session or a performance, and means nothing across all of them, so the form and the read-only
+values both vanish for a wide lens.
 
-The instance rows are only the ones **this tune was actually played at** (the write endpoint
-404s otherwise). Labels are the date, plus `location_override` when set — that's how festivals
+The instance rows are only the ones **this tune was actually played at** (the write endpoint 404s
+otherwise). Labels are the date, plus `location_override` when set — that's how festivals
 distinguish same-date instances (`LogsTab.svelte:132`); `start_time` is appended only to break a
 remaining tie. Never called a "night" — not every session is at night.
 
-**The last row is an errand, not a target.** Picking `At a different session …` opens a
-`SessionPicker` (kit, composed like `PersonPicker`) listing my other **member** sessions —
-visitor sessions are excluded, since a session you dropped into once on holiday isn't a
-repertoire you have a view on. Choosing one **re-scopes the whole drawer**: the payload refetches
-and the title chain, the aka line, the notation's setting, the droplist and the permissions all
-recompute for that session. The select must **snap back** when the picker opens, or cancelling it
-strands the select on a row that means nothing — that's why it's `bind:value`, since a one-way
-`value=` only writes the DOM when the state actually changes.
+**The "different session" row is an errand, not a target.** It opens a `SessionPicker` (kit,
+composed like `PersonPicker`) listing my other **member** sessions — visitor sessions are
+excluded, since a session you dropped into once on holiday isn't a repertoire you have a view on.
+Choosing one **re-scopes the whole drawer**: the payload refetches, and the title chain, the aka
+line, the notation's setting, the droplist and the permissions all recompute for that session.
+The select must **snap back** when the picker opens, or cancelling it strands the select on a row
+that means nothing — hence `bind:value`, since a one-way `value=` only writes the DOM when the
+state actually changes.
 
 The URL is deliberately **not** rewritten on a re-scope: the page behind the drawer is still the
 session you came from, and a path claiming otherwise would be a lie.
 
-### The context line
+### "While I was there" is a FILTER, not a scope
 
-Directly under the droplist, and above the form:
+A checkbox that ANDs on top of *whatever* is selected. This is the point: **"nights at Mueller I
+was actually there for" was not expressible before**, because `attended` was one of a set of
+mutually-exclusive Seg options and you had to choose between "this session" and "the ones I
+attended".
 
-- **At the session:** *This tune has been played **4 times at this session**.* The bold part is a
-  link straight to the **History** tab, already scoped to this session.
-- **On one date:** where it came round that night — *Set 3, tune 2* (and *Set 17, tune 1* if it
-  came round twice). Each links into the logger **at that exact record**, via the same
-  `?highlight=<session_instance_tune_id>` deep link the History tab uses. Note it goes through
-  the legacy `/sessions/<path>/<instance>` URL, which redirects beta users to the live screen and
-  **drops `?tune=`** — on the live screen that param means "append this tune", which is not what
-  a history link should do.
+Server-side it's a new `?attended=1` param rather than overloading `?scope=`, precisely because
+`scope=member` and `scope=attended` can't be ANDed. (`?scope=attended` is still accepted and means
+the filter with no other person restriction.)
 
-The set/tune coordinates come from the payload (`played_instances[].positions`), computed with
-the same window trick as `GET /api/tunes/<id>/history`: a running `SUM` over break records
-numbers the sets (spec 023), and the breaks are dropped **after** the window is computed so they
-never take a tune number.
+And it **marks** rather than only hides: every row carries an `attended` boolean — the same
+predicate, selected instead of filtered — so you can see at a glance which plays you were present
+for without hiding the ones you weren't. The mark is a small green check in a circle, with "You
+were there" on hover (`title`) and on tap (a toast — a `title` never appears on touch). It's a
+footnote on the row, not a label competing with it.
+
+A note on the layout: the filter holds the right edge with `margin-left: auto`, **not**
+`justify-content: space-between`. With space-between it slid left into the gap the moment the
+filter was switched on and the count line stepped aside — a control that moves because of what it
+just did.
+
+### The list
+
+- **A wide lens or the session** → the plays, each linking into the logger at that exact record.
+- **One instance** → where it came round that night: *Set 3, tune 2* (and *Set 17, tune 1* if it
+  came round twice). The same thing at finer granularity — which is what makes the merge more than
+  a consolidation. **No request is needed**: the payload already carries that night's coordinates
+  (`played_instances[].positions`), so selecting a date answers instantly.
+
+The set/tune coordinates use the same window trick as `GET /api/tunes/<id>/history`: a running
+`SUM` over break records numbers the sets (spec 023), and the breaks are dropped **after** the
+window is computed so they never take a tune number.
+
+Links go through the legacy `/sessions/<path>/<instance>?highlight=<session_instance_tune_id>`
+URL, which redirects beta users to the live screen and **drops `?tune=`** — on the live screen
+that param means "append this tune", which is not what a history link should do.
+
+A count line sits above the list (*Played 4 times at this session*). It steps aside when the
+attended filter is on, because the payload's counts don't know about the filter and the list is
+then the honest answer.
+
+### Offline
+
+History is a live query, not part of the offline bundle. Offline the drawer still paints
+normally and the list says **"Play history isn't available offline"** — it doesn't attempt the
+request and fail.
 
 ### The form
 
 Hidden until you click **"Update name, setting or key for this tune {at this session | on this
-date}"**.
+date}"**, since the tab's main job is to tell you things and editing is the rarer errand.
 
 - **The session's own row** → present tense: *We call this / Our setting / We play this in.*
-- **An instance** → past tense: *We called it / We played setting / We played it in.* Each
-  field's inherit option names its fallback — `(as usual — Dmajor)`.
+- **An instance** → past tense: *We called it / We played setting / We played it in.* Each field's
+  inherit option names its fallback — `(as usual — Dmajor)`. Instance overrides belong here
+  outright: what you called it and how you played it *is* a fact of that performance.
 
 Someone who can't edit sees the values read-only instead (no link) — nobody loses information.
 
-**URL:** `?siid=<session_instance_id>` selects an instance. `?date=YYYY-MM-DD` is accepted
-inbound and resolves to the earliest instance that day. The id is always what's used
-internally — at a festival there can be several instances on one date.
+**URL:** `?siid=<session_instance_id>` selects an instance. `?date=YYYY-MM-DD` is accepted inbound
+and resolves to the earliest instance that day. The id is always what's used internally — at a
+festival there can be several instances on one date.
 
 **Opening from the live logger** pre-selects the instance in scope. **Opening from the session
-tunes page** selects the session row. Both land on this tab, because it's leftmost.
+tunes page** selects the session row. With no session in scope at all, it lands on the widest lens
+the viewer is entitled to.
+
+### Played With keeps its own Seg
+
+Untouched. Coupling it to the History droplist would be over-fitting: it asks a different question.
 
 ### Permissions
 

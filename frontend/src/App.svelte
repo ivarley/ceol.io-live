@@ -332,11 +332,16 @@
   // hide nudge) are suppressed — they'd clobber this scroll. Retries briefly because
   // the rows render a tick after the bootstrap resolves.
   let pendingHighlight = null
-  function highlightFromUrl(id, tries = 20) {
+  function highlightFromUrl(id, tries = 60) {
     const el = setsEl?.querySelector(`[data-sit="${id}"]`)
     if (!el) {
       if (tries > 0) setTimeout(() => highlightFromUrl(id, tries - 1), 100)
-      else pendingHighlight = null
+      else {
+        // Don't fail silently: a deep-link that lands on nothing should say so, not just
+        // leave the user staring at a log wondering which row they were sent to.
+        console.warn(`[live] ?highlight=${id}: record never appeared (waited 6s)`)
+        pendingHighlight = null
+      }
       return
     }
     didInitialHide = true
@@ -2861,10 +2866,14 @@
       const qs = params.toString()
       window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''))
     }
+    // The highlight does NOT wait on connect(). It only needs the row on screen, and it
+    // polls until it is — so a bootstrap that is slow, or that rejects outright (offline,
+    // a dead SSE) while the records still hydrate from cache, can't silently eat the
+    // flash. autoLogTune DOES wait: appending a tune needs the loaded truth first.
+    if (highlightId) highlightFromUrl(highlightId)
     connect().then(() => {
       loaded = true
-      if (highlightId) highlightFromUrl(highlightId)
-      else if (autoTuneId) autoLogTune(autoTuneId)
+      if (autoTuneId && !highlightId) autoLogTune(autoTuneId)
     }) // bootstraps records, then hydrateQueue() re-applies any queued ops
     // Load the roster up front. The header's "Attendance (n)" reads it, so leaving it lazy
     // (fetched only when the picker opens) made the header claim "no one checked in yet"

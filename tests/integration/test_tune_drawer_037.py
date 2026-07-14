@@ -272,6 +272,91 @@ class TestRemoveFromSessionRequiresNoPlays:
             assert db_cursor.fetchone() is None
 
 
+class TestHistoryAttendedFilter:
+    """"While I was there" is a FILTER, not a scope (spec 037).
+
+    It ANDs on top of whatever else is selected, which is why "nights at Mueller I was
+    actually there for" is expressible at all — it wasn't when `attended` was one of a set
+    of mutually-exclusive scopes and you had to choose between "this session" and "the
+    ones I attended".
+    """
+
+    def _attend(self, db_cursor, db_conn, instance_id, person_id):
+        db_cursor.execute(
+            """INSERT INTO session_instance_person (session_instance_id, person_id, attendance)
+               VALUES (%s, %s, 'yes')
+               ON CONFLICT (session_instance_id, person_id)
+               DO UPDATE SET attendance = 'yes'""",
+            (instance_id, person_id),
+        )
+        db_conn.commit()
+
+    def test_it_composes_with_a_session_filter(
+        self, client, authenticated_user, session_fixture, db_cursor, db_conn
+    ):
+        f = session_fixture
+        with authenticated_user as user:
+            # A second instance at the same session where the tune was also played, but
+            # which the viewer did NOT attend.
+            db_cursor.execute(
+                """SELECT session_instance_id FROM session_instance
+                   WHERE session_id = %s AND session_instance_id <> %s LIMIT 1""",
+                (f["session_id"], f["instance_id"]),
+            )
+            other_instance = db_cursor.fetchone()[0]
+            db_cursor.execute(
+                """INSERT INTO session_instance_tune
+                   (session_instance_id, tune_id, order_position, record_type)
+                   VALUES (%s, %s, 'z', 'tune')""",
+                (other_instance, f["played_tune"]),
+            )
+            db_conn.commit()
+            self._attend(db_cursor, db_conn, f["instance_id"], user.person_id)
+
+            base = f"/api/tunes/{f['played_tune']}/history?session_path={f['path']}"
+
+            unfiltered = {p["session_instance_id"] for p in json.loads(client.get(base).data)["play_instances"]}
+            assert {f["instance_id"], other_instance} <= unfiltered
+
+            # ...and with the filter on, only the night I was actually at. Note this is a
+            # session filter AND an attended filter at once — the combination that the old
+            # mutually-exclusive scopes could not express.
+            filtered = {p["session_instance_id"] for p in json.loads(client.get(base + "&attended=1").data)["play_instances"]}
+            assert filtered == {f["instance_id"]}
+            assert other_instance not in filtered
+
+    def test_every_row_says_whether_i_was_there(
+        self, client, authenticated_user, session_fixture, db_cursor, db_conn
+    ):
+        """The point of marking rather than only filtering: you can see at a glance which
+        of a tune's plays you were present for, without hiding the ones you weren't."""
+        f = session_fixture
+        with authenticated_user as user:
+            self._attend(db_cursor, db_conn, f["instance_id"], user.person_id)
+            rows = json.loads(
+                client.get(f"/api/tunes/{f['played_tune']}/history?session_path={f['path']}").data
+            )["play_instances"]
+            attended = {p["session_instance_id"]: p["attended"] for p in rows}
+            assert attended[f["instance_id"]] is True
+
+    def test_anonymous_viewers_get_no_flag_and_cannot_filter(self, client, session_fixture):
+        f = session_fixture
+        rows = json.loads(
+            client.get(f"/api/tunes/{f['played_tune']}/history?session_path={f['path']}").data
+        )["play_instances"]
+        assert all(p["attended"] is False for p in rows)
+        assert client.get(f"/api/tunes/{f['played_tune']}/history?attended=1").status_code == 401
+
+    def test_the_old_scope_attended_still_works(self, client, authenticated_user, session_fixture):
+        """?scope=attended predates the filter and is still honoured — it means the filter
+        with no other person restriction."""
+        f = session_fixture
+        with authenticated_user:
+            resp = client.get(f"/api/tunes/{f['played_tune']}/history?scope=attended")
+            assert resp.status_code == 200
+            assert json.loads(resp.data)["success"]
+
+
 class TestSessionScopePayload:
     """What the Session tab renders from."""
 
