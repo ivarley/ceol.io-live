@@ -1792,11 +1792,16 @@ def _thesession_search_core(session_id=None, person_id=None):
         finally:
             conn.close()
 
+    # thesession matches per-setting, so one tune can appear several times in a single
+    # response (common for ABC queries); keep the first (highest-ranked) occurrence —
+    # duplicates would crash the client's keyed result list.
     results = []
+    seen = set()
     for h in hits:
         tid = h.get("id")
-        if not isinstance(tid, int):
+        if not isinstance(tid, int) or tid in seen:
             continue
+        seen.add(tid)
         results.append({
             "tune_id": tid,
             "name": h.get("name"),

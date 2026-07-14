@@ -7,7 +7,8 @@ re-homed for the two pane flavors:
     GET /api/sessions/<path>/tunes/deep-search          (session: in_session sorts last)
 
 Same name/ABC matching and ranking as the live screen (_deep_search_core). The
-thesession-search proxies are not exercised here (external network).
+thesession-search proxies are exercised with a mocked outbound request only
+(no external network).
 
 Isolation note: the endpoints open their own connection via get_db_connection() and
 read committed rows, so the fixture commits throwaway rows on its own connection and
@@ -131,3 +132,36 @@ def test_session_deep_search_unknown_session_404(client, authenticated_user, sea
     with authenticated_user:
         resp = client.get("/api/sessions/no-such-session-xyz/tunes/deep-search?q=glorp")
     assert resp.status_code == 404
+
+
+def test_thesession_search_dedupes_repeated_hits(client, authenticated_user, monkeypatch):
+    """thesession matches per-setting, so one tune can appear several times in a single
+    search response (common for ABC queries). The proxy must return each tune once —
+    duplicates crash the client's keyed result list."""
+    import types
+
+    import requests as real_requests
+
+    import live_logging_routes
+
+    def fake_get(url, timeout=None):
+        resp = types.SimpleNamespace()
+        resp.status_code = 200
+        resp.json = lambda: {"tunes": [
+            {"id": 4717, "name": "Kings Of Kerry", "type": "slide", "url": "https://thesession.org/tunes/4717"},
+            {"id": 2188, "name": "The Kerry Jig", "type": "slide", "url": "https://thesession.org/tunes/2188"},
+            {"id": 4717, "name": "Kings Of Kerry", "type": "slide", "url": "https://thesession.org/tunes/4717"},
+        ]}
+        return resp
+
+    monkeypatch.setattr(
+        live_logging_routes, "requests",
+        types.SimpleNamespace(get=fake_get, exceptions=real_requests.exceptions),
+    )
+    with authenticated_user:
+        resp = client.get("/api/my-tunes/thesession-search?q=A3ABc&type=Slide")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    ids = [r["tune_id"] for r in body["results"]]
+    assert ids == [4717, 2188]

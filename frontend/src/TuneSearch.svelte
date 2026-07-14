@@ -246,9 +246,12 @@
     const q = deepQuery.trim()
     if (!q || tsSearching || displayStatus === 'offline') return
     tsSearching = true; tsSearched = true
-    const localIds = new Set(deepResults.map((r) => r.tune_id))
+    // Suppress hits already in the local list AND within-list duplicates (thesession
+    // matches per-setting, so one tune can come back twice) — the results render in a
+    // keyed each, where a duplicate tune_id is fatal.
+    const seen = new Set(deepResults.map((r) => r.tune_id))
     const r = await thesessionSearch(config, q, deepType)
-    tsResults = r.filter((t) => !localIds.has(t.tune_id))
+    tsResults = r.filter((t) => !seen.has(t.tune_id) && (seen.add(t.tune_id), true))
     tsSearching = false
   }
   // Add a remote result -> import (server-side, folded into the add op) + log linked at
