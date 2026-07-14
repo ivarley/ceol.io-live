@@ -245,8 +245,8 @@ class TestPersonTuneDatabaseOperations:
         insert_call = mock_cursor.execute.call_args_list[1]
         assert "INSERT INTO person_tune" in insert_call[0][0]
         # params: person_id, tune_id, learn_status, heard_count, learned_date,
-        # notes, setting_id, name_alias, created_by_user_id
-        assert insert_call[0][1] == (1, 100, 'learning', 0, None, None, None, None, 1)
+        # notes, setting_id, name_alias, key, created_by_user_id
+        assert insert_call[0][1] == (1, 100, 'learning', 0, None, None, None, None, None, 1)
         
         # Verify result
         assert result is person_tune
@@ -298,7 +298,7 @@ class TestPersonTuneDatabaseOperations:
         # Mock database response
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchone.return_value = (
-            123, 1, 100, 'learning', 2, None, 'Test notes', None, None, mock_date, mock_date
+            123, 1, 100, 'learning', 2, None, 'Test notes', None, None, None, mock_date, mock_date
         )
 
         result = PersonTune.get_by_id(123)
@@ -342,7 +342,7 @@ class TestPersonTuneDatabaseOperations:
         
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchone.return_value = (
-            123, 1, 100, 'want to learn', 0, None, None, None, None, mock_date, mock_date
+            123, 1, 100, 'want to learn', 0, None, None, None, None, None, mock_date, mock_date
         )
         
         result = PersonTune.get_by_person_and_tune(1, 100)
@@ -367,8 +367,8 @@ class TestPersonTuneDatabaseOperations:
         
         mock_date = datetime(2023, 8, 15, 12, 0, 0, tzinfo=timezone.utc)
         mock_cursor.fetchall.return_value = [
-            (123, 1, 100, 'learning', 0, None, None, None, None, mock_date, mock_date),
-            (124, 1, 101, 'learning', 1, None, 'Notes', None, None, mock_date, mock_date)
+            (123, 1, 100, 'learning', 0, None, None, None, None, None, mock_date, mock_date),
+            (124, 1, 101, 'learning', 1, None, 'Notes', None, None, None, mock_date, mock_date)
         ]
         
         results = PersonTune.get_for_person(
@@ -458,6 +458,7 @@ class TestPersonTuneUtilityMethods:
             'notes': 'Test notes',
             'setting_id': None,
             'name_alias': None,
+            'key': None,
             'created_date': mock_date.isoformat(),
             'last_modified_date': mock_date.isoformat()
         }
@@ -489,7 +490,7 @@ class TestPersonTuneUtilityMethods:
         expected = (
             "PersonTune(person_tune_id=123, person_id=1, tune_id=100, "
             "learn_status='learning', heard_count=3, "
-            "setting_id=None, name_alias='None')"
+            "setting_id=None, name_alias='None', key='None')"
         )
         assert result == expected
     

@@ -56,7 +56,15 @@ class TestTuneDetailPayload:
         resp = client.get(f"/api/tunes/{tune_id}/detail")
         data = json.loads(resp.data)
         assert resp.status_code == 200 and data["success"]
-        assert data["viewer"] == {"logged_in": False, "is_admin": False, "is_session_admin": False}
+        # is_session_member (spec 037) is the weaker grant the Session tab needs on its
+        # own: any member may say what got played on a night, but only an admin may say
+        # what the session plays in general.
+        assert data["viewer"] == {
+            "logged_in": False,
+            "is_admin": False,
+            "is_session_admin": False,
+            "is_session_member": False,
+        }
         assert data["session_tune"]["person_tune_status"] is None
         # No scope requested -> no session block, global stats only
         assert data["session_tune"]["session_scope"] is None

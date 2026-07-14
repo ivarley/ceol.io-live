@@ -1,0 +1,114 @@
+{
+  "_readme": [
+    "Calibration set for the tune-name matcher (spec 037). Hand-labelled; see",
+    "scripts/build_name_fixtures.py for how the candidate pairs were drawn (every",
+    "within-tune name pair from the top ~200 tunes' alias sets in thesession.org's",
+    "weekly data dump — 34,035 pairs, of which these are the ones that actually",
+    "discriminate).",
+    "",
+    "The alias data CANNOT produce these labels. An alias group on thesession.org",
+    "freely mixes spelling variants ('The Connaughtman's Rambles' / 'Connaught",
+    "Rambles') with genuinely different names for the same tune ('The Kesh' / 'Na",
+    "Ceis' / 'The Castle'). Suppressing the first and SHOWING the second is the whole",
+    "job, so a human read them.",
+    "",
+    "The two errors are not symmetric, and the test bars say so:",
+    "  variants -> matcher must say SAME. A miss shows a pointless 'aka The Silver",
+    "              Spear'. A papercut. Bar: >= 95%.",
+    "  distinct -> matcher must say DIFF. A miss HIDES from you that the tune has",
+    "              another name, which defeats the feature. Bar: 100%, no exceptions.",
+    "",
+    "NOTE on the negative set: it is hand-picked, NOT sampled from pairs of different",
+    "tunes. The same name legitimately belongs to several tunes (\"O'Keefe's\"), so a",
+    "cross-tune identical pair is not a failure — 'same name' is the right answer",
+    "there. In the product this never arises anyway: the drawer only ever compares",
+    "names belonging to one tune_id."
+  ],
+
+  "variants": [
+    { "a": "The Connacht Man's Rambles", "b": "The Connachtman's Rambles", "why": "compound split" },
+    { "a": "The Connacht Man's Rambles", "b": "The Connachtmann's Rambles", "why": "doubled consonant" },
+    { "a": "The Connacht Man's Rambles", "b": "Connaght Man's Rambles", "why": "spelling table" },
+    { "a": "The Connacht Man's Rambles", "b": "The Connaught Man's Ramble", "why": "spelling + plural" },
+    { "a": "The Connacht Man's Rambles", "b": "Connaught Rambles", "why": "dropped interior word (dice)" },
+    { "a": "The Connacht Man's Rambles", "b": "The Connaughtman Rambles", "why": "compound + possessive" },
+    { "a": "The Connacht Man's Rambles", "b": "Connaughtman's", "why": "short form (prefix)" },
+    { "a": "The Connaughtman's Rambles", "b": "Connaughtman's Ramble", "why": "article + plural" },
+
+    { "a": "The Swallow's Tail", "b": "The Swallow Tail", "why": "possessive" },
+    { "a": "The Swallow's Tail", "b": "Swallows Tail", "why": "article + interior plural" },
+    { "a": "The Swallowtail", "b": "The Swallow's Tail", "why": "compound split" },
+
+    { "a": "Silver Spear", "b": "The Silver Spear", "why": "leading article — the case that motivated all this" },
+    { "a": "Cooley's Reel", "b": "Cooley's", "why": "trailing tune type" },
+    { "a": "Paddy Fahey's Favourite", "b": "Paddy Fahey's", "why": "trailing noise word" },
+    { "a": "The Butterfly", "b": "Butterfly, The", "why": "trailing ', The'" },
+    { "a": "Banish Misfortune", "b": "Banish Misfortune, The", "why": "trailing ', The'" },
+    { "a": "The Star Of Munster", "b": "Star of Munster", "why": "article + case" },
+    { "a": "Toss The Feathers", "b": "Toss the feathers", "why": "case only" },
+
+    { "a": "Drowsy Maggie", "b": "Drowsie Maggie", "why": "token-final y/ie" },
+    { "a": "Drowsey Maggie", "b": "Drowsy Maggy", "why": "token-final y/ey/ie, both tokens" },
+    { "a": "Maggie Drowsy", "b": "Drowsy Maggie", "why": "word order" },
+
+    { "a": "Ar Eirinn Ni Neosfainn Ce Hi", "b": "Is Ar Éirinn Ní Neosfainn Cé Hí", "why": "diacritics" },
+    { "a": "Laridé", "b": "Laride", "why": "diacritics" },
+
+    { "a": "Rolling In The Ryegrass", "b": "Rolling In The Rye Grass", "why": "compound split" },
+    { "a": "Kerrigan's", "b": "Kerrigans", "why": "possessive" },
+    { "a": "Mrs. McLeod Of Raasay", "b": "Mrs McLeod of Rasay", "why": "doubled vowel/consonant" },
+    { "a": "The Flowers Of Edinburgh", "b": "Flowers Of Edinburgh, The", "why": "article position" },
+    { "a": "The Humours Of Ballyloughlin", "b": "The Humors Of Ballyloughlin", "why": "-our-/-or-" },
+    { "a": "Jenny Lind's Favorite Serenading", "b": "Jenny Lind's Favourite Serenading", "why": "-our-/-or-" },
+
+    { "a": "Moll Roe", "b": "Moll Roe In The Morning", "why": "short form (prefix)" },
+    { "a": "Jenny Lind", "b": "Jenny Lind's Favourite Serenading", "why": "short form (prefix)" },
+    { "a": "Bonaparte's", "b": "Bonaparte Crossing The Rocky Mountains", "why": "short form (prefix)" },
+    { "a": "Lord Moira's", "b": "Lord Moira's Welcome To Scotland", "why": "short form (prefix)" },
+    { "a": "Pullet, The", "b": "The Pullet That Wants The Cock", "why": "short form (prefix)" }
+  ],
+
+  "distinct": [
+    { "a": "Paddy Fahey's", "b": "Paddy Fahey's No. 3", "why": "digit guard beats the prefix rule" },
+    { "a": "Paddy Fahey's No. 2", "b": "Paddy Fahey's No. 3", "why": "digit guard beats dice=0.90" },
+    { "a": "Brosna", "b": "Brosna #2", "why": "digit guard" },
+    { "a": "Ballydesmond No. 1", "b": "Ballydesmond No. 2", "why": "digit guard" },
+
+    { "a": "The Kesh", "b": "The Castle", "why": "alternate names for one tune, genuinely different" },
+    { "a": "The Kesh", "b": "Na Ceis", "why": "Irish-language name" },
+    { "a": "The Kesh", "b": "Kincora, The", "why": "alternate name" },
+    { "a": "Drowsy Maggie", "b": "Maggie Tuirseach", "why": "Irish-language name — must still show" },
+    { "a": "The Silver Spear", "b": "Fisherman's Lilt", "why": "alternate name" },
+
+    { "a": "Collins'", "b": "Daniel Michael Collins's Father's", "why": "sorted-prefix trap: shares one token only" },
+    { "a": "The Coolin", "b": "Had You Seen My Sweet Coolin", "why": "shares one token only" },
+    { "a": "First, The", "b": "My First Waltz With You", "why": "shares one token only" },
+    { "a": "McCleod's", "b": "Mrs Mcleod Of Raasay", "why": "shares one token only" },
+    { "a": "Manley's", "b": "Maurice Manley's", "why": "added forename is a different name" },
+    { "a": "O'Keefe's", "b": "Padraigh O'Keefe's", "why": "added forename is a different name" },
+    { "a": "The Federal Hornpipe", "b": "Get Out Of The Way Of The Federals", "why": "shares one token only" },
+
+    {
+      "a": "A Shetland Fiddler's Welcome To The Cape Breton Symphony",
+      "b": "Cape Breton Fiddler's Welcome To The Shetland Isles, The",
+      "why": "mirror-image titles: dice 0.7987, right under the 0.8 cliff. Do not lower the threshold."
+    },
+    { "a": "The Green Fields Of Rossbeigh", "b": "The Green Fields Of America", "why": "same frame, different place" },
+    { "a": "Drag Her Round The Road", "b": "Drag Her Up The Road", "why": "one preposition apart, different tune" },
+    { "a": "Indian Eat The Woodchuck", "b": "Indian Eat The Woodhen", "why": "one noun apart, different tune" },
+
+    {
+      "a": "The Silver Spear (Kevin's)",
+      "b": "The Silver Spear",
+      "why": "parenthetical guard beats the prefix rule — a bracketed aside is a deliberate disambiguation"
+    },
+    { "a": "Silver Spear (fast one)", "b": "The Silver Spear", "why": "parenthetical guard" },
+    { "a": "The Kesh (slow)", "b": "The Kesh (fast)", "why": "parentheticals differ from each other" },
+
+    { "a": "Toss The Feathers", "b": "The Sailor's Bonnet", "why": "unrelated" },
+    { "a": "Cooley's", "b": "The Wise Maid", "why": "unrelated" },
+    { "a": "The Butterfly", "b": "The Kesh", "why": "unrelated" },
+    { "a": "Banish Misfortune", "b": "The Blarney Pilgrim", "why": "unrelated" },
+    { "a": "The Musical Priest", "b": "The Blackthorn Stick", "why": "unrelated" }
+  ]
+}

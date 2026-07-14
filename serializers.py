@@ -923,7 +923,7 @@ def build_session_detail_payload(
 
 PERSON_TUNE_COLS = """
     pt.person_tune_id, pt.person_id, pt.tune_id, pt.learn_status,
-    pt.heard_count, pt.learned_date, pt.notes, pt.setting_id, pt.name_alias,
+    pt.heard_count, pt.learned_date, pt.notes, pt.setting_id, pt.name_alias, pt.key,
     pt.created_date, pt.last_modified_date,
     COALESCE(pt.name_alias, t.name) AS tune_name,
     t.tune_type,
@@ -959,6 +959,8 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "notes": row["notes"],
         "setting_id": setting_id,
         "name_alias": row["name_alias"],
+        # "I play this in ..." (spec 037). Label only — it does not drive notation.
+        "key": row["key"],
         "created_date": row["created_date"].isoformat() if row["created_date"] else None,
         "last_modified_date": row["last_modified_date"].isoformat() if row["last_modified_date"] else None,
         "tune_name": row["tune_name"],
@@ -1284,7 +1286,7 @@ def _find_session_instance_id(cur, session_id: int, date_or_id: str) -> Optional
 def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optional[str]) -> Dict[str, Any]:
     """The session (and optional instance) scope block for the drawer payload."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+    cur.execute("SELECT session_id, name FROM session WHERE path = %s", (session_path,))
     srow = cur.fetchone()
     if not srow:
         raise SessionNotFound(session_path)
@@ -1293,6 +1295,8 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
     scope: Dict[str, Any] = {
         "path": session_path,
         "session_id": session_id,
+        # The Session tab heads with the session's name, linked to its page.
+        "session_name": srow["name"],
         "date_or_id": date_or_id,
         "alias": None,
         "setting_id": None,
@@ -1302,6 +1306,7 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
         "name_override": None,
         "key_override": None,
         "setting_override": None,
+        "played_instances": [],
     }
 
     cur.execute(
@@ -1325,10 +1330,70 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
         """SELECT COUNT(*) AS n
            FROM session_instance_tune sit
            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-           WHERE si.session_id = %s AND sit.tune_id = %s""",
+           WHERE si.session_id = %s AND sit.tune_id = %s AND sit.deleted = FALSE""",
         (session_id, tune_id),
     )
     scope["times_played"] = cur.fetchone()["n"]
+
+    # The Session tab's droplist (spec 037): the instances this tune was actually
+    # played at — the only ones session_instance_tune can hold overrides for — each
+    # with the humane "Set 3, tune 2" coordinates of every time it came round that
+    # night (usually one; a tune played twice has two).
+    #
+    # The set/position window is the same trick as GET /api/tunes/<id>/history: a
+    # running SUM over break records numbers the sets (spec 023), and the breaks are
+    # dropped AFTER the window is computed so they never take a tune number.
+    # order_position is a fractional index, hence the id tiebreak.
+    cur.execute(
+        """
+        WITH rows AS (
+            SELECT sit.session_instance_id, sit.session_instance_tune_id, sit.tune_id,
+                   sit.record_type, sit.order_position,
+                   SUM(CASE WHEN sit.record_type = 'break' THEN 1 ELSE 0 END)
+                       OVER (PARTITION BY sit.session_instance_id
+                             ORDER BY sit.order_position, sit.session_instance_tune_id) AS set_idx
+            FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            WHERE si.session_id = %(session_id)s AND sit.deleted = FALSE
+        ),
+        positioned AS (
+            SELECT session_instance_id, session_instance_tune_id, tune_id,
+                   set_idx + 1 AS set_number,
+                   ROW_NUMBER() OVER (PARTITION BY session_instance_id, set_idx
+                                      ORDER BY order_position, session_instance_tune_id) AS position_in_set
+            FROM rows
+            WHERE record_type <> 'break'
+        )
+        SELECT si.session_instance_id, si.date, si.start_time, si.location_override,
+               p.session_instance_tune_id, p.set_number, p.position_in_set
+        FROM positioned p
+        JOIN session_instance si ON si.session_instance_id = p.session_instance_id
+        WHERE p.tune_id = %(tune_id)s
+        ORDER BY si.date DESC, si.start_time DESC NULLS LAST,
+                 p.set_number ASC, p.position_in_set ASC
+        """,
+        {"session_id": session_id, "tune_id": tune_id},
+    )
+    by_instance: Dict[int, Dict[str, Any]] = {}
+    for r in cur.fetchall():
+        entry = by_instance.setdefault(
+            r["session_instance_id"],
+            {
+                "session_instance_id": r["session_instance_id"],
+                "date": r["date"].isoformat(),
+                "start_time": r["start_time"].isoformat() if r["start_time"] else None,
+                "location_override": r["location_override"],
+                "positions": [],
+            },
+        )
+        entry["positions"].append(
+            {
+                "session_instance_tune_id": r["session_instance_tune_id"],
+                "set_number": r["set_number"],
+                "position_in_set": r["position_in_set"],
+            }
+        )
+    scope["played_instances"] = list(by_instance.values())
 
     if date_or_id is not None:
         instance_id = _find_session_instance_id(cur, session_id, date_or_id)
@@ -1426,15 +1491,21 @@ def build_tune_detail_payload(
                 "instrument_status": {},
             }
 
-    # Session-admin flag (system admins administer every session).
+    # Session-admin flag (system admins administer every session). is_session_member
+    # is a weaker grant the Session tab needs on its own: spec 037 lets any member
+    # edit a specific instance's overrides, while the session's own alias/setting/key
+    # stays admin-only.
     is_session_admin = bool(is_admin)
-    if scope and person_id and not is_session_admin:
+    is_session_member = bool(is_admin)
+    if scope and person_id:
         cur.execute(
             "SELECT is_admin FROM session_person WHERE session_id = %s AND person_id = %s",
             (scope["session_id"], person_id),
         )
         m = cur.fetchone()
-        is_session_admin = bool(m and m["is_admin"])
+        if m:
+            is_session_member = True
+            is_session_admin = is_session_admin or bool(m["is_admin"])
 
     # Notation precedence mirrors what each legacy variant showed: the instance
     # override, else the session's setting, else the viewer's saved setting,
@@ -1501,13 +1572,25 @@ def build_tune_detail_payload(
             if member_play_count is not None
             else {}
         ),
-        # Scope marker the drawer derives its session wording from.
+        # Scope marker the drawer derives its session wording from, and everything
+        # the Session tab renders (spec 037): which session, what it's played at,
+        # and who may edit which layer.
         "session_scope": (
             {
                 "path": scope["path"],
+                "session_name": scope["session_name"],
                 "instance": scope.get("session_instance_id"),
                 "date_or_id": scope["date_or_id"],
                 "in_repertoire": scope["in_repertoire"],
+                "played_instances": scope["played_instances"],
+                # The session's own alias/setting/key is the session speaking about
+                # its repertoire — admins only. A specific instance is a record of
+                # what happened in a room the member was in — any member.
+                "can_edit_session": is_session_admin,
+                "can_edit_instance": is_session_member,
+                # Un-enrolling only ever means "a tune that was never actually
+                # played here"; with plays present the link doesn't render at all.
+                "can_remove_from_session": is_session_admin and scope["times_played"] == 0,
             }
             if scope
             else None
@@ -1521,6 +1604,7 @@ def build_tune_detail_payload(
             "logged_in": bool(logged_in),
             "is_admin": bool(is_admin),
             "is_session_admin": is_session_admin,
+            "is_session_member": is_session_member,
         },
         "session_tune": session_tune,
     }

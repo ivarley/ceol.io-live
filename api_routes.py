@@ -76,6 +76,24 @@ def is_session_admin_for(cur, session_id, person_id):
     return cur.fetchone() is not None
 
 
+def is_session_member_for(cur, session_id, person_id):
+    """Any row in session_person (or a system admin) — the weaker grant the tune
+    drawer's Session tab needs (spec 037). A member may say what was played on a
+    night they were in the room; only an admin may say what the session plays in
+    general."""
+    from flask import session as flask_session
+
+    if flask_session.get("is_system_admin", False):
+        return True
+    if not person_id:
+        return False
+    cur.execute(
+        "SELECT 1 FROM session_person WHERE session_id = %s AND person_id = %s",
+        (session_id, person_id),
+    )
+    return cur.fetchone() is not None
+
+
 def instance_logging_locked(cur, session_instance_id):
     """True if the live editor owns this instance (logging_mode='live'); the classic
     editor's tune-mutation endpoints must refuse so they can't clobber live-editor data."""
@@ -1671,7 +1689,14 @@ def get_session_tune_detail(session_path, tune_id):
 
 @api_login_required
 def update_session_tune_details(session_path, tune_id):
-    """Update session-specific tune details (setting_id, key, alias, and aliases)"""
+    """Update session-specific tune details (setting_id, key, alias, and aliases).
+
+    Session admins only (spec 037). This is the session making a canonical statement
+    about its own repertoire; before 037 the endpoint was merely @api_login_required,
+    so any logged-in user could rewrite the alias/setting/key of any tune at any
+    session they had never attended. A member who wants to record what was played on
+    a given night edits that instance instead.
+    """
     try:
         data = request.get_json()
         if not data:
@@ -1747,19 +1772,28 @@ def update_session_tune_details(session_path, tune_id):
 
         session_id = session_result[0]
 
-        # Check if tune exists in session_tune
+        if not is_session_admin_for(cur, session_id, current_user.person_id):
+            cur.close()
+            conn.close()
+            return jsonify(
+                {"success": False, "message": "Only session admins can change what a session plays"}
+            ), 403
+
+        # Enroll on the fly if the tune has no session_tune row (spec 037). Stating
+        # "we play this in Ador here" is the strongest possible evidence the tune
+        # belongs to the repertoire; asking to confirm would be a silly question.
+        # Since spec 025 this should only be reachable for a tune that has never
+        # been played here.
         cur.execute(
             "SELECT tune_id FROM session_tune WHERE session_id = %s AND tune_id = %s",
             (session_id, tune_id),
         )
         if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify(
-                {
-                    "success": False,
-                    "message": "Tune not found in this session",
-                }
+            cur.execute(
+                """INSERT INTO session_tune (session_id, tune_id, setting_id, created_by_user_id)
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (session_id, tune_id) DO NOTHING""",
+                (session_id, tune_id, default_setting_id(cur, tune_id), get_current_user_id()),
             )
 
         # Save to history before making changes
@@ -1842,7 +1876,15 @@ def update_session_tune_details(session_path, tune_id):
 
 @api_login_required
 def delete_session_tune(session_path, tune_id):
-    """Delete a tune from a session's session_tune table (session admins only)"""
+    """Un-enroll a tune from a session's repertoire (session admins only).
+
+    Refuses when the tune has ever been played here (spec 037). The invariant is
+    that every tune played at an instance is in that session's repertoire, and this
+    endpoint used to break it: it deleted the session_tune row and left the
+    session_instance_tune plays orphaned. So it now means exactly one narrow thing —
+    un-enrolling a tune that was added to the repertoire and never actually played.
+    Fix the history, not the summary.
+    """
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1892,6 +1934,28 @@ def delete_session_tune(session_path, tune_id):
             cur.close()
             conn.close()
             return jsonify({"success": False, "message": "Tune not found in this session"}), 404
+
+        # Plays outrank the repertoire. The UI hides the link entirely in this case,
+        # but the endpoint is reachable directly, so it's enforced here too.
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM session_instance_tune sit
+            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
+            WHERE si.session_id = %s AND sit.tune_id = %s AND sit.deleted = FALSE
+            """,
+            (session_id, tune_id),
+        )
+        play_count = cur.fetchone()[0]
+        if play_count:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "message": (
+                    f'"{tune_name}" has been played at this session {play_count} '
+                    f'time{"s" if play_count != 1 else ""}. Remove those plays first.'
+                ),
+            }), 409
 
         # Delete associated aliases first (foreign key constraint)
         cur.execute(
@@ -10512,33 +10576,13 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
         if not session_instance_id:
             return jsonify({"success": False, "message": "Session instance not found"}), 404
 
-        # Check if user has permission to edit this session
-        # System admins and session admins can update all fields
-        # Regular session members can only update setting_override
-        is_session_admin = False
-        is_session_member = False
-
-        if not current_user.is_system_admin:
-            cur.execute(
-                """
-                SELECT is_admin FROM session_person
-                WHERE session_id = %s AND person_id = %s
-            """,
-                (session_id, current_user.person_id),
-            )
-            permission = cur.fetchone()
-            if permission:
-                is_session_member = True
-                is_session_admin = permission[0]
-
-            if not is_session_member:
-                return jsonify({"success": False, "message": "Unauthorized"}), 403
-
-            # Non-admins can only update setting_override
-            if not is_session_admin:
-                # Check if they're trying to update restricted fields
-                if data.get("name") or data.get("key_override"):
-                    return jsonify({"success": False, "message": "Only session admins can update name and key_override"}), 403
+        # Any session member may edit all three fields on a specific instance (spec
+        # 037). This is a record of what happened in a room they were in — not the
+        # session speaking about its repertoire, which stays admin-only over in
+        # update_session_tune_details. Before 037 a non-admin member could set only
+        # setting_override.
+        if not is_session_member_for(cur, session_id, current_user.person_id):
+            return jsonify({"success": False, "message": "Unauthorized"}), 403
 
         # Check if this tune exists in this session instance
         cur.execute(

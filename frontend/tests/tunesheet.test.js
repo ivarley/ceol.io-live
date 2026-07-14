@@ -7,7 +7,7 @@
 // declared by call sites.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushSync } from 'svelte'
-import { render, waitFor } from '@testing-library/svelte'
+import { render, waitFor, cleanup } from '@testing-library/svelte'
 import { fireEvent } from '@testing-library/dom'
 import TuneSheet from '../src/tunesheet/TuneSheet.svelte'
 import {
@@ -83,6 +83,23 @@ const notOnListPts = {
   instruments: [],
   instrument_status: {},
 }
+
+// The session_scope block the Session tab reads (spec 037). can_edit_session is the
+// admin gate on what the session plays IN GENERAL; can_edit_instance is the weaker
+// member gate on what got played on one night; can_remove_from_session is false the
+// moment the tune has any plays here.
+const sessScope = (o = {}) => ({
+  path: 'austin/mueller',
+  session_name: 'Mueller Session',
+  instance: null,
+  date_or_id: null,
+  in_repertoire: true,
+  played_instances: [],
+  can_edit_session: false,
+  can_edit_instance: false,
+  can_remove_from_session: false,
+  ...o,
+})
 
 const detailPayload = ({ tune = {}, pts, viewer = {}, redirected_from = null } = {}) => ({
   success: true,
@@ -302,31 +319,40 @@ describe('TuneSheet component', () => {
     // status control tinted by the roll-up, seg buttons present
     expect(container.querySelector('.tunebook-status-section.tunebook-status-want-to-learn')).toBeTruthy()
     expect(container.querySelectorAll('.tsc-main-block .tunebook-status-opt').length).toBe(3)
-    // 2 instruments -> expand toggle offered
+    // 2 instruments -> expand toggle offered, now living in the action row
     expect(container.querySelector('.tsc-expand-link').textContent.trim()).toBe('View By Instrument')
     // heard count section (status is want-to-learn and a person_tune_id exists)
     expect(container.querySelector('#heard-count-value').textContent).toBe('2')
-    // notation + notes + save/cancel + links + tabs
     expect(container.querySelector('.abc-notation-section')).toBeTruthy()
-    expect(container.querySelector('#notes-textarea').value).toBe('first two bars')
-    expect(container.querySelector('#save-btn')).toBeTruthy()
-    expect(container.querySelector('#save-btn').disabled).toBe(true)
-    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From My Tunes')
+    // Remove From My Tunes moved out of the footer links and into the action row.
+    expect(container.querySelector('.tsc-action-row .tsc-action-danger').textContent).toContain('Remove From My Tunes')
+    expect(container.querySelector('.modal-additional-links')).toBeFalsy()
+    // No session in scope -> no Session tab, so the leftmost tab is Stats.
+    expect(container.querySelector('.modal-tab[data-tab="session"]')).toBeFalsy()
     expect(container.querySelector('#stats-tab.active')).toBeTruthy()
     expect(container.querySelector('#tunebook-count').textContent).toBe('9')
-    // the shape-drift fix: "Last Updated" shows in the my-tunes variant too
     expect(container.querySelector('.stat-note').textContent).toContain('Last Updated 2026-01-01')
-    // configure section exists but is collapsed
-    expect(container.querySelector('#configure-section').style.display).toBe('none')
+    // The canonical name + id moved out of the config header and into Stats.
+    expect(container.querySelector('.stat-canonical').textContent).toContain("Canonical name: Cooley's (#101)")
+
+    // Personal config is collapsed behind Configure — and the title no longer opens it.
+    expect(container.querySelector('#configure-section')).toBeFalsy()
+    expect(container.querySelector('.modal-tune-title-clickable')).toBeFalsy()
+    await fireEvent.click(container.querySelector('.tsc-action-row .tsc-action-link'))
+    expect(container.querySelector('#configure-section')).toBeTruthy()
     expect(container.querySelector('#name-alias-input')).toBeTruthy()
+    expect(container.querySelector('#my-key-select')).toBeTruthy()
+    // My Notes now always renders, inside the form rather than as a sometimes-block.
+    expect(container.querySelector('#notes-textarea').value).toBe('first two bars')
+    expect(container.querySelector('#save-btn').disabled).toBe(true)
   })
 
-  it('a logged-out viewer on a SESSION page gets no Configure This Tune link', async () => {
+  it('a logged-out viewer on a SESSION page can READ the Session tab but not edit it', async () => {
     stubFetch([
       [
         '/api/tunes/101/detail',
         detailPayload({
-          tune: { session_scope: { path: 'austin/mueller', instance: null, in_repertoire: true } },
+          tune: { alias: 'The Cooley', key: 'Edorian', session_scope: sessScope() },
           pts: null,
           viewer: { logged_in: false },
         }),
@@ -334,12 +360,17 @@ describe('TuneSheet component', () => {
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 101, scope: { session: 'austin/mueller' } })
-    await waitFor(() => expect(container.querySelector('.modal-tune-title').textContent.trim()).toBe("Cooley's"))
-    // session variant renders (notation etc.), but nothing writable for anons
+    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
     expect(container.querySelector('.abc-notation-section')).toBeTruthy()
-    const linkTexts = [...container.querySelectorAll('.modal-additional-links a')].map((a) => a.textContent)
-    expect(linkTexts.join()).not.toMatch(/Configure This Tune|Remove/)
+    // Anyone may see what a session plays; only an admin may change it.
+    expect(container.querySelector('.sess-form-readonly')).toBeTruthy()
+    expect(container.querySelector('#sess-alias-input')).toBeFalsy()
+    expect(container.querySelector('#session-tab').textContent).toContain('The Cooley')
+    expect(container.querySelector('#session-tab').textContent).toContain('Edorian')
+    // Nothing writable for an anon: no personal config, no removes.
     expect(container.querySelector('#configure-section')).toBeFalsy()
+    expect(container.querySelector('.tsc-action-row')).toBeFalsy()
+    expect(container.textContent).not.toContain('Remove From Session')
   })
 
   it('a logged-out viewer derives the read-only view: no status seg, no save, no Generate Notation', async () => {
@@ -358,7 +389,7 @@ describe('TuneSheet component', () => {
     await waitFor(() => expect(container.querySelector('.modal-tune-title').textContent.trim()).toBe('Banish Misfortune'))
     expect(container.querySelector('.tunebook-status-section')).toBeFalsy()
     expect(container.querySelector('#save-btn')).toBeFalsy()
-    expect(container.querySelector('.modal-additional-links')).toBeFalsy()
+    expect(container.querySelector('.tsc-action-row')).toBeFalsy()
     expect(container.querySelector('.generate-notation-link')).toBeFalsy()
     expect(container.querySelector('.heard-count-section')).toBeFalsy()
   })
@@ -511,18 +542,18 @@ describe('TuneSheet component', () => {
     component.show({ tuneId: 303 }) // scope {admin:true} derived from the URL
     await waitFor(() => expect(container.querySelector('#configure-section')).toBeTruthy())
     expect(window.location.pathname).toBe('/admin/tunes/303')
-    expect(container.querySelector('#configure-section').style.display).toBe('block')
     expect(container.querySelector('#tune-name-input').value).toBe('The Sligo Maid')
     expect(container.querySelector('.tunebook-status-section')).toBeFalsy()
     expect(container.querySelector('.heard-count-section')).toBeFalsy()
     expect(container.querySelector('#stats-tab').textContent).toContain('In the repertoire of')
     // dirty-check enables save
-    expect(container.querySelector('#save-btn').disabled).toBe(true)
+    const saveBtn = container.querySelector('#configure-section .btn-primary')
+    expect(saveBtn.disabled).toBe(true)
     await fireEvent.input(container.querySelector('#tune-name-input'), { target: { value: 'Renamed' } })
-    expect(container.querySelector('#save-btn').disabled).toBe(false)
+    expect(saveBtn.disabled).toBe(false)
   })
 
-  it('a session scope derives the session variant: save PUTs only changed fields and calls onSave', async () => {
+  it('a session scope: the Session tab is leftmost + default, and In General PUTs only changed fields', async () => {
     window.history.replaceState({}, '', '/sessions/austin/mueller/tunes')
     const onSave = vi.fn()
     stubFetch([
@@ -540,7 +571,7 @@ describe('TuneSheet component', () => {
             setting_id: 5,
             key: 'Dmixolydian',
             times_played: 4,
-            session_scope: { path: 'austin/mueller', instance: null, in_repertoire: true },
+            session_scope: sessScope({ can_edit_session: true, can_edit_instance: true }),
           },
           pts: fullPts({ person_tune_id: 55, learn_status: 'learning' }),
           viewer: { is_session_admin: true },
@@ -549,23 +580,155 @@ describe('TuneSheet component', () => {
     ])
     const { container, component } = render(TuneSheet)
     component.show({ tuneId: 202, scope: { session: 'austin/mueller' }, onSave })
-    await waitFor(() => expect(container.querySelector('#alias-input')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
     expect(fetchMock.mock.calls[0][0]).toBe('/api/tunes/202/detail?session=austin%2Fmueller')
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/202')
-    // the payload's is_session_admin gates the remove link (no call-site flag)
-    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From Session')
-    expect(container.querySelector('#stats-tab').textContent).toContain('at this session')
 
-    await fireEvent.input(container.querySelector('#alias-input'), { target: { value: 'The Banish' } })
-    expect(container.querySelector('#save-btn').disabled).toBe(false)
-    await fireEvent.click(container.querySelector('#save-btn'))
+    // Session is leftmost and the drawer opened on it. The droplist IS the heading —
+    // it names the session, and the rest of the list continues the sentence downward.
+    expect(container.querySelectorAll('.modal-tab')[0].dataset.tab).toBe('session')
+    expect(container.querySelector('#session-tab.active')).toBeTruthy()
+    const scopeSel = container.querySelector('#sess-scope-select')
+    expect(scopeSel.value).toBe('general')
+    expect(scopeSel.options[0].text).toBe('At Mueller Session')
+    expect(scopeSel.options[scopeSel.options.length - 1].text).toBe('At a different session …')
+    expect(container.querySelector('.sess-name')).toBeFalsy() // the old linked title is gone
+
+    // The context line: how often, linking over to History already filtered to this session.
+    expect(container.querySelector('.sess-context-link').textContent.trim()).toBe(
+      '4 times at this session'
+    )
+
+    // The personal form is still here, on a session surface — that's the point of 037.
+    expect(container.querySelector('.tsc-action-row')).toBeTruthy()
+
+    // The edit form waits until it's asked for.
+    expect(container.querySelector('#sess-alias-input')).toBeFalsy()
+    expect(container.querySelector('.sess-edit-link').textContent).toContain(
+      'Update name, setting or key for this tune at this session'
+    )
+    await fireEvent.click(container.querySelector('.sess-edit-link'))
+    expect(container.querySelector('#session-tab').textContent).toContain('We call this:') // present tense
+
+    const save = () => container.querySelector('.sess-form .btn-primary')
+    expect(save().disabled).toBe(true)
+    await fireEvent.input(container.querySelector('#sess-alias-input'), { target: { value: 'The Banish' } })
+    expect(save().disabled).toBe(false)
+    await fireEvent.click(save())
     await waitFor(() => expect(onSave).toHaveBeenCalled())
     const put = fetchMock.mock.calls.find(([, opts]) => opts && opts.method === 'PUT')
     expect(put[0]).toBe('/api/sessions/austin/mueller/tunes/202')
     expect(JSON.parse(put[1].body)).toEqual({ alias: 'The Banish' })
-    expect(container.querySelector('#save-btn').textContent.trim()).toBe('Saved!')
-    // URL param cleaned before onSave
-    expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes')
+  })
+
+  it('the History link jumps to the History tab already scoped to this session', async () => {
+    stubFetch([
+      ['/api/tunes/202/history', { success: true, play_instances: [], truncated: false }],
+      [
+        '/api/tunes/202/detail',
+        detailPayload({
+          tune: {
+            tune_id: 202,
+            times_played: 4,
+            session_scope: sessScope({ can_edit_session: true }),
+          },
+        }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('.sess-context-link')).toBeTruthy())
+    await fireEvent.click(container.querySelector('.sess-context-link'))
+    await waitFor(() => expect(container.querySelector('#history-tab.active')).toBeTruthy())
+    const activeScope = container.querySelector('#history-tab .history-scope-btn.active')
+    expect(activeScope.textContent.trim()).toBe('This session')
+  })
+
+  it('"At a different session ..." re-scopes the whole drawer, and excludes visitor sessions', async () => {
+    stubFetch([
+      [
+        '/api/my-sessions',
+        {
+          success: true,
+          sessions: [
+            { path: 'austin/mueller', name: 'Mueller Session', relationship: 'member' },
+            { path: 'dublin/cobblestone', name: 'The Cobblestone', relationship: 'member' },
+            { path: 'doolin/mcganns', name: "McGann's", relationship: 'visitor' },
+          ],
+        },
+      ],
+      [
+        '/api/tunes/202/detail?session=dublin%2Fcobblestone',
+        detailPayload({
+          tune: {
+            tune_id: 202,
+            tune_name: 'Banish Misfortune',
+            alias: 'The Cobblestone Name',
+            times_played: 9,
+            session_scope: sessScope({
+              path: 'dublin/cobblestone',
+              session_name: 'The Cobblestone',
+              can_edit_session: true,
+            }),
+          },
+        }),
+      ],
+      [
+        '/api/tunes/202/detail',
+        detailPayload({
+          tune: { tune_id: 202, tune_name: 'Banish Misfortune', session_scope: sessScope() },
+        }),
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('#sess-scope-select')).toBeTruthy())
+
+    const sel = container.querySelector('#sess-scope-select')
+    sel.value = '__other__'
+    await fireEvent.change(sel)
+
+    // The sentinel row is an errand, not a target: the select snaps back, so cancelling
+    // the picker can't strand it on a row that means nothing.
+    expect(sel.value).toBe('general')
+
+    // The picker offers my OTHER member sessions. Not the one I'm already on, and not a
+    // session I merely visited once — that isn't a repertoire I have a view on.
+    await waitFor(() => expect(document.querySelector('.kit-list-row')).toBeTruthy())
+    const rows = [...document.querySelectorAll('.kit-list-row')].map((r) => r.textContent)
+    expect(rows.join('|')).toContain('The Cobblestone')
+    expect(rows.join('|')).not.toContain('Mueller Session')
+    expect(rows.join('|')).not.toContain("McGann's")
+
+    // Picking one re-scopes the whole drawer: the payload, the session name, the counts.
+    await fireEvent.click(document.querySelector('.kit-list-row'))
+    await waitFor(() =>
+      expect(container.querySelector('#sess-scope-select').options[0].text).toBe('At The Cobblestone')
+    )
+    expect(container.querySelector('.sess-context').textContent).toContain('9 times at this session')
+    // ...and it does NOT rewrite the URL — the page behind the drawer is still Mueller.
+    expect(window.location.pathname).not.toContain('cobblestone')
+  })
+
+  it('Remove From Session only renders for a tune with no plays here', async () => {
+    const payload = (o) =>
+      detailPayload({
+        tune: { tune_id: 202, tune_name: 'Banish Misfortune', session_scope: sessScope(o) },
+        viewer: { is_session_admin: true },
+      })
+    // Has plays -> the option is simply absent. No explanation, it just isn't offered.
+    stubFetch([['/api/tunes/202/detail', payload({ can_edit_session: true, can_remove_from_session: false })]])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
+    expect(container.textContent).not.toContain('Remove From Session')
+
+    cleanup()
+    stubFetch([['/api/tunes/202/detail', payload({ can_edit_session: true, can_remove_from_session: true })]])
+    const second = render(TuneSheet)
+    second.component.show({ tuneId: 202, scope: { session: 'austin/mueller' } })
+    await waitFor(() => expect(second.container.querySelector('#session-tab')).toBeTruthy())
+    expect(second.container.textContent).toContain('Remove From Session')
   })
 
   it('an old-style pill-logger config maps through the shim onto the instance variant', async () => {
@@ -579,9 +742,25 @@ describe('TuneSheet component', () => {
             tune_name: 'Banish Misfortune',
             name: 'That Night',
             key_override: 'Aminor',
-            session_scope: { path: 'austin/mueller', instance: 9, in_repertoire: true },
+            session_scope: sessScope({
+              instance: 9,
+              can_edit_instance: true,
+              played_instances: [
+                {
+                  session_instance_id: 9,
+                  date: '2026-01-01',
+                  start_time: null,
+                  location_override: null,
+                  // Played twice that night — two sets, so two links.
+                  positions: [
+                    { session_instance_tune_id: 501, set_number: 3, position_in_set: 2 },
+                    { session_instance_tune_id: 512, set_number: 17, position_in_set: 1 },
+                  ],
+                },
+              ],
+            }),
           },
-          pts: fullPts({ person_tune_id: 55 }),
+          pts: fullPts({ person_tune_id: 55, name_alias: 'The Banisher' }),
         }),
       ],
     ])
@@ -592,11 +771,35 @@ describe('TuneSheet component', () => {
       apiEndpoint: '/api/sessions/austin/mueller/2026-01-01/tunes/202',
       additionalData: { sessionPath: 'austin/mueller', dateOrId: '2026-01-01', isUserLoggedIn: true },
     })
-    await waitFor(() => expect(container.querySelector('#alias-input')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('#session-tab')).toBeTruthy())
     // the shim built the scoped feed URL
     expect(fetchMock.mock.calls[0][0]).toContain('/api/tunes/202/detail?session=austin%2Fmueller&instance=2026-01-01')
-    // instance wording
-    expect(container.textContent).toContain('In this case, we called it:')
+
+    // The instance in scope pre-selects, and the droplist row continues the sentence.
+    const scopeSel = container.querySelector('#sess-scope-select')
+    expect(scopeSel.value).toBe('9')
+    expect(scopeSel.options[1].text).toBe('… on Thu 1 Jan 2026')
+
+    // Where it came round that night — each linking into the logger at that exact record.
+    const positions = [...container.querySelectorAll('.sess-position')]
+    expect(positions.map((p) => p.textContent.trim())).toEqual(['Set 3, tune 2', 'Set 17, tune 1'])
+    expect(positions[0].getAttribute('href')).toBe(
+      '/sessions/austin/mueller/9?highlight=501&tune=202'
+    )
+
+    // Past tense on the disclosure and the form.
+    expect(container.querySelector('.sess-edit-link').textContent).toContain(
+      'Update name, setting or key for this tune on this date'
+    )
+    await fireEvent.click(container.querySelector('.sess-edit-link'))
+    expect(container.querySelector('#session-tab').textContent).toContain('We called it:')
+    expect(container.querySelector('#sess-alias-input').value).toBe('That Night')
+
+    // The NAME chain: a name is a label, so the most personal one wins — my alias beats
+    // the instance's name beats the session's beats the canonical one. And the aka line
+    // surfaces the next name down that is meaningfully DIFFERENT (not just respelled).
+    expect(container.querySelector('.modal-tune-title').textContent.trim()).toBe('The Banisher')
+    expect(container.querySelector('.modal-tune-aka').textContent.trim()).toBe('aka That Night')
   })
 
   it('offline fallback renders from CeolOffline with pending ops overlaid (derivation included)', async () => {
@@ -712,10 +915,12 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
 
     await fireEvent.click(container.querySelector('.played-with-item[data-tune-id="202"]'))
     // the payload's on_list derives the full my-tunes variant — no resolver hop
-    await waitFor(() => expect(container.querySelector('#notes-textarea')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('.tsc-action-row')).toBeTruthy())
+    expect(container.querySelector('.tsc-action-danger').textContent).toContain('Remove From My Tunes')
+    // Personal config is collapsed by default; the chained tune's own values seed it.
+    await fireEvent.click(container.querySelector('.tsc-action-row .tsc-action-link'))
     expect(container.querySelector('#notes-textarea').value).toBe('chained notes')
     expect(container.querySelector('#name-alias-input')).toBeTruthy()
-    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From My Tunes')
     // the URL learned the chained tune's ptid from the payload
     expect(new URL(window.location).searchParams.get('ptid')).toBe('55')
 
@@ -768,11 +973,12 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
     )
 
     // ...and the flipped on_list DERIVES the full my-tunes variant in place (no close)
-    await waitFor(() => expect(container.querySelector('#notes-textarea')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('.tsc-action-row')).toBeTruthy())
     expect(container.querySelector('#tune-detail-modal').style.display).toBe('flex')
+    expect(container.querySelector('.tsc-action-danger').textContent).toContain('Remove From My Tunes')
+    await fireEvent.click(container.querySelector('.tsc-action-row .tsc-action-link'))
     expect(container.querySelector('#notes-textarea').value).toBe('now mine')
     expect(container.querySelector('#name-alias-input')).toBeTruthy()
-    expect(container.querySelector('.modal-additional-links').textContent).toContain('Remove From My Tunes')
     expect(new URL(window.location).searchParams.get('ptid')).toBe('77')
     // the tab the user was on survives the upgrade
     expect(container.querySelector('#played-with-tab.active')).toBeTruthy()
@@ -799,7 +1005,7 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
           tune: {
             tune_id: 404,
             tune_name: 'The Chained',
-            session_scope: { path: 'austin/mueller', instance: null, in_repertoire: true },
+            session_scope: sessScope({ can_edit_session: true }),
           },
           pts: fullPts({ person_tune_id: 66 }),
         }),
@@ -810,7 +1016,7 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
           tune: {
             tune_id: 202,
             tune_name: 'Banish Misfortune',
-            session_scope: { path: 'austin/mueller', instance: null, in_repertoire: true },
+            session_scope: sessScope({ can_edit_session: true }),
           },
           pts: fullPts({ person_tune_id: 55 }),
         }),
@@ -828,7 +1034,7 @@ describe('TuneSheet — chaining, host notification, roll-up reset, generate not
       true
     )
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/404')
-    expect(container.querySelector('#alias-input')).toBeTruthy()
+    expect(container.querySelector('#sess-scope-select')).toBeTruthy()
   })
 
   it('the per-instrument roll-up resets to collapsed when the drawer shows another tune', async () => {
@@ -980,6 +1186,12 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
   })
 
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim()
+  // Personal config is collapsed by default, so the digest has to open it to see the
+  // fields — the offline path must render them identically once expanded.
+  const openConfig = async (c) => {
+    const link = c.querySelector('.tsc-action-row .tsc-action-link')
+    if (link) await fireEvent.click(link)
+  }
   const digest = (c) => ({
     title: norm(c.querySelector('.modal-tune-title')?.textContent),
     typePill: norm(c.querySelector('.tune-type-pill')?.textContent),
@@ -993,9 +1205,10 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     notes: c.querySelector('#notes-textarea')?.value,
     nameAlias: c.querySelector('#name-alias-input')?.value,
     settingField: c.querySelector('#setting-input')?.value,
-    removeLink: /Remove From My Tunes/.test(c.querySelector('.modal-additional-links')?.textContent || ''),
+    myKey: c.querySelector('#my-key-select')?.value,
+    removeLink: /Remove From My Tunes/.test(c.querySelector('.tsc-action-danger')?.textContent || ''),
     // The whole Stats tab: tunebook count row (incl. "Last Updated"), list count,
-    // my-sessions and all-sessions play counts.
+    // my-sessions and all-sessions play counts, and the canonical-name line.
     statsTab: norm(c.querySelector('#stats-tab')?.textContent),
   })
 
@@ -1007,10 +1220,12 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     await waitFor(() =>
       expect(online.container.querySelector('.modal-tune-title')?.textContent).toContain('Cooleys (mine)')
     )
+    await openConfig(online.container)
     const onlineDigest = digest(online.container)
     online.unmount()
 
     // Sanity-pin the online side first so "both blank" can never pass.
+    expect(onlineDigest.removeLink).toBe(true)
     expect(onlineDigest.activeStatus).toBe('want to learn')
     expect(onlineDigest.statusTint).toBe('tunebook-status-want-to-learn')
     expect(onlineDigest.instrumentExpand).toBe('View By Instrument')
@@ -1038,6 +1253,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     await waitFor(() =>
       expect(offline.container.querySelector('.modal-tune-title')?.textContent).toContain('Cooleys (mine)')
     )
+    await openConfig(offline.container)
     expect(digest(offline.container)).toEqual(onlineDigest)
   })
 })

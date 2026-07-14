@@ -32,6 +32,7 @@ class PersonTune:
         notes: Optional[str] = None,
         setting_id: Optional[int] = None,
         name_alias: Optional[str] = None,
+        key: Optional[str] = None,
         created_date: Optional[datetime] = None,
         last_modified_date: Optional[datetime] = None
     ):
@@ -44,6 +45,8 @@ class PersonTune:
         self.notes = notes
         self.setting_id = setting_id
         self.name_alias = name_alias
+        # "I play this in ..." (spec 037). Label only; NULL = no preference.
+        self.key = key
         self.created_date = created_date
         self.last_modified_date = last_modified_date
 
@@ -289,6 +292,7 @@ class PersonTune:
                     notes = %s,
                     setting_id = %s,
                     name_alias = %s,
+                    key = %s,
                     last_modified_date = (NOW() AT TIME ZONE 'UTC'),
                     last_modified_user_id = %s
                 WHERE person_tune_id = %s
@@ -299,6 +303,7 @@ class PersonTune:
                 self.notes,
                 self.setting_id,
                 self.name_alias,
+                self.key,
                 user_id,
                 self.person_tune_id
             ))
@@ -337,9 +342,10 @@ class PersonTune:
                 cur.execute("""
                     INSERT INTO person_tune (
                         person_id, tune_id, learn_status, heard_count,
-                        learned_date, notes, setting_id, name_alias, created_date, last_modified_date,
+                        learned_date, notes, setting_id, name_alias, key,
+                        created_date, last_modified_date,
                         created_by_user_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
                              (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC'), %s)
                     RETURNING person_tune_id, created_date, last_modified_date
                 """, (
@@ -351,27 +357,29 @@ class PersonTune:
                     self.notes,
                     self.setting_id,
                     self.name_alias,
+                    self.key,
                     user_id
                 ))
-                
+
                 result = cur.fetchone()
                 self.person_tune_id = result[0]
                 self.created_date = result[1]
                 self.last_modified_date = result[2]
-                
+
                 # Log INSERT to history
                 cur.execute("""
                     INSERT INTO person_tune_history (
                         person_tune_id, person_id, tune_id, learn_status,
                         heard_count, learned_date, notes,
-                        setting_id, name_alias,
+                        setting_id, name_alias, key,
                         operation, changed_by_user_id, changed_at, created_date
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                              (NOW() AT TIME ZONE 'UTC'), %s)
                 """, (
                     self.person_tune_id, self.person_id, self.tune_id,
                     self.learn_status, self.heard_count,
                     self.learned_date, self.notes, self.setting_id, self.name_alias,
+                    self.key,
                     'INSERT', user_id,
                     self.created_date
                 ))
@@ -406,7 +414,7 @@ class PersonTune:
             cur.execute("""
                 SELECT person_tune_id, person_id, tune_id, learn_status,
                        heard_count, learned_date, notes,
-                       setting_id, name_alias,
+                       setting_id, name_alias, key,
                        created_date, last_modified_date
                 FROM person_tune
                 WHERE person_tune_id = %s
@@ -424,8 +432,9 @@ class PersonTune:
                     notes=row[6],
                     setting_id=row[7],
                     name_alias=row[8],
-                    created_date=row[9],
-                    last_modified_date=row[10]
+                    key=row[9],
+                    created_date=row[10],
+                    last_modified_date=row[11]
                 )
             return None
             
@@ -450,7 +459,7 @@ class PersonTune:
             cur.execute("""
                 SELECT person_tune_id, person_id, tune_id, learn_status,
                        heard_count, learned_date, notes,
-                       setting_id, name_alias,
+                       setting_id, name_alias, key,
                        created_date, last_modified_date
                 FROM person_tune
                 WHERE person_id = %s AND tune_id = %s
@@ -468,8 +477,9 @@ class PersonTune:
                     notes=row[6],
                     setting_id=row[7],
                     name_alias=row[8],
-                    created_date=row[9],
-                    last_modified_date=row[10]
+                    key=row[9],
+                    created_date=row[10],
+                    last_modified_date=row[11]
                 )
             return None
             
@@ -503,7 +513,7 @@ class PersonTune:
             query = """
                 SELECT person_tune_id, person_id, tune_id, learn_status,
                        heard_count, learned_date, notes,
-                       setting_id, name_alias,
+                       setting_id, name_alias, key,
                        created_date, last_modified_date
                 FROM person_tune
                 WHERE person_id = %s
@@ -538,8 +548,9 @@ class PersonTune:
                     notes=row[6],
                     setting_id=row[7],
                     name_alias=row[8],
-                    created_date=row[9],
-                    last_modified_date=row[10]
+                    key=row[9],
+                    created_date=row[10],
+                    last_modified_date=row[11]
                 )
                 for row in rows
             ]
@@ -604,6 +615,7 @@ class PersonTune:
             'notes': self.notes,
             'setting_id': self.setting_id,
             'name_alias': self.name_alias,
+            'key': self.key,
             'created_date': self.created_date.isoformat() if self.created_date else None,
             'last_modified_date': self.last_modified_date.isoformat() if self.last_modified_date else None
         }
@@ -614,7 +626,8 @@ class PersonTune:
             f"person_id={self.person_id}, tune_id={self.tune_id}, "
             f"learn_status='{self.learn_status}', "
             f"heard_count={self.heard_count}, "
-            f"setting_id={self.setting_id}, name_alias='{self.name_alias}')"
+            f"setting_id={self.setting_id}, name_alias='{self.name_alias}', "
+            f"key='{self.key}')"
         )
 
     def __eq__(self, other) -> bool:
@@ -629,5 +642,6 @@ class PersonTune:
             self.learned_date == other.learned_date and
             self.notes == other.notes and
             self.setting_id == other.setting_id and
-            self.name_alias == other.name_alias
+            self.name_alias == other.name_alias and
+            self.key == other.key
         )

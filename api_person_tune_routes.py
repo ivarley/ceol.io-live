@@ -517,6 +517,7 @@ def update_person_tune(person_tune_id):
         - notes (str): Notes about the tune (empty string clears notes)
         - setting_id (int): thesession.org setting ID (null/empty string clears)
         - name_alias (str): Custom name/alias for the tune (null/empty string clears)
+        - key (str): "I play this in ..." (null/empty string clears) — spec 037
         - heard_count (int): Heard count (must be >= 0)
 
     Returns:
@@ -535,6 +536,7 @@ def update_person_tune(person_tune_id):
         notes = data.get('notes') if 'notes' in data else UNSET
         setting_id = data.get('setting_id') if 'setting_id' in data else UNSET
         name_alias = data.get('name_alias') if 'name_alias' in data else UNSET
+        key = data.get('key') if 'key' in data else UNSET
         heard_count = data.get('heard_count') if 'heard_count' in data else UNSET
 
         # Validate setting_id if provided
@@ -577,6 +579,10 @@ def update_person_tune(person_tune_id):
         if notes == '':
             notes = None
 
+        # Empty string clears the key ("no preference — whatever the setting says")
+        if key == '':
+            key = None
+
         user_id = current_user.user_id if hasattr(current_user, 'user_id') else None
 
         # Update the person_tune
@@ -586,6 +592,7 @@ def update_person_tune(person_tune_id):
             notes=notes,
             setting_id=setting_id,
             name_alias=name_alias,
+            key=key,
             heard_count=heard_count,
             user_id=user_id
         )
@@ -1277,7 +1284,7 @@ def get_offline_bundle():
                 """
                 SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
                        pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
-                       pt.setting_id, pt.learned_date,
+                       pt.setting_id, pt.key, pt.learned_date,
                        t.tunebook_count_cached, t.tunebook_count_cached_date,
                        ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
                        gp.n AS global_play_count, plc.n AS person_list_count
@@ -1317,6 +1324,9 @@ def get_offline_bundle():
                     "notes": r["notes"],
                     "name_alias": r["name_alias"],
                     "setting_id": r["setting_id"],
+                    # "I play this in ..." (spec 037). pt.key, not ts.key — the latter is
+                    # the setting's own key and is aliased to setting_key below.
+                    "key": r["key"],
                     "learned_date": r["learned_date"].isoformat() if r["learned_date"] else None,
                     "tunebook_count": r["tunebook_count_cached"] or 0,
                     "tunebook_count_cached_date": (
@@ -1396,9 +1406,10 @@ def get_my_sessions():
     """
     GET /api/my-sessions?limit=25
 
-    The current user's sessions (path + name), most-recently-active first. Used to
-    background-prefetch session pages so they're available offline without having to
-    visit each one.
+    The current user's sessions (path + name + relationship), most-recently-active
+    first. Used to background-prefetch session pages so they're available offline
+    without having to visit each one, and by the tune drawer's "At a different
+    session ..." picker (spec 037).
     """
     try:
         try:
@@ -1412,20 +1423,23 @@ def get_my_sessions():
             # Deliberately NOT filtered to relationship='member' (spec 033): a
             # visitor legitimately revisits the session pages of sessions they've
             # been to, and prefetching them for offline is a feature, not a leak.
+            # `relationship` is returned so a caller that DOES want only real
+            # memberships (the 037 session picker) can filter without a second
+            # endpoint.
             cur.execute(
                 """
-                SELECT s.path, s.name, MAX(si.date) AS last_date
+                SELECT s.path, s.name, sp.relationship, MAX(si.date) AS last_date
                 FROM session_person sp
                 JOIN session s ON sp.session_id = s.session_id
                 LEFT JOIN session_instance si ON si.session_id = s.session_id
                 WHERE sp.person_id = %s
-                GROUP BY s.path, s.name
+                GROUP BY s.path, s.name, sp.relationship
                 ORDER BY MAX(si.date) DESC NULLS LAST, s.name
                 LIMIT %s
                 """,
                 (person_id, limit),
             )
-            sessions = [{"path": r[0], "name": r[1]} for r in cur.fetchall()]
+            sessions = [{"path": r[0], "name": r[1], "relationship": r[2]} for r in cur.fetchall()]
             return jsonify({"success": True, "sessions": sessions, "count": len(sessions)}), 200
         finally:
             conn.close()

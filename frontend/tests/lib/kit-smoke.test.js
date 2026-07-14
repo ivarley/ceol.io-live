@@ -18,6 +18,7 @@ const COMPONENTS = {
   Seg: { options: [{ id: 'a', label: 'A' }] },
   // Composed from the kit rather than a primitive, but shared app-wide (spec 034).
   PersonPicker: { open: false, people: [] },
+  SessionPicker: { open: false, sessions: [] },
 }
 
 describe('kit exports', () => {

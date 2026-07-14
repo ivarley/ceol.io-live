@@ -244,6 +244,7 @@ class PersonTuneService:
         notes=UNSET,
         setting_id=UNSET,
         name_alias=UNSET,
+        key=UNSET,
         heard_count=UNSET,
         user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
@@ -256,6 +257,7 @@ class PersonTuneService:
             notes: New notes, or UNSET to skip (can be None to clear)
             setting_id: New thesession.org setting ID, or UNSET to skip (can be None to clear)
             name_alias: New custom name/alias, or UNSET to skip (can be None to clear)
+            key: New personal key, or UNSET to skip (can be None to clear)
             heard_count: New heard count, or UNSET to skip (must be >= 0 if provided)
             user_id: ID of user who made the change
 
@@ -289,6 +291,11 @@ class PersonTuneService:
             if name_alias is not UNSET and name_alias != person_tune.name_alias:
                 person_tune.name_alias = name_alias
                 changes_made.append("name_alias")
+
+            # Update key if provided (can be None to clear it)
+            if key is not UNSET and key != person_tune.key:
+                person_tune.key = key
+                changes_made.append("key")
 
             # Update heard_count if provided (must be >= 0)
             if heard_count is not UNSET:

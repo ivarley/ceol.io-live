@@ -1142,3 +1142,201 @@
 .fetch-setting-btn-loading {
     min-width: 70px; /* Prevent button from shrinking during loading */
 }
+
+/* ==========================================================================
+   Spec 037 — the restructured drawer
+   ========================================================================== */
+
+/* The "aka" line under the title. The title is the most personal name for the tune;
+   this names the next layer down that is meaningfully a DIFFERENT name. Usually absent. */
+.modal-tune-aka {
+    font-size: 12px;
+    color: var(--secondary-text, #888);
+    margin-top: 2px;
+    line-height: 1.35;
+}
+
+/* The title no longer opens anything, so it must not look like it does. */
+.modal-tune-title {
+    cursor: default;
+}
+
+/* You're looking at the session's setting, not yours. The link swaps the staff over and
+   back — a warning you can't act on is just an irritant. */
+.notation-mismatch {
+    margin-top: 9px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--secondary-text, #888);
+}
+.notation-mismatch-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--link-color, #4da6ff);
+    cursor: pointer;
+    text-decoration: underline;
+}
+.notation-mismatch-link:hover { color: var(--link-hover-color, #80c0ff); }
+
+/* The action row at the foot of the status block. Configure + View By Instrument cluster
+   left and wrap together (both expand more UI); Remove stays right and TOP-aligned, so it
+   holds the first line even when the left cluster wraps to two on a phone. */
+.tsc-action-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 11px;
+    border-top: 1px solid var(--border-color, #444);
+}
+.tsc-action-left {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    min-width: 0;
+}
+.tsc-action-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.tsc-action-link:hover {
+    color: var(--link-hover-color, #80c0ff);
+    text-decoration: underline;
+}
+.tsc-action-danger:hover { color: var(--danger, #e85a5a); }
+.tsc-caret {
+    display: inline-block;
+    font-size: 9px;
+    margin-right: 4px;
+}
+/* The expand link sits in the row now, not centred under the roll-up. */
+.tsc-action-row .tsc-expand-link {
+    align-self: auto;
+    font-size: 12.5px;
+    opacity: 1;
+    text-decoration: none;
+}
+.tsc-action-row .tsc-expand-link:hover { text-decoration: underline; }
+
+/* Personal config, expanded inside the status block. */
+.tsc-config-body {
+    margin-top: 12px;
+    background: transparent;
+    border: none;
+    border-top: 1px dashed var(--border-color, #444);
+    border-radius: 0;
+    padding: 12px 0 0;
+}
+.tsc-config-body .notes-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 64px;
+    resize: vertical;
+}
+.tsc-config-body .modal-action-buttons {
+    justify-content: flex-end;
+    align-items: center;
+}
+.tsc-offline-hint {
+    margin-right: auto;
+    font-size: 11px;
+    color: var(--warning-text, #ffd700);
+}
+
+/* Stats: the canonical name and id, which used to sit above everything you actually
+   opened the drawer to see. */
+.stat-canonical {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color, #444);
+    font-size: 12px;
+    color: var(--text-muted, #888);
+}
+
+/* ---- The Session tab ---- */
+
+/* The droplist IS the heading. It names the session ("At The Cobblestone") and the list
+   continues the sentence downward ("… on Tue 8 Jul"), so no separate title is needed. */
+.sess-scope-row {
+    margin-bottom: 12px;
+}
+.sess-scope-row .configure-select {
+    width: 100%;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 9px 11px;
+}
+
+/* What the tab is mostly FOR: telling you where this tune has been. */
+.sess-context {
+    font-size: 13px;
+    color: var(--secondary-text, #888);
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+.sess-context-link,
+.sess-position {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--link-color, #4da6ff);
+    cursor: pointer;
+    text-decoration: underline;
+}
+.sess-context-link:hover,
+.sess-position:hover { color: var(--link-hover-color, #80c0ff); }
+.sess-position-sep {
+    margin-right: 6px;
+}
+.sess-context-empty {
+    font-style: italic;
+}
+
+/* Editing is the rarer errand on this tab, so the form waits until it's asked for. */
+.sess-edit-link {
+    display: inline-block;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    text-align: left;
+}
+.sess-edit-link:hover {
+    color: var(--link-hover-color, #80c0ff);
+    text-decoration: underline;
+}
+.sess-form-readonly .configure-value {
+    color: var(--text-color, #e0e0e0);
+}
+.sess-danger-foot {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color, #444);
+}
+
+/* Offline: the three override fields are read-only, and must LOOK it. Notes stays live
+   (set_notes is an offline op — a phone in a pub basement is exactly where someone types
+   a note about a tune).
+
+   Scoped to the inputs on purpose: .fetch-setting-btn is also `disabled` while it's
+   showing its ✓/⚠/✗ feedback, and dimming that would swallow the signal. */
+.configure-input:disabled,
+.configure-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--already-added-bg, #3a3a3a);
+}

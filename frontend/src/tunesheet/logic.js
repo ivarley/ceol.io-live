@@ -5,6 +5,7 @@
 // come from mylist.js (the single tested ES copy; static/js/tunebook_status.js is
 // its vanilla twin for the remaining non-Svelte pages).
 import { listStatus, NOT_ON_LIST } from '../mylist.js'
+import { pickAka } from './namematch.js'
 
 // Musical keys list (same order as the legacy modal's key selects)
 export const MUSICAL_KEYS = [
@@ -79,19 +80,154 @@ export function detailUrl(tuneId, scope) {
   return `/api/tunes/${tuneId}/detail${s ? `?${s}` : ''}`
 }
 
-/** Display name for the header, per derived mode. */
+/**
+ * The name chain, most-personal-first (spec 037).
+ *
+ * A NAME is a label, so the most personal one wins — I want to see a tune by the
+ * name I know it under, even when the session I'm looking at calls it something
+ * else. (A SETTING is the opposite: it's a record of what was actually played, so
+ * the most specific factual layer wins. That precedence lives in the serializer.)
+ *
+ * `name` is the instance's name_override and `alias` the session's; both are null
+ * outside a session scope, so this collapses to [mine, global] on /my-tunes.
+ */
+export function nameChain(tuneData) {
+  if (!tuneData) return []
+  const pts = tuneData.person_tune_status
+  return [(pts && pts.name_alias) || null, tuneData.name || null, tuneData.alias || null, tuneData.tune_name || null]
+}
+
+/** Display name for the header: the first name in the chain that exists. */
 export function getDisplayName(tuneData, mode) {
   if (!tuneData) return 'Unknown'
-  const pts = tuneData.person_tune_status
-  switch (mode) {
-    case 'my_tunes':
-      return (pts && pts.name_alias) || tuneData.tune_name || 'Unknown'
-    case 'session':
-    case 'session_instance':
-      return tuneData.alias || tuneData.tune_name || 'Unknown'
-    default:
-      return tuneData.tune_name || 'Unknown'
+  // Admin mode is untouched by 037 (see spec 036) — it names the canonical tune.
+  if (mode === 'admin') return tuneData.tune_name || 'Unknown'
+  return nameChain(tuneData).find((n) => n) || 'Unknown'
+}
+
+/**
+ * The `aka` subtitle: the next name BELOW the title that is meaningfully a different
+ * name (not just a different spelling of it). Exactly one, or null. So a tune I call
+ * "The Burren" that the world calls "Michael Creamer's" says so, while "Silver Spear"
+ * never earns "aka The Silver Spear".
+ */
+export function getAkaName(tuneData, mode) {
+  if (!tuneData || mode === 'admin') return null
+  return pickAka(nameChain(tuneData))
+}
+
+// --- The Session tab (spec 037) -------------------------------------------------
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** "Tue 8 Jul 2026" — parsed as local, not UTC, so the date never slips a day. */
+function formatInstanceDate(iso) {
+  const [y, m, d] = String(iso || '').split('-').map(Number)
+  if (!y || !m || !d) return String(iso || '')
+  const dt = new Date(y, m - 1, d)
+  return `${DAYS[dt.getDay()]} ${d} ${MONTHS[m - 1]} ${y}`
+}
+
+/** "2:00pm" from a "14:00:00" time. */
+function formatInstanceTime(t) {
+  if (!t) return ''
+  const [hRaw, min] = String(t).split(':')
+  const h = Number(hRaw)
+  if (Number.isNaN(h)) return ''
+  const suffix = h < 12 ? 'am' : 'pm'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${min || '00'}${suffix}`
+}
+
+/** The droplist's last row: re-scope the drawer to one of my other sessions. */
+export const OTHER_SESSION = '__other__'
+
+/**
+ * The Session tab's droplist. It reads as one sentence continued down the list:
+ *
+ *   At The Cobblestone
+ *   … on Tue 8 Jul 2026
+ *   … on Sat 14 Feb 2026 · Gus O'Connor's
+ *   At a different session …
+ *
+ * The first row is the session's own alias/setting/key; the rest are the instances
+ * this tune was actually played at (the only ones session_instance_tune can hold
+ * overrides for).
+ *
+ * Labelling an instance: the date, plus location_override when it's set — that's what
+ * tells two same-date instances apart at a festival, and it's how the session's Logs
+ * tab already labels them. The start time is appended ONLY to break a remaining tie,
+ * so the ordinary weekly session stays clean.
+ */
+export function sessionScopeOptions(playedInstances, sessionName) {
+  const options = [{ id: 'general', label: `At ${sessionName || 'this session'}`, instanceId: null }]
+  const instances = playedInstances || []
+
+  // Which labels would still collide once the date and venue are shown?
+  const counts = {}
+  for (const i of instances) {
+    const k = `${i.date}|${i.location_override || ''}`
+    counts[k] = (counts[k] || 0) + 1
   }
+
+  for (const i of instances) {
+    const parts = [formatInstanceDate(i.date)]
+    if (i.location_override) parts.push(i.location_override)
+    if (counts[`${i.date}|${i.location_override || ''}`] > 1) {
+      const t = formatInstanceTime(i.start_time)
+      if (t) parts.push(t)
+    }
+    options.push({
+      id: String(i.session_instance_id),
+      label: `… on ${parts.join(' · ')}`,
+      instanceId: i.session_instance_id,
+    })
+  }
+
+  options.push({ id: OTHER_SESSION, label: 'At a different session …', instanceId: null })
+  return options
+}
+
+/**
+ * "Set 3, tune 2" — where this tune came round on a given night. Usually one entry;
+ * a tune played twice that night has two. Each links into the logger at that exact
+ * record via the same ?highlight=<session_instance_tune_id> deep link the History tab
+ * uses (the legacy /sessions/<path>/<instance> URL redirects beta users to the live
+ * screen, and deliberately drops ?tune=, which there would mean "append this tune").
+ */
+export function instancePositions(playedInstances, instanceId, sessionPath, tuneId) {
+  const inst = (playedInstances || []).find((i) => String(i.session_instance_id) === String(instanceId))
+  if (!inst) return []
+  return (inst.positions || []).map((p) => ({
+    label: `Set ${p.set_number}, tune ${p.position_in_set}`,
+    href: `/sessions/${sessionPath}/${inst.session_instance_id}?highlight=${p.session_instance_tune_id}&tune=${tuneId}`,
+  }))
+}
+
+/**
+ * Which droplist option to land on. The instance in scope when the drawer was opened
+ * from the live logger; else ?siid=; else ?date= (earliest instance that day, since a
+ * festival can run several on one date); else "In General".
+ */
+export function initialSessionScope(playedInstances, scopeInstanceId, search = '') {
+  const instances = playedInstances || []
+  const has = (id) => instances.some((i) => String(i.session_instance_id) === String(id))
+
+  if (scopeInstanceId != null && has(scopeInstanceId)) return String(scopeInstanceId)
+
+  const params = new URLSearchParams(search || '')
+  const siid = params.get('siid')
+  if (siid && has(siid)) return String(siid)
+
+  const date = params.get('date')
+  if (date) {
+    const onDate = instances
+      .filter((i) => i.date === date)
+      .sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')))
+    if (onDate.length) return String(onDate[0].session_instance_id)
+  }
+  return 'general'
 }
 
 /** Meter (time signature) for a tune type — used in the abctools ABC header. */
@@ -354,6 +490,7 @@ export function offlinePayload(cachedTune, ops, tuneId) {
             notes: t.notes || null,
             name_alias: t.name_alias || null,
             setting_id: t.setting_id || null,
+            key: t.key || null,
             instruments: t.instruments || [],
             instrument_status: t.instrument_status || {},
             session_play_count: t.session_play_count,
