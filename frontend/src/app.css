@@ -694,6 +694,14 @@ main {
   color: var(--muted); font-weight: 600; cursor: pointer;
 }
 .composer .done-btn:hover { color: var(--text); border-color: var(--muted); }
+/* deep-search escape while typing — takes over the End set / Done slot; accent blue
+   matches the search affordance it replaced in the dropdown */
+.composer .search-btn {
+  font: inherit; padding: 12px 18px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--accent); font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.composer .search-btn:hover { border-color: var(--accent); }
 
 .dock { position: relative; flex: 0 0 auto; padding: 0 16px 16px; background: var(--bg); }
 
@@ -885,17 +893,13 @@ main {
 }
 /* Log disabled while the field is empty — dimmed, not clickable */
 .composer > button:disabled { opacity: 0.4; cursor: default; }
-/* "Search …" footer in the type-ahead results (deep search also lives in the menu) */
-/* footer rows sit at the TOP of the column-reverse list, so the divider goes on their bottom */
-.results .result-deeper { color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
 /* "Log <text> as-is" — the unlinked escape shown while a placeholder is being disambiguated */
+/* footer rows sit at the TOP of the column-reverse list, so the divider goes on their bottom */
 .results .result-asis { color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); }
-/* The escape hatches pin to the dropdown's top edge, so they stay one tap away no matter
-   how many results are underneath (the rows scroll under them). The box-shadow paints
+/* The escape hatch pins to the dropdown's top edge, so it stays one tap away no matter
+   how many results are underneath (the rows scroll under it). The box-shadow paints
    over the container's 4px top padding strip that scrolled rows would otherwise peek
-   through; hover uses an opaque inset tint for the same reason. (Only one of the two
-   rows renders at a time, so they never stack.) */
-.results .result-deeper,
+   through; hover uses an opaque inset tint for the same reason. */
 .results .result-asis {
   position: sticky;
   top: 0;
@@ -903,7 +907,6 @@ main {
   background: var(--panel);
   box-shadow: 0 -4px 0 var(--panel);
 }
-.results .result-deeper:hover,
 .results .result-asis:hover {
   background: var(--panel);
   box-shadow: inset 0 0 0 999px rgba(79, 157, 255, 0.12), 0 -4px 0 var(--panel);
@@ -924,6 +927,13 @@ main {
 .composer-field { position: relative; flex: 1; min-width: 0; display: flex; }
 .composer-field input { flex: 1; padding-right: 34px; }
 .composer-field .input-spin { position: absolute; right: 12px; top: 50%; margin-top: -9px; pointer-events: none; }
+/* clear-× — same right-edge slot as the spinner (the input's padding-right reserves it) */
+.composer-field .input-clear {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 20px; line-height: 1; padding: 8px 12px;
+}
+.composer-field .input-clear:hover { color: var(--text); }
 /* input is read-only while a placeholder resolves (the text has moved into the row) */
 .composer input.locked { opacity: 0.6; cursor: default; }
 

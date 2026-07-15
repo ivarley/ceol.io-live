@@ -2931,7 +2931,7 @@
     // Cap the composer dropdown to the space actually visible above the composer.
     // Its CSS fallback (45vh) is measured against the LAYOUT viewport, which iOS
     // does NOT shrink for the keyboard — an uncapped dropdown can "fit" its own
-    // max-height yet have its top rows (the "Search …" escape) clipped by main's
+    // max-height yet have its top rows (the "Log as-is" escape) clipped by main's
     // overflow:hidden with no scrollbar to reach them.
     const composer = mainEl.querySelector('.composer')
     const topnav = mainEl.querySelector('.topnav')
@@ -3429,11 +3429,6 @@
           <li class="result-asis" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={logAsIs}>
             <span class="r-name">Log “{resolving.text}” as-is</span>
           </li>
-        {:else if editingId == null && (results.length || noMatch)}
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-          <li class="result-deeper" role="option" aria-selected="false" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>
-            <span class="r-name">🔍 Search …</span>
-          </li>
         {/if}
       </ul>
     {/if}
@@ -3503,11 +3498,19 @@
             } else if (e.key === 'Escape' && resolving) { e.preventDefault(); cancelResolving(true) }
           }}
         />
-        {#if searching}<span class="spinner input-spin"></span>{/if}
+        {#if searching}<span class="spinner input-spin"></span>{:else if input && !composerLocked}
+          <!-- clear-× shares the spinner's slot (only one shows at a time) -->
+          <button class="input-clear" type="button" title="Clear" aria-label="Clear entry" onmousedown={(e) => e.preventDefault()} onclick={clearEntry}>×</button>
+        {/if}
       </div>
       <button onmousedown={(e) => e.preventDefault()} onclick={commit} disabled={editingId == null && !composerLocked && !input.trim()}>{editingId != null ? 'Save' : 'Log'}</button>
       {#if editingId != null}
         <button class="endset" title="Cancel editing" onclick={cancelEdit}>Cancel</button>
+      {:else if input.trim() && !resolving}
+        <!-- Mid-search, End set / Done are useless (End set is a post-pick action; Done
+             leaves edit mode), so the slot becomes the deep-search escape instead of a
+             row pinned to the dropdown's top edge that could clip off-screen. -->
+        <button class="search-btn" title="Search deeper for this tune" onmousedown={(e) => e.preventDefault()} onclick={openDeep}>Search 🔍</button>
       {:else if activeSeam === 'end'}
         <!-- At the live end: open set -> close it (yellow "End set"); closed end with
              nothing selected -> the subtle grey "Done" leaves edit mode for read-only
