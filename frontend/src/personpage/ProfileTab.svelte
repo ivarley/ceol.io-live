@@ -699,8 +699,8 @@
 </div>
 
 <!-- Instrument config sheet (auto/manual + remove; changes save immediately,
-     so there is no Done — Cancel/scrim/Escape just dismiss) -->
-<Sheet bind:open={configOpen} title={configInstrument || ''}>
+     so the dismiss button is labeled Done — it, scrim, and Escape just dismiss) -->
+<Sheet bind:open={configOpen} title={configInstrument || ''} cancelLabel="Done">
   <div class="inst-config-body">
     <div class="form-check">
       <input
