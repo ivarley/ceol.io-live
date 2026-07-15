@@ -678,6 +678,14 @@
   const trackAttendance = $derived(config.trackAttendance !== false)
   const trackStarters = $derived(config.trackSetStarters !== false && trackAttendance)
 
+  // The roster's display_name is the FULL name (people lists show full names); the
+  // starter pill uses the server's abbreviated form ("First L"). Abbreviate the
+  // optimistic name the same way so it doesn't flicker when the server record echoes.
+  function starterAbbrev(p) {
+    if (!p.first_name) return p.display_name
+    return p.last_name ? `${p.first_name} ${p.last_name[0]}` : p.first_name
+  }
+
   // the set's recorded starter name (first tune that carries one)
   function setStarterName(seg) {
     for (const t of seg.tunes) if (t.started_by_name) return t.started_by_name
@@ -759,7 +767,7 @@
   function attributeTo(setId, person) {
     if (setId == null) return
     const seg = displaySegments.find((s) => s.tunes[0].session_instance_tune_id === setId)
-    if (seg) setStarter(seg, { person_id: person.person_id, display_name: person.display_name })
+    if (seg) setStarter(seg, person)
   }
 
   /**
@@ -806,7 +814,7 @@
     // The new person is checked in by the op. In starter mode, credit them with the set and
     // close -- that is the "a visitor shows up mid-tune" path, and it should cost one gesture.
     if (res && res.person && wasStarter) {
-      attributeTo(setId, { person_id: res.person.person_id, display_name: res.person.display_name })
+      attributeTo(setId, res.person)
       closePicker()
     }
   }
@@ -895,7 +903,7 @@
       byId.set(r.session_instance_tune_id, {
         ...r,
         started_by_person_id: personOrNull?.person_id ?? null,
-        started_by_name: personOrNull?.display_name ?? null,
+        started_by_name: personOrNull ? starterAbbrev(personOrNull) : null,
       })
     }
     const op_id = crypto.randomUUID()

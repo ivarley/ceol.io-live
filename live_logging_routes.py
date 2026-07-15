@@ -91,7 +91,7 @@ _RECORD_COLS = (
     "sit.session_instance_tune_id, sit.tune_id, sit.name, sit.order_position, sit.record_type, "
     "sit.source, sit.confidence, sit.deleted, sit.started_by_person_id, sit.key_override, "
     "sit.setting_override, t.tune_type, sit.inserted_timestamp, cp.first_name, "
-    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name"
+    "sp.first_name, sp.last_name, cp.person_id, slc.color, st.alias, t.name, cp.last_name"
 )
 # LEFT JOIN tune (type/name), the creating user -> person (who logged it, for the per-set
 # "Logged by X · time" tray AND the per-row logger color tint), the started-by person
@@ -136,7 +136,7 @@ def _record_to_dict(row):
         # ISO string (not a datetime) so the event payload is json.dumps-able and
         # the client can new Date() it.
         "logged_at": row[12].isoformat() if row[12] else None,
-        "logged_by": row[13],
+        "logged_by": _display_name(row[13], row[20]),
         "started_by_name": _display_name(row[14], row[15]),
         "logged_by_person_id": row[16],
         # Persisted palette index of the logger's per-session color (NULL if they have
@@ -185,7 +185,7 @@ def emit_change_tune(cur, session_instance_id, record_id, user_id):
         "record": record,
         "actor": {
             "person_id": getattr(current_user, "person_id", None),
-            "name": (getattr(current_user, "first_name", "") or ""),
+            "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
         },
     }
     cur.execute(
@@ -1246,7 +1246,7 @@ def live_op(session_instance_id):
         # person is what the UI shows.
         payload["actor"] = {
             "person_id": getattr(current_user, "person_id", None),
-            "name": (getattr(current_user, "first_name", "") or ""),
+            "name": _display_name(getattr(current_user, "first_name", None), getattr(current_user, "last_name", None)) or "",
         }
 
         # A handler may emit a different event type than the client requested
@@ -1423,7 +1423,7 @@ def live_people(session_instance_id):
                     "person_id": pid,
                     "first_name": first,
                     "last_name": last,
-                    "display_name": _display_name(first, last) or f"#{pid}",
+                    "display_name": f"{first or ''} {last or ''}".strip() or f"#{pid}",
                     "instruments": [],
                     "relationship": "visitor",
                     "confirmed": False,
@@ -1433,8 +1433,11 @@ def live_people(session_instance_id):
                     "recent_attendance_count": 0,
                 })
 
+        # Full names here on purpose: since 034/039 the People features are gated by
+        # confirmation + per-session flags, so the picker no longer soft-privatizes to
+        # "First L". Attribution surfaces (started_by_name / logged_by) still abbreviate.
         for pp in people:
-            pp["display_name"] = _display_name(pp["first_name"], pp["last_name"]) or f"#{pp['person_id']}"
+            pp["display_name"] = pp["display_name"] or f"#{pp['person_id']}"
 
         return jsonify({"success": True, "people": _disambiguate(people)})
     finally:
