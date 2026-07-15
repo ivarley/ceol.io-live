@@ -23,29 +23,30 @@ class TestSyncInterface:
         assert response.status_code == 302
         assert '/login' in response.location
     
-    def test_sync_page_renders_with_existing_user_id(self, client, authenticated_user, db_conn, db_cursor):
-        """Test sync page renders with existing thesession_user_id."""
+    def test_sync_page_redirects_into_add_pane(self, client, authenticated_user):
+        """The legacy sync page is folded away: it redirects to My Tunes with the
+        add pane auto-opened in its sync view (?add=1&sync=1)."""
         with authenticated_user:
-            # Set thesession_user_id for the test user
+            response = client.get('/my-tunes/sync')
+            assert response.status_code == 302
+            assert '/my-tunes' in response.location
+            assert 'add=1' in response.location
+            assert 'sync=1' in response.location
+
+    def test_my_tunes_payload_carries_saved_thesession_user_id(self, client, authenticated_user, db_conn, db_cursor):
+        """The saved thesession_user_id rides the my-tunes payload so the pane's
+        sync view can prefill it."""
+        with authenticated_user:
             db_cursor.execute("""
                 UPDATE person
                 SET thesession_user_id = 12345
                 WHERE person_id = %s
             """, (authenticated_user.person_id,))
             db_conn.commit()
-            
-            response = client.get('/my-tunes/sync')
+
+            response = client.get('/api/my-tunes')
             assert response.status_code == 200
-            assert b'Sync from TheSession.org' in response.data
-            assert b'12345' in response.data
-    
-    def test_sync_page_renders_without_user_id(self, client, authenticated_user):
-        """Test sync page renders when user has no thesession_user_id."""
-        with authenticated_user:
-            response = client.get('/my-tunes/sync')
-            assert response.status_code == 200
-            assert b'Sync from TheSession.org' in response.data
-            assert b'Enter your thesession.org user ID' in response.data
+            assert response.get_json()['thesession_user_id'] == 12345
     
     def test_update_profile_thesession_user_id(self, client, authenticated_user, db_conn, db_cursor):
         """Test updating thesession_user_id via API."""

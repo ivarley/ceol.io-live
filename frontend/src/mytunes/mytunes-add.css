@@ -318,3 +318,63 @@
   background: var(--accent); border: none; border-radius: 8px; color: #fff;
 }
 .mt-add-pane .mt-submit:disabled { opacity: 0.6; cursor: default; }
+
+/* ---------- tunebook sync (the folded-away /my-tunes/sync page) ---------- */
+/* The search phase's quiet pointer to it: one muted line under the header. */
+.mt-add-pane .mt-sync-link {
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  margin: 0 14px 8px; padding: 0; background: transparent; border: none; color: var(--muted);
+}
+.mt-add-pane .mt-sync-link span { color: var(--link-color, var(--accent)); font-weight: 600; text-decoration: underline; }
+.mt-add-pane .mt-sync-blurb { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 0; }
+.mt-add-pane .mt-sync-saved {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+}
+.mt-add-pane .mt-sync-saved-id { font-weight: 700; color: var(--accent); }
+.mt-add-pane .mt-sync-clear {
+  margin-left: auto; font: inherit; font-size: 15px; line-height: 1; padding: 4px 8px; cursor: pointer;
+  background: transparent; border: none; border-radius: 6px; color: var(--muted);
+}
+.mt-add-pane .mt-sync-clear:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.mt-add-pane .mt-sync-save { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+.mt-add-pane .mt-sync-progress { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+.mt-add-pane .mt-sync-bar {
+  height: 22px; border-radius: 6px; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--border);
+}
+.mt-add-pane .mt-sync-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--accent), var(--accent) 10px,
+    rgba(255, 255, 255, 0.3) 10px, rgba(255, 255, 255, 0.3) 20px
+  );
+  background-size: 28px 28px;
+  animation: mt-sync-stripes 1s linear infinite;
+}
+@keyframes mt-sync-stripes { to { background-position: 28px 0; } }
+@media (prefers-reduced-motion: reduce) { .mt-add-pane .mt-sync-bar-fill { animation: none; } }
+.mt-add-pane .mt-sync-status { font-size: 14px; text-align: center; color: var(--text); margin: 0; }
+.mt-add-pane .mt-sync-progress .mt-help { text-align: center; }
+.mt-add-pane .mt-sync-done { font-size: 17px; font-weight: 700; color: var(--text); padding-top: 4px; }
+.mt-add-pane .mt-sync-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mt-add-pane .mt-sync-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+}
+.mt-add-pane .mt-sync-stat-value { font-size: 26px; font-weight: 700; color: var(--accent); }
+.mt-add-pane .mt-sync-stat-label { font-size: 12px; text-align: center; color: var(--muted); }
+.mt-add-pane .mt-sync-errors {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.mt-add-pane .mt-sync-errors li {
+  font-size: 13px; padding: 7px 10px; color: var(--text);
+  background: var(--panel); border-left: 3px solid var(--danger, #dc3545); border-radius: 0 6px 6px 0;
+}
+.mt-add-pane .mt-sync-again {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+}

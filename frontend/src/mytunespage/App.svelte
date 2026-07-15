@@ -36,12 +36,18 @@
   // strips the one-shot params) so a refresh after opening doesn't reopen.
   const autoOpenAdd = new URLSearchParams(window.location.search).get('add') === '1'
   const autoOpenAddQuery = (new URLSearchParams(window.location.search).get('q') || '').trim()
+  // /my-tunes?add=1&sync=1 — the folded-away /my-tunes/sync page's redirect target:
+  // open the add pane straight into its tunebook-sync view.
+  const autoOpenSync = new URLSearchParams(window.location.search).get('sync') === '1'
   let filters = $state(initial.filters)
   let sort = $state(initial.sort)
   let rawSearch = $state(initial.filters.search)
 
   let allTunes = $state([])
   let instruments = $state([])
+  // Saved thesession.org member ID (prefills the add pane's sync view); refreshed
+  // alongside the tune list so a first sync's saved ID sticks for the next open.
+  let thesessionUserId = $state(pageData?.thesession_user_id ?? null)
   let fullTunesLoaded = $state(false) // suppresses no-results/count until the list is complete
   let fetchingMore = $state(false)
   let loadFailed = $state(false)
@@ -86,6 +92,7 @@
     return fetchAllTunes(sortParam())
       .then((d) => {
         loadFailed = false
+        if (d.thesession_user_id !== undefined) thesessionUserId = d.thesession_user_id
         return adopt(d.tunes, d.instruments, true)
       })
       .catch(() => {
@@ -343,12 +350,17 @@
 
   // ---- add pane (bundled-in AddTuneApp; formerly window.MyTunesAddPane) ---------
   let addPane = $state(null)
-  function openAddPane(query) {
+  function openAddPane(query, sync = false) {
     addPane.open({
       query,
+      sync,
       instruments,
+      thesessionUserId,
       onAdded: (tuneId, name) => afterPaneAdd(tuneId, name, false),
       onAlready: (tuneId, name) => afterPaneAdd(tuneId, name, true),
+      // Tunebook sync (the pane's sync view): refresh the list — and the saved
+      // thesession ID a first sync may have just stored — while results show.
+      onSynced: () => loadTunes(),
     })
   }
   function handleAddTuneClick(event) {
@@ -462,7 +474,7 @@
     if (autoOpenAdd) {
       const expectInstruments = !!(pageData && pageData.instruments && pageData.instruments.length)
       const openWhenReady = (n) => {
-        if (!expectInstruments || instruments.length || n >= 20) openAddPane(autoOpenAddQuery)
+        if (!expectInstruments || instruments.length || n >= 20) openAddPane(autoOpenAddQuery, autoOpenSync)
         else setTimeout(() => openWhenReady(n + 1), 50)
       }
       openWhenReady(0)
@@ -538,9 +550,6 @@
           </svg>
         </a>
       </h1>
-      <div class="page-actions">
-        <a href="/my-tunes/sync" class="btn btn-secondary sync-btn">Sync With TheSession.org</a>
-      </div>
     </div>
 
     <div class="filters-container">

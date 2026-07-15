@@ -73,7 +73,10 @@ CSS into the bundles (as `my_tunes.html` already does) is a known follow-up.
 The legacy fallback add pages (`my_tunes_add.html`, `session_tune_add.html`) are
 deleted: `/my-tunes/add` and `/sessions/<path>/tunes/add` now redirect to their
 modern Svelte surfaces with the add pane auto-opened (`?add=1[&q=]` — see
-[Svelte Pages](svelte-pages.md)).
+[Svelte Pages](svelte-pages.md)). Likewise `my_tunes_sync.html` is deleted:
+`/my-tunes/sync` redirects to `/my-tunes?add=1&sync=1`, which opens the add
+pane straight into its tunebook-sync view (`SyncPane.svelte`; the search phase
+links to it under the pane header).
 
 ## Header
 

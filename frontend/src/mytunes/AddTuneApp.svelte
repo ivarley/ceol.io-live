@@ -8,6 +8,7 @@
   import { Chip, Seg } from '../lib/index.js'
   import TuneSearch from '../TuneSearch.svelte'
   import Incipit from '../Incipit.svelte'
+  import SyncPane from './SyncPane.svelte'
   import { createPaneState } from './pane.svelte.js'
 
   // Personal flavor of the live search API (same request/response shapes).
@@ -20,6 +21,8 @@
 
   const pane = createPaneState()
   let picked = $state(null) // null = search phase; else {tune_id?, thesession_id?, name, tune_type, ...}
+  let syncMode = $state(false) // tunebook-sync view (the folded-away /my-tunes/sync page)
+  let thesessionUserId = $state(null) // saved thesession.org member ID, from the page payload
   let instruments = $state([]) // the person's instruments [{instrument, is_auto}], from the page
   let initialQuery = $state('')
   let history = $state([]) // search recall (MRU), kept across open/close for the page's lifetime
@@ -39,15 +42,19 @@
   let onAdded = () => {}
   let onAlready = () => {}
   let onClosed = () => {}
+  let onSynced = () => {}
 
   export function open(opts = {}) {
     instruments = opts.instruments || []
     initialQuery = opts.query || ''
+    thesessionUserId = opts.thesessionUserId ?? null
     onAdded = opts.onAdded || (() => {})
     onAlready = opts.onAlready || (() => {})
     onClosed = opts.onClosed || (() => {})
+    onSynced = opts.onSynced || (() => {})
     resetConfigPhase()
     picked = null
+    syncMode = !!opts.sync // open straight into the sync view (?sync=1 landing)
     pane.open()
   }
 
@@ -55,6 +62,7 @@
     const cb = onClosed
     pane.close(() => {
       picked = null
+      syncMode = false
       cb()
     })
   }
@@ -252,7 +260,14 @@
 {#if pane.visible}
   <div class="mt-add-backdrop" class:mt-open={pane.shown} onclick={close} aria-hidden="true"></div>
   <div class="mt-add-pane" class:mt-open={pane.shown} role="dialog" aria-label="Add a tune to My Tunes">
-    {#if !picked}
+    {#if syncMode}
+      <SyncPane
+        {thesessionUserId}
+        onBack={() => (syncMode = false)}
+        onClose={close}
+        {onSynced}
+      />
+    {:else if !picked}
       <TuneSearch
         {config}
         variant="modal"
@@ -265,7 +280,14 @@
         onRemember={remember}
         onAdd={pick}
         onClose={close}
-      />
+      >
+        {#snippet notice()}
+          <!-- The folded-away sync page's new home: quiet one-liner, search stays primary. -->
+          <button class="mt-sync-link" onclick={() => (syncMode = true)}>
+            Have a tunebook on thesession.org? <span>Sync it here</span>
+          </button>
+        {/snippet}
+      </TuneSearch>
     {:else}
       <div class="deep-head">
         <button class="mt-back" onclick={backToSearch} aria-label="Back to search">‹</button>

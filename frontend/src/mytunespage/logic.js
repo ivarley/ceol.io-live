@@ -313,6 +313,7 @@ export function cycleInstrumentOverride(tune, inst, next) {
 // cap (the legacy page silently truncated at 2000 — this is the fix).
 export async function fetchAllTunes(sortParam) {
   let instruments = null
+  let thesessionUserId = null
   const tunes = []
   for (let page = 1; ; page++) {
     const res = await fetch(
@@ -321,9 +322,12 @@ export async function fetchAllTunes(sortParam) {
     )
     if (!res.ok) throw new Error('my-tunes failed: ' + res.status)
     const j = await res.json()
-    if (page === 1) instruments = j.instruments || []
+    if (page === 1) {
+      instruments = j.instruments || []
+      thesessionUserId = j.thesession_user_id ?? null
+    }
     tunes.push(...(j.tunes || []))
     if (!j.pagination || !j.pagination.has_next) break
   }
-  return { tunes, instruments }
+  return { tunes, instruments, thesession_user_id: thesessionUserId }
 }

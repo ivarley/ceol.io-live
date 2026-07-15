@@ -62,7 +62,12 @@ Plus three non-page bundles:
   auto-opens the pane on mount (`?q` prefills its deep search) and the params
   are stripped via `replaceState` so refresh doesn't reopen. Offline, the
   My Tunes pane's deep search falls back to the `CeolOffline` bundle mirror
-  (the parity the legacy page had).
+  (the parity the legacy page had). The My Tunes pane also hosts the tunebook
+  sync (`SyncPane.svelte`): the search phase links to it under the header
+  (a quiet one-liner — sync is a rare, roughly-once action, so it doesn't get
+  a tab), and the folded-away `/my-tunes/sync` page 302s to
+  `/my-tunes?add=1&sync=1`, which opens the pane straight into it. The saved
+  `thesession_user_id` rides the my-tunes payload to prefill the form.
 
 ## What stays Jinja
 

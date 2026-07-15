@@ -24,6 +24,7 @@
     dimOnList = false, // dim results already on the person's list (My Tunes add pane)
     dimInSession = false, // dim results already in the session's repertoire (session-tunes add pane)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
+    notice = null, // optional snippet rendered between the header and the search field
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
     onClose = () => {},
@@ -359,6 +360,7 @@
     <button class="deep-done" onclick={onClose}>Done</button>
   </div>
 {/if}
+{#if notice}{@render notice()}{/if}
 <div class="deep-field-row">
   <div class="deep-field-wrap">
     <input

@@ -43,17 +43,13 @@ class TestMobileAssets:
             assert response.status_code == 302
             assert response.location == '/my-tunes?add=1'
 
-    def test_sync_has_mobile_assets(self, client, authenticated_user):
-        """Test that sync page loads mobile CSS and JS."""
+    def test_sync_redirects_to_pane(self, client, authenticated_user):
+        """The legacy sync page is folded away: /my-tunes/sync redirects to the
+        My Tunes page with the add pane auto-opened in its sync view."""
         with authenticated_user:
-            response = client.get('/my-tunes/sync')
-            assert response.status_code == 200
-            
-            # Check for mobile CSS
-            assert b'my_tunes_mobile.css' in response.data
-            
-            # Check for mobile JavaScript
-            assert b'my_tunes_mobile.js' in response.data
+            response = client.get('/my-tunes/sync', follow_redirects=False)
+            assert response.status_code == 302
+            assert response.location == '/my-tunes?add=1&sync=1'
 
 
 class TestMobileCSSFeatures:

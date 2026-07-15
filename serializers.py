@@ -1135,12 +1135,17 @@ def build_my_tunes_payload(
         per_page=per_page,
     )
     total_pages = (total_count + per_page - 1) // per_page
+    cur = conn.cursor()
+    cur.execute("SELECT thesession_user_id FROM person WHERE person_id = %s", (person_id,))
+    row = cur.fetchone()
     return {
         "success": True,
         "tunes": tunes,
         # The person's instruments + auto/manual flags, so the client can resolve
         # per-instrument status alongside each tune's sparse instrument_status overrides.
         "instruments": load_person_instruments(conn, person_id),
+        # The saved thesession.org member ID, prefilling the add pane's sync view.
+        "thesession_user_id": row[0] if row else None,
         "pagination": {
             "page": page,
             "per_page": per_page,
