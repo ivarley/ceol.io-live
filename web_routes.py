@@ -3396,7 +3396,9 @@ def live_logging_screen(session_instance_id):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT s.path, s.session_id, si.date FROM session_instance si
+            SELECT s.path, s.session_id, si.date,
+                   s.track_attendance, s.track_set_starters
+            FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -3405,7 +3407,7 @@ def live_logging_screen(session_instance_id):
         row = cur.fetchone()
         if not row:
             return render_template("error.html", error_message="Session instance not found"), 404
-        session_path, session_id, instance_date = row
+        session_path, session_id, instance_date, track_attendance, track_set_starters = row
     finally:
         conn.close()
 
@@ -3422,6 +3424,12 @@ def live_logging_screen(session_instance_id):
         instance_date=instance_date.isoformat() if instance_date else None,
         session_path=session_path,
         streaming_base_url=streaming_base_url,
+        # Per-session people-tracking flags (spec 039). Off => the attendance header /
+        # check-in picker (track_attendance) and the set-starter pills / picker
+        # (track_set_starters) are suppressed. Presence, "logged by", and typing are NOT
+        # gated by these — that's attribution of who's actively logging.
+        track_attendance=bool(track_attendance),
+        track_set_starters=bool(track_set_starters),
         # The template has always referenced this, but the route never passed it -- so the
         # create-person form's instrument checkboxes rendered empty.
         canonical_instruments=CANONICAL_INSTRUMENTS,

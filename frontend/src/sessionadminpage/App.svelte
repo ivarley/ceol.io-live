@@ -85,7 +85,7 @@
 
   <!-- People Tab -->
   <div class="tab-pane fade {activeTab === 'people' ? 'show active' : ''}" id="people" role="tabpanel">
-    <PeopleAdminTab {sessionPath} load={activeTab === 'people'} />
+    <PeopleAdminTab {sessionPath} load={activeTab === 'people'} trackAttendance={session.track_attendance !== false} />
   </div>
 
   <!-- Logs Tab -->

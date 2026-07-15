@@ -1054,3 +1054,58 @@ def test_restore_tunes_only_flips_tombstones(client, authenticated_user, live_in
     assert res["success"] is True
     assert [r["session_instance_tune_id"] for r in res["records"]] == [ids["mvA"]]
     assert _shape(db_cursor, inst) == ["mvA", "mvB"]
+
+
+# --- People-tracking flags (spec 039) -------------------------------------------
+
+def _set_flags(db_cursor, session_id, *, attendance, starters):
+    """Flip a session's people-tracking flags. The op endpoint reads its OWN committed
+    connection, so this must commit — db_cursor is READ COMMITTED and the fixture cleans
+    the session up afterward regardless of flag state."""
+    db_cursor.execute(
+        "UPDATE session SET track_attendance = %s, track_set_starters = %s WHERE session_id = %s",
+        (attendance, starters, session_id),
+    )
+    db_cursor.connection.commit()
+
+
+def test_attendance_ops_refused_when_attendance_off(client, authenticated_user, live_instance, db_cursor):
+    """A stale client, a queued offline op, or a direct POST must not slip a check-in into
+    a session that has turned attendance off — the op is refused, not merely UI-hidden."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    _set_flags(db_cursor, sid, attendance=False, starters=False)
+    with authenticated_user as user:
+        resp, body = _op(client, inst, op_type="attendance_add", person_id=user.person_id)
+    assert resp.status_code == 200  # the endpoint answers; the OP is rejected
+    assert body["success"] is False and body["rejected"] is True
+    assert body["reason"] == "people_tracking_off"
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_instance_person WHERE session_instance_id = %s", (inst,)
+    )
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_set_starter_refused_when_starters_off(client, authenticated_user, live_instance, db_cursor):
+    """Attendance may stay on while starters are off; the starter op is refused on its own."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    _set_flags(db_cursor, sid, attendance=True, starters=False)
+    with authenticated_user as user:
+        ids, _ = _seed_sets(client, inst, [["mvA", "mvB"]])
+        resp, body = _op(client, inst, op_type="attribute_set_starter",
+                         record_id=ids["mvA"], person_id=user.person_id)
+    assert resp.status_code == 200
+    assert body["success"] is False and body["reason"] == "people_tracking_off"
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_instance_tune WHERE session_instance_id = %s AND started_by_person_id IS NOT NULL",
+        (inst,),
+    )
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_people_ops_allowed_when_flags_on(client, authenticated_user, live_instance, db_cursor):
+    """The default (all flags on) still lets a check-in through — the gate is specific."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    _set_flags(db_cursor, sid, attendance=True, starters=True)
+    with authenticated_user as user:
+        resp, body = _op(client, inst, op_type="attendance_add", person_id=user.person_id)
+    assert resp.status_code == 200 and body["success"] is True

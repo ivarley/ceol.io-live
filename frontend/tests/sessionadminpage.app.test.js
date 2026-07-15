@@ -174,6 +174,11 @@ describe('session admin page view', () => {
         comments: 'Weekly session',
         auto_create_instances: true,
         auto_create_hours_ahead: 48,
+        // People-tracking flags (spec 039) travel with every details save; the fixture
+        // omits them, so they default on.
+        show_people_list: true,
+        track_attendance: true,
+        track_set_starters: true,
       })
       expect(window.showMessage).toHaveBeenCalledWith('Saved', 'success')
     })

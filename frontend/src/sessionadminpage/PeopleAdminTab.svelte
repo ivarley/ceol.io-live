@@ -8,7 +8,9 @@
   import { normalizeQuotes, parseLocalDate } from '../shared/parse.js'
   import { compareValues, personSortValue } from './logic.js'
 
-  let { sessionPath, load } = $props()
+  // trackAttendance (spec 039): membership management stays regardless, but the two
+  // attendance-derived columns are dropped when the session isn't tracking attendance.
+  let { sessionPath, load, trackAttendance = true } = $props()
 
   let allPeople = $state(null) // null until loaded
   let loadError = $state(null)
@@ -240,8 +242,10 @@
               <th style="cursor: pointer;" onclick={() => sortPeople('name')}>Name{indicator('name')}</th>
               <th style="cursor: pointer;" onclick={() => sortPeople('email')}>Email{indicator('email')}</th>
               <th class="person-flags-h" title="User · Confirmed · Member · Visitor · Archived · Session admin · System admin">Status</th>
-              <th style="cursor: pointer;" onclick={() => sortPeople('attendance')}>Attendance{indicator('attendance')}</th>
-              <th style="cursor: pointer;" onclick={() => sortPeople('last_attended')}>Last Attended{indicator('last_attended')}</th>
+              {#if trackAttendance}
+                <th style="cursor: pointer;" onclick={() => sortPeople('attendance')}>Attendance{indicator('attendance')}</th>
+                <th style="cursor: pointer;" onclick={() => sortPeople('last_attended')}>Last Attended{indicator('last_attended')}</th>
+              {/if}
             </tr>
           </thead>
           <tbody>
@@ -264,10 +268,12 @@
                 </td>
                 <td class="person-email">{#if person.email}{person.email}{:else}<span class="text-muted">No email</span>{/if}</td>
                 <td class="person-status"><PersonFlags {person} /></td>
-                <td class="person-attendance">{person.attendance_count} sessions</td>
-                <td class="person-last-attended">
-                  {#if person.last_attended}{parseLocalDate(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
-                </td>
+                {#if trackAttendance}
+                  <td class="person-attendance">{person.attendance_count} sessions</td>
+                  <td class="person-last-attended">
+                    {#if person.last_attended}{parseLocalDate(person.last_attended).toLocaleDateString()}{:else}<span class="text-muted">Never</span>{/if}
+                  </td>
+                {/if}
               </tr>
             {/each}
           </tbody>

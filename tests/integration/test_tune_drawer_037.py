@@ -297,10 +297,14 @@ class TestHistoryAttendedFilter:
         f = session_fixture
         with authenticated_user as user:
             # A second instance at the same session where the tune was also played, but
-            # which the viewer did NOT attend.
+            # which the viewer did NOT attend. Pick a specific other instance and make the
+            # premise true rather than assume it: seed data has this person attending most
+            # of the session's nights, and an unordered LIMIT 1 lands on a different one
+            # depending on physical row order.
             db_cursor.execute(
                 """SELECT session_instance_id FROM session_instance
-                   WHERE session_id = %s AND session_instance_id <> %s LIMIT 1""",
+                   WHERE session_id = %s AND session_instance_id <> %s
+                   ORDER BY session_instance_id LIMIT 1""",
                 (f["session_id"], f["instance_id"]),
             )
             other_instance = db_cursor.fetchone()[0]
@@ -310,6 +314,11 @@ class TestHistoryAttendedFilter:
                    VALUES (%s, %s, 'z', 'tune')""",
                 (other_instance, f["played_tune"]),
             )
+            # Ensure the viewer did NOT attend other_instance (seed data may say they did).
+            db_cursor.execute(
+                "DELETE FROM session_instance_person WHERE session_instance_id = %s AND person_id = %s",
+                (other_instance, user.person_id),
+            )
             db_conn.commit()
             self._attend(db_cursor, db_conn, f["instance_id"], user.person_id)
 
@@ -318,11 +327,13 @@ class TestHistoryAttendedFilter:
             unfiltered = {p["session_instance_id"] for p in json.loads(client.get(base).data)["play_instances"]}
             assert {f["instance_id"], other_instance} <= unfiltered
 
-            # ...and with the filter on, only the night I was actually at. Note this is a
-            # session filter AND an attended filter at once — the combination that the old
-            # mutually-exclusive scopes could not express.
+            # ...and with the filter on, the un-attended night drops while the attended one
+            # stays — a session filter AND an attended filter at once, the combination the
+            # old mutually-exclusive scopes couldn't express. (Asserted as the property, not
+            # an exact set: this person attends most of the session's other nights in seed
+            # data, so which else appear is noise; the point is other_instance is gone.)
             filtered = {p["session_instance_id"] for p in json.loads(client.get(base + "&attended=1").data)["play_instances"]}
-            assert filtered == {f["instance_id"]}
+            assert f["instance_id"] in filtered
             assert other_instance not in filtered
 
     def test_every_row_says_whether_i_was_there(

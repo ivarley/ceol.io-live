@@ -30,6 +30,10 @@
     currentUserId = null,
     initialPersonId = null,
     isSessionAdmin = false,
+    // Spec 039: when the session isn't tracking attendance the roster still shows (this
+    // is the members list, gated separately by show_people_list), but with no attendance
+    // counts or attended-nights table — there's nothing to show.
+    trackAttendance = true,
   } = $props()
 
   // ---- people list -----------------------------------------------------------
@@ -317,9 +321,11 @@
                 {person.instruments && person.instruments.length > 0 ? person.instruments.join(', ') : 'No instruments listed'}
               </div>
             </div>
-            <div class="person-meta">
-              <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
-            </div>
+            {#if trackAttendance}
+              <div class="person-meta">
+                <Chip label={String(person.attendance_count || 0)} styled={false} chipClass="person-attendance-badge" title="Nights attended" />
+              </div>
+            {/if}
           </div>
         {/each}
       {/if}
@@ -411,6 +417,7 @@
             <span style="color: var(--text-muted);">No instruments listed</span>
           {/if}
         </div>
+        {#if trackAttendance}
         <div class="person-detail-section">
           <h3>Sessions Attended</h3>
           {#if detailPerson.attended_instances && detailPerson.attended_instances.length > 0}
@@ -432,6 +439,7 @@
             <p style="color: var(--text-muted); margin-top: 12px;">No sessions attended yet</p>
           {/if}
         </div>
+        {/if}
       {/if}
     </div>
   </Sheet>

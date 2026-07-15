@@ -516,6 +516,9 @@ class TestLongRunningWorkflows:
                     "recurrence": "weekly",
                     "session_type": "regular",
                     "timezone": "UTC",
+                    "show_people_list": True,
+                    "track_attendance": True,
+                    "track_set_starters": True,
                 },
                 {"n": 4},  # total session_tune count
             ]

@@ -57,6 +57,13 @@ CREATE TABLE session (
     -- session + M globally-popular tunes not already in N (see migration 025).
     live_cache_session_limit INTEGER NOT NULL DEFAULT 200,
     live_cache_global_limit INTEGER NOT NULL DEFAULT 25,
+    -- Per-session people-tracking flags (spec 039, migration 038). All default TRUE:
+    -- opt-out, not opt-in. Set-starters require attendance (the CHECK below).
+    show_people_list BOOLEAN NOT NULL DEFAULT TRUE,
+    track_attendance BOOLEAN NOT NULL DEFAULT TRUE,
+    track_set_starters BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT ck_session_starters_need_attendance
+        CHECK (track_attendance OR NOT track_set_starters),
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,

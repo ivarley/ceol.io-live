@@ -1156,7 +1156,18 @@ def update_session_ajax(session_path):
             "auto_create_hours_ahead": "auto_create_hours_ahead",
             "live_cache_session_limit": "live_cache_session_limit",
             "live_cache_global_limit": "live_cache_global_limit",
+            # People-tracking flags (spec 039).
+            "show_people_list": "show_people_list",
+            "track_attendance": "track_attendance",
+            "track_set_starters": "track_set_starters",
         }
+
+        # Starters imply attendance (spec 039 CHECK). Normalize before building the update
+        # so a client that sends an inconsistent pair — or only one of them — can never
+        # land the session in a state the DB would reject: turning attendance off forces
+        # starters off too.
+        if "track_attendance" in data and not bool(data["track_attendance"]):
+            data = {**data, "track_set_starters": False}
 
         # Build update query dynamically based on provided fields
         for form_field, db_field in field_mapping.items():
@@ -1173,7 +1184,13 @@ def update_session_ajax(session_path):
                     "comments",
                 ]:
                     value = None
-                elif form_field in ["unlisted_address", "auto_create_instances"]:
+                elif form_field in [
+                    "unlisted_address",
+                    "auto_create_instances",
+                    "show_people_list",
+                    "track_attendance",
+                    "track_set_starters",
+                ]:
                     value = bool(value)
                 elif form_field == "auto_create_hours_ahead":
                     value = int(value) if value else 24
@@ -3299,13 +3316,22 @@ def add_session_ajax():
 
         # Insert new session with timezone
         timezone = data.get("timezone") or "America/Chicago"  # Default to Central Time
+        # People-tracking flags (spec 039): default TRUE (all three checkboxes are
+        # pre-checked on the create form), so a session is opt-OUT. Starters imply
+        # attendance — turning attendance off forces starters off, matching the CHECK.
+        show_people_list = bool(data.get("show_people_list", True))
+        track_attendance = bool(data.get("track_attendance", True))
+        track_set_starters = bool(data.get("track_set_starters", True)) and track_attendance
         cur.execute(
             """
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
-                city, state, country, timezone, initiation_date, recurrence, created_date, last_modified_date, created_by_user_id
+                city, state, country, timezone, initiation_date, recurrence,
+                show_people_list, track_attendance, track_set_starters,
+                created_date, last_modified_date, created_by_user_id
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
         """,
             (
@@ -3321,6 +3347,9 @@ def add_session_ajax():
                 timezone,
                 data.get("inception_date") or None,
                 data.get("recurrence") or None,
+                show_people_list,
+                track_attendance,
+                track_set_starters,
                 get_current_user_id(),
             ),
         )
@@ -5173,6 +5202,10 @@ def get_person_attendance_ajax(person_id):
             JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
             JOIN session s ON si.session_id = s.session_id
             WHERE sip.person_id = %s
+              -- Spec 039: a session that stopped tracking attendance shows nothing about
+              -- who attended, historic included — so its rows drop out of the person's
+              -- own Attended tab too, or the profile would leak what the session hides.
+              AND s.track_attendance
             ORDER BY si.date DESC
         """,
             (person_id,),

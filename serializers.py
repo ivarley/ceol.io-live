@@ -174,11 +174,15 @@ _ADMIN_PEOPLE_SQL = """
         GROUP BY person_id
     ) sp ON p.person_id = sp.person_id
     LEFT JOIN (
-        -- Real check-ins only (spec 033): a 'no'/'maybe' RSVP is not a sighting.
-        SELECT person_id, COUNT(*) AS session_instance_count
-        FROM session_instance_person
-        WHERE attendance = 'yes'
-        GROUP BY person_id
+        -- Real check-ins only (spec 033): a 'no'/'maybe' RSVP is not a sighting. And
+        -- (spec 039) a session with track_attendance off contributes nothing — the
+        -- "Checked In" column keeps existing, but such a session's rows drop out.
+        SELECT sip.person_id, COUNT(*) AS session_instance_count
+        FROM session_instance_person sip
+        JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
+        JOIN session s ON s.session_id = si.session_id AND s.track_attendance
+        WHERE sip.attendance = 'yes'
+        GROUP BY sip.person_id
     ) sip ON p.person_id = sip.person_id
     LEFT JOIN (
         SELECT DISTINCT ON (sip.person_id)
@@ -187,7 +191,7 @@ _ADMIN_PEOPLE_SQL = """
             s.name AS session_name
         FROM session_instance_person sip
         JOIN session_instance si ON sip.session_instance_id = si.session_instance_id
-        JOIN session s ON si.session_id = s.session_id
+        JOIN session s ON si.session_id = s.session_id AND s.track_attendance
         WHERE sip.attendance = 'yes'
         ORDER BY sip.person_id, si.date DESC
     ) latest_si ON p.person_id = latest_si.person_id
@@ -417,7 +421,8 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
                COALESCE(auto_create_instances, FALSE) AS auto_create_instances,
                COALESCE(auto_create_hours_ahead, 24) AS auto_create_hours_ahead,
                COALESCE(live_cache_session_limit, 200) AS live_cache_session_limit,
-               COALESCE(live_cache_global_limit, 25) AS live_cache_global_limit
+               COALESCE(live_cache_global_limit, 25) AS live_cache_global_limit,
+               show_people_list, track_attendance, track_set_starters
         FROM session
         WHERE path = %s
         """,
@@ -449,6 +454,11 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
         "auto_create_hours_ahead": row["auto_create_hours_ahead"],
         "live_cache_session_limit": row["live_cache_session_limit"],
         "live_cache_global_limit": row["live_cache_global_limit"],
+        # Per-session people-tracking flags (spec 039) — the DetailsTab checkboxes, and
+        # the PeopleAdminTab reads track_attendance to hide its attendance columns.
+        "show_people_list": bool(row["show_people_list"]),
+        "track_attendance": bool(row["track_attendance"]),
+        "track_set_starters": bool(row["track_set_starters"]),
     }
 
     session["recurrence_readable"] = recurrence_readable(session["recurrence"])
@@ -788,7 +798,8 @@ def build_session_detail_payload(
         SELECT session_id, thesession_id, name, path, location_name, location_website,
                location_phone, location_street, city, state, country, comments,
                unlisted_address, initiation_date, termination_date, recurrence,
-               session_type, timezone
+               session_type, timezone,
+               show_people_list, track_attendance, track_set_starters
         FROM session
         WHERE path = %s
         """,
@@ -817,6 +828,10 @@ def build_session_detail_payload(
         "recurrence": row["recurrence"],
         "session_type": row["session_type"] or "regular",
         "timezone": row["timezone"] or "UTC",
+        # Per-session people-tracking flags (spec 039).
+        "show_people_list": bool(row["show_people_list"]),
+        "track_attendance": bool(row["track_attendance"]),
+        "track_set_starters": bool(row["track_set_starters"]),
     }
 
     session["recurrence_readable"] = recurrence_readable(session["recurrence"])
@@ -850,7 +865,13 @@ def build_session_detail_payload(
             is_confirmed = bool(member_row["confirmed"])
             if member_row["is_admin"]:
                 is_session_admin = True
-    can_view_people = is_session_admin or is_confirmed
+    # is_admin OR confirmed is the visibility gate — but the session-page People tab is
+    # ALSO switched off entirely when show_people_list is false (spec 039). Gone for
+    # everyone including admins: an admin who wants the roster manages membership on the
+    # admin page, which is unaffected by this flag. (can_view_people gates only the
+    # session-page tab; is_session_admin, which gates administering the session, is left
+    # untouched.)
+    can_view_people = (is_session_admin or is_confirmed) and session["show_people_list"]
 
     # Today in the SESSION's timezone (drives the logs tab's add-instance default).
     try:
@@ -905,7 +926,7 @@ def build_session_detail_payload(
             "is_session_member": is_session_member,
             "relationship": relationship,  # 'member' | 'visitor' | None — drives the badge
             "is_confirmed": is_confirmed,
-            "can_view_people": can_view_people,  # is_admin OR confirmed — gates the People tab
+            "can_view_people": can_view_people,  # (is_admin OR confirmed) AND show_people_list
         },
         "today_in_session_tz": today_in_session_tz.isoformat(),
         "default_tab": "logs" if session["session_type"] == "festival" else "tunes",
@@ -1291,7 +1312,7 @@ def _find_session_instance_id(cur, session_id: int, date_or_id: str) -> Optional
 def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optional[str]) -> Dict[str, Any]:
     """The session (and optional instance) scope block for the drawer payload."""
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("SELECT session_id, name FROM session WHERE path = %s", (session_path,))
+    cur.execute("SELECT session_id, name, track_attendance FROM session WHERE path = %s", (session_path,))
     srow = cur.fetchone()
     if not srow:
         raise SessionNotFound(session_path)
@@ -1302,6 +1323,10 @@ def _load_session_scope(conn, tune_id: int, session_path: str, date_or_id: Optio
         "session_id": session_id,
         # The Session tab heads with the session's name, linked to its page.
         "session_name": srow["name"],
+        # Spec 039: the History tab's "while I was there" checkbox hides when the drawer
+        # is scoped to a session that doesn't track attendance — the filter is
+        # meaningless there (the counts already exclude it app-wide).
+        "track_attendance": bool(srow["track_attendance"]),
         "date_or_id": date_or_id,
         "alias": None,
         "setting_id": None,
@@ -1584,6 +1609,7 @@ def build_tune_detail_payload(
             {
                 "path": scope["path"],
                 "session_name": scope["session_name"],
+                "track_attendance": scope["track_attendance"],
                 "instance": scope.get("session_instance_id"),
                 "date_or_id": scope["date_or_id"],
                 "in_repertoire": scope["in_repertoire"],

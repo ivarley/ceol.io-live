@@ -122,7 +122,8 @@
       canonicalInstruments={ctx.canonicalInstruments || []}
       currentUserId={ctx.currentUserPersonId ?? null}
       initialPersonId={ctx.personId || null}
-      isSessionAdmin={permissions.is_session_admin} />
+      isSessionAdmin={permissions.is_session_admin}
+      trackAttendance={session.track_attendance !== false} />
   {/if}
     {/snippet}
   </Tabs>

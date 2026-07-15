@@ -29,6 +29,14 @@
   let timezone = $state('America/Chicago')
   let addMe = $state(true)
   let addMeRole = $state('admin')
+  // People-tracking flags (spec 039): all on by default — this is opt-OUT. Set-starters
+  // require attendance, so unchecking attendance disables and clears starters.
+  let showPeopleList = $state(true)
+  let trackAttendance = $state(true)
+  let trackSetStarters = $state(true)
+  $effect(() => {
+    if (!trackAttendance) trackSetStarters = false
+  })
   let unparsedText = $state('')
 
   // ---- recurrence editor ------------------------------------------------------
@@ -80,6 +88,9 @@
     timezone = s.timezone ?? 'America/Chicago'
     addMe = addMeDefault
     addMeRole = 'admin'
+    showPeopleList = true
+    trackAttendance = true
+    trackSetStarters = true
     unparsedText = s.unparsedText ?? ''
     invalidFields = []
     formError = ''
@@ -132,6 +143,9 @@
       recurrence: recurrence.json || null,
       add_current_user: addMe,
       add_current_user_role: addMe ? addMeRole : null,
+      show_people_list: showPeopleList,
+      track_attendance: trackAttendance,
+      track_set_starters: trackSetStarters && trackAttendance,
     }
 
     const requiredFields = [
@@ -345,6 +359,29 @@
           <option value="regular">a regular</option>
           <option value="admin">an admin</option>
         </select>
+      </div>
+    </div>
+
+    <!-- People tracking (spec 039): all on by default; the creator can opt out. -->
+    <div class="mb-3">
+      <div class="people-tracking-control">
+        <label class="checkbox-label">
+          <input type="checkbox" id="showPeopleList" bind:checked={showPeopleList} />
+          Show a members list
+        </label>
+        <small class="people-tracking-help">Allows session members to see who else plays here.</small>
+        <label class="checkbox-label">
+          <input type="checkbox" id="trackAttendance" bind:checked={trackAttendance} />
+          Record attendance
+        </label>
+        <small class="people-tracking-help">Allows you to record who attends each session. Visible only to members.</small>
+        <label class="checkbox-label">
+          <input type="checkbox" id="trackSetStarters" bind:checked={trackSetStarters} disabled={!trackAttendance} />
+          Record set starters
+        </label>
+        <small class="people-tracking-help">
+          Allows you to record who started each set. Visible only to members.{#if !trackAttendance} Requires attendance.{/if}
+        </small>
       </div>
     </div>
   </form>

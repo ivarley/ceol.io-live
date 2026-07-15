@@ -671,6 +671,13 @@
   let attendeesLoaded = $state(false)
   const canonicalInstruments = $derived(config.canonicalInstruments || [])
 
+  // Per-session people-tracking flags (spec 039). Default true when the config predates
+  // the flags. These gate ONLY attendance + set-starters; presence, "logged by", and
+  // typing are attribution of who's actively logging and are never gated. Starters
+  // additionally require attendance (the DB CHECK), so trackStarters folds it in.
+  const trackAttendance = $derived(config.trackAttendance !== false)
+  const trackStarters = $derived(config.trackSetStarters !== false && trackAttendance)
+
   // the set's recorded starter name (first tune that carries one)
   function setStarterName(seg) {
     for (const t of seg.tunes) if (t.started_by_name) return t.started_by_name
@@ -701,6 +708,10 @@
   })
 
   async function refreshAttendees() {
+    // The roster feeds ONLY the attendance header and the starter picker. With both off
+    // (spec 039) nothing consumes it, so we don't fetch it — and the endpoint would be
+    // pointless work besides.
+    if (!trackAttendance && !trackStarters) return
     try { attendees = await livePeople(config); attendeesLoaded = true } catch { /* keep current */ }
   }
   async function ensureAttendees() {
@@ -3005,13 +3016,15 @@
               </div>
             {/if}
           </div>
-          <div class="header-stat header-attend">
-            <span class="ha-text">
-              <span class="ha-label">{attendanceLabel}: {checkedIn.length}</span>
-              {checkedIn.length ? `(${checkedIn.map((a) => a.display_name).join(', ')})` : '— no one checked in yet'}
-            </span>
-            <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
-          </div>
+          {#if trackAttendance}
+            <div class="header-stat header-attend">
+              <span class="ha-text">
+                <span class="ha-label">{attendanceLabel}: {checkedIn.length}</span>
+                {checkedIn.length ? `(${checkedIn.map((a) => a.display_name).join(', ')})` : '— no one checked in yet'}
+              </span>
+              <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
+            </div>
+          {/if}
           {#if roster.some((p) => !p.away)}
             <div class="header-stat">Currently logging: {roster.filter((p) => !p.away).map((p) => p.name).join(', ')}</div>
           {/if}
@@ -3142,11 +3155,12 @@
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
-        {#if setStarterName(seg)}
+        {#if trackStarters && setStarterName(seg)}
           <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
         {/if}
         {#if openTrayId === seg.tunes[0].session_instance_tune_id}
           <div class="set-tray">
+            {#if trackStarters}
             <div class="tray-row">
               <span class="tray-k">Started by</span>
               {#if viewing}
@@ -3159,6 +3173,7 @@
                 >{setStarterName(seg) || 'Not set'}</button>
               {/if}
             </div>
+            {/if}
             {#if loggedInfo(seg.tunes)}
               {@const li = loggedInfo(seg.tunes)}
               <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>
@@ -3342,7 +3357,9 @@
         {#if !viewing}
           <button class="sel-act" class:dim={!lastCopy} disabled={searchMode} title="Paste tunes from clipboard" onclick={pasteClipboard}>Paste</button>
           <button class="sel-act sel-danger" disabled={!selected.size} onclick={bulkDelete}>Delete</button>
-          <button class="sel-act" disabled={!selected.size} onclick={openAssign}>Assign</button>
+          {#if trackStarters}
+            <button class="sel-act" disabled={!selected.size} onclick={openAssign}>Assign</button>
+          {/if}
         {/if}
         {#if listMode}
           <!-- bulk add-to-list / set-status (my personal list — safe in view mode too) -->

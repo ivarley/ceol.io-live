@@ -235,6 +235,12 @@
   // plays present the link is simply absent — no explanation, it just isn't an option.
   const canRemoveFromSession = $derived(!!sessionScope?.can_remove_from_session)
 
+  // The "while I was there" filter is meaningless in the context of a session that
+  // doesn't track attendance (spec 039) — so it hides when the scope IS that session.
+  // The wide lenses ('member'/'all') keep it: they still count attendance at OTHER
+  // sessions that do track it. (The counts themselves exclude off-sessions app-wide.)
+  const showAttendedFilter = $derived(scopeId !== 'general' || sessionScope?.track_attendance !== false)
+
   // A one-line count above the list. The payload's counts don't know about the "while I
   // was there" filter, so the line steps aside when the filter is on — the list is then
   // the honest answer.
@@ -2180,7 +2186,7 @@
                   {#if attendedHint}
                     <span class="hist-attended-hint" aria-live="polite">You attended</span>
                   {/if}
-                  {#if loggedIn && !editingInstance}
+                  {#if loggedIn && !editingInstance && showAttendedFilter}
                     <label class="hist-filter">
                       <input type="checkbox" checked={attendedOnly} onchange={toggleAttendedOnly} />
                       Only when I was there

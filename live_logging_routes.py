@@ -1135,6 +1135,37 @@ HANDLERS = {
 # --- Endpoints ------------------------------------------------------------
 
 
+def _people_ops_blocked(cur, session_instance_id):
+    """Which people ops this session refuses (spec 039), as {op_type: message}.
+
+    attendance_* need track_attendance; attribute_set_starter needs track_set_starters
+    (which itself requires attendance, per the CHECK). Reads the session's flags via the
+    instance — one small indexed lookup per op, in the same txn.
+    """
+    cur.execute(
+        """
+        SELECT s.track_attendance, s.track_set_starters
+        FROM session_instance si
+        JOIN session s ON s.session_id = si.session_id
+        WHERE si.session_instance_id = %s
+        """,
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {}
+    track_attendance, track_set_starters = row
+    blocked = {}
+    if not track_attendance:
+        msg = "This session isn't tracking attendance."
+        blocked["attendance_add"] = msg
+        blocked["attendance_remove"] = msg
+        blocked["attendance_create_person"] = msg
+    if not track_set_starters:
+        blocked["attribute_set_starter"] = "This session isn't tracking set starters."
+    return blocked
+
+
 @api_login_required
 def live_op(session_instance_id):
     """Generic op endpoint: dispatch by op_type, one atomic txn, idempotent by op_id."""
@@ -1158,6 +1189,16 @@ def live_op(session_instance_id):
         if not _instance_exists(cur, session_instance_id):
             cur.execute("ROLLBACK")
             return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        # People-tracking may be off for this session (spec 039). Refuse the ops rather
+        # than only hiding their UI — a stale client, a queued offline op, or a direct
+        # POST must not slip a check-in or a set-starter into a session that has turned
+        # those off. Set-starters require attendance, so the attendance flag gates both.
+        blocked = _people_ops_blocked(cur, session_instance_id)
+        if op_type in blocked:
+            cur.execute("ROLLBACK")
+            return jsonify({"success": False, "rejected": True, "reason": "people_tracking_off",
+                            "message": blocked[op_type], "op_id": op_id, "op_type": op_type})
 
         # Idempotency fast path: a known op_id returns its cached ack (§C).
         if op_id is not None:

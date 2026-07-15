@@ -26,6 +26,15 @@
   let autoCreateInstances = $state(!!session.auto_create_instances)
   let autoCreateHours = $state(String(session.auto_create_hours_ahead))
 
+  // People-tracking flags (spec 039). Set-starters require attendance, so turning
+  // attendance off forces starters off and disables that checkbox.
+  let showPeopleList = $state(session.show_people_list !== false)
+  let trackAttendance = $state(session.track_attendance !== false)
+  let trackSetStarters = $state(session.track_set_starters !== false)
+  $effect(() => {
+    if (!trackAttendance) trackSetStarters = false
+  })
+
   function saveSessionDetails() {
     // Collect form data
     const formData = {
@@ -44,6 +53,9 @@
       comments: comments.trim(),
       auto_create_instances: autoCreateInstances,
       auto_create_hours_ahead: parseInt(autoCreateHours) || 24,
+      show_people_list: showPeopleList,
+      track_attendance: trackAttendance,
+      track_set_starters: trackSetStarters && trackAttendance,
     }
 
     // Include termination date if it exists
@@ -608,6 +620,36 @@
           When enabled, the system will automatically create upcoming session instances based on the recurrence pattern.
           This runs every 15 minutes.
         </small>
+      </div>
+    </div>
+
+    <!-- People tracking (spec 039) -->
+    <div class="mb-3">
+      <span class="form-label">People Tracking</span>
+      <div class="p-3 border rounded bg-light">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="show-people-list" bind:checked={showPeopleList} />
+          <label class="form-check-label" for="show-people-list">Show a members list</label>
+          <small class="text-muted d-block">Allows session members to see who else plays here.</small>
+        </div>
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="track-attendance" bind:checked={trackAttendance} />
+          <label class="form-check-label" for="track-attendance">Record attendance</label>
+          <small class="text-muted d-block">Allows you to record who attends each session. Visible only to members.</small>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="track-set-starters"
+            bind:checked={trackSetStarters}
+            disabled={!trackAttendance}
+          />
+          <label class="form-check-label" for="track-set-starters">Record set starters</label>
+          <small class="text-muted d-block">
+            Allows you to record who started each set. Visible only to members.{#if !trackAttendance} Requires attendance.{/if}
+          </small>
+        </div>
       </div>
     </div>
 

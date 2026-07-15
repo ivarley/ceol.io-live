@@ -46,9 +46,18 @@ def member_instance_predicate(instance_expr, person_param="%(person_id)s"):
 
 
 def attended_instance_predicate(instance_expr, person_param="%(person_id)s"):
-    """R4 instance test: the person checked in to the instance with attendance='yes'."""
+    """R4 instance test: the person checked in to the instance with attendance='yes'.
+
+    A session with track_attendance off shows nothing about who attended, historic
+    included (spec 039), so its rows are excluded here — that's what gives "while I was
+    there" its holes at such a session. The rows stay in the table, just unqueried; the
+    join to `session` is on the already-selected instance, so it's cheap. (R3/member is
+    NOT filtered: it reads the viewer's OWN session_person row, which the flag doesn't
+    touch.)"""
     return (
         "EXISTS (SELECT 1 FROM session_instance_person asip"
+        " JOIN session_instance asi ON asi.session_instance_id = asip.session_instance_id"
+        " JOIN session ass ON ass.session_id = asi.session_id AND ass.track_attendance"
         f" WHERE asip.session_instance_id = {instance_expr}"
         f" AND asip.person_id = {person_param}"
         " AND asip.attendance = 'yes')"
@@ -89,6 +98,11 @@ def person_tune_play_counts_sql():
                 UNION ALL
                 SELECT sip.session_instance_id, FALSE, TRUE
                 FROM session_instance_person sip
+                -- Spec 039: exclude attendance at sessions that no longer track it, so
+                -- R4 ("while I was there") stops counting those nights. R3/member above
+                -- is untouched — it reads the viewer's own session_person row.
+                JOIN session_instance asi ON asi.session_instance_id = sip.session_instance_id
+                JOIN session ass ON ass.session_id = asi.session_id AND ass.track_attendance
                 WHERE sip.person_id = %(person_id)s AND sip.attendance = 'yes'
             ) u
             GROUP BY session_instance_id
@@ -120,10 +134,13 @@ def plays_sort_expr(kind):
             " AND sp.person_id = pt.person_id AND sp.relationship = 'member'"
         )
     elif kind == "attended":
+        # Spec 039: attendance at a track_attendance-off session doesn't count.
         rel_join = (
             " JOIN session_instance_person sip"
             " ON sip.session_instance_id = sit.session_instance_id"
             " AND sip.person_id = pt.person_id AND sip.attendance = 'yes'"
+            " JOIN session_instance asi ON asi.session_instance_id = sip.session_instance_id"
+            " JOIN session ass ON ass.session_id = asi.session_id AND ass.track_attendance"
         )
     else:
         raise ValueError(f"unknown plays sort kind: {kind}")
