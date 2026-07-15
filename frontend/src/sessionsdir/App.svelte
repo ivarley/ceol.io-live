@@ -125,6 +125,16 @@
   }
 
   const goto = (url) => (window.location.href = url)
+
+  let searchField = $state(null)
+
+  // "My Sessions" only shows memberships, so a missing session usually just
+  // needs a wider filter — jump to "All" and put the cursor in the search box.
+  function searchAllSessions(e) {
+    e.preventDefault()
+    filterIndex = filterStates.indexOf('all')
+    searchField?.focus()
+  }
 </script>
 
 <h1>Sessions</h1>
@@ -132,6 +142,7 @@
 <div class="sessions-controls">
   <div class="search-and-toggle">
     <SearchField
+      bind:this={searchField}
       bind:value={rawSearch}
       id="search-bar"
       inputClass="search-bar"
@@ -198,7 +209,13 @@
 {/if}
 
 <p style="font-size: 0.85rem; color: var(--secondary-text);">
-  Don't see your session? <a href="/add-session">Add it!</a>
+  Don't see your session?
+  {#if currentFilter === 'my'}
+    <a href="/sessions" onclick={searchAllSessions}>Search all sessions</a> or
+    <a href="/add-session">add it!</a>
+  {:else}
+    <a href="/add-session">Add it!</a>
+  {/if}
 </p>
 
 <p><a href="/">← Back to home</a></p>
