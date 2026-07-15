@@ -1866,6 +1866,12 @@
       put(res.record) // settle now if the ack beat the SSE echo (idempotent)
       flashId(res.record.session_instance_tune_id, res.op_type === 'corroborate' ? 'merge' : 'mine')
     }
+    // An ack landing while a bootstrap is in flight may postdate that bootstrap's DB
+    // read; remember it so the snapshot apply can re-put it instead of wiping the row
+    // until SSE catch-up (see lateSettles at connect()).
+    if (bootstrapInFlight && res.event_id && (res.record || res.records)) {
+      lateSettles.push({ event_id: res.event_id, records: [...(res.records || []), ...(res.record ? [res.record] : [])] })
+    }
     // My append collapsed into an existing tune (§H30/§D16). Surface a gentle nudge so
     // the merge is visible and reversible ("keep both"), rather than silent.
     if (entry.op_type === 'add_tune' && res.op_type === 'corroborate' && !entry._queued) {
@@ -2749,6 +2755,47 @@
     !renderOnly && (mode === 'edit' || (viewing && !logComplete && roster.some((p) => !p.away)))
   )
   let connecting = false // a connect() is in flight — gates the opportunistic reconnect triggers
+  // Map a cached snapshot row (snapshotGet) to the bootstrap shape, so the offline
+  // fallback and the slow-network fast paint apply through the same code.
+  const snapFromCache = (cached) => ({
+    records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
+    session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
+    log_complete: cached.log_complete, user_timezone: cached.display_tz,
+    known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [],
+  })
+  // Apply a bootstrap-shaped snapshot (server truth or cached copy) to the screen.
+  function applySnap(snap, fromCache) {
+    byId.clear()
+    for (const r of snap.records || []) put(r)
+    // Local fast-match vocabulary: rendering from the OFFLINE cache rebuilds the index
+    // immediately from the cached copy; ONLINE it's fetched in the background after
+    // render (loadVocabulary, below) so it never blocks bootstrap.
+    if (fromCache) buildLocalIndex(snap.known_tunes, snap.known_aliases)
+    if (snap.current_person) person = snap.current_person
+    if (snap.session_name) sessionName = snap.session_name
+    if (snap.session_date) sessionDate = snap.session_date
+    displayTz = snap.user_timezone || snap.session_timezone || undefined
+    notesText = snap.notes || ''
+    logComplete = !!snap.log_complete
+    highWater = snap.last_event_id || 0
+    // Truth (or cache) is applied — the screen can render NOW. Flipping `loaded` here
+    // (rather than when connect() fully resolves) matters only for an EMPTY log:
+    // rows render as soon as byId fills, but the "No tunes yet" message is gated on
+    // `loaded`, and the snapshot write + queue hydration below run on IndexedDB,
+    // which can take seconds on a cold mobile browser — an empty session would sit
+    // on the loading skeleton that whole time.
+    loaded = true
+  }
+  // How long the first bootstrap may keep the skeleton up before we paint the cached
+  // snapshot provisionally. Fast connections resolve well under this and never see it.
+  const STALE_PAINT_MS = 800
+  // Records settled by op-POST acks while a bootstrap was in flight. The bootstrap's DB
+  // read can predate those ops, so applying it verbatim would wipe a row the user just
+  // watched land, and it would only blink back via SSE catch-up. After the snapshot
+  // applies, re-put the ones newer than it — the same convergence the catch-up cursor
+  // performs (idempotent by record id), just without the visible gap.
+  let bootstrapInFlight = false
+  let lateSettles = []
   async function connect() {
     const myGen = ++connSeq
     connecting = true
@@ -2757,10 +2804,28 @@
     // Snapshot pre-reconnect state for the §I36 "synced / added while away" summary.
     const prevIds = new Set([...byId.values()].filter((r) => typeof r.session_instance_tune_id === 'number').map((r) => r.session_instance_tune_id))
     const wasQueued = [...pending.values()].filter((e) => e.status === 'queued').length
+    // Slow-network fast paint (stale-first): if the FIRST bootstrap hasn't answered
+    // within STALE_PAINT_MS and a cached snapshot exists, paint it provisionally so a
+    // slow connection sees the log in under a second instead of a skeleton. Correctness
+    // is unchanged by construction: this is the OFFLINE render path (cached records +
+    // queued-op overlay) triggered by a timer instead of a network error, and the
+    // bootstrap that eventually lands re-applies exactly like a reconnect does — byId
+    // reset to server truth, with lateSettles + the stream's idempotent catch-up cursor
+    // converging anything that raced in meanwhile. Never fires on reconnects (`loaded`),
+    // where the screen already shows state newer than the cache.
+    let snapApplied = false // the real bootstrap (or offline fallback) has painted — a late stale paint must not clobber it
+    const stalePaint = loaded ? null : setTimeout(async () => {
+      const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
+      if (!cached || snapApplied || myGen !== connSeq) return
+      applySnap(snapFromCache(cached), true)
+      hydrateQueue() // overlay still-queued offline ops, same as the offline path
+    }, STALE_PAINT_MS)
     try {
       if (es) { es.close(); es = null }
       let snap
       let fromCache = false
+      lateSettles = []
+      bootstrapInFlight = true
       try {
         snap = await bootstrap(config) // server truth + fresh high-water
         reachable = true // we just reached the server
@@ -2770,35 +2835,20 @@
         reachable = false // couldn't reach the server -> offline (not just "reconnecting")
         // Offline: fall back to the cached snapshot so the screen still renders (§G).
         const cached = await snapshotGet(config.sessionInstanceId).catch(() => null)
-        snap = cached
-          ? { records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
-              session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
-              log_complete: cached.log_complete, user_timezone: cached.display_tz,
-              known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [] }
-          : { records: [], last_event_id: 0 }
+        snap = cached ? snapFromCache(cached) : { records: [], last_event_id: 0 }
         fromCache = true
+      } finally {
+        bootstrapInFlight = false
+        if (stalePaint) clearTimeout(stalePaint)
       }
       if (myGen !== connSeq) return // a newer connect() superseded this one
-      byId.clear()
-      for (const r of snap.records || []) put(r)
-      // Local fast-match vocabulary: rendering from the OFFLINE cache rebuilds the index
-      // immediately from the cached copy; ONLINE it's fetched in the background after
-      // render (loadVocabulary, below) so it never blocks bootstrap.
-      if (fromCache) buildLocalIndex(snap.known_tunes, snap.known_aliases)
-      if (snap.current_person) person = snap.current_person
-      if (snap.session_name) sessionName = snap.session_name
-      if (snap.session_date) sessionDate = snap.session_date
-      displayTz = snap.user_timezone || snap.session_timezone || undefined
-      notesText = snap.notes || ''
-      logComplete = !!snap.log_complete
-      highWater = snap.last_event_id || 0
-      // Server truth is applied — the screen can render NOW. Flipping `loaded` here
-      // (rather than when connect() fully resolves) matters only for an EMPTY log:
-      // rows render as soon as byId fills, but the "No tunes yet" message is gated on
-      // `loaded`, and the snapshot write + queue hydration below run on IndexedDB,
-      // which can take seconds on a cold mobile browser — an empty session would sit
-      // on the loading skeleton that whole time.
-      loaded = true
+      snapApplied = true // from here on, a late-firing stale paint must stand down
+      applySnap(snap, fromCache)
+      // Converge ops acked while the bootstrap was in flight (see lateSettles above).
+      for (const s of lateSettles) {
+        if (s.event_id > (snap.last_event_id || 0)) for (const r of s.records) put(r)
+      }
+      lateSettles = []
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
 
       // Completed log = read-only. Render the records and stop — skip the offline-queue

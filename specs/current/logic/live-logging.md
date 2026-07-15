@@ -148,6 +148,21 @@ Source in `frontend/` (`frontend/src`). The shell template passes `session_insta
 `current_person`, and `STREAMING_BASE_URL` to the bundle, which then fetches the bootstrap
 snapshot and opens the SSE stream.
 
+**Slow-network fast paint (stale-first bootstrap).** If the *first* bootstrap hasn't
+answered within `STALE_PAINT_MS` (800ms) and an IndexedDB snapshot exists for this
+instance, `connect()` paints the snapshot provisionally instead of holding the skeleton
+— on slow pub Wi-Fi the log renders in under a second. Correctness is preserved by
+construction: the paint is the *offline* render path (`applySnap` from cache +
+`hydrateQueue` overlay) fired by a timer instead of a network error, and the bootstrap
+that eventually lands re-applies exactly like a reconnect (byId reset to server truth,
+SSE catch-up cursor closing any gap). Never fires on reconnects (`loaded` guard) — the
+screen would already show state newer than the cache. One race is closed explicitly:
+an op acked while the bootstrap is in flight can postdate the bootstrap's DB read, so
+applying the snapshot verbatim would blank that row until SSE catch-up re-delivers it;
+`lateSettles` buffers mid-bootstrap acks and re-puts those newer than the snapshot
+(`event_id > snap.last_event_id`) immediately after it applies. Pinned by the
+"slow-network stale-first paint" tests in `App.characterization.test.js`.
+
 **In-log filter (pull-down search).** A filter box that lives as the first child of the
 scrolling list, hidden above the fold and revealed by scrolling to the very top (no gesture
 handling — the list keeps a `.sets-body { min-height: 100% }` so it always overflows enough

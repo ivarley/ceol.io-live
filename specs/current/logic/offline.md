@@ -22,9 +22,19 @@ Served from **`/sw.js`** (via a route in `app.py`) so its scope is the whole ori
 controls every navigation except the live logger (`/live/*` has its own worker that wins by
 scope specificity).
 
-- **Network-first, cache fallback.** Asset filenames aren't fingerprinted, so online always
-  gets the latest build; the cache is purely the offline fallback. Never cache-first (that
-  would strand users on a stale build).
+- **Network-first, cache fallback — except content-hash versioned assets, which are
+  cache-first.** Flask stamps every `url_for('static', …)` URL with `?v=<sha1[:8]>` of the
+  file's content (`app.py`, `@app.url_defaults`) and answers v-stamped requests with
+  `Cache-Control: public, max-age=31536000, immutable`. Since the URL changes whenever the
+  content changes, an exact-URL cache hit can never be a stale build — the same guarantee
+  as filename fingerprinting without renaming build outputs — so both service workers serve
+  v-stamped `/static/` requests **cache-first** (`cacheFirstVersioned`: exact match incl.
+  query; on first fetch of a new version, superseded versions of the same path are pruned).
+  This is the site-wide slow-network win: a warm page load waits only for the HTML
+  document; all JS/CSS/images come from disk. Unversioned asset requests (and anything a
+  page hardcodes) keep network-first — a fixed-name asset served cache-first could strand
+  users on a stale build. Offline, both strategies fall back across the version boundary
+  (`ignoreSearch`): any cached version of the file beats a broken page.
 - **Per-user, version-scoped caches.** Page snapshots and API responses live in
   `ceol-io-pages-<VERSION>-<uid>` / `ceol-io-api-<VERSION>-<uid>`. Bumping `VERSION`
   invalidates stale snapshots on the next load; switching users prunes the other user's
@@ -157,6 +167,8 @@ status persists across reopen).
 
 ## Key files
 
+- `app.py` — `_static_version` / `_stamp_static_version` / `_immutable_versioned_static`:
+  the content-hash `?v=` stamping + immutable caching for static assets.
 - `static/service-worker.js` — the `/sw.js` worker (bump `VERSION` on a deploy that changes
   cached assets/snapshots).
 - `api_person_tune_routes.py` — `get_offline_bundle` (`/api/offline/bundle`), `my_tunes_op`

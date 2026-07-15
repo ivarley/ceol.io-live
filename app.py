@@ -514,6 +514,50 @@ def offline_page():
 
 app.add_url_rule("/offline", "offline_page", offline_page)
 
+
+# --- Versioned static assets (site-wide slow-network snappiness) -----------------
+# Every url_for('static', ...) URL gets a content-hash ?v=<sha1[:8]>, and responses to
+# v-stamped /static/ requests get a far-future immutable Cache-Control. The URL changes
+# whenever the file's content changes, so long-lived caching can never serve a stale
+# build — the same guarantee as filename fingerprinting, without renaming build outputs.
+# Both service workers additionally serve v-stamped /static/ URLs CACHE-FIRST (exact
+# URL match), so on a slow connection a page load only waits for the HTML document.
+import hashlib
+
+_static_versions = {}  # filename -> (mtime, size, hash) — mtime/size guard picks up dev rebuilds
+
+
+def _static_version(filename):
+    try:
+        path = os.path.normpath(os.path.join(app.static_folder, filename))
+        if not path.startswith(os.path.normpath(app.static_folder) + os.sep):
+            return None
+        st = os.stat(path)
+        cached = _static_versions.get(filename)
+        if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+            return cached[2]
+        with open(path, "rb") as f:
+            digest = hashlib.sha1(f.read()).hexdigest()[:8]
+        _static_versions[filename] = (st.st_mtime, st.st_size, digest)
+        return digest
+    except OSError:
+        return None
+
+
+@app.url_defaults
+def _stamp_static_version(endpoint, values):
+    if endpoint == "static" and "filename" in values and "v" not in values:
+        v = _static_version(values["filename"])
+        if v:
+            values["v"] = v
+
+
+@app.after_request
+def _immutable_versioned_static(resp):
+    if request.path.startswith("/static/") and request.args.get("v") and resp.status_code == 200:
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
 # /api/sessions/data (positional-tuple sessions list) deleted — zero UI callers;
 # /api/sessions/with-today-status is the serialized replacement (spec 035 follow-up).
 app.add_url_rule(

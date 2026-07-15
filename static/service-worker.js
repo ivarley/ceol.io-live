@@ -4,9 +4,12 @@
 // every navigation EXCEPT the live logger, which has its own /live/-scoped worker
 // (static/live-sw.js) that wins for /live/* by scope specificity.
 //
-// Policy (mirrors live-sw.js): NETWORK-FIRST, cache fallback. Asset filenames are
-// fixed (no fingerprint), so cache-first would strand users on a stale build —
-// online always gets the latest and the cache is purely the offline fallback.
+// Policy (mirrors live-sw.js): NETWORK-FIRST, cache fallback — EXCEPT static assets
+// carrying a content-hash version (?v=<hash>, stamped by Flask's url_for): their URL
+// changes whenever their content changes, so an exact-URL cache hit can never be a
+// stale build and they're served CACHE-FIRST (the site-wide slow-network win: a page
+// load waits only for the HTML document). Unversioned requests keep network-first —
+// a fixed-name asset served cache-first could strand users on a stale build.
 // Never our concern (straight to network): /api/*, /live/*, /admin*, non-GET and the
 // logout flow. The legacy word-processor editor is fetched live but never snapshotted
 // (the server marks it X-Offline-Exclude).
@@ -21,7 +24,7 @@
 //      and corrupts an in-flight navigation the same way.
 // Data is never stored here.
 
-const VERSION = 'v32'
+const VERSION = 'v33'
 const SHELL = `ceol-io-shell-${VERSION}` // shared, non-personalized assets + public/help pages
 // Page/api caches are VERSION-scoped too, so a VERSION bump (e.g. a deploy) invalidates
 // stale page snapshots + cached API data, not just the shell.
@@ -199,7 +202,9 @@ self.addEventListener('fetch', (event) => {
       return
     }
     if (url.pathname.startsWith('/static/')) {
-      event.respondWith(networkFirst(req, SHELL))
+      // Content-hash versioned (?v=) -> immutable, cache-first. Anything else keeps
+      // network-first (its filename can be reused across builds).
+      event.respondWith(url.searchParams.has('v') ? cacheFirstVersioned(req, SHELL) : networkFirst(req, SHELL))
       return
     }
     return
@@ -280,8 +285,43 @@ async function networkFirst(req, cacheName) {
     if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone())
     return res
   } catch (e) {
-    const hit = await cache.match(req)
+    let hit = await cache.match(req)
+    // Offline fallback for an UNVERSIONED static request: a versioned copy of the same
+    // file (cached from a page's ?v= reference) is at least as fresh as anything else
+    // we could serve, so don't fail just because the query strings differ.
+    if (!hit && new URL(req.url).pathname.startsWith('/static/')) {
+      hit = await cache.match(req, { ignoreSearch: true })
+    }
     if (hit) return hit
+    throw e
+  }
+}
+
+// Content-hash versioned static asset (?v=<hash>): the exact URL is immutable, so a
+// cache hit is always correct — no revalidation, no network wait. On first fetch of a
+// new version, superseded versions of the same file are pruned so the cache doesn't
+// accumulate one entry per deploy. Offline with no exact hit, any older version of the
+// file (ignoreSearch) beats a broken page — same staleness the offline fallback always had.
+async function cacheFirstVersioned(req, cacheName) {
+  const cache = await caches.open(cacheName)
+  const hit = await cache.match(req)
+  if (hit) return hit
+  try {
+    const res = await fetch(req)
+    if (res && res.ok) {
+      const path = new URL(req.url).pathname
+      const keys = await cache.keys()
+      await Promise.all(
+        keys
+          .filter((k) => k.url !== req.url && new URL(k.url).pathname === path && new URL(k.url).searchParams.has('v'))
+          .map((k) => cache.delete(k))
+      )
+      cache.put(req, res.clone())
+    }
+    return res
+  } catch (e) {
+    const stale = await cache.match(req, { ignoreSearch: true })
+    if (stale) return stale
     throw e
   }
 }

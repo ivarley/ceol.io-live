@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/svelte'
-import { queuePut, queueAll } from '../src/offline.js'
+import { queuePut, queueAll, snapshotPut } from '../src/offline.js'
 
 // Characterization test: mounts the REAL App with client.js mocked, and pins the
 // observable behavior the logstate.js extraction must preserve — that a bootstrap of
@@ -269,5 +269,48 @@ describe('queued ops across a reload', () => {
     )
     await waitFor(async () => expect(await queueAll(inst)).toHaveLength(0)) // cancelled op left the queue
     expect(sendOp.mock.calls.every((c) => c[1] !== 'remove_tune')).toBe(true) // local cancel, no server op
+  })
+})
+
+// Slow-network stale-first paint: a first bootstrap that stalls past STALE_PAINT_MS
+// paints the cached snapshot provisionally (the offline render path on a timer), and
+// the bootstrap that eventually lands re-applies server truth over it.
+describe('slow-network stale-first paint', () => {
+  const cachedSnapshot = (name) => ({
+    records: [
+      { session_instance_tune_id: 900, tune_id: 90, name, order_position: 'A', record_type: 'tune', deleted: false, tune_type: 'Reel' },
+    ],
+    last_event_id: 5, person: { person_id: 2, first_name: 'Ian' },
+    session_name: 'Test Session', session_date: '2026-02-01', notes: '',
+    log_complete: false, display_tz: null, known_tunes: [], known_aliases: [],
+  })
+
+  it('paints the cached snapshot while bootstrap stalls, then reconciles to server truth', async () => {
+    const { bootstrap } = await import('../src/client.js')
+    const inst = 995
+    await snapshotPut(inst, cachedSnapshot('Cached-Only Tune'))
+    let resolveBoot
+    bootstrap.mockImplementation(() => new Promise((r) => { resolveBoot = r }))
+    try {
+      const { container } = render(App, { props: { config: { ...config, sessionInstanceId: inst } } })
+      // The cached record paints after STALE_PAINT_MS, well before bootstrap answers.
+      await waitFor(() => expect(container.textContent).toContain('Cached-Only Tune'), { timeout: 3000 })
+      // Bootstrap lands with different truth: it wins, and the cache-only row is gone.
+      resolveBoot(bootstrapSnapshot)
+      await waitFor(() => expect(container.textContent).toContain('The Silver Spear'))
+      expect(container.textContent).not.toContain('Cached-Only Tune')
+    } finally {
+      bootstrap.mockImplementation(async () => bootstrapSnapshot)
+    }
+  })
+
+  it('never paints stale when bootstrap answers fast', async () => {
+    const inst = 996
+    await snapshotPut(inst, cachedSnapshot('Stale Tune'))
+    const { container } = render(App, { props: { config: { ...config, sessionInstanceId: inst } } })
+    await waitFor(() => expect(container.textContent).toContain('The Silver Spear'))
+    // Wait past the stale-paint timer: the cached-only row must never show up.
+    await new Promise((r) => setTimeout(r, 1100))
+    expect(container.textContent).not.toContain('Stale Tune')
   })
 })

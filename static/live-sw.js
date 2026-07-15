@@ -5,16 +5,18 @@
 // controls nothing and is just a PWA-install shim).
 //
 // Caching policy (§H):
-//   - shell assets (/static/live/*)          -> network-first, cache fallback
+//   - shell assets with a content-hash version (?v=, stamped by Flask's url_for)
+//                                             -> CACHE-FIRST (exact URL is immutable)
+//   - unversioned shell assets               -> network-first, cache fallback
 //   - the screen navigation (/live/instances/*) -> network-first, cache fallback
 //   - dynamic API (/api/*), op-POST, SSE      -> NETWORK-ONLY, never cached/intercepted
 // Data lives in IndexedDB, never the SW cache.
 //
-// Network-first (not cache-first/SWR) because the bundle has a FIXED filename
-// (app.js) — cache-first would strand users on a stale build until a later load.
-// Online always gets the latest; the cache is purely the offline fallback.
+// The bundle's FILENAME is fixed (app.js), so cache-first is only safe on the
+// versioned URL — its query hash changes with the content, so an exact-URL hit can
+// never be a stale build. Unversioned requests stay network-first for that reason.
 
-const CACHE = 'ceol-live-shell-v10'
+const CACHE = 'ceol-live-shell-v11'
 // The Svelte bundle PLUS the shared shell assets the live page pulls in directly
 // (the floated hamburger menu + the tune-detail modal). Without these in the cache,
 // an offline reload renders the menu unstyled (no CSS) and inert (no JS).
@@ -84,10 +86,41 @@ self.addEventListener('fetch', (event) => {
     SHELL_ASSETS.has(url.pathname) ||
     (req.mode === 'navigate' && url.pathname.startsWith('/live/instances/'))
   ) {
-    event.respondWith(networkFirst(req))
+    // Versioned asset URLs are immutable -> cache-first; everything else network-first.
+    event.respondWith(
+      req.mode !== 'navigate' && url.searchParams.has('v') ? cacheFirstVersioned(req) : networkFirst(req)
+    )
   }
   // anything else: default network
 })
+
+// Content-hash versioned asset: an exact-URL hit can never be stale. First fetch of a
+// new version prunes superseded versions of the same file; offline with no exact hit,
+// an older version (ignoreSearch — including the unversioned install-precache copy)
+// beats a broken screen.
+async function cacheFirstVersioned(req) {
+  const cache = await caches.open(CACHE)
+  const hit = await cache.match(req)
+  if (hit) return hit
+  try {
+    const res = await fetch(req)
+    if (res && res.ok) {
+      const path = new URL(req.url).pathname
+      const keys = await cache.keys()
+      await Promise.all(
+        keys
+          .filter((k) => k.url !== req.url && new URL(k.url).pathname === path && new URL(k.url).searchParams.has('v'))
+          .map((k) => cache.delete(k))
+      )
+      cache.put(req, res.clone())
+    }
+    return res
+  } catch (e) {
+    const stale = await cache.match(req, { ignoreSearch: true })
+    if (stale) return stale
+    throw e
+  }
+}
 
 async function networkFirst(req) {
   const cache = await caches.open(CACHE)
@@ -103,7 +136,12 @@ async function networkFirst(req) {
     if (res && res.ok) cache.put(req, res.clone())
     return res
   } catch (e) {
-    const cached = await cache.match(req)
+    let cached = await cache.match(req)
+    // Offline: an asset cached under a different ?v= (or the unversioned precache copy)
+    // still beats a broken screen. Navigations keep exact matching (distinct paths).
+    if (!cached && req.mode !== 'navigate') {
+      cached = await cache.match(req, { ignoreSearch: true })
+    }
     if (cached) return cached
     // Offline + never cached: for a page navigation, show the shared offline page
     // (precached above) instead of a browser error.
