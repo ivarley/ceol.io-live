@@ -608,13 +608,13 @@
 
     /* Remove docs-article padding - mobile only */
     body .docs-article {
-        padding: 0.5rem !important;
+        padding: 0.5rem 0 !important;
     }
 
     /* Reduce container padding to minimal - mobile only */
     body .docs-content-inner .container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
         padding-top: 0 !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
@@ -627,7 +627,29 @@
     }
 
     .card-body {
-        padding: 1rem;
+        padding: 0.75rem;
+    }
+
+    .card-header {
+        padding: 0.75rem;
+    }
+
+    /* The tab panel box hugs the (already minimal) page gutter */
+    .tab-content {
+        padding: 0.5rem;
+    }
+
+    /* Bootstrap grid gutters serve nothing at stacked-column widths, and the
+       rows' -15px margins would overflow the reduced card-body padding */
+    .card-body .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .card-body .row > .col,
+    .card-body .row > [class*="col-"] {
+        padding-left: 0;
+        padding-right: 0;
     }
 
     .table-responsive {

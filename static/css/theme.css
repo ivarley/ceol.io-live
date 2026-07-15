@@ -9619,7 +9619,7 @@
   }
   .docs-article ul,
   .docs-article ol,
-  .docs-article dl {
+  .docs-article dl:not(.row) {
     padding-left: 1.5rem;
   }
   .docs-article li {
