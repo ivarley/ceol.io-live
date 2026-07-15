@@ -1001,6 +1001,9 @@ describe('TuneSheet component', () => {
     component.show({ tuneId: 100, scope: { session: 'austin/mueller' } })
     await waitFor(() => expect(container.querySelector('.tune-merged-notice')).toBeTruthy())
     expect(container.querySelector('.tune-merged-notice').textContent).toContain('Tune #100 was merged into')
+    const noticeLink = container.querySelector('.tune-merged-notice a')
+    expect(noticeLink).toBeTruthy()
+    expect(noticeLink.getAttribute('href')).toBe('/sessions/austin/mueller/tunes/200')
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/200')
   })
 

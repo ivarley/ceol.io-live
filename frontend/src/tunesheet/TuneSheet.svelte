@@ -48,6 +48,7 @@
     extractSettingId,
     validateSettingInput,
     playedWithScopeOptions,
+    tuneHref,
     updateUrlWithTune,
     removeUrlTuneParam,
     getInstrumentData,
@@ -1607,8 +1608,14 @@
             class="tune-merged-notice"
             style="background: var(--input-bg, #f8f9fa); border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--secondary-text, #6c757d);"
           >
-            Tune #{mergedFrom} was merged into "{tune.tune_name || tune.name || `#${tune.tune_id}`}" (#{tune.tune_id})
-            — you're viewing the merged tune.
+            Tune #{mergedFrom} was merged into
+            <a
+              href={tuneHref(tune.tune_id, 'global')}
+              onclick={(e) => {
+                e.preventDefault()
+                openPlayedWithTune({ tune_id: tune.tune_id, name: tune.tune_name || tune.name })
+              }}>"{tune.tune_name || tune.name || `#${tune.tune_id}`}"</a
+            > (#{tune.tune_id}) — you're viewing the merged tune.
           </div>
         {/if}
 

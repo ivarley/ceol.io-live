@@ -331,7 +331,9 @@ export function playedWithScopeOptions(mode, scope, loggedIn = false) {
 
 // --- URL param management (identical to the legacy modal) ------------------------
 
-export function updateUrlWithTune(tuneId, context) {
+/** Drawer URL for a tune on the current page (path-based on session/admin pages,
+ *  query-param elsewhere). Shared by the history rewrite and in-drawer links. */
+export function tuneHref(tuneId, context) {
   const pathname = window.location.pathname
   if (pathname.includes('/sessions/') && !pathname.includes('/my-tunes')) {
     // Session context: path-based URL
@@ -339,9 +341,9 @@ export function updateUrlWithTune(tuneId, context) {
     if (!basePath.endsWith('/tunes')) {
       basePath = basePath.replace(/\/(logs|people)$/, '') + '/tunes'
     }
-    window.history.replaceState({}, '', `${basePath}/${tuneId}`)
+    return `${basePath}/${tuneId}`
   } else if (pathname.match(/^\/admin\/tunes(\/\d+)?$/)) {
-    window.history.replaceState({}, '', `/admin/tunes/${tuneId}`)
+    return `/admin/tunes/${tuneId}`
   } else {
     const url = new URL(window.location)
     const paramName = context === 'my_tunes' ? 'ptid' : 'tune'
@@ -349,8 +351,12 @@ export function updateUrlWithTune(tuneId, context) {
     // In-drawer chaining can hop between contexts (my_tunes <-> global view);
     // drop the other context's param so a stale one never lingers in the URL.
     url.searchParams.delete(context === 'my_tunes' ? 'tune' : 'ptid')
-    window.history.replaceState({}, '', url)
+    return url.pathname + url.search + url.hash
   }
+}
+
+export function updateUrlWithTune(tuneId, context) {
+  window.history.replaceState({}, '', tuneHref(tuneId, context))
 }
 
 export function removeUrlTuneParam(context) {
