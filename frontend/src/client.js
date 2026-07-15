@@ -385,8 +385,11 @@ export function openStream(config, lastEventId, handlers, mode) {
 
   // Liveness watchdog: reset on any byte we observe from the server; if it ever
   // fires, the stream is dead-but-not-errored — close it and ask for a reconnect.
+  // `alive` distinguishes real server bytes (reported via onAlive, so the UI can show
+  // "last update Xs ago") from the arming call below, which proves nothing arrived.
   let watchdog = null
-  const kick = () => {
+  const kick = (alive = true) => {
+    if (alive) handlers.onAlive?.()
     if (watchdog) clearTimeout(watchdog)
     watchdog = setTimeout(() => {
       handlers.onStatus?.('reconnecting')
@@ -438,6 +441,21 @@ export function openStream(config, lastEventId, handlers, mode) {
   // Arm the watchdog NOW, not on first byte: a stream that never opens (stalled
   // connect, or a non-200 that makes EventSource give up permanently with no native
   // retry) would otherwise sit in CONNECTING forever with no timer to kill it.
-  kick()
+  kick(false)
   return es
+}
+
+// Reachability probe for the connection-dot popover: can we reach (a) the Flask app
+// and (b) the streaming sidecar? These fail independently — locally a localhost vs
+// 127.0.0.1 mismatch in streamingBaseUrl kills only the stream — so probe both.
+// /sw.js is network-passthrough (never SW-cached); the sidecar's /health has no CORS
+// headers, so fetch it no-cors: an opaque response still proves the server answered,
+// and only a real network failure rejects.
+export async function probeServers(config) {
+  const base = config.streamingBaseUrl.replace(/\/$/, '')
+  const [app, stream] = await Promise.all([
+    fetch('/sw.js', { method: 'HEAD', cache: 'no-store' }).then(() => true).catch(() => false),
+    fetch(`${base}/health`, { mode: 'no-cors', cache: 'no-store' }).then(() => true).catch(() => false),
+  ])
+  return { app, stream }
 }

@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, tuneDetail, myTunesList, myTunesOp } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
   import { Dialog, PersonPicker } from './lib/index.js'
   import SidePane from './SidePane.svelte'
@@ -66,6 +66,67 @@
   //   reconnecting   - a transient stream blip we're still hopeful about
   const displayStatus = $derived(
     !online || !reachable ? 'offline' : sseStatus === 'live' ? 'live' : 'reconnecting'
+  )
+
+  // --- Connection-dot popover (tap the dot for detail) -----------------------
+  let connPopup = $state(false)
+  let lastEventAt = $state(0) // last byte observed on the stream (op/presence/typing/ping/open)
+  let offlineSince = $state(0) // when displayStatus first went offline (this page load)
+  let connNow = $state(0) // ticks while the popover is open so durations render live
+  // Active reachability probe (client.js probeServers), refreshed while the popover is
+  // open and the stream isn't live. The app and the streaming sidecar fail
+  // INDEPENDENTLY — locally a localhost vs 127.0.0.1 mismatch in streamingBaseUrl kills
+  // only the stream — so the popover names which one is unreachable.
+  let connProbe = $state(null) // {app: bool, stream: bool} | null while first probe runs
+  const streamHost = (() => {
+    try { return new URL(config.streamingBaseUrl, location.href).host } catch { return config.streamingBaseUrl }
+  })()
+  // The classic local-dev trap: page on localhost, stream on 127.0.0.1 (or vice versa).
+  // The sidecar responds to the probe but authenticates via the Flask-Login cookie,
+  // which is HOST-scoped — those are different hosts, so the SSE request 401s forever.
+  // Only flagged when BOTH hosts are loopback so it can never misfire in production
+  // (where the stream legitimately lives on a different host with domain-wide cookies).
+  const streamHostMismatch = (() => {
+    const loop = (h) => h === 'localhost' || h === '127.0.0.1'
+    try {
+      const sh = new URL(config.streamingBaseUrl, location.href).hostname
+      return loop(location.hostname) && loop(sh) && sh !== location.hostname
+    } catch { return false }
+  })()
+  // Clock starts when the stream stops being live (not when we finally declare
+  // 'offline'): in the sidecar-down case displayStatus oscillates offline->reconnecting
+  // every retry cycle, and anchoring on 'offline' would reset the duration each time.
+  $effect(() => {
+    if (displayStatus === 'live') offlineSince = 0
+    else if (!offlineSince) offlineSince = Date.now()
+  })
+  $effect(() => {
+    if (!connPopup) return
+    connNow = Date.now()
+    const tick = setInterval(() => (connNow = Date.now()), 1000)
+    return () => clearInterval(tick)
+  })
+  $effect(() => {
+    if (!connPopup || displayStatus === 'live') { connProbe = null; return }
+    let stale = false
+    const run = () => probeServers(config).then((r) => { if (!stale) connProbe = r })
+    run()
+    const timer = setInterval(run, 5000)
+    return () => { stale = true; clearInterval(timer) }
+  })
+  function fmtDur(ms) {
+    const s = Math.max(0, Math.round(ms / 1000))
+    if (s < 60) return `${s}s`
+    const m = Math.round(s / 60)
+    if (m < 60) return `${m}m`
+    return `${Math.floor(m / 60)}h ${m % 60}m`
+  }
+  const connTitle = $derived(
+    displayStatus === 'live' ? 'Connected'
+      // "offline" is the dot's catch-all for can't-connect, but if the probe proves the
+      // app server IS reachable the honest headline is stream trouble, not "offline".
+      : displayStatus === 'offline' ? (connProbe?.app ? 'Connection trouble' : "You're offline")
+      : sseStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'
   )
 
   // "reconnecting" is short-lived: if the stream doesn't come back within a few
@@ -840,6 +901,8 @@
   // the page (tap/click or keyboard focus outside the header). An unsaved notes draft
   // keeps it open — collapsing would silently discard the typing (Save/Cancel stay up).
   function collapseHeaderOnOutside(e) {
+    // Also dismiss the connection-dot popover on any interaction outside it.
+    if (connPopup && e.target instanceof Element && !e.target.closest('.conn-btn, .conn-popup')) connPopup = false
     if (!expanded) return
     if (e.target instanceof Element && e.target.closest('.topbar')) return
     if (notesDraft !== notesText) return
@@ -2634,6 +2697,7 @@
   }
 
   const queuedCount = $derived([...pending.values()].filter((e) => e.status === 'queued').length)
+  const sendingCount = $derived([...pending.values()].filter((e) => e.status === 'sending').length)
 
   // Refresh a typing reservation while composing (throttled), run search, clear when empty.
   function onInput() {
@@ -2771,6 +2835,7 @@
         onOp: applyOp,
         onPresence: (r) => (roster = r),
         onTyping: (l) => (typers = l),
+        onAlive: () => (lastEventAt = Date.now()),
         onStatus: (s) => {
           sseStatus = s
           noteSse(s)
@@ -3032,9 +3097,54 @@
 
 <main bind:this={mainEl} class:view-mode={viewing} class:wide>
   <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
-       so it sits where the app-wide indicator sits on every other page. -->
+       so it sits where the app-wide indicator sits on every other page. Tapping it opens
+       a popover with the full picture: status, queued edits, and (when the stream is
+       down) which server — app vs streaming sidecar — is actually unreachable. -->
   {#if showConnDot}
-    <span class="conn-dot conn-fixed conn-{displayStatus}" title={displayStatus} aria-label="Connection: {displayStatus}"></span>
+    <button
+      class="conn-btn"
+      title={displayStatus}
+      aria-label="Connection: {displayStatus}"
+      aria-expanded={connPopup}
+      onclick={(e) => { e.stopPropagation(); connPopup = !connPopup }}
+    ><span class="conn-dot conn-{displayStatus}"></span></button>
+    {#if connPopup}
+      <div class="conn-popup" role="status">
+        <div class="conn-popup-title"><span class="conn-dot conn-{displayStatus}"></span>{connTitle}</div>
+        {#if displayStatus === 'live'}
+          <div class="conn-popup-line">{mode === 'edit' ? 'Live — changes save and stream instantly.' : 'Watching live — updates appear as others log.'}</div>
+          {#if lastEventAt}
+            <div class="conn-popup-line">Last server activity {fmtDur(connNow - lastEventAt)} ago.</div>
+          {/if}
+        {:else if displayStatus === 'offline' && offlineSince}
+          <div class="conn-popup-line">{connProbe?.app ? 'Stream down' : 'Offline'} for {fmtDur(connNow - offlineSince)}.</div>
+        {/if}
+        {#if queuedCount > 0}
+          <div class="conn-popup-line conn-popup-queued">
+            {queuedCount} change{queuedCount === 1 ? '' : 's'} saved on this device — {displayStatus === 'offline' ? 'will sync when you reconnect.' : 'syncing…'}
+          </div>
+        {:else if sendingCount > 0}
+          <div class="conn-popup-line">{sendingCount} change{sendingCount === 1 ? '' : 's'} saving…</div>
+        {:else if mode === 'edit'}
+          <div class="conn-popup-line">All changes saved.</div>
+        {/if}
+        {#if displayStatus !== 'live'}
+          <div class="conn-popup-probe">
+            <div class="conn-popup-line">App server: {connProbe ? (connProbe.app ? '✓ reachable' : '✕ unreachable') : 'checking…'}</div>
+            <div class="conn-popup-line">Live-updates server ({streamHost}): {connProbe ? (connProbe.stream ? '✓ reachable' : '✕ unreachable') : 'checking…'}</div>
+            {#if connProbe && connProbe.app && !connProbe.stream}
+              <div class="conn-popup-line conn-popup-hint">Only the live-updates server is unreachable — changes still save, but updates from others won't appear until it's back.</div>
+            {:else if connProbe && connProbe.app && connProbe.stream}
+              {#if streamHostMismatch}
+                <div class="conn-popup-line conn-popup-hint">Host mismatch: the page is on {location.host} but the stream is on {streamHost} — login cookies don't cross those hosts, so the stream can't authenticate. Open the app via the other host or set STREAMING_BASE_URL to match.</div>
+              {:else}
+                <div class="conn-popup-line conn-popup-hint">Both servers respond but the stream isn't connecting — if this persists, the stream may be failing to authenticate.</div>
+              {/if}
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
   <div class="topnav" bind:clientHeight={headerH}>
     <!-- Mirrors the app-wide header (base.html .header): full-viewport bar, 30px logo +

@@ -115,6 +115,18 @@ detected by a heartbeat (`HEAD /sw.js`) and fetch-failures, **not** `navigator.o
 is actually offline). Tapping the dot shows how long you've been offline (persisted across
 page loads) and the pending-change count.
 
+The live logger's dot is tappable too, with a richer popover (it has more independent
+failure modes): status headline (connected / connecting / reconnecting / connection
+trouble / offline), last stream activity, how long the stream has been down, and the
+queued/saving edit counts. Whenever the stream isn't live it actively probes **both**
+servers — the Flask app (`HEAD /sw.js`) and the streaming sidecar (`GET /health`,
+`no-cors` so the missing CORS headers don't matter) — because they fail independently,
+and names the one that's unreachable. The classic local-dev trap (page on `localhost`,
+`STREAMING_BASE_URL` on `127.0.0.1` or vice versa: the sidecar responds but the
+host-scoped login cookie never reaches it, so SSE 401s forever) is detected explicitly —
+both hosts loopback but different — and called out with the fix; the loopback guard means
+the hint can never misfire in production.
+
 ### Background warm-up (`static/js/prefetch.js`)
 
 `window.CeolPrefetch` warms a small, fixed set of page shells + their assets (home, sessions,

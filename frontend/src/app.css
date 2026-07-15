@@ -241,15 +241,46 @@ main {
 .conn-live { background: #3fb950; }                  /* green: stream up */
 .conn-offline { background: #e0a23e; }               /* orange: offline */
 .conn-reconnecting { background: #e0a23e; animation: conn-pulse 1s ease-in-out infinite; }
-/* Floated beside the fixed hamburger (32px button at top:7px right:15px, matching the
-   base header): sit 8px to its left, centered on the button. Same z-index layer as
-   .live-menu (50). */
-.conn-fixed {
+/* The dot is a tappable button floated beside the fixed hamburger (32px button at
+   top:7px right:15px, matching the base header): 8px padding grows the tap target to
+   26px while keeping the 10px dot centered where the bare dot used to sit (top 18px /
+   right 55px). Same z-index layer as .live-menu (50). */
+.conn-btn {
   position: fixed;
-  top: calc(18px + env(safe-area-inset-top));
-  right: 55px;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 47px;
   z-index: 50;
+  display: inline-flex;
+  padding: 8px;
+  margin: 0;
+  background: none;
+  border: none;
+  line-height: 0;
+  cursor: pointer;
 }
+/* Status detail popover, anchored under the dot (fixed, like the dot itself). */
+.conn-popup {
+  position: fixed;
+  top: calc(42px + env(safe-area-inset-top));
+  right: 12px;
+  z-index: 60; /* above the hamburger layer (50) */
+  min-width: 230px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 11px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.conn-popup-title {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 5px;
+}
+.conn-popup-line { color: var(--muted); margin: 3px 0; overflow-wrap: anywhere; }
+.conn-popup-queued { color: var(--attention); }
+.conn-popup-probe { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); }
+.conn-popup-hint { color: var(--text); margin-top: 6px; }
 @keyframes conn-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.35; transform: scale(1.35); }
