@@ -62,12 +62,24 @@ Plus three non-page bundles:
   auto-opens the pane on mount (`?q` prefills its deep search) and the params
   are stripped via `replaceState` so refresh doesn't reopen. Offline, the
   My Tunes pane's deep search falls back to the `CeolOffline` bundle mirror
-  (the parity the legacy page had). The My Tunes pane also hosts the tunebook
-  sync (`SyncPane.svelte`): the search phase links to it under the header
-  (a quiet one-liner — sync is a rare, roughly-once action, so it doesn't get
-  a tab), and the folded-away `/my-tunes/sync` page 302s to
-  `/my-tunes?add=1&sync=1`, which opens the pane straight into it. The saved
-  `thesession_user_id` rides the my-tunes payload to prefill the form.
+  (the parity the legacy page had). The My Tunes pane has NO configure screen:
+  the preview (`TunePreview`) IS the configure step — its footer hosts
+  `AddTuneForm.svelte` (status seg + instrument roll-up + collapsed notes +
+  add button) via TunePreview's optional `footer` snippet (threaded through
+  TuneSearch as `previewFooter`; default = the plain action button, so the
+  live logger and session pane are unchanged). The settings pager is the
+  setting control (`chosenSettingId` flows into the add), the form is keyed on
+  the previewed tune's identity so ‹ › steps reset it, and an on-list tune's
+  footer shows a "show it" hand-off instead. The card's ＋ rail (and ⌘Enter)
+  adds instantly with defaults (want to learn, no notes, no setting) and lands
+  on the page's `?show/?added` flow. The session-tunes pane keeps its own
+  configure phase (alias/setting/key — session questions, not personal ones).
+  The My Tunes pane also hosts the tunebook sync (`SyncPane.svelte`): the
+  search phase links to it under the header (a quiet one-liner — sync is a
+  rare, roughly-once action, so it doesn't get a tab), and the folded-away
+  `/my-tunes/sync` page 302s to `/my-tunes?add=1&sync=1`, which opens the pane
+  straight into it. The saved `thesession_user_id` rides the my-tunes payload
+  to prefill the form.
 
 ## What stays Jinja
 

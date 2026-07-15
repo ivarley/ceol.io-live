@@ -60,7 +60,8 @@ export const TUNES = {
  */
 export const SCRATCH_TUNES = {
   addReplay: { id: 74, name: "Mason's Apron, The" },
-  addPageSearch: { id: 138, name: "Toss The Feathers" }, // my-tunes.spec.ts add-pane tests
+  addPageSearch: { id: 138, name: "Toss The Feathers" }, // my-tunes.spec.ts quick-add test
+  previewAdd: { id: 15, name: "Calliope House" }, // my-tunes.spec.ts preview-form add test (2 seeded settings)
   paneOfflineAdd: { id: 21, name: "Castle Kelly" }, // offline.spec.ts add-pane offline search/add
   homeDashboard: { id: 108, name: "Out On The Ocean" },
   listStatusCycle: { id: 4195, name: "Bear Dance, The" },

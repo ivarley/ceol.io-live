@@ -37,9 +37,10 @@ test.describe("My Tunes list", () => {
 test.describe("Add a tune", () => {
   // The legacy /my-tunes/add page is folded away: the URL now redirects to
   // /my-tunes?add=1[&q=], which auto-opens the modern add pane (AddTuneApp)
-  // with the deep search prefilled. SCRATCH_TUNES.addPageSearch is this
-  // describe's dedicated tune — the pick test needs it OFF sarah's list (an
-  // on-list pick hands off to the ?already flow instead of configuring).
+  // with the deep search prefilled. Two ways out of the search: the card's ＋
+  // rail adds INSTANTLY with defaults (want to learn, no notes), and the card
+  // body opens the preview whose footer hosts the add form. Each mutating test
+  // owns its OWN scratch tune (fullyParallel workers must not race on a row).
 
   test("the legacy add URL redirects to My Tunes with the pane open and q searched", async ({
     page,
@@ -66,9 +67,9 @@ test.describe("Add a tune", () => {
     await expect(pane.locator(".deep-card", { hasText: /Cooley/i }).first()).toBeVisible();
   });
 
-  test("picking a result opens the configure phase", async ({ page }) => {
+  test("the ＋ rail adds instantly with defaults and lands on the page", async ({ page }) => {
     const tune = SCRATCH_TUNES.addPageSearch;
-    // Reset to seed state (not on the list) so the pick configures, not ?already.
+    // Reset to seed state (not on the list) so the ＋ adds, not ?already.
     await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tune.id } });
     await page.goto("/my-tunes?add=1");
     const pane = page.locator(".mt-add-pane");
@@ -76,24 +77,75 @@ test.describe("Add a tune", () => {
     await pane.locator(".deep-field").fill(tune.name);
     const card = pane.locator(".deep-card", { hasText: tune.name }).first();
     await expect(card).toBeVisible();
-    await card.locator(".deep-quick").click(); // one-tap add -> configure phase
-    await expect(pane.locator(".mt-picked .deep-name")).toContainText(tune.name);
-    await expect(pane.locator(".mt-submit")).toBeEnabled();
+    await card.locator(".deep-quick").click(); // one-tap add — no configure step
+    // Pane closes; the page lands on the added tune with the success toast.
+    await expect(pane).toBeHidden();
+    await expect(page.locator("#message-container .message")).toContainText(/Successfully added/i);
+    await expect(page.locator(`[data-tune-id="${tune.id}"]`)).toBeVisible();
+    // Defaults: want to learn, no notes.
+    const res = await page.request.get("/api/my-tunes");
+    const added = (await res.json()).tunes.find((t: any) => t.tune_id === tune.id);
+    expect(added.learn_status).toBe("want to learn");
+    expect(added.notes).toBeFalsy();
+  });
+
+  test("the card body opens the preview with the add form in its footer", async ({ page }) => {
+    const tune = SCRATCH_TUNES.previewAdd;
+    await page.request.post("/api/my-tunes/ops", { data: { type: "remove", tune_id: tune.id } });
+    await page.goto("/my-tunes?add=1");
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await pane.locator(".deep-field").fill(tune.name);
+    await pane.locator(".deep-card-body", { hasText: tune.name }).first().click();
+    // The preview IS the configure screen now: pager + status seg + notes + add.
+    await expect(pane.locator(".pv")).toBeVisible();
+    const foot = pane.locator(".pv-foot");
+    await expect(foot.locator(".mt-submit")).toBeEnabled();
+    await foot.locator('[data-status="learned"]').click();
+    await foot.locator(".mt-note-toggle").click();
+    await foot.locator(".mt-notes").fill("from the e2e suite");
+    await foot.locator(".mt-submit").click();
+    await expect(pane).toBeHidden();
+    await expect(page.locator("#message-container .message")).toContainText(/Successfully added/i);
+    const res = await page.request.get("/api/my-tunes");
+    const added = (await res.json()).tunes.find((t: any) => t.tune_id === tune.id);
+    expect(added.learn_status).toBe("learned");
+    expect(added.notes).toBe("from the e2e suite");
+  });
+
+  test("previewing an on-list tune offers show-it instead of the form", async ({ page }) => {
+    // Cooley's (tune 1) is on sarah's SEED list — read-only, safe in parallel.
+    await page.goto("/my-tunes?add=1");
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await pane.locator(".deep-field").fill("Cooley");
+    await pane.locator(".deep-card-body", { hasText: /Cooley/i }).first().click();
+    const onlist = pane.locator(".mt-onlist");
+    await expect(onlist).toContainText(/Already on your list/i);
+    await expect(pane.locator(".mt-submit")).toHaveCount(0);
+    await onlist.click();
+    await expect(pane).toBeHidden();
+    await expect(page.locator("#message-container .message")).toContainText(/already on your list/i);
   });
 });
 
 test.describe("Sync from TheSession.org", () => {
-  test("renders the sync form", async ({ page }) => {
+  // The standalone sync page is folded away: /my-tunes/sync redirects to
+  // /my-tunes?add=1&sync=1, which opens the add pane straight into its sync view.
+  test("the legacy sync URL lands in the pane's sync view", async ({ page }) => {
     await page.goto("/my-tunes/sync");
-    await expect(page.locator("h1")).toContainText(/Sync from TheSession/i);
-    await expect(page.locator("#sync-form")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Start Sync/i })).toBeVisible();
+    await expect(page).toHaveURL(/\/my-tunes(\?|$)/);
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await expect(pane.locator(".deep-title")).toContainText(/Sync from TheSession/i);
+    await expect(pane.getByRole("button", { name: /Start Sync/i })).toBeVisible();
   });
 
   test("requires a user id before syncing", async ({ page }) => {
     await page.goto("/my-tunes/sync");
-    const input = page.locator("#thesession-user-id");
-    // The field is required; the browser blocks submit when empty.
-    await expect(input).toHaveAttribute("required", "");
+    const pane = page.locator(".mt-add-pane");
+    await expect(pane).toBeVisible();
+    await pane.getByRole("button", { name: /Start Sync/i }).click();
+    await expect(pane.locator(".mt-error")).toContainText(/valid thesession\.org user ID/i);
   });
 });

@@ -193,11 +193,11 @@ test.describe("offline writes (Tier 2)", () => {
       const card = pane.locator(".deep-card", { hasText: tune.name }).first();
       await expect(card).toBeVisible({ timeout: 8000 });
 
-      // Picking + adding offline must QUEUE via the op-queue (never a failing
-      // network POST), leaving the user on the list with the new card showing.
-      await card.locator(".deep-quick").click(); // -> configure phase
-      await expect(pane.locator(".mt-submit")).toBeEnabled();
-      await pane.locator(".mt-submit").click();
+      // The ＋ rail adds offline in ONE tap — it must QUEUE via the op-queue
+      // (never a failing network POST), closing the pane onto the list with
+      // the new card showing.
+      await card.locator(".deep-quick").click();
+      await expect(pane).toBeHidden({ timeout: 8000 });
 
       // The queued tune SHOWS in the list, marked "pending" (not vanished until sync).
       const listCard = page.locator(`.tune-card[data-tune-id="${addedTid}"], .tune-card-swipe-container[data-tune-id="${addedTid}"]`).first();

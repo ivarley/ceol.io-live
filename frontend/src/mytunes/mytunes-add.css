@@ -268,7 +268,7 @@
 }
 @keyframes mtpvspin { to { transform: rotate(360deg); } }
 
-/* ---------- configure phase ---------- */
+/* ---------- configure phase (session-tunes pane) + sync view shell ---------- */
 .mt-add-pane .mt-back {
   flex: none; font-size: 26px; line-height: 1; padding: 2px 12px 6px; cursor: pointer;
   background: transparent; border: none; color: var(--text);
@@ -318,6 +318,27 @@
   background: var(--accent); border: none; border-radius: 8px; color: #fff;
 }
 .mt-add-pane .mt-submit:disabled { opacity: 0.6; cursor: default; }
+
+/* ---------- preview-footer add form (AddTuneForm in TunePreview's .pv-foot) ---------- */
+/* The footer grows from a one-button strip into the whole configure step; cap it so
+   the notation stays visible, and let the expanded roll-up scroll inside. */
+.mt-add-pane .pv-foot { max-height: 60%; overflow-y: auto; }
+.mt-add-pane .mt-form { display: flex; flex-direction: column; gap: 9px; }
+.mt-add-pane .mt-form-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.mt-add-pane .mt-form .tsc-instruments { margin-top: 0; padding-top: 8px; }
+.mt-add-pane .mt-note-toggle {
+  align-self: flex-start; font: inherit; font-size: 13px; font-weight: 600; padding: 0; cursor: pointer;
+  background: transparent; border: none; color: var(--muted);
+}
+.mt-add-pane .mt-note-toggle:hover { color: var(--text); }
+.mt-add-pane .mt-form .mt-notes { min-height: 52px; }
+.mt-add-pane .mt-form .mt-error { margin: 0; }
+/* already-on-list hand-off: same footprint as the action button, gold "your list" voice */
+.mt-add-pane .pv-action.mt-onlist {
+  background: rgba(238, 191, 65, 0.16); border: 1px solid rgba(238, 191, 65, 0.5); color: #e8d28a;
+}
+/* quick-add failure banner in the search phase (lives in the notice slot) */
+.mt-add-pane .mt-search-error { margin: 0 14px 8px; }
 
 /* ---------- tunebook sync (the folded-away /my-tunes/sync page) ---------- */
 /* The search phase's quiet pointer to it: one muted line under the header. */

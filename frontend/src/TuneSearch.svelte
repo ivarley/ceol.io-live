@@ -25,6 +25,7 @@
     dimInSession = false, // dim results already in the session's repertoire (session-tunes add pane)
     history = [], // page-local recall history (MRU, shared across pane + modal via the parent)
     notice = null, // optional snippet rendered between the header and the search field
+    previewFooter = null, // optional snippet replacing TunePreview's action button (see TunePreview `footer`)
     onRemember = () => {}, // record a used query into the shared history
     onAdd,
     onClose = () => {},
@@ -338,6 +339,7 @@
       index={externalPreview.index}
       initialSettingId={externalPreview.settingId ?? null}
       {actionLabel}
+      footer={previewFooter}
       onAction={previewAction}
       onClose={() => { externalPreview = null }}
     />
@@ -350,6 +352,7 @@
     items={previewItems}
     index={previewIdx}
     {actionLabel}
+    footer={previewFooter}
     onAction={previewAction}
     onClose={closePreview}
   />

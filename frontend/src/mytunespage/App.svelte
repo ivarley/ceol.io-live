@@ -466,15 +466,18 @@
     const ptid = window.TuneDetailModal && window.TuneDetailModal.getTuneIdFromUrl
       ? window.TuneDetailModal.getTuneIdFromUrl()
       : null
-    if (ptid) waitForTuneAndOpen(ptid)
+    if (ptid) untrack(() => waitForTuneAndOpen(ptid)) // reads allTunes — same mount-once rule
     // ?add=1 landing (the folded-away add page's redirect target): open the pane.
     // Instruments arrive via the async adopt(), so poll briefly (only when the
-    // embed says there are any) so the configure phase gets its per-instrument
+    // embed says there are any) so the add form gets its per-instrument
     // controls. The URL-sync effect strips ?add/?q, so refresh won't reopen.
+    // untrack: the first poll reads `instruments` synchronously — tracking it
+    // would re-run this mount effect (and REOPEN the pane) on every list
+    // refresh, e.g. right after an add closes the pane.
     if (autoOpenAdd) {
       const expectInstruments = !!(pageData && pageData.instruments && pageData.instruments.length)
       const openWhenReady = (n) => {
-        if (!expectInstruments || instruments.length || n >= 20) openAddPane(autoOpenAddQuery, autoOpenSync)
+        if (!expectInstruments || untrack(() => instruments.length) || n >= 20) openAddPane(autoOpenAddQuery, autoOpenSync)
         else setTimeout(() => openWhenReady(n + 1), 50)
       }
       openWhenReady(0)

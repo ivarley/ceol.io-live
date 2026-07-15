@@ -21,6 +21,7 @@
     index = 0, // start position
     initialSettingId = null, // a pasted URL's ?setting=/#setting deep link — land the pager there (counts as CHOSEN)
     actionLabel = '＋ Log This Tune',
+    footer = null, // optional snippet (item, previewData, chosenSettingId) replacing the default action button
     onAction, // (item, previewData) -> onAdd's return (false = deferred, stay open)
     onClose,
   } = $props()
@@ -29,7 +30,7 @@
   let mode = $state('notes') // 'notes' | 'abc'
   let size = $state('incipit') // 'incipit' | 'full' (flips on content click)
   let setIdx = $state(0) // which setting the pager is on
-  let pagerTouched = false // did the user WORK the settings pager? (gates "chosen setting")
+  let pagerTouched = $state(false) // did the user WORK the settings pager? (gates "chosen setting")
   // A URL-requested setting jumps the pager when (or as soon as) it appears — including
   // after the backfill lands, since the deep-linked setting may not be imported yet.
   let pendingSetting = untrack(() => initialSettingId)
@@ -206,11 +207,12 @@
     show(n)
   }
 
+  // A setting counts as CHOSEN only if the user worked the pager on this tune —
+  // merely opening the preview (which lands on setting 1) expresses no preference.
+  const chosenSettingId = $derived(pagerTouched && setting?.setting_id != null ? setting.setting_id : null)
+
   function doAction() {
-    // A setting counts as CHOSEN only if the user worked the pager on this tune —
-    // merely opening the preview (which lands on setting 1) expresses no preference.
-    const chosen = pagerTouched && setting?.setting_id != null ? setting.setting_id : null
-    onAction(items[idx], data, chosen)
+    onAction(items[idx], data, chosenSettingId)
   }
 
   // Keys: ← → compare candidates, Enter confirms, Esc backs out to the results.
@@ -227,6 +229,9 @@
       e.preventDefault()
       stepResult(1)
     } else if (e.key === 'Enter') {
+      // A footer form owns its own confirm; a bare Enter must not fire a
+      // defaults-add underneath the user's half-filled form.
+      if (footer) return
       if (e.target.closest('button, a, input, textarea, select')) return
       e.preventDefault()
       doAction()
@@ -333,6 +338,10 @@
   </div>
 
   <div class="pv-foot">
-    <button class="pv-action" onclick={doAction}>{actionLabel}</button>
+    {#if footer}
+      {@render footer(item, data, chosenSettingId)}
+    {:else}
+      <button class="pv-action" onclick={doAction}>{actionLabel}</button>
+    {/if}
   </div>
 </div>

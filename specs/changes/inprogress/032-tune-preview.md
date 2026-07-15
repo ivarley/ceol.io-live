@@ -182,3 +182,13 @@ Four endpoints, each homed three ways like the rest of the search family
   setting" above).
 - The pane's "usually next" card remains visible above a pane preview; harmless but could be
   hidden later if it reads oddly.
+
+## Addendum (2026-07-14): optional `footer` snippet
+
+`TunePreview` grew an optional `footer` snippet prop `(item, previewData,
+chosenSettingId)` that REPLACES the default `.pv-action` button (threaded
+through `TuneSearch` as `previewFooter`; default null = today's button, so the
+live logger and session-tunes pane are unchanged). When a footer is set, the
+bare-Enter shortcut no-ops (the form owns its own confirm). The My Tunes add
+pane uses it to host `AddTuneForm` — its configure phase folded into the
+preview, and the ＋ rail became an instant defaults-add.
