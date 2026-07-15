@@ -14,7 +14,7 @@
     maxPos, cursorPos, remapAnchors, normName, normAbc, stripThe,
     openSetMergeTarget, mergeStable, parseThesessionId, parseThesessionSettingId,
     computeCursorSlots, seamKeyFor, seamActionFor,
-    rememberInHistory, historyStep,
+    rememberInHistory, historyStep, nextTs,
   } from './logstate.js'
   import {
     dragBlock, dropTargets, optimisticMove,
@@ -30,6 +30,15 @@
   // op_id -> {tempId, name, op_type, payload, status, ts}. status 'sending' = online
   // optimistic in-flight (§A2); 'queued' = offline, persisted to IndexedDB (§G).
   const pending = new SvelteMap()
+  // op_ids that fully resolved (settled, rejected, cancelled, or echoed via SSE).
+  // The IndexedDB delete in dropPending is async, so a reconnect's hydrateQueue can
+  // read the store before it commits — this set stops it resurrecting a finished op.
+  const resolvedOps = new Set()
+  function dropPending(op_id) {
+    resolvedOps.add(op_id)
+    pending.delete(op_id)
+    return queueDelete(op_id)
+  }
   // temp record id ("temp-<op_id>") -> real server id, learned as ops settle. Lets a
   // queued op whose anchor (after/before/record_id) points at a still-temp record be
   // remapped to the real id at send time, so offline mid-set inserts don't send
@@ -596,6 +605,9 @@
   function rowClick(r, e) {
     if (selectMode) { toggleSelect(r, e); return }
     if (r._resolving) { if (canEdit) selectRow(r.session_instance_tune_id); return }
+    // A QUEUED offline add is selectable so it can be cancelled before it ever syncs;
+    // a 'sending' temp settles within moments and stays inert until it's real.
+    if (r._temp && r._status === 'queued') { if (canEdit) selectRow(r.session_instance_tune_id); return }
     if (r._temp || r._removing) return
     // While filtering, a tap opens details (same as view mode) — filtering is
     // exactly when you've hunted down a tune and want its info.
@@ -624,7 +636,7 @@
       session_instance_tune_id: tempId, record_type: 'break',
       order_position: generateBetween(before, after), deleted: false, _temp: true,
     })
-    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: afterTuneId }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: afterTuneId }, status: 'sending', ts: nextTs(), tempId })
     holdCursor(nextId != null ? { newSet: nextId } : null)
   }
 
@@ -637,7 +649,7 @@
     const prevId = bidx > 0 ? ordered[bidx - 1]?.session_instance_tune_id : null
     byId.delete(breakId) // optimistic merge
     const op_id = crypto.randomUUID()
-    trySend({ op_id, op_type: 'set_break', payload: { action: 'remove', record_id: breakId }, status: 'sending', ts: Date.now(), restoreRecord: brk })
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'remove', record_id: breakId }, status: 'sending', ts: nextTs(), restoreRecord: brk })
     holdCursor(prevId != null ? prevId : null)
   }
 
@@ -907,7 +919,7 @@
       })
     }
     const op_id = crypto.randomUUID()
-    trySend({ op_id, op_type: 'attribute_set_starter', payload: { record_id: firstId, person_id: personOrNull?.person_id ?? null }, status: 'sending', ts: Date.now(), prevRecords })
+    trySend({ op_id, op_type: 'attribute_set_starter', payload: { record_id: firstId, person_id: personOrNull?.person_id ?? null }, status: 'sending', ts: nextTs(), prevRecords })
     // Close the picker and the whole tray immediately; flash the new starter pill (top-right)
     // as confirmation (only when one was set, not on clear).
     closePicker()
@@ -1162,7 +1174,7 @@
         const btmp = `temp-${bop}`
         const bkey = generateBetween(prevPos, succPos)
         byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
-        await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', after_record_id: prevTempId }, status: 'sending', ts: Date.now(), tempId: btmp })
+        await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', after_record_id: prevTempId }, status: 'sending', ts: nextTs(), tempId: btmp })
         prevPos = bkey
         prevTempId = btmp // next tune anchors after the BREAK, not before it
       }
@@ -1181,7 +1193,7 @@
         // Advance BEFORE the send: the ack's temp→real remap chases insertAfterId, so
         // setting it after the await could leave it on an already-retired temp id.
         if (advanceCursor && insertAfterId != null) insertAfterId = tempId
-        await trySend({ op_id, name: t.name, op_type: 'add_tune', payload, status: 'sending', ts: Date.now(), tempId })
+        await trySend({ op_id, name: t.name, op_type: 'add_tune', payload, status: 'sending', ts: nextTs(), tempId })
         prevTempId = tempId
         prevPos = key
         total++
@@ -1193,7 +1205,7 @@
       const btmp = `temp-${bop}`
       const bkey = generateBetween(prevPos, succPos)
       byId.set(btmp, { session_instance_tune_id: btmp, record_type: 'break', order_position: bkey, deleted: false, _temp: true })
-      await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', before_record_id: newSetTarget }, status: 'sending', ts: Date.now(), tempId: btmp })
+      await trySend({ op_id: bop, op_type: 'set_break', payload: { action: 'insert', before_record_id: newSetTarget }, status: 'sending', ts: nextTs(), tempId: btmp })
     }
     flashNotice(`Pasted ${total} tune${total === 1 ? '' : 's'} in ${sets.length} set${sets.length === 1 ? '' : 's'}`)
   }
@@ -1210,7 +1222,7 @@
     const op_id = crypto.randomUUID()
     const records = ids.map((id) => byId.get(id))
     for (const id of ids) byId.set(id, { ...byId.get(id), _removing: op_id })
-    trySend({ op_id, op_type: 'remove_tunes', payload: { record_ids: ids }, status: 'sending', ts: Date.now(), bulkRemoveIds: ids })
+    trySend({ op_id, op_type: 'remove_tunes', payload: { record_ids: ids }, status: 'sending', ts: nextTs(), bulkRemoveIds: ids })
     selected.clear()
     shiftAnchor = null
     const seq = ++undoDeleteSeq
@@ -1224,8 +1236,7 @@
     const entry = pending.get(u.op_id)
     if (entry && entry.status === 'queued') {
       // the delete never reached the server (offline) — cancel it locally, like restore()
-      pending.delete(u.op_id)
-      queueDelete(u.op_id)
+      dropPending(u.op_id)
       for (const id of u.ids) {
         const r = byId.get(id)
         if (r && r._removing) { const { _removing, ...rest } = r; byId.set(id, rest) }
@@ -1234,7 +1245,7 @@
     }
     // already sent/settled: optimistic re-add + the inverse op (streams to everyone)
     for (const r of u.records) if (r) byId.set(r.session_instance_tune_id, { ...r, deleted: false, _removing: undefined })
-    trySend({ op_id: crypto.randomUUID(), op_type: 'restore_tunes', payload: { record_ids: u.ids }, status: 'sending', ts: Date.now(), restoredIds: u.ids })
+    trySend({ op_id: crypto.randomUUID(), op_type: 'restore_tunes', payload: { record_ids: u.ids }, status: 'sending', ts: nextTs(), restoredIds: u.ids })
   }
 
   // Assign (§G): one attribute_set_starter per set containing a selected tune —
@@ -1345,7 +1356,7 @@
     trySend({
       op_id, op_type: 'move_tunes',
       payload: { record_ids: drag.block.tuneIds, after_record_id: t.after_record_id, before_record_id: t.before_record_id, new_set: t.new_set },
-      status: 'sending', ts: Date.now(), prevRecords, tempIds,
+      status: 'sending', ts: nextTs(), prevRecords, tempIds,
     })
     flashId(drag.block.tuneIds[0], 'mine')
     insertAfterId = drag.block.tuneIds[drag.block.tuneIds.length - 1] // cursor lands after the block
@@ -1415,7 +1426,7 @@
     if (prev) byId.set(id, { ...prev, confidence: 100 })
     const op_id = crypto.randomUUID()
     flashId(id)
-    trySend({ op_id, op_type: 'set_confidence', payload: { record_id: id, confidence: 100 }, status: 'sending', ts: Date.now(), prev })
+    trySend({ op_id, op_type: 'set_confidence', payload: { record_id: id, confidence: 100 }, status: 'sending', ts: nextTs(), prev })
     selectedId = null
   }
   function removeRow(id) {
@@ -1453,7 +1464,7 @@
     if (prev) byId.set(record_id, { ...prev, ...patch })
     const op_id = crypto.randomUUID()
     flashId(record_id)
-    trySend({ op_id, op_type: 'change_tune', payload: { record_id, ...payload }, status: 'sending', ts: Date.now(), prev })
+    trySend({ op_id, op_type: 'change_tune', payload: { record_id, ...payload }, status: 'sending', ts: nextTs(), prev })
   }
 
   // Relink the edited record to a catalog tune (from a tapped/Enter-picked result).
@@ -1654,8 +1665,7 @@
         byId.delete(entry.tempId) // ...drop its optimistic temp record
       }
       if (entry.tempIds) for (const t of entry.tempIds) byId.delete(t) // optimistic move boundary breaks
-      pending.delete(d.op_id)
-      queueDelete(d.op_id) // ...and drop it from the persisted queue (already applied)
+      dropPending(d.op_id) // ...and drop it from the persisted queue (already applied)
     }
     if (d.event_id && d.event_id > highWater) highWater = d.event_id
     noteRemote(d)
@@ -1770,8 +1780,7 @@
   }
 
   function settleOp(entry, res) {
-    pending.delete(entry.op_id)
-    queueDelete(entry.op_id)
+    dropPending(entry.op_id)
     if (res.rejected) {
       undoOp(entry)
       // An offline-originated op that the server rejected on flush is collected for the
@@ -1812,7 +1821,7 @@
 
   // Send a pending op (any type). Success -> settle; network failure -> queue it
   // (persisted for replay); server error -> undo + surface. Idempotent by op_id.
-  async function trySend(entry) {
+  async function trySend(entry, fromFlush = false) {
     entry.status = 'sending'
     pending.set(entry.op_id, entry)
     // Fast-path: if the browser knows it's offline, queue without a doomed fetch
@@ -1821,11 +1830,21 @@
       await markQueued(entry)
       return
     }
+    // FIFO gate: while older ops sit queued, a new op must queue behind them, never
+    // jump the line. On a flaky connection a fresh add can otherwise POST successfully
+    // while an earlier one waits for replay — and since appends carry no anchor, the
+    // server would bake that swapped order into order_position permanently. Queue it
+    // and kick a flush: if the network is back, the whole backlog drains in order now.
+    if (!fromFlush && [...pending.values()].some((e) => e.status === 'queued')) {
+      await markQueued(entry)
+      flush()
+      return
+    }
     // Remap any temp anchor/target ids to their real server ids (an offline mid-set
     // insert / burst can reference a record that hadn't settled yet, #5b).
     const { payload, skip } = remapAnchors(entry.payload, tempToReal)
     if (skip) { // the target record never reached the server -> drop this orphaned op
-      pending.delete(entry.op_id); await queueDelete(entry.op_id)
+      await dropPending(entry.op_id)
       if (entry.tempId) byId.delete(entry.tempId)
       return
     }
@@ -1841,8 +1860,7 @@
       if (e.networkError) await markQueued(entry)
       else {
         undoOp(entry)
-        pending.delete(entry.op_id)
-        await queueDelete(entry.op_id)
+        await dropPending(entry.op_id)
         error = e.message
       }
     }
@@ -1859,9 +1877,16 @@
     flushRejects = []
     const hadQueued = [...pending.values()].some((e) => e.status === 'queued')
     try {
-      const queued = [...pending.values()].filter((e) => e.status === 'queued').sort((a, b) => a.ts - b.ts)
-      for (const entry of queued) {
-        await trySend(entry)
+      // Re-pick the head each iteration (not a snapshot): the FIFO gate in trySend can
+      // queue NEW ops behind the backlog while this drain is in flight, and its flush()
+      // call no-ops on the `flushing` guard — so this loop must see them or they'd
+      // strand until the next 'live' event. Each pass either settles/drops the head
+      // (trySend removes it from pending) or leaves it queued (offline again -> stop).
+      for (;;) {
+        const queued = [...pending.values()].filter((e) => e.status === 'queued').sort((a, b) => a.ts - b.ts)
+        if (!queued.length) break
+        const entry = queued[0]
+        await trySend(entry, true)
         if (entry.status === 'queued') break // still offline
       }
     } finally {
@@ -1892,7 +1917,7 @@
     const seq = ++mergeNudgeSeq
     mergeNudge = { name: name || payload.name || 'that tune', payload }
     setTimeout(() => { if (seq === mergeNudgeSeq) mergeNudge = null }, 7000)
-    trySend({ op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, after_record_id: null, before_record_id: null }, status: 'sending', ts: Date.now(), _localMerged: true })
+    trySend({ op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, after_record_id: null, before_record_id: null }, status: 'sending', ts: nextTs(), _localMerged: true })
   }
 
   // Shared optimistic add: place a temp row at the cursor, send/queue the op, and
@@ -1915,7 +1940,7 @@
       session_instance_tune_id: tempId, name, tune_id: payload.tune_id ?? null, tune_type: payload.tune_type ?? null,
       record_type: 'tune', order_position: position, deleted: false, _temp: true, _status: 'sending',
     })
-    trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, after_record_id: afterId, before_record_id: beforeId }, status: 'sending', ts: nextTs(), tempId })
     if (insertAfterId != null) insertAfterId = tempId // mid-insert: cursor follows the new tune
   }
 
@@ -1952,7 +1977,7 @@
       session_instance_tune_id: tempId, name: n.name, tune_id: n.payload.tune_id ?? null, tune_type: n.payload.tune_type ?? null,
       record_type: 'tune', order_position: generateAppend(maxPos(byId.values())), deleted: false, _temp: true, _status: 'sending',
     })
-    trySend({ op_id, name: n.name, op_type: 'add_tune', payload: { ...n.payload, after_record_id: null, before_record_id: null, no_merge: true }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, name: n.name, op_type: 'add_tune', payload: { ...n.payload, after_record_id: null, before_record_id: null, no_merge: true }, status: 'sending', ts: nextTs(), tempId })
   }
   const dismissMerge = () => { mergeNudge = null }
 
@@ -2004,8 +2029,8 @@
     })
     insertAfterId = tempId // burst continues inside the new set (before its trailing break)
 
-    await trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, before_record_id: nextFirstId }, status: 'sending', ts: Date.now(), tempId })
-    trySend({ op_id: bid, op_type: 'set_break', payload: { action: 'insert', before_record_id: nextFirstId }, status: 'sending', ts: Date.now() + 1, tempId: btmp })
+    await trySend({ op_id, name, op_type: 'add_tune', payload: { ...payload, before_record_id: nextFirstId }, status: 'sending', ts: nextTs(), tempId })
+    trySend({ op_id: bid, op_type: 'set_break', payload: { action: 'insert', before_record_id: nextFirstId }, status: 'sending', ts: nextTs(), tempId: btmp })
   }
 
   // Cancel a pending debounced search AND invalidate any in-flight one, so a late
@@ -2207,12 +2232,12 @@
     resolving = null
     results = []; resultsQuery = ''; noMatch = false; ambiguous = false
     queueMicrotask(() => inputEl?.focus())
-    const addEntry = { op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, ...rs.addAnchors }, status: 'sending', ts: Date.now(), tempId: rs.tempId }
+    const addEntry = { op_id: crypto.randomUUID(), name, op_type: 'add_tune', payload: { ...payload, ...rs.addAnchors }, status: 'sending', ts: nextTs(), tempId: rs.tempId }
     if (rs.breakOp) {
       // new-set seam: send the break only AFTER the tune resolves, anchored before the same
       // next tune, so it always lands after our tune (mirrors addNewSetTune).
       await trySend(addEntry)
-      trySend({ op_id: crypto.randomUUID(), op_type: rs.breakOp.op_type, payload: rs.breakOp.payload, status: 'sending', ts: Date.now() + 1, tempId: rs.breakTempId })
+      trySend({ op_id: crypto.randomUUID(), op_type: rs.breakOp.op_type, payload: rs.breakOp.payload, status: 'sending', ts: nextTs(), tempId: rs.breakTempId })
     } else {
       trySend(addEntry)
     }
@@ -2566,15 +2591,27 @@
     error = ''
     const op_id = crypto.randomUUID()
     byId.set(record_id, { ...r, _removing: op_id })
-    trySend({ op_id, op_type: 'remove_tune', payload: { record_id }, status: 'sending', ts: Date.now() })
+    trySend({ op_id, op_type: 'remove_tune', payload: { record_id }, status: 'sending', ts: nextTs() })
+  }
+
+  // Remove a QUEUED offline add before it syncs: the op never reached the server, so
+  // this is a local cancel (like restore()/undoBulkDelete) — drop the op from the
+  // queue and its optimistic row from the log. Only 'queued' entries: an in-flight
+  // 'sending' op settles momentarily and can be removed normally once real.
+  function cancelQueuedRow(tempId) {
+    const entry = [...pending.values()].find((e) => e.tempId === tempId && e.status === 'queued')
+    if (!entry) return
+    dropPending(entry.op_id)
+    byId.delete(tempId)
+    if (insertAfterId === tempId) insertAfterId = null
+    if (selectedId === tempId) selectedId = null
   }
 
   // Restore a not-yet-synced removal: cancel the queued op, clear the mark.
   function restore(record_id) {
     const r = byId.get(record_id)
     if (!r || !r._removing) return
-    pending.delete(r._removing)
-    queueDelete(r._removing)
+    dropPending(r._removing)
     const { _removing, ...rest } = r
     byId.set(record_id, rest)
   }
@@ -2593,7 +2630,7 @@
       session_instance_tune_id: tempId, record_type: 'break',
       order_position: nextTempPos(), deleted: false, _temp: true,
     })
-    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: null }, status: 'sending', ts: Date.now(), tempId })
+    trySend({ op_id, op_type: 'set_break', payload: { action: 'insert', after_record_id: null }, status: 'sending', ts: nextTs(), tempId })
   }
 
   const queuedCount = $derived([...pending.values()].filter((e) => e.status === 'queued').length)
@@ -2721,6 +2758,15 @@
       }
       refreshAttendees() // load the attendance list (header + starter picker) — online only
 
+      // The server is provably reachable (bootstrap just succeeded) — replay queued ops
+      // NOW. Waiting for the stream to reach 'live' (the only other flush trigger) strands
+      // the queue indefinitely when SSE can't connect (e.g. the streaming sidecar is down)
+      // even though every op would land fine. Awaited so the §I36 summary below reports
+      // what actually synced. The ops' own events replay via the stream's catch-up cursor
+      // (idempotent by record id), so flushing before opening the stream loses nothing.
+      await flush()
+      if (myGen !== connSeq) return // a newer connect() superseded this one while flushing
+
       const stream = openStream(config, snap.last_event_id, {
         onOp: applyOp,
         onPresence: (r) => (roster = r),
@@ -2745,10 +2791,15 @@
       loadVocabulary(myGen) // background: warm the local fast-match index, then persist it
 
       // On a reconnect (not the first connect), summarize what changed while away.
+      // "synced" counts ops that actually LEFT the queue in the flush above — claiming
+      // wasQueued outright showed a green "N synced" on every reconnect even when the
+      // flush couldn't run and the ops were still stuck queued.
       if (everConnected) {
         const added = (snap.records || []).filter((r) => !prevIds.has(r.session_instance_tune_id)).length
+        const stillQueued = [...pending.values()].filter((e) => e.status === 'queued').length
+        const synced = Math.max(0, wasQueued - stillQueued)
         const parts = []
-        if (wasQueued) parts.push(`${wasQueued} synced`)
+        if (synced) parts.push(`${synced} synced`)
         if (added) parts.push(`${added} added while away`)
         if (parts.length) showSync(parts.join(' · '))
       }
@@ -2786,7 +2837,10 @@
       return // IndexedDB unavailable (private mode etc.) — degrade to online-only
     }
     for (const e of saved) {
-      if (!pending.has(e.op_id)) {
+      // Skip ops already tracked AND ops that resolved this session — queueAll can read
+      // the store before a just-resolved op's IndexedDB delete commits, and re-queueing
+      // it would replay (and optimistically re-render) an op that's already done.
+      if (!pending.has(e.op_id) && !resolvedOps.has(e.op_id)) {
         pending.set(e.op_id, { op_id: e.op_id, op_type: e.op_type, payload: e.payload, name: e.name, status: 'queued', ts: e.ts })
       }
     }
@@ -2796,8 +2850,13 @@
     for (const entry of queued) {
       if (entry.op_type === 'add_tune') {
         entry.tempId = `temp-${entry.op_id}`
+        // Carry the link through from the op payload: an offline add matched via the
+        // cache/local vocabulary IS linked, and dropping tune_id/tune_type here made
+        // every queued tune render "unlinked" in an "Unknown" set after a reload.
         byId.set(entry.tempId, {
-          session_instance_tune_id: entry.tempId, name: entry.name, tune_id: null, record_type: 'tune',
+          session_instance_tune_id: entry.tempId, name: entry.name,
+          tune_id: entry.payload?.tune_id ?? null, tune_type: entry.payload?.tune_type ?? null,
+          record_type: 'tune',
           order_position: nextTempPos(), deleted: false, _temp: true, _status: 'queued',
         })
       } else if (entry.op_type === 'set_break' && entry.payload?.action === 'remove') {
@@ -3273,6 +3332,11 @@
               <div class="row-actions">
                 <button onclick={() => { selectedId = null; cancelResolving(true) }}>✎ Edit</button>
                 <button class="danger" onclick={() => { selectedId = null; cancelResolving(false) }}>🗑 Remove</button>
+              </div>
+            {:else if r._temp}
+              <!-- queued offline add: cancel it locally — the op hasn't reached the server -->
+              <div class="row-actions">
+                <button class="danger" onclick={() => cancelQueuedRow(r.session_instance_tune_id)}>🗑 Remove</button>
               </div>
             {:else}
             <div class="row-actions">

@@ -8,6 +8,18 @@
 
 import { generateAppend, generateBetween } from './fracindex.js'
 
+// --- Op timestamps ---------------------------------------------------------- //
+
+// Monotonic op timestamp (spec §G): queued ops replay sorted by ts, and IndexedDB
+// getAll() returns rows in op_id (random UUID) order — so two ops minted in the same
+// millisecond would rehydrate after a restart in arbitrary order. Never hand out the
+// same ts twice, even when Date.now() hasn't advanced (or stepped backwards).
+let lastTs = 0
+export function nextTs() {
+  lastTs = Math.max(Date.now(), lastTs + 1)
+  return lastTs
+}
+
 // --- Ordering & segmentation ---------------------------------------------- //
 
 // order_position is a COLLATE "C" (byte-order) string; compare with </> tri-state.

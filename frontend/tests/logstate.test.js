@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   computeOrdered, segmentByBreaks, setsOf, tunesOf,
   pluralType, setLabel, maxPos, cursorPos, remapAnchors,
   normName, normAbc, stripThe, openSetMergeTarget, mergeStable,
   computeCursorSlots, seamKeyFor, seamActionFor, parseThesessionId, parseThesessionSettingId,
-  rememberInHistory, historyStep,
+  rememberInHistory, historyStep, nextTs,
 } from '../src/logstate.js'
 
 // Compact record builder. Positions are single letters so ordering is obvious.
@@ -381,5 +381,43 @@ describe('historyStep', () => {
   it('empty history never steps', () => {
     expect(historyStep([], null, -1)).toBeNull()
     expect(historyStep([], null, 1)).toBeNull()
+  })
+})
+
+// Queued ops replay sorted by ts, and IndexedDB getAll() rehydrates in random UUID
+// order after a restart — so a ts tie replays in arbitrary order. nextTs must never
+// hand out the same value twice, whatever Date.now() does.
+describe('nextTs', () => {
+  it('is strictly increasing within a frozen millisecond', () => {
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    try {
+      const a = nextTs()
+      const b = nextTs()
+      const c = nextTs()
+      expect(b).toBeGreaterThan(a)
+      expect(c).toBeGreaterThan(b)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('stays monotonic when the wall clock steps backwards', () => {
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(2_000_000)
+    try {
+      const a = nextTs()
+      spy.mockReturnValue(1_500_000) // clock adjusted backwards (NTP etc.)
+      expect(nextTs()).toBeGreaterThan(a)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('follows the wall clock when it is ahead of the counter', () => {
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(3_000_000)
+    try {
+      expect(nextTs()).toBe(3_000_000)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

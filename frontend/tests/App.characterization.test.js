@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, waitFor } from '@testing-library/svelte'
+import { queuePut, queueAll } from '../src/offline.js'
 
 // Characterization test: mounts the REAL App with client.js mocked, and pins the
 // observable behavior the logstate.js extraction must preserve — that a bootstrap of
@@ -96,8 +97,11 @@ describe('App renders bootstrapped records (extraction guard)', () => {
 // order through the same op pipeline as selection-mode paste. A single plain name is
 // NOT intercepted (normal paste; edit, then Enter).
 describe('composer multi-tune paste', () => {
-  async function mountInEditMode() {
-    const { container } = render(App, { props: { config } })
+  // Each caller gets its own session instance id: unmount is not automatic (beforeEach
+  // only clears the DOM), so a zombie App from an earlier test can otherwise hydrate and
+  // flush this test's queued ops out of the shared fake-IndexedDB.
+  async function mountInEditMode(sessionInstanceId = config.sessionInstanceId) {
+    const { container } = render(App, { props: { config: { ...config, sessionInstanceId } } })
     await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(3))
     container.querySelector('.editbtn').click()
     await waitFor(() => expect(container.querySelector('.composer-field input')).not.toBeNull())
@@ -149,5 +153,121 @@ describe('composer multi-tune paste', () => {
     const ev = pasteInto(container.querySelector('.composer-field input'), 'The Lonesome Boatman')
     expect(ev.defaultPrevented).toBe(false)
     expect(sendOp).not.toHaveBeenCalled()
+  })
+
+  // FIFO gate (§G): once an op is queued by a network failure, a LATER op minted while
+  // the browser still reports online must queue behind it — never POST first, which
+  // would bake the swapped order into order_position server-side. The gate also kicks
+  // a flush, so the backlog drains in submit order as soon as the network cooperates.
+  it('a later add never jumps the line past a queued one (flaky network)', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    let nextId = 300
+    let failedOnce = false
+    sendOp.mockImplementation(async (cfg, opType, payload) => {
+      if (!failedOnce) { // first POST dies on a flaky network -> op goes queued
+        failedOnce = true
+        const e = new Error('fetch failed')
+        e.networkError = true
+        throw e
+      }
+      const id = nextId++
+      return {
+        success: true,
+        record: {
+          session_instance_tune_id: id, tune_id: payload.tune_id ?? null, tune_type: null,
+          name: payload.name ?? null, order_position: `Z${id}`, deleted: false,
+          record_type: opType === 'set_break' ? 'break' : 'tune',
+        },
+      }
+    })
+    const container = await mountInEditMode(993)
+    pasteInto(container.querySelector('.composer-field input'), 'Tune A, Tune B')
+    await waitFor(() => expect(sendOp.mock.calls.length).toBe(3))
+    const ops = sendOp.mock.calls.map((c) => [c[1], c[2].name])
+    expect(ops).toEqual([
+      ['add_tune', 'Tune A'], // networkError -> queued
+      ['add_tune', 'Tune A'], // Tune B's gate queued it and kicked a flush: A replays first...
+      ['add_tune', 'Tune B'], // ...then B, still in submit order
+    ])
+    // B's temp anchor resolved to A's real id on replay (order preserved, not append-scrambled)
+    expect(sendOp.mock.calls[2][2].after_record_id).toBe(300)
+  })
+})
+
+// Reload with a queued offline backlog (§G). openStream is mocked and never reports
+// 'live' — the SSE-down case (e.g. dead sidecar) — so these pin that the queue neither
+// strands nor forgets what it knew.
+describe('queued ops across a reload', () => {
+  it('flushes on a successful bootstrap even though SSE never goes live', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    sendOp.mockImplementation(async () => ({ success: true }))
+    const inst = 991
+    await queuePut({
+      op_id: 'q-flush-1', op_type: 'add_tune', name: 'Maid Behind The Bar, The', ts: 1, session_instance_id: inst,
+      payload: { name: 'Maid Behind The Bar, The', tune_id: 77, tune_type: 'Reel', after_record_id: null, before_record_id: null },
+    })
+    render(App, { props: { config: { ...config, sessionInstanceId: inst } } })
+    await waitFor(() => expect(sendOp.mock.calls.length).toBe(1))
+    expect(sendOp.mock.calls[0][1]).toBe('add_tune')
+    expect(sendOp.mock.calls[0][3]).toBe('q-flush-1')
+    await waitFor(async () => expect(await queueAll(inst)).toHaveLength(0)) // settled -> gone from IndexedDB
+  })
+
+  it('rehydrates a matched offline add as LINKED with its tune type, not "unlinked"/"Unknown"', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    sendOp.mockImplementation(async () => { // still can't reach the server -> row stays queued
+      const e = new Error('offline')
+      e.networkError = true
+      throw e
+    })
+    const inst = 992
+    await queuePut({
+      op_id: 'q-link-1', op_type: 'add_tune', name: 'Silver Spear, The', ts: 1, session_instance_id: inst,
+      payload: { name: 'Silver Spear, The', tune_id: 55, tune_type: 'Reel', after_record_id: null, before_record_id: null },
+    })
+    const { container } = render(App, { props: { config: { ...config, sessionInstanceId: inst } } })
+    await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(4)) // 3 bootstrapped + the queued one
+    const row = [...container.querySelectorAll('.tune-row')].find((r) => r.textContent.includes('Silver Spear'))
+    expect(row).toBeTruthy()
+    expect(row.classList.contains('unlinked')).toBe(false)
+    expect(row.querySelector('.row-warn')).toBeNull() // no "⚠ unlinked" badge
+    // tune_type carried through: the open set (Jig + this Reel) labels "Mixed", not "Jigs"
+    const labels = [...container.querySelectorAll('.set-label')].map((b) => b.textContent.trim())
+    expect(labels[labels.length - 1]).toBe('Mixed')
+  })
+
+  it('lets a queued offline add be tapped and removed before it syncs', async () => {
+    const { sendOp } = await import('../src/client.js')
+    sendOp.mockClear()
+    sendOp.mockImplementation(async () => { // still offline: the op stays queued
+      const e = new Error('offline')
+      e.networkError = true
+      throw e
+    })
+    const inst = 994
+    await queuePut({
+      op_id: 'q-del-1', op_type: 'add_tune', name: 'Doomed Tune', ts: 1, session_instance_id: inst,
+      payload: { name: 'Doomed Tune', tune_id: null, tune_type: null, after_record_id: null, before_record_id: null },
+    })
+    const { container } = render(App, { props: { config: { ...config, sessionInstanceId: inst } } })
+    await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(4))
+    container.querySelector('.editbtn').click()
+    await waitFor(() => expect(container.querySelector('.composer-field input')).not.toBeNull())
+    let row
+    await waitFor(() => { // entering edit mode reconnects (byId rebuilds); wait for the rehydrated row
+      row = [...container.querySelectorAll('.tune-row')].find((r) => r.textContent.includes('Doomed Tune'))
+      expect(row).toBeTruthy()
+    })
+    row.click() // select the queued row -> its actions panel offers Remove
+    await waitFor(() => expect(container.querySelector('.row-actions .danger')).not.toBeNull())
+    container.querySelector('.row-actions .danger').click()
+    await waitFor(() =>
+      expect([...container.querySelectorAll('.tune-row')].some((r) => r.textContent.includes('Doomed Tune'))).toBe(false)
+    )
+    await waitFor(async () => expect(await queueAll(inst)).toHaveLength(0)) // cancelled op left the queue
+    expect(sendOp.mock.calls.every((c) => c[1] !== 'remove_tune')).toBe(true) // local cancel, no server op
   })
 })

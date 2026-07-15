@@ -14,3 +14,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect() {}
   }
 }
+
+// jsdom doesn't implement Element.scrollTo (App.svelte scrolls the log to the bottom
+// on entering edit mode, in a double-rAF that can fire after a test finishes and
+// surface as an unhandled error). A no-op is enough — nothing asserts scroll state.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {}
+}
