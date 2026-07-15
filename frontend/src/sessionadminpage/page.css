@@ -164,8 +164,15 @@
     color: #90e5a8;
 }
 
-/* Recurrence display styling */
-.recurrence-display {
+/* Link-out arrow next to the URL Path label */
+.path-link {
+    margin-left: 0.25rem;
+    text-decoration: none;
+}
+
+/* Recurrence display + settings boxes (auto-create, people tracking) styling */
+.recurrence-display,
+.settings-box {
     background-color: rgba(255, 255, 255, 0.05) !important;
     border-color: var(--border-color) !important;
     color: var(--text-color);

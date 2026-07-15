@@ -349,7 +349,12 @@
         </div>
 
         <div class="mb-3">
-          <label for="session-path" class="form-label">URL Path</label>
+          <label for="session-path" class="form-label">
+            URL Path
+            {#if path.trim()}
+              <a href="/sessions/{path.trim()}" target="_blank" class="path-link" title="Open session page">↗</a>
+            {/if}
+          </label>
           <input type="text" class="form-control" id="session-path" bind:value={path} />
         </div>
 
@@ -585,7 +590,7 @@
         </button>
 
         <!-- Preview section -->
-        <div id="recurrence-preview" class="mt-3 p-3 border rounded bg-light" style:display={previewItems.length ? 'block' : 'none'}>
+        <div id="recurrence-preview" class="mt-3 p-3 border rounded settings-box" style:display={previewItems.length ? 'block' : 'none'}>
           <h6 class="mb-2">Next 5 Occurrences:</h6>
           <ul id="recurrence-preview-list" class="mb-0">
             {#each previewItems as item, i (i)}
@@ -604,7 +609,7 @@
     <!-- Auto-create instances settings -->
     <div class="mb-3">
       <span class="form-label">Auto-Create Instances</span>
-      <div class="p-3 border rounded bg-light">
+      <div class="p-3 border rounded settings-box">
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="auto-create-instances" bind:checked={autoCreateInstances} />
           <label class="form-check-label" for="auto-create-instances">
@@ -626,7 +631,7 @@
     <!-- People tracking (spec 039) -->
     <div class="mb-3">
       <span class="form-label">People Tracking</span>
-      <div class="p-3 border rounded bg-light">
+      <div class="p-3 border rounded settings-box">
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="show-people-list" bind:checked={showPeopleList} />
           <label class="form-check-label" for="show-people-list">Show a members list</label>
