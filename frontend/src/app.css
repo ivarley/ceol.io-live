@@ -8,6 +8,8 @@
   --border: #2a2a30;
   --attention: #e0b341; /* amber: unlinked / needs-attention */
   --set-bg: #222227; /* set card — a hair lighter than --panel for contrast vs --bg */
+  --results-bg: #1c2634; /* type-ahead dropdown — blue-tinted so results never read as logged tunes */
+  --results-border: rgba(79, 157, 255, 0.4);
 
   /* The kit (src/lib) reads theme.css's variable NAMES, which this screen never loads —
      it hardcodes its own dark palette above under different names. Without this bridge a
@@ -758,8 +760,8 @@ main {
      by main's overflow:hidden without ever overflowing this box (so no scrollbar). */
   max-height: min(45vh, var(--results-max, 45vh));
   overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--results-bg);
+  border: 1px solid var(--results-border);
   border-radius: 8px;
   /* float above the input rather than pushing the list */
   position: absolute;
@@ -904,12 +906,12 @@ main {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--panel);
-  box-shadow: 0 -4px 0 var(--panel);
+  background: var(--results-bg);
+  box-shadow: 0 -4px 0 var(--results-bg);
 }
 .results .result-asis:hover {
-  background: var(--panel);
-  box-shadow: inset 0 0 0 999px rgba(79, 157, 255, 0.12), 0 -4px 0 var(--panel);
+  background: var(--results-bg);
+  box-shadow: inset 0 0 0 999px rgba(79, 157, 255, 0.12), 0 -4px 0 var(--results-bg);
 }
 
 /* unified "thinking" spinner — in the input (search in flight) and on a resolving/sending row */
