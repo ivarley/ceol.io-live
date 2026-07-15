@@ -40,6 +40,7 @@ from database import (
     get_current_user_id,
     save_to_history,
     find_matching_tune,
+    normalize_override_name,
     normalize_quotes,
     normalize_quotes_sql,
     check_in_person as db_check_in_person,
@@ -571,6 +572,13 @@ def _handle_add_tune(cur, session_instance_id, data, user_id):
             remapped_from = tune_id
             tune_id = rrow[0]
 
+    # name is an override slot: a linked row stores it only when it genuinely differs
+    # from the display fallbacks (COALESCE(sit.name, st.alias, t.name)). Clients always
+    # send the display name alongside tune_id; dropping the redundant copy here keeps
+    # rows following later alias/name changes. A remapped add's old name survives this
+    # (it differs from the canonical tune's name — that's the spec 030 preservation).
+    name = normalize_override_name(cur, session_id, tune_id, name)
+
     source = data.get("source") or "human"
     confidence = data.get("confidence")
 
@@ -649,7 +657,7 @@ def _handle_remove_tune(cur, session_instance_id, data, user_id):
 def _handle_change_tune(cur, session_instance_id, data, user_id):
     """Identity-preserving relink / rename / unlink / key / setting (§C)."""
     record_id = data.get("record_id")
-    _require_live_record(cur, session_instance_id, record_id)
+    rec = _require_live_record(cur, session_instance_id, record_id)
 
     sets, params = [], []
     remapped_from = None
@@ -668,7 +676,21 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         sets += ["tune_id = %s"]; params += [data["tune_id"]]
     if "name" in data:
         nm = data["name"]
-        sets += ["name = %s"]; params += [str(nm).strip() if nm else None]
+        nm = str(nm).strip() if nm else None
+        # Override-only: on a row that ends up linked (relink sends the display name
+        # alongside tune_id), a name matching the display fallbacks stores as NULL.
+        # A rename ships unlink:true, so effective_tune_id is None and nm is kept.
+        if data.get("unlink"):
+            effective_tune_id = None
+        elif "tune_id" in data:
+            effective_tune_id = data["tune_id"]
+        else:
+            effective_tune_id = rec[1]
+        if effective_tune_id is not None and nm is not None:
+            cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+            srow = cur.fetchone()
+            nm = normalize_override_name(cur, srow[0] if srow else None, effective_tune_id, nm)
+        sets += ["name = %s"]; params += [nm]
     if "key_override" in data:
         sets += ["key_override = %s"]; params += [data["key_override"]]
     if "setting_override" in data:

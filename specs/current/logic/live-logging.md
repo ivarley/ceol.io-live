@@ -82,6 +82,21 @@ the ack carries `remapped_from` (spec 030). When an admin merges tunes, the merg
 endpoint emits synthetic `change_tune` events for affected rows in recently-active
 instances so connected live screens relink in place.
 
+### name is override-only
+
+`session_instance_tune.name` is the top of the display hierarchy
+`COALESCE(sit.name, session_tune.alias, tune.name)` and is stored **only when it
+genuinely differs from both fallbacks**. Clients always ship a display `name`
+alongside `tune_id` (typeahead tap, relink, paste); the server normalizes it via
+`database.normalize_override_name` (case/accent/smart-quote-insensitive) at every
+write path — `add_tune`, `change_tune`, `link_tune_ajax`, the legacy bulk save, and
+the tune-drawer instance edit — so linked rows follow later alias/name changes
+instead of freezing a redundant copy at log time. Names that survive normalization
+are real overrides: per-night renames, and the old display name kept when an add
+remaps a merged-away tune (or frozen by `merge_tune_ids()`, spec 030). Unlinked
+rows (`tune_id NULL`) always keep their raw name. Backfill for pre-fix redundant
+copies: `schema/039_sit_name_override_only.sql`.
+
 ## Presence & typing (§F, ephemeral)
 
 Presence and typing indicators are **in-memory in the streaming service and never

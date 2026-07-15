@@ -75,6 +75,10 @@ def live_instance():
     for tid, name in [(REEL, "The Test Reel"), (MAID, "The Maid Behind the Bar"), (COOLEY, "Cooleys")]:
         cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')", (tid, name))
         cur.execute("INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, tid))
+    # COOLEY gets a session alias (the override-only name tests exercise the alias arm
+    # of normalize_override_name; display coalesces sit.name -> st.alias -> t.name).
+    cur.execute("UPDATE session_tune SET alias = 'The Tumbling Cooley' WHERE session_id = %s AND tune_id = %s",
+                (SID, COOLEY))
     # REEL's locally-cached settings (the chosen-setting tests, spec 032): SET_LOCAL is
     # the default (lowest id), SET_LOCAL2 a non-default alternative.
     cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Dmaj', 'ABCd efga|')",
@@ -182,6 +186,69 @@ def test_add_tune_by_name_matches_catalog(client, authenticated_user, live_insta
         resp, body = _op(client, inst, op_type="add_tune", name="The Maid Behind the Bar")
     assert body["success"] is True
     assert body["record"]["tune_id"] == live_instance["maid"]
+
+
+def test_add_tune_linked_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+    """name is override-only: a typeahead-style add ships the display name alongside
+    tune_id, but the redundant copy is not persisted — the row falls back to the
+    catalog name (so it follows later alias/name changes). The response still carries
+    the display name via the server-side coalesce."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune",
+                      tune_id=live_instance["reel"], name="The Test Reel")
+    assert body["success"] is True
+    assert body["record"]["name"] == "The Test Reel"
+    rows = _records(db_cursor, inst)
+    assert rows[0][1] == live_instance["reel"]
+    assert rows[0][2] is None
+
+
+def test_add_tune_by_name_match_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+    """A typed name that links (even as a case variant of the catalog name) stores
+    NULL — normalization is case/accent/quote-insensitive."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune", name="the maid behind the bar")
+    assert body["record"]["tune_id"] == live_instance["maid"]
+    rows = _records(db_cursor, inst)
+    assert rows[0][2] is None
+
+
+def test_add_tune_alias_variant_stores_null_name(client, authenticated_user, live_instance, db_cursor):
+    """A display name matching the session alias is just as redundant as the catalog
+    name — the coalesce falls back to session_tune.alias."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune",
+                      tune_id=live_instance["cooley"], name="The Tumbling Cooley")
+    assert body["record"]["name"] == "The Tumbling Cooley"
+    rows = _records(db_cursor, inst)
+    assert rows[0][1] == live_instance["cooley"]
+    assert rows[0][2] is None
+
+
+def test_add_tune_divergent_name_kept_as_override(client, authenticated_user, live_instance, db_cursor):
+    """A name that genuinely differs from both fallbacks is a real per-row override."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune",
+                      tune_id=live_instance["reel"], name="Sonny's Version")
+    assert body["record"]["name"] == "Sonny's Version"
+    rows = _records(db_cursor, inst)
+    assert rows[0][2] == "Sonny's Version"
+
+
+def test_add_merged_tune_keeps_logged_name_as_override(client, authenticated_user, live_instance, db_cursor):
+    """A remapped add (merged-away tune_id) keeps the name the logger saw — it differs
+    from the canonical tune's name, so it survives normalization (spec 030)."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="add_tune",
+                      tune_id=live_instance["merged"], name="The Merged Reel")
+    assert body["record"]["tune_id"] == live_instance["reel"]
+    rows = _records(db_cursor, inst)
+    assert rows[0][2] == "The Merged Reel"
 
 
 def test_add_tune_by_name_unlinked_when_unknown(client, authenticated_user, live_instance, db_cursor):
@@ -320,6 +387,34 @@ def test_change_tune_rename_and_unlink(client, authenticated_user, live_instance
         assert ren["record"]["name"] == "Renamed Tune"
         _, unl = _op(client, inst, op_type="change_tune", record_id=rid, unlink=True)
     assert unl["record"]["tune_id"] is None
+
+
+def test_change_tune_relink_clears_redundant_name(client, authenticated_user, live_instance, db_cursor):
+    """Relink ships the new tune's display name alongside tune_id (the client always
+    does); the redundant copy stores as NULL — which also clears any stale override
+    the row carried while unlinked."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", name="mystery reel xyz")
+        rid = a["record"]["session_instance_tune_id"]
+        _, rel = _op(client, inst, op_type="change_tune", record_id=rid,
+                     tune_id=live_instance["reel"], name="The Test Reel")
+    assert rel["record"]["tune_id"] == live_instance["reel"]
+    assert rel["record"]["name"] == "The Test Reel"
+    db_cursor.execute("SELECT name FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    assert db_cursor.fetchone()[0] is None
+
+
+def test_change_tune_rename_stores_override(client, authenticated_user, live_instance, db_cursor):
+    """A rename that differs from the fallbacks persists as a genuine per-row override."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=live_instance["reel"])
+        rid = a["record"]["session_instance_tune_id"]
+        _, ren = _op(client, inst, op_type="change_tune", record_id=rid, name="Renamed Tune")
+    assert ren["record"]["name"] == "Renamed Tune"
+    db_cursor.execute("SELECT name, tune_id FROM session_instance_tune WHERE session_instance_tune_id = %s", (rid,))
+    assert db_cursor.fetchone() == ("Renamed Tune", live_instance["reel"])
 
 
 def test_change_tune_no_fields_rejected(client, authenticated_user, live_instance):

@@ -11,6 +11,7 @@ from database import (
     get_current_user_id,
     save_to_history,
     find_matching_tune,
+    normalize_override_name,
     normalize_quotes,
     normalize_quotes_sql,
     check_in_person as db_check_in_person,
@@ -3822,15 +3823,19 @@ def link_tune_ajax(session_path, date_or_id):
             # Save history before update
             save_to_history(cur, "session_instance_tune", "UPDATE", session_instance_tune_id, user_id=get_current_user_id())
 
-            # Tune already in session_tune, just update session_instance_tune
-            # Use setting_id as setting_override if provided
+            # Tune already in session_tune, just update session_instance_tune.
+            # Use setting_id as setting_override if provided. name is override-only:
+            # keep the row's typed name only when it differs from the display
+            # fallbacks (the other branches preserve it via session_tune.alias, but
+            # this session already has its own row — the per-row slot is the only home).
             cur.execute(
                 """
                 UPDATE session_instance_tune
                 SET tune_id = %s, name = %s, setting_override = %s, last_modified_user_id = %s
                 WHERE session_instance_tune_id = %s
             """,
-                (tune_id, tune_name, setting_id, get_current_user_id(), session_instance_tune_id),
+                (tune_id, normalize_override_name(cur, session_id, tune_id, tune_name),
+                 setting_id, get_current_user_id(), session_instance_tune_id),
             )
 
             setting_msg = f" with setting #{setting_id}" if setting_id else ""
@@ -7606,6 +7611,14 @@ def save_session_instance_tunes_ajax(session_path, date_or_id):
             for tune in processed_tunes:
                 sit_id = tune.get("session_instance_tune_id")
 
+                # name is override-only: the pill client echoes the resolved display
+                # name for every pill, linked or not. Normalize (after the session_tune/
+                # alias inserts above, so a just-created alias counts) before diffing,
+                # so a redundant copy neither persists nor reads as a change — else
+                # every legacy save would rewrite all linked rows and their history.
+                if tune["tune_id"]:
+                    tune["name"] = normalize_override_name(cur, session_id, tune["tune_id"], tune["name"])
+
                 if tune["is_new"]:
                     # Insert new record with generated order_position
                     cur.execute(
@@ -10664,6 +10677,10 @@ def update_session_instance_tune_details(session_path, date_or_id, tune_id):
                 update_values.append(None)
             else:
                 name_str = str(name_raw).strip()
+                # Override-only: this endpoint targets linked rows (WHERE tune_id
+                # below), so saving back the display name unchanged must not create
+                # a spurious per-night override.
+                name_str = normalize_override_name(cur, session_id, tune_id, name_str)
                 update_fields.append("name = %s")
                 update_values.append(name_str if name_str else None)
 

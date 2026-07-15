@@ -605,6 +605,36 @@ def find_matching_tune(
     return None, tune_name, None
 
 
+def normalize_override_name(cur, session_id, tune_id, name):
+    """session_instance_tune.name is an override slot: display falls back
+    COALESCE(sit.name, st.alias, t.name), so a stored copy of either fallback is
+    redundant — and worse, it pins the row's display forever (a session alias set
+    later never shows on already-logged rows). Returns None when `name` matches
+    (case/accent/quote-insensitively) the tune's catalog name or this session's
+    alias; otherwise returns `name` unchanged (a genuine override, e.g. a per-night
+    rename or a merge-preserved name from spec 030).
+
+    Only meaningful for linked rows — callers with tune_id NULL should store the
+    raw name untouched.
+    """
+    if not name or not tune_id:
+        return name
+    nq = normalize_quotes_sql("%s")
+    cur.execute(
+        f"""
+        SELECT 1 FROM tune
+        WHERE tune_id = %s
+          AND LOWER(unaccent({normalize_quotes_sql('name')})) = LOWER(unaccent({nq}))
+        UNION ALL
+        SELECT 1 FROM session_tune
+        WHERE session_id = %s AND tune_id = %s AND alias IS NOT NULL
+          AND LOWER(unaccent({normalize_quotes_sql('alias')})) = LOWER(unaccent({nq}))
+        LIMIT 1
+        """,
+        (tune_id, name, session_id, tune_id, name),
+    )
+    return None if cur.fetchone() else name
+
 
 # Session Attendee Tracking Database Functions
 

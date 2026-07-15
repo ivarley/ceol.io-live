@@ -220,6 +220,30 @@ class TestInstanceLayerIsOpenToMembers:
             )
             assert db_cursor.fetchone() == ("The Fast One", "Gmajor")
 
+    def test_saving_the_display_name_back_is_not_an_override(
+        self, client, authenticated_user, session_fixture, db_cursor, db_conn
+    ):
+        """name is override-only: echoing the tune's own (display) name back through
+        the instance edit stores NULL, not a spurious per-night override — and it
+        clears an existing redundant one."""
+        f = session_fixture
+        with authenticated_user as user:
+            _set_membership(db_cursor, db_conn, f["session_id"], user.person_id, is_admin=False)
+            db_cursor.execute("SELECT name FROM tune WHERE tune_id = %s", (f["played_tune"],))
+            canonical = db_cursor.fetchone()[0]
+            resp = client.put(
+                f"/api/sessions/{f['path']}/{f['instance_id']}/tunes/{f['played_tune']}",
+                data=json.dumps({"name": canonical}),
+                content_type="application/json",
+            )
+            assert resp.status_code == 200, resp.data
+            db_cursor.execute(
+                """SELECT name FROM session_instance_tune
+                   WHERE session_instance_id = %s AND tune_id = %s""",
+                (f["instance_id"], f["played_tune"]),
+            )
+            assert db_cursor.fetchone()[0] is None
+
     def test_a_non_member_still_cannot(
         self, client, authenticated_user, session_fixture, db_cursor, db_conn
     ):
