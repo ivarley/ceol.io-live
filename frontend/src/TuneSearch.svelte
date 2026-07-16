@@ -59,6 +59,7 @@
   // pages the other matches) or the single pasted tune. Closing it falls back to the
   // normal search underneath.
   let externalPreview = $state(untrack(() => initialPreview))
+  let fieldEl = $state(null) // the search input (the clear-× hands focus back to it)
   let resultsEl = $state(null) // the .deep-results scroller (to restore scroll on back)
   let resultsScroll = 0
   // iOS: while the search field holds focus the software keyboard is up, and Safari
@@ -385,6 +386,7 @@
       aria-controls="deep-results-list"
       aria-activedescendant={hl >= 0 ? `dres-${hl}` : undefined}
       placeholder={deepMode === 'abc' ? 'Search by notes, e.g. GED or EBBA…' : deepMode === 'name' ? 'Search by name…' : 'Search by name or notes…'}
+      bind:this={fieldEl}
       bind:value={deepQuery}
       oninput={onDeepInput}
       onkeydown={deepKey}
@@ -392,7 +394,9 @@
     />
     {#if deepQuery}
       <!-- cancel out of search mode — same idle state an add leaves behind -->
-      <button class="deep-clear" title="Clear search" aria-label="Clear search" onclick={reset}>×</button>
+      <!-- mousedown preventDefault keeps the field focused through the click (same as the
+           composer's ×); the explicit focus covers touch, where no mousedown fires -->
+      <button class="deep-clear" title="Clear search" aria-label="Clear search" onmousedown={(e) => e.preventDefault()} onclick={() => { reset(); fieldEl?.focus() }}>×</button>
     {/if}
   </div>
   <button class="deep-filter-tab" class:active={deepFilterOpen || deepType != null || deepMode !== 'mixed'} title="Search filters" aria-label="Search filters" aria-expanded={deepFilterOpen} onclick={toggleDeepFilters}>
