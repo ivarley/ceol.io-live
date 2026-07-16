@@ -61,6 +61,18 @@
   let externalPreview = $state(untrack(() => initialPreview))
   let resultsEl = $state(null) // the .deep-results scroller (to restore scroll on back)
   let resultsScroll = 0
+  // iOS: while the search field holds focus the software keyboard is up, and Safari
+  // pans the visual viewport on drag instead of scrolling .deep-results (the app's
+  // viewport re-pinning then fights the pan — flicker, frozen list). Do what native
+  // search UIs do (keyboardDismissMode .onDrag): the first real drag in the results
+  // blurs the field, the keyboard drops, and the gesture scrolls the list.
+  let dragStartY = 0
+  const onResultsTouchStart = (e) => { dragStartY = e.touches[0].clientY }
+  function onResultsTouchMove(e) {
+    if (Math.abs(e.touches[0].clientY - dragStartY) < 8) return // tap jitter, not a drag
+    const el = document.activeElement
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) el.blur()
+  }
   // gates the modal's input re-autofocus after a preview round-trip (a jumped-open
   // preview counts — Back should reveal the results, not pop the keyboard)
   let everPreviewed = $state(!!untrack(() => initialPreview))
@@ -436,7 +448,7 @@
 {#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
   <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
 {/if}
-<div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl}>
+<div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl} ontouchstart={onResultsTouchStart} ontouchmove={onResultsTouchMove}>
   {#if deepLoading && !deepResults.length}
     <p class="deep-empty">Searching…</p>
   {:else if !deepResults.length}

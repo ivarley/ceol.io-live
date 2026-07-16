@@ -1037,7 +1037,7 @@ main {
   text-align: left; background: rgba(245, 197, 24, 0.1); border: 1px solid var(--insert);
   border-radius: 8px; color: #e8d28a; cursor: pointer;
 }
-.deep-results { flex: 1; overflow-y: auto; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.deep-results { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .deep-empty { color: var(--muted); font-style: italic; text-align: center; padding: 24px 0; }
 .deep-card {
   display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left;
