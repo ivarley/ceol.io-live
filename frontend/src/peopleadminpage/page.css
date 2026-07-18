@@ -114,6 +114,13 @@
 
 .person-name {
     font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Deactivated people: reddish row tint. On the tds so it paints over the
+   .table-striped odd-row background. */
+#people-content .table tr.person-inactive td {
+    background-color: rgba(220, 53, 69, 0.14);
 }
 
 .person-link {

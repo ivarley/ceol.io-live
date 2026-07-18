@@ -151,6 +151,34 @@ describe('admin people table', () => {
     })
   })
 
+  it('deactivated people are hidden by default; "All" reveals them with the person-inactive class', async () => {
+    const data = payload()
+    data.people[1].active = false
+    const { container } = render(App, { pageData: data })
+
+    // default: Active Only — the deactivated person is filtered out
+    const select = container.querySelector('#people-active-filter')
+    expect(select.value).toBe('active')
+    expect(rowNames(container)).toEqual(['Ian Varley', 'No Account'])
+
+    await fireEvent.change(select, { target: { value: 'all' } })
+    await waitFor(() => expect(rowNames(container)).toHaveLength(3))
+    const tinted = [...container.querySelectorAll('#people-tbody tr.person-inactive')]
+    expect(tinted).toHaveLength(1)
+    expect(tinted[0].querySelector('.person-link').textContent).toBe('Sarah OConnor')
+  })
+
+  it('a blank name falls back to the username (then a placeholder) as the link text', () => {
+    const data = payload()
+    data.people[0].name = '  ' // account holder with no person name
+    data.people[2].name = ''   // no name AND no account
+    const { container } = render(App, { pageData: data })
+    const links = [...container.querySelectorAll('#people-tbody .person-link')]
+    expect(links[0].textContent).toBe('ian')
+    expect(links[0].getAttribute('href')).toBe('/admin/people/1')
+    expect(links[2].textContent).toBe('(unnamed)')
+  })
+
   it('the account droplist hides accountless people and composes with search', async () => {
     const { container } = render(App, { pageData: payload() })
     const select = container.querySelector('#people-account-filter')

@@ -146,6 +146,7 @@ _ADMIN_PEOPLE_SQL = """
         p.state,
         p.country,
         p.thesession_user_id,
+        p.active,
         ua.username,
         ua.is_system_admin,
         us.last_login,
@@ -224,6 +225,7 @@ def admin_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "state": row["state"],
         "country": row["country"],
         "thesession_user_id": row["thesession_user_id"],
+        "active": row["active"],
         "username": row["username"],
         "is_system_admin": bool(row["is_system_admin"]) if row["username"] else False,
         # timestamps as naive-local ISO strings; date-only for latest_session_date

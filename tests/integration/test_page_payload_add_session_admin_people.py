@@ -105,7 +105,7 @@ class TestAdminPeoplePayload:
         person = people[0]
         expected_keys = {
             "person_id", "name", "email", "city", "state", "country",
-            "thesession_user_id", "username", "is_system_admin", "last_login",
+            "thesession_user_id", "active", "username", "is_system_admin", "last_login",
             "session_count", "session_instance_count", "latest_session_date",
             "latest_session_name", "tune_count", "last_logged_tune",
             "last_tunebook_update",

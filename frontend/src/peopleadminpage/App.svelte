@@ -25,13 +25,19 @@
     return parts.length > 0 ? parts.join(', ') : 'Unknown'
   }
 
+  // A person with blank first+last name still needs a clickable label.
+  const displayName = (p) => (p.name || '').trim() || p.username || '(unnamed)'
+
   // ---- account filter (droplist: all people vs. only those with a login) --------
   let accountFilter = $state('all') // 'all' | 'users'
+  // ---- active filter (droplist; deactivated people are hidden by default) -------
+  let activeFilter = $state('active') // 'active' | 'all'
 
   // ---- search (same fields the legacy data-person-* attributes carried) --------
   const filtered = $derived(
     people.filter((p) => {
       if (accountFilter === 'users' && !p.username) return false
+      if (activeFilter === 'active' && p.active === false) return false
       if (!searchTerm) return true
       const haystack = [
         p.name,
@@ -47,7 +53,7 @@
 
   // ---- sort ---------------------------------------------------------------------
   const COLUMNS = [
-    { id: 'name', label: 'Name', type: 'text', key: (p) => p.name.toLowerCase() },
+    { id: 'name', label: 'Name', type: 'text', key: (p) => displayName(p).toLowerCase() },
     { id: 'location', label: 'Location', type: 'text', key: (p) => (p.city || '').toLowerCase() },
     { id: 'thesession', label: 'TheSession.org', type: 'number', key: (p) => p.thesession_user_id || 0 },
     { id: 'username', label: 'Username', type: 'text', key: (p) => (p.username || 'no account').toLowerCase() },
@@ -247,6 +253,14 @@
       <option value="users">Site Users Only</option>
       <option value="all">All People</option>
     </select>
+    <select
+      id="people-active-filter"
+      class="form-control people-account-filter"
+      aria-label="Filter by active status"
+      bind:value={activeFilter}>
+      <option value="active">Active Only</option>
+      <option value="all">All</option>
+    </select>
     <button id="add-person-btn" class="btn btn-primary btn-add-person" onclick={openAddPerson}>Add Person</button>
   </div>
 
@@ -276,9 +290,9 @@
           </thead>
           <tbody id="people-tbody">
             {#each rows as person (person.person_id)}
-              <tr>
+              <tr class:person-inactive={person.active === false}>
                 <td class="person-name">
-                  <a href="/admin/people/{person.person_id}" class="person-link">{person.name}</a>
+                  <a href="/admin/people/{person.person_id}" class="person-link">{displayName(person)}</a>
                 </td>
                 <td class="person-location" title={locationOf(person)}>{person.city || 'Unknown'}</td>
                 <td class="person-thesession">
@@ -356,7 +370,7 @@
           </tbody>
         </table>
       </div>
-      {#if rows.length === 0 && (searchTerm || accountFilter !== 'all')}
+      {#if rows.length === 0 && (searchTerm || accountFilter !== 'all' || activeFilter !== 'all')}
         <div id="no-search-results" class="alert alert-info">
           <p class="mb-0">No people match your search criteria.</p>
         </div>
