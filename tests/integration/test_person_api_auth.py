@@ -158,6 +158,21 @@ class TestPersonTunesList:
             stamps = [r["logged_at"] for r in data["tunes"] if r["logged_at"]]
             assert stamps == sorted(stamps, reverse=True)
             assert data["total_count"] >= 2
+
+            # summary view: one row per instance with a count (breaks/deleted
+            # still excluded — the two fixture tunes land in instance 1's row)
+            with logged_in(client, person_id=1, is_system_admin=True):
+                sresp = client.get("/api/person/1/logged-tunes?view=summary")
+                assert client.get("/api/person/1/logged-tunes?view=bogus").status_code == 400
+            sdata = sresp.get_json()
+            assert sdata["success"] is True and sdata["view"] == "summary"
+            mine = [i for i in sdata["instances"] if i["tune_count"] >= 2]
+            assert len(mine) == 1
+            assert mine[0]["tune_count"] == 2
+            for key in ("session_name", "session_path", "date", "last_logged_at"):
+                assert mine[0][key], key
+            last_stamps = [i["last_logged_at"] for i in sdata["instances"] if i["last_logged_at"]]
+            assert last_stamps == sorted(last_stamps, reverse=True)
         finally:
             cur = conn.cursor()
             cur.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id BETWEEN 97001 AND 97004")

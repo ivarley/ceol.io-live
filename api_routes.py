@@ -5480,16 +5480,53 @@ def get_person_logged_tunes(person_id):
     Breaks and soft-deleted rows are excluded. Display name falls back
     per-record override -> session alias -> catalog name, like the loggers.
 
-    Optional query parameter: limit (default 1000, max 2000).
+    Optional query parameters:
+    - view: 'detail' (default; one row per logged tune) or 'summary'
+      (one row per session instance with a count)
+    - limit (default 1000, max 2000)
     """
     try:
         limit = min(2000, max(1, int(request.args.get("limit", 1000))))
     except ValueError:
         return jsonify({"success": False, "error": "Invalid limit"}), 400
+    view = request.args.get("view", "detail")
+    if view not in ("detail", "summary"):
+        return jsonify({"success": False, "error": "Invalid view"}), 400
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        if view == "summary":
+            cur.execute(
+                """
+                SELECT s.name AS session_name, s.path AS session_path, si.date,
+                       COUNT(*) AS tune_count,
+                       MAX(COALESCE(sit.inserted_timestamp, sit.created_date)) AS last_logged_at
+                FROM session_instance_tune sit
+                JOIN user_account cu ON cu.user_id = sit.created_by_user_id
+                JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+                JOIN session s ON s.session_id = si.session_id
+                WHERE cu.person_id = %s
+                  AND sit.record_type = 'tune'
+                  AND sit.deleted IS NOT TRUE
+                GROUP BY si.session_instance_id, s.name, s.path, si.date
+                ORDER BY MAX(COALESCE(sit.inserted_timestamp, sit.created_date)) DESC NULLS LAST,
+                         si.session_instance_id DESC
+                LIMIT %s
+                """,
+                (person_id, limit),
+            )
+            instances = [
+                {
+                    "session_name": r[0],
+                    "session_path": r[1],
+                    "date": r[2].isoformat() if r[2] else None,
+                    "tune_count": r[3],
+                    "last_logged_at": r[4].isoformat() if r[4] else None,
+                }
+                for r in cur.fetchall()
+            ]
+            return jsonify({"success": True, "view": "summary", "instances": instances})
         cur.execute(
             """
             SELECT sit.session_instance_tune_id, sit.tune_id,
