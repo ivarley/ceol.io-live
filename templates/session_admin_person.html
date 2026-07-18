@@ -623,6 +623,26 @@ dl.row dd {
 .modal-open {
     overflow: hidden;
 }
+
+/* Bootstrap's default modal chrome is white; match the dark page. */
+.modal-content {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+}
+
+.modal-header,
+.modal-footer {
+    border-color: var(--border-color);
+}
+
+.modal-title {
+    color: var(--text-color);
+}
+
+.modal .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
 </style>
 
 <script>

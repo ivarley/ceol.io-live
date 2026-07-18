@@ -61,7 +61,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.is_active, ua.is_system_admin,
-                       ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval,
+                       ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval,
                        p.at_active_session_instance_id, si.session_id, si.date, si.start_time, si.end_time, si.location_override, s.name, s.path,
                        ua.beta_live_logging
                 FROM user_account ua
@@ -116,7 +116,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
-                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE LOWER(ua.username) = LOWER(%s)
@@ -154,7 +154,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
-                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE LOWER(ua.user_email) = LOWER(%s)
@@ -192,7 +192,7 @@ class User(UserMixin):
             cur.execute(
                 """
                 SELECT ua.user_id, ua.person_id, ua.username, ua.hashed_password, ua.is_active,
-                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, p.email, ua.auto_save_tunes, ua.auto_save_interval
+                       ua.is_system_admin, ua.timezone, ua.email_verified, p.first_name, p.last_name, ua.user_email, ua.auto_save_tunes, ua.auto_save_interval
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
                 WHERE ua.login_token = %s AND ua.login_token_expires > %s
@@ -252,6 +252,18 @@ class User(UserMixin):
             if not result:
                 return None
             user_id = result[0]
+            # Once connected, user_account.user_email is the authoritative address;
+            # retire person.email (its only job was matching pre-account). Copy it
+            # into user_email first if none was supplied, so no address is lost.
+            cur.execute(
+                """
+                UPDATE user_account
+                SET user_email = COALESCE(user_email, (SELECT email FROM person WHERE person_id = %s))
+                WHERE user_id = %s
+                """,
+                (person_id, user_id),
+            )
+            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
             conn.commit()
             return user_id
         finally:
@@ -295,6 +307,8 @@ class User(UserMixin):
             if not result:
                 return None
             user_id = result[0]
+            # Connected now: user_email (just set) is authoritative — retire person.email.
+            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
             conn.commit()
             return user_id
         finally:

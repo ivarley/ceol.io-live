@@ -23,7 +23,6 @@
   let username = $state(user ? user.username || '' : '')
   let userEmail = $state(user ? user.user_email || '' : '')
   let timezone = $state(user ? user.timezone : null)
-  let isActiveChecked = $state(user ? !!user.is_active : false)
   let receiveUpdateEmails = $state(user ? !!user.receive_update_emails : false)
 
   const originalUsername = user ? user.username || '' : ''
@@ -79,7 +78,9 @@
     formData.person = {
       first_name: firstName.trim() || null,
       last_name: lastName.trim() || null,
-      email: email.trim() || null,
+      // person.email is retired for connected people — the account's user_email
+      // is the address. Never write it back for someone who has an account.
+      email: user ? null : (email.trim() || null),
       sms_number: smsNumber.trim() || null,
       city: city.trim() || null,
       state: stateField.trim() || null,
@@ -94,9 +95,9 @@
         timezone: timezone || null,
         user_id: user.user_id,
       }
-      if (!isUserProfile) {
-        formData.user.is_active = isActiveChecked
-      } else {
+      // is_active is no longer editable here — it's governed by the person
+      // deactivate/reactivate control, in lockstep with the account.
+      if (isUserProfile) {
         formData.user.receive_update_emails = receiveUpdateEmails
       }
     }
@@ -385,8 +386,12 @@
             <dt class="col-sm-4">Name:</dt>
             <dd class="col-sm-8">{person.name}</dd>
 
-            <dt class="col-sm-4">Email:</dt>
-            <dd class="col-sm-8">{person.email || 'Not provided'}</dd>
+            <!-- Person-level email only exists for people with no account; once
+                 connected, the account's User Email (below) is the address. -->
+            {#if !user}
+              <dt class="col-sm-4">Email:</dt>
+              <dd class="col-sm-8">{person.email || 'Not provided'}</dd>
+            {/if}
 
             <dt class="col-sm-4">SMS Number:</dt>
             <dd class="col-sm-8">{person.sms_number || 'Not provided'}</dd>
@@ -442,10 +447,12 @@
                 <label for="last_name" class="form-label">Last Name</label>
                 <input type="text" class="form-control" id="last_name" name="last_name" bind:value={lastName} required />
               </div>
-              <div class="mb-3">
-                <label for="email" class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" name="email" bind:value={email} />
-              </div>
+              {#if !user}
+                <div class="mb-3">
+                  <label for="email" class="form-label">Email</label>
+                  <input type="email" class="form-control" id="email" name="email" bind:value={email} />
+                </div>
+              {/if}
             </div>
             <div class="col-md-6">
               <div class="mb-3">
@@ -623,16 +630,6 @@
                 </div>
               </div>
               <div class="col-md-6">
-                {#if !isUserProfile}
-                  <div class="mb-3">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="is_active" name="is_active" bind:checked={isActiveChecked} />
-                      <label class="form-check-label" for="is_active">
-                        User Account Active
-                      </label>
-                    </div>
-                  </div>
-                {/if}
                 {#if isUserProfile}
                   <div class="mb-3">
                     <div class="form-check">
@@ -672,18 +669,18 @@
           <h6 class="text-danger">Deactivate Person</h6>
           <p class="text-muted">
             Deactivating {person.name} will prevent them from being added to any sessions, session instances, or tune sets.
-            Existing associations will not be affected.
+            Existing associations will not be affected.{#if user}{' '}This also disables their login and stops all emails to their account.{/if}
           </p>
           <button type="button" class="btn btn-outline-danger" id="deactivate-person-btn" onclick={() => askTogglePersonActive(false)}>
             Deactivate {person.first_name}
           </button>
         {:else}
           <div class="alert alert-warning mb-3">
-            <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.
+            <strong>This person is deactivated.</strong> They cannot be added to sessions, session instances, or tune sets.{#if user}{' '}Their login is disabled.{/if}
           </div>
           <h6 class="text-success">Reactivate Person</h6>
           <p class="text-muted">
-            Reactivating {person.name} will allow them to be added to sessions, session instances, and tune sets again.
+            Reactivating {person.name} will allow them to be added to sessions, session instances, and tune sets again.{#if user}{' '}It also re-enables their login.{/if}
           </p>
           <button type="button" class="btn btn-success" id="reactivate-person-btn" onclick={() => askTogglePersonActive(true)}>
             Reactivate {person.first_name}

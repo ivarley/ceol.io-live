@@ -4239,7 +4239,19 @@ def add_person_to_session_people_tab(session_path):
 
         person_id = None
         if email:
-            cur.execute("SELECT person_id, active FROM person WHERE LOWER(email) = LOWER(%s)", (email,))
+            # Match on either person.email (accountless) or the account email —
+            # person.email is nulled once connected, so a connected person must
+            # still be found by user_account.user_email to avoid a duplicate.
+            cur.execute(
+                """
+                SELECT p.person_id, p.active
+                FROM person p
+                LEFT JOIN user_account ua ON ua.person_id = p.person_id
+                WHERE LOWER(p.email) = LOWER(%s) OR LOWER(ua.user_email) = LOWER(%s)
+                LIMIT 1
+                """,
+                (email, email),
+            )
             existing = cur.fetchone()
             if existing:
                 person_id, active = existing
@@ -5723,11 +5735,15 @@ def update_person_details(person_id):
             if receive_update_emails is not None:
                 receive_update_emails = bool(receive_update_emails)
 
+            # is_active is intentionally NOT set here: a person and their account
+            # share one active status, controlled only by the person deactivate/
+            # reactivate action (toggle_person_active). Setting it from this form
+            # would let a routine profile save silently flip login access.
             save_to_history(cur, "user_account", "UPDATE", user_id, user_id=get_current_user_id())
             cur.execute(
                 """
                 UPDATE user_account
-                SET username = %s, user_email = %s, is_active = %s, timezone = %s,
+                SET username = %s, user_email = %s, timezone = %s,
                     receive_update_emails = COALESCE(%s, receive_update_emails),
                     last_modified_date = %s
                 WHERE user_id = %s
@@ -5735,7 +5751,6 @@ def update_person_details(person_id):
                 (
                     username,
                     user_data.get("user_email") or None,
-                    user_data.get("is_active", True),
                     user_data.get("timezone") or "UTC",
                     receive_update_emails,
                     now_utc(),
@@ -5862,9 +5877,16 @@ def toggle_person_active(person_id):
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Check if person exists and get their name
+        # Check if person exists and get their name + connected account (if any).
+        # A person and their login account share one active status: deactivating a
+        # connected person also disables their login, and reactivating re-enables it.
         cur.execute(
-            "SELECT first_name, last_name, active FROM person WHERE person_id = %s",
+            """
+            SELECT p.first_name, p.last_name, p.active, ua.user_id, ua.is_active
+            FROM person p
+            LEFT JOIN user_account ua ON ua.person_id = p.person_id
+            WHERE p.person_id = %s
+            """,
             (person_id,),
         )
         person_row = cur.fetchone()
@@ -5874,10 +5896,14 @@ def toggle_person_active(person_id):
             conn.close()
             return jsonify({"success": False, "message": "Person not found"}), 404
 
-        first_name, last_name, current_active = person_row
+        first_name, last_name, current_active, account_user_id, account_active = person_row
         person_name = f"{first_name} {last_name}"
 
-        if current_active == active:
+        # "Already X" only when nothing needs changing — for a connected person that
+        # means both flags already match the target (a legacy desync still needs a write).
+        person_matches = current_active == active
+        account_matches = account_user_id is None or account_active == active
+        if person_matches and account_matches:
             status_word = "active" if active else "deactivated"
             cur.close()
             conn.close()
@@ -5889,7 +5915,7 @@ def toggle_person_active(person_id):
         # Save to history before update
         save_to_history(cur, "person", "UPDATE", person_id, user_id=get_current_user_id())
 
-        # Update the active status
+        # Update the person's active status
         cur.execute(
             """
             UPDATE person
@@ -5898,6 +5924,18 @@ def toggle_person_active(person_id):
             """,
             (active, now_utc(), person_id),
         )
+
+        # Keep the connected account's login status in lockstep.
+        if account_user_id is not None:
+            save_to_history(cur, "user_account", "UPDATE", account_user_id, user_id=get_current_user_id())
+            cur.execute(
+                """
+                UPDATE user_account
+                SET is_active = %s, last_modified_date = %s
+                WHERE user_id = %s
+                """,
+                (active, now_utc(), account_user_id),
+            )
 
         conn.commit()
         cur.close()
@@ -6143,7 +6181,12 @@ def add_person_to_session():
 
         # Get person and session details for email
         cur.execute(
-            "SELECT first_name, last_name, email, active FROM person WHERE person_id = %s",
+            """
+            SELECT p.first_name, p.last_name, COALESCE(p.email, ua.user_email), p.active
+            FROM person p
+            LEFT JOIN user_account ua ON ua.person_id = p.person_id
+            WHERE p.person_id = %s
+            """,
             (person_id,),
         )
         person_row = cur.fetchone()
@@ -6187,27 +6230,31 @@ def add_person_to_session():
         save_to_history(cur, "session_person", "INSERT", (session_id, person_id),
                         user_id=get_current_user_id())
 
-        # Get session admins for email notification
+        # Get session admins for email notification. Prefer the account email
+        # (user_account.user_email) — person.email is being retired for connected
+        # people — but fall back to person.email for admins with no account.
         cur.execute(
             """
-            SELECT p.first_name, p.last_name, p.email
+            SELECT p.first_name, p.last_name, COALESCE(ua.user_email, p.email)
             FROM person p
             JOIN session_person sp ON p.person_id = sp.person_id
-            WHERE sp.session_id = %s AND sp.is_admin = TRUE AND p.email IS NOT NULL
+            LEFT JOIN user_account ua ON ua.person_id = p.person_id
+            WHERE sp.session_id = %s AND sp.is_admin = TRUE
+              AND COALESCE(ua.user_email, p.email) IS NOT NULL
         """,
             (session_id,),
         )
 
         session_admins = cur.fetchall()
 
-        # If no session admins, get system admins
+        # If no session admins, get system admins (always account holders).
         if not session_admins:
             cur.execute(
                 """
-                SELECT p.first_name, p.last_name, p.email
+                SELECT p.first_name, p.last_name, ua.user_email
                 FROM person p
                 JOIN user_account ua ON p.person_id = ua.person_id
-                WHERE ua.is_system_admin = TRUE AND p.email IS NOT NULL
+                WHERE ua.is_system_admin = TRUE AND ua.user_email IS NOT NULL
             """,
                 (),
             )
@@ -9442,11 +9489,18 @@ def find_duplicate_person(person_data, session_id):
     cur = conn.cursor()
     
     try:
-        # First check by email (exact match)
+        # First check by email (exact match) — against person.email (accountless)
+        # or the account email, since person.email is nulled once connected.
         if person_data.get('email'):
             cur.execute(
-                "SELECT person_id FROM person WHERE email = %s",
-                (person_data['email'],)
+                """
+                SELECT p.person_id
+                FROM person p
+                LEFT JOIN user_account ua ON ua.person_id = p.person_id
+                WHERE p.email = %s OR LOWER(ua.user_email) = LOWER(%s)
+                LIMIT 1
+                """,
+                (person_data['email'], person_data['email'])
             )
             result = cur.fetchone()
             if result:

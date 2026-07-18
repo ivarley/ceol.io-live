@@ -38,8 +38,14 @@
   const personEmail = (p) => (p.email || '').trim()
   const accountEmail = (p) => (hasAccount(p) ? (p.user_email || '').trim() : '')
   const effectiveEmail = (p) => (hasAccount(p) ? accountEmail(p) || personEmail(p) : personEmail(p))
+  // Only a genuine conflict counts: both addresses present and different. A
+  // connected person normally has person.email nulled (account email is the
+  // source of truth), which is the expected state, not a mismatch.
   const emailMismatch = (p) =>
-    hasAccount(p) && accountEmail(p).toLowerCase() !== personEmail(p).toLowerCase()
+    hasAccount(p) &&
+    !!personEmail(p) &&
+    !!accountEmail(p) &&
+    accountEmail(p).toLowerCase() !== personEmail(p).toLowerCase()
 
   // ---- account filter (droplist: all people vs. only those with a login) --------
   let accountFilter = $state('all') // 'all' | 'users'

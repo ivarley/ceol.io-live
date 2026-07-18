@@ -189,7 +189,14 @@ class TestUser:
         )
 
         assert user_id == 123
-        mock_cursor.execute.assert_called_once()
+        # Creating an account now also retires the person's redundant email: the
+        # INSERT, a COALESCE backfill of user_email, then nulling person.email.
+        assert mock_cursor.execute.call_count == 3
+        insert_sql = mock_cursor.execute.call_args_list[0][0][0]
+        assert "INSERT INTO user_account" in insert_sql
+        null_sql = mock_cursor.execute.call_args_list[2][0][0]
+        assert "UPDATE person SET email = NULL" in null_sql
+        assert mock_cursor.execute.call_args_list[2][0][1] == (42,)
         mock_conn.commit.assert_called_once()
 
 

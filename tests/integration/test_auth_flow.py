@@ -53,21 +53,25 @@ class TestRegistrationFlow:
         # Verify person record was created
         db_cursor.execute(
             """
-            SELECT person_id, first_name, last_name, email
-            FROM person
-            WHERE email = %s
+            SELECT p.person_id, p.first_name, p.last_name, p.email
+            FROM person p
+            JOIN user_account ua ON ua.person_id = p.person_id
+            WHERE ua.username = %s
         """,
-            (email,),
+            (username,),
         )
         person_record = db_cursor.fetchone()
         assert person_record is not None
         assert person_record[1] == "Test"
         assert person_record[2] == "Registration"
+        # Once connected to an account, person.email is retired — the email lives
+        # only on user_account.user_email (see migration 041).
+        assert person_record[3] is None
 
-        # Verify user account was created
+        # Verify user account was created and carries the email
         db_cursor.execute(
             """
-            SELECT user_id, username, person_id, email_verified, timezone
+            SELECT user_id, username, person_id, email_verified, timezone, user_email
             FROM user_account
             WHERE username = %s
         """,
@@ -78,6 +82,7 @@ class TestRegistrationFlow:
         assert user_record[1] == username
         assert user_record[2] == person_record[0]  # person_id should match
         assert user_record[3] is False  # email_verified should be False
+        assert user_record[5] == email  # account holds the address
         # Timezone should be set to requested value or UTC default
         assert user_record[4] in ["America/New_York", "UTC"]
 

@@ -841,6 +841,17 @@ def register():
             flash("Username already exists. Please choose a different one.", "error")
             return render_template("auth/register.html")
 
+        # Check if an account already uses this email. user_account.user_email is
+        # the authoritative account address; the person.email lookup below only
+        # links an accountless person, and person.email is nulled once linked, so
+        # this guard (not the person.email match) is what blocks duplicate accounts.
+        if User.get_by_email(email):
+            flash(
+                "Email address already registered with a user account. Please try logging in or use password reset if needed.",
+                "error",
+            )
+            return render_template("auth/register.html")
+
         # Check if email already exists and whether it has a user account
         existing_person_id = None
         existing_person = None
@@ -962,6 +973,10 @@ def register():
                     user_id,
                     user_id=get_current_user_id(),
                 )
+
+            # Now connected: user_account.user_email holds this address; retire the
+            # person-level email (its only role was matching this person pre-account).
+            cur.execute("UPDATE person SET email = NULL WHERE person_id = %s", (person_id,))
 
             conn.commit()
 
@@ -2144,13 +2159,14 @@ def resend_verification():
         try:
             cur = conn.cursor()
 
-            # Find unverified user by email
+            # Find unverified user by their account email (user_account.user_email —
+            # the login/verification address; person.email is being retired).
             cur.execute(
                 """
-                SELECT ua.user_id, ua.username, p.first_name, p.last_name, p.email
+                SELECT ua.user_id, ua.username, p.first_name, p.last_name, ua.user_email
                 FROM user_account ua
                 JOIN person p ON ua.person_id = p.person_id
-                WHERE p.email = %s AND ua.email_verified = FALSE AND ua.is_active = TRUE
+                WHERE LOWER(ua.user_email) = LOWER(%s) AND ua.email_verified = FALSE AND ua.is_active = TRUE
             """,
                 (email,),
             )

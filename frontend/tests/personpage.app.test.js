@@ -133,11 +133,15 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#profileTabs')).toBeTruthy()
     // Desktop = real ARIA tabs; mobile fallback = a <select>.
     const tabs = container.querySelectorAll('#profileTabs [role="tab"]')
-    expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'Sessions', "I've Attended", 'Tunes', 'Logins'])
+    expect([...tabs].map((t) => t.textContent)).toEqual(['Profile', 'Sessions', "I've Attended", 'Tunebook', 'Logged', 'Logins'])
     expect(container.querySelector('#profile-tab-select')).toBeTruthy()
     // Profile pane active; person + account info rendered from the embed.
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
-    expect(container.querySelector('#person-display').textContent).toContain('ian@example.com')
+    // Connected person: the email lives on the account (User Email), not on the
+    // person record — the person-level Email row is hidden.
+    expect(container.querySelector('#person-display').textContent).toContain('Ian Varley')
+    expect(container.querySelector('#person-display').textContent).not.toContain('ian@example.com')
+    expect(container.querySelector('#user-display').textContent).toContain('ian@example.com')
     expect(container.querySelector('#instruments-display').textContent).toBe('Fiddle, Whistle')
     expect(container.querySelector('#user-display').textContent).toContain('Central Time')
     expect(container.querySelector('#user-display').textContent).toContain('2026-07-01 20:15')
@@ -222,7 +226,8 @@ describe('person details page view (user profile flavor)', () => {
         person: {
           first_name: 'Iain',
           last_name: 'Varley',
-          email: 'ian@example.com',
+          // Connected person: person.email is retired, never written back.
+          email: null,
           sms_number: null,
           city: 'Austin',
           state: 'TX',
@@ -361,7 +366,7 @@ describe('person details page view (admin flavor)', () => {
     expect(container.querySelector('#breadcrumb-person-name').textContent).toBe('Ian Varley')
     // Tabs use the admin labels.
     const tabs = [...container.querySelectorAll('#profileTabs [role="tab"]')].map((t) => t.textContent)
-    expect(tabs).toEqual(['Profile', 'Sessions', 'Attended', 'Tunes', 'Logins'])
+    expect(tabs).toEqual(['Profile', 'Sessions', 'Attended', 'Tunebook', 'Logged', 'Logins'])
     // Danger zone + verify email exist only on the admin flavor; the beta
     // toggle shows on both (self-serve opt-in).
     expect(container.querySelector('#danger-zone')).toBeTruthy()
@@ -375,7 +380,7 @@ describe('person details page view (admin flavor)', () => {
   it('switching tabs nests the breadcrumb (person name becomes a link back to Profile)', async () => {
     const { container } = renderAdmin()
     await fireEvent.click(container.querySelector('#tunes-tab'))
-    expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('Tunes')
+    expect(container.querySelector('#breadcrumb-tab-name').textContent).toBe('Tunebook')
     expect(container.querySelector('#breadcrumb-person-name a')).toBeTruthy()
     await fireEvent.click(container.querySelector('#breadcrumb-person-name a'))
     expect(container.querySelector('#profile').classList.contains('active')).toBe(true)
@@ -400,17 +405,19 @@ describe('person details page view (admin flavor)', () => {
     })
   })
 
-  it('edit mode on the admin flavor exposes is_active (not receive_update_emails) and sends it', async () => {
+  it('edit mode on the admin flavor has no is_active or opt-in fields, and never sends is_active', async () => {
     const { container } = renderAdmin()
     await fireEvent.click(container.querySelector('#edit-btn'))
-    expect(container.querySelector('#is_active')).toBeTruthy()
+    // Account active is governed by the deactivate/reactivate control (in lockstep
+    // with the person), not an edit-form checkbox; opt-in is self-serve only.
+    expect(container.querySelector('#is_active')).toBeNull()
     expect(container.querySelector('#receive_update_emails')).toBeNull()
     await fireEvent.click(container.querySelector('#bottom-save-btn'))
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/api/person/5/update'))
       expect(call).toBeTruthy()
       const body = JSON.parse(call[1].body)
-      expect(body.user.is_active).toBe(true)
+      expect(body.user).not.toHaveProperty('is_active')
       expect(body.user).not.toHaveProperty('receive_update_emails')
     })
   })
