@@ -20,6 +20,7 @@ GATED_GETS = [
     "/api/person/{pid}/logins",
     "/api/person/{pid}/attended",
     "/api/person/{pid}/tunes-stats",
+    "/api/person/{pid}/tunes",
     "/api/person/{pid}/available-sessions",
     "/api/person/{pid}/active_session",
 ]
@@ -86,13 +87,44 @@ class TestPersonEndpointAuth:
         assert resp.status_code == 200
         assert resp.get_json()["success"] is True
 
+
+class TestPersonTunesList:
+    """GET /api/person/<id>/tunes — the admin person page's tunes grid, in the
+    /api/my-tunes payload shape (shared serializer)."""
+
+    def test_admin_gets_another_persons_tunes(self, client):
+        with logged_in(client, person_id=1, is_system_admin=True):
+            resp = client.get("/api/person/2/tunes")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert len(data["tunes"]) > 0  # seeded person 2 has tunes
+        row = data["tunes"][0]
+        for key in ("person_tune_id", "tune_id", "tune_name", "tune_type",
+                    "learn_status", "heard_count", "created_date"):
+            assert key in row, key
+        # every row belongs to the requested person, not the caller
+        assert all(t["person_id"] == 2 for t in data["tunes"])
+
+    def test_filters_and_validation(self, client):
+        with logged_in(client, person_id=1, is_system_admin=True):
+            all_rows = client.get("/api/person/2/tunes").get_json()["tunes"]
+            learned = client.get("/api/person/2/tunes?learn_status=learned").get_json()["tunes"]
+            assert all(t["learn_status"] == "learned" for t in learned)
+            assert len(learned) < len(all_rows)
+            assert client.get("/api/person/2/tunes?learn_status=bogus").status_code == 400
+            assert client.get("/api/person/2/tunes?sort=bogus").status_code == 400
+            assert client.get("/api/person/2/tunes?page=x").status_code == 400
+
     def test_removed_person_tunes_endpoints_are_gone(self, client):
         """The orphaned /api/person/tunes* endpoints (only caller was the deleted
         legacy tune_detail_modal.js) are deleted, not just unlinked."""
         assert client.get("/api/person/tunes/55").status_code == 404
         assert client.post("/api/person/tunes", json={"tune_id": 55}).status_code == 404
         assert client.put("/api/person/tunes/55/status", json={}).status_code == 404
-        assert client.get("/api/person/1/tunes").status_code == 404
+        # /api/person/<id>/tunes exists again as the (gated) tunes-grid endpoint,
+        # so anonymous gets 401 now — the orphaned unauthenticated one stays gone.
+        assert client.get("/api/person/1/tunes").status_code == 401
 
 
 class TestBetaLoggingToggleAuth:

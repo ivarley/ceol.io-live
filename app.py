@@ -962,6 +962,11 @@ app.add_url_rule(
     get_person_tunes_stats,
 )
 app.add_url_rule(
+    "/api/person/<int:person_id>/tunes",
+    "get_person_tunes_list",
+    get_person_tunes_list,
+)
+app.add_url_rule(
     "/api/check-username-availability",
     "check_username_availability",
     check_username_availability,

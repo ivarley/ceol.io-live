@@ -5429,6 +5429,47 @@ def get_person_tunes_stats(person_id):
         )
 
 
+@api_admin_or_self_required
+def get_person_tunes_list(person_id):
+    """
+    GET /api/person/<person_id>/tunes — the person's tune collection, in the
+    same shape as GET /api/my-tunes (shared serializer). Feeds the tunes grid
+    on the admin person page; admin-or-self, so /me could use it too.
+
+    Optional query parameters: tune_type, learn_status, search, sort, page, per_page.
+    """
+    from serializers import build_my_tunes_payload, VALID_PERSON_TUNE_SORTS
+
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = min(2000, max(1, int(request.args.get("per_page", 2000))))
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid pagination parameter"}), 400
+    learn_status = request.args.get("learn_status")
+    if learn_status and learn_status not in ("want to learn", "learning", "learned"):
+        return jsonify({"success": False, "error": "Invalid learn_status"}), 400
+    sort = request.args.get("sort", "alpha-asc")
+    if sort not in VALID_PERSON_TUNE_SORTS:
+        return jsonify({"success": False, "error": "Invalid sort"}), 400
+    search = request.args.get("search", "").strip()
+
+    conn = get_db_connection()
+    try:
+        payload = build_my_tunes_payload(
+            conn,
+            person_id,
+            learn_status=learn_status,
+            tune_type=request.args.get("tune_type"),
+            search=search or None,
+            sort=sort,
+            page=page,
+            per_page=per_page,
+        )
+    finally:
+        conn.close()
+    return jsonify(payload)
+
+
 @api_login_required  # only caller is the profile tab on /me and /admin/people/<id> (both @login_required pages)
 def check_username_availability():
     """Check if a username is available"""

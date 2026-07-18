@@ -1,12 +1,15 @@
 <script>
   // Tunes tab: lazy-loaded tune statistics. The type filter re-slices the loaded
   // stats client-side; the date filter re-fetches with start/end params (as the
-  // legacy page did). Stat cards + "View tune list" link with matching params.
-  let { personId, load } = $props()
+  // legacy page did). Stat cards; on /me a "View tune list" link (it goes to the
+  // viewer's own /my-tunes, which is only correct there); on the admin view the
+  // actual tune grid renders below the stats instead.
+  let { personId, load, isUserProfile = true } = $props()
 
   let loading = $state(true)
   let stats = $state(null) // the /tunes-stats stats object
   let noStats = $state(false)
+  let tunes = $state(null) // admin view: the person's tune rows (null = loading)
   let selectedType = $state('')
   let startDate = $state('')
   let endDate = $state('')
@@ -48,8 +51,37 @@
     if (load && !started) {
       started = true
       loadTunesData()
+      if (!isUserProfile) loadTuneGrid()
     }
   })
+
+  function loadTuneGrid() {
+    fetch(`/api/person/${personId}/tunes`)
+      .then((r) => r.json())
+      .then((data) => {
+        tunes = data.success ? data.tunes : []
+      })
+      .catch((err) => {
+        tunes = []
+        console.error('Error loading tunes:', err)
+      })
+  }
+
+  // The grid obeys the same filters as the stat cards: the type droplist, and
+  // the date range (which, like /tunes-stats, filters on when the tune was
+  // added to the collection).
+  const gridRows = $derived.by(() => {
+    if (!tunes) return null
+    return tunes.filter((t) => {
+      if (selectedType && t.tune_type !== selectedType) return false
+      const added = (t.created_date || '').slice(0, 10)
+      if (startDate && (!added || added < startDate)) return false
+      if (endDate && (!added || added > endDate)) return false
+      return true
+    })
+  })
+
+  const fmtDate = (iso) => (iso ? iso.slice(0, 10) : '')
 
   const displayStats = $derived.by(() => {
     if (!stats) return null
@@ -117,9 +149,11 @@
   <div id="tunes-content">
     {#if noStats}
       <div class="alert alert-info" role="alert">No tune statistics available.</div>
-      <div class="mt-3">
-        <a href="/my-tunes" class="tune-list-link">View tune list</a>
-      </div>
+      {#if isUserProfile}
+        <div class="mt-3">
+          <a href="/my-tunes" class="tune-list-link">View tune list</a>
+        </div>
+      {/if}
     {:else if stats}
       <div class="tune-stats">
         <div class="tune-filter-row mb-3">
@@ -166,7 +200,9 @@
               }}>Filter by date</a>
           {/if}
 
-          <a href={tuneListUrl} class="tune-list-link">View tune list</a>
+          {#if isUserProfile}
+            <a href={tuneListUrl} class="tune-list-link">View tune list</a>
+          {/if}
         </div>
 
         <div id="date-filter-panel" class="date-filter-panel" style:display={datePanelVisible ? 'block' : 'none'}>
@@ -222,7 +258,63 @@
             </div>
           </div>
         </div>
+
+        {#if !isUserProfile}
+          {#if !gridRows}
+            <p class="text-muted">Loading tunes…</p>
+          {:else if gridRows.length === 0}
+            <p class="text-muted">No tunes match the current filters.</p>
+          {:else}
+            <div class="table-responsive">
+              <table class="table table-striped tune-grid" id="person-tunes-grid">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th class="tune-grid-num">Heard</th>
+                    <th>Learned</th>
+                    <th>Added</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each gridRows as tune (tune.person_tune_id)}
+                    <tr>
+                      <td class="tune-grid-name">
+                        <a href="/admin/tunes/{tune.tune_id}">{tune.tune_name}</a>
+                      </td>
+                      <td>{tune.tune_type || ''}</td>
+                      <td>{tune.learn_status}</td>
+                      <td class="tune-grid-num">{tune.heard_count || 0}</td>
+                      <td>{fmtDate(tune.learned_date)}</td>
+                      <td>{fmtDate(tune.created_date)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {/if}
+        {/if}
       </div>
     {/if}
   </div>
 </div>
+
+<style>
+  .tune-grid-name a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .tune-grid-name a:hover {
+    text-decoration: underline;
+  }
+  .tune-grid-num {
+    text-align: right;
+  }
+  .tune-grid td,
+  .tune-grid th {
+    color: var(--text-color);
+  }
+</style>

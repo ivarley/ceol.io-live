@@ -199,7 +199,7 @@
     id="tunes"
     role="tabpanel"
     aria-labelledby="tunes-tab">
-    <TunesStatsTab {personId} load={tunesLoaded} />
+    <TunesStatsTab {personId} load={tunesLoaded} {isUserProfile} />
   </div>
 
   <!-- Logins Tab -->
