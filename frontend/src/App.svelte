@@ -3210,7 +3210,14 @@
       <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}<a class="session-return" href="/sessions/{config.sessionPath}" title="Back to session" onclick={(e) => e.stopPropagation()}>⮐</a></div>
-          <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
+          <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}
+              <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </a>{/if}</div>
           {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
@@ -3226,7 +3233,15 @@
       </div>
       {#if expanded}
         <div class="header-expand">
-          <div class="header-stat">{tuneSummary}</div>
+          <div class="header-stat">{tuneSummary}
+            <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </a>
+          </div>
           <div class="header-notes-edit">
             <span class="hn-label">Notes</span>
             <textarea
@@ -3265,17 +3280,6 @@
             {:else}
               <button class="hc-mark" onclick={(e) => { e.stopPropagation(); markComplete() }}>Mark this log complete</button>
             {/if}
-            <a
-              class="header-help"
-              href="/help/session-tracking/live-logger"
-              title="How to use the live logger"
-              onclick={(e) => e.stopPropagation()}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-            </a>
           </div>
         </div>
       {/if}

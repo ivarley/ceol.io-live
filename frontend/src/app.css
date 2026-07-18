@@ -231,10 +231,15 @@ main {
 }
 .hc-link:hover { color: var(--text); }
 .header-help {
-  margin-left: auto; align-self: center; display: inline-flex;
+  display: inline-flex; vertical-align: -2px; margin-left: 4px;
   color: var(--muted); opacity: 0.6;
 }
 .header-help:hover { opacity: 1; color: var(--accent); }
+.deep-empty-help {
+  display: inline-flex; vertical-align: -2px; margin-left: 4px;
+  color: var(--muted); opacity: 0.6;
+}
+.deep-empty-help:hover { opacity: 1; color: var(--accent); }
 
 /* Connection status dot — same visual language as the app-wide indicator
    (connection_status.js / base.html): green = live, orange = offline,
