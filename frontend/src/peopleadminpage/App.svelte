@@ -261,6 +261,7 @@
       <option value="active">Active Only</option>
       <option value="all">All</option>
     </select>
+    <span class="people-count" aria-live="polite">{rows.length} {rows.length === 1 ? 'row' : 'rows'}</span>
     <button id="add-person-btn" class="btn btn-primary btn-add-person" onclick={openAddPerson}>Add Person</button>
   </div>
 

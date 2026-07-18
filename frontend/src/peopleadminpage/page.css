@@ -60,6 +60,13 @@
     flex: 0 0 auto;
 }
 
+.people-count {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 0.9rem;
+    color: var(--disabled-text);
+}
+
 /* ---- table -------------------------------------------------------------- */
 
 #people-content .table {
