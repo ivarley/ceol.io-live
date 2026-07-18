@@ -25,9 +25,13 @@
     return parts.length > 0 ? parts.join(', ') : 'Unknown'
   }
 
+  // ---- account filter (droplist: all people vs. only those with a login) --------
+  let accountFilter = $state('all') // 'all' | 'users'
+
   // ---- search (same fields the legacy data-person-* attributes carried) --------
   const filtered = $derived(
     people.filter((p) => {
+      if (accountFilter === 'users' && !p.username) return false
       if (!searchTerm) return true
       const haystack = [
         p.name,
@@ -235,6 +239,14 @@
       wrapperClass="people-search-wrap"
       styled={false}
       placeholder="Search by name, email, username, or location..." />
+    <select
+      id="people-account-filter"
+      class="form-control people-account-filter"
+      aria-label="Filter by account"
+      bind:value={accountFilter}>
+      <option value="users">Site Users Only</option>
+      <option value="all">All People</option>
+    </select>
     <button id="add-person-btn" class="btn btn-primary btn-add-person" onclick={openAddPerson}>Add Person</button>
   </div>
 
@@ -344,7 +356,7 @@
           </tbody>
         </table>
       </div>
-      {#if rows.length === 0 && searchTerm}
+      {#if rows.length === 0 && (searchTerm || accountFilter !== 'all')}
         <div id="no-search-results" class="alert alert-info">
           <p class="mb-0">No people match your search criteria.</p>
         </div>

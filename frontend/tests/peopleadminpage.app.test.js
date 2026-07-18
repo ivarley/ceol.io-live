@@ -151,6 +151,30 @@ describe('admin people table', () => {
     })
   })
 
+  it('the account droplist hides accountless people and composes with search', async () => {
+    const { container } = render(App, { pageData: payload() })
+    const select = container.querySelector('#people-account-filter')
+    expect(select.value).toBe('all') // default shows everyone
+
+    await fireEvent.change(select, { target: { value: 'users' } })
+    await waitFor(() => expect(rowNames(container)).toEqual(['Ian Varley', 'Sarah OConnor']))
+
+    // composes with search: "no account" matches person 3's placeholder text,
+    // but the filter keeps her out
+    const input = container.querySelector('#people-search')
+    input.value = 'no account'
+    await fireEvent.input(input)
+    await waitFor(() => {
+      expect(container.querySelectorAll('#people-tbody tr')).toHaveLength(0)
+      expect(container.querySelector('#no-search-results')).toBeTruthy()
+    })
+
+    input.value = ''
+    await fireEvent.input(input)
+    await fireEvent.change(select, { target: { value: 'all' } })
+    await waitFor(() => expect(rowNames(container)).toHaveLength(3))
+  })
+
   it('sorting toggles asc/desc and always sinks dateless rows', async () => {
     const { container } = render(App, { pageData: payload() })
     const tunesHeader = container.querySelector('th[data-column="tunes"]')

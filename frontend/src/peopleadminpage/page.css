@@ -53,6 +53,13 @@
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
+/* After the .form-control width:100% rule above (same specificity — source
+   order decides): the droplist hugs its content instead of flexing. */
+.people-toolbar .people-account-filter {
+    width: auto;
+    flex: 0 0 auto;
+}
+
 /* ---- table -------------------------------------------------------------- */
 
 #people-content .table {
