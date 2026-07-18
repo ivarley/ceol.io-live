@@ -21,6 +21,7 @@ GATED_GETS = [
     "/api/person/{pid}/attended",
     "/api/person/{pid}/tunes-stats",
     "/api/person/{pid}/tunes",
+    "/api/person/{pid}/logged-tunes",
     "/api/person/{pid}/available-sessions",
     "/api/person/{pid}/active_session",
 ]
@@ -115,6 +116,53 @@ class TestPersonTunesList:
             assert client.get("/api/person/2/tunes?learn_status=bogus").status_code == 400
             assert client.get("/api/person/2/tunes?sort=bogus").status_code == 400
             assert client.get("/api/person/2/tunes?page=x").status_code == 400
+
+    def test_logged_tunes_newest_first_no_breaks(self, client):
+        """GET /api/person/<id>/logged-tunes: rows the person's user created,
+        ordered newest-first, breaks and deleted rows excluded. Seed log rows
+        carry no created_by attribution, so build committed fixture rows (the
+        endpoint opens its own connection) and delete them in teardown."""
+        from database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            # user 1 = seeded admin; instance 1 belongs to the mueller session
+            cur.execute(
+                """
+                INSERT INTO session_instance_tune
+                    (session_instance_tune_id, session_instance_id, tune_id, name,
+                     order_position, record_type, deleted, inserted_timestamp, created_by_user_id)
+                VALUES
+                    (97001, 1, 1,    NULL,        'zz1', 'tune',  FALSE, '2026-01-01T20:00:00Z', 1),
+                    (97002, 1, NULL, 'Free Text', 'zz2', 'tune',  FALSE, '2026-01-01T21:00:00Z', 1),
+                    (97003, 1, NULL, NULL,        'zz3', 'break', FALSE, '2026-01-01T22:00:00Z', 1),
+                    (97004, 1, 27,   NULL,        'zz4', 'tune',  TRUE,  '2026-01-01T23:00:00Z', 1)
+                """
+            )
+            conn.commit()
+
+            with logged_in(client, person_id=1, is_system_admin=True):
+                resp = client.get("/api/person/1/logged-tunes")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["success"] is True
+            rows = [r for r in data["tunes"] if r["session_instance_tune_id"] >= 97001]
+            # the break (97003) and the deleted row (97004) are excluded
+            assert [r["session_instance_tune_id"] for r in rows] == [97002, 97001]
+            assert rows[0]["tune_name"] == "Free Text"
+            assert rows[1]["tune_name"]  # catalog name resolved from tune 1
+            for key in ("session_name", "session_path", "date", "tune_name", "logged_at"):
+                assert rows[0][key], key
+            # newest-first across the whole payload
+            stamps = [r["logged_at"] for r in data["tunes"] if r["logged_at"]]
+            assert stamps == sorted(stamps, reverse=True)
+            assert data["total_count"] >= 2
+        finally:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id BETWEEN 97001 AND 97004")
+            conn.commit()
+            conn.close()
 
     def test_removed_person_tunes_endpoints_are_gone(self, client):
         """The orphaned /api/person/tunes* endpoints (only caller was the deleted

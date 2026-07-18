@@ -5470,6 +5470,84 @@ def get_person_tunes_list(person_id):
     return jsonify(payload)
 
 
+@api_admin_or_self_required
+def get_person_logged_tunes(person_id):
+    """
+    GET /api/person/<person_id>/logged-tunes — tune records this person logged
+    at sessions (rows they created, via the live logger's attribution join:
+    created_by_user_id -> user_account -> person), newest first.
+
+    Breaks and soft-deleted rows are excluded. Display name falls back
+    per-record override -> session alias -> catalog name, like the loggers.
+
+    Optional query parameter: limit (default 1000, max 2000).
+    """
+    try:
+        limit = min(2000, max(1, int(request.args.get("limit", 1000))))
+    except ValueError:
+        return jsonify({"success": False, "error": "Invalid limit"}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT sit.session_instance_tune_id, sit.tune_id,
+                   COALESCE(sit.name, st.alias, t.name) AS tune_name,
+                   COALESCE(sit.inserted_timestamp, sit.created_date) AS logged_at,
+                   s.name AS session_name, s.path AS session_path, si.date
+            FROM session_instance_tune sit
+            JOIN user_account cu ON cu.user_id = sit.created_by_user_id
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            JOIN session s ON s.session_id = si.session_id
+            LEFT JOIN tune t ON t.tune_id = sit.tune_id
+            LEFT JOIN session_tune st
+                   ON st.session_id = si.session_id AND st.tune_id = sit.tune_id
+            WHERE cu.person_id = %s
+              AND sit.record_type = 'tune'
+              AND sit.deleted IS NOT TRUE
+            ORDER BY COALESCE(sit.inserted_timestamp, sit.created_date) DESC NULLS LAST,
+                     sit.session_instance_tune_id DESC
+            LIMIT %s
+            """,
+            (person_id, limit),
+        )
+        rows = cur.fetchall()
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM session_instance_tune sit
+            JOIN user_account cu ON cu.user_id = sit.created_by_user_id
+            WHERE cu.person_id = %s
+              AND sit.record_type = 'tune'
+              AND sit.deleted IS NOT TRUE
+            """,
+            (person_id,),
+        )
+        total_count = cur.fetchone()[0]
+    finally:
+        conn.close()
+
+    return jsonify(
+        {
+            "success": True,
+            "total_count": total_count,
+            "tunes": [
+                {
+                    "session_instance_tune_id": r[0],
+                    "tune_id": r[1],
+                    "tune_name": r[2],
+                    "logged_at": r[3].isoformat() if r[3] else None,
+                    "session_name": r[4],
+                    "session_path": r[5],
+                    "date": r[6].isoformat() if r[6] else None,
+                }
+                for r in rows
+            ],
+        }
+    )
+
+
 @api_login_required  # only caller is the profile tab on /me and /admin/people/<id> (both @login_required pages)
 def check_username_availability():
     """Check if a username is available"""

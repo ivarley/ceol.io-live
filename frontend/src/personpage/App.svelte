@@ -9,6 +9,7 @@
   import SessionsTab from './SessionsTab.svelte'
   import AttendedTab from './AttendedTab.svelte'
   import TunesStatsTab from './TunesStatsTab.svelte'
+  import LoggedTab from './LoggedTab.svelte'
   import LoginsTab from './LoginsTab.svelte'
 
   let { pageData, ctx = {} } = $props()
@@ -21,7 +22,7 @@
 
   import { toast, Tabs } from '../lib/index.js'
 
-  const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logins']
+  const validTabs = ['profile', 'sessions', 'attended', 'tunes', 'logged', 'logins']
 
   // Initial tab from the URL (?tab=), exactly like the legacy DOMContentLoaded path
   // (activateTab(tabFromUrl, false) — no URL rewrite on load).
@@ -33,12 +34,14 @@
   let activeTab = $state(initialTab)
   let attendedLoaded = $state(false)
   let tunesLoaded = $state(false)
+  let loggedLoaded = $state(false)
   let loginsLoaded = $state(false)
 
   // Lazy-load bookkeeping for whichever tab is (or becomes) active.
   function noteActivated(tabId) {
     if (tabId === 'attended') attendedLoaded = true
     else if (tabId === 'tunes') tunesLoaded = true
+    else if (tabId === 'logged') loggedLoaded = true
     else if (tabId === 'logins') loginsLoaded = true
   }
   noteActivated(initialTab)
@@ -50,7 +53,8 @@
       { id: 'profile', label: 'Profile', domId: 'profile-tab' },
       { id: 'sessions', label: sessionsTabLabel, domId: 'sessions-tab' },
       { id: 'attended', label: attendedTabLabel, domId: 'attended-tab' },
-      { id: 'tunes', label: 'Tunes', domId: 'tunes-tab' },
+      { id: 'tunes', label: 'Tunebook', domId: 'tunes-tab' },
+      { id: 'logged', label: 'Logged', domId: 'logged-tab' },
     ]
     if (user) t.push({ id: 'logins', label: 'Logins', domId: 'logins-tab' })
     return t
@@ -78,7 +82,8 @@
     profile: null,
     sessions: 'Sessions',
     attended: 'Attended',
-    tunes: 'Tunes',
+    tunes: 'Tunebook',
+    logged: 'Logged',
     logins: 'Logins',
   }
   const breadcrumbTabName = $derived(tabDisplayNames[activeTab] || null)
@@ -200,6 +205,17 @@
     role="tabpanel"
     aria-labelledby="tunes-tab">
     <TunesStatsTab {personId} load={tunesLoaded} {isUserProfile} />
+  </div>
+
+  <!-- Logged Tab -->
+  <div
+    class="tab-pane fade"
+    class:show={activeTab === 'logged'}
+    class:active={activeTab === 'logged'}
+    id="logged"
+    role="tabpanel"
+    aria-labelledby="logged-tab">
+    <LoggedTab {personId} load={loggedLoaded} />
   </div>
 
   <!-- Logins Tab -->
