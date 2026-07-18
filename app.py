@@ -380,6 +380,12 @@ app.add_url_rule(
     get_admin_people_api,
     methods=["GET"],
 )
+app.add_url_rule(
+    "/api/admin/people/merge",
+    "merge_people",
+    merge_people,
+    methods=["POST"],
+)
 
 # Register API routes
 # Live logging (spec 024) -- referee op endpoints + screen shell (Phase 0)

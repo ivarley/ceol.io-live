@@ -4188,7 +4188,8 @@ def add_person_to_session_people_tab(session_path):
        first+last name, silently reusing that row. That was cross-session person discovery
        through the back door (type a name, learn whether they exist) and it merged two
        different John Smiths into one human. Email is now the sole identity key; a name
-       collision creates a genuinely new person. (merge_person_ids exists for cleanup.)
+       collision creates a genuinely new person. (The admin person-merge action —
+       POST /api/admin/people/merge — exists for cleanup.)
 
     2. CONFIRMED IS A VOUCH, so only a session admin can grant it. A confirmed non-admin
        member may still add people -- they just land unconfirmed, for an admin to confirm.
@@ -12348,6 +12349,71 @@ def get_add_session_payload():
     from serializers import build_add_session_payload
 
     return jsonify(build_add_session_payload(current_user.is_authenticated))
+
+
+@api_login_required
+def merge_people():
+    """
+    Merge two people that are the same human (system-admin only).
+
+    POST /api/admin/people/merge
+
+    Request body:
+    {
+        "loser_person_id": int (required)  — the person being absorbed/deleted,
+        "winner_person_id": int (required) — the surviving person,
+        "confirm": boolean (default false),
+        "surviving_user_id": int — required iff BOTH people have login accounts
+    }
+
+    confirm=false returns a detailed preview: per-table move counts, every
+    colliding row with the exact field-merge outcome, profile fills/discards,
+    the account situation, and warnings (checked-in, active-flag mismatch).
+    confirm=true executes the merge in one transaction. Hard merge: the loser
+    row is deleted; history tables keep the old person_id as the audit trail.
+    """
+    from services.person_merge_service import (
+        MergeValidationError,
+        build_merge_preview,
+        execute_merge,
+    )
+
+    if not current_user.is_system_admin:
+        return jsonify({"success": False, "error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Request body required"}), 400
+
+    loser_id = data.get("loser_person_id")
+    winner_id = data.get("winner_person_id")
+    confirm = data.get("confirm", False)
+    surviving_user_id = data.get("surviving_user_id")
+
+    if not loser_id or not winner_id:
+        return jsonify(
+            {"success": False, "error": "Both loser_person_id and winner_person_id are required"}
+        ), 400
+
+    conn = get_db_connection()
+    try:
+        if not confirm:
+            preview = build_merge_preview(conn, loser_id, winner_id)
+            return jsonify(preview)
+
+        result = execute_merge(
+            conn, loser_id, winner_id, current_user.user_id, surviving_user_id=surviving_user_id
+        )
+        conn.commit()
+        return jsonify(result)
+    except MergeValidationError as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": e.message}), e.status
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        conn.close()
 
 
 @api_login_required

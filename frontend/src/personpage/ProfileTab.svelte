@@ -6,6 +6,7 @@
   let { person, user, isUserProfile, personId, timezoneOptions = [], canonicalInstruments = [] } = $props()
 
   import { Dialog, Sheet, toast } from '../lib/index.js'
+  import MergeSection from './MergeSection.svelte'
 
   let editMode = $state(false)
 
@@ -693,6 +694,8 @@
             <div class="alert alert-{toggleActiveStatusHtml.kind}">{toggleActiveStatusHtml.text}</div>
           {/if}
         </div>
+
+        <MergeSection {person} {personId} />
       </div>
     </div>
   {/if}

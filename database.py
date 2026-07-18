@@ -375,10 +375,10 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO person_history
             (person_id, operation, changed_by_user_id, first_name, last_name, email, sms_number,
-             city, state, country, thesession_user_id, created_date, last_modified_date,
+             city, state, country, thesession_user_id, active, created_date, last_modified_date,
              created_by_user_id, last_modified_user_id)
             SELECT person_id, %s, %s, first_name, last_name, email, sms_number,
-                   city, state, country, thesession_user_id, created_date, last_modified_date,
+                   city, state, country, thesession_user_id, active, created_date, last_modified_date,
                    created_by_user_id, last_modified_user_id
             FROM person WHERE person_id = %s
         """,
@@ -402,6 +402,30 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             (operation, user_id, record_id),
         )
         
+    elif table_name == "person_tune":
+        # record_id is either a (person_id, tune_id) tuple or a scalar person_tune_id
+        # (models/person_tune.py passes the latter). This branch was missing until the
+        # person-merge feature — before that, every save_to_history("person_tune", ...)
+        # call was a silent no-op and person_tune_history was only written DB-side by
+        # merge_tune_ids().
+        if isinstance(record_id, tuple):
+            where, params = "person_id = %s AND tune_id = %s", record_id
+        else:
+            where, params = "person_tune_id = %s", (record_id,)
+        cur.execute(
+            f"""
+            INSERT INTO person_tune_history
+            (person_tune_id, operation, changed_by_user_id, person_id, tune_id, learn_status,
+             heard_count, learned_date, notes, setting_id, name_alias, key,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT person_tune_id, %s, %s, person_id, tune_id, learn_status,
+                   heard_count, learned_date, notes, setting_id, name_alias, key,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            FROM person_tune WHERE {where}
+        """,
+            (operation, user_id, *params),
+        )
+
     elif table_name == "person_instrument":
         # For person_instrument, record_id should be a tuple (person_id, instrument)
         person_id, instrument = record_id
