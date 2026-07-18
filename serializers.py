@@ -149,6 +149,9 @@ _ADMIN_PEOPLE_SQL = """
         p.active,
         ua.username,
         ua.is_system_admin,
+        ua.user_email,
+        ua.is_active AS account_active,
+        ua.receive_update_emails,
         us.last_login,
         COALESCE(sp.session_count, 0) AS session_count,
         COALESCE(sip.session_instance_count, 0) AS session_instance_count,
@@ -228,6 +231,12 @@ def admin_person_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "active": row["active"],
         "username": row["username"],
         "is_system_admin": bool(row["is_system_admin"]) if row["username"] else False,
+        # account-level fields (null for people with no login account). user_email
+        # is the address update emails actually go to — distinct from person.email,
+        # which is the "email" key above (spec 027 / api_routes.py:492).
+        "user_email": row["user_email"],
+        "account_active": bool(row["account_active"]) if row["username"] else None,
+        "receive_update_emails": bool(row["receive_update_emails"]) if row["username"] else None,
         # timestamps as naive-local ISO strings; date-only for latest_session_date
         "last_login": row["last_login"].isoformat() if row["last_login"] else None,
         "session_count": row["session_count"],

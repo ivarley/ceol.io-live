@@ -28,6 +28,19 @@
   // A person with blank first+last name still needs a clickable label.
   const displayName = (p) => (p.name || '').trim() || p.username || '(unnamed)'
 
+  // ---- email / account helpers ------------------------------------------------
+  // Two emails can disagree: person.email (contact on the person record) vs
+  // user_account.user_email (where update emails are actually sent). The Email
+  // column shows the effective address, and highlights + shows both when they
+  // differ for an account-holder — that mismatch is a live email-deliverability
+  // trap (an opted-in account with a blank/stale user_email gets no mail).
+  const hasAccount = (p) => !!p.username
+  const personEmail = (p) => (p.email || '').trim()
+  const accountEmail = (p) => (hasAccount(p) ? (p.user_email || '').trim() : '')
+  const effectiveEmail = (p) => (hasAccount(p) ? accountEmail(p) || personEmail(p) : personEmail(p))
+  const emailMismatch = (p) =>
+    hasAccount(p) && accountEmail(p).toLowerCase() !== personEmail(p).toLowerCase()
+
   // ---- account filter (droplist: all people vs. only those with a login) --------
   let accountFilter = $state('all') // 'all' | 'users'
   // ---- active filter (droplist; deactivated people are hidden by default) -------
@@ -42,6 +55,7 @@
       const haystack = [
         p.name,
         p.email || '',
+        p.user_email || '',
         p.username || 'no account',
         [p.city, p.state, p.country].filter(Boolean).join(' '),
       ]
@@ -57,6 +71,12 @@
     { id: 'location', label: 'Location', type: 'text', key: (p) => (p.city || '').toLowerCase() },
     { id: 'thesession', label: 'TheSession.org', type: 'number', key: (p) => p.thesession_user_id || 0 },
     { id: 'username', label: 'Username', type: 'text', key: (p) => (p.username || 'no account').toLowerCase() },
+    { id: 'email', label: 'Email', type: 'text', key: (p) => effectiveEmail(p).toLowerCase() },
+    // Comms/Account rank: 0 = no account (sorts to the bottom), 1 = the "off"
+    // state (unsubscribed / inactive account), 2 = the "on" state — so a
+    // descending sort surfaces subscribed/active first and the off-states next.
+    { id: 'comms', label: 'Updates', type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.receive_update_emails ? 2 : 1) },
+    { id: 'account', label: 'Account Active', type: 'number', key: (p) => (!hasAccount(p) ? 0 : p.account_active ? 2 : 1) },
     { id: 'sessions', label: 'Sessions', type: 'number', key: (p) => p.session_count },
     { id: 'instances', label: 'Checked In', type: 'number', key: (p) => p.session_instance_count },
     { id: 'tunes', label: 'Tunes', type: 'number', key: (p) => p.tune_count },
@@ -313,6 +333,36 @@
                     {/if}
                   {:else}
                     <span class="text-muted">No account</span>
+                  {/if}
+                </td>
+                <td class="person-email" class:email-mismatch={emailMismatch(person)}>
+                  {#if emailMismatch(person)}
+                    <div class="email-split" title="Account email (receives updates) differs from the person's contact email">
+                      <span><span class="email-tag">acct</span> {accountEmail(person) || '(none)'}</span>
+                      <span><span class="email-tag">person</span> {personEmail(person) || '(none)'}</span>
+                    </div>
+                  {:else if effectiveEmail(person)}
+                    {effectiveEmail(person)}
+                  {:else}
+                    <span class="text-muted">—</span>
+                  {/if}
+                </td>
+                <td class="person-comms">
+                  {#if !person.username}
+                    <span class="text-muted">—</span>
+                  {:else if person.receive_update_emails}
+                    <span class="text-success">✓ Subscribed</span>
+                  {:else}
+                    <span class="text-muted">Unsubscribed</span>
+                  {/if}
+                </td>
+                <td class="person-account-active">
+                  {#if !person.username}
+                    <span class="text-muted">—</span>
+                  {:else if person.account_active}
+                    <span class="text-success">Active</span>
+                  {:else}
+                    <span class="text-danger">Inactive</span>
                   {/if}
                 </td>
                 <td class="person-session-count">

@@ -109,6 +109,7 @@ class TestAdminPeoplePayload:
             "session_count", "session_instance_count", "latest_session_date",
             "latest_session_name", "tune_count", "last_logged_tune",
             "last_tunebook_update",
+            "user_email", "account_active", "receive_update_emails",
         }
         assert expected_keys == set(person.keys())
 
