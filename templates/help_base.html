@@ -317,7 +317,7 @@
             <li class="help-nav-item">
                 <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">Working Offline</a>
             </li>
-            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
                 <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
                     <span>Features</span>
                     <span class="chevron">&#9656;</span>
@@ -326,7 +326,7 @@
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_my_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'my-tunes' else '' }}">My Tune List</a>
                     </li>
-                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
                         <div class="help-nav-section-header" onclick="event.stopPropagation(); toggleSection(this.parentElement)">
                             <span>Session Tracking</span>
                             <span class="chevron">&#9656;</span>
@@ -339,7 +339,10 @@
                                 <a href="{{ url_for('help_session_logs') }}" class="help-nav-link {{ 'active' if active_page == 'logs' else '' }}">Logs</a>
                             </li>
                             <li class="help-nav-item">
-                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">Members</a>
+                                <a href="{{ url_for('help_live_logger') }}" class="help-nav-link {{ 'active' if active_page == 'live-logger' else '' }}">The Live Logger</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">People</a>
                             </li>
                         </ul>
                     </li>
@@ -351,6 +354,21 @@
                     <span class="chevron">&#9656;</span>
                 </div>
                 <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-07' else '' }}">July 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-06') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-06' else '' }}">June 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-03') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-03' else '' }}">March 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-02') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-02' else '' }}">February 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-01') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-01' else '' }}">January 2026</a>
+                    </li>
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_release_notes', month='2025-12') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-12' else '' }}">December 2025</a>
                     </li>
@@ -389,7 +407,7 @@
             <li class="help-nav-item">
                 <a href="{{ url_for('help_offline') }}" class="help-nav-link {{ 'active' if active_page == 'offline' else '' }}">Working Offline</a>
             </li>
-            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+            <li class="help-nav-section {{ 'expanded' if active_page in ['my-tunes', 'session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
                 <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
                     <span>Features</span>
                     <span class="chevron">&#9656;</span>
@@ -398,7 +416,7 @@
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_my_tunes') }}" class="help-nav-link {{ 'active' if active_page == 'my-tunes' else '' }}">My Tune List</a>
                     </li>
-                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'members'] else '' }}">
+                    <li class="help-nav-section {{ 'expanded' if active_page in ['session-tracking', 'tunes', 'logs', 'live-logger', 'members'] else '' }}">
                         <div class="help-nav-section-header" onclick="event.stopPropagation(); toggleSection(this.parentElement)">
                             <span>Session Tracking</span>
                             <span class="chevron">&#9656;</span>
@@ -411,7 +429,10 @@
                                 <a href="{{ url_for('help_session_logs') }}" class="help-nav-link {{ 'active' if active_page == 'logs' else '' }}">Logs</a>
                             </li>
                             <li class="help-nav-item">
-                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">Members</a>
+                                <a href="{{ url_for('help_live_logger') }}" class="help-nav-link {{ 'active' if active_page == 'live-logger' else '' }}">The Live Logger</a>
+                            </li>
+                            <li class="help-nav-item">
+                                <a href="{{ url_for('help_session_members') }}" class="help-nav-link {{ 'active' if active_page == 'members' else '' }}">People</a>
                             </li>
                         </ul>
                     </li>
@@ -423,6 +444,21 @@
                     <span class="chevron">&#9656;</span>
                 </div>
                 <ul class="help-nav-subnav">
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-07' else '' }}">July 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-06') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-06' else '' }}">June 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-03') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-03' else '' }}">March 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-02') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-02' else '' }}">February 2026</a>
+                    </li>
+                    <li class="help-nav-item">
+                        <a href="{{ url_for('help_release_notes', month='2026-01') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-01' else '' }}">January 2026</a>
+                    </li>
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_release_notes', month='2025-12') }}" class="help-nav-link {{ 'active' if active_page == 'release-2025-12' else '' }}">December 2025</a>
                     </li>

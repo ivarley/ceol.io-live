@@ -7,7 +7,125 @@
 {% block help_content %}
 <h1>Release Notes: {{ month_name }}</h1>
 
-{% if month == '2025-12' %}
+{% if month == '2026-07' %}
+<p class="release-date">July 2026</p>
+
+<h2>Live Logger: Big Upgrades</h2>
+<ul class="release-notes-list">
+    <li>Desktop layout: on wide screens the logger shows a second pane with always-visible tune search and the suggested next tune</li>
+    <li>Full keyboard control on desktop: arrow keys move the insertion cursor, Enter splits/joins sets, "/" jumps to search</li>
+    <li>Selection mode: bulk select tunes to copy, paste, move, delete (with undo), or assign a set starter — plus drag-to-move</li>
+    <li>Paste a whole night in one go: commas separate tunes in a set, line breaks start new sets</li>
+    <li>Preview before you add: tap a search result to see its full notation, browse alternate settings, and compare candidates — including results from TheSession.org</li>
+    <li>Highlight mode (★): color the log by your own learning status, and bulk-add tunes to your list</li>
+    <li>Pull-down search to filter the night's log to a tune</li>
+    <li>Extended tune search against TheSession.org, right from the logger</li>
+    <li>Presence circles now show people's real initials, and the connection dot shows more detail when tapped</li>
+    <li>Faster loading on slow connections, and fixes for edits made while offline</li>
+    <li>You can now turn the new logger on yourself from your profile page</li>
+</ul>
+
+<h2>My Tunes</h2>
+<ul class="release-notes-list">
+    <li>Per-instrument learning status: track a tune separately on each instrument you play</li>
+    <li>Streamlined add-tune flow with unified search and preview; TheSession.org tunebook sync now lives inside it</li>
+    <li>Filter pills and consistent status badge colors throughout</li>
+</ul>
+
+<h2>Tune Details</h2>
+<ul class="release-notes-list">
+    <li>Tune drawer overhaul: History and Session tabs combined, with deep links straight into the session logs where a tune was played</li>
+    <li>New "played with" list showing which tunes it's commonly set with</li>
+    <li>Key overrides now shown in tune lists</li>
+    <li>Merged tunes now link to their current version</li>
+</ul>
+
+<h2>Sessions</h2>
+<ul class="release-notes-list">
+    <li>Session tunes list shows your own tunebook status next to each tune, with a better search/add flow</li>
+    <li>Tune counts on the session log list</li>
+    <li>"Continue logging" shortcut on the home page for logs you're still working on</li>
+    <li>Clearer "my sessions" (the sessions you're a member of, vs. ones you've visited)</li>
+    <li>Sessions can now turn people-tracking features (members list, attendance, set starters) on or off</li>
+    <li>Full names shown in people lists</li>
+</ul>
+
+<h2>Look &amp; Feel</h2>
+<ul class="release-notes-list">
+    <li>The app is now dark mode throughout</li>
+    <li>Faster page loads everywhere (smarter asset caching)</li>
+</ul>
+
+{% elif month == '2026-06' %}
+<p class="release-date">June 2026</p>
+
+<h2>The Live Logger (Beta)</h2>
+<p>A brand-new logging screen, built for use during the session itself:</p>
+<ul class="release-notes-list">
+    <li>Multiple people can log the same session at once and see each other's changes instantly — no save button</li>
+    <li>Presence circles, typing indicators, and activity toasts show who's logging alongside you</li>
+    <li>Each logger gets a color, and tunes are tinted by who added them</li>
+    <li>Instant tune matching from a local cache — logging works with no network delay</li>
+    <li>Suggested next tune, based on the sets your session usually plays</li>
+    <li>Record who started each set, and manage attendance right from the same flow</li>
+    <li>View mode for following along without editing, and a "mark complete" for finished logs</li>
+    <li>Works offline: changes queue on your device and sync when you reconnect</li>
+</ul>
+
+<h2>Offline Support Everywhere</h2>
+<ul class="release-notes-list">
+    <li>My Tunes, tune details with notation, tune search, and your session pages now work without a connection</li>
+    <li>Changes made offline (add a tune, change status, bump heard count) sync automatically when you're back online</li>
+    <li>Connection dot in the header shows offline/syncing status</li>
+    <li>Faster loads from local caching</li>
+</ul>
+
+<h2>Other Improvements</h2>
+<ul class="release-notes-list">
+    <li>Consistent header and menu across the whole app</li>
+    <li>New site icon</li>
+</ul>
+
+{% elif month == '2026-03' %}
+<p class="release-date">March 2026</p>
+
+<ul class="release-notes-list">
+    <li>Session admins can now grant session admin to other members</li>
+    <li>First beta of the session audio recording feature</li>
+</ul>
+
+{% elif month == '2026-02' %}
+<p class="release-date">February 2026</p>
+
+<ul class="release-notes-list">
+    <li>Sheet music now renders for searched tunes that aren't yet in the local database</li>
+    <li>When you pick a specific setting while adding a tune, that setting is used</li>
+    <li>Fixes to adding tunes to My Tunes</li>
+</ul>
+
+{% elif month == '2026-01' %}
+<p class="release-date">January 2026</p>
+
+<h2>New Home Page</h2>
+<ul class="release-notes-list">
+    <li>Learning stats and your upcoming sessions, at a glance</li>
+    <li>Quick links into your tune list with sensible sorting</li>
+</ul>
+
+<h2>Sessions</h2>
+<ul class="release-notes-list">
+    <li>Session instances can now be created automatically on your session's schedule</li>
+    <li>Fixed tune relinking on the log page</li>
+</ul>
+
+<h2>Other Improvements</h2>
+<ul class="release-notes-list">
+    <li>Smoother drag &amp; drop when reordering tunes on mobile</li>
+    <li>Fixed My Tunes scrolling and filtering</li>
+    <li>Instrument list is alphabetized at signup</li>
+</ul>
+
+{% elif month == '2025-12' %}
 <p class="release-date">December 2025</p>
 
 <h2>Admin & User Management</h2>
@@ -35,6 +153,9 @@
     <li>Added "who logged the tune" tracking</li>
     <li>Added ability for session admins to remove session tunes</li>
     <li>Added ABC Tools link in tune detail modal - click to hear the tune played back</li>
+    <li>Search for a tune by its TheSession.org ID</li>
+    <li>More results shown in session search</li>
+    <li>Improved the tunes view on user profiles</li>
 </ul>
 
 <h2>Bug Fixes</h2>
@@ -42,6 +163,7 @@
     <li>Fixed set popout positioning and closing behavior</li>
     <li>Fixed session tune details modal configuration saving</li>
     <li>Fixed saving created_by_user_id on session instance tunes</li>
+    <li>Fixed flickering "started by" dropdown</li>
 </ul>
 
 {% elif month == '2025-11' %}

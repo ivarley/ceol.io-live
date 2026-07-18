@@ -1,0 +1,169 @@
+{% extends "help_base.html" %}
+
+{% set page_title = "The Live Logger" %}
+{% set page_description = "Logging tunes in real time during a session" %}
+{% set active_page = "live-logger" %}
+
+{% block help_content %}
+<h1>The Live Logger</h1>
+
+<p>The live logger is the screen you use to record tunes <em>during</em> a session. It's built
+for a phone on your knee in a noisy pub: type a few letters and the tune matches instantly,
+everything saves as you go (there's no save button), and it keeps working when the Wi-Fi
+doesn't.</p>
+
+<p>It's also <strong>multi-user</strong>: several people can log the same session at once, and
+everyone sees each other's changes live.</p>
+
+<h2>Getting There</h2>
+
+<p>Open a session log from the session's <strong>Logs</strong> tab (or the home page's
+"continue logging" shortcut for a log you're mid-way through). The header shows the session
+name and date — tap it to expand for notes, attendance, and the "mark complete" control. The
+<strong>⮐</strong> arrow next to the session name takes you back to the session's home page.</p>
+
+<h2>Logging Tunes</h2>
+
+<ul>
+    <li><strong>Type a tune name</strong> in the box at the bottom. Matches appear instantly as
+        you type — tap one, or press Enter to take the top match.</li>
+    <li><strong>Likely next tune</strong> - When you're at the end of a set, the logger suggests
+        the tune that usually comes next in this session's sets. Tap it to log it, or the × to
+        dismiss the suggestion.</li>
+    <li><strong>End set</strong> - Tap the yellow <strong>End set</strong> button when the set
+        finishes. The next tune you log starts a new set.</li>
+    <li><strong>Unmatched names are fine</strong> - If a name doesn't match anything, choose
+        <em>Log "…" as-is</em>. It's saved as text, and you (or anyone else) can link it to a
+        real tune later.</li>
+    <li><strong>Paste a whole night</strong> - Paste text into the entry box: commas separate
+        tunes within a set, line breaks start new sets. Each name is matched just as if you'd
+        typed it.</li>
+</ul>
+
+<h2>Searching Deeper</h2>
+
+<p>If the quick match doesn't find your tune, tap <strong>Search 🔍</strong> (or the 🔍 on any
+quick result to take a closer look at it first). The full search can:</p>
+
+<ul>
+    <li>Search the catalog <strong>by name or by ABC notes</strong> (e.g. type "GED" to find a
+        tune by its opening notes), with a tune-type filter</li>
+    <li>Search <strong>thesession.org</strong> for tunes not in the catalog yet</li>
+    <li>Import from a pasted <strong>thesession.org URL or tune ID</strong></li>
+</ul>
+
+<p>Tapping a result opens a <strong>preview</strong>: full notation, alternate settings you can
+page through, aliases, and how often it's been played at this session. Use the ‹ › arrows to
+compare candidates, then confirm to log it — or use the <strong>＋</strong> on the result card
+to skip the preview and add in one tap. If you page to a particular setting in the preview,
+that setting is saved with the tune.</p>
+
+<h2>Fixing Things</h2>
+
+<p>Tap a tune row to select it, revealing its actions:</p>
+
+<ul>
+    <li><strong>ⓘ Info</strong> - Open the tune's detail drawer (notation, your list status,
+        history, stats)</li>
+    <li><strong>✎ Edit</strong> - Re-pick the match, rename, or unlink</li>
+    <li><strong>🗑 Remove</strong> - Delete the tune from the log</li>
+    <li><strong>↑ / ↓</strong> - Insert a tune above or below this one</li>
+</ul>
+
+<p>Rows marked <strong>⚠ unlinked</strong> are text-only — edit them to link them to a catalog
+tune. Between tunes and sets you'll see seams with <strong>Split</strong> and
+<strong>Join</strong> pills for reorganizing sets in place.</p>
+
+<p>Sets are labeled by tune type ("Reels", "Jigs", or "Mixed"). Tap the label to open the set's
+tray, showing who logged it and — if your session tracks set starters — a
+<strong>Started by</strong> control to note who kicked it off.</p>
+
+<h2>Logging Together</h2>
+
+<ul>
+    <li><strong>Presence circles</strong> in the header show who's currently on the log, by
+        their initials. Each person gets a color, and tunes are tinted by who added them.</li>
+    <li>Toasts announce what others do ("Mary added The Silver Spear"), and you'll see changes
+        appear in place immediately.</li>
+    <li>If two people log the same tune in the same set at nearly the same time, the logger
+        merges them and tells you (you can keep both if it really was played twice).</li>
+    <li>The expanded header lets you edit <strong>session notes</strong> and — if your session
+        tracks attendance — see and <strong>manage who's checked in</strong>.</li>
+</ul>
+
+<h2>Finding a Tune in the Log</h2>
+
+<p>Scroll to the very top of the list to reveal the pull-down <strong>filter bar</strong>.
+Typing filters the log live to sets containing a matching tune, with the match highlighted.
+Tap <strong>Done Searching</strong> to clear it. This works in view mode and on completed logs
+too.</p>
+
+<h2>Selection Mode</h2>
+
+<p>The <strong>☑</strong> button on the filter bar enters selection mode. Tap rows to select
+them (or use <em>Select all</em>), then use the bottom bar:</p>
+
+<ul>
+    <li><strong>Copy / Paste</strong> - Move tunes between spots, or copy a set as plain text
+        you can paste anywhere (lines = sets, commas = tunes)</li>
+    <li><strong>Delete</strong> - Bulk remove, with an Undo toast</li>
+    <li><strong>Assign</strong> - Set the "started by" person for the selected sets</li>
+    <li><strong>⠿ drag bar</strong> - Drag a selection to a new spot; drop zones appear at the
+        seams, including "new set" zones at the ends</li>
+</ul>
+
+<h2>My-List Highlight (★)</h2>
+
+<p>The <strong>★</strong> button on the filter bar colors every tune in the log by
+<em>your</em> learning status (learned / learning / want to learn / not on your list) — handy
+for spotting which of tonight's tunes you should learn next. If you play multiple instruments
+you can scope it to one. While it's on, selection mode gains a <strong>My list</strong> button
+to bulk-add the selected tunes to your list at a chosen status.</p>
+
+<h2>View Mode &amp; Completing a Log</h2>
+
+<p>Tap <strong>Done</strong> when you finish logging to switch to read-only view mode; tap
+<strong>✎ Edit log</strong> to go back. In view mode you can browse, filter, open tune details,
+and copy — without any risk of nudging the log. When the night is fully logged, use
+<strong>Mark this log complete</strong> in the expanded header; a completed log hides the
+editing controls (and can be re-opened later if needed).</p>
+
+<h2>On a Computer</h2>
+
+<p>On wider screens the logger adds a second pane with the always-visible tune search and the
+"usually next" suggestion, and everything works from the keyboard:</p>
+
+<ul>
+    <li><strong>Type</strong> to search; <strong>Enter</strong> logs the top match;
+        <strong>↑ / ↓</strong> walk the match list</li>
+    <li><strong>↑ / ↓</strong> (with nothing focused) move the insertion cursor through the
+        log; <strong>Enter</strong> splits or joins sets at the cursor, or ends the set at the
+        live end; <strong>Space</strong> jumps back to the entry box</li>
+    <li><strong>/</strong> jumps to the search pane from anywhere</li>
+    <li><strong>Cmd/Ctrl+C, V, A</strong> and <strong>Delete</strong> work in selection mode</li>
+    <li>In search: <strong>Enter</strong> previews, <strong>Enter</strong> again confirms,
+        <strong>Cmd/Ctrl+Enter</strong> adds without previewing, <strong>← / →</strong> step
+        through results, <strong>Esc</strong> backs out</li>
+</ul>
+
+<h2>Working Offline</h2>
+
+<p>The logger keeps working when the signal drops. Changes are saved on your device and marked
+<em>offline</em> on the row; a banner shows how many are queued, and everything syncs
+automatically when you reconnect. The <strong>connection dot</strong> (top right) tells the
+story: green = live, orange = offline with changes queued, pulsing = reconnecting/syncing. Tap
+it for details — how long you've been offline, what's queued, and which server is unreachable
+if something's wrong. On the rare occasion an offline change can't be applied after
+reconnecting (usually because someone else edited the same tune first), the logger shows you
+exactly which changes didn't stick.</p>
+
+<p>See <a href="/help/offline">Working Offline</a> for how the rest of the app behaves without
+a connection.</p>
+
+<h2>Turning It On or Off</h2>
+
+<p>The live logger is rolling out to everyone. If you need the old editor for some reason, you
+can switch the live logger off (and back on) from your <a href="/me">profile page</a> — look
+for <strong>Live editor (beta)</strong> under Account Information. If something's not working
+for you, please get in touch; the old editor is on its way out.</p>
+{% endblock %}

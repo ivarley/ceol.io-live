@@ -1,58 +1,64 @@
 {% extends "help_base.html" %}
 
-{% set page_title = "Session Members" %}
-{% set page_description = "Managing people at sessions" %}
+{% set page_title = "Session People" %}
+{% set page_description = "Members, visitors, and attendance at sessions" %}
 {% set active_page = "members" %}
 
 {% block help_content %}
-<h1>Session Members</h1>
+<h1>Session People</h1>
 
-<p>The <strong>Members</strong> tab helps you track who plays at your session and manage their attendance.</p>
+<p>The <strong>People</strong> tab tracks who plays at your session. A person doesn't need an
+account on this site to be listed — session admins can add anyone who plays there.</p>
 
-<h2>Types of Members</h2>
+<h2>Members and Visitors</h2>
 
+<p>Everyone on a session's roster has a relationship to it:</p>
 <ul>
-    <li><strong>Regulars</strong> - People who attend frequently and are considered part of the session's core group</li>
-    <li><strong>Attendees</strong> - Anyone who has played at the session</li>
-    <li><strong>Session Admins</strong> - People who can edit the session's details and logs</li>
+    <li><strong>Member</strong> - This is one of their sessions. Members' tunes count toward
+        the session's community stats, and the session appears in their "My Sessions" list.</li>
+    <li><strong>Visitor</strong> - They've played here, but it isn't one of their regular
+        sessions.</li>
 </ul>
 
-<h2>Tracking Attendance</h2>
+<p>There's no formal "regular" rank — people who attend often naturally sort to the top of
+lists based on their actual attendance.</p>
 
-<p>For each session instance, you can track who attended:</p>
-<ul>
-    <li><strong>Yes</strong> - Confirmed attendance</li>
-    <li><strong>Maybe</strong> - Uncertain</li>
-    <li><strong>No</strong> - Not attending</li>
-</ul>
+<h2>Who Can See the People List</h2>
 
-<p>Regulars are automatically shown in the attendance list for each session instance.</p>
+<p>Tunes and logs are public, but <strong>people are not</strong>. The People tab and
+attendance records are visible only to the session's admins and to people the session has
+<strong>confirmed</strong>. Joining a session yourself doesn't reveal its roster — an admin
+confirms you first (new joiners show as "Unconfirmed" until then). This keeps who-was-where
+private to the people who actually play together.</p>
 
-<h2>Adding People</h2>
+<p>Sessions can also switch people-tracking features off entirely: the members list,
+attendance recording, and set-starter recording are each optional, controlled by the session's
+admins.</p>
 
-<p>Session admins can:</p>
-<ul>
-    <li>Search for existing users to add to the session</li>
-    <li>Create new person records for people not yet in the system</li>
-    <li>Set someone as a regular member</li>
-    <li>Grant session admin privileges</li>
-</ul>
+<h2>Attendance</h2>
 
-<h2>Member Information</h2>
-
-<p>Each member's profile can include:</p>
-<ul>
-    <li>Name</li>
-    <li>Instruments they play</li>
-    <li>Email address (for notifications)</li>
-    <li>Attendance history</li>
-</ul>
-
-<h2>Check-In Feature</h2>
-
-<p>When a session is active (during its scheduled time), members can check in to show they're attending. This updates the "On Now" indicator and lets others know who's at the session.</p>
+<p>If the session records attendance, each person's row shows how many nights they've
+attended, and their detail sheet lists the dates. Checking people in happens right in the
+<a href="/help/session-tracking/live-logger">live logger</a> while you log — including adding
+someone new who just showed up. When a session is on, checking in also updates the
+"On Now" indicator.</p>
 
 <h2>Who Started What</h2>
 
-<p>When logging tunes, session admins can optionally note who started each set. This helps track who introduces which tunes to the session.</p>
+<p>Sessions can record who started each set — a fun way to see who introduces which tunes.
+This is set in the live logger, either per set or by assigning several sets at once.</p>
+
+<h2>For Session Admins</h2>
+
+<p>Admins can, from a person's detail sheet:</p>
+<ul>
+    <li><strong>Add people</strong> - Search the session's roster or create a brand-new person
+        record (there's deliberately no global people search — you can't browse people from
+        other sessions)</li>
+    <li><strong>Confirm</strong> someone, giving them access to the people list and attendance</li>
+    <li>Set their <strong>relationship</strong> (member or visitor)</li>
+    <li><strong>Archive</strong> someone who's moved on — they're hidden from the default list
+        but their history is kept, and they still see the session as theirs</li>
+    <li>Grant <strong>session admin</strong> to other members</li>
+</ul>
 {% endblock %}

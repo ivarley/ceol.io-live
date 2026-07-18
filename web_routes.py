@@ -788,9 +788,18 @@ def help_session_members():
     return render_template("help_session_members.html")
 
 
+def help_live_logger():
+    return render_template("help_live_logger.html")
+
+
 def help_release_notes(month):
     # Map month to display name
     month_names = {
+        '2026-07': 'July 2026',
+        '2026-06': 'June 2026',
+        '2026-03': 'March 2026',
+        '2026-02': 'February 2026',
+        '2026-01': 'January 2026',
         '2025-12': 'December 2025',
         '2025-11': 'November 2025',
         '2025-10': 'October 2025',

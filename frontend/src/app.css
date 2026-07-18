@@ -230,6 +230,11 @@ main {
   background: none; border: none; color: var(--muted); text-decoration: underline;
 }
 .hc-link:hover { color: var(--text); }
+.header-help {
+  margin-left: auto; align-self: center; display: inline-flex;
+  color: var(--muted); opacity: 0.6;
+}
+.header-help:hover { opacity: 1; color: var(--accent); }
 
 /* Connection status dot — same visual language as the app-wide indicator
    (connection_status.js / base.html): green = live, orange = offline,

@@ -137,7 +137,19 @@
   }
 </script>
 
-<h1>Sessions</h1>
+<h1>
+  Sessions
+  <a
+    href="/help/sessions"
+    title="What's a session?"
+    style="display: inline-flex; vertical-align: middle; color: var(--text-muted, #6c757d); opacity: 0.5; text-decoration: none;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
+  </a>
+</h1>
 
 <div class="sessions-controls">
   <div class="search-and-toggle">

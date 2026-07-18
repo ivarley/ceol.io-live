@@ -7,40 +7,51 @@
 {% block help_content %}
 <h1>Session Tunes</h1>
 
-<p>Each session has a <strong>Tunes</strong> tab that shows all the tunes that have been played at that session across all logs. This gives you a comprehensive view of the session's repertoire.</p>
+<p>Each session has a <strong>Tunes</strong> tab showing every tune that's part of that
+session's repertoire — everything that's been logged there, plus tunes added directly. This is
+the session's collective tunebook, and a great answer to "what should I learn to play here?"</p>
 
-<h2>Viewing Session Tunes</h2>
+<h2>Browsing</h2>
 
-<p>The tunes tab displays:</p>
+<p>Each tune shows its name, its type (reel, jig, …), and a count. What the count means
+follows the sort you've picked:</p>
 <ul>
-    <li><strong>Tune Name</strong> - The name of the tune, linked to its details on TheSession.org</li>
-    <li><strong>Tune Type</strong> - Reel, jig, hornpipe, etc.</li>
-    <li><strong>Play Count</strong> - How many times this tune has been logged at this session</li>
-    <li><strong>Last Played</strong> - When the tune was most recently logged</li>
+    <li><strong>session</strong> - How many times the tune has been logged at this session</li>
+    <li><strong>everywhere</strong> - How many TheSession.org tunebooks it appears in</li>
+    <li><strong>a-z</strong> - Alphabetical</li>
 </ul>
 
-<h2>Sorting and Filtering</h2>
-
-<p>You can organize the tune list by:</p>
+<p>The filter panel also lets you narrow by tune type, or (when logged in):</p>
 <ul>
-    <li><strong>Popularity</strong> - Sort by how often each tune is played</li>
-    <li><strong>Alphabetical</strong> - Sort by tune name</li>
-    <li><strong>Type Filter</strong> - Show only specific tune types</li>
-    <li><strong>Search</strong> - Find specific tunes by name</li>
+    <li><strong>Nights I attended</strong> - Only tunes played on nights you checked in to</li>
+    <li><strong>My Tunebook</strong> - Show your own learning status next to each tune, or
+        filter to just the ones you've learned, are learning, want to learn, or don't have yet
+        — optionally scoped to one of your instruments</li>
 </ul>
 
 <h2>Tune Details</h2>
 
-<p>Click on any tune to see its details:</p>
+<p>Tap any tune to open its detail drawer:</p>
 <ul>
-    <li>Links to each session instance where the tune was played</li>
-    <li>The tune's page on TheSession.org</li>
-    <li>Sheet music notation (incipit) if available</li>
-    <li><strong>ABC Tools link</strong> - Click the ABC icon to open the tune in Michael Eskin's ABC Tools, where you can hear it played back</li>
-    <li>Option to add the tune to your personal tune list</li>
+    <li>Sheet music notation, with links to the tune on TheSession.org and in ABC Tools
+        (where you can hear it played back)</li>
+    <li>Your own list status, with an <strong>Add</strong> button if it's not on your list yet</li>
+    <li><strong>History</strong> - Every time it's been played here, with links straight into
+        those nights' logs; session members can set the name, setting, or key the session uses
+        for it</li>
+    <li><strong>Stats</strong> - Play counts and tunebook counts</li>
+    <li><strong>Played With</strong> - The tunes it's most often set with</li>
 </ul>
 
-<h2>Popular Tunes</h2>
+<h2>Adding Tunes</h2>
 
-<p>The session home page shows the most popular tunes for that session. These are the "core repertoire" - tunes that get played frequently and are good ones to learn if you want to participate more actively.</p>
+<p>The <strong>+</strong> button opens the add-tune search — the same search-and-preview flow
+used everywhere in the app, including TheSession.org search and paste-a-URL import. When you
+add a tune you can optionally record what the session calls it ("We call this"), and a
+specific setting or key the session plays it in.</p>
+
+<h2>Copying Tunes</h2>
+
+<p>Use <strong>Select Tunes...</strong> to pick several tunes and copy them in one go — to
+your own list (at a chosen learning status), or to another session you help run.</p>
 {% endblock %}
