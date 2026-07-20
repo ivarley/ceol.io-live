@@ -267,6 +267,7 @@ app.add_url_rule("/help/session-tracking/tunes", "help_session_tunes", help_sess
 app.add_url_rule("/help/session-tracking/logs", "help_session_logs", help_session_logs)
 app.add_url_rule("/help/session-tracking/members", "help_session_members", help_session_members)
 app.add_url_rule("/help/session-tracking/live-logger", "help_live_logger", help_live_logger)
+app.add_url_rule("/help/release-notes/", "help_release_notes_index", help_release_notes_index)
 app.add_url_rule("/help/release-notes/<month>", "help_release_notes", help_release_notes)
 app.add_url_rule("/share", "share_page", share_page)
 app.add_url_rule("/register", "register", register, methods=["GET", "POST"])

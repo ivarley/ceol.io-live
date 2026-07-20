@@ -85,6 +85,16 @@
 
     .help-nav-section-header:hover {
         background-color: var(--hover-bg);
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .help-nav-section-header.active {
+        background-color: var(--hover-bg);
+        color: var(--primary);
+        font-weight: 500;
+        border-left: 3px solid var(--primary);
+        padding-left: 17px;
     }
 
     .help-nav-section-header .chevron {
@@ -349,10 +359,10 @@
                 </ul>
             </li>
             <li class="help-nav-section {{ 'expanded' if active_page and active_page.startswith('release-') else '' }}">
-                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                <a href="{{ url_for('help_release_notes_index') }}" class="help-nav-section-header {{ 'active' if active_page == 'release-index' else '' }}">
                     <span>Release Notes</span>
                     <span class="chevron">&#9656;</span>
-                </div>
+                </a>
                 <ul class="help-nav-subnav">
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_release_notes', month='2026-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-07' else '' }}">July 2026</a>
@@ -439,10 +449,10 @@
                 </ul>
             </li>
             <li class="help-nav-section {{ 'expanded' if active_page and active_page.startswith('release-') else '' }}">
-                <div class="help-nav-section-header" onclick="toggleSection(this.parentElement)">
+                <a href="{{ url_for('help_release_notes_index') }}" class="help-nav-section-header {{ 'active' if active_page == 'release-index' else '' }}">
                     <span>Release Notes</span>
                     <span class="chevron">&#9656;</span>
-                </div>
+                </a>
                 <ul class="help-nav-subnav">
                     <li class="help-nav-item">
                         <a href="{{ url_for('help_release_notes', month='2026-07') }}" class="help-nav-link {{ 'active' if active_page == 'release-2026-07' else '' }}">July 2026</a>

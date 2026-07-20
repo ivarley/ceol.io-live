@@ -792,22 +792,29 @@ def help_live_logger():
     return render_template("help_live_logger.html")
 
 
+# Release notes months, most recent first. Single source of truth shared by
+# the index page and the per-month detail pages.
+RELEASE_NOTES_MONTHS = [
+    ('2026-07', 'July 2026'),
+    ('2026-06', 'June 2026'),
+    ('2026-03', 'March 2026'),
+    ('2026-02', 'February 2026'),
+    ('2026-01', 'January 2026'),
+    ('2025-12', 'December 2025'),
+    ('2025-11', 'November 2025'),
+    ('2025-10', 'October 2025'),
+    ('2025-09', 'September 2025'),
+    ('2025-08', 'August 2025'),
+    ('2025-07', 'July 2025'),
+]
+
+
+def help_release_notes_index():
+    return render_template("help_release_notes_index.html", months=RELEASE_NOTES_MONTHS)
+
+
 def help_release_notes(month):
-    # Map month to display name
-    month_names = {
-        '2026-07': 'July 2026',
-        '2026-06': 'June 2026',
-        '2026-03': 'March 2026',
-        '2026-02': 'February 2026',
-        '2026-01': 'January 2026',
-        '2025-12': 'December 2025',
-        '2025-11': 'November 2025',
-        '2025-10': 'October 2025',
-        '2025-09': 'September 2025',
-        '2025-08': 'August 2025',
-        '2025-07': 'July 2025',
-    }
-    month_name = month_names.get(month, month)
+    month_name = dict(RELEASE_NOTES_MONTHS).get(month, month)
     return render_template("help_release_notes.html", month=month, month_name=month_name)
 
 
