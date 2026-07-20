@@ -272,7 +272,7 @@ CREATE TABLE user_account (
     timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
     is_active BOOLEAN DEFAULT TRUE,
     is_system_admin BOOLEAN DEFAULT FALSE,
-    beta_live_logging BOOLEAN NOT NULL DEFAULT FALSE,  -- opt-in to the new live logger (admin-set, spec 024)
+    beta_live_logging BOOLEAN NOT NULL DEFAULT TRUE,  -- new live logger, now default-on for all users (spec 024)
     receive_update_emails BOOLEAN NOT NULL DEFAULT TRUE,  -- app update emails, on by default; opt-out on profile (spec 027)
     email_verified BOOLEAN DEFAULT FALSE,
     auto_save_tunes BOOLEAN DEFAULT FALSE,
