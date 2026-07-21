@@ -100,7 +100,10 @@
   let pcFields = $state({ name_alias: '', setting: '', key: '', notes: '', tags: [] })
   let pcOriginals = $state({})
   let pcSettingError = $state('')
-  let pcSaveState = $state('idle') // idle | saving | saved | error
+  let pcSaveState = $state('idle') // idle | saving | saved | error (the Configure Save button)
+  // Notes & tags now live in an always-visible panel that auto-saves on blur —
+  // this drives the small "Saving…/Saved" flash for that (separate from Configure).
+  let autoSaveState = $state('idle') // idle | saving | saved | error
   let pcFetchState = $state('idle') // idle | loading | ok | warn | err
 
   // Session: session_tune when the droplist is on 'general', else that instance's
@@ -341,17 +344,21 @@
   const pcFetchLabel = $derived(settingLabelFor(pcFields.setting, pcOriginals.setting_id || null))
   const sessFetchLabel = $derived(settingLabelFor(sessFields.setting, sessOriginals.setting_id || null))
 
+  // The Configure Save button covers ONLY the fields that still batch-save behind it
+  // (name alias / setting / key). Notes and tags moved to the always-visible panel and
+  // auto-save on blur, so they no longer make this dirty.
   const pcDirty = $derived.by(() => {
     if (!tune || !onList) return false
     return (
       pcFields.name_alias !== pcOriginals.name_alias ||
       extractSettingId(pcFields.setting) !== (pcOriginals.setting_id || null) ||
-      pcFields.key !== pcOriginals.key ||
-      pcFields.notes !== pcOriginals.notes ||
-      !tagsEqual(pcFields.tags, pcOriginals.tags)
+      pcFields.key !== pcOriginals.key
     )
   })
   const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle' || !!pcSettingError)
+  const autoSaveLabel = $derived(
+    autoSaveState === 'saving' ? 'Saving…' : autoSaveState === 'saved' ? 'Saved ✓' : autoSaveState === 'error' ? "Couldn't save" : ''
+  )
 
   const sessDirty = $derived.by(() => {
     if (!tune || !inSession) return false
@@ -379,16 +386,18 @@
   const historyKey = $derived(`${scopeId}|${attendedOnly ? 'att' : 'any'}`)
   const historyState = $derived(historyCache[historyKey] || { status: 'loading' })
 
-  // Tabs. History absorbed the Session tab (spec 037): after the merge they were asking
-  // the same question — which plays of this tune am I looking at — so they became one
-  // droplist. The drawer ALWAYS opens on History; the list loads async, so the drawer
-  // paints immediately either way.
-  const tabList = [
+  // Tabs. "My List" — the personal status / notes / tags / configure — is the leftmost
+  // tab and the default whenever it applies (a logged-in, non-admin viewer, on any
+  // surface). History absorbed the old Session tab (spec 037). Panes all stay mounted
+  // (CSS shows the active one), so History still loads eagerly on open regardless.
+  const showMyList = $derived(mode !== 'admin' && loggedIn)
+  const tabList = $derived([
+    ...(showMyList ? [{ id: 'my-list', label: 'My List' }] : []),
     { id: 'history', label: 'History' },
     { id: 'stats', label: 'Stats' },
     { id: 'played-with', label: 'Played With' },
-  ]
-  const defaultTab = 'history'
+  ])
+  const defaultTab = $derived(showMyList ? 'my-list' : 'history')
 
   // ---- form seeding -------------------------------------------------------------
 
@@ -487,11 +496,12 @@
     showingMyVersion = false
     // Personal config starts collapsed; admin's canonical-name editor is always open.
     isConfigVisible = mode === 'admin'
-    // The drawer ALWAYS opens on History now. The list is fetched async and renders its
-    // own loading state, so the drawer paints immediately regardless.
+    // Default tab is My List when it applies (logged-in, non-admin), else History.
     activeTab = opts.keepTab || config.initialTab || defaultTab
-    if (activeTab === 'history') loadHistory()
-    else if (activeTab === 'played-with') loadPlayedWith()
+    // History loads eagerly so its pane is ready the instant that tab is opened, even
+    // though the drawer now usually lands on My List.
+    loadHistory()
+    if (activeTab === 'played-with') loadPlayedWith()
     // An explicit played-with scope choice survives a re-apply only if the (possibly
     // changed) mode still offers it. (History's scope is the droplist, reset above.)
     if (playedWithScope != null && !playedWithScopeOptions(mode, scope, loggedIn).some((o) => o.key === playedWithScope))
@@ -963,44 +973,18 @@
 
   // ---- personal config (person_tune) ------------------------------------------------
 
+  // Configure Save: name alias / setting / key. These are read-only offline, so this
+  // is an online-only PUT. Notes & tags are NOT here — they auto-save (autoSavePersonal).
   export function savePersonal() {
-    if (!tune || !config || pcSaveDisabled) return
+    if (!tune || !config || pcSaveDisabled || isOffline) return
     const ptid = (pts && pts.person_tune_id) || config.ptid
     if (!ptid) return
-
-    // Offline, only notes and tags can be dirty (the other three are read-only).
-    // Both have ops, so the edit survives the basement and replays on reconnect.
-    if (isOffline) {
-      const notesChanged = pcFields.notes !== pcOriginals.notes
-      const tagsChanged = !tagsEqual(pcFields.tags, pcOriginals.tags)
-      const notes = pcFields.notes.trim() || null
-      const tags = normalizeTags(pcFields.tags)
-      const ops = []
-      if (notesChanged) ops.push(submitMyTunesOp({ type: 'set_notes', tune_id: tune.tune_id, notes }))
-      if (tagsChanged) ops.push(submitMyTunesOp({ type: 'set_tags', tune_id: tune.tune_id, tags }))
-      if (!ops.length) return
-      pcSaveState = 'saving'
-      Promise.all(ops)
-        .then(() => {
-          if (tune.person_tune_status) {
-            if (notesChanged) tune.person_tune_status.notes = notes
-            if (tagsChanged) tune.person_tune_status.tags = tags
-          }
-          pcSaveState = 'saved'
-          seedPersonalForm()
-          setTimeout(() => (pcSaveState = 'idle'), 1200)
-        })
-        .catch(() => flashSaveState((s) => (pcSaveState = s), 'error'))
-      return
-    }
 
     const updates = {}
     if (pcFields.name_alias !== pcOriginals.name_alias) updates.name_alias = pcFields.name_alias.trim() || null
     const newSettingId = extractSettingId(pcFields.setting)
     if (newSettingId !== (pcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (pcFields.key !== pcOriginals.key) updates.key = pcFields.key || null
-    if (pcFields.notes !== pcOriginals.notes) updates.notes = pcFields.notes.trim() || null
-    if (!tagsEqual(pcFields.tags, pcOriginals.tags)) updates.tags = normalizeTags(pcFields.tags)
     if (!Object.keys(updates).length) return
 
     pcSaveState = 'saving'
@@ -1014,8 +998,11 @@
         if (!data.success) throw new Error(data.error || data.message)
         pcSaveState = 'saved'
         if (tune.person_tune_status) Object.assign(tune.person_tune_status, updates)
-        seedPersonalForm()
-        pcSaveState = 'saved'
+        // Reseed ONLY the config originals — leaving notes/tags in pcFields untouched so
+        // an in-progress (or just-autosaved) edit there isn't clobbered.
+        pcOriginals.name_alias = pcFields.name_alias
+        pcOriginals.setting_id = newSettingId || ''
+        pcOriginals.key = pcFields.key
         if (config.onSave && typeof config.onSave === 'function') config.onSave(data)
         setTimeout(() => (pcSaveState = 'idle'), 1200)
       })
@@ -1023,6 +1010,70 @@
         console.error('Error saving personal config:', error)
         flashSaveState((s) => (pcSaveState = s), 'error')
       })
+  }
+
+  // Cancel the Configure edits — reverts ONLY name/setting/key, never the
+  // separately-auto-saved notes & tags.
+  export function cancelConfigure() {
+    pcFields.name_alias = pcOriginals.name_alias
+    pcFields.setting = String(pcOriginals.setting_id || '')
+    pcFields.key = pcOriginals.key
+    pcSettingError = ''
+    pcSaveState = 'idle'
+    pcFetchState = 'idle'
+  }
+
+  // Auto-save one field of the always-visible notes/tags panel, fired on blur. Online:
+  // a scoped PUT. Offline: the matching op (both survive the basement, like before).
+  function autoSavePersonal(field) {
+    if (!tune || !onList) return
+    const ptid = (pts && pts.person_tune_id) || (config && config.ptid)
+    if (!ptid) return
+
+    let value
+    if (field === 'notes') {
+      if (pcFields.notes === pcOriginals.notes) return
+      value = pcFields.notes.trim() || null
+    } else {
+      if (tagsEqual(pcFields.tags, pcOriginals.tags)) return
+      value = normalizeTags(pcFields.tags)
+    }
+
+    autoSaveState = 'saving'
+    const onDone = () => {
+      if (tune.person_tune_status) tune.person_tune_status[field] = value
+      if (field === 'notes') pcOriginals.notes = pcFields.notes
+      else pcOriginals.tags = [...value]
+      autoSaveState = 'saved'
+      setTimeout(() => {
+        if (autoSaveState === 'saved') autoSaveState = 'idle'
+      }, 1200)
+    }
+    const onErr = () => flashSaveState((s) => (autoSaveState = s), 'error')
+
+    if (isOffline) {
+      const op =
+        field === 'notes'
+          ? { type: 'set_notes', tune_id: tune.tune_id, notes: value }
+          : { type: 'set_tags', tune_id: tune.tune_id, tags: value }
+      submitMyTunesOp(op).then(onDone).catch(onErr)
+      return
+    }
+    fetch(`/api/my-tunes/${ptid}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error || data.message)
+        onDone()
+        // Deliberately NOT calling config.onSave here: notes & tags don't appear in
+        // the list behind the drawer, so a full loadTunes() refresh on every blur is
+        // pure cost — and it visibly flickers the page. The optimistic person_tune_status
+        // update above is all the surrounding UI needs.
+      })
+      .catch(onErr)
   }
 
   // ---- session config (session_tune / session_instance_tune) --------------------------
@@ -1787,10 +1838,10 @@
           </div>
         {/if}
 
-        <!-- Tunebook status: my relationship to this tune. Now also carries the heard
-             count, the action row, and the personal Configure form — so everything that
-             is MINE about this tune lives in one block, on every surface. -->
-        {#if mode !== 'admin' && loggedIn}
+        <!-- The "My List" tab body: my relationship to this tune (status), plus notes,
+             tags, and the Configure form. Defined as a snippet here and rendered inside
+             the tabbed area below as the leftmost, default tab. -->
+        {#snippet myListPane()}
           {#if !onList}
             <div class="tunebook-status-section tunebook-status-not-on-list">
               <div class="tunebook-status-seg tsc-notlist-seg" role="group" aria-label="Status">
@@ -1819,6 +1870,13 @@
                   aria-label="Status"
                   onSelect={setTunebookStatus} />
               </div>
+              <!-- Per-instrument toggle, centered right under the roll-up so the status
+                   box stays compact. Configure/Remove moved to the notes & tags panel. -->
+              {#if multiInstrument}
+                <button type="button" class="tsc-expand-link tsc-expand-center" onclick={toggleStatusExpand}>
+                  {piExpanded ? 'Hide Instruments' : 'View By Instrument'}
+                </button>
+              {/if}
               {#if multiInstrument && piExpanded}
                 <div class="tsc-instruments">
                   {#each instruments as inst, i}
@@ -1865,7 +1923,17 @@
                 </div>
               {/if}
 
-              <!-- Heard count (hidden for 'learned'; requires a person_tune row) -->
+            </div>
+
+            <!-- Notes & tags: always visible for a tune on my list, auto-saved on blur
+                 (no Save button). The Configure and Remove links live here now, below
+                 them — Configure expands the extra fields (name / setting / key). -->
+            <div class="tsc-personal-panel">
+              {#if autoSaveState !== 'idle'}
+                <span class="tsc-autosave tsc-autosave-{autoSaveState}" aria-live="polite">{autoSaveLabel}</span>
+              {/if}
+              <!-- Heard count (hidden for 'learned'; requires a person_tune row). Its own
+                   bar above the notes now, out of the tinted status box. -->
               {#if heardVisible}
                 <div class="heard-count-section">
                   <div class="heard-count-label">
@@ -1888,10 +1956,26 @@
                   </div>
                 </div>
               {/if}
+              <div class="configure-field-group">
+                <textarea
+                  id="notes-textarea"
+                  class="notes-textarea"
+                  aria-label="My notes"
+                  placeholder="Enter notes here"
+                  bind:value={pcFields.notes}
+                  onblur={() => autoSavePersonal('notes')}
+                ></textarea>
+              </div>
+              <div class="configure-field-group">
+                <TagInput
+                  inputId="tags-input"
+                  bind:tags={pcFields.tags}
+                  normalize={normalizeTag}
+                  onblur={() => autoSavePersonal('tags')}
+                  placeholder="Add tags — space or enter…"
+                />
+              </div>
 
-              <!-- The action row. Configure and View By Instrument cluster left and wrap
-                   together (both expand more UI); Remove stays right and TOP-aligned, so
-                   it holds the first line even when the left cluster wraps on a phone. -->
               <div class="tsc-action-row">
                 <span class="tsc-action-left">
                   <button
@@ -1902,19 +1986,14 @@
                   >
                     <span class="tsc-caret">{isConfigVisible ? '▾' : '▸'}</span>Configure
                   </button>
-                  {#if multiInstrument}
-                    <button type="button" class="tsc-action-link tsc-expand-link" onclick={toggleStatusExpand}>
-                      {piExpanded ? 'Hide Instruments' : 'View By Instrument'}
-                    </button>
-                  {/if}
                 </span>
                 <button type="button" class="tsc-action-link tsc-action-danger" onclick={removeFromMyTunes}>
                   Remove From My Tunes
                 </button>
               </div>
 
-              <!-- Personal config: the SAME fields on every surface. A session never
-                   replaces them — that was the whole point of 037. -->
+              <!-- Configure: the extra personal fields (name alias / setting / key),
+                   the SAME on every surface (037). Still an explicit Save/Cancel. -->
               {#if isConfigVisible}
                 <div id="configure-section" class="configure-section tsc-config-body">
                   <div class="configure-field-group-inline">
@@ -1984,29 +2063,11 @@
                       {/each}
                     </select>
                   </div>
-                  <div class="configure-field-group">
-                    <label class="configure-label" for="notes-textarea">My notes:</label>
-                    <textarea
-                      id="notes-textarea"
-                      class="notes-textarea"
-                      placeholder="Anything you want to remember about this tune…"
-                      bind:value={pcFields.notes}
-                    ></textarea>
-                  </div>
-                  <div class="configure-field-group">
-                    <label class="configure-label" for="tags-input">My tags:</label>
-                    <TagInput
-                      inputId="tags-input"
-                      bind:tags={pcFields.tags}
-                      normalize={normalizeTag}
-                      placeholder="Add a tag — space or enter…"
-                    />
-                  </div>
                   <div class="modal-action-buttons">
                     {#if isOffline}
-                      <span class="tsc-offline-hint">Offline — only notes and tags can be edited</span>
+                      <span class="tsc-offline-hint">Offline — these can't be edited (notes &amp; tags still can)</span>
                     {/if}
-                    <button class="btn-secondary" onclick={() => seedPersonalForm()} disabled={!pcDirty}>Cancel</button>
+                    <button class="btn-secondary" onclick={cancelConfigure} disabled={!pcDirty}>Cancel</button>
                     <button
                       id="save-btn"
                       class="btn-primary"
@@ -2021,7 +2082,7 @@
               {/if}
             </div>
           {/if}
-        {/if}
+        {/snippet}
 
         <!-- Admin: the canonical tune name. 037 does not touch admin mode — it is the
              one remaining place where the drawer's shape depends on which page opened
@@ -2069,6 +2130,13 @@
             tabClass="modal-tab"
             selectLabel="Tune info section" />
           <div class="modal-tabs-content">
+            <!-- MY LIST — the personal status / notes / tags / configure, the drawer's
+                 default tab (rendered from the snippet defined above). -->
+            {#if showMyList}
+              <div id="my-list-tab" class="modal-tab-pane{activeTab === 'my-list' ? ' active' : ''}">
+                {@render myListPane()}
+              </div>
+            {/if}
             <!-- HISTORY — which plays of this tune am I looking at, and (when the answer
                  is a session or one of its instances) what am I editing. The old Session
                  tab and the old History tab were asking the same question, so they became

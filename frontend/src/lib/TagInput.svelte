@@ -11,16 +11,20 @@
   let {
     tags = $bindable([]),
     disabled = false,
-    placeholder = 'Add a tag…',
+    placeholder = 'Add tags…',
     // Single-tag normalizer. The drawer passes logic.js's normalizeTag so the
     // client matches the server; the default here keeps standalone use sane.
     normalize = (raw) => String(raw ?? '').trim().toLowerCase().replace(/\s+/g, '-'),
+    // Fires when focus leaves the whole component (after committing any draft) —
+    // the drawer uses this to auto-save the tags on blur.
+    onblur = () => {},
     inputId = null,
     ...rest
   } = $props()
 
   let draft = $state('')
   let inputEl = $state(null)
+  let boxEl = $state(null)
 
   function commit(raw) {
     const tag = normalize(raw)
@@ -47,8 +51,13 @@
     }
   }
 
-  function onBlur() {
+  // Focus leaving the whole component (not just moving between the input and a
+  // chip's ✕) commits any draft and notifies the parent — this is the "blur" the
+  // drawer auto-saves on. relatedTarget is the element receiving focus.
+  function onFocusOut(e) {
+    if (boxEl && e.relatedTarget && boxEl.contains(e.relatedTarget)) return
     if (draft.trim()) commit(draft)
+    onblur()
   }
 
   // Clicking anywhere in the box lands focus in the input, like Tag-it.
@@ -58,11 +67,13 @@
 </script>
 
 <div
+  bind:this={boxEl}
   class="kit-taginput"
   class:disabled
   role="group"
   aria-label="Tags"
   onclick={focusInput}
+  onfocusout={onFocusOut}
   {...rest}
 >
   {#each tags as tag, i (tag)}
@@ -80,7 +91,7 @@
     {disabled}
     bind:value={draft}
     onkeydown={onKeydown}
-    onblur={onBlur}
+    onblur={() => { if (draft.trim()) commit(draft) }}
   />
 </div>
 
@@ -95,7 +106,7 @@
     border-radius: var(--r-md, 6px);
     background: var(--input-bg, var(--bg-color, #2a2e35));
     cursor: text;
-    min-height: 2.25rem;
+    min-height: 2rem;
   }
   .kit-taginput.disabled {
     opacity: 0.6;
@@ -109,9 +120,26 @@
     background: transparent;
     color: var(--text-color, #e8e8e8);
     font: inherit;
+    font-size: 0.8rem;
     padding: 2px 0;
   }
   .kit-taginput-field::placeholder {
     color: var(--text-muted, #8a8f98);
+    font-size: 0.8rem;
+  }
+  /* Tag pills: shorter, squarer, and a darker blue than the shared Chip primary —
+     scoped to this component so other Chip uses are untouched. */
+  .kit-taginput :global(.kit-chip--styled) {
+    padding: 0 6px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    border-radius: 3px;
+  }
+  .kit-taginput :global(.kit-chip-primary) {
+    background: #1e40af;
+    border-color: #1e40af;
+  }
+  .kit-taginput :global(.kit-chip-primary .kit-x) {
+    opacity: 0.85;
   }
 </style>

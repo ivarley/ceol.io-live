@@ -371,9 +371,9 @@ describe('TuneSheet component', () => {
     // Remove From My Tunes moved out of the footer links and into the action row.
     expect(container.querySelector('.tsc-action-row .tsc-action-danger').textContent).toContain('Remove From My Tunes')
     expect(container.querySelector('.modal-additional-links')).toBeFalsy()
-    // The drawer always opens on History now; with no session in scope the droplist
-    // offers only the wide lenses.
-    expect(container.querySelector('#history-tab.active')).toBeTruthy()
+    // The drawer now opens on My List (the personal tab); History is still present (the
+    // next tab) and, with no session in scope, its droplist offers only the wide lenses.
+    expect(container.querySelector('#my-list-tab.active')).toBeTruthy()
     expect([...container.querySelector('#sess-scope-select').options].map((o) => o.value)).toEqual([
       'member',
       'all',
@@ -390,9 +390,60 @@ describe('TuneSheet component', () => {
     expect(container.querySelector('#configure-section')).toBeTruthy()
     expect(container.querySelector('#name-alias-input')).toBeTruthy()
     expect(container.querySelector('#my-key-select')).toBeTruthy()
-    // My Notes now always renders, inside the form rather than as a sometimes-block.
+    // My Notes now always renders in its own panel, NOT behind Configure.
     expect(container.querySelector('#notes-textarea').value).toBe('first two bars')
     expect(container.querySelector('#save-btn').disabled).toBe(true)
+  })
+
+  it('notes auto-save on blur via a scoped PUT (no Save button involved)', async () => {
+    const puts = []
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload({ pts: fullPts({ person_tune_id: 11 }) })],
+      [
+        '/api/my-tunes/11',
+        (url, opts) => {
+          puts.push(JSON.parse(opts.body))
+          return { success: true }
+        },
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, scope: null })
+    await waitFor(() => expect(container.querySelector('#notes-textarea')).toBeTruthy())
+
+    // Notes are always visible — no Configure click needed. Edit + blur = save.
+    const notes = container.querySelector('#notes-textarea')
+    await fireEvent.input(notes, { target: { value: 'new note' } })
+    await fireEvent.blur(notes)
+
+    await waitFor(() => expect(puts).toEqual([{ notes: 'new note' }]))
+    // A no-op blur (no change) must NOT fire another PUT.
+    await fireEvent.blur(notes)
+    expect(puts).toEqual([{ notes: 'new note' }])
+  })
+
+  it('tags auto-save on blur; the Configure Save button covers only name/setting/key', async () => {
+    const puts = []
+    stubFetch([
+      ['/api/tunes/101/detail', detailPayload({ pts: fullPts({ person_tune_id: 11, tags: ['old'] }) })],
+      [
+        '/api/my-tunes/11',
+        (url, opts) => {
+          puts.push(JSON.parse(opts.body))
+          return { success: true }
+        },
+      ],
+    ])
+    const { container, component } = render(TuneSheet)
+    component.show({ tuneId: 101, scope: null })
+    await waitFor(() => expect(container.querySelector('#tags-input')).toBeTruthy())
+
+    // Add a tag, then move focus out of the tag box entirely → save just the tags.
+    const tagField = container.querySelector('#tags-input')
+    await fireEvent.input(tagField, { target: { value: 'new' } })
+    await fireEvent.keyDown(tagField, { key: 'Enter' })
+    await fireEvent.focusOut(tagField, { relatedTarget: document.body })
+    await waitFor(() => expect(puts).toEqual([{ tags: ['old', 'new'] }]))
   })
 
   it('a logged-out viewer on a SESSION page can READ the Session tab but not edit it', async () => {
@@ -601,7 +652,7 @@ describe('TuneSheet component', () => {
     expect(saveBtn.disabled).toBe(false)
   })
 
-  it('a session scope: the Session tab is leftmost + default, and In General PUTs only changed fields', async () => {
+  it('a session scope: My List is leftmost + default, session History is next, and In General PUTs only changed fields', async () => {
     window.history.replaceState({}, '', '/sessions/austin/mueller/tunes')
     const onSave = vi.fn()
     stubFetch([
@@ -632,10 +683,16 @@ describe('TuneSheet component', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/tunes/202/detail?session=austin%2Fmueller')
     expect(window.location.pathname).toBe('/sessions/austin/mueller/tunes/202')
 
-    // Session is leftmost and the drawer opened on it. The droplist IS the heading —
-    // it names the session, and the rest of the list continues the sentence downward.
-    expect(container.querySelectorAll('.modal-tab')[0].dataset.tab).toBe('history')
-    expect(container.querySelector('#history-tab.active')).toBeTruthy()
+    // My List is leftmost and the drawer opens on it; the session's History is the next
+    // tab. Its droplist IS that tab's heading — it names the session, and the rest of the
+    // list continues the sentence downward.
+    expect([...container.querySelectorAll('.modal-tab')].map((t) => t.dataset.tab)).toEqual([
+      'my-list',
+      'history',
+      'stats',
+      'played-with',
+    ])
+    expect(container.querySelector('#my-list-tab.active')).toBeTruthy()
     const scopeSel = container.querySelector('#sess-scope-select')
     expect(scopeSel.value).toBe('general')
     expect(scopeSel.options[0].text).toBe('At Mueller Session')

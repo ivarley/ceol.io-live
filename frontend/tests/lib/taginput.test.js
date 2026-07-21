@@ -71,6 +71,26 @@ describe('TagInput', () => {
     expect(chips()).toEqual(['polka'])
   })
 
+  it('onblur fires (and commits) when focus leaves the whole component', async () => {
+    const onblur = vi.fn()
+    render(TagInput, { props: { tags: [], normalize: normalizeTag, onblur } })
+    await type('reel')
+    // focus moves to something outside the tag box
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    await fireEvent.focusOut(field(), { relatedTarget: outside })
+    expect(chips()).toEqual(['reel'])
+    expect(onblur).toHaveBeenCalledTimes(1)
+  })
+
+  it('onblur does NOT fire when focus moves within the component (input → chip ✕)', async () => {
+    const onblur = vi.fn()
+    render(TagInput, { props: { tags: ['a'], normalize: normalizeTag, onblur } })
+    const x = document.querySelector('.kit-taginput .kit-x')
+    await fireEvent.focusOut(field(), { relatedTarget: x })
+    expect(onblur).not.toHaveBeenCalled()
+  })
+
   it('disabled: no chip removal, no commit', async () => {
     render(TagInput, { props: { tags: ['x'], disabled: true, normalize: normalizeTag } })
     await fireEvent.keyDown(field(), { key: 'Backspace' })
