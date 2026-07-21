@@ -6,6 +6,7 @@ CRUD operations, learning status management, and heard count tracking.
 It acts as an abstraction layer over the PersonTune model.
 """
 
+import re
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from models.person_tune import PersonTune
@@ -18,6 +19,31 @@ class _Unset:
         return "<UNSET>"
 
 UNSET = _Unset()
+
+
+def normalize_tags(tags: Optional[List[str]]) -> List[str]:
+    """Canonicalize a freeform tag list (spec 042). Authoritative — the client
+    mirrors this in frontend/src/tunesheet/logic.js normalizeTag(), but the server
+    always re-normalizes so a tag written by ANY path (drawer, offline op, future
+    IrishTune sync) is stored the same way.
+
+    Each tag: trimmed, lowercased, one word (internal whitespace -> single hyphen).
+    Empties dropped; duplicates removed keeping first-occurrence order. The result
+    is a set of tags in the truest sense (no dupes) which is what the sync's
+    three-way set merge assumes.
+    """
+    if not tags:
+        return []
+    out: List[str] = []
+    seen = set()
+    for raw in tags:
+        if raw is None:
+            continue
+        tag = re.sub(r"\s+", "-", str(raw).strip().lower())
+        if tag and tag not in seen:
+            seen.add(tag)
+            out.append(tag)
+    return out
 
 # The list loader (with its plays-sort expression) lives in serializers.py.
 
@@ -245,6 +271,7 @@ class PersonTuneService:
         setting_id=UNSET,
         name_alias=UNSET,
         key=UNSET,
+        tags=UNSET,
         heard_count=UNSET,
         user_id: Optional[int] = None
     ) -> Tuple[bool, str, Optional[PersonTune]]:
@@ -258,6 +285,7 @@ class PersonTuneService:
             setting_id: New thesession.org setting ID, or UNSET to skip (can be None to clear)
             name_alias: New custom name/alias, or UNSET to skip (can be None to clear)
             key: New personal key, or UNSET to skip (can be None to clear)
+            tags: New freeform tag list, or UNSET to skip (re-normalized server-side)
             heard_count: New heard count, or UNSET to skip (must be >= 0 if provided)
             user_id: ID of user who made the change
 
@@ -296,6 +324,14 @@ class PersonTuneService:
             if key is not UNSET and key != person_tune.key:
                 person_tune.key = key
                 changes_made.append("key")
+
+            # Update tags if provided (spec 042). Server re-normalizes, then
+            # compares as sets so a reorder/dupe-only payload is a no-op.
+            if tags is not UNSET:
+                new_tags = normalize_tags(tags)
+                if set(new_tags) != set(person_tune.tags or []):
+                    person_tune.tags = new_tags
+                    changes_made.append("tags")
 
             # Update heard_count if provided (must be >= 0)
             if heard_count is not UNSET:

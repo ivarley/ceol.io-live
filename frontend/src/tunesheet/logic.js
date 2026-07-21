@@ -433,6 +433,40 @@ export function rollupStatus(tuneData) {
   )
 }
 
+// --- Tags (spec 042) --------------------------------------------------------------
+// The client mirror of services/person_tune_service.normalize_tags. The server is
+// authoritative and re-normalizes every write, but doing it here too keeps the
+// chips clean as you type and makes the dirty-check honest.
+
+/** Canonicalize one tag: trimmed, lowercased, one word (whitespace -> hyphen). */
+export function normalizeTag(raw) {
+  if (raw == null) return ''
+  return String(raw).trim().toLowerCase().replace(/\s+/g, '-')
+}
+
+/** Canonicalize a tag list: normalize each, drop empties, dedupe keeping order. */
+export function normalizeTags(tags) {
+  const out = []
+  const seen = new Set()
+  for (const raw of tags || []) {
+    const tag = normalizeTag(raw)
+    if (tag && !seen.has(tag)) {
+      seen.add(tag)
+      out.push(tag)
+    }
+  }
+  return out
+}
+
+/** Set-equality of two tag lists (order- and dupe-insensitive). */
+export function tagsEqual(a, b) {
+  const sa = new Set(normalizeTags(a))
+  const sb = new Set(normalizeTags(b))
+  if (sa.size !== sb.size) return false
+  for (const t of sa) if (!sb.has(t)) return false
+  return true
+}
+
 // --- Offline fallback -------------------------------------------------------------
 
 /**
@@ -450,6 +484,7 @@ export function overlayOfflineOps(tune, ops, tuneId) {
       if (o.type === 'set_status') t.learn_status = o.learn_status
       else if (o.type === 'set_heard') t.heard_count = o.heard_count
       else if (o.type === 'set_notes') t.notes = o.notes
+      else if (o.type === 'set_tags') t.tags = normalizeTags(o.tags)
       else if (o.type === 'add' && !t.learn_status) t.learn_status = o.learn_status || 'want to learn'
     })
   return t
@@ -502,6 +537,7 @@ export function offlinePayload(cachedTune, ops, tuneId) {
             name_alias: t.name_alias || null,
             setting_id: t.setting_id || null,
             key: t.key || null,
+            tags: t.tags || [],
             instruments: t.instruments || [],
             instrument_status: t.instrument_status || {},
             session_play_count: t.session_play_count,

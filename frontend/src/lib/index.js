@@ -5,6 +5,8 @@ export { default as Dialog } from './Dialog.svelte'
 export { default as Popover } from './Popover.svelte'
 export { default as Card } from './Card.svelte'
 export { default as Chip } from './Chip.svelte'
+// TagInput (spec 042): one-word-tag editor (chips + input), used in the tune drawer.
+export { default as TagInput } from './TagInput.svelte'
 export { default as Tabs } from './Tabs.svelte'
 export { default as List } from './List.svelte'
 export { default as Pager } from './Pager.svelte'

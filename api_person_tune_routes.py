@@ -9,7 +9,7 @@ from flask import request, jsonify
 from flask_login import current_user
 from typing import Optional, Dict, Any
 from functools import wraps
-from services.person_tune_service import PersonTuneService, UNSET
+from services.person_tune_service import PersonTuneService, UNSET, normalize_tags
 from services.thesession_sync_service import ThesessionSyncService
 from database import get_db_connection, get_current_user_id, normalize_quotes, normalize_quotes_sql
 import base64
@@ -518,6 +518,7 @@ def update_person_tune(person_tune_id):
         - setting_id (int): thesession.org setting ID (null/empty string clears)
         - name_alias (str): Custom name/alias for the tune (null/empty string clears)
         - key (str): "I play this in ..." (null/empty string clears) — spec 037
+        - tags (list[str]): Freeform per-person tags (spec 042); re-normalized server-side
         - heard_count (int): Heard count (must be >= 0)
 
     Returns:
@@ -537,7 +538,16 @@ def update_person_tune(person_tune_id):
         setting_id = data.get('setting_id') if 'setting_id' in data else UNSET
         name_alias = data.get('name_alias') if 'name_alias' in data else UNSET
         key = data.get('key') if 'key' in data else UNSET
+        tags = data.get('tags') if 'tags' in data else UNSET
         heard_count = data.get('heard_count') if 'heard_count' in data else UNSET
+
+        # tags must be a list when provided (normalized in the service). Reject a
+        # non-list rather than silently coercing so client bugs surface.
+        if tags is not UNSET and tags is not None and not isinstance(tags, list):
+            return jsonify({
+                "success": False,
+                "error": "tags must be a list of strings"
+            }), 400
 
         # Validate setting_id if provided
         if setting_id is not UNSET and setting_id is not None and setting_id != '':
@@ -593,6 +603,7 @@ def update_person_tune(person_tune_id):
             setting_id=setting_id,
             name_alias=name_alias,
             key=key,
+            tags=tags,
             heard_count=heard_count,
             user_id=user_id
         )
@@ -761,6 +772,7 @@ def my_tunes_op():
       - set_heard  -> UPDATE heard_count = <count>   (absolute set; client sends the
                        target count, NOT a delta, so a replayed +1 can't double-count)
       - set_notes  -> UPDATE notes
+      - set_tags   -> UPDATE tags                    (absolute set; normalized server-side)
       - remove     -> DELETE
 
     Keyed by tune_id (not the server-assigned person_tune_id) so an offline
@@ -824,6 +836,15 @@ def my_tunes_op():
                     """UPDATE person_tune SET notes=%s, last_modified_user_id=%s
                        WHERE person_id=%s AND tune_id=%s""",
                     (data.get("notes"), user_id, person_id, tune_id),
+                )
+            elif op_type == "set_tags":
+                # Absolute set of the person's tags on this tune (spec 042). Client
+                # sends the full list; server re-normalizes so the stored value is
+                # canonical regardless of the writer (drawer, replayed op, sync).
+                cur.execute(
+                    """UPDATE person_tune SET tags=%s, last_modified_user_id=%s
+                       WHERE person_id=%s AND tune_id=%s""",
+                    (normalize_tags(data.get("tags")), user_id, person_id, tune_id),
                 )
             elif op_type == "remove":
                 cur.execute(
@@ -1284,7 +1305,7 @@ def get_offline_bundle():
                 """
                 SELECT pt.person_tune_id, pt.tune_id, t.name, t.tune_type,
                        pt.learn_status, pt.heard_count, pt.notes, pt.name_alias,
-                       pt.setting_id, pt.key, pt.learned_date,
+                       pt.setting_id, pt.key, pt.tags, pt.learned_date,
                        t.tunebook_count_cached, t.tunebook_count_cached_date,
                        ts.incipit_abc, ts.incipit_image, ts.key AS setting_key,
                        gp.n AS global_play_count, plc.n AS person_list_count
@@ -1327,6 +1348,8 @@ def get_offline_bundle():
                     # "I play this in ..." (spec 037). pt.key, not ts.key — the latter is
                     # the setting's own key and is aliased to setting_key below.
                     "key": r["key"],
+                    # Freeform per-person tags (spec 042); PARITY RULE with the drawer.
+                    "tags": r["tags"] or [],
                     "learned_date": r["learned_date"].isoformat() if r["learned_date"] else None,
                     "tunebook_count": r["tunebook_count_cached"] or 0,
                     "tunebook_count_cached_date": (

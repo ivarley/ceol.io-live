@@ -405,6 +405,72 @@ class TestPersonTuneAPI:
         assert data["success"] is True
         assert data["person_tune"]["learn_status"] == "learning"
 
+    def test_update_tune_tags_normalizes_and_persists(self, client, authenticated_user, db_conn, db_cursor):
+        """PUT tags: server re-normalizes (lowercase, ws->hyphen, dedupe) and stores TEXT[]."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 51000
+        person_id = 2  # Match authenticated_user fixture
+
+        db_cursor.execute(
+            "INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, %s) ON CONFLICT (tune_id) DO NOTHING",
+            (tune_id, f"Tag Tune {unique_id}", "Reel"),
+        )
+        db_cursor.execute(
+            "INSERT INTO person_tune (person_id, tune_id, learn_status) VALUES (%s, %s, %s) RETURNING person_tune_id",
+            (person_id, tune_id, "want to learn"),
+        )
+        person_tune_id = db_cursor.fetchone()[0]
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.put(
+                f"/api/my-tunes/{person_tune_id}",
+                json={"tags": ["Session", "session", "to learn", "", "#Reel"]},
+            )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert data["person_tune"]["tags"] == ["session", "to-learn", "#reel"]
+
+        db_cursor.execute("SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,))
+        assert db_cursor.fetchone()[0] == ["session", "to-learn", "#reel"]
+
+        # Clearing: an empty list stores '{}'.
+        with authenticated_user:
+            response = client.put(f"/api/my-tunes/{person_tune_id}", json={"tags": []})
+        assert response.status_code == 200
+        db_cursor.execute("SELECT tags FROM person_tune WHERE person_tune_id = %s", (person_tune_id,))
+        assert db_cursor.fetchone()[0] == []
+
+    def test_set_tags_op_normalizes_and_persists(self, client, authenticated_user, db_conn, db_cursor):
+        """POST /api/my-tunes/ops set_tags: absolute set, normalized server-side."""
+        unique_id = str(uuid.uuid4())[:8]
+        tune_id = 900000000 + int(unique_id[:6], 16) % 100000 + 52000
+        person_id = 2
+
+        db_cursor.execute(
+            "INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, %s) ON CONFLICT (tune_id) DO NOTHING",
+            (tune_id, f"Op Tag Tune {unique_id}", "Jig"),
+        )
+        db_cursor.execute(
+            "INSERT INTO person_tune (person_id, tune_id, learn_status) VALUES (%s, %s, %s)",
+            (person_id, tune_id, "learning"),
+        )
+        db_conn.commit()
+
+        with authenticated_user:
+            response = client.post(
+                "/api/my-tunes/ops",
+                json={"op_id": "op1", "type": "set_tags", "tune_id": tune_id, "tags": ["Fav", "fav", "quick set"]},
+            )
+        assert response.status_code == 200
+        assert json.loads(response.data)["success"] is True
+
+        db_cursor.execute(
+            "SELECT tags FROM person_tune WHERE person_id = %s AND tune_id = %s", (person_id, tune_id)
+        )
+        assert db_cursor.fetchone()[0] == ["fav", "quick-set"]
+
     def test_update_tune_status_to_learned_sets_date(self, client, authenticated_user, db_conn, db_cursor):
         """Test that updating status to 'learned' sets learned_date."""
         # Create test tune and person_tune

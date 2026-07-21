@@ -416,10 +416,10 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             f"""
             INSERT INTO person_tune_history
             (person_tune_id, operation, changed_by_user_id, person_id, tune_id, learn_status,
-             heard_count, learned_date, notes, setting_id, name_alias, key,
+             heard_count, learned_date, notes, setting_id, name_alias, key, tags,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT person_tune_id, %s, %s, person_id, tune_id, learn_status,
-                   heard_count, learned_date, notes, setting_id, name_alias, key,
+                   heard_count, learned_date, notes, setting_id, name_alias, key, tags,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM person_tune WHERE {where}
         """,

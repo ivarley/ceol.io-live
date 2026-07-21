@@ -956,6 +956,7 @@ def build_session_detail_payload(
 PERSON_TUNE_COLS = """
     pt.person_tune_id, pt.person_id, pt.tune_id, pt.learn_status,
     pt.heard_count, pt.learned_date, pt.notes, pt.setting_id, pt.name_alias, pt.key,
+    pt.tags,
     pt.created_date, pt.last_modified_date,
     COALESCE(pt.name_alias, t.name) AS tune_name,
     t.tune_type,
@@ -993,6 +994,8 @@ def person_tune_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "name_alias": row["name_alias"],
         # "I play this in ..." (spec 037). Label only — it does not drive notation.
         "key": row["key"],
+        # Freeform per-person tags (spec 042). TEXT[] -> list; NULL-safe to [].
+        "tags": row["tags"] or [],
         "created_date": row["created_date"].isoformat() if row["created_date"] else None,
         "last_modified_date": row["last_modified_date"].isoformat() if row["last_modified_date"] else None,
         "tune_name": row["tune_name"],

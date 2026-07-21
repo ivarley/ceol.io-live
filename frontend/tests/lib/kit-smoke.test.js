@@ -11,6 +11,7 @@ const COMPONENTS = {
   Popover: {},
   Card: {},
   Chip: { label: 'x' },
+  TagInput: { tags: [] },
   Tabs: { tabs: [{ id: 'a', label: 'A' }] },
   List: { items: [] },
   Pager: { index: 0, count: 0 },

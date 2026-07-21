@@ -107,6 +107,7 @@ const fullPts = (over = {}) => ({
   heard_count: 2,
   learned_date: null,
   notes: 'first two bars',
+  tags: ['practice', 'session'],
   name_alias: null,
   setting_id: null,
   session_play_count: 3,
@@ -1303,6 +1304,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     learn_status: 'want to learn',
     heard_count: 2,
     notes: 'first two bars',
+    tags: ['practice', 'session'],
     name_alias: 'Cooleys (mine)',
     setting_id: 4321,
     learned_date: null,
@@ -1347,6 +1349,8 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     heard: norm(c.querySelector('#heard-count-value')?.textContent),
     notation: c.querySelector('.abc-notation-text')?.textContent,
     notes: c.querySelector('#notes-textarea')?.value,
+    // The tag chips, in order — the TagInput renders one .kit-chip-body per tag.
+    tags: [...c.querySelectorAll('.kit-taginput .kit-chip-body')].map((e) => norm(e.textContent)).join(','),
     nameAlias: c.querySelector('#name-alias-input')?.value,
     settingField: c.querySelector('#setting-input')?.value,
     myKey: c.querySelector('#my-key-select')?.value,
@@ -1376,6 +1380,7 @@ describe('DRIFT GUARD: offline bundle parity with the API detail payload', () =>
     expect(onlineDigest.heard).toBe('2')
     expect(onlineDigest.notation).toBe('EBBA\nB2 EB')
     expect(onlineDigest.notes).toBe('first two bars')
+    expect(onlineDigest.tags).toBe('practice,session')
     expect(onlineDigest.nameAlias).toBe('Cooleys (mine)')
     expect(onlineDigest.settingField).toBe('4321')
     expect(onlineDigest.statsTab).toContain('Saved in 4 tune lists on Ceol.io')

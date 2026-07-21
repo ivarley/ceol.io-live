@@ -13,6 +13,7 @@ CREATE TABLE person_tune_history (
     heard_count INTEGER DEFAULT 0,
     learned_date TIMESTAMPTZ,
     notes TEXT,
+    tags TEXT[],
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ
 );

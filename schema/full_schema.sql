@@ -447,6 +447,9 @@ CREATE TABLE person_tune (
     setting_id INTEGER,
     name_alias VARCHAR(255),
     key VARCHAR(20),
+    -- Freeform per-person tags (spec 042). TEXT[] so sync is a set merge and
+    -- `= ANY(tags)` filtering stays cheap. Normalized app-side, like notes.
+    tags TEXT[] NOT NULL DEFAULT '{}',
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     created_by_user_id INTEGER,
@@ -1092,6 +1095,7 @@ CREATE TABLE person_tune_history (
     setting_id INTEGER,
     name_alias VARCHAR(255),
     key VARCHAR(20),
+    tags TEXT[],
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,

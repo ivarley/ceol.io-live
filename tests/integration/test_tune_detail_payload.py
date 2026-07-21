@@ -93,9 +93,9 @@ class TestTuneDetailPayload:
         tune_id = self._mk_tune(db_cursor, db_conn)
         db_cursor.execute("DELETE FROM person_tune WHERE person_id = %s AND tune_id = %s", (self.PERSON_ID, tune_id))
         db_cursor.execute(
-            "INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes, name_alias, setting_id)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (self.PERSON_ID, tune_id, "learning", 3, "the notes", "My Name For It", tune_id),
+            "INSERT INTO person_tune (person_id, tune_id, learn_status, heard_count, notes, name_alias, setting_id, tags)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (self.PERSON_ID, tune_id, "learning", 3, "the notes", "My Name For It", tune_id, ["practice", "session"]),
         )
         db_conn.commit()
         with authenticated_user:
@@ -106,6 +106,7 @@ class TestTuneDetailPayload:
         assert pts["heard_count"] == 3
         # The full /api/my-tunes core shape, not the old minimal block:
         assert pts["notes"] == "the notes"
+        assert pts["tags"] == ["practice", "session"]
         assert pts["name_alias"] == "My Name For It"
         assert pts["setting_id"] == tune_id
         for key in ("learned_date", "session_play_count", "instruments", "instrument_status",

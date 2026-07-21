@@ -32,7 +32,7 @@
   // e2e suite all select on it. For the same reason this component has NO
   // <style> block: Svelte scoping would detach it from the shared stylesheet.
   import { onMount } from 'svelte'
-  import { Chip, Dialog, Seg, SessionPicker, Tabs, toast } from '../lib/index.js'
+  import { Chip, Dialog, Seg, SessionPicker, TagInput, Tabs, toast } from '../lib/index.js'
   import {
     MUSICAL_KEYS,
     OTHER_SESSION,
@@ -63,6 +63,9 @@
     notationInfo,
     notationDisplay,
     submitMyTunesOp,
+    normalizeTag,
+    normalizeTags,
+    tagsEqual,
   } from './logic.js'
 
   // ---- modal state -----------------------------------------------------------
@@ -94,7 +97,7 @@
   // drawer-wide one: a single button committing both would be lying about what it does.
 
   // Personal: person_tune. Rendered on EVERY surface for a tune on my list.
-  let pcFields = $state({ name_alias: '', setting: '', key: '', notes: '' })
+  let pcFields = $state({ name_alias: '', setting: '', key: '', notes: '', tags: [] })
   let pcOriginals = $state({})
   let pcSettingError = $state('')
   let pcSaveState = $state('idle') // idle | saving | saved | error
@@ -344,7 +347,8 @@
       pcFields.name_alias !== pcOriginals.name_alias ||
       extractSettingId(pcFields.setting) !== (pcOriginals.setting_id || null) ||
       pcFields.key !== pcOriginals.key ||
-      pcFields.notes !== pcOriginals.notes
+      pcFields.notes !== pcOriginals.notes ||
+      !tagsEqual(pcFields.tags, pcOriginals.tags)
     )
   })
   const pcSaveDisabled = $derived(!pcDirty || pcSaveState !== 'idle' || !!pcSettingError)
@@ -395,12 +399,16 @@
       setting_id: (pts && pts.setting_id) || '',
       key: (pts && pts.key) || '',
       notes: (pts && pts.notes) || '',
+      tags: (pts && pts.tags) || [],
     }
     pcFields = {
       name_alias: pcOriginals.name_alias,
       setting: String(pcOriginals.setting_id || ''),
       key: pcOriginals.key,
       notes: pcOriginals.notes,
+      // Copy the array — TagInput reassigns pcFields.tags, and pcOriginals must
+      // keep the pristine snapshot for the dirty-check.
+      tags: [...pcOriginals.tags],
     }
     pcSettingError = ''
     pcSaveState = 'idle'
@@ -960,14 +968,24 @@
     const ptid = (pts && pts.person_tune_id) || config.ptid
     if (!ptid) return
 
-    // Offline, only notes can be dirty (the other three are read-only), so the save is
-    // necessarily a notes change — and that has an op, so it survives the basement.
+    // Offline, only notes and tags can be dirty (the other three are read-only).
+    // Both have ops, so the edit survives the basement and replays on reconnect.
     if (isOffline) {
+      const notesChanged = pcFields.notes !== pcOriginals.notes
+      const tagsChanged = !tagsEqual(pcFields.tags, pcOriginals.tags)
       const notes = pcFields.notes.trim() || null
+      const tags = normalizeTags(pcFields.tags)
+      const ops = []
+      if (notesChanged) ops.push(submitMyTunesOp({ type: 'set_notes', tune_id: tune.tune_id, notes }))
+      if (tagsChanged) ops.push(submitMyTunesOp({ type: 'set_tags', tune_id: tune.tune_id, tags }))
+      if (!ops.length) return
       pcSaveState = 'saving'
-      submitMyTunesOp({ type: 'set_notes', tune_id: tune.tune_id, notes })
+      Promise.all(ops)
         .then(() => {
-          if (tune.person_tune_status) tune.person_tune_status.notes = notes
+          if (tune.person_tune_status) {
+            if (notesChanged) tune.person_tune_status.notes = notes
+            if (tagsChanged) tune.person_tune_status.tags = tags
+          }
           pcSaveState = 'saved'
           seedPersonalForm()
           setTimeout(() => (pcSaveState = 'idle'), 1200)
@@ -982,6 +1000,7 @@
     if (newSettingId !== (pcOriginals.setting_id || null)) updates.setting_id = newSettingId
     if (pcFields.key !== pcOriginals.key) updates.key = pcFields.key || null
     if (pcFields.notes !== pcOriginals.notes) updates.notes = pcFields.notes.trim() || null
+    if (!tagsEqual(pcFields.tags, pcOriginals.tags)) updates.tags = normalizeTags(pcFields.tags)
     if (!Object.keys(updates).length) return
 
     pcSaveState = 'saving'
@@ -1974,9 +1993,18 @@
                       bind:value={pcFields.notes}
                     ></textarea>
                   </div>
+                  <div class="configure-field-group">
+                    <label class="configure-label" for="tags-input">My tags:</label>
+                    <TagInput
+                      inputId="tags-input"
+                      bind:tags={pcFields.tags}
+                      normalize={normalizeTag}
+                      placeholder="Add a tag — space or enter…"
+                    />
+                  </div>
                   <div class="modal-action-buttons">
                     {#if isOffline}
-                      <span class="tsc-offline-hint">Offline — only notes can be edited</span>
+                      <span class="tsc-offline-hint">Offline — only notes and tags can be edited</span>
                     {/if}
                     <button class="btn-secondary" onclick={() => seedPersonalForm()} disabled={!pcDirty}>Cancel</button>
                     <button

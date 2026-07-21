@@ -8,6 +8,7 @@ CREATE TABLE person_tune (
     heard_count INTEGER DEFAULT 0 CHECK (heard_count >= 0),
     learned_date TIMESTAMPTZ, -- Set when status changes to 'learned'
     notes TEXT,
+    tags TEXT[] NOT NULL DEFAULT '{}', -- Freeform per-person tags (spec 042); normalized app-side
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
     UNIQUE(person_id, tune_id)
