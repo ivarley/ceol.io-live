@@ -26,7 +26,7 @@ class User(UserMixin):
         auto_save_tunes=False,
         auto_save_interval=60,
         active_session=None,
-        beta_live_logging=False,
+        beta_live_logging=True,
     ):
         self.id = str(user_id)
         self.user_id = user_id
@@ -42,7 +42,10 @@ class User(UserMixin):
         self.auto_save_tunes = auto_save_tunes
         self.auto_save_interval = auto_save_interval
         self.active_session = active_session  # Dict with session instance data or None
-        self.beta_live_logging = beta_live_logging  # opt-in to the new live editor (spec 024)
+        # The live logger is the default for everyone (spec 024). This flag is now an
+        # opt-OUT: False means "put me back on the legacy pill editor". Column name kept
+        # for continuity with the beta rollout that introduced it.
+        self.beta_live_logging = beta_live_logging
         self.hashed_password = None  # Will be set when loading from database
 
     @property

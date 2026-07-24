@@ -214,6 +214,8 @@ main {
 /* recently-disconnected person: dimmed + hollow until the 1h away-TTL drops them */
 .avatar.away { opacity: 0.4; filter: grayscale(0.35); }
 .header-away { color: var(--muted); opacity: 0.75; }
+/* signed-out viewer: session notes, read-only (no textarea, no save controls) */
+.header-notes-ro { white-space: pre-wrap; color: var(--muted); }
 
 /* "completely logged" controls (§024): the deliberate mark, and the tucked-away
    un-complete link (only reachable in the expanded header). */
@@ -765,6 +767,9 @@ main {
   font-size: 14px; font-weight: 600; color: var(--muted);
   padding: 11px 26px;
 }
+/* signed-out viewer: the only affordance in the bar is the way in */
+.viewbar .viewbar-login { color: var(--accent); text-decoration: none; }
+.viewbar .viewbar-login:hover { text-decoration: underline; }
 /* compact, fewer-affordance list when reading: larger tune text, a bit more air
    between sets, no per-row attribution tint (who logged it doesn't matter while
    reading), and logger/starter names in quiet grey rather than the edit-mode accent */

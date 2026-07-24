@@ -18,6 +18,11 @@ Auth reuses the existing web stack (spec 024 §H): the Flask-Login session cooki
 native-client hedge). Both resolve to a user_id; Phase 0 only requires "is this
 an authenticated user", not per-instance authorization (logging is flat, §D).
 
+The `events` stream ALSO accepts unauthenticated connections — the session-instance
+page is public and read-only when signed out — but only while the instance is active,
+and such a connection is scrubbed of people and excluded from presence entirely
+(see _public_payload / the `anon` flag). `typing` stays authenticated: it's upstream.
+
 Run locally:
   venv/bin/python -m streaming.service        # or: streaming/service.py
 Serves on STREAMING_PORT (default 8080).
@@ -281,6 +286,8 @@ def _roster(instance_id):
 def _broadcast_presence(instance_id):
     roster = _roster(instance_id)
     for st in list(PRESENCE.get(instance_id, {}).values()):
+        if st.get("anon"):
+            continue  # a signed-out viewer is told nothing about who is here
         st["queue"].put_nowait(("presence", roster))
 
 
@@ -304,6 +311,8 @@ def _typing_list(instance_id):
 def _broadcast_typing(instance_id):
     lst = _typing_list(instance_id)
     for st in list(PRESENCE.get(instance_id, {}).values()):
+        if st.get("anon"):
+            continue  # typing signals name people — not for signed-out viewers
         st["queue"].put_nowait(("typing", lst))
 
 
@@ -333,6 +342,54 @@ async def _away_sweeper():
                 a.pop(pid, None)
             if expired:
                 _broadcast_presence(instance_id)
+
+
+# --- Signed-out viewers (read-only public stream) --------------------------
+# The session-instance page is public, so an unauthenticated EventSource is allowed —
+# but only while the session is actually under way, and it never learns anything about
+# people. Ops carrying nothing BUT people (attendance, set-starter attribution) are
+# dropped outright; the rest are stripped of the actor and of every people field on a
+# record. Mirrors live_logging_routes._PEOPLE_KEYS — keep the two in sync.
+_PEOPLE_KEYS = (
+    "started_by_person_id", "started_by_name",
+    "logged_by", "logged_by_person_id", "logged_by_color",
+)
+_PEOPLE_ONLY_OPS = {
+    "attendance_add", "attendance_remove", "attendance_create_person",
+    "attribute_set_starter",
+}
+
+
+def _public_payload(op_type, payload_json):
+    """Scrub one event for an anonymous connection. Returns the JSON text to send, or
+    None if the whole event is people-only and must not be sent at all."""
+    if op_type in _PEOPLE_ONLY_OPS:
+        return None
+    try:
+        data = json.loads(payload_json) if payload_json else {}
+    except (TypeError, ValueError):
+        return payload_json  # unparseable: pass through untouched (the client ignores it)
+    if not isinstance(data, dict):
+        return payload_json
+    data.pop("actor", None)
+    data.pop("person", None)
+    scrub = lambda r: {k: v for k, v in r.items() if k not in _PEOPLE_KEYS} if isinstance(r, dict) else r
+    if isinstance(data.get("record"), dict):
+        data["record"] = scrub(data["record"])
+    if isinstance(data.get("records"), list):
+        data["records"] = [scrub(r) for r in data["records"]]
+    return json.dumps(data)
+
+
+async def _instance_is_active(instance_id):
+    """Is this session happening right now? (session_instance.is_active, maintained by
+    the 15-minute active-sessions cron.) Gates the public stream: outside a live
+    session a signed-out viewer gets the static bootstrap snapshot and nothing more."""
+    async with pool.acquire() as c:
+        return bool(await c.fetchval(
+            "SELECT is_active FROM session_instance WHERE session_instance_id = $1",
+            instance_id,
+        ))
 
 
 async def _resolve_person(user_id):
@@ -397,15 +454,20 @@ async def typing(request):
 async def events(request):
     """SSE stream for one session instance: replay-then-live (spec 024 §B)."""
     uid = await authenticate(request)
-    if uid is None:
-        return JSONResponse({"error": "unauthorized"}, status_code=401, headers=_cors_headers(request))
-
     session_instance_id = int(request.path_params["session_instance_id"])
+
+    # Signed out: the public read-only viewer. Allowed only while the session is
+    # actually under way — a finished log is served as a static snapshot, so there is
+    # nothing to stream. Everything this connection receives is scrubbed of people.
+    anon = uid is None
+    if anon and not await _instance_is_active(session_instance_id):
+        return JSONResponse({"error": "not streaming"}, status_code=403, headers=_cors_headers(request))
 
     # A view-only (read-only) client still streams ops/presence but asserts no presence
     # of its own — it's left out of the roster so reading a session never shows you as
     # "currently logging" (spec 024 §presence). Edit clients (or no flag) assert normally.
-    view_mode = request.query_params.get("mode") == "view"
+    # A signed-out viewer is a viewer by construction.
+    view_mode = anon or request.query_params.get("mode") == "view"
 
     # EventSource auto-sends Last-Event-ID on reconnect. On the FIRST connect it
     # can't set that header, so the bootstrap high-water mark rides in as a query
@@ -429,12 +491,15 @@ async def events(request):
         # initial replay — so concurrent clients are bounded by memory, not the pool.
         queue: asyncio.Queue = asyncio.Queue()
 
-        person = await _resolve_person(uid)
-        seq = await _session_color(session_instance_id, person["person_id"])
+        person = {"person_id": None, "name": ""} if anon else await _resolve_person(uid)
+        seq = None if anon else await _session_color(session_instance_id, person["person_id"])
         conn_id = next(_conn_ids)
         PRESENCE.setdefault(session_instance_id, {})[conn_id] = {
             "queue": queue, "person_id": person["person_id"],
             "arrival_seq": seq, "name": person["name"], "view_mode": view_mode,
+            # anon connections are in PRESENCE only to receive fan-out: never in the
+            # roster (view_mode already excludes them) and never sent presence/typing.
+            "anon": anon,
         }
         # A viewer arriving doesn't cancel their AWAY entry — they're not "back" as a
         # logger; an edit connection (if they have one) is what clears it.
@@ -460,12 +525,19 @@ async def events(request):
             replayed_through = last
             for r in rows:
                 replayed_through = r["event_id"]
-                yield _sse(r["event_id"], r["op_type"], r["payload"])
+                payload = r["payload"]
+                if anon:
+                    payload = _public_payload(r["op_type"], payload)
+                    if payload is None:
+                        continue  # people-only op: nothing a signed-out viewer may see
+                yield _sse(r["event_id"], r["op_type"], payload)
 
             # Announce arrival: a fresh roster to me + everyone else on this instance,
-            # and hand the new client the current typing state.
+            # and hand the new client the current typing state. A signed-out viewer
+            # announces nothing and is told nothing (_broadcast_presence skips them).
             _broadcast_presence(session_instance_id)
-            queue.put_nowait(("typing", _typing_list(session_instance_id)))
+            if not anon:
+                queue.put_nowait(("typing", _typing_list(session_instance_id)))
 
             # 2) GO LIVE — drain the queue (ops + presence), skipping replayed ops.
             #    On client disconnect, Starlette cancels this generator (-> finally).
@@ -486,6 +558,10 @@ async def events(request):
                     _, eid, op_type, payload = msg
                     if eid <= replayed_through:
                         continue
+                    if anon:
+                        payload = _public_payload(op_type, payload)
+                        if payload is None:
+                            continue
                     yield _sse(eid, op_type, payload)
         finally:
             # Sync cleanup so a leave is always broadcast, even if the cancellation

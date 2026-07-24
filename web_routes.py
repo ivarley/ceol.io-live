@@ -395,9 +395,11 @@ def session_handler(full_path, active_tab=None, tune_id=None, person_id=None):
             session_instance = cur.fetchone()
 
             if session_instance:
-                # Beta rollout (spec 024): users opted into the new live editor go straight
-                # to it for any session instance. Everyone else stays on the classic editor.
-                if current_user.is_authenticated and getattr(current_user, "beta_live_logging", False):
+                # Logger routing (spec 024): the live logger is THE session-instance page.
+                # EVERYONE lands on it — signed out too, where it renders read-only. The
+                # only way to the legacy pill editor is a signed-in user turning the live
+                # logger off in their profile preferences; there is no other route to it.
+                if not current_user.is_authenticated or getattr(current_user, "beta_live_logging", True):
                     cur.close(); conn.close()
                     # Forward a play-history deep-link (?highlight=<record>) so the live
                     # screen can scroll to it. Deliberately NOT ?tune= — on the live
@@ -3409,7 +3411,6 @@ def admin_activity():
         conn.close()
 
 
-@login_required
 def live_logging_screen(session_instance_id):
     """
     Serve the clean-slate Svelte live-logging screen (spec 024 §H, Phase 0).
@@ -3418,6 +3419,12 @@ def live_logging_screen(session_instance_id):
     service base URL to the bundle, which then fetches the bootstrap snapshot and
     opens the SSE stream. The bundle is a self-contained Vite build under
     /static/live, isolated to this screen (not the base layout).
+
+    PUBLIC (no @login_required): this screen is now the session-instance page for
+    everyone, so a signed-out visitor gets it read-only — `can_edit` false, no
+    people anywhere (bootstrap scrubs them server-side), and a live stream only
+    while the session is actually happening (`instance_active`). Everything a
+    logged-out viewer must not do is refused by the API regardless of the UI.
     """
     import os
 
@@ -3429,7 +3436,7 @@ def live_logging_screen(session_instance_id):
         cur.execute(
             """
             SELECT s.path, s.session_id, si.date,
-                   s.track_attendance, s.track_set_starters
+                   s.track_attendance, s.track_set_starters, si.is_active
             FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
@@ -3439,10 +3446,12 @@ def live_logging_screen(session_instance_id):
         row = cur.fetchone()
         if not row:
             return render_template("error.html", error_message="Session instance not found"), 404
-        session_path, session_id, instance_date, track_attendance, track_set_starters = row
+        (session_path, session_id, instance_date, track_attendance,
+         track_set_starters, instance_active) = row
     finally:
         conn.close()
 
+    can_edit = bool(current_user.is_authenticated)
     streaming_base_url = os.environ.get("STREAMING_BASE_URL", "http://localhost:8080")
     return render_template(
         "live_logging.html",
@@ -3465,9 +3474,16 @@ def live_logging_screen(session_instance_id):
         # The template has always referenced this, but the route never passed it -- so the
         # create-person form's instrument checkboxes rendered empty.
         canonical_instruments=CANONICAL_INSTRUMENTS,
+        # Signed out => no person, and the bundle renders read-only (no composer, no
+        # people, no edit affordances anywhere).
+        can_edit=can_edit,
+        # A signed-out viewer only opens the SSE stream while the session is actually
+        # under way — otherwise the page is a static snapshot of a finished log. (The
+        # active flag is maintained by the 15-minute active-sessions cron.)
+        instance_active=bool(instance_active),
         current_person={
             "person_id": current_user.person_id,
             "first_name": current_user.first_name,
             "last_name": current_user.last_name,
-        },
+        } if can_edit else None,
     )

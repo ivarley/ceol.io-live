@@ -257,13 +257,14 @@ INSERT INTO person (person_id, first_name, last_name, email, city, state, countr
 -- Hash generated with bcrypt cost factor 12
 -- =============================================================================
 
--- Ian gets the beta live logger (spec 024) so the admin login exercises the
--- new logging UI locally.
+-- beta_live_logging is the tune-logger preference (spec 024): TRUE = the live logger,
+-- which is now the default for every account. Seed users mirror that default; maeve is
+-- left opted out so the legacy pill editor stays exercisable locally.
 INSERT INTO user_account (user_id, person_id, username, user_email, hashed_password, timezone, is_active, is_system_admin, email_verified, beta_live_logging) VALUES
 (1, 1, 'ian', 'ian@ceol.io', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, TRUE, TRUE, TRUE),
-(2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, FALSE),
-(3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE, FALSE),
-(4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, FALSE),
+(2, 2, 'sarah_fiddle', 'sarah.oconnor@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
+(3, 6, 'siobhan_flute', 'siobhan.w@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/New_York', TRUE, FALSE, TRUE, TRUE),
+(4, 9, 'sean_banjo', 'sobrien@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Chicago', TRUE, FALSE, TRUE, TRUE),
 (5, 12, 'maeve_accordion', 'maeve.brennan@example.com', '$2b$12$/YvbW.M2JbUhytoG1so4be2RgUcFEHghuIWGeOGaSIx1Rt7zdl1im', 'America/Los_Angeles', TRUE, FALSE, FALSE, FALSE);
 
 -- =============================================================================

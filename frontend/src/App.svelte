@@ -168,6 +168,11 @@
   let error = $state('')
   let notice = $state('')
   let person = $state(untrack(() => config.currentPerson) || {}) // initial fallback; bootstrap overwrites it
+  // Signed out: this screen is the PUBLIC session-instance page, rendered read-only.
+  // No composer, no edit affordances, and no people anywhere — the server already
+  // scrubs people from the bootstrap and the stream, so this is presentation only,
+  // not the guard. `mode` can never leave 'view' (see setMode).
+  const readOnly = untrack(() => config.canEdit) === false
   let roster = $state([]) // who's connected right now (ephemeral presence, §F)
   let typers = $state([]) // who's currently composing (ephemeral typing, §F)
   let activities = $state([]) // transient "X did Y" toasts for others' changes (§E); stack up to MAX
@@ -334,6 +339,7 @@
   // Persist a clean (server-truth) snapshot of the records so the screen can render
   // offline (§G): strip client-only optimistic flags and temp rows.
   async function saveSnapshot() {
+    if (readOnly) return // the offline cache serves loggers; a public viewer writes nothing
     const records = [...byId.values()]
       .filter((r) => !r._temp && typeof r.session_instance_tune_id === 'number')
       .map(({ _removing, _temp, pending, status, ...rest }) => rest)
@@ -1429,6 +1435,7 @@
   // affordance; the SSE then reconnects so the server learns this connection's new
   // presence intent — a viewer asserts nothing (spec 024 §presence).
   function setMode(m) {
+    if (readOnly) return // signed-out viewers never leave view mode
     if (mode === m) return
     mode = m
     if (m === 'view') {
@@ -2751,8 +2758,11 @@
   // in view mode only while the log is still open AND someone else is connected and
   // editing live — a non-away roster entry (viewers are excluded from the roster
   // server-side, spec 024 §presence). A completed render-only log has no stream, so hide.
+  // Signed out, the dot would only ever mean "this page is streaming" — the roster it
+  // keys off is deliberately empty and there are no queued edits to report — so a
+  // read-only viewer gets a live page with no connection chrome at all.
   const showConnDot = $derived(
-    !renderOnly && (mode === 'edit' || (viewing && !logComplete && roster.some((p) => !p.away)))
+    !renderOnly && !readOnly && (mode === 'edit' || (viewing && !logComplete && roster.some((p) => !p.away)))
   )
   let connecting = false // a connect() is in flight — gates the opportunistic reconnect triggers
   // Map a cached snapshot row (snapshotGet) to the bootstrap shape, so the offline
@@ -2849,6 +2859,36 @@
         if (s.event_id > (snap.last_event_id || 0)) for (const r of s.records) put(r)
       }
       lateSettles = []
+
+      // Signed-out viewer: the snapshot IS the page. Nothing below this applies —
+      // there's no offline queue to flush or hydrate, no attendance to load, no
+      // vocabulary index and no local snapshot to write (all of that serves editing,
+      // on the editor's own device). Stream only while the session is actually
+      // happening: someone reading last month's log has nothing to watch, so they get
+      // a static snapshot (the server refuses an anonymous stream on an inactive
+      // instance regardless, so this is the polite half of the same rule).
+      if (readOnly) {
+        everConnected = true
+        // Prefer the bootstrap's fresh value over the page-load config, so a viewer
+        // whose session ends mid-watch drops to static on the next reconnect instead
+        // of retrying a stream the server now refuses.
+        const active = snap.instance_active ?? config.instanceActive
+        if (fromCache || !active) {
+          renderOnly = true
+          if (fromCache) scheduleReconnect() // offline: retry so the page fills in when the network returns
+          return
+        }
+        const viewStream = openStream(config, snap.last_event_id, {
+          onOp: applyOp,
+          onAlive: () => (lastEventAt = Date.now()),
+          onStatus: (s) => { sseStatus = s; noteSse(s) },
+          onDead: () => { if (myGen === connSeq) connect() },
+        }, 'view')
+        if (myGen !== connSeq) { viewStream.close(); return }
+        es = viewStream
+        return
+      }
+
       if (!fromCache) await saveSnapshot() // refresh the cache from server truth, immediately
 
       // Completed log = read-only. Render the records and stop — skip the offline-queue
@@ -3071,9 +3111,14 @@
     // Load the roster up front. The header's "Attendance (n)" reads it, so leaving it lazy
     // (fetched only when the picker opens) made the header claim "no one checked in yet"
     // while the picker itself listed four people under "Checked in".
-    refreshAttendees()
-    // The shared app menu's 'Find a tune' calls this in the live context -> insert.
-    window.__liveFindTune = () => openDeep()
+    // Signed out there is no attendance UI at all, and the endpoint is gated — skip it.
+    if (!readOnly) {
+      refreshAttendees()
+      // The shared app menu's 'Find a tune' calls this in the live context -> insert.
+      // Deep search is login-gated, so a signed-out viewer keeps the menu's default
+      // (site-wide) behavior instead.
+      window.__liveFindTune = () => openDeep()
+    }
     window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
@@ -3223,7 +3268,7 @@
           {/if}
         </div>
         <span class="topbar-presence">
-          {#each roster as p (p.person_id)}
+          {#each readOnly ? [] : roster as p (p.person_id)}
             <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.away ? ' (away)' : p.devices > 1 ? ` (${p.devices} devices)` : ''}">
               {initials(p.name)}{#if !p.away && p.devices > 1}<sup>{p.devices}</sup>{/if}
             </span>
@@ -3242,6 +3287,12 @@
               </svg>
             </a>
           </div>
+          {#if readOnly}
+            <!-- Signed out: notes are part of the public log, but read-only. -->
+            {#if notesText}
+              <div class="header-stat header-notes-ro">{notesText}</div>
+            {/if}
+          {:else}
           <div class="header-notes-edit">
             <span class="hn-label">Notes</span>
             <textarea
@@ -3258,7 +3309,8 @@
               </div>
             {/if}
           </div>
-          {#if trackAttendance}
+          {/if}
+          {#if trackAttendance && !readOnly}
             <div class="header-stat header-attend">
               <span class="ha-text">
                 <span class="ha-label">{attendanceLabel}: {checkedIn.length}</span>
@@ -3267,17 +3319,19 @@
               <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
             </div>
           {/if}
-          {#if roster.some((p) => !p.away)}
+          {#if !readOnly && roster.some((p) => !p.away)}
             <div class="header-stat">Currently logging: {roster.filter((p) => !p.away).map((p) => p.name).join(', ')}</div>
           {/if}
-          {#if roster.some((p) => p.away)}
+          {#if !readOnly && roster.some((p) => p.away)}
             <div class="header-stat header-away">Away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</div>
           {/if}
           <div class="header-stat header-complete">
             {#if logComplete}
               <span class="hc-done">✓ This log is marked complete.</span>
-              <button class="hc-link" onclick={(e) => { e.stopPropagation(); markIncomplete() }}>Mark as not complete</button>
-            {:else}
+              {#if !readOnly}
+                <button class="hc-link" onclick={(e) => { e.stopPropagation(); markIncomplete() }}>Mark as not complete</button>
+              {/if}
+            {:else if !readOnly}
               <button class="hc-mark" onclick={(e) => { e.stopPropagation(); markComplete() }}>Mark this log complete</button>
             {/if}
           </div>
@@ -3362,8 +3416,11 @@
         />
         {#if searchMode && searchText}<button class="searchbar-clear" title="Clear filter" onclick={doneSearching}>✕</button>{/if}
       {/if}
-      <!-- my-list highlight toggle: color every tune by MY learn status -->
-      <button class="listmode-btn" class:on={listMode} title={listMode ? 'Hide my list status' : 'Show my list status'} aria-pressed={listMode} onclick={toggleListMode}>★</button>
+      <!-- my-list highlight toggle: color every tune by MY learn status (needs a list,
+           so it's absent when signed out) -->
+      {#if !readOnly}
+        <button class="listmode-btn" class:on={listMode} title={listMode ? 'Hide my list status' : 'Show my list status'} aria-pressed={listMode} onclick={toggleListMode}>★</button>
+      {/if}
       <!-- selection-mode toggle (spec 029 §A): available in edit AND view (copy-only) -->
       <button class="selmode-btn" class:on={selectMode} title={selectMode ? 'Leave selection mode' : 'Select tunes'} aria-pressed={selectMode} onclick={toggleSelectMode}>☑</button>
     </div>
@@ -3397,12 +3454,14 @@
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
-        {#if trackStarters && setStarterName(seg)}
+        {#if trackStarters && !readOnly && setStarterName(seg)}
           <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
         {/if}
-        {#if openTrayId === seg.tunes[0].session_instance_tune_id}
+        <!-- The tray holds only people facts (starter, logger), so signed out it has
+             nothing to show and never opens. -->
+        {#if !readOnly && openTrayId === seg.tunes[0].session_instance_tune_id}
           <div class="set-tray">
-            {#if trackStarters}
+            {#if trackStarters && !readOnly}
             <div class="tray-row">
               <span class="tray-k">Started by</span>
               {#if viewing}
@@ -3416,7 +3475,7 @@
               {/if}
             </div>
             {/if}
-            {#if loggedInfo(seg.tunes)}
+            {#if !readOnly && loggedInfo(seg.tunes)}
               {@const li = loggedInfo(seg.tunes)}
               <div class="tray-row"><span class="tray-k">Logged by</span><span class="tray-v">{li.who || 'someone'}{li.when ? ` · ${li.when}` : ''}</span></div>
             {/if}
@@ -3582,7 +3641,7 @@
 
   {#if error}<p class="error">{error}</p>{/if}
 
-  {#if canEdit && othersTyping.length}
+  {#if canEdit && !readOnly && othersTyping.length}
     <div class="typing">
       {#each othersTyping as t (t.person_id)}<span class="t-name" style="color:{colorFor(t.arrival_seq)}">{t.name}</span>{/each}
       <span class="t-verb">{othersTyping.length === 1 ? 'is' : 'are'} typing…</span>
@@ -3624,7 +3683,13 @@
     {/if}
     {#if viewing}
       <footer class="viewbar">
-        {#if logComplete}
+        {#if readOnly}
+          <!-- Signed out: no edit affordance at all, just the way in. -->
+          <span class="logdone">
+            {#if logComplete}✓ This session has been fully logged{:else}Viewing this session log{/if}
+            · <a class="viewbar-login" href="/login?next={encodeURIComponent(location.pathname + location.search)}">Log in to edit</a>
+          </span>
+        {:else if logComplete}
           <span class="logdone">✓ This session has been fully logged</span>
         {:else}
           <button class="editbtn" onclick={() => setMode('edit')}>✎ Edit log</button>
@@ -3827,7 +3892,9 @@
     onClose={closePicker}
   />
 
-  {#if wide}
+  <!-- The side pane is a search-and-add surface (its APIs are all login-gated), so it
+       never mounts for a signed-out viewer. -->
+  {#if wide && !readOnly}
     <SidePane
       bind:this={sidePaneEl}
       {config}

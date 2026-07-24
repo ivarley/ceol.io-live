@@ -53,6 +53,7 @@ from api_routes import (
     api_login_required, segment_records_into_sets, render_abc_to_png, bytea_to_base64,
     match_tune_core, _fetch_thesession_tune, TuneImportError, default_setting_id,
 )
+from api_auth import public_api
 from fractional_indexing import generate_append_position, generate_position_between
 
 
@@ -144,6 +145,21 @@ def _record_to_dict(row):
         # for the subtle per-row attribution tint.
         "logged_by_color": row[17],
     }
+
+
+# Every people-bearing key on a record dict. A signed-out viewer sees the tune log and
+# nothing about who was there or who logged it — the same bar the public session-instance
+# page has always held. Scrubbed in ONE place (here) and applied at both exits: the
+# bootstrap below, and the SSE fan-out for anonymous connections (streaming/service.py).
+_PEOPLE_KEYS = (
+    "started_by_person_id", "started_by_name",
+    "logged_by", "logged_by_person_id", "logged_by_color",
+)
+
+
+def strip_people(record):
+    """A copy of `record` with every people field dropped (see _PEOPLE_KEYS)."""
+    return {k: v for k, v in record.items() if k not in _PEOPLE_KEYS}
 
 
 def _load_record(cur, session_instance_id, record_id):
@@ -2278,7 +2294,8 @@ def live_issue_token():
     return jsonify({"success": True, "token": token, "token_type": "Bearer"})
 
 
-@api_login_required
+@public_api  # the session-instance page is public: a signed-out visitor reads the tune
+# log (people scrubbed via strip_people, no editing — every write endpoint stays gated).
 def live_bootstrap(session_instance_id):
     """
     Bootstrap snapshot for the live screen (spec 024 §H).
@@ -2286,7 +2303,11 @@ def live_bootstrap(session_instance_id):
     Current (non-deleted) records, both flat and segmented into sets, plus the
     feed high-water mark (max event_id). The client renders this, then opens the
     SSE stream with that mark so it receives only the delta.
+
+    Signed out, the payload is read-only: `can_edit` false, `current_person` null,
+    and every record stripped of who logged/started it.
     """
+    can_edit = bool(current_user.is_authenticated)
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -2302,13 +2323,15 @@ def live_bootstrap(session_instance_id):
             (session_instance_id,),
         )
         rows = cur.fetchall()
-        records = [_record_to_dict(r) for r in rows]
+        shape = _record_to_dict if can_edit else (lambda r: strip_people(_record_to_dict(r)))
+        records = [shape(r) for r in rows]
         # record_type is index 4 in _RECORD_COLS; segment into sets, dropping breaks.
-        sets = [[_record_to_dict(r) for r in s] for s in segment_records_into_sets(rows, type_index=4)]
+        sets = [[shape(r) for r in s] for s in segment_records_into_sets(rows, type_index=4)]
 
         cur.execute(
             """
-            SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path, s.timezone
+            SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path,
+                   s.timezone, si.is_active
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -2328,11 +2351,12 @@ def live_bootstrap(session_instance_id):
         return jsonify({
             "success": True,
             "session_instance_id": int(session_instance_id),
+            "can_edit": can_edit,
             "current_person": {
                 "person_id": getattr(current_user, "person_id", None),
                 "first_name": getattr(current_user, "first_name", ""),
                 "last_name": getattr(current_user, "last_name", ""),
-            },
+            } if can_edit else None,
             # Display tz for "logged at" times: viewer's own tz wins, session tz is
             # the fallback (mirrors the app's format_datetime_tz precedence).
             "user_timezone": getattr(current_user, "timezone", None),
@@ -2343,6 +2367,10 @@ def live_bootstrap(session_instance_id):
             "session_name": meta[4] if meta else "",
             "session_path": meta[5] if meta else None,
             "session_date": session_date,
+            # Is the session under way right now? Signed-out viewers stream only while it
+            # is (the sidecar enforces the same rule), and re-read it on every reconnect
+            # so a viewer whose session ends settles into a static snapshot by itself.
+            "instance_active": bool(meta[7]) if meta else False,
             "records": records,
             "sets": sets,
             "last_event_id": high_water,

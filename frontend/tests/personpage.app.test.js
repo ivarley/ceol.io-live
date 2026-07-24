@@ -339,11 +339,13 @@ describe('person details page view (user profile flavor)', () => {
     expect(container.querySelector('#user-edit')).toBeNull()
   })
 
-  it('the beta live-editor toggle is self-serve: the button shows and POSTs the flip', async () => {
+  it('the tune-logger preference is self-serve: the button shows and POSTs the flip', async () => {
+    // The fixture user is opted out (beta_live_logging: false), i.e. on the legacy pill
+    // editor, so the button offers the way back to the default live logger.
     fetchRoutes['/beta-logging'] = { success: true, user_id: 9, beta_live_logging: true }
     const { container } = renderApp()
     const btn = container.querySelector('#beta-logging-btn')
-    expect(btn.textContent.trim()).toBe('Turn on')
+    expect(btn.textContent.trim()).toBe('Use live logger')
     await fireEvent.click(btn)
     await waitFor(() => {
       const call = fetch.mock.calls.find(([u]) => String(u).includes('/beta-logging'))

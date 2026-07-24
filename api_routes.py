@@ -423,8 +423,10 @@ def get_tune_played_with(tune_id):
 
 @api_login_required
 def set_beta_logging(user_id):
-    """Turn the new live editor on/off for a user (beta rollout). System admins
-    can set it for anyone; users can opt themselves in/out.
+    """Set a user's tune-logger preference. enabled=True (the default for every
+    account) means the live logger; False drops them back to the legacy pill editor,
+    which is otherwise unreachable. System admins can set it for anyone; users can set
+    their own. Endpoint/flag names date from the spec 024 beta rollout.
     POST /api/users/<user_id>/beta-logging  body {enabled: bool}"""
     is_self = getattr(current_user, "user_id", None) == user_id
     if not (current_user.is_system_admin or is_self):

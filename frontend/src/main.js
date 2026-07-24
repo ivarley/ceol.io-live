@@ -7,7 +7,10 @@ const config = window.__LIVE_CONFIG__ || {}
 
 // Register the live-screen service worker (scope /live/) so the shell loads
 // offline (spec 024 §H). Best-effort: failure just means no offline reload.
-if ('serviceWorker' in navigator) {
+// Signed-out viewers skip it: offline support exists so a logger keeps working
+// mid-session, and a public read-only page has no reason to install a worker or
+// cache a session log on someone else's device.
+if (config.canEdit !== false && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/live/sw.js').catch(() => {})
     // Prime the cache with THIS page so an offline reload always has a shell to

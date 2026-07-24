@@ -6,10 +6,16 @@ Word-processor-style interface for logging tunes played during sessions.
 > **single-user, bulk-save pill editor** — replaced by the **real-time
 > multi-user live logger** (Feature 024 — incremental ops, no explicit save,
 > Svelte 5 PWA), documented in [Live Logging](../logic/live-logging.md).
+> The live logger is now the session-instance page for **everyone** —
+> signed-out visitors included, who get it read-only (see
+> [Live Logging → The public view](../logic/live-logging.md)). This page is
+> reachable exactly one way: a signed-in user who set **Tune logger → Classic
+> editor** on their profile.
 > The pill page is kept working but untouched: it is never cached offline
-> (`X-Offline-Exclude`), out of e2e scope, and spec 035 Step 6 (pending —
-> promote the live logger first) deletes `session_instance_detail.html`, its
-> pill modules in `static/js/dist/`, and their `frontend/src/ts/` sources.
+> (`X-Offline-Exclude`), out of e2e scope, and spec 035 Step 6 (pending)
+> deletes `session_instance_detail.html`, its pill modules in
+> `static/js/dist/`, and their `frontend/src/ts/` sources. Nothing but that
+> one preference now depends on it.
 > Nothing new should be built against this page.
 
 ## Overview

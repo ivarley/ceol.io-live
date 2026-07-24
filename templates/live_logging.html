@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- maximum-scale=1 stops mobile browsers auto-zooming when a text field gains focus (app-like locked viewport) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>Live Logging (beta)</title>
+  <title>Live Logging</title>
   <!--
     Spec 024 Phase 0 shell. Clean-slate: deliberately does NOT extend base.html.
     Bootstrap config is inlined for the self-contained Svelte bundle to read.
@@ -17,6 +17,8 @@
       sessionPath: {{ session_path | tojson }},
       streamingBaseUrl: {{ streaming_base_url | tojson }},
       currentPerson: {{ current_person | tojson }},
+      canEdit: {{ can_edit | tojson }},
+      instanceActive: {{ instance_active | tojson }},
       canonicalInstruments: {{ canonical_instruments | tojson }},
       trackAttendance: {{ track_attendance | tojson }},
       trackSetStarters: {{ track_set_starters | tojson }}

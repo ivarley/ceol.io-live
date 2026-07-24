@@ -156,7 +156,9 @@
       })
   }
 
-  // --- Beta live-editor toggle (admin or self) ---------------------------------
+  // --- Session logger preference (admin or self) -------------------------------
+  // The live logger is the default; this flips back to the legacy pill editor, which
+  // is otherwise unreachable. Endpoint/flag names date from the beta rollout.
   let betaBusy = $state(false)
 
   function toggleBetaLogging() {
@@ -170,7 +172,7 @@
       .then((r) => r.json())
       .then((data) => {
         if (data.success) {
-          toast('Live editor (beta) ' + (enable ? 'enabled' : 'disabled') + '.', 'success')
+          toast('Now using the ' + (enable ? 'live logger' : 'classic editor') + '.', 'success')
           setTimeout(() => window.location.reload(), 800)
         } else {
           toast('Error: ' + (data.error || 'failed'), 'error')
@@ -560,14 +562,17 @@
                 {/if}
               </dd>
 
-              <dt class="col-sm-4">Live editor (beta):</dt>
+              <dt class="col-sm-4">Tune logger:</dt>
               <dd class="col-sm-8">
                 <span id="beta-logging-status">
-                  {#if user.beta_live_logging}<span class="text-success">✓ On</span>{:else}<span class="text-muted">Off</span>{/if}
+                  {#if user.beta_live_logging}<span class="text-success">Live logger</span>{:else}<span class="text-muted">Classic editor</span>{/if}
                 </span>
                 <button id="beta-logging-btn" class="btn btn-sm btn-outline-primary ms-2" disabled={betaBusy} onclick={(e) => { e.preventDefault(); toggleBetaLogging() }}>
-                  {user.beta_live_logging ? 'Turn off' : 'Turn on'}
+                  {user.beta_live_logging ? 'Use classic editor' : 'Use live logger'}
                 </button>
+                {#if !user.beta_live_logging}
+                  <div class="text-muted small mt-1">The classic editor is being retired; the live logger is the default.</div>
+                {/if}
               </dd>
             </dl>
           </div>

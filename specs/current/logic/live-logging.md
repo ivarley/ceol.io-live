@@ -115,6 +115,53 @@ session's own top tunes) and `session.live_cache_global_limit` (M — globally p
 tunes not already in N). Defaults 200 / 25, mirroring the `LOCAL_VOCAB_*` fallbacks in
 `live_logging_routes.py`.
 
+## Reaching the logger (default routing)
+
+The live screen is **the** session-instance page, for everyone.
+`GET /sessions/<path>/<date|id>` (`web_routes.py:session_instance_detail`) redirects to
+`/live/instances/<id>` (forwarding `?highlight=`, never `?tune=` — on the live screen that
+means "append this tune").
+
+- `user_account.beta_live_logging` is now an **opt-OUT**, not an opt-in: column default
+  `TRUE` (migration `043`), every existing row backfilled to `TRUE`. Only a user who sets
+  it `FALSE` from **Account Information → Tune logger** on their profile
+  (`POST /api/users/<id>/beta-logging`, admin-or-self) lands on the legacy pill editor.
+  There is no other route to it, and signed-out visitors can't reach it at all.
+- Names (`beta_live_logging`, `/beta-logging`) are kept from the beta rollout to avoid a
+  rename migration; they no longer mean "beta".
+
+### The public (signed-out) view
+
+`live_logging_screen` and `live_bootstrap` are **public**; everything that writes, and
+everything that names a person, stays gated. Three rules define what a signed-out
+visitor gets:
+
+1. **Read-only.** The shell passes `can_edit: false`; the bundle sets `readOnly` from it
+   and pins `mode = 'view'` (`setMode` refuses to leave it). No composer, side pane,
+   my-list highlighting, notes editor, complete/incomplete control or Edit button — the
+   view bar carries a "Log in to edit" link instead. It skips the service worker, the
+   IndexedDB snapshot, the offline queue, `livePeople` and the vocabulary index: all of
+   that serves editing, on an editor's own device.
+2. **No people, in the payload — not just the UI.** `strip_people()`
+   (`live_logging_routes.py`) drops `logged_by`, `logged_by_person_id`,
+   `logged_by_color`, `started_by_name` and `started_by_person_id` from every record in
+   an anonymous bootstrap, which also returns `current_person: null`. The sidecar mirrors
+   it for anonymous streams (`_public_payload`): `actor`/`person` stripped, records
+   scrubbed, and people-only ops (`attendance_*`, `attribute_set_starter`) dropped
+   entirely. The two `_PEOPLE_KEYS` lists are duplicated because the sidecar can't import
+   the Flask app — `tests/unit/test_streaming_public_payload.py` asserts they agree.
+3. **Live only while the session is live.** An anonymous EventSource is accepted only
+   when `session_instance.is_active` (the 15-minute active-sessions cron owns that flag);
+   otherwise the sidecar answers `403 not streaming` and the page is a static snapshot of
+   the log. The client honors the same rule from the bootstrap's `instance_active`, which
+   it re-reads on each reconnect — so a viewer whose session ends settles into static by
+   itself. Anonymous connections are in `PRESENCE` only to receive fan-out: never in the
+   roster (they're `view_mode`), never sent presence or typing.
+
+Coverage: `tests/integration/test_live_logging_public.py`,
+`tests/unit/test_streaming_public_payload.py`, `e2e/public/live-logger-public.spec.ts`,
+`frontend/tests/App.readonly.test.js`.
+
 ## Endpoints
 
 **Flask referee / shell** (registered in `app.py`, handlers in `live_logging_routes.py`;
