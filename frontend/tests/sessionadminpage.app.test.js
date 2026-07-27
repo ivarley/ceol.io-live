@@ -179,9 +179,73 @@ describe('session admin page view', () => {
         show_people_list: true,
         track_attendance: true,
         track_set_starters: true,
+        // The four that had no editor until now; the fixture omits them, so they
+        // ride along as "unlinked / regular / the 60-minute default window".
+        thesession_id: '',
+        session_type: 'regular',
+        active_buffer_minutes_before: 60,
+        active_buffer_minutes_after: 60,
       })
       expect(window.showMessage).toHaveBeenCalledWith('Saved', 'success')
     })
+  })
+
+  // The four previously-uneditable fields (thesession_id, session_type, active
+  // window). They were readable elsewhere — the admin grid links the upstream id,
+  // session_type reorders the public page — but only SQL could change them.
+  it('pre-fills the four formerly DB-only fields from the payload', () => {
+    const { container } = renderApp(
+      payload({
+        session: {
+          ...payload().session,
+          thesession_id: 6247,
+          session_type: 'festival',
+          active_buffer_minutes_before: 15,
+          active_buffer_minutes_after: 90,
+        },
+      })
+    )
+    expect(container.querySelector('#thesession-id').value).toBe('6247')
+    expect(container.querySelector('#session-type').value).toBe('festival')
+    expect(container.querySelector('#active-buffer-before').value).toBe('15')
+    expect(container.querySelector('#active-buffer-after').value).toBe('90')
+    // The ↗ only appears once the box holds something resolvable.
+    expect(container.querySelector('a[href="https://thesession.org/sessions/6247"]')).toBeTruthy()
+  })
+
+  it('sends the four on save, taking a pasted session URL', async () => {
+    const { container } = renderApp()
+    const ts = container.querySelector('#thesession-id')
+    ts.value = 'https://thesession.org/sessions/6247'
+    await fireEvent.input(ts)
+    const type = container.querySelector('#session-type')
+    type.value = 'festival'
+    await fireEvent.change(type)
+    const before = container.querySelector('#active-buffer-before')
+    before.value = '20'
+    await fireEvent.input(before)
+    await fireEvent.submit(container.querySelector('#session-details-form'))
+    await waitFor(() => {
+      const call = fetch.mock.calls.find(([u]) => String(u).includes('/admin-update'))
+      const body = JSON.parse(call[1].body)
+      // Sent raw — the server parses it and owns the "already linked" check.
+      expect(body.thesession_id).toBe('https://thesession.org/sessions/6247')
+      expect(body.session_type).toBe('festival')
+      expect(body.active_buffer_minutes_before).toBe(20)
+    })
+  })
+
+  it('a tune URL in the thesession box blocks the save', async () => {
+    const { container } = renderApp()
+    const ts = container.querySelector('#thesession-id')
+    ts.value = 'https://thesession.org/tunes/182'
+    await fireEvent.input(ts)
+    await fireEvent.submit(container.querySelector('#session-details-form'))
+    expect(window.showMessage).toHaveBeenCalledWith(
+      expect.stringContaining('thesession.org/sessions/1234'),
+      'error'
+    )
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('an empty session name blocks the save with an error toast', async () => {

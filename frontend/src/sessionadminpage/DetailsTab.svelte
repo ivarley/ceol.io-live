@@ -3,6 +3,7 @@
   // /api/sessions/<path>/admin-update), termination / reactivation flows, and
   // the recurrence schedule editor with live preview.
   import { formatTime } from '../shared/format.js'
+  import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
 
   let { session, sessionPath, timezoneOptions = [] } = $props()
@@ -26,6 +27,15 @@
   let comments = $state(session.comments || '')
   let autoCreateInstances = $state(!!session.auto_create_instances)
   let autoCreateHours = $state(String(session.auto_create_hours_ahead))
+
+  // The upstream link + the two settings that were previously DB-only. thesession_id
+  // takes a pasted /sessions/<id> URL as readily as a bare id (same courtesy the tune
+  // boxes give); empty clears the link.
+  let thesessionId = $state(session.thesession_id == null ? '' : String(session.thesession_id))
+  const thesessionRef = $derived(parseThesessionSessionId(thesessionId))
+  let sessionType = $state(session.session_type || 'regular')
+  let bufferBefore = $state(String(session.active_buffer_minutes_before ?? 60))
+  let bufferAfter = $state(String(session.active_buffer_minutes_after ?? 60))
 
   // People-tracking flags (spec 039). Set-starters require attendance, so turning
   // attendance off forces starters off and disables that checkbox.
@@ -57,6 +67,12 @@
       show_people_list: showPeopleList,
       track_attendance: trackAttendance,
       track_set_starters: trackSetStarters && trackAttendance,
+      // Sent raw: the server parses a URL or id with the same rules as the client
+      // helper and owns the "already linked to another session" check.
+      thesession_id: thesessionId.trim(),
+      session_type: sessionType,
+      active_buffer_minutes_before: parseInt(bufferBefore, 10),
+      active_buffer_minutes_after: parseInt(bufferAfter, 10),
     }
 
     // Include termination date if it exists
@@ -75,6 +91,17 @@
     if (pathError) {
       toast(pathError, 'error')
       return
+    }
+    // Catch a mistyped link (or a pasted TUNE url) here rather than after a round trip.
+    if (formData.thesession_id && thesessionRef == null) {
+      toast('Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID', 'error')
+      return
+    }
+    for (const [minutes, label] of [[bufferBefore, 'Minutes before'], [bufferAfter, 'Minutes after']]) {
+      if (!/^\d+$/.test(String(minutes).trim())) {
+        toast(`${label} must be a whole number of minutes`, 'error')
+        return
+      }
     }
 
     fetch(`/api/sessions/${sessionPath}/admin-update`, {
@@ -368,6 +395,27 @@
         </div>
 
         <div class="mb-3">
+          <label for="thesession-id" class="form-label">
+            TheSession.org ID
+            {#if thesessionRef != null}
+              <a
+                href="https://thesession.org/sessions/{thesessionRef}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="path-link"
+                title="Open on thesession.org">↗</a>
+            {/if}
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="thesession-id"
+            placeholder="ID or thesession.org/sessions/… URL"
+            bind:value={thesessionId} />
+          <small class="text-muted d-block">Links this session to its listing on thesession.org. Leave blank if it isn't listed there.</small>
+        </div>
+
+        <div class="mb-3">
           <label for="location-name" class="form-label">Location Name</label>
           <input type="text" class="form-control" id="location-name" bind:value={locationName} />
         </div>
@@ -401,6 +449,23 @@
               <option value={tz.value}>{tz.label}</option>
             {/each}
           </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="session-type" class="form-label">Session Type</label>
+          <select class="form-select" id="session-type" bind:value={sessionType}>
+            <option value="regular">Regular (recurring)</option>
+            <option value="festival">Festival</option>
+          </select>
+          <small class="text-muted d-block">
+            {#if sessionType === 'festival'}
+              A festival runs between its first and last dates instead of recurring: the public page leads with
+              the "Sessions" tab, grouped by day, and its instances may overlap.
+            {:else}
+              A regular session recurs on the schedule below. Choose Festival for a multi-day event whose
+              sessions are listed by day.
+            {/if}
+          </small>
         </div>
       </div>
     </div>
@@ -633,6 +698,40 @@
         <small class="text-muted d-block mt-2">
           When enabled, the system will automatically create upcoming session instances based on the recurrence pattern.
           This runs every 15 minutes.
+        </small>
+      </div>
+    </div>
+
+    <!-- Active window: how long either side of the scheduled time this session counts
+         as "happening now" (active_session_manager reads these). -->
+    <div class="mb-3">
+      <span class="form-label">Active Window</span>
+      <div class="p-3 border rounded settings-box">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span>Counts as happening now from</span>
+          <input
+            type="number"
+            class="form-control"
+            id="active-buffer-before"
+            aria-label="Minutes before the session starts"
+            bind:value={bufferBefore}
+            min="0"
+            max="1440"
+            style="width: 90px;" />
+          <span>minutes before it starts, until</span>
+          <input
+            type="number"
+            class="form-control"
+            id="active-buffer-after"
+            aria-label="Minutes after the session ends"
+            bind:value={bufferAfter}
+            min="0"
+            max="1440"
+            style="width: 90px;" />
+          <span>minutes after it ends.</span>
+        </div>
+        <small class="text-muted d-block mt-2">
+          Drives the "Live" badge, the live-logging screen, and which instance the session page opens on.
         </small>
       </div>
     </div>

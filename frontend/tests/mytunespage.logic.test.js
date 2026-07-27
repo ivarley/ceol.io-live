@@ -1,7 +1,7 @@
 // Unit tests for the My Tunes page logic (spec 035 Step 2) — the pure module
 // behind App.svelte. Ported behaviors are asserted against the legacy semantics.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { extractTuneId } from '../src/shared/parse.js'
+import { extractTuneId, parseThesessionSessionId } from '../src/shared/parse.js'
 import {
   resolveTuneInstrumentStatus,
   buildSortFunction,
@@ -41,6 +41,20 @@ describe('extractTuneId', () => {
     expect(extractTuneId('https://thesession.org/tunes/9#setting9')).toBe(9)
     expect(extractTuneId('cooley')).toBe(null)
     expect(extractTuneId('')).toBe(null)
+  })
+})
+
+describe('parseThesessionSessionId', () => {
+  it('takes session urls and bare ids, but never a tune url', () => {
+    expect(parseThesessionSessionId('6247')).toBe(6247)
+    expect(parseThesessionSessionId('https://thesession.org/sessions/6247')).toBe(6247)
+    expect(parseThesessionSessionId('  thesession.org/sessions/6247#comments ')).toBe(6247)
+    // Tunes and sessions share an id space upstream: accepting a tune link here
+    // would silently point a session at a tune's page.
+    expect(parseThesessionSessionId('https://thesession.org/tunes/6247')).toBe(null)
+    expect(parseThesessionSessionId('mueller')).toBe(null)
+    expect(parseThesessionSessionId('')).toBe(null)
+    expect(parseThesessionSessionId(null)).toBe(null)
   })
 })
 

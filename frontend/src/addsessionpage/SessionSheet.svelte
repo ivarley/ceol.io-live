@@ -6,6 +6,7 @@
   // for retry — the kit convention for server-side commits.
   import { tick } from 'svelte'
   import { Sheet, Seg } from '../lib/index.js'
+  import { parseThesessionSessionId } from '../shared/parse.js'
   import { normalizeSessionPath } from '../shared/sessionpath.js'
   import { generatePath, summarizeRecurrence } from './logic.js'
 
@@ -28,6 +29,12 @@
   let country = $state('')
   let inceptionDate = $state('')
   let timezone = $state('America/Chicago')
+  // Editable here as well as on the admin page — the import seeds thesession_id, but a
+  // hand-added session can be linked up now instead of needing SQL later.
+  const thesessionRef = $derived(parseThesessionSessionId(thesessionId))
+  let sessionType = $state('regular')
+  let bufferBefore = $state('60')
+  let bufferAfter = $state('60')
   let addMe = $state(true)
   let addMeRole = $state('admin')
   // People-tracking flags (spec 039): all on by default — this is opt-OUT. Set-starters
@@ -110,6 +117,9 @@
     country = s.country ?? ''
     inceptionDate = s.inception_date ?? ''
     timezone = s.timezone ?? 'America/Chicago'
+    sessionType = s.session_type ?? 'regular'
+    bufferBefore = String(s.active_buffer_minutes_before ?? 60)
+    bufferAfter = String(s.active_buffer_minutes_after ?? 60)
     addMe = addMeDefault
     addMeRole = 'admin'
     showPeopleList = true
@@ -170,6 +180,9 @@
       country: country.trim(),
       inception_date: inceptionDate || null,
       timezone,
+      session_type: sessionType,
+      active_buffer_minutes_before: parseInt(bufferBefore, 10),
+      active_buffer_minutes_after: parseInt(bufferAfter, 10),
       recurrence: recurrence.json || null,
       add_current_user: addMe,
       add_current_user_role: addMe ? addMeRole : null,
@@ -215,6 +228,24 @@
         pathInput.focus()
       }
       return
+    }
+    // A mistyped link (or a pasted TUNE url) is worth catching before the round trip.
+    if (thesessionId.trim() && thesessionRef == null) {
+      invalidFields = ['thesessionId']
+      formError = 'Enter a thesession.org session URL (thesession.org/sessions/1234) or numeric ID'
+      document.getElementById('thesessionId')?.focus()
+      return
+    }
+    for (const [id, minutes, label] of [
+      ['activeBufferBefore', bufferBefore, 'Minutes before'],
+      ['activeBufferAfter', bufferAfter, 'Minutes after'],
+    ]) {
+      if (!/^\d+$/.test(String(minutes).trim())) {
+        invalidFields = [id]
+        formError = `${label} must be a whole number of minutes`
+        document.getElementById(id)?.focus()
+        return
+      }
     }
     formError = ''
 
@@ -317,6 +348,46 @@
           <option value={tz.value}>{tz.label}</option>
         {/each}
       </select>
+    </div>
+    <!-- Seeded by the import; editable so a hand-added session can be linked too. -->
+    <div class="mb-3">
+      <label for="thesessionId">TheSession.org ID:</label>
+      <input type="text" id="thesessionId" bind:value={thesessionId}
+        placeholder="ID or thesession.org/sessions/… URL"
+        class:is-invalid={invalidFields.includes('thesessionId')}
+        oninput={() => markValid('thesessionId')} />
+      <small class="as-field-help">Optional — links this session to its listing on thesession.org.</small>
+    </div>
+    <div class="mb-3">
+      <label for="sessionType">Session Type:</label>
+      <select id="sessionType" class="form-control" bind:value={sessionType}>
+        <option value="regular">Regular (recurring)</option>
+        <option value="festival">Festival</option>
+      </select>
+      <small class="as-field-help">
+        {#if sessionType === 'festival'}
+          Runs between its first and last dates instead of recurring; its sessions are listed by day and may overlap.
+        {:else}
+          Recurs on the schedule below.
+        {/if}
+      </small>
+    </div>
+    <div class="mb-3">
+      <span class="as-path-label" id="activeWindowLabel">Active window:</span>
+      <div class="as-buffer-row" aria-labelledby="activeWindowLabel">
+        <span>from</span>
+        <input type="number" id="activeBufferBefore" min="0" max="1440" bind:value={bufferBefore}
+          aria-label="Minutes before the session starts"
+          class:is-invalid={invalidFields.includes('activeBufferBefore')}
+          oninput={() => markValid('activeBufferBefore')} />
+        <span>min before, until</span>
+        <input type="number" id="activeBufferAfter" min="0" max="1440" bind:value={bufferAfter}
+          aria-label="Minutes after the session ends"
+          class:is-invalid={invalidFields.includes('activeBufferAfter')}
+          oninput={() => markValid('activeBufferAfter')} />
+        <span>min after</span>
+      </div>
+      <small class="as-field-help">How long either side of the scheduled time this counts as "happening now".</small>
     </div>
 
     <!-- Recurrence editor (collapsible summary/edit) -->

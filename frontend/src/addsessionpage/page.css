@@ -383,3 +383,28 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ---- optional/advanced fields -----------------------------------------------
+   The thesession.org link, session type and active window: previously DB-only
+   settings, now editable here as well as on the admin page. Help text sits under
+   the field it explains (the shared input rule already provides the gap). */
+#sessionDetailsForm .as-field-help {
+    display: block;
+    margin: -10px 0 15px;
+    font-size: 13px;
+    color: var(--disabled-text);
+}
+
+#sessionDetailsForm .as-buffer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+#sessionDetailsForm .as-buffer-row input[type="number"] {
+    width: 80px;
+    margin-bottom: 0;
+}

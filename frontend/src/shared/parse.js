@@ -33,6 +33,21 @@ export function parseThesessionId(raw) {
 }
 
 /**
+ * The SESSION sibling of parseThesessionId: a thesession.org *session* URL
+ * (/sessions/<id>) or a bare numeric id -> its integer id, else null. Sessions and
+ * tunes both live under thesession.org with numeric ids, so keep the two parsers
+ * apart — a tune URL must not pass as a session id, or a session ends up linked to
+ * a tune's page. Mirrors the server's _parse_thesession_session_id.
+ */
+export function parseThesessionSessionId(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  const m = s.match(/thesession\.org\/sessions\/(\d+)/)
+  if (m) return parseInt(m[1], 10)
+  return /^\d+$/.test(s) ? parseInt(s, 10) : null
+}
+
+/**
  * The optional setting deep-link in a thesession tune URL — ?setting=NNN and/or
  * #settingNNN (thesession uses both, e.g. /tunes/1716?setting=15143#setting15143).
  * Only meaningful alongside a URL; a bare numeric id carries no setting.

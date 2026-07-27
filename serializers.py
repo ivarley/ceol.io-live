@@ -426,9 +426,13 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
         """
-        SELECT session_id, name, path, location_name, location_website, location_phone,
+        SELECT session_id, thesession_id, name, path, location_name, location_website,
+               location_phone,
                location_street, city, state, country, comments, unlisted_address,
                initiation_date, termination_date, recurrence, timezone,
+               COALESCE(session_type, 'regular') AS session_type,
+               COALESCE(active_buffer_minutes_before, 60) AS active_buffer_minutes_before,
+               COALESCE(active_buffer_minutes_after, 60) AS active_buffer_minutes_after,
                COALESCE(auto_create_instances, FALSE) AS auto_create_instances,
                COALESCE(auto_create_hours_ahead, 24) AS auto_create_hours_ahead,
                COALESCE(live_cache_session_limit, 200) AS live_cache_session_limit,
@@ -445,6 +449,13 @@ def build_session_admin_payload(conn, session_path: str) -> Optional[Dict[str, A
 
     session = {
         "session_id": row["session_id"],
+        # The four the admin form had no editor for until now: the upstream link, the
+        # regular/festival switch (which reorders the public page's tabs), and the
+        # "happening now" window active_session_manager reads.
+        "thesession_id": row["thesession_id"],
+        "session_type": row["session_type"],
+        "active_buffer_minutes_before": row["active_buffer_minutes_before"],
+        "active_buffer_minutes_after": row["active_buffer_minutes_after"],
         "name": row["name"],
         "path": row["path"],
         "location_name": row["location_name"],

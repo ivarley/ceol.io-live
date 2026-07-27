@@ -1129,6 +1129,37 @@ def update_session_ajax(session_path):
                 return jsonify({"success": False, "error": path_error}), 400
             data = {**data, "path": new_path}
 
+        # The four fields that had no editor before: thesession_id, session_type and the
+        # two active-window buffers. Coerced up front (shared with POST /api/add-session)
+        # so a bad value is a 400 with a sentence, not a psycopg error or a silently
+        # stored string. Absent keys are left absent — every caller here sends partials.
+        from session_fields import (
+            normalize_active_buffer,
+            normalize_session_type,
+            parse_thesession_session_id,
+        )
+
+        new_thesession_id = None
+        if "thesession_id" in data:
+            new_thesession_id, ts_error = parse_thesession_session_id(data["thesession_id"])
+            if ts_error:
+                return jsonify({"success": False, "error": ts_error}), 400
+            data = {**data, "thesession_id": new_thesession_id}
+        if "session_type" in data:
+            session_type, type_error = normalize_session_type(data["session_type"])
+            if type_error:
+                return jsonify({"success": False, "error": type_error}), 400
+            data = {**data, "session_type": session_type}
+        for buffer_field, label in (
+            ("active_buffer_minutes_before", "Minutes before"),
+            ("active_buffer_minutes_after", "Minutes after"),
+        ):
+            if buffer_field in data:
+                minutes, buffer_error = normalize_active_buffer(data[buffer_field], label)
+                if buffer_error:
+                    return jsonify({"success": False, "error": buffer_error}), 400
+                data = {**data, buffer_field: minutes}
+
         conn = get_db_connection()
         cur = conn.cursor()
 
@@ -1160,6 +1191,25 @@ def update_session_ajax(session_path):
                     }
                 ), 400
 
+        # One thesession.org session maps to one of ours (the create path checks the
+        # same thing). Without this the admin form would happily point two sessions at
+        # the same upstream id, which the import/lookup path resolves by picking one.
+        if new_thesession_id is not None:
+            cur.execute(
+                "SELECT name FROM session WHERE thesession_id = %s AND session_id != %s",
+                (new_thesession_id, session_id),
+            )
+            ts_collision = cur.fetchone()
+            if ts_collision:
+                cur.close()
+                conn.close()
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f'TheSession.org session {new_thesession_id} is already linked to "{ts_collision[0]}"',
+                    }
+                ), 400
+
         # Save to history before making changes
         save_to_history(
             cur, "session", "UPDATE", session_id, user_id=get_current_user_id()
@@ -1173,6 +1223,11 @@ def update_session_ajax(session_path):
         field_mapping = {
             "name": "name",
             "path": "path",
+            # Coerced above; NULLable on purpose — clearing the link is a real edit.
+            "thesession_id": "thesession_id",
+            "session_type": "session_type",
+            "active_buffer_minutes_before": "active_buffer_minutes_before",
+            "active_buffer_minutes_after": "active_buffer_minutes_after",
             "location_name": "location_name",
             "location_street": "location_street",
             "city": "city",
@@ -3325,6 +3380,32 @@ def add_session_ajax():
     if path_error:
         return jsonify({"success": False, "message": path_error})
 
+    # Same coercion the admin update uses (session_fields), so a session can be created
+    # with the values the admin form can later edit — including a thesession.org link
+    # pasted as a URL rather than a bare id.
+    from session_fields import (
+        normalize_active_buffer,
+        normalize_session_type,
+        parse_thesession_session_id,
+    )
+
+    thesession_id, ts_error = parse_thesession_session_id(data.get("thesession_id"))
+    if ts_error:
+        return jsonify({"success": False, "message": ts_error})
+    session_type, type_error = normalize_session_type(data.get("session_type"))
+    if type_error:
+        return jsonify({"success": False, "message": type_error})
+    buffer_before, before_error = normalize_active_buffer(
+        data.get("active_buffer_minutes_before"), "Minutes before"
+    )
+    if before_error:
+        return jsonify({"success": False, "message": before_error})
+    buffer_after, after_error = normalize_active_buffer(
+        data.get("active_buffer_minutes_after"), "Minutes after"
+    )
+    if after_error:
+        return jsonify({"success": False, "message": after_error})
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -3340,10 +3421,10 @@ def add_session_ajax():
             )
 
         # Check if TheSession.org ID is already used
-        if data.get("thesession_id"):
+        if thesession_id is not None:
             cur.execute(
                 "SELECT session_id FROM session WHERE thesession_id = %s",
-                (data["thesession_id"],),
+                (thesession_id,),
             )
             existing_thesession = cur.fetchone()
             if existing_thesession:
@@ -3352,7 +3433,7 @@ def add_session_ajax():
                 return jsonify(
                     {
                         "success": False,
-                        "message": f'TheSession.org session {data["thesession_id"]} is already in the database',
+                        "message": f"TheSession.org session {thesession_id} is already in the database",
                     }
                 )
 
@@ -3369,15 +3450,17 @@ def add_session_ajax():
             INSERT INTO session (
                 thesession_id, name, path, location_name, location_phone, location_website,
                 city, state, country, timezone, initiation_date, recurrence,
+                session_type, active_buffer_minutes_before, active_buffer_minutes_after,
                 show_people_list, track_attendance, track_set_starters,
                 created_date, last_modified_date, created_by_user_id
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s,
                 %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s
             ) RETURNING session_id
         """,
             (
-                data.get("thesession_id") or None,
+                thesession_id,
                 data["name"],
                 new_path,
                 data.get("location_name") or None,
@@ -3389,6 +3472,9 @@ def add_session_ajax():
                 timezone,
                 data.get("inception_date") or None,
                 data.get("recurrence") or None,
+                session_type,
+                buffer_before,
+                buffer_after,
                 show_people_list,
                 track_attendance,
                 track_set_starters,

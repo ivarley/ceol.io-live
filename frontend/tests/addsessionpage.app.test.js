@@ -206,7 +206,71 @@ describe('add-session wizard', () => {
       recurrence: null,
       add_current_user: true,
       add_current_user_role: 'admin',
+      // Editable here too, defaulting to unlinked / regular / the 60-minute window.
+      session_type: 'regular',
+      active_buffer_minutes_before: 60,
+      active_buffer_minutes_after: 60,
     })
+  })
+
+  it('carries an edited thesession link, type and active window into the POST', async () => {
+    const navigate = vi.fn()
+    const { container } = render(App, { pageData: payload(), navigate })
+    await fireEvent.click(container.querySelector('a[href="/add-session#here"]'))
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+    for (const [id, value] of [
+      ['#sessionName', 'Festival Session'],
+      ['#cityName', 'Testville'],
+      ['#stateName', 'TX'],
+      ['#countryName', 'USA'],
+      ['#thesessionId', 'https://thesession.org/sessions/6247'],
+      ['#activeBufferBefore', '30'],
+    ]) {
+      const el = document.querySelector(id)
+      el.value = value
+      await fireEvent.input(el)
+    }
+    const type = document.querySelector('#sessionType')
+    type.value = 'festival'
+    await fireEvent.change(type)
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(true)
+    )
+    const [, init] = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-session'))
+    expect(JSON.parse(init.body)).toMatchObject({
+      thesession_id: 'https://thesession.org/sessions/6247',
+      session_type: 'festival',
+      active_buffer_minutes_before: 30,
+      active_buffer_minutes_after: 60,
+    })
+  })
+
+  it('refuses to post a tune URL as the thesession link', async () => {
+    const { container } = render(App, { pageData: payload(), navigate: vi.fn() })
+    await fireEvent.click(container.querySelector('a[href="/add-session#here"]'))
+    await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+    for (const [id, value] of [
+      ['#sessionName', 'Tune Link Session'],
+      ['#cityName', 'Testville'],
+      ['#stateName', 'TX'],
+      ['#countryName', 'USA'],
+      ['#thesessionId', 'https://thesession.org/tunes/182'],
+    ]) {
+      const el = document.querySelector(id)
+      el.value = value
+      await fireEvent.input(el)
+    }
+    await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+    expect(document.querySelector('.session-sheet-actions .field-error').textContent).toContain(
+      'thesession.org/sessions/1234'
+    )
+    expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(false)
+    expect(document.querySelector('#thesessionId').classList.contains('is-invalid')).toBe(true)
   })
 
   // A path like "/" or "." is non-empty, so the old required-fields check passed
