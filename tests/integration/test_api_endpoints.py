@@ -13,6 +13,8 @@ from datetime import datetime, date, timedelta, time
 
 from flask import url_for
 
+from database import get_db_connection
+
 
 @pytest.mark.integration
 class TestSessionsAPI:
@@ -654,50 +656,54 @@ class TestUserAPI:
     def test_update_auto_save_preference(
         self, client, authenticated_user, db_conn, db_cursor
     ):
-        """Test updating user auto-save preference via API."""
-        # Create the user in the database (authenticated_user fixture provides user_id=1)
-        unique_id = str(uuid.uuid4())[:8]
-        person_id = 900000000 + int(unique_id[:6], 16) % 100000 + 50000  # Unique person_id
+        """Test updating user auto-save preference via API.
 
+        The endpoint writes `WHERE user_id = current_user.user_id`, so it acts on
+        the fixture's own seeded account (user_id=2) — no setup rows needed. This
+        test used to INSERT ... ON CONFLICT (user_id) DO UPDATE against user_id=1
+        and commit, which permanently repointed the SEEDED ADMIN's account at a
+        throwaway person for the rest of the run (breaking any later test that
+        resolves person 1 through user_account). Don't reintroduce that.
+        """
+        user_id = authenticated_user.user_id
         db_cursor.execute(
-            """
-            INSERT INTO person (person_id, first_name, last_name, email)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (person_id) DO NOTHING
-        """,
-            (person_id, "Test", "User", f"test{unique_id}@example.com"),
+            "SELECT auto_save_tunes, auto_save_interval FROM user_account WHERE user_id = %s",
+            (user_id,),
         )
+        original = db_cursor.fetchone()
+        assert original is not None, "the authenticated_user fixture must be a seeded account"
 
-        db_cursor.execute(
-            """
-            INSERT INTO user_account (user_id, person_id, username, user_email, hashed_password, auto_save_tunes)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (user_id) DO UPDATE SET auto_save_tunes = EXCLUDED.auto_save_tunes, person_id = EXCLUDED.person_id
-        """,
-            (
-                1,
-                person_id,
-                "testuser",
-                f"test{unique_id}@example.com",
-                "hashedpass",
-                False,
-            ),
-        )
-        db_conn.commit()
+        try:
+            # NOTE the payload keys: the endpoint reads `auto_save` / `auto_save_interval`.
+            with authenticated_user:
+                response = client.post(
+                    "/api/user/auto-save-preference",
+                    json={"auto_save": True, "auto_save_interval": 30},
+                )
 
-        # Update auto-save preference
-        with authenticated_user:
-            response = client.post(
-                "/api/user/auto-save-preference", json={"auto_save_tunes": True}
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["success"] is True
+
+            # The endpoint commits on its own connection; db_cursor is READ COMMITTED
+            # so it sees the write.
+            db_conn.rollback()  # end this cursor's snapshot before re-reading
+            db_cursor.execute(
+                "SELECT auto_save_tunes, auto_save_interval FROM user_account WHERE user_id = %s",
+                (user_id,),
             )
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is True
-
-        # Just verify the API call succeeded - the API might be working with a different transaction
-        # This is an integration test so we focus on the API response
-        assert data["success"] is True
+            assert db_cursor.fetchone() == (True, 30)
+        finally:
+            # The endpoint's write is committed, so the fixture rollback can't undo it.
+            restore = get_db_connection()
+            rcur = restore.cursor()
+            rcur.execute(
+                "UPDATE user_account SET auto_save_tunes = %s, auto_save_interval = %s WHERE user_id = %s",
+                (original[0], original[1], user_id),
+            )
+            restore.commit()
+            rcur.close()
+            restore.close()
 
 
 @pytest.mark.integration
