@@ -186,6 +186,12 @@ def _instance_exists(cur, session_instance_id):
     return cur.fetchone() is not None
 
 
+def _session_id_of(cur, session_instance_id):
+    cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def emit_change_tune(cur, session_instance_id, record_id, user_id):
     """Append a `change_tune` feed event for a record + NOTIFY, so connected SSE
     clients update in real time. Use this when a session_instance_tune row is edited
@@ -377,6 +383,59 @@ def _enroll_session_tune(cur, session_id, tune_id, user_id):
     )
     if cur.rowcount > 0:
         save_to_history(cur, "session_tune", "INSERT", (session_id, tune_id), user_id=user_id)
+
+
+def _unenroll_session_tune(cur, session_id, tune_id, user_id):
+    """Inverse of _enroll_session_tune: drop a repertoire row that only existed
+    because of a play that has now been deleted (spec 045).
+
+    Logging a tune enrolls it; without this, searching a tune, adding it and
+    deleting it again left a permanent orphan in the session's tune list. The
+    row goes ONLY when all of these hold:
+
+      * no live (non-tombstoned) play of this tune remains at this session --
+        including other instances, so deleting one night's play doesn't drop a
+        tune the session plays regularly;
+      * `manually_added` is FALSE -- someone adding the tune to the repertoire on
+        purpose (the add-tune pane, an admin copy, a session-scoped key/setting)
+        is protected forever, even if a play of it is logged and deleted later;
+      * the row carries no session-scoped curation (alias, key, or
+        session_tune_alias rows) -- belt and braces for anything that set those
+        without flipping the flag.
+
+    A restore/undo re-enrolls via _enroll_session_tune, so the round trip is
+    lossless for the bare rows this touches.
+    """
+    if not tune_id:
+        return False
+    cur.execute(
+        """
+        SELECT st.manually_added
+        FROM session_tune st
+        WHERE st.session_id = %s AND st.tune_id = %s
+          AND st.alias IS NULL AND st.key IS NULL
+          AND NOT st.manually_added
+          AND NOT EXISTS (
+                SELECT 1 FROM session_tune_alias sta
+                WHERE sta.session_id = st.session_id AND sta.tune_id = st.tune_id)
+          AND NOT EXISTS (
+                SELECT 1 FROM session_instance_tune sit
+                JOIN session_instance si
+                  ON si.session_instance_id = sit.session_instance_id
+                WHERE si.session_id = st.session_id
+                  AND sit.tune_id = st.tune_id
+                  AND sit.deleted = FALSE)
+        """,
+        (session_id, tune_id),
+    )
+    if cur.fetchone() is None:
+        return False
+    save_to_history(cur, "session_tune", "DELETE", (session_id, tune_id), user_id=user_id)
+    cur.execute(
+        "DELETE FROM session_tune WHERE session_id = %s AND tune_id = %s",
+        (session_id, tune_id),
+    )
+    return cur.rowcount > 0
 
 
 def _parse_thesession_id(raw):
@@ -667,6 +726,9 @@ def _handle_remove_tune(cur, session_instance_id, data, user_id):
         "UPDATE session_instance_tune SET deleted = TRUE, last_modified_user_id = %s WHERE session_instance_tune_id = %s",
         (user_id, record_id),
     )
+    # Deleting the last play un-enrolls the tune again (spec 045), so an add
+    # the user immediately undid doesn't litter the session's tune list.
+    _unenroll_session_tune(cur, _session_id_of(cur, session_instance_id), rec[1], user_id)
     return {"record": _reselect(cur, record_id)}
 
 
@@ -721,11 +783,19 @@ def _handle_change_tune(cur, session_instance_id, data, user_id):
         tuple(params),
     )
     # A relink to a linked tune (not an unlink) enrolls it in the repertoire, like add.
-    if not data.get("unlink") and data.get("tune_id"):
-        cur.execute("SELECT session_id FROM session_instance WHERE session_instance_id = %s", (session_instance_id,))
-        srow = cur.fetchone()
-        if srow:
-            _enroll_session_tune(cur, srow[0], data["tune_id"], user_id)
+    # Unlinking, or relinking onto a DIFFERENT tune, can equally strand the tune this
+    # row used to point at — the same orphan the delete path cleans up (spec 045).
+    old_tune_id = rec[1]
+    unlinked = bool(data.get("unlink"))
+    enrolls = None if unlinked else data.get("tune_id")
+    strands = old_tune_id if (unlinked or ("tune_id" in data and data["tune_id"] != old_tune_id)) else None
+    if enrolls or strands:
+        session_id = _session_id_of(cur, session_instance_id)
+        if session_id:
+            if enrolls:
+                _enroll_session_tune(cur, session_id, enrolls, user_id)
+            if strands:
+                _unenroll_session_tune(cur, session_id, strands, user_id)
     result = {"record": _reselect(cur, record_id)}
     if remapped_from is not None:
         result["remapped_from"] = remapped_from
@@ -1055,7 +1125,7 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
     if not isinstance(ids, list) or not ids:
         raise OpRejected("invalid", "remove_tunes requires a non-empty record_ids list.")
     cur.execute(
-        "SELECT session_instance_tune_id, record_type, deleted FROM session_instance_tune "
+        "SELECT session_instance_tune_id, record_type, deleted, tune_id FROM session_instance_tune "
         "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) ORDER BY order_position",
         (session_instance_id, ids),
     )
@@ -1071,6 +1141,11 @@ def _handle_remove_tunes(cur, session_instance_id, data, user_id):
             "WHERE session_instance_tune_id = ANY(%s)",
             (user_id, target_ids),
         )
+        # Same un-enroll as the single delete (spec 045), once per distinct tune.
+        session_id = _session_id_of(cur, session_instance_id)
+        targets = set(target_ids)
+        for tune_id in {r[3] for r in rows if r[0] in targets and r[3]}:
+            _unenroll_session_tune(cur, session_id, tune_id, user_id)
     return {"records": [_reselect(cur, rid) for rid in target_ids],
             "already_removed": not target_ids}
 
@@ -1083,12 +1158,13 @@ def _handle_restore_tunes(cur, session_instance_id, data, user_id):
     if not isinstance(ids, list) or not ids:
         raise OpRejected("invalid", "restore_tunes requires a non-empty record_ids list.")
     cur.execute(
-        "SELECT session_instance_tune_id FROM session_instance_tune "
+        "SELECT session_instance_tune_id, tune_id FROM session_instance_tune "
         "WHERE session_instance_id = %s AND session_instance_tune_id = ANY(%s) "
         "AND record_type = 'tune' AND deleted = TRUE ORDER BY order_position",
         (session_instance_id, ids),
     )
-    target_ids = [r[0] for r in cur.fetchall()]
+    rows = cur.fetchall()
+    target_ids = [r[0] for r in rows]
     for rid in target_ids:
         save_to_history(cur, "session_instance_tune", "UPDATE", rid, user_id=user_id)
     if target_ids:
@@ -1097,6 +1173,11 @@ def _handle_restore_tunes(cur, session_instance_id, data, user_id):
             "WHERE session_instance_tune_id = ANY(%s)",
             (user_id, target_ids),
         )
+        # The delete may have un-enrolled these tunes (spec 045); putting the play
+        # back puts the repertoire row back, so undo is a true round trip.
+        session_id = _session_id_of(cur, session_instance_id)
+        for tune_id in {r[1] for r in rows if r[1]}:
+            _enroll_session_tune(cur, session_id, tune_id, user_id)
     return {"records": [_reselect(cur, rid) for rid in target_ids]}
 
 

@@ -1344,7 +1344,8 @@ def get_offline_bundle():
                     LIMIT 1
                 ) ts ON TRUE
                 LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit WHERE sit.tune_id = pt.tune_id
+                    SELECT COUNT(*) AS n FROM session_instance_tune sit
+                    WHERE sit.tune_id = pt.tune_id AND sit.deleted = FALSE
                 ) gp ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = pt.tune_id
@@ -1411,7 +1412,8 @@ def get_offline_bundle():
                     LIMIT 1
                 ) ts ON TRUE
                 LEFT JOIN LATERAL (
-                    SELECT COUNT(*) AS n FROM session_instance_tune sit WHERE sit.tune_id = t.tune_id
+                    SELECT COUNT(*) AS n FROM session_instance_tune sit
+                    WHERE sit.tune_id = t.tune_id AND sit.deleted = FALSE
                 ) gp ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT COUNT(*) AS n FROM person_tune p2 WHERE p2.tune_id = t.tune_id

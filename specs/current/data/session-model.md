@@ -130,7 +130,9 @@ Stored as JSON in `session.recurrence` field. Schema in `schema/recurrence_schem
 - Beta UI: `web_routes.py:session_instance_detail_beta()`
 - Live (real-time, multi-user): `live_logging_routes.py` ops at `POST /api/live/instances/<id>/ops` — see [Live Logging](../logic/live-logging.md) (Feature 024)
 - Logging a **linked** tune (any UI) enrolls it into the session's repertoire (`session_tune`)
-  as a side effect; see [Tune Model → session_tune](tune-model.md) and spec 025.
+  as a side effect; see [Tune Model → session_tune](tune-model.md) and spec 025. Deleting the
+  last live play in the live logger un-enrolls it again unless the entry is protected
+  (`manually_added` / curated) — spec 045.
 
 ### Set Management
 - Group tunes: Set `continues_set = TRUE` to continue previous tune

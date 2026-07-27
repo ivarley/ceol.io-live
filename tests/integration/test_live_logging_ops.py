@@ -74,7 +74,11 @@ def live_instance():
                 (SID, "Live Ops Test", "liveops-test"))
     for tid, name in [(REEL, "The Test Reel"), (MAID, "The Maid Behind the Bar"), (COOLEY, "Cooleys")]:
         cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')", (tid, name))
-        cur.execute("INSERT INTO session_tune (session_id, tune_id) VALUES (%s, %s)", (SID, tid))
+        # manually_added: these three model the session's CURATED repertoire (someone
+        # put them there on purpose), so the play-delete auto-cleanup (spec 045) must
+        # leave them alone. NEWT below is the auto-enrollment subject.
+        cur.execute("INSERT INTO session_tune (session_id, tune_id, manually_added) VALUES (%s, %s, TRUE)",
+                    (SID, tid))
     # COOLEY gets a session alias (the override-only name tests exercise the alias arm
     # of normalize_override_name; display coalesces sit.name -> st.alias -> t.name).
     cur.execute("UPDATE session_tune SET alias = 'The Tumbling Cooley' WHERE session_id = %s AND tune_id = %s",
@@ -477,6 +481,177 @@ def test_change_tune_relink_enrolls_new_tune(client, authenticated_user, live_in
         assert _repertoire_count(db_cursor, sid, newt) == 0
         _op(client, inst, op_type="change_tune", record_id=rid, tune_id=newt)
     assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+# --------------------------------------------------------------------------- #
+# session_tune (repertoire) un-enrollment on delete (spec 045)
+#
+# Logging a tune enrolls it; deleting the last play un-enrolls it again, so a
+# search-add-then-delete doesn't leave an orphan in the session's tune list.
+# --------------------------------------------------------------------------- #
+
+def test_remove_tune_unenrolls_auto_enrolled_tune(client, authenticated_user, live_instance, db_cursor):
+    """The reported bug: add a tune from search, delete it, repertoire is clean again."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        assert _repertoire_count(db_cursor, sid, newt) == 1
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, newt) == 0
+    # The un-enrollment is audited like the enrollment was.
+    db_cursor.execute(
+        "SELECT COUNT(*) FROM session_tune_history WHERE session_id = %s AND tune_id = %s AND operation = 'DELETE'",
+        (sid, newt))
+    assert db_cursor.fetchone()[0] == 1
+
+
+def test_remove_tune_keeps_repertoire_while_another_play_lives(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """Only the LAST live play un-enrolls; a tune played twice stays in the repertoire."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        # A second set, so the add isn't collapsed into a corroboration of the first.
+        _op(client, inst, op_type="set_break", action="insert")
+        _op(client, inst, op_type="add_tune", tune_id=newt)
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_remove_tune_keeps_repertoire_when_played_another_night(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """A play at ANOTHER instance of the same session still counts — deleting tonight's
+    play must not drop a tune the session plays regularly."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    other = INST + 1
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date)"
+                    " VALUES (%s, %s, '2026-02-08')", (other, sid))
+        cur.execute("INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type)"
+                    " VALUES (%s, %s, 'a0', 'tune')", (other, newt))
+        conn.commit()
+        with authenticated_user:
+            _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+            _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+        assert _repertoire_count(db_cursor, sid, newt) == 1
+    finally:
+        cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id = %s", (other,))
+        cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id = %s", (other,))
+        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (other,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_remove_tune_never_unenrolls_manually_added(client, authenticated_user, live_instance, db_cursor):
+    """A repertoire entry someone added on purpose survives a log-then-delete (spec 045)."""
+    sid, inst, reel = live_instance["session_id"], live_instance["instance_id"], live_instance["reel"]
+    assert _repertoire_count(db_cursor, sid, reel) == 1
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=reel)
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, reel) == 1
+
+
+def test_remove_tune_never_unenrolls_curated_row(client, authenticated_user, live_instance, db_cursor):
+    """Belt and braces: a row carrying a session alias stays even with the flag cleared."""
+    sid, inst, cooley = live_instance["session_id"], live_instance["instance_id"], live_instance["cooley"]
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE session_tune SET manually_added = FALSE WHERE session_id = %s AND tune_id = %s",
+                (sid, cooley))
+    conn.commit()
+    cur.close()
+    conn.close()
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=cooley)
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, cooley) == 1
+
+
+def test_add_tune_pane_marks_repertoire_entry_protected(
+    client, authenticated_user, live_instance, db_cursor
+):
+    """End to end: a tune added through the add-tune pane is flagged manually_added,
+    so logging and then deleting it later leaves the entry standing."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        resp = client.post("/api/sessions/liveops-test/tunes", json={"tune_id": newt})
+        assert resp.status_code == 201, resp.data
+        db_cursor.execute("SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                          (sid, newt))
+        assert db_cursor.fetchone()[0] is True
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_curating_an_auto_enrolled_row_protects_it(
+    client, authenticated_admin_user, live_instance, db_cursor
+):
+    """Stating a session-scoped key on an auto-enrolled row (spec 037) makes it
+    deliberate, so it stops being cleanup-eligible."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_admin_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        db_cursor.execute("SELECT manually_added FROM session_tune WHERE session_id = %s AND tune_id = %s",
+                          (sid, newt))
+        assert db_cursor.fetchone()[0] is False
+        resp = client.put(f"/api/sessions/liveops-test/tunes/{newt}", json={"key": "Ador"})
+        assert resp.status_code == 200, resp.data
+        _op(client, inst, op_type="remove_tune", record_id=a["record"]["session_instance_tune_id"])
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_remove_tunes_bulk_unenrolls(client, authenticated_user, live_instance, db_cursor):
+    """The bulk delete (spec 029 selection mode) un-enrolls too, once per tune."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        _op(client, inst, op_type="set_break", action="insert")
+        _, b = _op(client, inst, op_type="add_tune", tune_id=newt)
+        ids = [a["record"]["session_instance_tune_id"], b["record"]["session_instance_tune_id"]]
+        _op(client, inst, op_type="remove_tunes", record_ids=ids)
+    assert _repertoire_count(db_cursor, sid, newt) == 0
+
+
+def test_restore_tunes_reenrolls(client, authenticated_user, live_instance, db_cursor):
+    """Undo is a true round trip: restoring the play puts the repertoire row back."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        rid = a["record"]["session_instance_tune_id"]
+        _op(client, inst, op_type="remove_tunes", record_ids=[rid])
+        assert _repertoire_count(db_cursor, sid, newt) == 0
+        _op(client, inst, op_type="restore_tunes", record_ids=[rid])
+    assert _repertoire_count(db_cursor, sid, newt) == 1
+
+
+def test_change_tune_unlink_unenrolls_old_tune(client, authenticated_user, live_instance, db_cursor):
+    """Unlinking the only play of a tune strands its repertoire row — clean it up."""
+    sid, inst, newt = live_instance["session_id"], live_instance["instance_id"], live_instance["newt"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        rid = a["record"]["session_instance_tune_id"]
+        assert _repertoire_count(db_cursor, sid, newt) == 1
+        _op(client, inst, op_type="change_tune", record_id=rid, unlink=True, name="Some Other Name")
+    assert _repertoire_count(db_cursor, sid, newt) == 0
+
+
+def test_change_tune_relink_unenrolls_previous_tune(client, authenticated_user, live_instance, db_cursor):
+    """Relinking onto a different tune enrolls the new one and drops the stranded old one."""
+    sid, inst = live_instance["session_id"], live_instance["instance_id"]
+    newt, maid = live_instance["newt"], live_instance["maid"]
+    with authenticated_user:
+        _, a = _op(client, inst, op_type="add_tune", tune_id=newt)
+        rid = a["record"]["session_instance_tune_id"]
+        _op(client, inst, op_type="change_tune", record_id=rid, tune_id=maid)
+    assert _repertoire_count(db_cursor, sid, newt) == 0
+    assert _repertoire_count(db_cursor, sid, maid) == 1
 
 
 def test_merged_tune_id_remaps_to_canonical(client, authenticated_user, live_instance, db_cursor):

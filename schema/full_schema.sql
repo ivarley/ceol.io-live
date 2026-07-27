@@ -363,6 +363,10 @@ CREATE TABLE session_tune (
     setting_id INTEGER,
     key VARCHAR(20),
     alias VARCHAR(255),
+    -- spec 045: TRUE = someone curated this entry on purpose, so the
+    -- play-delete auto-cleanup leaves it alone. Play-driven enrollment
+    -- (spec 025) leaves it FALSE.
+    manually_added BOOLEAN NOT NULL DEFAULT FALSE,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_modified_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by_user_id INTEGER,
@@ -923,6 +927,7 @@ CREATE TABLE session_tune_history (
     setting_id INTEGER,
     key VARCHAR(20),
     alias VARCHAR(255),
+    manually_added BOOLEAN,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,
     created_by_user_id INTEGER,

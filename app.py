@@ -744,11 +744,6 @@ app.add_url_rule(
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/tune_count",
-    "get_session_tune_count_ajax",
-    get_session_tune_count_ajax,
-)
-app.add_url_rule(
     "/api/sessions/<path:session_path>/<date_or_id:date_or_id>/delete",
     "delete_session_instance_ajax",
     delete_session_instance_ajax,

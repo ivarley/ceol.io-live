@@ -42,11 +42,15 @@ Session-specific tune information — the session's **repertoire**. A `(session_
 row means "this tune belongs to this session's list"; it feeds the fast-match vocabulary,
 "in session" flags, and tune-list views. Enrolled as a side effect of logging any linked
 tune, by **both** loggers: the old save path (`api_routes.py`) and the live logger's
-`_enroll_session_tune` (spec 025). Merged/redirect tunes are never enrolled.
+`_enroll_session_tune` (spec 025). Merged/redirect tunes are never enrolled. The live
+logger also **un-enrolls** when the last live play is deleted (spec 045), unless the row
+is protected by `manually_added` or carries curation.
 - session_tune_id, session_id, tune_id (nullable)
 - tune_name, thesession_tune_id
 - key (VARCHAR(20) - expanded to support "Amixolydian")
 - alias (single alternative name)
+- manually_added (BOOLEAN) — someone put this entry here on purpose (add-tune pane, admin
+  copy, or curating its alias/key/setting), so the play-delete auto-cleanup skips it
 
 ### session_tune_alias
 Multiple alternative names per tune at session.

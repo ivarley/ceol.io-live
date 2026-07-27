@@ -76,6 +76,28 @@ from `add_tune` (on the final linked record) and from `change_tune` (on a relink
 set). This keeps the fast-match vocabulary, "in session" flags, and tune-list views
 complete. Backfill for pre-fix gaps: `scripts/backfill_025_session_tune_enrollment.py`.
 
+### Repertoire un-enrollment (spec 045)
+
+Enrollment has an inverse: `_unenroll_session_tune` drops the repertoire row again when
+the play that created it goes away, so searching a tune, adding it and deleting it doesn't
+leave an orphan in the session's tune list. It runs from `remove_tune`, `remove_tunes`,
+and from `change_tune` when an unlink/relink strands the previous `tune_id`. The row goes
+only when **all** of:
+
+- no live (non-tombstoned) play of that tune remains **anywhere in the session** — other
+  instances count, so deleting one night's play never drops a tune played regularly;
+- `session_tune.manually_added` is FALSE. Deliberate paths set it TRUE and are protected
+  forever: the add-tune pane (`add_session_tune`), an admin repertoire copy
+  (`copy_tunes_to_destination`), and curating an entry via `update_session_tune_details`
+  ("we play this in Ador here", spec 037) — which also flips the flag on a row that
+  originally arrived by auto-enrollment;
+- the row carries no session-scoped curation (`alias`, `key`, or `session_tune_alias`
+  rows) — belt and braces for anything that sets those without the flag.
+
+`restore_tunes` re-enrolls, so undo is a lossless round trip. Migration:
+`schema/045_session_tune_manually_added.sql` (backfills `manually_added` for entries with
+no play record of any kind — those cannot have been auto-enrolled).
+
 A merged-away `tune_id` arriving in `add_tune` or `change_tune` (stale typeahead cache,
 replayed offline op) is transparently **remapped** to the canonical tune before insert —
 the ack carries `remapped_from` (spec 030). When an admin merges tunes, the merge

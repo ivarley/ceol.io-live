@@ -194,7 +194,7 @@ def magic():
                 SELECT si.session_id
                 FROM session_instance si
                 WHERE si.session_instance_id = sit.session_instance_id
-            ) AND st.tune_id = sit.tune_id
+            ) AND st.tune_id = sit.tune_id AND sit.deleted = FALSE
             WHERE st.session_id = 1 AND lower(t.tune_type) = lower(%s)
             GROUP BY t.tune_id, t.name, t.tune_type
             HAVING COUNT(sit.session_instance_tune_id) > 1

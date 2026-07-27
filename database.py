@@ -343,8 +343,10 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO session_tune_history
             (session_id, tune_id, operation, changed_by_user_id, setting_id, key, alias,
+             manually_added,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_id, tune_id, %s, %s, setting_id, key, alias,
+                   manually_added,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_tune WHERE session_id = %s AND tune_id = %s
         """,

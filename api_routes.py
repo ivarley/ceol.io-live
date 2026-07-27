@@ -1918,8 +1918,9 @@ def update_session_tune_details(session_path, tune_id):
         )
         if not cur.fetchone():
             cur.execute(
-                """INSERT INTO session_tune (session_id, tune_id, setting_id, created_by_user_id)
-                   VALUES (%s, %s, %s, %s)
+                """INSERT INTO session_tune
+                       (session_id, tune_id, setting_id, manually_added, created_by_user_id)
+                   VALUES (%s, %s, %s, TRUE, %s)
                    ON CONFLICT (session_id, tune_id) DO NOTHING""",
                 (session_id, tune_id, default_setting_id(cur, tune_id), get_current_user_id()),
             )
@@ -1929,6 +1930,10 @@ def update_session_tune_details(session_path, tune_id):
 
         # Update session_tune - only update fields that were in the request
         if update_fields:
+            # Curating a repertoire entry (admin-only, spec 037) is a deliberate
+            # statement about it, so it stops being cleanup-eligible even if the
+            # row originally arrived by auto-enrollment (spec 045).
+            update_fields.append("manually_added = TRUE")
             # Always update last_modified_user_id
             update_fields.append("last_modified_user_id = %s")
             update_values.append(get_current_user_id())
@@ -2235,8 +2240,9 @@ def add_session_tune(session_path):
         # Insert into session_tune
         cur.execute(
             """
-            INSERT INTO session_tune (session_id, tune_id, alias, setting_id, key, created_by_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO session_tune
+                (session_id, tune_id, alias, setting_id, key, manually_added, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, TRUE, %s)
         """,
             (session_id, tune_id, alias, parsed_setting_id, key, get_current_user_id()),
         )
@@ -2849,38 +2855,6 @@ def update_session_instance_ajax(session_path, date_or_id):
                 "success": False,
                 "message": f"Failed to update session instance: {str(e)}",
             }
-        )
-
-
-@api_login_required  # zero callers found in templates/, static/js/, frontend/src/ — gated by default
-def get_session_tune_count_ajax(session_path, date):
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # Get tune count for this session instance (exclude break records)
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM session_instance_tune sit
-            JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-            JOIN session s ON si.session_id = s.session_id
-            WHERE s.path = %s AND si.date = %s AND sit.record_type = 'tune'
-        """,
-            (session_path, date),
-        )
-
-        result = cur.fetchone()
-        tune_count = result[0] if result else 0
-
-        cur.close()
-        conn.close()
-
-        return jsonify({"success": True, "tune_count": tune_count})
-
-    except Exception as e:
-        return jsonify(
-            {"success": False, "message": f"Failed to get tune count: {str(e)}"}
         )
 
 
@@ -5173,7 +5147,7 @@ def get_session_logs_ajax(session_path):
                 COUNT(DISTINCT sip.session_instance_person_id) as attendance_count
             FROM session_instance si
             LEFT JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
-                AND sit.record_type = 'tune'
+                AND sit.record_type = 'tune' AND sit.deleted = FALSE
             LEFT JOIN session_instance_person sip ON si.session_instance_id = sip.session_instance_id
                 AND sip.attendance = 'yes'
             WHERE si.session_id = %s
@@ -5256,7 +5230,7 @@ def get_session_tunes_grid_ajax(session_path):
                     COUNT(DISTINCT si.session_instance_id) as play_count
                 FROM session_instance_tune sit
                 INNER JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-                WHERE si.session_id = %s AND sit.tune_id IS NOT NULL
+                WHERE si.session_id = %s AND sit.tune_id IS NOT NULL AND sit.deleted = FALSE
                 GROUP BY sit.tune_id
             ),
             session_members AS (
@@ -7434,7 +7408,7 @@ def match_tune_core(cur, session_id, tune_name, previous_tune_type=None, limit=5
             SELECT sit.tune_id, COUNT(*) AS plays
             FROM session_instance si
             INNER JOIN session_instance_tune sit ON si.session_instance_id = sit.session_instance_id
-            WHERE si.session_id = %s
+            WHERE si.session_id = %s AND sit.deleted = FALSE
             GROUP BY sit.tune_id
         ) pc ON pc.tune_id = c.tune_id
         ORDER BY preferred_tune_type ASC,
@@ -11298,7 +11272,7 @@ def get_admin_tune_detail(tune_id):
             """
             SELECT COUNT(DISTINCT session_instance_id)
             FROM session_instance_tune
-            WHERE tune_id = %s
+            WHERE tune_id = %s AND deleted = FALSE
         """,
             (tune_id,),
         )
@@ -12121,8 +12095,8 @@ def copy_tunes_to_destination():
                 # Insert into session_tune
                 cur.execute(
                     """
-                    INSERT INTO session_tune (session_id, tune_id, created_by_user_id)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO session_tune (session_id, tune_id, manually_added, created_by_user_id)
+                    VALUES (%s, %s, TRUE, %s)
                     """,
                     (session_id, tune_id, get_current_user_id())
                 )

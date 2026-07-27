@@ -704,7 +704,7 @@ def load_session_people(
 # One session_tune row shape for the whole page: the embedded first page, the
 # /tunes/remaining continuation, and anything else listing a session's tunes.
 # (This is where the legacy tuple-reshaping hack died — everything is dicts.)
-_SESSION_TUNES_SQL = """
+_SESSION_TUNES_SQL = f"""
     SELECT
         st.tune_id,
         COALESCE(st.alias, t.name) AS tune_name,
@@ -718,7 +718,7 @@ _SESSION_TUNES_SQL = """
         SELECT sit.tune_id, COUNT(*) AS play_count
         FROM session_instance_tune sit
         JOIN session_instance si ON sit.session_instance_id = si.session_instance_id
-        WHERE si.session_id = %s
+        WHERE si.session_id = %s AND {person_scope.SIT_COUNTABLE}
         GROUP BY sit.tune_id
     ) play_counts ON st.tune_id = play_counts.tune_id
     WHERE st.session_id = %s
@@ -903,7 +903,7 @@ def build_session_detail_payload(
 
     # Top 20 most-played tunes at this session (includes instance-only tunes).
     cur.execute(
-        """
+        f"""
         WITH tune_counts AS (
             SELECT
                 COALESCE(sit.name, st.alias, t.name) AS tune_name,
@@ -915,6 +915,7 @@ def build_session_detail_payload(
             LEFT JOIN tune t ON sit.tune_id = t.tune_id
             LEFT JOIN session_tune st ON sit.tune_id = st.tune_id AND st.session_id = %s
             WHERE si.session_id = %s AND COALESCE(sit.name, st.alias, t.name) IS NOT NULL
+              AND {person_scope.SIT_COUNTABLE}
             GROUP BY COALESCE(sit.name, st.alias, t.name), sit.tune_id, COALESCE(t.tunebook_count_cached, 0)
         )
         SELECT tune_name, tune_id, play_count, tunebook_count
@@ -1269,7 +1270,7 @@ def attach_person_tune_detail(conn, d: Dict[str, Any]) -> Dict[str, Any]:
 
     cur.execute(
         """SELECT COUNT(DISTINCT session_instance_id) AS n
-           FROM session_instance_tune WHERE tune_id = %s""",
+           FROM session_instance_tune WHERE tune_id = %s AND deleted = FALSE""",
         (d["tune_id"],),
     )
     d["global_play_count"] = cur.fetchone()["n"]
@@ -1572,7 +1573,10 @@ def build_tune_detail_payload(
         effective_setting_id = person_tune_status["setting_id"]
     notation = _load_setting_notation(conn, tune_id, effective_setting_id)
 
-    cur.execute("SELECT COUNT(*) AS n FROM session_instance_tune WHERE tune_id = %s", (tune_id,))
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM session_instance_tune WHERE tune_id = %s AND deleted = FALSE",
+        (tune_id,),
+    )
     global_play_count = cur.fetchone()["n"]
     cur.execute("SELECT COUNT(*) AS n FROM person_tune WHERE tune_id = %s", (tune_id,))
     person_list_count = cur.fetchone()["n"]
