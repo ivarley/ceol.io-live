@@ -27,6 +27,17 @@ Represents a regular music session (e.g., "Mueller Monday Night Session").
 
 **Note**: Times are stored on `session_instance`, not `session`. The recurrence pattern may contain default times.
 
+**Note on `path`**: the path *is* the session's URL — every page and API route is keyed on it
+(`/sessions/<path>`, `/admin/sessions/<path>`, `/api/sessions/<path>/...`), and nothing looks a
+session up by `session_id`. So a session written with an unusable path has no reachable screen
+that could repair it; only a direct `UPDATE` gets it back. Every write validates structure, not
+just non-emptiness, via `normalize_session_path()` in `session_path.py` (mirrored on the client in
+`frontend/src/shared/sessionpath.js` — keep the two in lockstep). Slash-separated segments of
+RFC 3986 unreserved characters, each containing at least one letter or number; no leading,
+trailing or doubled slashes, no `.`/`..` segments, no whitespace or invisible characters.
+This exists because a production session was created with a path that was non-empty (so it passed
+the old `.strip()` check) but resolved to nothing in a browser, stranding it.
+
 **Location**: `schema/create_session_table.sql`
 
 ### `session_instance` - Specific Occurrences

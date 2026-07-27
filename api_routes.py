@@ -18,6 +18,7 @@ from database import (
 )
 from email_utils import send_email_via_sendgrid, send_update_email
 from instruments import normalize_instrument, normalize_instruments
+from session_path import normalize_session_path
 from timezone_utils import now_utc, format_datetime_with_timezone, utc_to_local
 from flask_login import current_user
 from functools import wraps
@@ -1117,6 +1118,17 @@ def update_session_ajax(session_path):
                     "error": f"Invalid recurrence pattern: {error_msg}"
                 }), 400
 
+        # Only some callers send a path at all (the cache and recurrence saves send
+        # a partial payload) — but one that does must send a usable one. Writing a
+        # blank or unresolvable path here locks the session out of its own admin
+        # screen, and this endpoint is the only way back.
+        new_path = None
+        if "path" in data:
+            new_path, path_error = normalize_session_path(data["path"])
+            if path_error:
+                return jsonify({"success": False, "error": path_error}), 400
+            data = {**data, "path": new_path}
+
         conn = get_db_connection()
         cur = conn.cursor()
 
@@ -1128,8 +1140,27 @@ def update_session_ajax(session_path):
             conn.close()
             return jsonify({"success": False, "error": "Session not found"}), 404
 
-        # Save to history before making changes
         session_id = session_result[0]
+
+        # Paths are unique; without this the UNIQUE index raises and the caller
+        # gets a raw "duplicate key" string instead of something actionable.
+        if new_path is not None:
+            cur.execute(
+                "SELECT name FROM session WHERE path = %s AND session_id != %s",
+                (new_path, session_id),
+            )
+            collision = cur.fetchone()
+            if collision:
+                cur.close()
+                conn.close()
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f'Path "{new_path}" is already used by "{collision[0]}"',
+                    }
+                ), 400
+
+        # Save to history before making changes
         save_to_history(
             cur, "session", "UPDATE", session_id, user_id=get_current_user_id()
         )
@@ -3278,26 +3309,34 @@ def add_session_ajax():
     if not data:
         return jsonify({"success": False, "message": "No JSON data provided"})
 
-    # Validate required fields
+    # Validate required fields. Anything non-string is a malformed payload — treat
+    # it as missing rather than letting .strip() raise (that used to 500).
     required_fields = ["name", "path", "city", "state", "country"]
     for field in required_fields:
-        if not data.get(field, "").strip():
+        value = data.get(field)
+        if not isinstance(value, str) or not value.strip():
             return jsonify(
                 {"success": False, "message": f"{field.title()} is required"}
             )
+
+    # The path is the session's URL, and a malformed one strands the session:
+    # every admin route is keyed on the path, so there'd be no way back in.
+    new_path, path_error = normalize_session_path(data.get("path"))
+    if path_error:
+        return jsonify({"success": False, "message": path_error})
 
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
         # Check if path is already taken
-        cur.execute("SELECT session_id FROM session WHERE path = %s", (data["path"],))
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (new_path,))
         existing_session = cur.fetchone()
         if existing_session:
             cur.close()
             conn.close()
             return jsonify(
-                {"success": False, "message": f'Path "{data["path"]}" is already taken'}
+                {"success": False, "message": f'Path "{new_path}" is already taken'}
             )
 
         # Check if TheSession.org ID is already used
@@ -3340,7 +3379,7 @@ def add_session_ajax():
             (
                 data.get("thesession_id") or None,
                 data["name"],
-                data["path"],
+                new_path,
                 data.get("location_name") or None,
                 data.get("location_phone") or None,
                 data.get("location_website") or None,
@@ -3396,7 +3435,7 @@ def add_session_ajax():
             {
                 "success": True,
                 "message": f'Session "{data["name"]}" created successfully!',
-                "session_path": data["path"],
+                "session_path": new_path,
             }
         )
 

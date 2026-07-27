@@ -4,8 +4,10 @@
   // "Add me as" control, and commits via POST /api/add-session. The commit
   // lives in the footer (not header Done) so a failed save keeps the sheet open
   // for retry — the kit convention for server-side commits.
+  import { tick } from 'svelte'
   import { Sheet, Seg } from '../lib/index.js'
-  import { summarizeRecurrence } from './logic.js'
+  import { normalizeSessionPath } from '../shared/sessionpath.js'
+  import { generatePath, summarizeRecurrence } from './logic.js'
 
   let {
     open = $bindable(false),
@@ -18,7 +20,6 @@
   // ---- form fields (reset from each new seed) --------------------------------
   let thesessionId = $state('')
   let name = $state('')
-  let path = $state('')
   let locationName = $state('')
   let locationPhone = $state('')
   let locationWebsite = $state('')
@@ -38,6 +39,30 @@
     if (!trackAttendance) trackSetStarters = false
   })
   let unparsedText = $state('')
+
+  // ---- path: generated from name + city, overridable --------------------------
+  // The path is a URL, not a field anyone should have to invent. Presenting it as
+  // a bare required input is how a production session ended up with a path of "."
+  // — non-empty, so it validated, but it resolved to nothing and stranded the
+  // session. So: derive it, show it, and make overriding it a deliberate act.
+  let manualPath = $state('')
+  let pathIsManual = $state(false)
+
+  const generatedPath = $derived(generatePath(city, name))
+  const effectivePath = $derived(pathIsManual ? manualPath.trim() : generatedPath)
+
+  async function startEditingPath() {
+    manualPath = effectivePath
+    pathIsManual = true
+    await tick()
+    document.getElementById('sessionPath')?.focus()
+  }
+
+  function useGeneratedPath() {
+    pathIsManual = false
+    manualPath = ''
+    markValid('sessionPath')
+  }
 
   // ---- recurrence editor ------------------------------------------------------
   let recType = $state('')
@@ -77,7 +102,6 @@
   function applySeed(s) {
     thesessionId = s.thesession_id ?? ''
     name = s.name ?? ''
-    path = s.path ?? ''
     locationName = s.location_name ?? ''
     locationPhone = s.location_phone ?? ''
     locationWebsite = s.location_website ?? ''
@@ -92,6 +116,12 @@
     trackAttendance = true
     trackSetStarters = true
     unparsedText = s.unparsedText ?? ''
+    // The import flow seeds exactly what generatePath would produce, so it stays
+    // in generated mode; a seed that differs is a genuine override.
+    const seededPath = (s.path ?? '').trim()
+    pathIsManual =
+      Boolean(seededPath) && seededPath !== generatePath(s.city ?? '', s.name ?? '')
+    manualPath = seededPath
     invalidFields = []
     formError = ''
     saving = false
@@ -127,11 +157,11 @@
     invalidFields = invalidFields.filter((f) => f !== fieldId)
   }
 
-  function save() {
+  async function save() {
     const formData = {
       thesession_id: thesessionId,
       name: name.trim(),
-      path: path.trim(),
+      path: effectivePath,
       location_name: locationName.trim() || null,
       location_phone: locationPhone.trim() || null,
       location_website: locationWebsite.trim() || null,
@@ -148,9 +178,10 @@
       track_set_starters: trackSetStarters && trackAttendance,
     }
 
+    // Path isn't listed: it's generated from name + city, so those are what a
+    // person actually has to supply.
     const requiredFields = [
       { id: 'sessionName', value: formData.name, label: 'Name' },
-      { id: 'sessionPath', value: formData.path, label: 'Path' },
       { id: 'cityName', value: formData.city, label: 'City' },
       { id: 'stateName', value: formData.state, label: 'State' },
       { id: 'countryName', value: formData.country, label: 'Country' },
@@ -163,6 +194,25 @@
       if (firstInvalid) {
         firstInvalid.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
         firstInvalid.focus()
+      }
+      return
+    }
+
+    // The path becomes the session's URL — a non-empty but unusable one (a bare
+    // "/", a ".", a pasted zero-width space) would strand the session with no
+    // reachable admin screen. Server enforces the same rule.
+    const { error: pathError } = normalizeSessionPath(formData.path)
+    if (pathError) {
+      invalidFields = ['sessionPath']
+      formError = pathError
+      // A generated path can be unusable when the name and city are all
+      // punctuation or non-Latin script — there's nothing to slugify. Retyping the
+      // name won't help, so hand over the text box.
+      if (!pathIsManual) await startEditingPath()
+      const pathInput = document.getElementById('sessionPath')
+      if (pathInput) {
+        pathInput.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+        pathInput.focus()
       }
       return
     }
@@ -201,12 +251,6 @@
         oninput={() => markValid('sessionName')} />
     </div>
     <div class="mb-3">
-      <label for="sessionPath">Path (URL slug):</label>
-      <input type="text" id="sessionPath" required bind:value={path}
-        class:is-invalid={invalidFields.includes('sessionPath')}
-        oninput={() => markValid('sessionPath')} />
-    </div>
-    <div class="mb-3">
       <label for="locationName">Location Name:</label>
       <input type="text" id="locationName" bind:value={locationName} />
     </div>
@@ -235,6 +279,32 @@
       <input type="text" id="countryName" required bind:value={country}
         class:is-invalid={invalidFields.includes('countryName')}
         oninput={() => markValid('countryName')} />
+    </div>
+    <!-- Sits after name + city because it's generated from them. -->
+    <div class="mb-3">
+      <span class="as-path-label" id="sessionPathLabel">Web address:</span>
+      {#if pathIsManual}
+        <div class="as-path-edit">
+          <input type="text" id="sessionPath" required bind:value={manualPath}
+            aria-labelledby="sessionPathLabel"
+            class:is-invalid={invalidFields.includes('sessionPath')}
+            oninput={() => markValid('sessionPath')} />
+          {#if generatedPath && manualPath.trim() !== generatedPath}
+            <button type="button" class="as-path-action" id="useGeneratedPathBtn"
+              onclick={useGeneratedPath}>Use suggested address</button>
+          {/if}
+        </div>
+      {:else}
+        <div class="as-path-display" class:is-invalid={invalidFields.includes('sessionPath')}>
+          {#if generatedPath}
+            <code id="sessionPathValue">/sessions/{generatedPath}</code>
+          {:else}
+            <span class="as-path-empty" id="sessionPathValue">Enter a name and city first</span>
+          {/if}
+          <button type="button" class="as-path-action" id="editPathBtn"
+            onclick={startEditingPath}>Edit</button>
+        </div>
+      {/if}
     </div>
     <div class="mb-3">
       <label for="inceptionDate">Inception Date:</label>

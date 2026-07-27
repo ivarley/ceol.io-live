@@ -3,6 +3,7 @@
   // /api/sessions/<path>/admin-update), termination / reactivation flows, and
   // the recurrence schedule editor with live preview.
   import { formatTime } from '../shared/format.js'
+  import { normalizeSessionPath } from '../shared/sessionpath.js'
 
   let { session, sessionPath, timezoneOptions = [] } = $props()
 
@@ -68,8 +69,11 @@
       toast('Session name is required', 'error')
       return
     }
-    if (!formData.path) {
-      toast('URL path is required', 'error')
+    // Not just non-empty: this path is the URL of the very screen you're on, so
+    // saving an unusable one locks you out of the only form that could fix it.
+    const { error: pathError } = normalizeSessionPath(formData.path)
+    if (pathError) {
+      toast(pathError, 'error')
       return
     }
 
@@ -82,6 +86,11 @@
       .then((data) => {
         if (data.success) {
           toast(data.message || 'Session details saved successfully', 'success')
+          // Every route on this page is keyed on the path we just changed, so the
+          // page's own sessionPath is now stale and a second save would 404.
+          if (formData.path !== sessionPath) {
+            setTimeout(() => window.location.assign(`/admin/sessions/${formData.path}`), 800)
+          }
         } else {
           toast(data.error || 'Failed to save session details', 'error')
         }

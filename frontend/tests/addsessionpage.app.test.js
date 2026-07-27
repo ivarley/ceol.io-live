@@ -99,8 +99,11 @@ describe('add-session wizard', () => {
 
     await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
     expect(document.querySelector('#sessionName').value).toBe("B.D. Riley's")
-    // path derives from city + name; timezone guessed from Texas
-    expect(document.querySelector('#sessionPath').value).toBe('austin/bd-rileys')
+    // path derives from city + name and shows read-only; timezone guessed from Texas
+    expect(document.querySelector('#sessionPathValue').textContent).toBe(
+      '/sessions/austin/bd-rileys'
+    )
+    expect(document.querySelector('#sessionPath')).toBeNull()
     expect(document.querySelector('#timezone').value).toBe('America/Chicago')
     // "Every Tuesday @ 8pm" parses into the schedule summary
     expect(document.querySelector('#recurrence-summary-text').textContent).toBe(
@@ -161,20 +164,22 @@ describe('add-session wizard', () => {
     await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
     expect(document.querySelector('#sessionName').value).toBe('')
 
-    // Save with everything empty: inline error, no POST
+    // The path is generated, so it isn't one of the fields you're asked to supply
     await fireEvent.click(document.querySelector('#saveSessionBtn'))
     await waitFor(() =>
       expect(document.querySelector('.session-sheet-actions .field-error').textContent).toContain(
-        'Name, Path, City, State, Country'
+        'Name, City, State, Country'
       )
     )
     expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(false)
     expect(document.querySelector('#sessionName').classList.contains('is-invalid')).toBe(true)
+    expect(document.querySelector('#sessionPathValue').textContent).toBe(
+      'Enter a name and city first'
+    )
 
-    // Fill the required fields and save
+    // Fill the required fields and save — the path follows from name + city
     for (const [id, value] of [
       ['#sessionName', 'New Session'],
-      ['#sessionPath', 'testville/new-session'],
       ['#cityName', 'Testville'],
       ['#stateName', 'TX'],
       ['#countryName', 'USA'],
@@ -183,6 +188,9 @@ describe('add-session wizard', () => {
       el.value = value
       await fireEvent.input(el)
     }
+    expect(document.querySelector('#sessionPathValue').textContent).toBe(
+      '/sessions/testville/new-session'
+    )
     await fireEvent.click(document.querySelector('#saveSessionBtn'))
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/testville/new-session'))
@@ -201,6 +209,166 @@ describe('add-session wizard', () => {
     })
   })
 
+  // A path like "/" or "." is non-empty, so the old required-fields check passed
+  // it — but it resolves to nothing as a URL, and since every admin route is keyed
+  // on the path, the session lands with no screen that can repair it.
+  it.each([['/'], ['.'], ['austin/'], ['austin mueller']])(
+    'refuses to post an unusable path (%s)',
+    async (badPath) => {
+      const navigate = vi.fn()
+      const { container } = render(App, { pageData: payload(), navigate })
+      await fireEvent.click(container.querySelector('a[href="/add-session#here"]'))
+      await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+      for (const [id, value] of [
+        ['#sessionName', 'New Session'],
+        ['#cityName', 'Testville'],
+        ['#stateName', 'TX'],
+        ['#countryName', 'USA'],
+      ]) {
+        const el = document.querySelector(id)
+        el.value = value
+        await fireEvent.input(el)
+      }
+      // An unusable path can only be reached deliberately now, via Edit
+      await fireEvent.click(document.querySelector('#editPathBtn'))
+      await waitFor(() => expect(document.querySelector('#sessionPath')).toBeTruthy())
+      const pathInput = document.querySelector('#sessionPath')
+      pathInput.value = badPath
+      await fireEvent.input(pathInput)
+
+      await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+      await waitFor(() =>
+        expect(
+          document.querySelector('.session-sheet-actions .field-error').textContent
+        ).toMatch(/Path/i)
+      )
+      expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(false)
+      expect(navigate).not.toHaveBeenCalled()
+      expect(document.querySelector('#sessionPath').classList.contains('is-invalid')).toBe(true)
+    }
+  )
+
+  // The web address is generated from name + city rather than typed. Asking people
+  // to invent a URL slug in a bare required field is what produced a session whose
+  // path was "." — it satisfied "non-empty" and resolved to nothing.
+  describe('the generated web address', () => {
+    async function openEmptySheet() {
+      const navigate = vi.fn()
+      const { container } = render(App, { pageData: payload(), navigate })
+      await fireEvent.click(container.querySelector('a[href="/add-session#here"]'))
+      await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+      return { navigate }
+    }
+
+    async function fill(id, value) {
+      const el = document.querySelector(id)
+      el.value = value
+      await fireEvent.input(el)
+    }
+
+    it('tracks the name and city as they are typed, with no input to fill in', async () => {
+      await openEmptySheet()
+      expect(document.querySelector('#sessionPath')).toBeNull()
+
+      await fill('#sessionName', "McGrath's Irish Pub")
+      expect(document.querySelector('#sessionPathValue').textContent).toBe(
+        '/sessions/mcgraths-irish-pub'
+      )
+
+      await fill('#cityName', 'Dublin')
+      expect(document.querySelector('#sessionPathValue').textContent).toBe(
+        '/sessions/dublin/mcgraths-irish-pub'
+      )
+    })
+
+    it('Edit swaps in an input seeded with the generated value, and posts the override', async () => {
+      const { navigate } = await openEmptySheet()
+      await fill('#sessionName', 'New Session')
+      await fill('#cityName', 'Testville')
+      await fill('#stateName', 'TX')
+      await fill('#countryName', 'USA')
+
+      await fireEvent.click(document.querySelector('#editPathBtn'))
+      await waitFor(() => expect(document.querySelector('#sessionPath')).toBeTruthy())
+      expect(document.querySelector('#sessionPath').value).toBe('testville/new-session')
+
+      await fill('#sessionPath', 'somewhere-else')
+      await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith('/sessions/somewhere-else'))
+      const [, init] = fetch.mock.calls.find(([u]) => String(u).includes('/api/add-session'))
+      expect(JSON.parse(init.body).path).toBe('somewhere-else')
+    })
+
+    it('an override stops tracking the name, and can be handed back', async () => {
+      await openEmptySheet()
+      await fill('#sessionName', 'New Session')
+      await fill('#cityName', 'Testville')
+
+      await fireEvent.click(document.querySelector('#editPathBtn'))
+      await waitFor(() => expect(document.querySelector('#sessionPath')).toBeTruthy())
+      await fill('#sessionPath', 'my-own-slug')
+
+      // renaming no longer moves the path out from under the override
+      await fill('#sessionName', 'Renamed Session')
+      expect(document.querySelector('#sessionPath').value).toBe('my-own-slug')
+
+      await fireEvent.click(document.querySelector('#useGeneratedPathBtn'))
+      await waitFor(() => expect(document.querySelector('#sessionPath')).toBeNull())
+      expect(document.querySelector('#sessionPathValue').textContent).toBe(
+        '/sessions/testville/renamed-session'
+      )
+    })
+
+    it('drops into manual entry when there is nothing to slugify', async () => {
+      await openEmptySheet()
+      // No Latin characters to build a slug from, so the generated path is empty
+      await fill('#sessionName', '会话')
+      await fill('#cityName', '北京')
+      await fill('#stateName', 'TX')
+      await fill('#countryName', 'USA')
+      expect(document.querySelector('#sessionPathValue').textContent).toBe(
+        'Enter a name and city first'
+      )
+
+      await fireEvent.click(document.querySelector('#saveSessionBtn'))
+
+      await waitFor(() => expect(document.querySelector('#sessionPath')).toBeTruthy())
+      expect(document.querySelector('.session-sheet-actions .field-error').textContent).toBe(
+        'Path is required'
+      )
+      expect(fetch.mock.calls.some(([u]) => String(u).includes('/api/add-session'))).toBe(false)
+    })
+
+    it('keeps a seeded path that is not what the generator would produce', async () => {
+      // An import whose stored path was customized earlier stays as-is
+      fetchRoutes['/api/fetch-session-data'] = {
+        success: true,
+        session_data: {
+          id: 1247,
+          name: "B.D. Riley's",
+          city: 'Austin',
+          state: 'Texas',
+          country: 'USA',
+        },
+      }
+      const { container } = render(App, { pageData: payload() })
+      const input = container.querySelector('#sessionUrl')
+      input.value = '1247'
+      await fireEvent.input(input)
+      await fireEvent.submit(container.querySelector('#sessionUrlForm'))
+      await waitFor(() => expect(document.querySelector('#sessionDetailsForm')).toBeTruthy())
+
+      // the import seeds generatePath's own output, so it stays generated
+      expect(document.querySelector('#sessionPath')).toBeNull()
+      expect(document.querySelector('#sessionPathValue').textContent).toBe(
+        '/sessions/austin/bd-rileys'
+      )
+    })
+  })
+
   it('a failed save keeps the sheet open with the server message', async () => {
     fetchRoutes['/api/add-session'] = { success: false, message: 'Path "x" is already taken' }
     const navigate = vi.fn()
@@ -210,7 +378,6 @@ describe('add-session wizard', () => {
 
     for (const [id, value] of [
       ['#sessionName', 'New Session'],
-      ['#sessionPath', 'x'],
       ['#cityName', 'T'],
       ['#stateName', 'TX'],
       ['#countryName', 'USA'],
