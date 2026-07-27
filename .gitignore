@@ -117,8 +117,11 @@ venv.bak/
 .env
 .env.test
 
-# Database backups and other local data, including sensitive production data
-data/
+# Database backups and other local data, including sensitive production data.
+# Anchored: an unanchored "data/" matches a directory named data at ANY depth,
+# which silently swallowed specs/current/data/ (backups only ever land in
+# /data/backup/ — see scripts/DATABASE_BACKUP.md).
+/data/
 
 # Claude
 .claude-code-config.json
