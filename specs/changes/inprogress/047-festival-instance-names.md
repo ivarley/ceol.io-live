@@ -63,9 +63,10 @@ in spec 046).
 
 - Collapsed row: the name on its own line between the session name and the date, clipped
   to one line. **Absent when unset**, so a weekly session's header is unchanged.
-- Expanded panel: a **Name** row directly under Date, reading the name or "The usual",
-  with a `Rename` / `Name it` action. Not festival-gated — it's the same field a regular
-  session uses for a night at a different venue.
+- Expanded panel: a **Name** row directly under Date, reading the name or — when unset —
+  "The usual" / "Unnamed" depending on the session type, with a `Rename` / `Name it`
+  action. Not festival-gated — it's the same field a regular session uses for a night at
+  a different venue.
 - The sheet reuses the date sheet's `.dt-*` chrome, because it's the same kind of
   decision. Save is explicit; clearing a set name keeps the commit live and relabels it
   "Clear name".
@@ -73,6 +74,19 @@ in spec 046).
 `instanceName` applies from a snapshot on key *presence*, not truthiness — `null` is a
 real value (an unnamed log), but a snapshot cached before this spec has no key at all and
 must not blank the name the shell already painted.
+
+The sheet's help text **reads the session type**. `session_type` is plumbed into the
+logger (bootstrap + shell config + offline snapshot) for this one purpose. At a festival
+naming is the norm and the reason is concrete — "Several sessions share a day here, so the
+date on its own won't tell them apart" — while everywhere else it's the exception, and
+telling someone at a weekly pub session about "a festival day with several sessions" is
+noise about a case they will never be in. The placeholder and the unnamed-state wording
+follow the same split ("Unnamed" at a festival, where there is no *usual*; "The usual"
+otherwise).
+
+Nothing is **gated** on session type — the same fields are editable either way. Only the
+words change. And "Clear name" appears only when there is a name to clear; on an
+already-unnamed log an empty box is the status quo, not a deletion.
 
 ### 4. The add-instance sheet (`AddInstanceModal.svelte`)
 
@@ -93,10 +107,12 @@ and one with a NULL `location_override` exercising the venue fallback.
   instances get distinct labels, the unnamed instance falls back to the venue,
   `instance_label` drops the session name, and regular sessions are byte-identical.
 - `tests/integration/test_live_logging_ops.py` — `set_name` sets (trimmed, with history),
-  clears, rejects an overlong name, no-ops on an unchanged name, and reaches bootstrap.
+  clears, rejects an overlong name, no-ops on an unchanged name, and reaches bootstrap;
+  plus bootstrap carrying `session_type` both ways.
 - `frontend/tests/App.sessionname.test.js` — the header offers to name an unnamed log,
-  one `set_name` op reaches the collapsed header, blanking clears, and an SSE echo
-  renames with attribution.
+  one `set_name` op reaches the collapsed header, blanking clears, an SSE echo renames
+  with attribution, and the help/placeholder/unnamed wording differs by session type
+  (the regular copy never mentions festivals).
 
 ## Not done
 

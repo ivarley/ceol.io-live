@@ -2566,7 +2566,7 @@ def live_bootstrap(session_instance_id):
             """
             SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path,
                    s.timezone, si.is_active, si.location_override,
-                   si.start_time, si.end_time
+                   si.start_time, si.end_time, s.session_type
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -2613,6 +2613,10 @@ def live_bootstrap(session_instance_id):
             # end_time is a real state — the session that runs until it stops.
             "start_time": meta[9].isoformat() if meta and meta[9] else None,
             "end_time": meta[10].isoformat() if meta and meta[10] else None,
+            # 'regular' | 'festival' (spec 004). The header's naming help reads it: at a
+            # festival a name is the norm and the reason is specific, everywhere else it's
+            # the exception. Nothing is GATED on it — the fields are the same either way.
+            "session_type": (meta[11] if meta else None) or "regular",
             # Is the session under way right now? Signed-out viewers stream only while it
             # is (the sidecar enforces the same rule), and re-read it on every reconnect
             # so a viewer whose session ends settles into a static snapshot by itself.

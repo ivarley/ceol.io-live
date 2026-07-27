@@ -3437,7 +3437,7 @@ def live_logging_screen(session_instance_id):
             """
             SELECT s.path, s.session_id, si.date,
                    s.track_attendance, s.track_set_starters, si.is_active,
-                   si.location_override, si.start_time, si.end_time
+                   si.location_override, si.start_time, si.end_time, s.session_type
             FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
@@ -3449,7 +3449,7 @@ def live_logging_screen(session_instance_id):
             return render_template("error.html", error_message="Session instance not found"), 404
         (session_path, session_id, instance_date, track_attendance,
          track_set_starters, instance_active, instance_name,
-         instance_start, instance_end) = row
+         instance_start, instance_end, session_type) = row
     finally:
         conn.close()
 
@@ -3472,6 +3472,9 @@ def live_logging_screen(session_instance_id):
         # range and both are editable there.
         instance_start_time=instance_start.isoformat() if instance_start else None,
         instance_end_time=instance_end.isoformat() if instance_end else None,
+        # 'regular' | 'festival' (spec 004) — the header's naming help is written for
+        # whichever this is. Nothing is gated on it.
+        session_type=session_type or "regular",
         session_path=session_path,
         streaming_base_url=streaming_base_url,
         # Per-session people-tracking flags (spec 039). Off => the attendance header /

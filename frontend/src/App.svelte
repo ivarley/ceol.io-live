@@ -315,6 +315,12 @@
   // "8:00pm-11:00pm", or "11:00pm - ?" when it never got an end. The identical
   // string the session's Logs tab shows, from the one shared formatter.
   const timeLabel = $derived(instanceTimeLabel({ start_time: instanceStart, end_time: instanceEnd }))
+  // 'regular' | 'festival' (spec 004). Used ONLY to word the naming help: at a festival a
+  // name is the norm and the reason is specific ("several sessions share this day"),
+  // anywhere else it's the exception ("a night somewhere other than the usual place").
+  // Nothing is gated on it — the same fields are editable either way.
+  let sessionType = $state(untrack(() => config.sessionType) || 'regular')
+  const isFestival = $derived(sessionType === 'festival')
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
@@ -365,7 +371,7 @@
         records, last_event_id: highWater, person, ts: Date.now(),
         session_name: sessionName, session_date: sessionDate, instance_date: instanceDate,
         instance_name: instanceName, start_time: instanceStart, end_time: instanceEnd,
-        notes: notesText,
+        session_type: sessionType, notes: notesText,
         log_complete: logComplete, display_tz: displayTz,
         // Persist the session vocabulary so the offline-render path keeps the local
         // exact-match fast path working without a fresh bootstrap (§024 / §G).
@@ -2948,7 +2954,8 @@
     records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
     session_name: cached.session_name, session_date: cached.session_date,
     instance_date: cached.instance_date, instance_name: cached.instance_name,
-    start_time: cached.start_time, end_time: cached.end_time, notes: cached.notes,
+    start_time: cached.start_time, end_time: cached.end_time,
+    session_type: cached.session_type, notes: cached.notes,
     log_complete: cached.log_complete, user_timezone: cached.display_tz,
     known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [],
   })
@@ -2970,6 +2977,7 @@
     if ('instance_name' in snap) instanceName = snap.instance_name || ''
     if ('start_time' in snap) instanceStart = snap.start_time || ''
     if ('end_time' in snap) instanceEnd = snap.end_time || ''
+    if (snap.session_type) sessionType = snap.session_type
     displayTz = snap.user_timezone || snap.session_timezone || undefined
     notesText = snap.notes || ''
     logComplete = !!snap.log_complete
@@ -3498,12 +3506,14 @@
           </div>
           <!-- Name sits under Date because it answers the same question — which log is
                this? — and because at a festival the date can't answer it alone. Shown
-               even when unset (as "The usual"), since an unnamed log that COULD be named
-               is exactly the case the row exists to fix. -->
+               even when unset, since an unnamed log that COULD be named is exactly the
+               case the row exists to fix. Unnamed reads differently by session type:
+               "The usual" is a true statement about a weekly session's venue, but says
+               nothing at a festival where there is no usual. -->
           {#if instanceName || !readOnly}
             <div class="hx-row">
               <span class="hx-label">Name</span>
-              <span class="hx-val">{instanceName || 'The usual'}</span>
+              <span class="hx-val">{instanceName || (isFestival ? 'Unnamed' : 'The usual')}</span>
               {#if !readOnly}
                 <button class="hx-act" onclick={(e) => { e.stopPropagation(); openNameEditor() }}>
                   {instanceName ? 'Rename' : 'Name it'}
@@ -4265,10 +4275,21 @@
   title="Log name"
   onCancel={() => { nameOpen = false }}>
   <div class="dt-body">
+    <!-- The help knows which kind of session this is (spec 004). At a festival naming is
+         the norm and the reason is concrete — the day holds several sessions, so the date
+         identifies none of them. Anywhere else it's the exception, and saying "a festival
+         day with several sessions" to someone at a weekly pub session is noise about a
+         case they'll never be in. The FIELDS are identical either way; only the words
+         differ. -->
     <p class="dt-note">
-      Most nights don't need one — the date says which session it was. Name this log when
-      the date isn't enough: a festival day with several sessions, or a night somewhere
-      other than the usual place.
+      {#if isFestival}
+        Several sessions share a day here, so the date on its own won't tell them apart.
+        This name is what the log is called everywhere it's listed.
+      {:else}
+        Most nights don't need one — the date says which session it was. Name this log when
+        the date isn't enough: a night somewhere other than the usual place, or a second
+        session on the same day.
+      {/if}
     </p>
     <label class="dt-field">
       <span class="dt-label">Name</span>
@@ -4276,13 +4297,13 @@
         class="dt-input"
         type="text"
         maxlength="255"
-        placeholder="e.g. Advanced Session @ Jim Bowie"
+        placeholder={isFestival ? 'e.g. Advanced Session @ Jim Bowie' : "e.g. At Sarah's house"}
         bind:value={nameDraft}
         oninput={() => { nameErr = '' }}
         onkeydown={(e) => { if (e.key === 'Enter') saveName() }} />
     </label>
     <p class="dt-preview" class:dt-changed={nameDraft.trim() !== (instanceName || '')}>
-      {nameDraft.trim() || 'No name — shown by date alone'}
+      {nameDraft.trim() || (isFestival ? 'Unnamed — shown by date alone' : 'No name — shown by date alone')}
       {#if nameDraft.trim() === (instanceName || '')}<span class="dt-same">(unchanged)</span>{/if}
     </p>
     {#if nameErr}
@@ -4291,8 +4312,10 @@
   </div>
   {#snippet footer()}
     <div class="dt-actions">
+      <!-- "Clear name" only when there is a name to clear. On an already-unnamed log
+           an empty box is the status quo, not a deletion. -->
       <button class="dt-save" disabled={nameSaving || nameDraft.trim() === (instanceName || '')} onclick={saveName}>
-        {nameSaving ? 'Saving…' : nameDraft.trim() ? 'Save name' : 'Clear name'}
+        {nameSaving ? 'Saving…' : !nameDraft.trim() && instanceName ? 'Clear name' : 'Save name'}
       </button>
     </div>
   {/snippet}

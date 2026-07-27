@@ -1188,6 +1188,30 @@ def test_bootstrap_returns_the_instance_name(client, authenticated_user, live_in
     assert res.get_json()["instance_name"] == "Opening Ceili @ Scholz Garten"
 
 
+def test_bootstrap_returns_the_session_type(client, authenticated_user, live_instance, db_cursor):
+    """The header's naming help is worded per session type, so bootstrap carries it.
+    Nothing is gated on it — the same fields are editable either way."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        assert client.get(f"/api/live/instances/{inst}/bootstrap").get_json()["session_type"] == "regular"
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("UPDATE session SET session_type = 'festival' WHERE session_id = %s",
+                (live_instance["session_id"],))
+    conn.commit()
+    try:
+        with authenticated_user:
+            body = client.get(f"/api/live/instances/{inst}/bootstrap").get_json()
+        assert body["session_type"] == "festival"
+    finally:
+        cur.execute("UPDATE session SET session_type = 'regular' WHERE session_id = %s",
+                    (live_instance["session_id"],))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
 def test_mark_complete_then_incomplete(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:

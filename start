@@ -138,6 +138,17 @@ streaming_pid=""
 if curl -fsS --max-time 2 "http://$HOST:$STREAM_PORT/health" >/dev/null 2>&1; then
   echo "→ Streaming sidecar already running on :$STREAM_PORT"
 else
+  # Nothing is answering, but a sidecar process can still be alive — orphaned when a
+  # terminal went away, or hung. It no longer serves the port, yet it still holds a
+  # Postgres LISTEN: the stale-fan-out state that makes live logging fail silently.
+  # SIGKILL, not SIGTERM — a sidecar in this state has typically lost its event loop
+  # and will sit on a TERM forever (observed). It has already stopped serving, so
+  # there is nothing graceful left to preserve.
+  if pgrep -f "streaming\.service" >/dev/null 2>&1; then
+    echo "  clearing an orphaned sidecar (not serving :$STREAM_PORT)…"
+    pkill -KILL -f "streaming\.service" 2>/dev/null || true
+    sleep 1
+  fi
   echo "→ Starting live-logging streaming sidecar on :${STREAM_PORT}…"
   mkdir -p logs
   ./venv/bin/python -m streaming.service > logs/streaming.log 2>&1 &
@@ -161,6 +172,10 @@ fi
 # `flask --debug` runs a reloader, so the pid we start is a parent with a child
 # doing the serving; kill the children first or the child survives and keeps the
 # port. `trap - ` first so the EXIT trap doesn't re-enter after INT/TERM.
+#
+# SIGTERM only, deliberately: escalating to SIGKILL would mean sleeping on every
+# Ctrl+C. A sidecar that ignores the TERM is swept on the next run by the
+# orphan check above, which is the cheaper place to pay for a rare case.
 cleanup() {
   trap - EXIT INT TERM
   if [ -n "${flask_pid:-}" ]; then

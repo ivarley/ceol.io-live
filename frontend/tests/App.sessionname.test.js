@@ -119,6 +119,34 @@ describe('log name editor (spec 047)', () => {
     await waitFor(() => expect(container.querySelector('.session-instance-name')).toBeNull())
   })
 
+  it('writes the naming help for a REGULAR session', async () => {
+    const { container } = render(App, { props: { config } })
+    const input = await openNameSheet(container)
+    const note = document.querySelector('.dt-note').textContent
+    expect(note).toContain("Most nights don't need one")
+    // A weekly pub session is never in the festival case; saying so is noise.
+    expect(note).not.toMatch(/festival/i)
+    expect(input.placeholder).toBe("e.g. At Sarah's house")
+    // Nothing to clear on an unnamed log — an empty box is the status quo.
+    expect(document.querySelector('.dt-save').textContent.trim()).toBe('Save name')
+  })
+
+  it('writes the naming help for a FESTIVAL, where naming is the norm', async () => {
+    vi.mocked(bootstrap).mockResolvedValueOnce({ ...bootstrapSnapshot, session_type: 'festival' })
+    const { container } = render(App, { props: { config: { ...config, sessionType: 'festival' } } })
+    // Unnamed reads differently: there is no "usual" at a festival.
+    const row = await nameRow(container)
+    expect(row.querySelector('.hx-val').textContent.trim()).toBe('Unnamed')
+
+    await fireEvent.click(row.querySelector('.hx-act'))
+    await waitFor(() => expect(document.querySelector('.dt-input[type="text"]')).toBeTruthy())
+    const note = document.querySelector('.dt-note').textContent
+    expect(note).toContain('Several sessions share a day here')
+    expect(note).not.toContain("Most nights don't need one")
+    expect(document.querySelector('.dt-input[type="text"]').placeholder)
+      .toBe('e.g. Advanced Session @ Jim Bowie')
+  })
+
   it('renames from someone else\'s set_name arriving over SSE', async () => {
     // A previous test's connect() can still register a stream after its component is
     // gone, so match the call by the exact config object THIS render was given.

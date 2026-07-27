@@ -650,4 +650,14 @@ app = Starlette(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    # timeout_graceful_shutdown mirrors the --timeout-graceful-shutdown 5 that
+    # render.yaml passes in production, and for the same reason: the SSE streams
+    # this service exists to hold are infinite, so an unbounded graceful drain
+    # never finishes. Without it a SIGTERM'd sidecar hangs FOREVER — still alive,
+    # no longer serving its port, but still holding its Postgres LISTEN. That is
+    # the stale-fan-out state where live logging silently stops updating while
+    # everything else looks fine, and it survives every attempt to stop it short
+    # of SIGKILL. `./start` sweeps any sidecar already in that state; this stops
+    # new ones getting there.
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info",
+                timeout_graceful_shutdown=5)
