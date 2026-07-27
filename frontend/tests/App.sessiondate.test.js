@@ -11,6 +11,8 @@ const bootstrapSnapshot = {
   session_name: 'Test Session',
   session_date: 'Sun · Feb 1, 2026',
   instance_date: '2026-02-01',
+  start_time: '19:00:00',
+  end_time: '22:00:00',
   current_person: { person_id: 2, first_name: 'Ian' },
   last_event_id: 0,
   log_complete: false,
@@ -25,7 +27,12 @@ vi.mock('../src/client.js', () => ({
   openStream: vi.fn(() => ({ close: () => {} })),
   livePeople: vi.fn(async () => []),
   peopleSearch: vi.fn(async () => []),
-  sendOp: vi.fn(async () => ({ success: true, date: '2026-01-31', session_date: 'Sat · Jan 31, 2026' })),
+  sendOp: vi.fn(async () => ({
+    success: true, date: '2026-01-31', session_date: 'Sat · Jan 31, 2026',
+    previous_date: '2026-02-01',
+    start_time: '19:00:00', end_time: '22:00:00',
+    previous_start_time: '19:00:00', previous_end_time: '22:00:00',
+  })),
   sendTyping: vi.fn(async () => {}),
   liveMatch: vi.fn(async () => ({ exact_match: false, results: [] })),
   deepSearch: vi.fn(async () => []),
@@ -37,6 +44,8 @@ vi.mock('../src/client.js', () => ({
 const config = {
   sessionInstanceId: 90,
   instanceDate: '2026-02-01',
+  instanceStartTime: '19:00:00',
+  instanceEndTime: '22:00:00',
   currentPerson: { person_id: 2, first_name: 'Ian' },
   streamingBaseUrl: 'http://stream.test/',
 }
@@ -63,13 +72,15 @@ async function openDateSheet(container) {
 }
 
 describe('session date editor (spec 046)', () => {
-  it('shows the current date in the expanded header, with a way to change it', async () => {
+  it('shows the current date AND time range in the expanded header (spec 048)', async () => {
     const { container } = render(App, { props: { config } })
     await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(1))
     await fireEvent.click(container.querySelector('.topbar-row'))
     const dateRow = [...container.querySelectorAll('.hx-row')]
       .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
-    expect(dateRow.querySelector('.hx-val').textContent.trim()).toBe('Sun · Feb 1, 2026')
+    // The same string the session's Logs tab shows, from the shared formatter.
+    expect(dateRow.querySelector('.hx-val').textContent.replace(/\s+/g, ' ').trim())
+      .toBe('Sun · Feb 1, 2026 · 7:00pm-10:00pm')
     expect(dateRow.querySelector('.hx-act').textContent.trim()).toBe('Change')
   })
 
@@ -83,7 +94,10 @@ describe('session date editor (spec 046)', () => {
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
     const [, opType, payload] = vi.mocked(sendOp).mock.calls[0]
     expect(opType).toBe('set_date')
-    expect(payload).toMatchObject({ date: '2026-01-31', confirm: false })
+    // Times ride along unchanged — one op carries the whole "when".
+    expect(payload).toMatchObject({
+      date: '2026-01-31', start_time: '19:00', end_time: '22:00', confirm: false,
+    })
     // The server's display string lands on the header, and the sheet closes.
     await waitFor(() => expect(document.querySelector('.dt-input')).toBeNull())
     expect(container.querySelector('.session-date').textContent).toContain('Sat · Jan 31, 2026')
@@ -126,5 +140,87 @@ describe('session date editor (spec 046)', () => {
     await fireEvent.click(doc.querySelector('.dt-save'))
     await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(2))
     expect(vi.mocked(sendOp).mock.calls[1][2]).toMatchObject({ date: '2026-01-31', confirm: true })
+  })
+})
+
+describe('session time editor (spec 048)', () => {
+  /** The Start / End inputs, in sheet order after the date picker. */
+  const timeInputs = (doc) => [...doc.querySelectorAll('.dt-input[type="time"]')]
+
+  it('saves a changed end time without touching the date', async () => {
+    vi.mocked(sendOp).mockResolvedValueOnce({
+      success: true, date: '2026-02-01', session_date: 'Sun · Feb 1, 2026',
+      previous_date: '2026-02-01',
+      start_time: '19:00:00', end_time: '23:30:00',
+      previous_start_time: '19:00:00', previous_end_time: '22:00:00',
+    })
+    const { container } = render(App, { props: { config } })
+    const doc = await openDateSheet(container)
+    const [start, end] = timeInputs(doc)
+    expect(start.value).toBe('19:00') // HH:MM, not the server's HH:MM:SS
+    expect(end.value).toBe('22:00')
+
+    await fireEvent.input(end, { target: { value: '23:30' } })
+    await fireEvent.click(doc.querySelector('.dt-save'))
+
+    await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(sendOp).mock.calls[0][2]).toMatchObject({
+      date: '2026-02-01', start_time: '19:00', end_time: '23:30',
+    })
+    // The header's Date row picks up the new range.
+    await waitFor(() => {
+      const row = [...container.querySelectorAll('.hx-row')]
+        .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
+      expect(row.querySelector('.hx-val').textContent).toContain('7:00pm-11:30pm')
+    })
+  })
+
+  it('clears the end time to "still going"', async () => {
+    vi.mocked(sendOp).mockResolvedValueOnce({
+      success: true, date: '2026-02-01', session_date: 'Sun · Feb 1, 2026',
+      previous_date: '2026-02-01',
+      start_time: '19:00:00', end_time: null,
+      previous_start_time: '19:00:00', previous_end_time: '22:00:00',
+    })
+    const { container } = render(App, { props: { config } })
+    const doc = await openDateSheet(container)
+    await fireEvent.input(timeInputs(doc)[1], { target: { value: '' } })
+    await fireEvent.click(doc.querySelector('.dt-save'))
+
+    await waitFor(() => expect(sendOp).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(sendOp).mock.calls[0][2]).toMatchObject({ end_time: '' })
+    await waitFor(() => {
+      const row = [...container.querySelectorAll('.hx-row')]
+        .find((r) => r.querySelector('.hx-label').textContent.trim() === 'Date')
+      expect(row.querySelector('.hx-val').textContent).toContain('7:00pm - ?')
+    })
+  })
+
+  it('keeps Save inert until something actually changes', async () => {
+    const { container } = render(App, { props: { config } })
+    const doc = await openDateSheet(container)
+    expect(doc.querySelector('.dt-save').disabled).toBe(true)
+    await fireEvent.input(timeInputs(doc)[0], { target: { value: '20:00' } })
+    expect(doc.querySelector('.dt-save').disabled).toBe(false)
+  })
+
+  it('attributes a times-only change as a time change, not a re-dating', async () => {
+    const myConfig = { ...config }
+    const myStream = () => vi.mocked(openStream).mock.calls.find((c) => c[0] === myConfig)
+    const { container } = render(App, { props: { config: myConfig } })
+    await waitFor(() => expect(myStream()).toBeTruthy())
+    const { onOp } = myStream()[2]
+
+    onOp({
+      op_type: 'set_date', event_id: 8,
+      date: '2026-02-01', session_date: 'Sun · Feb 1, 2026', previous_date: '2026-02-01',
+      start_time: '19:00:00', end_time: '23:30:00',
+      previous_start_time: '19:00:00', previous_end_time: '22:00:00',
+      actor: { person_id: 9, name: 'Aoife' },
+    })
+    await waitFor(() => expect(container.querySelector('.toast.activity')).toBeTruthy())
+    const toast = container.querySelector('.toast.activity').textContent
+    expect(toast).toContain("set this log's time to 7:00pm-11:30pm")
+    expect(toast).not.toContain('re-dated')
   })
 })

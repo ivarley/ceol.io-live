@@ -129,7 +129,7 @@
   </Tabs>
 </div>
 
-<AddInstanceModal bind:this={addInstanceModal} {sessionPath} locationName={session.location_name} />
+<AddInstanceModal bind:this={addInstanceModal} {sessionPath} locationName={session.location_name} {isFestival} />
 
 <!-- Add-to-session-tunes pane: same component as before, now a bundled-in child
      with callback props instead of the window.SessionTuneAddPane global. -->

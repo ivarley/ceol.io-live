@@ -1032,6 +1032,162 @@ def test_set_date_to_the_same_date_is_a_no_op(client, authenticated_user, live_i
     assert body["date"] == "2026-02-01"
 
 
+def test_set_date_sets_the_times_too(client, authenticated_user, live_instance, db_cursor):
+    """Spec 048: date and times are one edit behind one Save, so one op carries both."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-01",
+                      start_time="20:00", end_time="23:00")
+    assert body["start_time"] == "20:00:00"
+    assert body["end_time"] == "23:00:00"
+    assert body["date"] == "2026-02-01"  # unchanged date is not a collision with itself
+    db_cursor.execute(
+        "SELECT date, start_time, end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+    d, s, e = db_cursor.fetchone()
+    assert (d.isoformat(), str(s), str(e)) == ("2026-02-01", "20:00:00", "23:00:00")
+
+
+def test_set_date_accepts_an_overnight_range(client, authenticated_user, live_instance, db_cursor):
+    """End before start is signal, not an error — the after-hours session runs past midnight."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-01",
+                      start_time="23:00", end_time="02:00")
+    assert body.get("rejected") is None
+    assert (body["start_time"], body["end_time"]) == ("23:00:00", "02:00:00")
+
+
+def test_set_date_blank_end_time_clears_it(client, authenticated_user, live_instance, db_cursor):
+    """A NULL end_time is a real state: "it ran until it stopped" ("11:00pm - ?")."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="23:00", end_time="02:00")
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="23:00", end_time="")
+    assert body["end_time"] is None
+    assert body["previous_end_time"] == "02:00:00"
+    db_cursor.execute(
+        "SELECT end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0] is None
+
+
+def test_set_date_omitting_times_leaves_them_alone(client, authenticated_user, live_instance, db_cursor):
+    """Absent key != cleared. A pre-048 client sending only `date` must not wipe them."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="20:00", end_time="23:00")
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-03")
+    assert (body["start_time"], body["end_time"]) == ("20:00:00", "23:00:00")
+    db_cursor.execute(
+        "SELECT start_time, end_time FROM session_instance WHERE session_instance_id = %s", (inst,))
+    s, e = db_cursor.fetchone()
+    assert (str(s), str(e)) == ("20:00:00", "23:00:00")
+
+
+def test_set_date_rejects_a_non_time(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="half eight")
+    assert body["rejected"] is True
+    assert body["reason"] == "invalid"
+    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"  # untouched
+
+
+def test_set_date_times_only_is_not_a_collision(client, authenticated_user, live_instance, db_cursor):
+    """Editing times without moving the date must not trip the sibling collision check —
+    the date isn't moving, so there is nothing to collide with."""
+    inst = live_instance["instance_id"]
+    conn = get_db_connection()
+    cur = conn.cursor()
+    sibling = INST + 1
+    cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+                (sibling, live_instance["session_id"], "2026-02-01"))
+    conn.commit()
+    try:
+        with authenticated_user:
+            _, body = _op(client, inst, op_type="set_date", date="2026-02-01", start_time="21:00")
+        assert body.get("rejected") is None
+        assert body["start_time"] == "21:00:00"
+    finally:
+        cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (sibling,))
+        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_bootstrap_returns_the_times(client, authenticated_user, live_instance):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_date", date="2026-02-01", start_time="20:00", end_time="23:00")
+        res = client.get(f"/api/live/instances/{inst}/bootstrap")
+    body = res.get_json()
+    assert (body["start_time"], body["end_time"]) == ("20:00:00", "23:00:00")
+
+
+def test_set_name_names_the_log(client, authenticated_user, live_instance, db_cursor):
+    """Spec 047: name this log. At a festival the date names several instances equally,
+    so the name is the only thing distinguishing them in every list that shows them."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_name", name="  Advanced Session @ Jim Bowie  ")
+    assert body["instance_name"] == "Advanced Session @ Jim Bowie"  # trimmed
+    assert body["previous_name"] is None
+    db_cursor.execute(
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0] == "Advanced Session @ Jim Bowie"
+    # The prior value is recoverable from the audit trail.
+    db_cursor.execute(
+        "SELECT location_override FROM session_instance_history WHERE session_instance_id = %s "
+        "ORDER BY changed_at DESC LIMIT 1", (inst,))
+    assert db_cursor.fetchone()[0] is None
+
+
+def test_set_name_blank_clears_it(client, authenticated_user, live_instance, db_cursor):
+    """Blanking is a real edit — back to "the usual" — not a validation error."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_name", name="After-Hours Session @ Hotel")
+        _, body = _op(client, inst, op_type="set_name", name="   ")
+    assert body["instance_name"] is None
+    assert body["previous_name"] == "After-Hours Session @ Hotel"
+    db_cursor.execute(
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0] is None
+
+
+def test_set_name_rejects_an_overlong_name(client, authenticated_user, live_instance, db_cursor):
+    """The column is VARCHAR(255): reject rather than let psycopg2 raise mid-transaction."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_name", name="x" * 256)
+    assert body["rejected"] is True
+    assert body["reason"] == "invalid"
+    db_cursor.execute(
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0] is None  # untouched
+
+
+def test_set_name_to_the_same_name_is_a_no_op(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_name", name="Slow Session @ Parish Hall")
+        _, body = _op(client, inst, op_type="set_name", name="Slow Session @ Parish Hall")
+    assert body.get("rejected") is None
+    assert body["instance_name"] == "Slow Session @ Parish Hall"
+    assert body["previous_name"] == "Slow Session @ Parish Hall"
+
+
+def test_bootstrap_returns_the_instance_name(client, authenticated_user, live_instance):
+    """The header paints the name before any op runs, so bootstrap has to carry it."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _op(client, inst, op_type="set_name", name="Opening Ceili @ Scholz Garten")
+        res = client.get(f"/api/live/instances/{inst}/bootstrap")
+    assert res.status_code == 200
+    assert res.get_json()["instance_name"] == "Opening Ceili @ Scholz Garten"
+
+
 def test_mark_complete_then_incomplete(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:

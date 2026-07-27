@@ -193,6 +193,97 @@ def scoped_person(authenticated_user):
     conn.close()
 
 
+SID_F = 9730        # "History Test Festival" — session_type='festival'
+INST_F1 = 9731      # 2026-06-06, "Advanced Session @ Jim Bowie"
+INST_F2 = 9732      # 2026-06-06 as well — the whole point
+INST_F3 = 9733      # 2026-06-07, no location_override (falls back to the venue)
+
+
+@pytest.fixture
+def festival_data():
+    """A festival day running three sessions, two of them on the same date.
+
+    This is the case a date-only label cannot describe: F1 and F2 share 2026-06-06 and
+    would otherwise both read "History Test Festival - 2026-06-06". F3 has no
+    location_override, so it exercises the fallback to the session's own venue.
+    """
+    conn = get_db_connection()
+    conn.autocommit = False
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO session (session_id, name, path, session_type, location_name) "
+        "VALUES (%s, %s, %s, 'festival', %s)",
+        (SID_F, "History Test Festival", "history-test-fest", "Scholz Garten"),
+    )
+    cur.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (%s, %s, 'Reel')",
+                (TGT, "The History Target"))
+    for inst, date, override in (
+        (INST_F1, "2026-06-06", "Advanced Session @ Jim Bowie"),
+        (INST_F2, "2026-06-06", "After-Hours Session @ Hotel"),
+        (INST_F3, "2026-06-07", None),
+    ):
+        cur.execute(
+            "INSERT INTO session_instance (session_instance_id, session_id, date, location_override) "
+            "VALUES (%s, %s, %s, %s)",
+            (inst, SID_F, date, override),
+        )
+        cur.execute(
+            """INSERT INTO session_instance_tune
+               (session_instance_id, tune_id, record_type, order_position)
+               VALUES (%s, %s, 'tune', 'a1')""",
+            (inst, TGT),
+        )
+    conn.commit()
+
+    yield
+
+    insts = (INST_F1, INST_F2, INST_F3)
+    cur.execute("DELETE FROM session_instance_tune WHERE session_instance_id IN %s", (insts,))
+    cur.execute("DELETE FROM session_instance_tune_history WHERE session_instance_id IN %s", (insts,))
+    cur.execute("DELETE FROM session_instance_history WHERE session_instance_id IN %s", (insts,))
+    cur.execute("DELETE FROM session_instance WHERE session_instance_id IN %s", (insts,))
+    cur.execute("DELETE FROM session_history WHERE session_id = %s", (SID_F,))
+    cur.execute("DELETE FROM session WHERE session_id = %s", (SID_F,))
+    cur.execute("DELETE FROM tune_history WHERE tune_id = %s", (TGT,))
+    cur.execute("DELETE FROM tune WHERE tune_id = %s", (TGT,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+class TestFestivalInstanceLabels:
+    """Spec 006: a festival instance is named by date AND place, because the date on its
+    own names several of them. Regular sessions keep the bare date they always had."""
+
+    def test_same_day_instances_get_distinct_labels(self, client, festival_data):
+        resp, data = _get(client, TGT, session_path="history-test-fest")
+        assert resp.status_code == 200 and data["success"]
+        by_id = {p["session_instance_id"]: p for p in data["play_instances"]}
+        assert by_id[INST_F1]["full_name"] == (
+            "History Test Festival - 2026-06-06 - Advanced Session @ Jim Bowie")
+        assert by_id[INST_F2]["full_name"] == (
+            "History Test Festival - 2026-06-06 - After-Hours Session @ Hotel")
+        # Same date, different label — which is the whole reason the place is appended.
+        assert by_id[INST_F1]["full_name"] != by_id[INST_F2]["full_name"]
+
+    def test_unnamed_instance_falls_back_to_the_session_venue(self, client, festival_data):
+        resp, data = _get(client, TGT, session_path="history-test-fest")
+        by_id = {p["session_instance_id"]: p for p in data["play_instances"]}
+        assert by_id[INST_F3]["full_name"] == "History Test Festival - 2026-06-07 - Scholz Garten"
+
+    def test_instance_label_drops_the_session_name(self, client, festival_data):
+        """The in-session list already knows which session it is (spec 037 drawer)."""
+        resp, data = _get(client, TGT, session_path="history-test-fest")
+        by_id = {p["session_instance_id"]: p for p in data["play_instances"]}
+        assert by_id[INST_F1]["instance_label"] == "2026-06-06 - Advanced Session @ Jim Bowie"
+
+    def test_regular_sessions_are_unchanged(self, client, history_data):
+        resp, data = _get(client, TGT, session_path="history-test-b")
+        (play,) = data["play_instances"]
+        assert play["full_name"] == "History Test Session B - 2026-03-05"
+        assert play["instance_label"] == "2026-03-05"
+
+
 class TestTuneHistoryScopes:
     """The spec 033 lenses on ?scope=: member (R3) vs attended (R4)."""
 

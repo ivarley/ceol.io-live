@@ -3,7 +3,10 @@
   // scrim/Escape cancel, commit in the footer so a failed POST keeps it open).
   // Opening prefills from GET next_instance_suggestion; adding POSTs add_instance
   // and redirects to the new instance in edit mode.
-  let { sessionPath, locationName } = $props()
+  // isFestival re-frames one field: `location` is stored as session_instance.location_override,
+  // which at a festival is the log's NAME, not an exception to the usual venue — several
+  // sessions share the date, so it's the only thing telling them apart afterwards.
+  let { sessionPath, locationName, isFestival = false } = $props()
 
   let visible = $state(false)
   let date = $state('')
@@ -103,8 +106,18 @@
       </div>
     </div>
 
-    <label for="session-location-input" style="margin-top: 16px;">Location:</label>
-    <input type="text" id="session-location-input" placeholder="The usual: {locationName}" bind:value={location} />
+    <label for="session-location-input" style="margin-top: 16px;">{isFestival ? 'Name:' : 'Location:'}</label>
+    <input
+      type="text"
+      id="session-location-input"
+      placeholder={isFestival ? 'e.g. Advanced Session @ Jim Bowie' : `The usual: ${locationName}`}
+      bind:value={location} />
+    {#if isFestival}
+      <small class="add-instance-hint">
+        Several sessions share a day at a festival, so the date alone won't tell them
+        apart. This is what the log is called everywhere it's listed.
+      </small>
+    {/if}
 
     <label for="session-comments-input" style="margin-top: 16px;">Comments:</label>
     <textarea
@@ -120,3 +133,14 @@
     </div>
   {/snippet}
 </Sheet>
+
+<style>
+  /* Sits directly under the Name input, so it reads as that field's caption. */
+  .add-instance-hint {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-muted, #9a9aa3);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+</style>

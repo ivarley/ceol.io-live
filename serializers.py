@@ -509,6 +509,40 @@ def recurrence_readable(recurrence: Optional[str]) -> Optional[str]:
         return recurrence
 
 
+def instance_labels(
+    session_name: Optional[str],
+    session_type: Optional[str],
+    date: Any,
+    location_override: Optional[str],
+    session_location_name: Optional[str] = None,
+) -> Dict[str, str]:
+    """Spec 006's unique names for a session instance, in both the forms a list needs.
+
+    Returns ``{"full_name": ..., "instance_label": ...}`` — the same string with and
+    without the session's name on the front, because a cross-session list has to say
+    WHICH session and an in-session list already knows.
+
+    The date alone identifies an instance of a REGULAR session, and that is all those
+    labels have ever carried. It does not identify one at a FESTIVAL: a festival runs
+    several sessions a day, so 'Hill Country Trad Fest - 2026-06-06' can name two
+    different rooms three hours apart. Festivals therefore always append the place,
+    falling back to the session's own venue when the instance doesn't override it —
+    the same `location_override or location_name` the Logs tab renders.
+
+    Spec 006 wrote the festival date as mm/dd. It's spelled the full way here: these
+    labels appear in "All Sessions" lists that span years, where a bare mm/dd is worse
+    than ambiguous. The regular-session label is unchanged either way.
+    """
+    date_str = date.strftime("%Y-%m-%d") if date else None
+    is_festival = (session_type or "regular") == "festival"
+    place = (location_override or session_location_name or "").strip() if is_festival else ""
+
+    parts = [p for p in (date_str, place or None) if p]
+    instance_label = " - ".join(parts)
+    full_name = " - ".join([p for p in ([session_name] + parts) if p]) or (session_name or "")
+    return {"full_name": full_name, "instance_label": instance_label or (date_str or "")}
+
+
 # ---------------------------------------------------------------------------
 # sessions directory — the /sessions page and GET /api/sessions/with-today-status
 # ---------------------------------------------------------------------------

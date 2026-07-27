@@ -18,7 +18,10 @@ Represents a regular music session (e.g., "Mueller Monday Night Session").
 - `city`, `state`, `country` - Geographic location
 - `timezone` - IANA timezone identifier (default: UTC)
 - `recurrence` - JSON pattern (see Recurrence below)
-- `session_type` - "regular" or "class" (default: "regular")
+- `session_type` - "regular" or "festival" (default: "regular"); see [spec 004](../../changes/004-session-type.md).
+  A festival does not recur — `recurrence` is NULL and `initiation_date`/`termination_date` are its
+  first and last day. It flips the public page (Sessions tab first, grouped by day) and its instances
+  may overlap. Seeded as session 6, `austin/hill-country-fest`, in `schema/seed_data.sql`.
 - `active_buffer_minutes_before` - Minutes before session is considered active (default: 60)
 - `active_buffer_minutes_after` - Minutes after session is considered active (default: 60)
 - `auto_create_instances` - Whether to auto-create instances ahead of schedule (default: FALSE)

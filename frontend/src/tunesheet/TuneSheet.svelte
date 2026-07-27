@@ -2329,9 +2329,14 @@
                         {#each playInstances as instance}
                           <div class="history-item">
                             <div class="history-instance-name">
+                              <!-- Scoped to one session the name is redundant, so the row is
+                                   instance_label ("2026-06-06 - Advanced Session @ Jim Bowie");
+                                   across sessions it's full_name, which prefixes the session.
+                                   Both carry the place at a festival, where the date names
+                                   several different rooms (spec 006). -->
                               <a href={instance.link}>
                                 {scopeId === 'general'
-                                  ? instance.date || 'Unknown'
+                                  ? instance.instance_label || instance.date || 'Unknown'
                                   : instance.full_name || instance.date || 'Unknown'}
                               </a>
                               {#if instance.attended}

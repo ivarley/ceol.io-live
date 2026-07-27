@@ -65,3 +65,21 @@ Here's how I want this modal to work:
         - Session / Session Instance - grid showing contextual unique session instance names (leave out the session name) with links (based on session_instance_id) to the session_instance_detail log view highlighting / scrolling to that tune based on querystring parameter. 
         - Admin - Plays at all sessions showing fully unique session instance names with links (based on session_instance_id) to the session_instance_detail log view highlighting / scrolling to that tune based on querystring parameter.
         - All views have the 3-row display of "Unique name / link" on the first row, Position in set on 2nd row, and setting id on third row.
+
+## Addendum (2026-07-27): the festival label finally exists — see [047](inprogress/047-festival-instance-names.md)
+
+The rule above ("if the session type is festival the label is `{Session Name} - {Date} -
+{location_override}`") was never implemented outside the session's own Logs tab.
+`GET /api/tunes/<id>/history` built `full_name` as `{name} - {YYYY-MM-DD}` unconditionally,
+so the tune drawer's History tab showed a festival's four same-day instances as four
+identical rows.
+
+It now comes from `instance_labels()` in `serializers.py`, in both forms — `full_name`
+(with the session) and `instance_label` (without, for a list already scoped to one
+session, which is the "leave out the session name" case this spec describes). Two
+deliberate refinements to the wording above:
+
+- The date is spelled in full, not `mm/dd`. These labels appear in "All Sessions" lists
+  that span years.
+- A festival instance with no `location_override` falls back to the session's
+  `location_name`, so it still gets a place instead of trailing off.

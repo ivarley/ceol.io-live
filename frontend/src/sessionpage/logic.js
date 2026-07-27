@@ -4,10 +4,9 @@
 // tunebook_count, setting_id}) — the legacy tuple format is dead.
 
 // extractTuneId ("search" also matches a bare thesession.org tune id or URL),
-// normalizeQuotes and formatTime/formatTimeRange now live in src/shared/ —
-// one tested copy for every page bundle.
+// normalizeQuotes, formatTime/formatTimeRange and instanceTimeLabel now live in
+// src/shared/ — one tested copy for every page bundle.
 import { extractTuneId, parseLocalDate } from '../shared/parse.js'
-import { formatTime, formatTimeRange } from '../shared/format.js'
 
 // Sort functions keyed by type (alpha, session, everywhere) and direction.
 export const sortFunctions = {
@@ -130,13 +129,10 @@ export function basePathOf(pathname) {
 
 // ---- logs tab -------------------------------------------------------------------
 
-export function instanceTimeLabel(instance) {
-  if (instance.start_time && instance.end_time) {
-    return formatTimeRange(instance.start_time, instance.end_time)
-  }
-  if (instance.start_time) return formatTime(instance.start_time) + ' - ?'
-  return ''
-}
+// Moved to src/shared/format.js so the live logger's header can label its own
+// times with the identical string the Logs tab shows. Re-exported here because
+// LogsTab and this module's tests import it from logic.js.
+export { instanceTimeLabel } from '../shared/format.js'
 
 // Faint "(N tunes logged)" suffix; empty when nothing has been logged.
 export function tuneCountOf(instance) {

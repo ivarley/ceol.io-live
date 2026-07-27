@@ -153,3 +153,6 @@ static/peopleadminpage/
 
 # Claude Code worktrees (each contains its own checkout)
 .claude/worktrees/
+
+# ./start writes the streaming sidecar's output here
+logs/

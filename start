@@ -23,6 +23,13 @@ PG_PREFIX="$("$BREW" --prefix postgresql@16 2>/dev/null || true)"
 [ -n "$PG_PREFIX" ] && export PATH="$PG_PREFIX/bin:$PATH"
 
 PORT=5001
+STREAM_PORT=8080
+# `localhost`, not 127.0.0.1: the browser scopes the session cookie by host, and
+# the streaming sidecar authenticates with that same cookie. Serving the app on
+# one spelling and the sidecar on the other kills live updates and nothing else,
+# which is a miserable thing to debug. The e2e suite uses localhost too.
+HOST=localhost
+export STREAMING_BASE_URL="http://$HOST:$STREAM_PORT"
 DB_NAME=ceol_test
 DB_USER=test_user
 DB_PASS=test_password
@@ -48,14 +55,36 @@ if [ ! -x venv/bin/flask ]; then
 fi
 
 # --- 2b. Frontend bundles (TypeScript → static/js/dist via webpack) --------
-if [ ! -d static/js/dist ]; then
-  echo "→ Building frontend bundles…"
-  if ! command -v npm >/dev/null 2>&1; then
+need_npm() {
+  command -v npm >/dev/null 2>&1 || {
     echo "npm not found. Install Node first:  brew install node" >&2
     exit 1
-  fi
+  }
+}
+
+if [ ! -d static/js/dist ]; then
+  echo "→ Building frontend bundles…"
+  need_npm
   [ -d node_modules ] || npm install --silent
   npm run build
+fi
+
+# --- 2c. Svelte bundles (frontend/src/<page> → static/<page> via Vite) -----
+# Every interactive page is a Svelte bundle now (spec 035), and all of their
+# output dirs are gitignored — so a fresh clone has NO working interactive page
+# until these are built. Rebuild if any one of them is missing; Vite's own
+# caching makes a redundant full build cheap.
+SVELTE_BUNDLES=(live mytunespage tunesheet sessionsdir sessionpage personpage
+                sessionadminpage addsessionpage peopleadminpage)
+missing_bundle=false
+for b in "${SVELTE_BUNDLES[@]}"; do
+  [ -d "static/$b" ] || missing_bundle=true
+done
+if $missing_bundle; then
+  echo "→ Building Svelte page bundles…"
+  need_npm
+  [ -d frontend/node_modules ] || (cd frontend && npm install --silent)
+  (cd frontend && npm run build)
 fi
 
 # --- 3. .env ---------------------------------------------------------------
@@ -81,10 +110,10 @@ db_ready() { PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME"
 if $reset_db || ! db_ready; then
   ME="$(whoami)"
   if $reset_db; then
-    echo "→ Dropping database $DB_NAME…"
+    echo "→ Dropping database ${DB_NAME}…"
     psql -U "$ME" -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null
   fi
-  echo "→ Setting up database $DB_NAME…"
+  echo "→ Setting up database ${DB_NAME}…"
   # Homebrew makes the current macOS user the superuser, so connect via -d postgres.
   psql -U "$ME" -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1 \
     || psql -U "$ME" -d postgres -c "CREATE ROLE $DB_USER LOGIN PASSWORD '$DB_PASS';" >/dev/null
@@ -97,10 +126,66 @@ if $reset_db || ! db_ready; then
   PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q -f schema/seed_data.sql
 fi
 
-# --- 5. Run the app --------------------------------------------------------
+# --- 5. Live-logging streaming sidecar (spec 024 §A4) ----------------------
+# The SSE fan-out for live logging is a SEPARATE service (Starlette + asyncpg),
+# not part of Flask. Without it the logger still works — ops POST fine and
+# catch-up on reconnect fills the gap — but nothing arrives live, which reads
+# as "the logger is broken" and is easy to misdiagnose. So start it here.
+#
+# It shares the DB and the Flask session secret via .env, which streaming.service
+# loads itself. Idempotent: if something already answers /health, leave it be.
+streaming_pid=""
+if curl -fsS --max-time 2 "http://$HOST:$STREAM_PORT/health" >/dev/null 2>&1; then
+  echo "→ Streaming sidecar already running on :$STREAM_PORT"
+else
+  echo "→ Starting live-logging streaming sidecar on :${STREAM_PORT}…"
+  mkdir -p logs
+  ./venv/bin/python -m streaming.service > logs/streaming.log 2>&1 &
+  streaming_pid=$!
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 1 "http://$HOST:$STREAM_PORT/health" >/dev/null 2>&1 && break
+    sleep 0.5
+  done
+  if ! curl -fsS --max-time 2 "http://$HOST:$STREAM_PORT/health" >/dev/null 2>&1; then
+    echo "  ! sidecar did not come up — see logs/streaming.log" >&2
+    echo "    (the logger will still work, but without live updates)" >&2
+    streaming_pid=""
+  fi
+fi
+
+# Take everything down together, so stopping the app never leaves an orphan
+# holding :$PORT or :$STREAM_PORT. A long-lived sidecar is worse than none: its
+# Postgres LISTEN can die quietly, and then ops stop fanning out while /health
+# still answers 200 — live logging looks broken for no visible reason.
+#
+# `flask --debug` runs a reloader, so the pid we start is a parent with a child
+# doing the serving; kill the children first or the child survives and keeps the
+# port. `trap - ` first so the EXIT trap doesn't re-enter after INT/TERM.
+cleanup() {
+  trap - EXIT INT TERM
+  if [ -n "${flask_pid:-}" ]; then
+    pkill -P "$flask_pid" 2>/dev/null || true
+    kill "$flask_pid" 2>/dev/null || true
+  fi
+  [ -n "$streaming_pid" ] && kill "$streaming_pid" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# --- 6. Run the app --------------------------------------------------------
 echo ""
-echo "→ ceol.io running at http://127.0.0.1:$PORT"
+echo "→ ceol.io running at http://$HOST:$PORT"
 echo "  login: ian / password123 (admin)  ·  sarah_fiddle / password123"
 echo "  (Ctrl+C to stop)"
 echo ""
-exec ./venv/bin/flask --app app run --port "$PORT" --debug
+# Backgrounded and waited on, NOT exec'd and NOT run in the foreground. exec
+# would replace this shell and lose the trap; a foreground child would block the
+# shell so a `kill` aimed at the script does nothing until the child exits
+# (Ctrl+C happens to work there, since the terminal signals the whole process
+# group — but only Ctrl+C). Backgrounding it makes every stop path behave.
+#
+# Use `localhost`, not 127.0.0.1: the session cookie is host-scoped and the
+# sidecar authenticates with that same cookie, so mixing the two spellings kills
+# live updates and nothing else. STREAMING_BASE_URL is pinned to the same host.
+./venv/bin/flask --app app run --port "$PORT" --debug &
+flask_pid=$!
+wait "$flask_pid" || true

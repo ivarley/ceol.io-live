@@ -186,6 +186,8 @@ def get_tune_history(tune_id):
     fractional order_position, break records split the sets (spec 023) and are
     excluded from the tune numbering.
     """
+    from serializers import instance_labels
+
     session_path = request.args.get("session_path") or None
     scope = request.args.get("scope") or None
     # "While I was there" is a FILTER, not a scope (spec 037). It ANDs on top of whatever
@@ -237,6 +239,9 @@ def get_tune_history(tune_id):
             f"""
             WITH target_instances AS (
                 SELECT si.session_instance_id, si.date, s.name AS session_name, s.path AS session_path,
+                       -- Spec 006: a festival needs the place to tell two same-day
+                       -- instances apart, and falls back to the session's own venue.
+                       s.session_type, si.location_override, s.location_name,
                        {attended_select} AS attended
                 FROM session_instance si
                 JOIN session s ON si.session_id = s.session_id
@@ -272,7 +277,8 @@ def get_tune_history(tune_id):
             SELECT ti.session_name, ti.session_path, ti.date, ti.attended,
                    p.name, p.key_override, p.setting_override,
                    p.session_instance_id, p.session_instance_tune_id,
-                   p.set_number, p.position_in_set
+                   p.set_number, p.position_in_set,
+                   ti.session_type, ti.location_override, ti.location_name
             FROM positioned p
             JOIN target_instances ti ON p.session_instance_id = ti.session_instance_id
             WHERE p.tune_id = %(tune_id)s
@@ -290,11 +296,16 @@ def get_tune_history(tune_id):
         play_instances = []
         instance_ids = set()
         for (session_name, s_path, date, attended, name_override, key_override, setting_override,
-             session_instance_id, session_instance_tune_id, set_number, position_in_set) in rows:
+             session_instance_id, session_instance_tune_id, set_number, position_in_set,
+             session_type, location_override, location_name) in rows:
             instance_ids.add(session_instance_id)
-            date_str = date.strftime("%Y-%m-%d") if date else None
+            # full_name names the session; instance_label omits it, for the list that is
+            # already scoped to one session. Both append the place at a festival, where
+            # the date alone names several different rooms (spec 006).
+            labels = instance_labels(session_name, session_type, date, location_override, location_name)
             play_instances.append({
-                "full_name": f"{session_name} - {date_str}" if date_str else session_name,
+                "full_name": labels["full_name"],
+                "instance_label": labels["instance_label"],
                 "session_name": session_name,
                 "session_path": s_path,
                 "date": date.isoformat() if date else None,

@@ -9,7 +9,7 @@
 --
 -- Includes:
 --   - 150 tunes (real tune IDs and names from TheSession.org)
---   - 5 sessions in different cities
+--   - 6 sessions in different cities (5 regular + 1 festival, spec 004)
 --   - 20 people (musicians)
 --   - 5 user accounts (including 1 admin)
 --   - Session instances over the past 3 months
@@ -2655,6 +2655,159 @@ INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position,
 -- Attendance for current week instances
 INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
 (90, 1, 'yes'), (90, 2, 'yes'), (90, 3, 'yes'), (90, 4, 'yes');
+
+-- =============================================================================
+-- FESTIVAL SESSION (spec 004) -- session_id 6
+-- =============================================================================
+-- Sessions 1-5 are all session_type='regular'. Nothing in the seed exercised the
+-- OTHER type, so every festival-only code path (the flipped tab order, day
+-- grouping, id-based instance URLs, overlapping instances) could only be seen by
+-- hand-editing the database. This block is that missing case.
+--
+-- What makes a festival different, all of it visible in the rows below:
+--
+--   recurrence IS NULL          A festival does not recur -- it RUNS, from
+--                               initiation_date to termination_date. That NULL is
+--                               load-bearing: auto_create_scheduled_instances()
+--                               filters on `recurrence IS NOT NULL`, so a festival
+--                               is correctly never auto-populated with instances.
+--   session_type='festival'     Flips the public page: default_tab becomes 'logs'
+--                               (serializers.build_session_detail_payload), the tab
+--                               is labelled "Sessions" and ordered FIRST, and
+--                               get_session_logs() returns instances_by_day /
+--                               sorted_days (ascending, oldest first) instead of
+--                               instances_by_year (descending).
+--   many instances per DAY      The reason idx_session_instance_no_overlap was
+--                               dropped. Instances 100/101 and 104/105 deliberately
+--                               OVERLAP in time -- invalid for a regular session,
+--                               normal for a festival.
+--   location_override on each   A festival has no per-instance name column, so
+--                               location_override carries the name: the Logs tab
+--                               renders it as the link label ("Advanced Session @
+--                               Jim Bowie" -- spec 004's own example), with the time
+--                               range in the adjacent column. Instance 107 leaves it
+--                               NULL on purpose, to exercise the fallback to the
+--                               session's own location_name.
+--
+-- One edition only. initiation_date/termination_date model a single run, so an
+-- annually-repeating festival is a separate session row per year, not one row.
+
+INSERT INTO session (session_id, name, path, city, state, country, timezone, location_name, location_street, location_website, recurrence, session_type, comments, initiation_date, termination_date) VALUES
+(6, 'Hill Country Trad Fest', 'austin/hill-country-fest', 'Austin', 'TX', 'USA', 'America/Chicago',
+ 'Scholz Garten', '1607 San Jacinto Blvd', 'https://example.com/hillcountrytrad',
+ NULL, 'festival',
+ 'Three days of sessions across four venues. Slow session Saturday morning; the after-hours session runs until it stops.',
+ '2026-06-05', '2026-06-07');
+
+-- Festival instances. Note the two pairs that could not exist on a regular session:
+--   100 (19:00-22:00) and 101 (21:30-open) overlap on the Friday.
+--   104 (20:00-23:00) and 105 (23:00-02:00) run back-to-back into Sunday morning.
+-- 103 and 104 share BOTH a date and a location_override -- the only thing telling them
+-- apart is start_time, which is exactly the tie the tune drawer's scope droplist
+-- (frontend/src/tunesheet/logic.js:historyScopeOptions) appends the time to break.
+-- Because every one of these days has more than one instance, multiple_on_date is TRUE
+-- throughout, so the Logs tab links by session_instance_id, not by date: /sessions/<path>/<date>
+-- resolves to the LOWEST id on that date and could never reach the others.
+INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time, location_override, comments) VALUES
+-- Friday
+(100, 6, '2026-06-05', '19:00', '22:00', 'Opening Ceili @ Scholz Garten', 'Packed. Mostly session standards to get everyone playing together.'),
+(101, 6, '2026-06-05', '21:30', NULL,    'Late Session @ Hostel Lounge', 'Open-ended -- no end_time, so it renders as "9:30pm - ?"'),
+-- Saturday
+(102, 6, '2026-06-06', '10:00', '12:00', 'Slow Session @ Parish Hall', 'Tunes taken at half speed, one per half hour.'),
+(103, 6, '2026-06-06', '13:00', '16:00', 'Advanced Session @ Jim Bowie', NULL),
+(104, 6, '2026-06-06', '20:00', '23:00', 'Advanced Session @ Jim Bowie', 'Same room, same day, second sitting.'),
+(105, 6, '2026-06-06', '23:00', '02:00', 'After-Hours Session @ Hotel', 'Ran past 2am; end_time is nominal.'),
+-- Sunday
+(106, 6, '2026-06-07', '12:00', '15:00', 'Farewell Session @ Parish Hall', NULL),
+(107, 6, '2026-06-07', '15:30', '17:00', NULL, 'No location_override: falls back to the session location (Scholz Garten).');
+
+-- Festival tune logs. Instance 107 is left EMPTY on purpose -- an unlogged instance
+-- renders dimmed (isEmptyLog) and with no "(N tunes logged)" suffix.
+INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type, started_by_person_id) VALUES
+-- Friday opening ceili (100)
+(100, 27, 'V', 'tune', 1),
+(100, 1, 'W', 'tune', NULL),
+(100, NULL, 'X', 'break', NULL),
+(100, 55, 'Y', 'tune', 6),
+(100, 71, 'Z', 'tune', NULL),
+(100, NULL, 'a', 'break', NULL),
+(100, 441, 'b', 'tune', 4),
+(100, NULL, 'c', 'break', NULL),
+-- Friday late session (101) -- overlaps the ceili; different room, different crowd
+(101, 52, 'V', 'tune', 9),
+(101, 62, 'W', 'tune', NULL),
+(101, NULL, 'X', 'break', NULL),
+(101, 475, 'Y', 'tune', 12),
+(101, NULL, 'Z', 'break', NULL),
+-- Saturday slow session (102)
+(102, 55, 'V', 'tune', 4),
+(102, NULL, 'W', 'break', NULL),
+(102, 10, 'X', 'tune', 4),
+(102, NULL, 'Y', 'break', NULL),
+-- Saturday afternoon advanced (103)
+(103, 2, 'V', 'tune', 13),
+(103, 116, 'W', 'tune', NULL),
+(103, 138, 'X', 'tune', NULL),
+(103, NULL, 'Y', 'break', NULL),
+(103, 4195, 'Z', 'tune', 9),
+(103, NULL, 'a', 'break', NULL),
+-- Saturday evening advanced (104) -- same date AND same venue label as 103.
+-- 116 and 138 are deliberately played at BOTH sittings: that gives the tune drawer two
+-- history rows whose date and location_override are identical, which is the only thing
+-- that makes historyScopeOptions() fall through to its start_time tiebreak.
+(104, 27, 'V', 'tune', 2),
+(104, 74, 'W', 'tune', NULL),
+(104, NULL, 'X', 'break', NULL),
+(104, 651, 'Y', 'tune', 7),
+(104, 83, 'Z', 'tune', NULL),
+(104, NULL, 'a', 'break', NULL),
+(104, 116, 'b', 'tune', 1),
+(104, 138, 'c', 'tune', NULL),
+(104, NULL, 'd', 'break', NULL),
+-- Saturday after-hours (105) -- starts while 104 is still going
+(105, 70, 'V', 'tune', 12),
+(105, NULL, 'W', 'break', NULL),
+(105, 106, 'X', 'tune', 6),
+(105, 108, 'Y', 'tune', NULL),
+(105, NULL, 'Z', 'break', NULL),
+-- Sunday farewell (106)
+(106, 27, 'V', 'tune', 1),
+(106, 55, 'W', 'tune', NULL),
+(106, NULL, 'X', 'break', NULL),
+(106, 1, 'Y', 'tune', 13),
+(106, NULL, 'Z', 'break', NULL);
+
+-- Festival repertoire. Overlaps sessions 1-5 on the standards (27, 1, 55, 71) so the
+-- tune drawer's scope droplist has something to compare across sessions, and carries
+-- five tunes (52, 62, 70, 475, 4195) that NO regular session plays -- the "I only ever
+-- heard this at the festival" case.
+INSERT INTO session_tune (session_id, tune_id, key) VALUES
+(6, 27, 'Em'), (6, 1, 'Em'), (6, 55, 'G'), (6, 71, 'Em'), (6, 74, 'A'),
+(6, 52, 'Ador'), (6, 62, 'D'), (6, 70, 'A'), (6, 475, 'Em'), (6, 4195, 'Ador');
+
+-- A festival is where people from every other session in the seed converge, which is
+-- what session_person could not express before spec 034: the organizers are confirmed
+-- members, everyone else is a VISITOR. Siobhan helps run it and is confirmed (so she
+-- can see the roster); the rest are unconfirmed and cannot.
+INSERT INTO session_person (session_id, person_id, relationship, confirmed, is_admin) VALUES
+(6, 1, 'member', TRUE, TRUE),
+(6, 4, 'member', TRUE, FALSE),
+(6, 6, 'visitor', TRUE, FALSE),
+(6, 9, 'visitor', FALSE, FALSE),
+(6, 12, 'visitor', FALSE, FALSE),
+(6, 13, 'visitor', FALSE, FALSE),
+(6, 22, 'visitor', FALSE, FALSE);
+
+-- Festival attendance: people drift between overlapping rooms rather than attending
+-- "the session", and several go home before the last day.
+INSERT INTO session_instance_person (session_instance_id, person_id, attendance) VALUES
+(100, 1, 'yes'), (100, 2, 'yes'), (100, 4, 'yes'), (100, 6, 'yes'), (100, 22, 'yes'),
+(101, 9, 'yes'), (101, 12, 'yes'), (101, 13, 'yes'), (101, 22, 'yes'),
+(102, 4, 'yes'), (102, 3, 'yes'), (102, 6, 'yes'),
+(103, 1, 'yes'), (103, 9, 'yes'), (103, 13, 'yes'), (103, 2, 'no'),
+(104, 1, 'yes'), (104, 2, 'yes'), (104, 6, 'yes'), (104, 7, 'yes'), (104, 9, 'yes'),
+(105, 6, 'yes'), (105, 12, 'yes'), (105, 13, 'yes'),
+(106, 1, 'yes'), (106, 4, 'yes'), (106, 13, 'yes'), (106, 9, 'no'), (106, 12, 'no');
 
 -- =============================================================================
 -- Reset sequences to avoid conflicts with future inserts

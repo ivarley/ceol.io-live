@@ -21,6 +21,7 @@
     serializeClipboard, parseClipboard, rangeBetween, selectableIds,
   } from './selection.js'
   import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
+  import { instanceTimeLabel } from './shared/format.js'
 
   let { config } = $props()
 
@@ -303,6 +304,17 @@
   // Raw YYYY-MM-DD. Seeded by the shell, but re-datable while the screen is open
   // (spec 046), so it's state rather than a straight read of config.
   let instanceDate = $state(untrack(() => config.instanceDate) || '')
+  // This log's own name — session_instance.location_override. Null for the ordinary
+  // weekly night; at a festival it's the only thing telling two same-day instances
+  // apart, so it's editable from the header alongside the date (spec 047).
+  let instanceName = $state(untrack(() => config.instanceName) || '')
+  // When it ran (spec 048). Raw "HH:MM[:SS]", '' when unset — and unset is a real
+  // state for end_time: the after-hours session that runs until it stops.
+  let instanceStart = $state(untrack(() => config.instanceStartTime) || '')
+  let instanceEnd = $state(untrack(() => config.instanceEndTime) || '')
+  // "8:00pm-11:00pm", or "11:00pm - ?" when it never got an end. The identical
+  // string the session's Logs tab shows, from the one shared formatter.
+  const timeLabel = $derived(instanceTimeLabel({ start_time: instanceStart, end_time: instanceEnd }))
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
@@ -351,7 +363,9 @@
       // structured-clone a Proxy (DataCloneError), which would silently fail.
       const value = JSON.parse(JSON.stringify({
         records, last_event_id: highWater, person, ts: Date.now(),
-        session_name: sessionName, session_date: sessionDate, instance_date: instanceDate, notes: notesText,
+        session_name: sessionName, session_date: sessionDate, instance_date: instanceDate,
+        instance_name: instanceName, start_time: instanceStart, end_time: instanceEnd,
+        notes: notesText,
         log_complete: logComplete, display_tz: displayTz,
         // Persist the session vocabulary so the offline-render path keeps the local
         // exact-match fast path working without a fresh bootstrap (§024 / §G).
@@ -946,8 +960,27 @@
   let dateConfirm = $state(false) // a collision was reported; the next save says "yes, really"
   let dateSaving = $state(false)
 
+  // The time drafts live alongside the date one: same sheet, same Save (spec 048).
+  // '' is meaningful — clearing end_time is how you say "it ran until it stopped".
+  let startDraft = $state('')
+  let endDraft = $state('')
+  // <input type="time"> wants HH:MM; the server sends HH:MM:SS.
+  const toInputTime = (t) => (t ? String(t).slice(0, 5) : '')
+  const dateDirty = $derived(
+    dateDraft !== instanceDate ||
+      startDraft !== toInputTime(instanceStart) ||
+      endDraft !== toInputTime(instanceEnd)
+  )
+  // The sheet's one-line preview of what Save would write.
+  const draftWhen = $derived.by(() => {
+    const when = instanceTimeLabel({ start_time: startDraft, end_time: endDraft })
+    return (longDate(dateDraft) || '—') + (when ? ` · ${when}` : '')
+  })
+
   function openDateEditor() {
     dateDraft = instanceDate || localToday()
+    startDraft = toInputTime(instanceStart)
+    endDraft = toInputTime(instanceEnd)
     dateErr = ''
     dateConfirm = false
     dateSaving = false
@@ -975,12 +1008,16 @@
   }
 
   async function saveDate() {
-    if (!dateDraft || dateDraft === instanceDate) { dateOpen = false; return }
+    if (!dateDraft || !dateDirty) { dateOpen = false; return }
     dateErr = ''
     if (!navigator.onLine) { dateErr = "You're offline — changing the date needs a connection."; return }
     dateSaving = true
     try {
-      const res = await sendOp(config, 'set_date', { date: dateDraft, confirm: dateConfirm })
+      // Date and times go in ONE op: they're one edit behind one Save, so sending
+      // them together means one history row and no half-applied "when".
+      const res = await sendOp(config, 'set_date', {
+        date: dateDraft, start_time: startDraft, end_time: endDraft, confirm: dateConfirm,
+      })
       if (res.rejected) {
         dateErr = res.message || res.reason
         // A same-date collision is allowed, just rarely intended: offer to go ahead.
@@ -996,11 +1033,57 @@
     }
   }
 
-  // One place that lands a new date on the screen — used by both the local save and the
-  // SSE echo (which is what re-dates everyone else's open logger).
+  // One place that lands a new date/time on the screen — used by both the local save
+  // and the SSE echo (which is what re-dates everyone else's open logger). Times apply
+  // on key PRESENCE, not truthiness: null means "no end time", which has to be able to
+  // land, and an echo from a pre-048 client carries no time keys at all.
   function applyDate(d) {
     if (d.date) instanceDate = d.date
     if (d.session_date) sessionDate = d.session_date
+    if ('start_time' in d) instanceStart = d.start_time || ''
+    if ('end_time' in d) instanceEnd = d.end_time || ''
+  }
+
+  // The log's name (session_instance.location_override). A weekly session doesn't need
+  // one — the date says it. A festival does: several sessions run in a day and the date
+  // names all of them equally, so this is what tells them apart in every list that shows
+  // instances. Same shape as the date editor: sheet, explicit save, SSE echo.
+  let nameOpen = $state(false)
+  let nameDraft = $state('')
+  let nameErr = $state('')
+  let nameSaving = $state(false)
+
+  function openNameEditor() {
+    nameDraft = instanceName || ''
+    nameErr = ''
+    nameSaving = false
+    nameOpen = true
+  }
+
+  async function saveName() {
+    const next = nameDraft.trim()
+    if (next === (instanceName || '')) { nameOpen = false; return }
+    nameErr = ''
+    if (!navigator.onLine) { nameErr = "You're offline — naming this log needs a connection."; return }
+    nameSaving = true
+    try {
+      const res = await sendOp(config, 'set_name', { name: next })
+      if (res.rejected) {
+        nameErr = res.message || res.reason
+        return
+      }
+      applyName(res)
+      nameOpen = false
+    } catch (e) {
+      nameErr = e.networkError ? "You're offline — naming this log needs a connection." : e.message
+    } finally {
+      nameSaving = false
+    }
+  }
+
+  // One place a new name lands — the local save and the SSE echo both come through here.
+  function applyName(d) {
+    instanceName = d.instance_name || ''
   }
 
   // Mark this session "completely logged" (§024): hides the editing affordances for
@@ -1779,7 +1862,20 @@
       case 'attendance_create_person': return d.person ? `added ${d.person.display_name}` : 'added a player'
       case 'attendance_remove': return d.person ? `checked out ${d.person.display_name}` : 'updated attendance'
       case 'edit_notes': return 'edited the notes'
-      case 'set_date': return d.session_date ? `re-dated this log to ${d.session_date}` : 're-dated this log'
+      // One op, up to two distinct edits — say which actually happened, or the
+      // toast claims someone re-dated a log when they only fixed the end time.
+      case 'set_date': {
+        const movedDate = d.previous_date != null && d.date !== d.previous_date
+        const movedTimes =
+          ('start_time' in d && d.start_time !== d.previous_start_time) ||
+          ('end_time' in d && d.end_time !== d.previous_end_time)
+        const when = instanceTimeLabel({ start_time: d.start_time, end_time: d.end_time })
+        if (movedDate && movedTimes && d.session_date) return `re-dated this log to ${d.session_date}${when ? `, ${when}` : ''}`
+        if (movedDate) return d.session_date ? `re-dated this log to ${d.session_date}` : 're-dated this log'
+        if (movedTimes) return when ? `set this log's time to ${when}` : "cleared this log's time"
+        return 're-dated this log'
+      }
+      case 'set_name': return d.instance_name ? `named this log "${d.instance_name}"` : "cleared this log's name"
       default: return null
     }
   }
@@ -1875,6 +1971,9 @@
       }
       case 'set_date':
         applyDate(d)
+        break
+      case 'set_name':
+        applyName(d)
         break
       case 'mark_complete':
         logComplete = true
@@ -2848,7 +2947,8 @@
   const snapFromCache = (cached) => ({
     records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
     session_name: cached.session_name, session_date: cached.session_date,
-    instance_date: cached.instance_date, notes: cached.notes,
+    instance_date: cached.instance_date, instance_name: cached.instance_name,
+    start_time: cached.start_time, end_time: cached.end_time, notes: cached.notes,
     log_complete: cached.log_complete, user_timezone: cached.display_tz,
     known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [],
   })
@@ -2864,6 +2964,12 @@
     if (snap.session_name) sessionName = snap.session_name
     if (snap.session_date) sessionDate = snap.session_date
     if (snap.instance_date) instanceDate = snap.instance_date
+    // Presence of the key, not truthiness: null is a real value here (an unnamed log),
+    // but a snapshot cached before spec 047 has no key at all and must not blank the
+    // name the shell already painted.
+    if ('instance_name' in snap) instanceName = snap.instance_name || ''
+    if ('start_time' in snap) instanceStart = snap.start_time || ''
+    if ('end_time' in snap) instanceEnd = snap.end_time || ''
     displayTz = snap.user_timezone || snap.session_timezone || undefined
     notesText = snap.notes || ''
     logComplete = !!snap.log_complete
@@ -3342,6 +3448,13 @@
       <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}<a class="session-return" href="/sessions/{config.sessionPath}" title="Back to session" onclick={(e) => e.stopPropagation()}>⮐</a></div>
+          <!-- This log's own name, when it has one. A weekly session doesn't: the date
+               says which night. A festival does, and there the date says nothing on its
+               own — so it sits above the date, on its own line, rather than being packed
+               into it. Absent when unset, so the ordinary case is unchanged. -->
+          {#if instanceName}
+            <div class="session-instance-name">{instanceName}</div>
+          {/if}
           <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
           {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
@@ -3368,13 +3481,36 @@
       </div>
       {#if expanded}
         <div class="header-expand">
+          <!-- Date carries the time range too (spec 048). The session's Logs tab has
+               always shown when an instance ran; the logger showed only the day, so
+               the one screen that can edit it couldn't see it. Same formatter, so the
+               two never disagree. -->
           <div class="hx-row">
             <span class="hx-label">Date</span>
-            <span class="hx-val">{sessionDate || '—'}</span>
+            <span class="hx-val">
+              <!-- Separator inside the expression: Svelte trims whitespace at the
+                   start of an element, so a literal " · " here loses its space. -->
+              {sessionDate || '—'}{#if timeLabel}<span class="hx-time">{` · ${timeLabel}`}</span>{/if}
+            </span>
             {#if !readOnly}
               <button class="hx-act" onclick={(e) => { e.stopPropagation(); openDateEditor() }}>Change</button>
             {/if}
           </div>
+          <!-- Name sits under Date because it answers the same question — which log is
+               this? — and because at a festival the date can't answer it alone. Shown
+               even when unset (as "The usual"), since an unnamed log that COULD be named
+               is exactly the case the row exists to fix. -->
+          {#if instanceName || !readOnly}
+            <div class="hx-row">
+              <span class="hx-label">Name</span>
+              <span class="hx-val">{instanceName || 'The usual'}</span>
+              {#if !readOnly}
+                <button class="hx-act" onclick={(e) => { e.stopPropagation(); openNameEditor() }}>
+                  {instanceName ? 'Rename' : 'Name it'}
+                </button>
+              {/if}
+            </div>
+          {/if}
           <div class="hx-row">
             <span class="hx-label">Tunes</span>
             <span class="hx-val">{tuneSummary}</span>
@@ -4067,7 +4203,7 @@
 -->
 <Sheet
   bind:open={dateOpen}
-  title="Session date"
+  title="Date &amp; time"
   onCancel={() => { dateOpen = false }}>
   <div class="dt-body">
     <p class="dt-note">
@@ -4086,9 +4222,23 @@
         bind:value={dateDraft}
         oninput={() => { dateErr = ''; dateConfirm = false }} />
     </label>
-    <p class="dt-preview" class:dt-changed={dateDraft !== instanceDate}>
-      {longDate(dateDraft) || '—'}
-      {#if dateDraft === instanceDate}<span class="dt-same">(unchanged)</span>{/if}
+    <!-- Start/end are NOT checked against each other: a session that starts at 11pm
+         and ends at 2am is ordinary. Leaving End blank is a real answer — "it ran
+         until it stopped" — which is why the hint says so instead of nagging. -->
+    <div class="dt-times">
+      <label class="dt-field">
+        <span class="dt-label">Start</span>
+        <input class="dt-input" type="time" bind:value={startDraft} oninput={() => { dateErr = '' }} />
+      </label>
+      <label class="dt-field">
+        <span class="dt-label">End</span>
+        <input class="dt-input" type="time" bind:value={endDraft} oninput={() => { dateErr = '' }} />
+      </label>
+    </div>
+    <p class="dt-hint">Leave End blank if it ran on past when anyone was counting.</p>
+    <p class="dt-preview" class:dt-changed={dateDirty}>
+      {draftWhen}
+      {#if !dateDirty}<span class="dt-same">(unchanged)</span>{/if}
     </p>
     {#if dateErr}
       <p class="dt-err">{dateErr}</p>
@@ -4097,8 +4247,52 @@
   {#snippet footer()}
     <!-- Cancel lives in the Sheet's own header row; the footer carries only the commit. -->
     <div class="dt-actions">
-      <button class="dt-save" disabled={dateSaving || !dateDraft || dateDraft === instanceDate} onclick={saveDate}>
-        {dateSaving ? 'Saving…' : dateConfirm ? 'Save anyway' : 'Save date'}
+      <button class="dt-save" disabled={dateSaving || !dateDraft || !dateDirty} onclick={saveDate}>
+        {dateSaving ? 'Saving…' : dateConfirm ? 'Save anyway' : 'Save'}
+      </button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<!--
+  Name this log (spec 047). Reuses the date sheet's shape and its .dt-* styles — same
+  kind of decision, same chrome, one visual language for header edits. Empty clears the
+  name, which is a real edit (back to the session's usual venue), so Save stays enabled
+  when you blank a name that was set.
+-->
+<Sheet
+  bind:open={nameOpen}
+  title="Log name"
+  onCancel={() => { nameOpen = false }}>
+  <div class="dt-body">
+    <p class="dt-note">
+      Most nights don't need one — the date says which session it was. Name this log when
+      the date isn't enough: a festival day with several sessions, or a night somewhere
+      other than the usual place.
+    </p>
+    <label class="dt-field">
+      <span class="dt-label">Name</span>
+      <input
+        class="dt-input"
+        type="text"
+        maxlength="255"
+        placeholder="e.g. Advanced Session @ Jim Bowie"
+        bind:value={nameDraft}
+        oninput={() => { nameErr = '' }}
+        onkeydown={(e) => { if (e.key === 'Enter') saveName() }} />
+    </label>
+    <p class="dt-preview" class:dt-changed={nameDraft.trim() !== (instanceName || '')}>
+      {nameDraft.trim() || 'No name — shown by date alone'}
+      {#if nameDraft.trim() === (instanceName || '')}<span class="dt-same">(unchanged)</span>{/if}
+    </p>
+    {#if nameErr}
+      <p class="dt-err">{nameErr}</p>
+    {/if}
+  </div>
+  {#snippet footer()}
+    <div class="dt-actions">
+      <button class="dt-save" disabled={nameSaving || nameDraft.trim() === (instanceName || '')} onclick={saveName}>
+        {nameSaving ? 'Saving…' : nameDraft.trim() ? 'Save name' : 'Clear name'}
       </button>
     </div>
   {/snippet}

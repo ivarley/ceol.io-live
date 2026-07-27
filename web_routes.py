@@ -3436,7 +3436,8 @@ def live_logging_screen(session_instance_id):
         cur.execute(
             """
             SELECT s.path, s.session_id, si.date,
-                   s.track_attendance, s.track_set_starters, si.is_active
+                   s.track_attendance, s.track_set_starters, si.is_active,
+                   si.location_override, si.start_time, si.end_time
             FROM session_instance si
             JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
@@ -3447,7 +3448,8 @@ def live_logging_screen(session_instance_id):
         if not row:
             return render_template("error.html", error_message="Session instance not found"), 404
         (session_path, session_id, instance_date, track_attendance,
-         track_set_starters, instance_active) = row
+         track_set_starters, instance_active, instance_name,
+         instance_start, instance_end) = row
     finally:
         conn.close()
 
@@ -3463,6 +3465,13 @@ def live_logging_screen(session_instance_id):
         # header uses it to pick its tense: a session tonight or later has people "Attending";
         # one in the past had people who "Attended".
         instance_date=instance_date.isoformat() if instance_date else None,
+        # This log's own name (session_instance.location_override), so the header can
+        # paint it before bootstrap lands. Editable from the header now (spec 047).
+        instance_name=instance_name,
+        # When it ran (spec 048), same reason: the header's Date row shows the time
+        # range and both are editable there.
+        instance_start_time=instance_start.isoformat() if instance_start else None,
+        instance_end_time=instance_end.isoformat() if instance_end else None,
         session_path=session_path,
         streaming_base_url=streaming_base_url,
         # Per-session people-tracking flags (spec 039). Off => the attendance header /

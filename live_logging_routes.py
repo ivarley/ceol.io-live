@@ -13,7 +13,7 @@ Ops (this build):
   Tune/set:  add_tune, remove_tune (soft tombstone), change_tune (relink/rename/
              unlink/key/setting), set_confidence, set_break (insert/remove),
              attribute_set_starter
-  Metadata:  edit_notes, set_date, mark_complete, mark_incomplete
+  Metadata:  edit_notes, set_date, set_name, mark_complete, mark_incomplete
 
 Idempotency (§C): every op carries `op_id`; a retried POST whose ack was lost
 dedupes to the same `session_event` row (UNIQUE on op_id) and returns the cached
@@ -920,17 +920,48 @@ def format_session_date(d):
     return d.strftime("%a · %b %-d, %Y") if d else ""
 
 
+def _parse_op_time(data, key):
+    """Read an optional HH:MM[:SS] from an op payload.
+
+    Returns (present, value). `present` distinguishes "the client didn't mention
+    this field" from "the client cleared it" — absent leaves the column alone,
+    blank sets NULL. NULL is a real state, not missing data: an end_time of NULL
+    is the after-hours session that runs until it stops ("11:30pm - ?").
+    """
+    if key not in data:
+        return False, None
+    raw = data.get(key)
+    if raw is None or not str(raw).strip():
+        return True, None
+    try:
+        return True, datetime.time.fromisoformat(str(raw).strip())
+    except ValueError:
+        raise OpRejected("invalid", f"That isn't a valid time (expected HH:MM).")
+
+
 def _handle_set_date(cur, session_instance_id, data, user_id):
-    """Re-date this log (spec 046).
+    """Set when this log happened — date and/or start/end time (specs 046, 048).
 
     The date is fixed when the instance is created, which is wrong for the common
     case of starting the log after midnight: the session really happened the
     previous evening. Anyone who can log can move it.
 
+    Times ride along in the same op rather than getting their own, because they
+    answer the same question and the header edits them on one screen with one
+    Save — so one op means one history row, one SSE echo, and no way to land a
+    half-applied "when". Both are optional: omitting a key leaves that column
+    untouched, so an old client sending only `date` behaves exactly as before.
+
+    Start/end are NOT validated against each other. A session that starts at 23:00
+    and ends at 02:00 is normal (and seeded), so "end before start" is signal, not
+    an error.
+
     Two instances of one session CAN share a date (the schema allows it and a few
     sessions really do run twice in a day), but it's nearly always a mistake — and
     a date-based URL resolves to whichever instance is first. So a collision is a
     soft stop: rejected once, then honoured if the client re-sends with confirm.
+    Only an actual date MOVE is checked — re-saving the current date while editing
+    the times must not collide with a sibling, or with itself.
     """
     raw = (data.get("date") or "").strip()
     try:
@@ -938,19 +969,43 @@ def _handle_set_date(cur, session_instance_id, data, user_id):
     except ValueError:
         raise OpRejected("invalid", "That isn't a valid date (expected YYYY-MM-DD).")
 
+    start_given, new_start = _parse_op_time(data, "start_time")
+    end_given, new_end = _parse_op_time(data, "end_time")
+
     cur.execute(
-        "SELECT session_id, date FROM session_instance WHERE session_instance_id = %s",
+        "SELECT session_id, date, start_time, end_time FROM session_instance "
+        "WHERE session_instance_id = %s",
         (session_instance_id,),
     )
     row = cur.fetchone()
     if not row:
         raise OpRejected("not_found", "This session log no longer exists.")
-    session_id, old_date = row
-    if new_date == old_date:
-        return {"date": new_date.isoformat(), "session_date": format_session_date(new_date),
-                "previous_date": old_date.isoformat()}
+    session_id, old_date, old_start, old_end = row
 
-    if not data.get("confirm"):
+    if not start_given:
+        new_start = old_start
+    if not end_given:
+        new_end = old_end
+
+    def _iso(t):
+        return t.isoformat() if t else None
+
+    result = {
+        "date": new_date.isoformat(),
+        "session_date": format_session_date(new_date),
+        "previous_date": old_date.isoformat(),
+        "start_time": _iso(new_start),
+        "end_time": _iso(new_end),
+        "previous_start_time": _iso(old_start),
+        "previous_end_time": _iso(old_end),
+    }
+
+    date_moved = new_date != old_date
+    times_moved = new_start != old_start or new_end != old_end
+    if not date_moved and not times_moved:
+        return result
+
+    if date_moved and not data.get("confirm"):
         cur.execute(
             """
             SELECT COUNT(*) FROM session_instance
@@ -966,11 +1021,48 @@ def _handle_set_date(cur, session_instance_id, data, user_id):
 
     save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
     cur.execute(
-        "UPDATE session_instance SET date = %s, last_modified_user_id = %s WHERE session_instance_id = %s",
-        (new_date, user_id, session_instance_id),
+        "UPDATE session_instance SET date = %s, start_time = %s, end_time = %s, "
+        "last_modified_user_id = %s WHERE session_instance_id = %s",
+        (new_date, new_start, new_end, user_id, session_instance_id),
     )
-    return {"date": new_date.isoformat(), "session_date": format_session_date(new_date),
-            "previous_date": old_date.isoformat()}
+    return result
+
+
+def _handle_set_name(cur, session_instance_id, data, user_id):
+    """Name this log — `session_instance.location_override` (spec 047).
+
+    At a festival the date does not identify an instance: several sessions run in one
+    day, so the name IS how you tell "Advanced Session @ Jim Bowie" from the after-hours
+    one three hours later. The column has existed since spec 004 and the Logs tab has
+    always rendered it, but the only writers were the add-instance form and the legacy
+    pill editor's modal — so a log created live could never be named.
+
+    Blank clears it, which is a real edit (back to "the usual"), not an error. Anyone
+    who can log can rename, like the date. Online-only: never queued for offline replay.
+    """
+    raw = data.get("name")
+    new_name = (raw or "").strip() or None
+    if new_name and len(new_name) > 255:
+        raise OpRejected("invalid", "That name is too long (255 characters max).")
+
+    cur.execute(
+        "SELECT location_override FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise OpRejected("not_found", "This session log no longer exists.")
+    previous = row[0]
+    if new_name == previous:
+        return {"instance_name": new_name, "previous_name": previous}
+
+    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    cur.execute(
+        "UPDATE session_instance SET location_override = %s, last_modified_user_id = %s "
+        "WHERE session_instance_id = %s",
+        (new_name, user_id, session_instance_id),
+    )
+    return {"instance_name": new_name, "previous_name": previous}
 
 
 def _set_log_complete(cur, session_instance_id, user_id, complete):
@@ -1306,6 +1398,7 @@ HANDLERS = {
     "set_break": _handle_set_break,
     "edit_notes": _handle_edit_notes,
     "set_date": _handle_set_date,
+    "set_name": _handle_set_name,
     "mark_complete": _handle_mark_complete,
     "mark_incomplete": _handle_mark_incomplete,
 }
@@ -2472,7 +2565,8 @@ def live_bootstrap(session_instance_id):
         cur.execute(
             """
             SELECT si.session_id, si.comments, si.log_complete_date, si.date, s.name, s.path,
-                   s.timezone, si.is_active
+                   s.timezone, si.is_active, si.location_override,
+                   si.start_time, si.end_time
             FROM session_instance si JOIN session s ON s.session_id = si.session_id
             WHERE si.session_instance_id = %s
             """,
@@ -2511,6 +2605,14 @@ def live_bootstrap(session_instance_id):
             # Raw ISO alongside the display string: the header's attendance tense reads
             # it, and it can change under the screen now that set_date exists (spec 046).
             "instance_date": meta[3].isoformat() if meta and meta[3] else None,
+            # This log's own name (session_instance.location_override). Null for the
+            # ordinary weekly night; at a festival it's what tells one instance from
+            # another, and it's editable from the header now (spec 047).
+            "instance_name": meta[8] if meta else None,
+            # When it ran (spec 048). Raw "HH:MM:SS"; the header formats them. A NULL
+            # end_time is a real state — the session that runs until it stops.
+            "start_time": meta[9].isoformat() if meta and meta[9] else None,
+            "end_time": meta[10].isoformat() if meta and meta[10] else None,
             # Is the session under way right now? Signed-out viewers stream only while it
             # is (the sidecar enforces the same rule), and re-read it on every reconnect
             # so a viewer whose session ends settles into a static snapshot by itself.

@@ -166,7 +166,17 @@ main {
   font-size: 0.7em; font-weight: 400; transition: color 0.2s ease;
 }
 .session-return:hover { color: var(--accent); }
+/* This log's own name (session_instance.location_override), when it has one — spec 047.
+   Sits between the session name and the date: subordinate to the session, but stronger
+   than the date, because at a festival it's the part that identifies the log. Clipped to
+   one line so a long "Session @ Venue" can't push the date out of the collapsed row. */
+.session-instance-name {
+  font-size: 14px; font-weight: 600; color: var(--text); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .session-date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+/* The time range beside the date in the expanded header (spec 048). */
+.hx-time { color: var(--muted); }
 /* read-only session notes shown under the date/count line (collapsed header) */
 .session-notes {
   font-size: 13px; color: var(--muted); font-style: italic; margin-top: 3px;
@@ -255,7 +265,7 @@ main {
 }
 .header-help:hover { opacity: 1; color: var(--accent); }
 
-/* --- session-date sheet (spec 046) --------------------------------------- */
+/* --- date & time sheet (specs 046, 048) ----------------------------------- */
 .dt-body { display: flex; flex-direction: column; gap: 14px; }
 .dt-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
 .dt-nudge { display: flex; gap: 8px; }
@@ -275,6 +285,11 @@ main {
   background: var(--panel); border: 1px solid var(--border); color: var(--text);
   color-scheme: dark; /* so the native picker chrome matches the screen */
 }
+/* Start and End sit side by side: they're one range, and the sheet is a phone
+   screen most of the time. They collapse to a stack under 380px. */
+.dt-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 380px) { .dt-times { grid-template-columns: 1fr; } }
+.dt-hint { margin: -6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); opacity: 0.85; }
 .dt-preview { margin: 0; font-size: 14px; color: var(--muted); }
 .dt-preview.dt-changed { color: var(--text); font-weight: 600; }
 .dt-same { font-weight: 400; opacity: 0.7; }

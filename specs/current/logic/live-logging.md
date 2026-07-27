@@ -56,7 +56,7 @@ All writes are incremental, intent-based ops `POST`ed to
 `/api/live/instances/<id>/ops` and refereed by `live_op` in `live_logging_routes.py`:
 
 `add_tune`, `remove_tune` (soft tombstone), `change_tune`, `set_confidence`, `set_break`,
-`attribute_set_starter`, `edit_notes`, `set_date` (spec 046), `attendance_add` /
+`attribute_set_starter`, `edit_notes`, `set_date` (spec 046), `set_name` (spec 047), `attendance_add` /
 `attendance_remove` / `attendance_create_person`, `mark_complete` / `mark_incomplete`, plus the bulk ops
 (spec 029): `move_tunes` (atomic block move; interior breaks travel, `started_by` is
 never touched), `remove_tunes` (atomic bulk tombstone), and `restore_tunes` (its
@@ -85,6 +85,43 @@ you are standing on. The bootstrap returns both `session_date` (the header's dis
 string, from `format_session_date`) and the raw ISO `instance_date`; the header's
 attendance tense ("Attending" vs "Attended") reads the latter and flips as soon as the
 date moves.
+
+`set_date` also carries the **start and end time** (spec 048). They ride in the same op
+rather than getting one of their own because they answer the same question and the header
+edits them on one sheet behind one Save — so one op means one history row, one SSE echo,
+and no way to land a half-applied "when". Both time keys are optional: an omitted key
+leaves that column untouched (a pre-048 client sending only `date` behaves exactly as
+before), while a present-but-blank one sets NULL. NULL is a real state, not missing data —
+it's the after-hours session that runs until it stops, rendered "11:00pm - ?".
+
+Start and end are **not** validated against each other: 23:00→02:00 is an ordinary
+overnight session, so "end before start" is signal. The collision check fires only on an
+actual date *move*, so editing times without changing the date can't collide with a
+sibling — or with itself.
+
+The header's Date row shows the range beside the date, using `instanceTimeLabel` from
+`frontend/src/shared/format.js` — the same function the session's Logs tab uses, so the
+screen that edits the times and the screen that lists them can't disagree.
+
+### Naming a log (spec 047)
+
+`set_name` writes `session_instance.location_override` — the log's own name. Most nights
+don't need one: the date says which session it was. A **festival** does, because several
+sessions run in one day, so the date names all of them equally and none of them
+individually. That column has existed since spec 004 and every list has rendered it, but
+its only writers were the add-instance form and the legacy pill editor's modal — a log
+created live could never be named, and the admin instance sheet is view/delete only.
+
+Blank clears it (a real edit, back to the session's usual venue), names over 255
+characters are `rejected: {reason: 'invalid'}` rather than left to the column constraint,
+and the prior name is preserved by `save_to_history`. Like the date it is metadata:
+online-only, never queued for offline replay, and the SSE echo renames every other open
+screen. The bootstrap and the page shell both return `instance_name`, so the header
+paints it before bootstrap lands.
+
+In the header it sits under the session name in the collapsed row (absent when unset, so
+the ordinary weekly night is unchanged) and as a **Name** row in the expanded panel,
+whose action reads "Name it" or "Rename".
 
 ### Repertoire enrollment (spec 025)
 
