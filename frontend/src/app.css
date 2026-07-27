@@ -8,6 +8,9 @@
   --border: #2a2a30;
   --attention: #e0b341; /* amber: unlinked / needs-attention */
   --set-bg: #222227; /* set card — a hair lighter than --panel for contrast vs --bg */
+  /* The session band (name/date/details) sits on its own surface, lighter than --bg and
+     cooler than the set cards, so the header never reads as the top of the tune list. */
+  --header-band: #1c1d22;
   --results-bg: #1c2634; /* type-ahead dropdown — blue-tinted so results never read as logged tunes */
   --results-border: rgba(79, 157, 255, 0.4);
 
@@ -106,7 +109,7 @@ main {
 .topnav {
   flex: 0 0 auto;
   z-index: 30;
-  background: var(--bg);
+  background: var(--header-band);
   /* room for the fixed .appbar (the in-flow .topbar starts below it) */
   padding-top: calc(42px + env(safe-area-inset-top));
 }
@@ -147,10 +150,13 @@ main {
 /* The hamburger menu is now the SHARED app menu (static/css/hamburger_menu.css),
    rendered server-side in the live shell and floated top-right via .live-menu. */
 
+/* The session band. Its own surface + a defined edge (hairline and a soft drop shadow)
+   so the header is visibly a different region from the tune list below it. */
 .topbar {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #161619, var(--bg));
+  background: var(--header-band);
+  border-bottom: 1px solid #34353d;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
 }
 .topbar-row { display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .topbar-main { flex: 1; min-width: 0; }
@@ -166,14 +172,41 @@ main {
   font-size: 13px; color: var(--muted); font-style: italic; margin-top: 3px;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
+/* one right-hand cluster: presence, help, expand chevron */
+.topbar-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .topbar-presence { display: flex; gap: 4px; }
 .header-chevron { color: var(--muted); font-size: 14px; transition: transform 0.18s ease; }
 .header-chevron.up { transform: rotate(180deg); }
-.header-expand { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-.header-stat { font-size: 13px; color: var(--muted); }
-.header-notes { font-style: italic; }
+
+/* Expanded detail: a label/value grid, one fact per row, so the panel scans as a list
+   of properties instead of a stack of sentences. Rows that own an action put it in a
+   third column, right-aligned (Change / Manage / Mark complete). */
+.header-expand {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.hx-row {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: baseline; gap: 4px 10px; font-size: 13px;
+}
+.hx-label {
+  color: var(--muted); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hx-val { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.hx-strong { font-weight: 700; }
+.hx-away { color: var(--muted); opacity: 0.75; }
+.hx-act {
+  flex: none; font: inherit; font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--accent);
+  align-self: center;
+}
+.hx-act:hover { border-color: var(--accent); color: var(--text); }
+/* the notes textarea needs the whole value column, and its own baseline */
+.hx-notes { align-items: start; }
+.hx-notes .hx-label { padding-top: 5px; }
 .header-notes-edit { display: flex; flex-direction: column; gap: 6px; }
-.header-notes-edit .hn-label { font-size: 13px; font-weight: 600; color: var(--text); }
 .hn-area {
   width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.4;
   padding: 8px 10px; border-radius: 8px; resize: vertical;
@@ -188,15 +221,12 @@ main {
   font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer;
   background: transparent; border: 1px solid var(--border); color: var(--muted);
 }
-.header-attend { display: flex; align-items: baseline; gap: 8px; }
-.header-attend .ha-text { flex: 1; min-width: 0; }
-.header-attend .ha-label { color: var(--text); font-weight: 600; }
-.ha-manage {
-  flex: none; font: inherit; font-size: 12px; font-weight: 600;
-  padding: 3px 10px; border-radius: 6px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border); color: var(--accent);
+@media (max-width: 400px) {
+  /* no room for a label column — stack, and let the action sit beside the value */
+  .hx-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .hx-label { grid-column: 1 / -1; }
+  .hx-notes .hx-label { padding-top: 0; }
 }
-.ha-manage:hover { border-color: var(--accent); color: var(--text); }
 
 .avatar {
   display: inline-flex;
@@ -213,30 +243,51 @@ main {
 .avatar sup { font-size: 8px; margin-left: 1px; }
 /* recently-disconnected person: dimmed + hollow until the 1h away-TTL drops them */
 .avatar.away { opacity: 0.4; filter: grayscale(0.35); }
-.header-away { color: var(--muted); opacity: 0.75; }
 /* signed-out viewer: session notes, read-only (no textarea, no save controls) */
 .header-notes-ro { white-space: pre-wrap; color: var(--muted); }
 
-/* "completely logged" controls (§024): the deliberate mark, and the tucked-away
-   un-complete link (only reachable in the expanded header). */
-.header-complete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* "completely logged" (§024): the Status row's value; the mark/re-open control is a
+   plain .hx-act like every other row action. */
 .header-complete .hc-done { color: var(--text); font-weight: 600; }
-.hc-mark {
-  font: inherit; font-size: 12px; font-weight: 600;
-  padding: 3px 10px; border-radius: 6px; cursor: pointer;
-  background: transparent; border: 1px solid var(--border); color: var(--accent);
-}
-.hc-mark:hover { border-color: var(--accent); color: var(--text); }
-.hc-link {
-  font: inherit; font-size: 12px; padding: 0; cursor: pointer;
-  background: none; border: none; color: var(--muted); text-decoration: underline;
-}
-.hc-link:hover { color: var(--text); }
 .header-help {
-  display: inline-flex; vertical-align: -2px; margin-left: 4px;
+  display: inline-flex; align-items: center;
   color: var(--muted); opacity: 0.6;
 }
 .header-help:hover { opacity: 1; color: var(--accent); }
+
+/* --- session-date sheet (spec 046) --------------------------------------- */
+.dt-body { display: flex; flex-direction: column; gap: 14px; }
+.dt-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.dt-nudge { display: flex; gap: 8px; }
+.dt-step {
+  flex: 1; font: inherit; font-size: 14px; font-weight: 600;
+  padding: 10px 8px; border-radius: 8px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+}
+.dt-step:hover { border-color: var(--accent); color: var(--accent); }
+.dt-field { display: flex; flex-direction: column; gap: 5px; }
+.dt-label {
+  color: var(--muted); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.dt-input {
+  font: inherit; font-size: 16px; padding: 9px 10px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  color-scheme: dark; /* so the native picker chrome matches the screen */
+}
+.dt-preview { margin: 0; font-size: 14px; color: var(--muted); }
+.dt-preview.dt-changed { color: var(--text); font-weight: 600; }
+.dt-same { font-weight: 400; opacity: 0.7; }
+.dt-err {
+  margin: 0; font-size: 13px; line-height: 1.45; padding: 8px 10px; border-radius: 8px;
+  background: var(--warning-bg); border: 1px solid var(--warning-border); color: var(--warning-text);
+}
+.dt-actions { display: flex; justify-content: flex-end; }
+.dt-save {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer;
+  background: var(--accent); border: none; color: #04122b;
+}
+.dt-save:disabled { opacity: 0.45; cursor: default; }
 .deep-empty-help {
   display: inline-flex; vertical-align: -2px; margin-left: 4px;
   color: var(--muted); opacity: 0.6;

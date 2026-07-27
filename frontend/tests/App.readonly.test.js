@@ -84,7 +84,6 @@ describe('live screen, signed out', () => {
     await waitFor(() => expect(rows(container).length).toBe(2))
     expect(container.querySelector('.composer')).toBeNull()
     expect(container.querySelector('.editbtn')).toBeNull()
-    expect(container.querySelector('.hc-mark')).toBeNull() // "mark this log complete"
     expect(container.querySelector('.hn-area')).toBeNull() // notes textarea
     expect(container.querySelector('.listmode-btn')).toBeNull() // my-list highlight
     expect(container.querySelector('main.view-mode')).toBeTruthy()
@@ -97,7 +96,9 @@ describe('live screen, signed out', () => {
     container.querySelector('.topbar-row').click()
     await waitFor(() => expect(container.querySelector('.header-notes-ro')).toBeTruthy())
     expect(container.querySelector('.header-notes-ro').textContent).toContain('Great night')
-    expect(container.querySelector('.header-attend')).toBeNull()
+    // No row action anywhere in the panel: no Change (date), no Manage (attendance),
+    // no Mark complete — they're all .hx-act, and a signed-out viewer gets none of them.
+    expect(container.querySelectorAll('.hx-act').length).toBe(0)
   })
 
   it('never asks for people or vocabulary (both are login-gated)', async () => {

@@ -56,14 +56,35 @@ All writes are incremental, intent-based ops `POST`ed to
 `/api/live/instances/<id>/ops` and refereed by `live_op` in `live_logging_routes.py`:
 
 `add_tune`, `remove_tune` (soft tombstone), `change_tune`, `set_confidence`, `set_break`,
-`attribute_set_starter`, `edit_notes`, `attendance_add` / `attendance_remove` /
-`attendance_create_person`, `mark_complete` / `mark_incomplete`, plus the bulk ops
+`attribute_set_starter`, `edit_notes`, `set_date` (spec 046), `attendance_add` /
+`attendance_remove` / `attendance_create_person`, `mark_complete` / `mark_incomplete`, plus the bulk ops
 (spec 029): `move_tunes` (atomic block move; interior breaks travel, `started_by` is
 never touched), `remove_tunes` (atomic bulk tombstone), and `restore_tunes` (its
 inverse — the first brick of the op/inverse-op undo pattern).
 
 Each op carries a client-generated `op_id` (UUID) for idempotent retry. A rejected op
 returns `{rejected, reason}` rather than throwing (§E).
+
+### Re-dating a log (spec 046)
+
+`set_date` moves `session_instance.date`. The motivating case is a session logged past
+midnight: the instance is created on the calendar day the logging started, which is a day
+later than the night it belongs to. Anyone who can log can move it — it's metadata, like
+notes, so it's online-only (never queued for offline replay) and the SSE echo re-dates
+every other open screen.
+
+Two instances of one session **may** share a date (the schema permits it and a few
+sessions genuinely run twice in a day), but it is nearly always a mistake, and a
+date-based URL (`/sessions/<path>/<date>`) resolves to whichever instance is first. So a
+collision is a *soft* stop: the first attempt is rejected with `reason: 'date_conflict'`,
+and the client re-sends with `confirm: true` if the user means it. The prior date is
+preserved by `save_to_history` on `session_instance`.
+
+The live screen's URL is `/live/instances/<id>`, so re-dating never invalidates the page
+you are standing on. The bootstrap returns both `session_date` (the header's display
+string, from `format_session_date`) and the raw ISO `instance_date`; the header's
+attendance tense ("Attending" vs "Attended") reads the latter and flips as soon as the
+date moves.
 
 ### Repertoire enrollment (spec 025)
 
@@ -216,6 +237,18 @@ Svelte 5 + Vite PWA, built to a self-contained bundle under `static/live/`
 Source in `frontend/` (`frontend/src`). The shell template passes `session_instance_id`,
 `current_person`, and `STREAMING_BASE_URL` to the bundle, which then fetches the bootstrap
 snapshot and opens the SSE stream.
+
+**The session band (header).** Two layers on one lighter surface (`--header-band`, plus a
+hairline and a soft drop shadow) so the header never reads as the top of the tune list.
+The always-visible `.topbar-row` carries session name, date · tune count, and — in a single
+right-hand cluster — presence avatars, the help link and the expand chevron. Tapping it
+opens `.header-expand`: a **label/value grid** (`.hx-row` = label · value · optional
+action), one fact per row — Date (Change), Tunes, Attending/Attended (Manage), Logging
+(who's on it now, and who's away), Notes (the inline textarea), Status (Mark complete /
+Re-open). Every row action is an `.hx-act`, so "a signed-out viewer gets no row actions"
+is one assertion rather than a list of them. Under 400px the label moves above its value.
+The panel auto-collapses on any interaction outside `.topbar` — except while an unsaved
+notes draft or the date sheet is open, which are header work by another name.
 
 **Slow-network fast paint (stale-first bootstrap).** If the *first* bootstrap hasn't
 answered within `STALE_PAINT_MS` (800ms) and an IndexedDB snapshot exists for this

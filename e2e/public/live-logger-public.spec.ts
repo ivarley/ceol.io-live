@@ -49,10 +49,11 @@ test.describe("live logger (logged out)", () => {
     // the set tray (starter + "logged by") never opens: it holds only people facts
     await page.locator(".set-label").first().click();
     await expect(page.locator(".set-tray")).toHaveCount(0);
-    // expanding the header offers no attendance block and no complete/incomplete control
+    // expanding the header offers no attendance block and no row action at all
+    // (.hx-act is Change-the-date / Manage-attendance / Mark-complete alike)
     await page.locator(".topbar-row").click();
-    await expect(page.locator(".header-attend")).toHaveCount(0);
-    await expect(page.locator(".hc-mark")).toHaveCount(0);
+    await expect(page.locator(".hx-act")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /manage/i })).toHaveCount(0);
   });
 
   test("the bootstrap payload carries no people and no edit rights", async ({ request }) => {

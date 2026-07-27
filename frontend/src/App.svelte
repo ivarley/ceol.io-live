@@ -5,7 +5,7 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
-  import { Dialog, PersonPicker } from './lib/index.js'
+  import { Dialog, PersonPicker, Sheet } from './lib/index.js'
   import SidePane from './SidePane.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
@@ -299,7 +299,10 @@
   let syncMsgSeq = 0
   let sessionId = null // for search ranking/flagging (set from bootstrap when online)
   let sessionName = $state('')
-  let sessionDate = $state('')
+  let sessionDate = $state('') // display form ("Mon · Jul 27, 2026")
+  // Raw YYYY-MM-DD. Seeded by the shell, but re-datable while the screen is open
+  // (spec 046), so it's state rather than a straight read of config.
+  let instanceDate = $state(untrack(() => config.instanceDate) || '')
   let displayTz = $state(undefined) // viewer's tz (fallback session tz) for "logged at" times
   let notesText = $state('') // server-truth session notes
   let notesDraft = $state('') // editable buffer in the expanded header
@@ -348,7 +351,7 @@
       // structured-clone a Proxy (DataCloneError), which would silently fail.
       const value = JSON.parse(JSON.stringify({
         records, last_event_id: highWater, person, ts: Date.now(),
-        session_name: sessionName, session_date: sessionDate, notes: notesText,
+        session_name: sessionName, session_date: sessionDate, instance_date: instanceDate, notes: notesText,
         log_complete: logComplete, display_tz: displayTz,
         // Persist the session vocabulary so the offline-render path keeps the local
         // exact-match fast path working without a fresh bootstrap (§024 / §G).
@@ -787,12 +790,15 @@
    * is standing in the room.
    */
   const attendanceLabel = $derived.by(() => {
-    const date = config.instanceDate
-    if (!date) return 'Attending'
-    const today = new Date()
-    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    return date < localToday ? 'Attended' : 'Attending'
+    if (!instanceDate) return 'Attending'
+    return instanceDate < localToday() ? 'Attended' : 'Attending'
   })
+
+  /** Today, in the logger's own local calendar, as YYYY-MM-DD. */
+  function localToday() {
+    const t = new Date()
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+  }
 
   async function refreshAttendees() {
     // The roster feeds ONLY the attendance header and the starter picker. With both off
@@ -911,6 +917,7 @@
     if (connPopup && e.target instanceof Element && !e.target.closest('.conn-btn, .conn-popup')) connPopup = false
     if (!expanded) return
     if (e.target instanceof Element && e.target.closest('.topbar')) return
+    if (dateOpen) return // the date sheet portals outside .topbar; it IS header work
     if (notesDraft !== notesText) return
     expanded = false
   }
@@ -927,6 +934,73 @@
       if (e.networkError) notice = "You're offline — notes need a connection."
       else error = e.message
     }
+  }
+
+  // --- session date (header §F, spec 046) ---
+  // A log's date is set when the instance is created, which is wrong whenever you start
+  // logging after midnight: the session was really the evening before. This sheet moves
+  // it. Online-only, like notes — the SSE echo re-dates every other open screen.
+  let dateOpen = $state(false)
+  let dateDraft = $state('') // YYYY-MM-DD in the picker
+  let dateErr = $state('') // rejection text shown inside the sheet
+  let dateConfirm = $state(false) // a collision was reported; the next save says "yes, really"
+  let dateSaving = $state(false)
+
+  function openDateEditor() {
+    dateDraft = instanceDate || localToday()
+    dateErr = ''
+    dateConfirm = false
+    dateSaving = false
+    dateOpen = true
+  }
+  // Shift the draft by ±1 day. Parsed as local noon so a DST boundary can't land the
+  // arithmetic on the wrong calendar day.
+  function nudgeDate(days) {
+    const base = dateDraft || instanceDate || localToday()
+    const [y, m, d] = base.split('-').map(Number)
+    const dt = new Date(y, m - 1, d, 12)
+    dt.setDate(dt.getDate() + days)
+    dateDraft = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+    dateErr = ''
+    dateConfirm = false
+  }
+  // Long form of a YYYY-MM-DD, for the sheet's preview line.
+  function longDate(iso) {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-').map(Number)
+    if (!y || !m || !d) return iso
+    return new Date(y, m - 1, d, 12).toLocaleDateString(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    })
+  }
+
+  async function saveDate() {
+    if (!dateDraft || dateDraft === instanceDate) { dateOpen = false; return }
+    dateErr = ''
+    if (!navigator.onLine) { dateErr = "You're offline — changing the date needs a connection."; return }
+    dateSaving = true
+    try {
+      const res = await sendOp(config, 'set_date', { date: dateDraft, confirm: dateConfirm })
+      if (res.rejected) {
+        dateErr = res.message || res.reason
+        // A same-date collision is allowed, just rarely intended: offer to go ahead.
+        dateConfirm = res.reason === 'date_conflict'
+        return
+      }
+      applyDate(res)
+      dateOpen = false
+    } catch (e) {
+      dateErr = e.networkError ? "You're offline — changing the date needs a connection." : e.message
+    } finally {
+      dateSaving = false
+    }
+  }
+
+  // One place that lands a new date on the screen — used by both the local save and the
+  // SSE echo (which is what re-dates everyone else's open logger).
+  function applyDate(d) {
+    if (d.date) instanceDate = d.date
+    if (d.session_date) sessionDate = d.session_date
   }
 
   // Mark this session "completely logged" (§024): hides the editing affordances for
@@ -1705,6 +1779,7 @@
       case 'attendance_create_person': return d.person ? `added ${d.person.display_name}` : 'added a player'
       case 'attendance_remove': return d.person ? `checked out ${d.person.display_name}` : 'updated attendance'
       case 'edit_notes': return 'edited the notes'
+      case 'set_date': return d.session_date ? `re-dated this log to ${d.session_date}` : 're-dated this log'
       default: return null
     }
   }
@@ -1798,6 +1873,9 @@
         if (wasClean) notesDraft = notesText // don't clobber an in-progress local edit
         break
       }
+      case 'set_date':
+        applyDate(d)
+        break
       case 'mark_complete':
         logComplete = true
         if (mode === 'edit') setMode('view') // completion locks editing for everyone
@@ -2769,7 +2847,8 @@
   // fallback and the slow-network fast paint apply through the same code.
   const snapFromCache = (cached) => ({
     records: cached.records, last_event_id: cached.last_event_id || 0, current_person: cached.person,
-    session_name: cached.session_name, session_date: cached.session_date, notes: cached.notes,
+    session_name: cached.session_name, session_date: cached.session_date,
+    instance_date: cached.instance_date, notes: cached.notes,
     log_complete: cached.log_complete, user_timezone: cached.display_tz,
     known_tunes: cached.known_tunes || [], known_aliases: cached.known_aliases || [],
   })
@@ -2784,6 +2863,7 @@
     if (snap.current_person) person = snap.current_person
     if (snap.session_name) sessionName = snap.session_name
     if (snap.session_date) sessionDate = snap.session_date
+    if (snap.instance_date) instanceDate = snap.instance_date
     displayTz = snap.user_timezone || snap.session_timezone || undefined
     notesText = snap.notes || ''
     logComplete = !!snap.log_complete
@@ -3251,88 +3331,115 @@
            routes to openDeep() here via window.__liveFindTune (set in onMount). -->
     </div>
 
+    <!--
+      The session band. Two layers: the always-visible summary row (who/when/how much,
+      plus the presence avatars) and, on tap, a labelled detail panel. The panel used to
+      be a stack of loose sentences; it's a label/value grid now so each fact has one
+      obvious home — and so the date has somewhere to hang its editor (spec 046). The
+      whole band sits on its own lighter surface so it never reads as part of the list.
+    -->
     <header class="topbar">
       <div class="topbar-row" role="button" tabindex="0" onclick={toggleExpand} onkeydown={(e) => activate(e, toggleExpand)}>
         <div class="topbar-main">
           <div class="session-name">{sessionName || 'Session'}<a class="session-return" href="/sessions/{config.sessionPath}" title="Back to session" onclick={(e) => e.stopPropagation()}>⮐</a></div>
-          <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}
-              <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
-              </a>{/if}</div>
+          <div class="session-date">{sessionDate}{#if !expanded && ordered.length}{sessionDate ? ' · ' : ''}{tuneSummary}{/if}</div>
           {#if notesText && !expanded && logComplete}
             <div class="session-notes">{notesText}</div>
           {/if}
         </div>
-        <span class="topbar-presence">
-          {#each readOnly ? [] : roster as p (p.person_id)}
-            <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.away ? ' (away)' : p.devices > 1 ? ` (${p.devices} devices)` : ''}">
-              {initials(p.name)}{#if !p.away && p.devices > 1}<sup>{p.devices}</sup>{/if}
-            </span>
-          {/each}
+        <!-- Right-hand controls, in one cluster: who's here, help, expand. -->
+        <span class="topbar-tools">
+          <span class="topbar-presence">
+            {#each readOnly ? [] : roster as p (p.person_id)}
+              <span class="avatar" class:away={p.away} style="background:{colorFor(p.arrival_seq)}" title="{p.name}{p.away ? ' (away)' : p.devices > 1 ? ` (${p.devices} devices)` : ''}">
+                {initials(p.name)}{#if !p.away && p.devices > 1}<sup>{p.devices}</sup>{/if}
+              </span>
+            {/each}
+          </span>
+          <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </a>
+          <span class="header-chevron" class:up={expanded}>▾</span>
         </span>
-        <span class="header-chevron" class:up={expanded}>▾</span>
       </div>
       {#if expanded}
         <div class="header-expand">
-          <div class="header-stat">{tuneSummary}
-            <a class="header-help" href="/help/session-tracking/live-logger" title="How to use the live logger" onclick={(e) => e.stopPropagation()}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-            </a>
+          <div class="hx-row">
+            <span class="hx-label">Date</span>
+            <span class="hx-val">{sessionDate || '—'}</span>
+            {#if !readOnly}
+              <button class="hx-act" onclick={(e) => { e.stopPropagation(); openDateEditor() }}>Change</button>
+            {/if}
           </div>
+          <div class="hx-row">
+            <span class="hx-label">Tunes</span>
+            <span class="hx-val">{tuneSummary}</span>
+          </div>
+          {#if trackAttendance && !readOnly}
+            <div class="hx-row">
+              <span class="hx-label">{attendanceLabel}</span>
+              <span class="hx-val">
+                <b class="hx-strong">{checkedIn.length}</b>
+                {checkedIn.length ? `— ${checkedIn.map((a) => a.display_name).join(', ')}` : '— no one checked in yet'}
+              </span>
+              <button class="hx-act" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
+            </div>
+          {/if}
+          {#if !readOnly && roster.length}
+            <div class="hx-row">
+              <span class="hx-label">Logging</span>
+              <span class="hx-val">
+                {roster.filter((p) => !p.away).map((p) => p.name).join(', ') || 'no one right now'}
+                {#if roster.some((p) => p.away)}
+                  <span class="hx-away">· away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</span>
+                {/if}
+              </span>
+            </div>
+          {/if}
           {#if readOnly}
             <!-- Signed out: notes are part of the public log, but read-only. -->
             {#if notesText}
-              <div class="header-stat header-notes-ro">{notesText}</div>
-            {/if}
-          {:else}
-          <div class="header-notes-edit">
-            <span class="hn-label">Notes</span>
-            <textarea
-              class="hn-area"
-              rows="2"
-              placeholder="Add notes for this session…"
-              bind:value={notesDraft}
-              onclick={(e) => e.stopPropagation()}
-            ></textarea>
-            {#if notesDraft !== notesText}
-              <div class="hn-actions">
-                <button class="hn-save" onclick={(e) => { e.stopPropagation(); saveNotes() }}>Save</button>
-                <button class="hn-cancel" onclick={(e) => { e.stopPropagation(); notesDraft = notesText }}>Cancel</button>
+              <div class="hx-row">
+                <span class="hx-label">Notes</span>
+                <span class="hx-val header-notes-ro">{notesText}</span>
               </div>
             {/if}
-          </div>
-          {/if}
-          {#if trackAttendance && !readOnly}
-            <div class="header-stat header-attend">
-              <span class="ha-text">
-                <span class="ha-label">{attendanceLabel}: {checkedIn.length}</span>
-                {checkedIn.length ? `(${checkedIn.map((a) => a.display_name).join(', ')})` : '— no one checked in yet'}
+          {:else}
+            <div class="hx-row hx-notes">
+              <span class="hx-label">Notes</span>
+              <span class="hx-val header-notes-edit">
+                <textarea
+                  class="hn-area"
+                  rows="2"
+                  placeholder="Add notes for this session…"
+                  bind:value={notesDraft}
+                  onclick={(e) => e.stopPropagation()}
+                ></textarea>
+                {#if notesDraft !== notesText}
+                  <span class="hn-actions">
+                    <button class="hn-save" onclick={(e) => { e.stopPropagation(); saveNotes() }}>Save</button>
+                    <button class="hn-cancel" onclick={(e) => { e.stopPropagation(); notesDraft = notesText }}>Cancel</button>
+                  </span>
+                {/if}
               </span>
-              <button class="ha-manage" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
             </div>
           {/if}
-          {#if !readOnly && roster.some((p) => !p.away)}
-            <div class="header-stat">Currently logging: {roster.filter((p) => !p.away).map((p) => p.name).join(', ')}</div>
-          {/if}
-          {#if !readOnly && roster.some((p) => p.away)}
-            <div class="header-stat header-away">Away: {roster.filter((p) => p.away).map((p) => p.name).join(', ')}</div>
-          {/if}
-          <div class="header-stat header-complete">
+          <div class="hx-row header-complete">
+            <span class="hx-label">Status</span>
             {#if logComplete}
-              <span class="hc-done">✓ This log is marked complete.</span>
+              <span class="hx-val hc-done">✓ Marked complete</span>
               {#if !readOnly}
-                <button class="hc-link" onclick={(e) => { e.stopPropagation(); markIncomplete() }}>Mark as not complete</button>
+                <button class="hx-act" onclick={(e) => { e.stopPropagation(); markIncomplete() }}>Re-open</button>
               {/if}
-            {:else if !readOnly}
-              <button class="hc-mark" onclick={(e) => { e.stopPropagation(); markComplete() }}>Mark this log complete</button>
+            {:else}
+              <span class="hx-val">Still logging</span>
+              {#if !readOnly}
+                <button class="hx-act" onclick={(e) => { e.stopPropagation(); markComplete() }}>Mark complete</button>
+              {/if}
             {/if}
           </div>
         </div>
@@ -3952,3 +4059,47 @@
   title="Re-open this session log for editing?"
   confirmLabel="Re-open log"
   onConfirm={doMarkIncomplete} />
+
+<!--
+  Re-date this log (spec 046). The motivating case is a session logged past midnight,
+  so "Previous day" is the first thing under your thumb; the picker is there for
+  everything else. Save is explicit — a nudge or a picker change alone writes nothing.
+-->
+<Sheet
+  bind:open={dateOpen}
+  title="Session date"
+  onCancel={() => { dateOpen = false }}>
+  <div class="dt-body">
+    <p class="dt-note">
+      If you started logging after midnight, the log may be dated a day later than the
+      session actually happened. Set it to the right night here.
+    </p>
+    <div class="dt-nudge">
+      <button class="dt-step" onclick={() => nudgeDate(-1)}>‹ Previous day</button>
+      <button class="dt-step" onclick={() => nudgeDate(1)}>Next day ›</button>
+    </div>
+    <label class="dt-field">
+      <span class="dt-label">Date</span>
+      <input
+        class="dt-input"
+        type="date"
+        bind:value={dateDraft}
+        oninput={() => { dateErr = ''; dateConfirm = false }} />
+    </label>
+    <p class="dt-preview" class:dt-changed={dateDraft !== instanceDate}>
+      {longDate(dateDraft) || '—'}
+      {#if dateDraft === instanceDate}<span class="dt-same">(unchanged)</span>{/if}
+    </p>
+    {#if dateErr}
+      <p class="dt-err">{dateErr}</p>
+    {/if}
+  </div>
+  {#snippet footer()}
+    <!-- Cancel lives in the Sheet's own header row; the footer carries only the commit. -->
+    <div class="dt-actions">
+      <button class="dt-save" disabled={dateSaving || !dateDraft || dateDraft === instanceDate} onclick={saveDate}>
+        {dateSaving ? 'Saving…' : dateConfirm ? 'Save anyway' : 'Save date'}
+      </button>
+    </div>
+  {/snippet}
+</Sheet>

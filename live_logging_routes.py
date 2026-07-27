@@ -13,7 +13,7 @@ Ops (this build):
   Tune/set:  add_tune, remove_tune (soft tombstone), change_tune (relink/rename/
              unlink/key/setting), set_confidence, set_break (insert/remove),
              attribute_set_starter
-  Metadata:  edit_notes, mark_complete, mark_incomplete
+  Metadata:  edit_notes, set_date, mark_complete, mark_incomplete
 
 Idempotency (§C): every op carries `op_id`; a retried POST whose ack was lost
 dedupes to the same `session_event` row (UNIQUE on op_id) and returns the cached
@@ -25,6 +25,7 @@ effects), server-generated corroborate/merge detection (§H30), presence (§F).
 """
 
 import base64
+import datetime
 import json
 import re
 import uuid
@@ -914,6 +915,64 @@ def _handle_edit_notes(cur, session_instance_id, data, user_id):
     return {"notes": notes}
 
 
+def format_session_date(d):
+    """The header's display form of an instance date ("Mon · Jul 27, 2026")."""
+    return d.strftime("%a · %b %-d, %Y") if d else ""
+
+
+def _handle_set_date(cur, session_instance_id, data, user_id):
+    """Re-date this log (spec 046).
+
+    The date is fixed when the instance is created, which is wrong for the common
+    case of starting the log after midnight: the session really happened the
+    previous evening. Anyone who can log can move it.
+
+    Two instances of one session CAN share a date (the schema allows it and a few
+    sessions really do run twice in a day), but it's nearly always a mistake — and
+    a date-based URL resolves to whichever instance is first. So a collision is a
+    soft stop: rejected once, then honoured if the client re-sends with confirm.
+    """
+    raw = (data.get("date") or "").strip()
+    try:
+        new_date = datetime.date.fromisoformat(raw)
+    except ValueError:
+        raise OpRejected("invalid", "That isn't a valid date (expected YYYY-MM-DD).")
+
+    cur.execute(
+        "SELECT session_id, date FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise OpRejected("not_found", "This session log no longer exists.")
+    session_id, old_date = row
+    if new_date == old_date:
+        return {"date": new_date.isoformat(), "session_date": format_session_date(new_date),
+                "previous_date": old_date.isoformat()}
+
+    if not data.get("confirm"):
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM session_instance
+            WHERE session_id = %s AND date = %s AND session_instance_id <> %s
+            """,
+            (session_id, new_date, session_instance_id),
+        )
+        if cur.fetchone()[0]:
+            raise OpRejected(
+                "date_conflict",
+                f"This session already has a log dated {format_session_date(new_date)}.",
+            )
+
+    save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
+    cur.execute(
+        "UPDATE session_instance SET date = %s, last_modified_user_id = %s WHERE session_instance_id = %s",
+        (new_date, user_id, session_instance_id),
+    )
+    return {"date": new_date.isoformat(), "session_date": format_session_date(new_date),
+            "previous_date": old_date.isoformat()}
+
+
 def _set_log_complete(cur, session_instance_id, user_id, complete):
     save_to_history(cur, "session_instance", "UPDATE", session_instance_id, user_id=user_id)
     if complete:
@@ -1246,6 +1305,7 @@ HANDLERS = {
     "attribute_set_starter": _handle_attribute_set_starter,
     "set_break": _handle_set_break,
     "edit_notes": _handle_edit_notes,
+    "set_date": _handle_set_date,
     "mark_complete": _handle_mark_complete,
     "mark_incomplete": _handle_mark_incomplete,
 }
@@ -2419,7 +2479,7 @@ def live_bootstrap(session_instance_id):
             (session_instance_id,),
         )
         meta = cur.fetchone()
-        session_date = meta[3].strftime("%a · %b %-d, %Y") if meta and meta[3] else ""
+        session_date = format_session_date(meta[3]) if meta else ""
 
         cur.execute("SELECT COALESCE(MAX(event_id), 0) FROM session_event WHERE session_instance_id = %s", (session_instance_id,))
         high_water = cur.fetchone()[0]
@@ -2448,6 +2508,9 @@ def live_bootstrap(session_instance_id):
             "session_name": meta[4] if meta else "",
             "session_path": meta[5] if meta else None,
             "session_date": session_date,
+            # Raw ISO alongside the display string: the header's attendance tense reads
+            # it, and it can change under the screen now that set_date exists (spec 046).
+            "instance_date": meta[3].isoformat() if meta and meta[3] else None,
             # Is the session under way right now? Signed-out viewers stream only while it
             # is (the sidecar enforces the same rule), and re-read it on every reconnect
             # so a viewer whose session ends settles into a static snapshot by itself.

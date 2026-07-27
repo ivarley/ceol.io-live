@@ -967,6 +967,71 @@ def test_edit_notes(client, authenticated_user, live_instance, db_cursor):
     assert db_cursor.fetchone()[0] == "Great craic tonight"
 
 
+def test_set_date_moves_the_log(client, authenticated_user, live_instance, db_cursor):
+    """The after-midnight case (spec 046): re-date the log to the night it happened."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="2026-01-31")
+    assert body["date"] == "2026-01-31"
+    assert body["previous_date"] == "2026-02-01"
+    assert body["session_date"] == "Sat · Jan 31, 2026"  # the header's display form
+    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0].isoformat() == "2026-01-31"
+    # The prior date is preserved in the audit trail.
+    db_cursor.execute(
+        "SELECT date FROM session_instance_history WHERE session_instance_id = %s "
+        "ORDER BY changed_at DESC LIMIT 1", (inst,))
+    assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"
+
+
+def test_set_date_rejects_a_non_date(client, authenticated_user, live_instance, db_cursor):
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="last tuesday")
+    assert body["rejected"] is True
+    assert body["reason"] == "invalid"
+    db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+    assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"  # untouched
+
+
+def test_set_date_collision_is_a_soft_stop(client, authenticated_user, live_instance, db_cursor):
+    """A sibling instance already on that date: rejected once, honoured on confirm."""
+    inst = live_instance["instance_id"]
+    conn = get_db_connection()
+    cur = conn.cursor()
+    sibling = INST + 1
+    cur.execute("INSERT INTO session_instance (session_instance_id, session_id, date) VALUES (%s, %s, %s)",
+                (sibling, live_instance["session_id"], "2026-03-15"))
+    conn.commit()
+    try:
+        with authenticated_user:
+            _, blocked = _op(client, inst, op_type="set_date", date="2026-03-15")
+            assert blocked["rejected"] is True
+            assert blocked["reason"] == "date_conflict"
+            db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+            assert db_cursor.fetchone()[0].isoformat() == "2026-02-01"
+
+            _, forced = _op(client, inst, op_type="set_date", date="2026-03-15", confirm=True)
+        assert forced["date"] == "2026-03-15"
+        db_cursor.execute("SELECT date FROM session_instance WHERE session_instance_id = %s", (inst,))
+        assert db_cursor.fetchone()[0].isoformat() == "2026-03-15"
+    finally:
+        cur.execute("DELETE FROM session_instance_history WHERE session_instance_id = %s", (sibling,))
+        cur.execute("DELETE FROM session_instance WHERE session_instance_id = %s", (sibling,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_set_date_to_the_same_date_is_a_no_op(client, authenticated_user, live_instance, db_cursor):
+    """Re-saving the current date must not trip the collision check against itself."""
+    inst = live_instance["instance_id"]
+    with authenticated_user:
+        _, body = _op(client, inst, op_type="set_date", date="2026-02-01")
+    assert body.get("rejected") is None
+    assert body["date"] == "2026-02-01"
+
+
 def test_mark_complete_then_incomplete(client, authenticated_user, live_instance, db_cursor):
     inst = live_instance["instance_id"]
     with authenticated_user:
