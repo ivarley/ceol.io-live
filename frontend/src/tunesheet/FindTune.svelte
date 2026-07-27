@@ -8,17 +8,28 @@
   // min 2 chars, server search with offline-bundle fallback, stale-response
   // guard, click a result -> the shared tune-detail sheet.
   import { SearchField, Sheet } from '../lib/index.js'
+  import { parseThesessionId, parseThesessionSettingId } from '../shared/parse.js'
 
   let open = $state(false)
   let query = $state('')
   let results = $state(null) // null = nothing to show; [] = "No tunes match"
   let searchField = $state(null)
+  // A pasted thesession.org URL / tune id resolves to that one tune (the server does the
+  // lookup, following merge redirects). When the catalog doesn't have it yet, the empty
+  // state hands off to the My Tunes add pane, which CAN import it — carrying the raw
+  // link so its ?setting=/#setting deep link survives as the person's setting.
+  let linkRef = $state(null) // {id, settingId, raw} while the box holds a tune link
+  const importHref = $derived(
+    linkRef ? `/my-tunes?add=1&q=${encodeURIComponent(linkRef.raw)}` : '/my-tunes?add=1'
+  )
+  const loggedIn = typeof window !== 'undefined' && !!window.CEOL_AUTHED
 
   let seq = 0
 
   export function show() {
     query = ''
     results = null
+    linkRef = null
     open = true
     setTimeout(() => searchField && searchField.focus(), 50)
   }
@@ -45,7 +56,9 @@
   // server-with-offline-fallback search.
   async function runSearch(raw) {
     const q = (raw || '').trim()
-    if (q.length < 2) {
+    const refId = parseThesessionId(q)
+    linkRef = refId == null ? null : { id: refId, settingId: parseThesessionSettingId(q), raw: q }
+    if (refId == null && q.length < 2) {
       results = null
       return
     }
@@ -62,6 +75,12 @@
       if (mine !== seq) return
       if (json && json.success && (json.tunes || []).length) {
         render(json.tunes)
+        return
+      }
+      // A link that found nothing is "not in the catalog yet", not "no name matches" —
+      // the offline bundle (a name index) can't answer it either, so don't ask.
+      if (refId != null) {
+        render([])
         return
       }
       const off = await offlineSearch(q)
@@ -94,13 +113,16 @@
     inputClass="ft-input"
     wrapperClass="ft-search-wrap"
     styled={false}
-    placeholder="Search tunes…"
+    placeholder="Search tunes, or paste a thesession.org link…"
     autocomplete="off"
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false"
     debounce={200}
     onSearch={runSearch} />
+  {#if linkRef && results === null}
+    <p class="ft-note">Looking up tune #{linkRef.id} from thesession.org…</p>
+  {/if}
   <ul class="ft-results">
     {#if results !== null}
       {#if results.length}
@@ -114,6 +136,18 @@
             aria-selected="false"
             tabindex="0">{tune.name}<span class="ft-type">{tune.tune_type || ''}</span></li>
         {/each}
+      {:else if linkRef}
+        <!-- The link resolved, the catalog just doesn't have that tune yet. Importing is
+             an add, so it happens where adds happen: the My Tunes add pane, seeded with
+             the same link (setting deep link included). -->
+        <li class="ft-empty">
+          Tune #{linkRef.id} isn't in the library yet.
+          {#if loggedIn}
+            <a class="ft-import" href={importHref}>Add it from thesession.org</a>
+          {:else}
+            <a class="ft-import" href="https://thesession.org/tunes/{linkRef.id}" target="_blank" rel="noopener">View it on thesession.org</a>
+          {/if}
+        </li>
       {:else}
         <li class="ft-empty">No tunes match</li>
       {/if}

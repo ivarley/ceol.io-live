@@ -328,6 +328,10 @@
 // Hamburger menu + dark mode + share + 'Find a tune' moved to
 // static/js/hamburger_menu.js (shared with the live editor). Loaded in <head>.
 
+// Is anyone signed in? App-wide bundles that render for logged-out viewers too (the
+// tune drawer / "Find a tune" overlay) have no __PAGE_DATA__ of their own to ask.
+window.CEOL_AUTHED = {{ current_user.is_authenticated | tojson }};
+
 // Show any server-side flash messages as ephemeral messages on load.
 document.addEventListener('DOMContentLoaded', function() {
     showServerFlashMessages();

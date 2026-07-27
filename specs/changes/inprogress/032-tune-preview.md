@@ -192,3 +192,47 @@ live logger and session-tunes pane are unchanged). When a footer is set, the
 bare-Enter shortcut no-ops (the form owns its own confirm). The My Tunes add
 pane uses it to host `AddTuneForm` — its configure phase folded into the
 preview, and the ＋ rail became an instant defaults-add.
+
+## Addendum (2026-07-26): paste a link ANYWHERE you can type a tune name
+
+The rule is now uniform: any box that takes a tune name (or ABC) also takes a
+thesession.org URL / tune id, and a `?setting=`/`#setting` deep link rides
+through to the scope that surface writes. Before this, only the live composer's
+paste-detect and the deep search's *secondary* paste box (buried under "Search
+on thesession.org") did it — the legacy vanilla `TuneSearchComponent`'s
+`enableTuneIdPaste` had covered the main box, and the Svelte rewrite dropped it.
+
+- **`TuneSearch.svelte` main field** (live pane/modal + both add panes): a link
+  in the box suppresses the local name search (nothing can match it) and offers
+  `🔗 Open tune #NNN`; a real PASTE jumps into the preview immediately, as does
+  Enter, a seeded `initialQuery`, and `seed()`. Only a paste auto-jumps —
+  `inputType` starting `insertFrom` (falling back to a ≥8-char jump for IMEs
+  that omit it) — because typing a URL by hand parses at `.../tunes/8` and would
+  yank you into the wrong tune mid-keystroke. All of it funnels through one
+  `jumpToPasted(raw)`, shared with the old paste box.
+- **Hamburger "Find a tune"** (`FindTune.svelte`, logged-out included): resolves
+  links server-side (below). Not in the catalog yet ⇒ not a typo — the empty
+  state offers the My Tunes add pane at `/my-tunes?add=1&q=<raw link>` (logged
+  out: the thesession.org page). The offline bundle is a NAME index, so it is
+  never consulted for a link.
+- **`GET /api/tunes/search`** treats an id / tunes URL as a pointer: exact tune,
+  merge redirects followed, `query_tune_id` echoed (empty `tunes` beside it =
+  "not imported yet"). The 2-char minimum no longer applies to a link.
+- **Page search boxes** hand off rather than resolve: My Tunes' filter box gains
+  an `Add Tune #NNN` action in its empty state (session tunes already had `Add
+  Tune`), and both carry the raw link into the pane, which jumps on the seeded
+  query. Filter-only lists (session admin's tune tab) keep plain id matching.
+- **Scopes, verified end to end** (stubbed thesession.org): personal ⇒
+  `person_tune.setting_id`; session ⇒ `session_tune.setting_id` (prefilled in
+  the pane's Advanced field); instance ⇒ session preference when the tune was
+  just enrolled, `session_instance_tune.setting_override` once the session
+  already prefers a different non-default setting (spec 032's precedence,
+  unchanged — the paste path just feeds it a chosen setting).
+- Frontend: `parseThesessionId`/`parseThesessionSettingId` moved from
+  `logstate.js` (live-only) to `shared/parse.js`, re-exported for the logger.
+  `window.CEOL_AUTHED` (base.html + live_logging.html) tells app-wide bundles
+  with no page payload whether anyone is signed in.
+- Tests: `frontend/tests/tunesearch.test.js` (paste vs. type, seeded query, no
+  name search for a link), 3 more in `findtune.test.js`, 5 in
+  `tests/integration/test_my_tunes_search.py` (URL/bare id/merge-follow/
+  unimported/short-query).

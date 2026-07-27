@@ -50,6 +50,11 @@
   let tsSearched = $state(false) // has the user run a remote search for this query yet?
   let tsPasteUrl = $state('') // the "paste a URL / tune ID" field inside the remote section
   let tsPasteError = $state('')
+  // A thesession.org URL / tune id sitting in the MAIN search field. A name search for
+  // it is meaningless, so we suppress the local results and offer to open that tune
+  // instead; a real paste jumps straight there (see onDeepInput).
+  let pastedId = $derived(parseThesessionId(deepQuery.trim()))
+  let pastedSettingId = $derived(parseThesessionSettingId(deepQuery.trim()))
 
   // --- preview (look before you log): tapping a card opens TunePreview in this same
   // real estate; the card's ＋ rail (or ⌘Enter) keeps the old one-tap add.
@@ -119,11 +124,20 @@
 
   function runSearch() {
     if (deepTimer) clearTimeout(deepTimer)
-    deepLoading = true
     hl = -1 // a new query invalidates the keyboard highlight
     // The remote (thesession.org) results were for the previous query — drop them; the user
     // must tap "Search on thesession.org" again for the new query.
     resetThesession()
+    // A URL / tune id in the field is not a name: no local row can match it, and a
+    // "no tunes match https://…" empty state is a dead end. Skip the search and let the
+    // "Open tune #NNN" row (below) carry the query instead.
+    if (pastedId != null) {
+      deepSeq++ // discard an in-flight name search
+      deepResults = []
+      deepLoading = false
+      return
+    }
+    deepLoading = true
     deepTimer = setTimeout(async () => {
       const seq = ++deepSeq
       const r = await deepSearch(config, deepQuery.trim(), deepType, preferType, deepMode)
@@ -144,11 +158,29 @@
   // remember the query once it settles (800ms idle) so recall holds real searches, not every
   // keystroke — complements remembering on a pick (afterAdd).
   let rememberTimer = null
-  function onDeepInput() {
+  let lastQuery = untrack(() => initialQuery) // previous field value (paste detection)
+  function onDeepInput(e) {
+    const prev = lastQuery
+    lastQuery = deepQuery
     histPos = null // typing leaves history-recall mode
     if (rememberTimer) clearTimeout(rememberTimer)
     rememberTimer = setTimeout(() => onRemember(deepQuery), 800)
+    // Pasting a thesession.org link into the search box means "this tune" — go straight
+    // to its preview. Only a PASTE jumps: typing a URL by hand would otherwise land you
+    // in a preview the moment ".../tunes/8" first parsed. `inputType` is the reliable
+    // signal where it exists; the length jump is the fallback for keyboards/IMEs that
+    // omit it (typing never adds 8 characters in one event).
+    const pasteLike = e?.inputType
+      ? e.inputType.startsWith('insertFrom') // insertFromPaste / …Drop / …Yank
+      : deepQuery.length - prev.length >= 8 // no inputType: only a paste grows it this fast
+    if (pasteLike && jumpToPasted(deepQuery)) return
     runSearch()
+  }
+  // Every PROGRAMMATIC write to the field goes through here, so the paste detector's
+  // "previous value" never drifts from what's actually in the box.
+  function setQuery(v) {
+    deepQuery = v
+    lastQuery = v
   }
   // Recall a past search into the box AND run it, so the results show immediately (spec 028).
   // histPos stays set so the arrows keep cycling history; typing or a pick exits recall mode.
@@ -156,7 +188,7 @@
     const step = historyStep(history, histPos, dir)
     if (!step) return false
     histPos = step.pos
-    deepQuery = step.value
+    setQuery(step.value)
     if (step.value.trim()) runSearch() // fire the recalled search
     else { deepResults = []; deepLoading = false; deepSeq++ } // back to the empty draft
     return true
@@ -186,7 +218,7 @@
   export function reset() {
     if (deepTimer) { clearTimeout(deepTimer); deepTimer = null }
     deepSeq++
-    deepQuery = ''
+    setQuery('')
     deepResults = []
     deepLoading = false
     previewIdx = null
@@ -240,6 +272,8 @@
       if (variant === 'modal') { e.preventDefault(); onClose() }
     } else if (e.key === 'Enter') {
       e.preventDefault()
+      // A URL/id typed (not pasted) into the field: Enter is the commit that opens it.
+      if (pastedId != null) { jumpToPasted(deepQuery); return }
       const target = hl >= 0 && deepResults[hl] ? hl : deepResults.length ? 0 : -1
       if (target >= 0) {
         if (e.metaKey || e.ctrlKey) pickDeep(deepResults[target])
@@ -277,22 +311,30 @@
     if (r.setting_id != null) payload.setting_id = r.setting_id // preview's chosen setting only
     return afterAdd(onAdd(payload, r.name, r))
   }
-  // "Paste a thesession.org URL or tune ID" -> jump straight into that tune's preview
-  // (a frozen single-item list; the real name/notation load there), honoring a
-  // ?setting=/#setting deep link — the pager lands on that setting and it counts as
-  // CHOSEN. Meanwhile the search re-seeds with the tune's name in the background so
-  // Back lands on relevant results, not the pasted URL.
-  function pasteThesession() {
-    const raw = tsPasteUrl
+  // THE paste-a-URL entry point, shared by the main search field (paste / Enter / the
+  // "Open tune #NNN" row / a seeded query) and the remote section's paste box: jump
+  // straight into that tune's preview — a frozen single-item list; the real name and
+  // notation load there — honoring a ?setting=/#setting deep link. The pager lands on
+  // that setting and it counts as CHOSEN, so confirming applies it at whatever scope
+  // this surface writes: the person's setting on My Tunes, the session's on session
+  // tunes, the instance row (or session preference) in the live logger. Meanwhile the
+  // search re-seeds with the tune's real name in the background so Back lands on
+  // relevant results, not the pasted URL. Returns false when `raw` isn't a tune ref.
+  function jumpToPasted(raw) {
     const id = parseThesessionId(raw)
-    if (id == null) { tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'; return }
+    if (id == null) return false
     everPreviewed = true
+    previewIdx = null
     externalPreview = {
       items: [{ r: { tune_id: id, name: `#${id}`, tune_type: null }, remote: true }],
       index: 0,
       settingId: parseThesessionSettingId(raw),
     }
     reseedFromThesession(id)
+    return true
+  }
+  function pasteThesession() {
+    if (!jumpToPasted(tsPasteUrl)) tsPasteError = 'Enter a thesession.org tune URL or numeric ID.'
   }
   // Runtime entry points for the long-lived PANE instance — the desktop twins of
   // mounting the modal with initialQuery / initialPreview (spec 032: on desktop the
@@ -300,8 +342,11 @@
   export function seed(q) {
     previewIdx = null
     externalPreview = null
-    deepQuery = q
+    setQuery(q)
     histPos = null
+    // A URL handed to the pane (e.g. the page's "Add a tune" carrying a pasted link)
+    // resolves the same way a paste into the field does.
+    if (jumpToPasted(q)) return
     runSearch()
   }
   export function openExternalPreview(preview) {
@@ -319,7 +364,7 @@
       const d = info.is_local ? await tunePreview(config, info.tune_id) : info
       const q = ((info.is_local && d.aliases?.length ? d.aliases[0] : '') || d.name || '').trim()
       if (q) {
-        deepQuery = q
+        setQuery(q)
         histPos = null
         runSearch()
       }
@@ -327,8 +372,13 @@
   }
 
   // Initial search: the modal always ran one on open (an empty query browses by
-  // popularity/type); the pane stays idle until the user types.
-  if (untrack(() => variant === 'modal' || initialQuery.trim())) runSearch()
+  // popularity/type); the pane stays idle until the user types. A seeded query that IS
+  // a tune URL/id opens that tune's preview instead — this is what carries a link
+  // pasted into a page's own search box (My Tunes / session tunes "Add a tune", or
+  // /my-tunes?add=1&q=<url>) through to the resolved tune.
+  if (untrack(() => !initialPreview && jumpToPasted(initialQuery))) {
+    /* jumped: reseedFromThesession runs the name search underneath */
+  } else if (untrack(() => variant === 'modal' || initialQuery.trim())) runSearch()
   // Mounted straight into a PASTED tune's preview (the composer's paste detection):
   // re-seed the search with the tune's real name in the background, so backing out
   // of the preview lands on its results rather than a search for the URL string.
@@ -444,13 +494,26 @@
     {/if}
   </div>
 {/if}
-<!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled
-     like "Log as-is" but blue; sits directly above it. -->
-{#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
-  <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
-{/if}
-{#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
-  <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
+<!-- A tune URL / id in the field: the only sensible action is to open THAT tune, so it
+     replaces both the remote-search and log-as-is rows (a URL is not a tune name). A
+     real paste jumps on its own; this row is for a typed/edited one. -->
+{#if pastedId != null}
+  {#if displayStatus === 'offline'}
+    <p class="deep-empty">You're offline — a thesession.org link can't be looked up until you reconnect.</p>
+  {:else}
+    <button class="deep-asis deep-asis-remote" onclick={() => jumpToPasted(deepQuery)}>
+      🔗 Open tune #{pastedId}{pastedSettingId != null ? ` (setting #${pastedSettingId})` : ''} from thesession.org
+    </button>
+  {/if}
+{:else}
+  <!-- Extend the search to thesession.org (spec 026): explicit tap, online-only. Styled
+       like "Log as-is" but blue; sits directly above it. -->
+  {#if deepQuery.trim() && displayStatus !== 'offline' && !tsSearched}
+    <button class="deep-asis deep-asis-remote" onclick={runThesessionSearch}>🔎 Search on thesession.org for “{deepQuery.trim()}”</button>
+  {/if}
+  {#if allowAsIs && deepMode !== 'abc' && deepQuery.trim()}
+    <button class="deep-asis" onclick={deepLogAsIs}>＋ Log “{deepQuery.trim()}” as-is (unlinked)</button>
+  {/if}
 {/if}
 <div class="deep-results" id="deep-results-list" role="listbox" bind:this={resultsEl} ontouchstart={onResultsTouchStart} ontouchmove={onResultsTouchMove}>
   {#if deepLoading && !deepResults.length}
@@ -467,6 +530,9 @@
           </svg>
         </a>
       </p>
+    {:else if pastedId != null}
+      <!-- A link, not a name: nothing local could match it, and the row above is the action. -->
+      <p class="deep-empty">That's a thesession.org tune link{pastedSettingId != null ? ' (with a setting)' : ''} — open it above to see the tune.</p>
     {:else}
       <p class="deep-empty">No{deepType ? ` ${deepType.toLowerCase()}` : ''} tunes match{deepQuery.trim() ? ` “${deepQuery.trim()}”` : ''}.</p>
     {/if}

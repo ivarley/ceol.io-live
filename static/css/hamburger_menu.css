@@ -90,3 +90,7 @@
 .ft-item:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); }
 .ft-type { color: var(--disabled-text, #9a9aa3); font-size: 13px; flex: none; }
 .ft-empty { padding: 10px 12px; color: var(--disabled-text, #9a9aa3); font-style: italic; }
+/* Pasted-link states: the "looking up #NNN" note and the import/offsite handoff the
+   empty state offers when the catalog doesn't have that tune yet. */
+.ft-note { padding: 4px 12px 0; margin: 0; color: var(--disabled-text, #9a9aa3); font-size: 13px; }
+.ft-import { display: block; margin-top: 4px; color: var(--primary, #4a9eff); font-style: normal; }

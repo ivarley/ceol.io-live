@@ -1096,7 +1096,15 @@ def search_tunes():
                 "error": "Search query is required"
             }), 400
 
-        if len(query) < 2:
+        # A thesession.org tune URL (or a bare tune id) is a POINTER, not a name — resolve
+        # it to that one tune instead of running a hopeless LIKE over names. This is what
+        # makes pasting a link work in every plain tune-search box (the hamburger "Find a
+        # tune" overlay, the legacy search component); the deep search resolves links
+        # client-side because it can also preview not-yet-imported tunes.
+        from live_logging_routes import _parse_thesession_id
+        ref_tune_id = _parse_thesession_id(query)
+
+        if ref_tune_id is None and len(query) < 2:
             return jsonify({
                 "success": False,
                 "error": "Search query must be at least 2 characters"
@@ -1172,11 +1180,23 @@ def search_tunes():
             order_by_parts = ["type_pref"] + order_by_fields + ["match_priority", "t.tunebook_count_cached DESC NULLS LAST", "t.name"]
             order_by_clause = ", ".join(order_by_parts)
 
+            # An id/URL query matches exactly one tune (its merge target if it was merged
+            # away — a pasted permalink for a merged tune should land on the survivor);
+            # everything else is the name LIKE.
+            if ref_tune_id is not None:
+                from api_routes import follow_tune_redirect
+                ref_tune_id, _redirected_from = follow_tune_redirect(cur, ref_tune_id)
+                where_sql = "t.tune_id = %s"
+                where_param = ref_tune_id
+            else:
+                where_sql = f"LOWER(unaccent({normalize_quotes_sql('t.name')})) LIKE LOWER(unaccent(%s))"
+                where_param = f"%{query}%"
+
             sql = f"""
                 SELECT {select_clause}
                 FROM tune t
                 {join_clause}
-                WHERE LOWER(unaccent({normalize_quotes_sql('t.name')})) LIKE LOWER(unaccent(%s))
+                WHERE {where_sql}
                   AND t.redirect_to_tune_id IS NULL
                 ORDER BY {order_by_clause}
                 LIMIT %s
@@ -1187,7 +1207,7 @@ def search_tunes():
             # 2. query_params for JOINs (person_id, session_id)
             # 3. query param for WHERE clause
             # 4. limit param
-            final_params = [query, f"{query}%", prefer_type] + query_params + [f"%{query}%", limit]
+            final_params = [query, f"{query}%", prefer_type] + query_params + [where_param, limit]
             cur.execute(sql, final_params)
 
             rows = cur.fetchall()
@@ -1217,7 +1237,11 @@ def search_tunes():
             return jsonify({
                 "success": True,
                 "tunes": tunes,
-                "count": len(tunes)
+                "count": len(tunes),
+                # Echoed when the query was a tune id / thesession.org URL: the canonical
+                # id it resolved to. An empty `tunes` alongside it means "that tune isn't
+                # in the local catalog yet" (an import, not a typo) — the clients say so.
+                "query_tune_id": ref_tune_id,
             }), 200
 
         finally:

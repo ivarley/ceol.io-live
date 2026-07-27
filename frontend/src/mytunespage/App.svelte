@@ -367,6 +367,10 @@
     event.preventDefault()
     openAddPane(rawSearch.trim())
   }
+  // A tune id / thesession.org link in the filter box: it filters the list by tune_id
+  // (a tune you already have), but when nothing matches it means "I want THIS tune" —
+  // so the empty state offers the add pane, which resolves the link (and its setting).
+  const searchTuneRef = $derived(extractTuneId(rawSearch.trim()))
   // No-JS fallback href = the same URL the folded-away /my-tunes/add redirects to.
   const addTuneHref = $derived(
     rawSearch.trim() ? `/my-tunes?add=1&q=${encodeURIComponent(rawSearch.trim())}` : '/my-tunes?add=1'
@@ -762,7 +766,21 @@
             : noResultsMessage(filters)}
         </p>
         <div id="no-results-action" style="margin-top: 15px;">
-          {#if hasActiveFilters}
+          {#if searchTuneRef != null}
+            <!-- A pasted link/id that isn't on your list yet: adding it is the point, and
+                 the pane resolves the same link (setting included). Clear Filters still
+                 rides along when other filters could be what's hiding it. -->
+            <a href={addTuneHref} class="btn" onclick={handleAddTuneClick}>Add Tune #{searchTuneRef}</a>
+            {#if hasActiveFilters}
+              <a
+                href="#clear"
+                class="btn"
+                onclick={(e) => {
+                  e.preventDefault()
+                  clearFilters()
+                }}>Clear Filters</a>
+            {/if}
+          {:else if hasActiveFilters}
             <a
               href="#clear"
               class="btn"

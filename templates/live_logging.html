@@ -23,6 +23,10 @@
       trackAttendance: {{ track_attendance | tojson }},
       trackSetStarters: {{ track_set_starters | tojson }}
     };
+    // Same app-wide flag base.html sets (this shell doesn't extend it): the tune drawer
+    // and "Find a tune" overlay render for logged-out viewers too and have no page
+    // payload of their own to ask.
+    window.CEOL_AUTHED = {{ current_user.is_authenticated | tojson }};
   </script>
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#0e0e10">

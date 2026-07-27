@@ -178,29 +178,10 @@ export function mergeStable(localList, serverList) {
 
 // --- thesession.org id parsing (spec 026/028) ------------------------------ //
 
-// Detect a thesession.org tune URL or bare numeric id -> its integer id, else null.
-// Mirrors the server's _parse_thesession_id. Shared by the composer's paste detection
-// (App) and the deep-search paste-URL import (TuneSearch).
-export function parseThesessionId(raw) {
-  if (raw == null) return null
-  const s = String(raw).trim()
-  const m = s.match(/thesession\.org\/tunes\/(\d+)/)
-  if (m) return parseInt(m[1], 10)
-  return /^\d+$/.test(s) ? parseInt(s, 10) : null
-}
-
-// The optional setting deep-link in a thesession tune URL — ?setting=NNN and/or
-// #settingNNN (thesession uses both, e.g. /tunes/1716?setting=15143#setting15143).
-// Only meaningful alongside a URL; a bare numeric id carries no setting.
-export function parseThesessionSettingId(raw) {
-  if (raw == null) return null
-  const s = String(raw).trim()
-  if (!s.includes('thesession.org')) return null
-  const qm = s.match(/[?&]setting=(\d+)/)
-  if (qm) return parseInt(qm[1], 10)
-  const hm = s.match(/#setting(\d+)/)
-  return hm ? parseInt(hm[1], 10) : null
-}
+// The parsers themselves now live in shared/parse.js (every bundle's paste-a-URL
+// entry point needs them, not just the live logger); re-exported here so the
+// logger's own imports — and logstate.test.js — keep working unchanged.
+export { parseThesessionId, parseThesessionSettingId } from './shared/parse.js'
 
 // --- insertion-cursor slots (spec 028 keyboard nav) ------------------------ //
 

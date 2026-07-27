@@ -165,3 +165,68 @@ def test_thesession_search_dedupes_repeated_hits(client, authenticated_user, mon
     assert body["success"] is True
     ids = [r["tune_id"] for r in body["results"]]
     assert ids == [4717, 2188]
+
+
+# --- /api/tunes/search link resolution ------------------------------------------------
+# The plain tune-search endpoint (hamburger "Find a tune", logged-out included) treats a
+# thesession.org URL or bare tune id as a POINTER to one tune rather than a name to LIKE.
+
+
+def test_tune_search_resolves_thesession_url(client, search_tunes):
+    resp = client.get(
+        "/api/tunes/search?q=https://thesession.org/tunes/%d?setting=44656#setting44656"
+        % search_tunes["offlist"]
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert [t["tune_id"] for t in body["tunes"]] == [search_tunes["offlist"]]
+    assert body["query_tune_id"] == search_tunes["offlist"]
+
+
+def test_tune_search_resolves_bare_tune_id(client, search_tunes):
+    resp = client.get("/api/tunes/search?q=%d" % search_tunes["onlist"])
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert [t["tune_id"] for t in body["tunes"]] == [search_tunes["onlist"]]
+
+
+def test_tune_search_link_follows_a_merge(client, search_tunes):
+    """A pasted permalink for a tune that was merged away lands on the survivor."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE tune SET redirect_to_tune_id = %s WHERE tune_id = %s",
+        (search_tunes["onlist"], search_tunes["offlist"]),
+    )
+    conn.commit()
+    try:
+        resp = client.get(
+            "/api/tunes/search?q=https://thesession.org/tunes/%d" % search_tunes["offlist"]
+        )
+        body = resp.get_json()
+        assert [t["tune_id"] for t in body["tunes"]] == [search_tunes["onlist"]]
+        assert body["query_tune_id"] == search_tunes["onlist"]
+    finally:
+        cur.execute(
+            "UPDATE tune SET redirect_to_tune_id = NULL WHERE tune_id = %s",
+            (search_tunes["offlist"],),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+
+def test_tune_search_link_to_unimported_tune_is_empty_not_an_error(client):
+    """Not a typo — that tune simply isn't in the catalog yet, which is what the
+    clients turn into an "add it from thesession.org" offer."""
+    resp = client.get("/api/tunes/search?q=https://thesession.org/tunes/99999401")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body["tunes"] == []
+    assert body["query_tune_id"] == 99999401
+
+
+def test_tune_search_short_name_query_still_rejected(client):
+    resp = client.get("/api/tunes/search?q=z")
+    assert resp.status_code == 400

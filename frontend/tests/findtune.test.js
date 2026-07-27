@@ -22,6 +22,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   delete window.CeolOffline
+  delete window.CEOL_AUTHED
 })
 
 async function openAndSearch(component, q) {
@@ -66,6 +67,48 @@ describe('FindTune overlay', () => {
     expect(items).toHaveLength(1)
     expect(items[0].textContent).toContain('Drowsy Maggie')
     expect(window.CeolOffline.searchTunes).toHaveBeenCalledWith('drowsy', 10)
+  })
+
+  // Paste-a-link: the server resolves an id/URL query to that one tune, so the overlay
+  // just passes it through — but the "nothing found" case means "not imported yet", not
+  // "no such name", and hands off to the add pane carrying the link (setting included).
+  it('resolves a pasted thesession.org URL to its tune', async () => {
+    fetch.mockResolvedValue({
+      json: async () => ({ success: true, tunes: [TUNES[0]], query_tune_id: 55 }),
+    })
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'https://thesession.org/tunes/55#setting123')
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('https://thesession.org/tunes/55#setting123')),
+      expect.anything()
+    )
+    const items = document.querySelectorAll('.ft-results .ft-item')
+    expect(items).toHaveLength(1)
+    expect(items[0].dataset.tuneId).toBe('55')
+  })
+
+  it('offers the add pane (link and setting intact) for a tune not in the library', async () => {
+    window.CEOL_AUTHED = true
+    fetch.mockResolvedValue({ json: async () => ({ success: true, tunes: [], query_tune_id: 8645 }) })
+    window.CeolOffline = { searchTunes: vi.fn().mockResolvedValue([TUNES[1]]) }
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'https://thesession.org/tunes/8645#setting44656')
+    // The offline bundle is a NAME index — never consulted for a link lookup.
+    expect(window.CeolOffline.searchTunes).not.toHaveBeenCalled()
+    const link = document.querySelector('.ft-empty .ft-import')
+    expect(document.querySelector('.ft-empty').textContent).toContain('8645')
+    expect(link.getAttribute('href')).toBe(
+      '/my-tunes?add=1&q=' + encodeURIComponent('https://thesession.org/tunes/8645#setting44656')
+    )
+  })
+
+  it('sends a logged-out viewer to thesession.org instead of the add pane', async () => {
+    fetch.mockResolvedValue({ json: async () => ({ success: true, tunes: [], query_tune_id: 8645 }) })
+    const { component } = render(FindTune)
+    await openAndSearch(component, 'https://thesession.org/tunes/8645')
+    expect(document.querySelector('.ft-empty .ft-import').getAttribute('href')).toBe(
+      'https://thesession.org/tunes/8645'
+    )
   })
 
   it('shows the no-match row and requires 2+ characters', async () => {

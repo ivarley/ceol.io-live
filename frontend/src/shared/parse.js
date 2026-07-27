@@ -15,6 +15,38 @@ export function extractTuneId(input) {
   return null
 }
 
+// --- thesession.org id parsing (spec 026/028; moved here from logstate.js so the
+// tunesheet/mytunes bundles can share it — logstate re-exports for its consumers).
+
+/**
+ * Detect a thesession.org tune URL or bare numeric id -> its integer id, else null.
+ * Mirrors the server's _parse_thesession_id. Used by every paste-a-URL entry point:
+ * the composer's paste detection, the deep search's field + paste box, and the
+ * hamburger "Find a tune" overlay.
+ */
+export function parseThesessionId(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  const m = s.match(/thesession\.org\/tunes\/(\d+)/)
+  if (m) return parseInt(m[1], 10)
+  return /^\d+$/.test(s) ? parseInt(s, 10) : null
+}
+
+/**
+ * The optional setting deep-link in a thesession tune URL — ?setting=NNN and/or
+ * #settingNNN (thesession uses both, e.g. /tunes/1716?setting=15143#setting15143).
+ * Only meaningful alongside a URL; a bare numeric id carries no setting.
+ */
+export function parseThesessionSettingId(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  if (!s.includes('thesession.org')) return null
+  const qm = s.match(/[?&]setting=(\d+)/)
+  if (qm) return parseInt(qm[1], 10)
+  const hm = s.match(/#setting(\d+)/)
+  return hm ? parseInt(hm[1], 10) : null
+}
+
 /**
  * Parse a payload date as a LOCAL date. Date-only strings ("2026-01-27", the
  * shape serializers emit for DATE columns) hit the Date(y, m, d) constructor —
