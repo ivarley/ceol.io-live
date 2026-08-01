@@ -3384,7 +3384,12 @@
      expanded header from auto-closing when the user interacts elsewhere. -->
 <svelte:document onpointerdowncapture={collapseHeaderOnOutside} onfocusincapture={collapseHeaderOnOutside} />
 
-<main bind:this={mainEl} class:view-mode={viewing} class:wide>
+<!-- `wide` on <main> means "the two-pane grid is IN EFFECT", which needs the pane to
+     actually be there: it only mounts for editors ({#if wide && !readOnly} below), so a
+     signed-out viewer got the grid's 440px pane column reserved and empty, with the log
+     stranded in the left half. The `wide` state itself stays viewport-only — the preview
+     routing and "/" focus target both guard on sidePaneEl. -->
+<main bind:this={mainEl} class:view-mode={viewing} class:wide={wide && !readOnly}>
   <!-- Connection dot, floated top-right next to the shared hamburger (templates/live_logging.html)
        so it sits where the app-wide indicator sits on every other page. Tapping it opens
        a popover with the full picture: status, queued edits, and (when the stream is
@@ -3435,7 +3440,9 @@
       </div>
     {/if}
   {/if}
-  <div class="topnav" bind:clientHeight={headerH}>
+  <!-- --header-h feeds the full-bleed band behind this bar (app.css .topnav::before);
+       it is the same measurement the toasts already offset by. -->
+  <div class="topnav" bind:clientHeight={headerH} style="--header-h:{headerH}px">
     <!-- Mirrors the app-wide header (base.html .header): full-viewport bar, 30px logo +
          site title (hidden on phones, like .logo-text). -->
     <div class="appbar">

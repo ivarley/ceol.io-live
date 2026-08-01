@@ -14,6 +14,10 @@ import {
   instanceUrlId,
   parseTheSessionId,
   filterPeople,
+  keepInstance,
+  filterInstanceGroups,
+  matchLoggedTunes,
+  tunePlayLinks,
 } from '../src/sessionpage/logic.js'
 
 const tune = (id, name, type, plays, tunebook) => ({
@@ -259,5 +263,96 @@ describe('parseLocalDate', () => {
     expect(parseLocalDate(iso).getTime()).toBe(new Date(iso).getTime())
     const d = new Date()
     expect(parseLocalDate(d).getTime()).toBe(d.getTime())
+  })
+})
+
+describe('logs tab filters', () => {
+  const inst = (id, count) => ({ session_instance_id: id, date: '2026-01-01', tune_count: count })
+  const groups = {
+    2026: [inst(1, 5), inst(2, 0)],
+    2025: [inst(3, 0)],
+    2024: [inst(4, 2)],
+  }
+  const years = [2026, 2025, 2024]
+
+  it('keepInstance: "logged" drops the placeholder nights, "all" keeps them', () => {
+    expect(keepInstance(inst(1, 5), 'logged', null)).toBe(true)
+    expect(keepInstance(inst(2, 0), 'logged', null)).toBe(false)
+    expect(keepInstance(inst(2, 0), 'all', null)).toBe(true)
+  })
+
+  it('keepInstance: a tune filter SUPERSEDES the toggle (its nights are logged by definition)', () => {
+    const ids = new Set([2])
+    expect(keepInstance(inst(2, 0), 'logged', ids)).toBe(true)
+    expect(keepInstance(inst(1, 5), 'all', ids)).toBe(false)
+  })
+
+  it('filterInstanceGroups drops sections left empty rather than showing a bare header', () => {
+    const view = filterInstanceGroups(years, groups, 'logged', null)
+    expect(view.sortedKeys).toEqual([2026, 2024]) // 2025 held only an empty night
+    expect(view.byKey[2026].map((i) => i.session_instance_id)).toEqual([1])
+    expect(view.total).toBe(2)
+  })
+
+  it('filterInstanceGroups keeps everything under "all"', () => {
+    const view = filterInstanceGroups(years, groups, 'all', null)
+    expect(view.sortedKeys).toEqual(years)
+    expect(view.total).toBe(4)
+  })
+
+  it('filterInstanceGroups narrows to the tune filter across years', () => {
+    const view = filterInstanceGroups(years, groups, 'logged', new Set([3, 4]))
+    expect(view.sortedKeys).toEqual([2025, 2024])
+    expect(view.total).toBe(2)
+  })
+
+  const tunes = [
+    { tune_id: 1, name: 'The Butterfly', log_count: 3 },
+    { tune_id: 2, name: 'Butterfly Whirl', log_count: 9 },
+    { tune_id: 3, name: "Cooley's", log_count: 40 },
+  ]
+
+  it('matchLoggedTunes: empty query matches nothing (no dropdown on an empty box)', () => {
+    expect(matchLoggedTunes(tunes, '')).toEqual([])
+    expect(matchLoggedTunes(tunes, '   ')).toEqual([])
+  })
+
+  it('matchLoggedTunes: substring match, prefix hits first, then the most-played', () => {
+    const names = matchLoggedTunes(tunes, 'butterfly').map((t) => t.name)
+    expect(names).toEqual(['Butterfly Whirl', 'The Butterfly'])
+  })
+
+  it('matchLoggedTunes: case-insensitive and capped by the limit', () => {
+    expect(matchLoggedTunes(tunes, 'COOL').map((t) => t.tune_id)).toEqual([3])
+    expect(matchLoggedTunes(tunes, 'butterfly', 1)).toHaveLength(1)
+  })
+})
+
+describe('tunePlayLinks', () => {
+  const plays = new Map([
+    [
+      10,
+      [
+        { session_instance_tune_id: 900, name: "Cooley's", set_number: 2, position_in_set: 1 },
+        { session_instance_tune_id: 907, name: "Cooley's", set_number: 5, position_in_set: 3 },
+      ],
+    ],
+  ])
+
+  it('links each play at its own record, with Set N / tune M coordinates', () => {
+    const links = tunePlayLinks(plays, { session_instance_id: 10 }, 'austin/mueller', 101)
+    expect(links).toHaveLength(2)
+    expect(links[0]).toEqual({
+      key: 900,
+      name: "Cooley's",
+      where: 'set 2, tune 1',
+      href: '/sessions/austin/mueller/10?highlight=900&tune=101',
+    })
+    expect(links[1].href).toBe('/sessions/austin/mueller/10?highlight=907&tune=101')
+  })
+
+  it('is empty for an instance with no plays, and with no map at all', () => {
+    expect(tunePlayLinks(plays, { session_instance_id: 11 }, 'p', 1)).toEqual([])
+    expect(tunePlayLinks(null, { session_instance_id: 10 }, 'p', 1)).toEqual([])
   })
 })

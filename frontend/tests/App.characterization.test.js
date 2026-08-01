@@ -91,6 +91,21 @@ describe('App renders bootstrapped records (extraction guard)', () => {
       Object.defineProperty(window, 'innerWidth', { value: realWidth, configurable: true, writable: true })
     }
   })
+
+  // The two-pane grid reserves a 440px pane column, so main.wide may only be set when
+  // the pane is actually mounted. A signed-out viewer (canEdit: false) never mounts it,
+  // and used to get the column reserved and empty with the log stranded in the left half.
+  it('main.wide only when the pane is really there (never for a read-only viewer)', async () => {
+    const { container } = render(App, { props: { config } })
+    await waitFor(() => expect(container.querySelectorAll('.tune-row').length).toBe(3))
+    expect(container.querySelector('main').classList.contains('wide')).toBe(true)
+
+    document.body.innerHTML = ''
+    const { container: ro } = render(App, { props: { config: { ...config, canEdit: false } } })
+    await waitFor(() => expect(ro.querySelectorAll('.tune-row').length).toBe(3))
+    expect(ro.querySelectorAll('.sidepane').length).toBe(0)
+    expect(ro.querySelector('main').classList.contains('wide')).toBe(false)
+  })
 })
 
 // Composer paste: commas = tunes in a set, line breaks = new sets — bulk-logged in

@@ -149,6 +149,76 @@ export function instanceUrlId(instance) {
   return instance.multiple_on_date ? instance.session_instance_id : instance.date
 }
 
+// The Logs tab's view toggle. "logged" is the default: an instance with nothing
+// logged is a placeholder for a night, not a log, and a long-running session
+// accumulates far more of those than real logs.
+export const LOG_VIEW_OPTIONS = [
+  { id: 'logged', label: 'Logged' },
+  { id: 'all', label: 'All' },
+]
+
+// One instance's fate under the two filters. A tune filter SUPERSEDES the
+// all/logged toggle rather than ANDing with it — every instance where a tune was
+// played is by definition a logged one, so ANDing could only ever surprise.
+export function keepInstance(instance, mode, tuneInstanceIds) {
+  if (tuneInstanceIds) return tuneInstanceIds.has(instance.session_instance_id)
+  if (mode === 'logged') return !isEmptyLog(instance)
+  return true
+}
+
+// Filter the year (or festival-day) groups, dropping any section left empty so
+// the toggle doesn't leave behind headers with nothing under them.
+export function filterInstanceGroups(sortedKeys, groups, mode, tuneInstanceIds) {
+  const byKey = {}
+  const keys = []
+  let total = 0
+  for (const key of sortedKeys || []) {
+    const kept = (groups[key] || []).filter((i) => keepInstance(i, mode, tuneInstanceIds))
+    if (kept.length > 0) {
+      byKey[key] = kept
+      keys.push(key)
+      total += kept.length
+    }
+  }
+  return { sortedKeys: keys, byKey, total }
+}
+
+// The <ul> under a filtered date: every time the chosen tune came round that
+// night, linked at the exact record. Same deep link the tune drawer's History tab
+// uses (?highlight=<session_instance_tune_id>, with ?tune= for the legacy page),
+// and the same "Set 3, tune 2" coordinates — one vocabulary for one idea.
+export function tunePlayLinks(playsByInstance, instance, sessionPath, tuneId) {
+  const positions = playsByInstance ? playsByInstance.get(instance.session_instance_id) : null
+  return (positions || []).map((p) => ({
+    key: p.session_instance_tune_id,
+    name: p.name,
+    where: `set ${p.set_number}, tune ${p.position_in_set}`,
+    href:
+      `/sessions/${sessionPath}/${instance.session_instance_id}` +
+      `?highlight=${p.session_instance_tune_id}&tune=${tuneId}`,
+  }))
+}
+
+// Autocomplete matches for the tune filter box. Accent-insensitive via the
+// app-wide AccentUtils when present (same rule as the Tunes tab search);
+// prefix matches lead, then the tunes played most often here.
+export function matchLoggedTunes(tunes, query, limit = 8) {
+  const q = (query || '').trim().toLowerCase()
+  if (!q) return []
+  const accent = typeof window !== 'undefined' ? window.AccentUtils : null
+  const matches = (tunes || []).filter((t) =>
+    accent ? accent.includes(t.name || '', q) : (t.name || '').toLowerCase().includes(q)
+  )
+  matches.sort((a, b) => {
+    const ap = (a.name || '').toLowerCase().startsWith(q) ? 0 : 1
+    const bp = (b.name || '').toLowerCase().startsWith(q) ? 0 : 1
+    if (ap !== bp) return ap - bp
+    if ((b.log_count || 0) !== (a.log_count || 0)) return (b.log_count || 0) - (a.log_count || 0)
+    return (a.name || '').localeCompare(b.name || '')
+  })
+  return matches.slice(0, limit)
+}
+
 // Festival day header, e.g. "Sunday, June 1, 2025". Parsed as a LOCAL date —
 // the legacy new Date("YYYY-MM-DD") semantics rendered the previous day west
 // of UTC (same bug class as the admin logs tab).

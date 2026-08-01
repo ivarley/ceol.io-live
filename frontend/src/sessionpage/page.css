@@ -422,6 +422,184 @@
     color: var(--text-color);
 }
 
+/* Logs tab filter header: the All/Logged toggle + the tune autocomplete.
+   Skins come from my_tunes_mobile.css (.filter-button-group / .filter-sort-btn /
+   .filter-search-input), the same ones the Tunes tab's filter row wears. */
+.logs-filter-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 8px 12px 0;
+    /* 12px = .instance-date-cell's own padding, so the search box's left edge
+       lines up with the column of dates below it. */
+    padding-left: 12px;
+    /* clear the floated help icon so the row doesn't run under it */
+    padding-right: 24px;
+}
+
+.logs-view-toggle {
+    flex: 0 0 auto;
+}
+
+/* A quiet view switch, not a call to action: the active side reads as "pressed"
+   (a lifted surface + full-strength text) rather than as a primary blue button,
+   which is what .filter-sort-btn.active paints everywhere else. */
+.logs-view-toggle .filter-sort-btn {
+    padding: 7px 14px;
+    color: var(--text-muted, #6c757d);
+    background-color: transparent;
+}
+
+.logs-view-toggle .filter-sort-btn:hover {
+    color: var(--text-color);
+}
+
+.logs-view-toggle .filter-sort-btn.active {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+    border-color: var(--border-color);
+    font-weight: 500;
+}
+
+.logs-tune-filter {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    max-width: 320px;
+}
+
+/* Autocomplete list — overlays the grid below it. */
+.logs-tune-options {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+    max-height: 280px;
+    overflow-y: auto;
+    background-color: var(--dropdown-bg, var(--bg-color));
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Same frame as the option list, for the "loading" / "no match" one-liner. */
+.logs-tune-status {
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-tune-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 14px;
+    color: var(--text-color);
+    text-align: left;
+    cursor: pointer;
+}
+
+.logs-tune-option:hover,
+.logs-tune-option.active {
+    background-color: var(--hover-bg);
+}
+
+.logs-tune-option-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logs-tune-option-count {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-filter-note {
+    margin: -4px 0 12px;
+    padding-left: 12px; /* same date-column alignment as the header row */
+    font-size: 13px;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-filter-clear {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.logs-filter-clear:hover {
+    text-decoration: underline;
+}
+
+/* The hits under a filtered date: each play of the found tune, linked at the
+   exact record. Indented under the date so the date still reads as the row. */
+.logs-tune-hits {
+    list-style: none;
+    margin: 4px 0 2px;
+    padding: 0 0 0 18px;
+}
+
+.logs-tune-hits li {
+    margin: 0;
+    padding: 2px 0;
+    font-size: 0.9em;
+}
+
+.logs-tune-hits a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.logs-tune-hits a:hover {
+    text-decoration: underline;
+}
+
+.logs-tune-hit-where {
+    margin-left: 6px;
+    color: var(--text-muted, #6c757d);
+    font-size: 0.85em;
+}
+
+.logs-empty-state {
+    padding: 24px 8px;
+    color: var(--text-muted, #6c757d);
+}
+
+.logs-empty-hint {
+    margin-top: 4px;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .logs-tune-filter {
+        max-width: none;
+    }
+    /* my_tunes_mobile.css gives .filter-button-group width:100% on phones (it owns a
+       whole filter-panel row there). Here it shares the row with the tune box. */
+    .logs-view-toggle {
+        width: auto;
+    }
+    .logs-filter-header {
+        gap: 6px;
+        padding-right: 20px;
+    }
+}
+
 /* Year section toggle styles */
 .year-section {
     margin-bottom: 1.5rem;

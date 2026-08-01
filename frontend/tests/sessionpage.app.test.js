@@ -236,9 +236,13 @@ describe('session detail page view', () => {
 
   it('lazy-loads and renders regular logs (years, counts, empty-log dimming)', async () => {
     const { container } = renderApp(payload(), { activeTab: 'logs' })
+    // Default view is "logged": 2024's only instance has nothing logged, so that
+    // whole year section is filtered out until All is picked.
     await waitFor(() => {
-      expect(container.querySelectorAll('#logs-tab .year-section')).toHaveLength(2)
+      expect(container.querySelectorAll('#logs-tab .year-section')).toHaveLength(1)
     })
+    await fireEvent.click(container.querySelector('[data-log-view="all"]'))
+    expect(container.querySelectorAll('#logs-tab .year-section')).toHaveLength(2)
     expect(container.querySelector('.year-title').textContent).toBe('2025')
     const link2025 = container.querySelector('a[data-instance-id="11"]')
     expect(link2025.getAttribute('href')).toBe('/sessions/test/2025-06-01')
@@ -251,6 +255,107 @@ describe('session detail page view', () => {
     await fireEvent.click(container.querySelector('.year-toggle[data-year="2025"]'))
     expect(container.querySelector('.year-toggle[data-year="2025"]').textContent).toBe('▶')
     expect(container.querySelector('.year-content-row[data-year="2025"]').style.display).toBe('none')
+  })
+
+  it('the logged/all toggle defaults to logged and hides sections with nothing logged', async () => {
+    const { container } = renderApp(payload(), { activeTab: 'logs' })
+    await waitFor(() => {
+      expect(container.querySelector('#logs-filter-header')).toBeTruthy()
+    })
+    expect(container.querySelector('[data-log-view="logged"]').classList.contains('active')).toBe(true)
+    expect(container.querySelector('a[data-instance-id="11"]')).toBeTruthy()
+    expect(container.querySelector('a[data-instance-id="10"]')).toBeFalsy()
+    // …and All brings the placeholder night back.
+    await fireEvent.click(container.querySelector('[data-log-view="all"]'))
+    expect(container.querySelector('a[data-instance-id="10"]')).toBeTruthy()
+  })
+
+  it('the tune filter autocompletes and narrows the list to nights that tune was played', async () => {
+    fetchRoutes['/logged-tunes/101/instances'] = {
+      success: true,
+      session_instance_ids: [10],
+      instances: [
+        {
+          session_instance_id: 10,
+          positions: [
+            { session_instance_tune_id: 900, name: "Cooley's", set_number: 2, position_in_set: 1 },
+            { session_instance_tune_id: 907, name: "Cooley's", set_number: 5, position_in_set: 3 },
+          ],
+        },
+      ],
+    }
+    fetchRoutes['/logged-tunes/102/instances'] = {
+      success: true,
+      session_instance_ids: [11],
+      instances: [
+        {
+          session_instance_id: 11,
+          positions: [
+            { session_instance_tune_id: 950, name: 'Banish Misfortune', set_number: 1, position_in_set: 2 },
+          ],
+        },
+      ],
+    }
+    fetchRoutes['/logged-tunes'] = {
+      success: true,
+      tunes: [
+        { tune_id: 101, name: "Cooley's", log_count: 1 },
+        { tune_id: 102, name: 'Banish Misfortune', log_count: 4 },
+      ],
+    }
+    const { container } = renderApp(payload(), { activeTab: 'logs' })
+    await waitFor(() => {
+      expect(container.querySelector('#logs-tune-filter-input')).toBeTruthy()
+    })
+    const input = container.querySelector('#logs-tune-filter-input')
+    await fireEvent.focus(input)
+    await waitFor(() => {
+      expect(fetch.mock.calls.some(([u]) => String(u).endsWith('/api/sessions/test/logged-tunes'))).toBe(true)
+    })
+    await fireEvent.input(input, { target: { value: 'cool' } })
+    await waitFor(() => {
+      expect(container.querySelectorAll('#logs-tune-options .logs-tune-option')).toHaveLength(1)
+    })
+    expect(container.querySelector('.logs-tune-option-name').textContent).toBe("Cooley's")
+
+    await fireEvent.click(container.querySelector('.logs-tune-option'))
+    // Instance 10 has nothing logged, but the tune filter supersedes logged/all:
+    // it is the only night this tune was played, so it is the only one shown.
+    await waitFor(() => {
+      expect(container.querySelector('a[data-instance-id="10"]')).toBeTruthy()
+    })
+    expect(container.querySelector('a[data-instance-id="11"]')).toBeFalsy()
+    expect(container.querySelector('#logs-filter-note').textContent).toContain("1 log with Cooley's")
+
+    // Each play that night is listed under the date and deep-links at that exact
+    // record (?highlight=<session_instance_tune_id>), not the top of the log.
+    const hits = container.querySelectorAll('.logs-tune-hits li a')
+    expect(hits).toHaveLength(2)
+    expect(hits[0].getAttribute('href')).toBe('/sessions/test/10?highlight=900&tune=101')
+    expect(hits[0].textContent.replace(/\s+/g, ' ').trim()).toBe("Cooley'sset 2, tune 1") // the gap is CSS margin
+    expect(hits[0].querySelector('.logs-tune-hit-where').textContent).toBe('set 2, tune 1')
+    expect(hits[1].getAttribute('href')).toBe('/sessions/test/10?highlight=907&tune=101')
+
+    // Editing the box after a pick drops the filter AND reopens the dropdown —
+    // a selection that swallowed focus would leave the box unable to search again.
+    await fireEvent.input(input, { target: { value: 'banish' } })
+    await waitFor(() => {
+      expect(container.querySelector('.logs-tune-option-name').textContent).toBe('Banish Misfortune')
+    })
+    expect(container.querySelector('#logs-filter-note')).toBeFalsy()
+    expect(container.querySelector('a[data-instance-id="11"]')).toBeTruthy()
+
+    // Enter picks the highlighted option.
+    await fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => {
+      expect(container.querySelector('#logs-filter-note').textContent).toContain('Banish Misfortune')
+    })
+
+    // The kit's clear × drops the filter too.
+    await fireEvent.click(container.querySelector('.logs-tune-filter .kit-x'))
+    await waitFor(() => {
+      expect(container.querySelector('#logs-filter-note')).toBeFalsy()
+    })
   })
 
   it('festival sessions label the logs tab "Sessions", order it first, and render by day', async () => {

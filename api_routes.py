@@ -11664,6 +11664,163 @@ def get_session_logs(session_path):
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+@public_api  # backs the Logs tab's tune filter autocomplete (frontend/src/sessionpage/LogsTab.svelte)
+def get_session_logged_tunes(session_path):
+    """
+    GET /api/sessions/<path>/logged-tunes — every tune ever logged at this session,
+    for the Logs tab's "filter to nights this tune was played" autocomplete. Lazy:
+    fetched on the first keystroke in that box, then filtered client-side.
+
+    Only LINKED rows appear (tune_id IS NOT NULL) — the filter navigates by tune
+    identity, and a name-only log row has none. The name shown is the one the rest
+    of the session shows: the session's alias when it has one, else the canonical
+    tune name.
+
+    Returns {"success": true, "tunes": [{tune_id, name, log_count}, ...]}
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        session_id = session_result[0]
+
+        cur.execute(
+            f"""
+            SELECT sit.tune_id,
+                   COALESCE(st.alias, t.name, MIN(sit.name)) AS name,
+                   COUNT(DISTINCT sit.session_instance_id) AS log_count
+            FROM session_instance_tune sit
+            JOIN session_instance si ON si.session_instance_id = sit.session_instance_id
+            LEFT JOIN tune t ON t.tune_id = sit.tune_id
+            LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = si.session_id
+            WHERE si.session_id = %s AND sit.tune_id IS NOT NULL AND {person_scope.SIT_COUNTABLE}
+            GROUP BY sit.tune_id, st.alias, t.name
+            ORDER BY name
+            """,
+            (session_id,),
+        )
+        tunes = [
+            {"tune_id": row[0], "name": row[1], "log_count": row[2]}
+            for row in cur.fetchall()
+            if row[1]  # a linked row with no name anywhere isn't searchable
+        ]
+        cur.close()
+        conn.close()
+
+        return jsonify({"success": True, "tunes": tunes})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@public_api  # backs the Logs tab's tune filter (frontend/src/sessionpage/LogsTab.svelte)
+def get_session_tune_log_instances(session_path, tune_id):
+    """
+    GET /api/sessions/<path>/logged-tunes/<tune_id>/instances — where that tune was
+    played at this session: the instance ids the Logs tab filters down to, plus the
+    exact record(s) within each night so the list can link straight at them.
+
+    Positions are the same humane "Set N, tune M" coordinates the tune drawer's
+    History tab shows (break records split the sets, spec 023, and are excluded from
+    the numbering), and each carries its session_instance_tune_id for the
+    ?highlight= deep link. A tune played twice that night yields two entries.
+
+    Unbounded on purpose (unlike the History tab's 100-instance window): a partial
+    list would silently hide nights from a filter that claims to show all of them.
+
+    Returns {"success": true, "session_instance_ids": [...],
+             "instances": [{session_instance_id, positions: [
+                 {session_instance_tune_id, name, set_number, position_in_set}]}]}
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
+        session_result = cur.fetchone()
+        if not session_result:
+            cur.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Session not found"}), 404
+        session_id = session_result[0]
+
+        cur.execute(
+            """
+            WITH target_instances AS (
+                SELECT si.session_instance_id
+                FROM session_instance si
+                WHERE si.session_id = %(session_id)s
+                  AND EXISTS (
+                      SELECT 1 FROM session_instance_tune x
+                      WHERE x.session_instance_id = si.session_instance_id
+                        AND x.tune_id = %(tune_id)s AND x.deleted = FALSE
+                  )
+            ),
+            instance_rows AS (
+                -- Breaks are KEPT here: they are what splits the sets. They drop out
+                -- of `positioned` below, so they never take a tune number.
+                SELECT sit.session_instance_tune_id, sit.session_instance_id, sit.tune_id,
+                       sit.name, sit.record_type, sit.order_position,
+                       SUM(CASE WHEN sit.record_type = 'break' THEN 1 ELSE 0 END)
+                           OVER (PARTITION BY sit.session_instance_id
+                                 ORDER BY sit.order_position, sit.session_instance_tune_id) AS set_idx
+                FROM session_instance_tune sit
+                JOIN target_instances ti ON sit.session_instance_id = ti.session_instance_id
+                WHERE sit.deleted = FALSE
+            ),
+            positioned AS (
+                SELECT *,
+                       set_idx + 1 AS set_number,
+                       ROW_NUMBER() OVER (PARTITION BY session_instance_id, set_idx
+                                          ORDER BY order_position, session_instance_tune_id) AS position_in_set
+                FROM instance_rows
+                WHERE record_type <> 'break'
+            )
+            SELECT p.session_instance_id, p.session_instance_tune_id,
+                   COALESCE(p.name, st.alias, t.name) AS name,
+                   p.set_number, p.position_in_set
+            FROM positioned p
+            LEFT JOIN tune t ON t.tune_id = p.tune_id
+            LEFT JOIN session_tune st ON st.tune_id = p.tune_id AND st.session_id = %(session_id)s
+            WHERE p.tune_id = %(tune_id)s
+            ORDER BY p.session_instance_id, p.set_number, p.position_in_set
+            """,
+            {"session_id": session_id, "tune_id": tune_id},
+        )
+
+        by_instance = {}
+        order = []
+        for instance_id, sit_id, name, set_number, position_in_set in cur.fetchall():
+            if instance_id not in by_instance:
+                by_instance[instance_id] = []
+                order.append(instance_id)
+            by_instance[instance_id].append({
+                "session_instance_tune_id": sit_id,
+                "name": name,
+                "set_number": set_number,
+                "position_in_set": position_in_set,
+            })
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "session_instance_ids": order,
+            "instances": [
+                {"session_instance_id": i, "positions": by_instance[i]} for i in order
+            ],
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @public_api  # backs the logged-out /sessions/<path> page (the shell embeds the same serializer output; flags reflect the anonymous user)
 def get_session_detail(session_path):
     """

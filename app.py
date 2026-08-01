@@ -574,6 +574,21 @@ app.add_url_rule(
     get_session_logs,
     methods=["GET"],
 )
+# The Logs tab's tune filter. Deliberately NOT under .../tunes: that prefix is
+# already a thicket of greedy <path:session_path> rules, and "logged-tunes" is
+# the distinct thing anyway (tunes that appear in the logs, not the repertoire).
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/logged-tunes",
+    "get_session_logged_tunes",
+    get_session_logged_tunes,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/sessions/<path:session_path>/logged-tunes/<int:tune_id>/instances",
+    "get_session_tune_log_instances",
+    get_session_tune_log_instances,
+    methods=["GET"],
+)
 app.add_url_rule(
     "/api/sessions/<path:session_path>/tunes/remaining",
     "get_session_tunes_remaining",

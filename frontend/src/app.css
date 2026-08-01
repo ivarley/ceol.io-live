@@ -65,9 +65,14 @@ body {
   color: var(--text);
 }
 
+/* The column grows with the window right up to the ≥900px two-pane breakpoint
+   (main.wide, spec 028), where the grid takes over at max-width 1200. Capping it at
+   the phone's 640 stranded a narrow column in the middle of any 640–900px window
+   with black gutters either side, which reads as a broken page rather than a
+   deliberate column. */
 main {
   position: relative;
-  max-width: 640px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 0;
   height: 100dvh;
@@ -107,11 +112,28 @@ main {
 
 /* ---------- sticky header: appbar (logo + menu) + topbar (session) ---------- */
 .topnav {
+  position: relative;
   flex: 0 0 auto;
   z-index: 30;
   background: var(--header-band);
   /* room for the fixed .appbar (the in-flow .topbar starts below it) */
   padding-top: calc(42px + env(safe-area-inset-top));
+}
+/* The session band is FULL-BLEED even though it lives inside the centered column:
+   a header colour that stops mid-window (wherever the column happens to end) reads
+   as a broken page. Painted by a pseudo-element so no layout — nor the help menu
+   that overflows the bar — changes; FIXED rather than absolute because main's
+   overflow:hidden would clip anything in flow, and sized from --header-h, which
+   .topnav publishes from the height it already measures for the toast offset. */
+.topnav::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h, 0);
+  background: var(--header-band);
+  z-index: -1;
 }
 /* The app-wide header, replicated (base.html .header / theme.css, dark palette): a
    full-VIEWPORT-width fixed bar — position:fixed escapes main's max-width column AND
