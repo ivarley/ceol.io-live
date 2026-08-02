@@ -11,7 +11,7 @@ import { defineConfig, devices } from "@playwright/test";
  * NOT covered here — they are tracked separately.
  */
 
-const PORT = Number(process.env.E2E_PORT || 5001);
+const PORT = Number(process.env.E2E_PORT || 3232);
 // localhost (not 127.0.0.1): the session cookie's host must match the streaming
 // sidecar's host (localhost:8080) or EventSource(withCredentials) can't authenticate —
 // cookies ignore ports but not hostnames. Spec 029's multiplayer e2e needs live SSE.

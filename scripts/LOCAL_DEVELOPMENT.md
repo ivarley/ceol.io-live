@@ -24,7 +24,7 @@ cp .env.test .env
 flask --app app run --debug
 ```
 
-The app will be available at http://127.0.0.1:5001
+The app will be available at http://127.0.0.1:3232
 
 ## Live Logging Screen (feature 024)
 
@@ -39,7 +39,7 @@ python -m streaming.service   # SSE service on :8080 (loads .env; needs the same
 **Host must match.** The streaming service authenticates with your Flask-Login `session`
 cookie, which is **host-scoped** — `localhost` and `127.0.0.1` are different hosts and do
 **not** share cookies (ports don't matter; hosts do). The page's `STREAMING_BASE_URL`
-defaults to `http://localhost:8080`, so open the app at **`http://localhost:5001`** (not
+defaults to `http://localhost:8080`, so open the app at **`http://localhost:3232`** (not
 `127.0.0.1`). A mismatch makes the SSE request 401, the client falls back to **"offline,"**
 and live updates silently stop. If you prefer `127.0.0.1`, set
 `STREAMING_BASE_URL=http://127.0.0.1:8080` in `.env` so both sides agree.

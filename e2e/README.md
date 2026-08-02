@@ -21,7 +21,7 @@ npm run test:e2e:report   # open the last HTML report
 
 The suite expects the seeded **`ceol_test`** database to be up (`make
 setup-test-db` / `./start`). `playwright.config.ts` starts the dev server on
-port 5001 and reuses an already-running one locally.
+port 3232 (override with `E2E_PORT`) and reuses an already-running one locally.
 
 The run **reseeds the database when it ends** (`global.teardown.ts` — the
 specs commit real rows through the app's API, and without this they pile up

@@ -22,7 +22,10 @@ eval "$("$BREW" shellenv)"
 PG_PREFIX="$("$BREW" --prefix postgresql@16 2>/dev/null || true)"
 [ -n "$PG_PREFIX" ] && export PATH="$PG_PREFIX/bin:$PATH"
 
-PORT=5001
+# 3232, not 5001: another local app (rialta) owns 5001 on this machine, and a
+# hardcoded collision there stops `./start` dead at the bind. Overridable so a
+# future clash needs no edit here.
+PORT="${PORT:-3232}"
 STREAM_PORT=8080
 # `localhost`, not 127.0.0.1: the browser scopes the session cookie by host, and
 # the streaming sidecar authenticates with that same cookie. Serving the app on

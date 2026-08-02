@@ -10,12 +10,21 @@ description: How to launch and drive this Flask app to verify changes end-to-end
 - Python: `./venv/bin/python` (NOT system python). Tests: `./venv/bin/pytest`.
 - DB: local Postgres `ceol_test` as `test_user` (config comes from `.env`;
   `psql -h localhost -U test_user -d ceol_test` works without a password prompt).
-- The user's own dev server often occupies port **5001** — never kill it. Run a
+- The app's own port is **3232** (`./start`, `.flaskenv`). Port 5001 belongs to a
+  DIFFERENT local app (rialta) — never kill whatever is on it.
+- The user's own ceol dev server often occupies 3232 — never kill it either. Run a
   second instance on another port:
   `./venv/bin/python -c "import sys; sys.path.insert(0,'.'); from app import app; app.run(port=5031)"`
   (run from repo root so `load_dotenv()` picks up `.env`).
-- Login: `ian` / `password123` (system admin), `sarah_fiddle` / `password123`
-  (regular). The login form's "Email address" field accepts the username.
+- Login is EMAIL-ONLY and two-step — there is no username field. Use the seeded
+  addresses, not your own: `ian@ceol.io` / `password123` (system admin, username
+  `ian`), `sarah.oconnor@example.com` / `password123` (regular, username
+  `sarah_fiddle`).
+- Entering an email with no account does NOT error — `/api/auth/check-email`
+  returns `registration_started` and CREATES a user plus a blank person row.
+  Typing a real personal address here silently pollutes the seed data; the
+  account has no password and can't be logged into (no mail locally). Clean up
+  with `make reset-test-db`.
 
 ## Driving
 

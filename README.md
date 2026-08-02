@@ -33,7 +33,7 @@ export PGPASSWORD=your_password
 export SECRET_KEY=your_secret_key
 
 # Run development server
-flask --app app run --debug --port 5001
+flask --app app run --debug --port 3232
 ```
 
 ## Project Structure

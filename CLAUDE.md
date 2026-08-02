@@ -72,7 +72,7 @@ make setup-test-db        # Create local database with seed data
 cp .env.test .env         # Use test environment config
 
 # Run the app
-flask --app app run --debug  # http://127.0.0.1:5001
+flask --app app run --debug  # http://127.0.0.1:3232
 
 # Database management
 make reset-test-db        # Drop and recreate database
