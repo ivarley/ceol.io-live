@@ -1,6 +1,10 @@
 # CLAUDE.md
 
-Irish music session tracker. Flask/PostgreSQL web app for tracking live music sessions and tunes.
+## What Ceol is for
+
+Ceol.io is a companion to thesession.org for players of Irish traditional music: it tracks the tunes you know and are learning, the sessions you play at, and what was actually played at each of those sessions. thesession.org holds the world's tune data; Ceol holds the social layer — what is really played, where, and by whom.
+
+The user-facing version of this lives at `/help` (`templates/help.html`). Keep the two in step.
 
 ## Work Process
 
@@ -9,7 +13,7 @@ The high level view of the system is documented in the /specs directory. Before 
 ## Quick Reference
 
 **Stack**: Flask 3.1 + PostgreSQL + Svelte 5 (interactive pages) + Jinja2 shells + Bootstrap 4.5 (legacy pages)
-**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON)
+**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON), `live_logging_routes.py` (live-logging ops)
 **Payloads**: `serializers.py` — one function per payload; the page shell's embedded `__PAGE_DATA__` and the API return the same dict (spec 035)
 **API auth**: `api_auth.py` — `@api_login_required` / `@api_admin_or_self_required` / `@public_api`; Bearer tokens via `app.py` request_loader
 **Frontend**: `frontend/src/<page>/` + shared kit `frontend/src/lib/` → Vite builds to `static/<page>/` (gitignored, rebuilt on deploy); how-to: [Svelte Pages](specs/current/ui/svelte-pages.md)
@@ -65,19 +69,29 @@ Internal services, microservices, background jobs
 
 ## Development
 
+Run the app with [`./start`](start). It is idempotent and brings up everything the app needs from any state — Postgres, the venv, the webpack and Vite bundles, `.env`, the seeded local database, and the live-logging streaming sidecar — then runs the Flask dev server.
+
 ```bash
-# First time setup
-make install              # Install Python/JS dependencies
-make setup-test-db        # Create local database with seed data
-cp .env.test .env         # Use test environment config
+./start                   # run the app: http://localhost:3232
+./start --reset-db        # drop and reseed the local database first
+```
 
-# Run the app
-flask --app app run --debug  # http://127.0.0.1:3232
+Two things `./start` gets right that a bare `flask run` does not:
 
-# Database management
-make reset-test-db        # Drop and recreate database
-make seed-test-db         # Refresh seed data only
-make test                 # Run all tests
+- **`localhost`, not `127.0.0.1`.** The session cookie is host-scoped and the streaming sidecar authenticates with that same cookie, so mixing the two spellings kills live updates and nothing else — a miserable thing to debug. The e2e suite uses `localhost` too.
+- **The streaming sidecar has to be running.** Without it live logging still accepts ops and catch-up on reconnect fills the gap, but nothing arrives live, which reads as "the logger is broken".
+
+Port 3232 (not Flask's default) because another local app owns 5001 on this machine; override with `PORT`.
+
+```bash
+make install              # Python test/dev deps — ./start installs runtime deps only
+make test                 # pytest + npm test + frontend Vitest
+make test-e2e             # Playwright
+make lint                 # flake8 + black --check
+make format               # black
+make reset-test-db        # drop and recreate the local database
+make seed-test-db         # refresh seed data only
+make help                 # every target
 ```
 
 See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed setup instructions.
@@ -86,12 +100,35 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 
 ## Key Files
 
-- `app.py:52` - Flask app init; `app.py:106` - Bearer-token request_loader; API URL rules bound here
-- `web_routes.py` - ~3600 lines, all HTML page routes (migrated pages are thin shells calling serializers)
-- `api_routes.py` - ~12700 lines, JSON API endpoints; `api_person_tune_routes.py` - my-tunes/person-tune APIs
-- `serializers.py` - page/API payload builders (pure mappers, RealDictCursor loaders)
-- `api_auth.py` - API auth decorators + `@public_api` marker
-- `auth.py:13` - User model and authentication
-- `database.py:253` - DB connection, `database.py:270` - History tracking
-- `frontend/` - Svelte sources (`src/<page>/`, kit in `src/lib/`), one Vite config per bundle; `frontend/tests/` Vitest; `e2e/` Playwright
-- `schema/schema.md` - Complete database documentation
+**Request handling**
+- [`app.py`](app.py) - Flask app construction, Flask-Login setup, the Bearer-token `request_loader`, template filters, and the `add_url_rule` block that binds every route imported from the route modules
+- [`web_routes.py`](web_routes.py) - every HTML page route; migrated pages are thin shells that call a serializer
+- [`api_routes.py`](api_routes.py) - the bulk of the JSON API
+- [`api_person_tune_routes.py`](api_person_tune_routes.py) - my-tunes / person-tune JSON API
+- [`live_logging_routes.py`](live_logging_routes.py) - the live-logging referee: the server-authoritative op endpoint and its op vocabulary (spec 024)
+- [`serializers.py`](serializers.py) - page/API payload builders; one function per wire shape, shared by the page shell's `__PAGE_DATA__` and the API (spec 035)
+- [`api_auth.py`](api_auth.py) - API auth decorators and the `@public_api` marker
+
+**Data and auth**
+- [`database.py`](database.py) - connection handling, the history/audit writer, and shared query helpers
+- [`auth.py`](auth.py) - User model, login, registration, email verification
+- [`models/`](models) / [`services/`](services) - the few pieces that have been pulled out of the route modules (person-tune, person merge, thesession sync, merge scanning)
+- [`schema/schema.md`](schema/schema.md) - complete database documentation
+
+**Domain utilities**
+- [`active_session_manager.py`](active_session_manager.py) - which session instances are currently live, and who is at them
+- [`recurrence_utils.py`](recurrence_utils.py) / [`session_instance_auto_create.py`](session_instance_auto_create.py) - recurrence patterns, and creating upcoming instances from them
+- [`timezone_utils.py`](timezone_utils.py) - UTC storage, per-session and per-user display conversion
+- [`session_path.py`](session_path.py) / [`session_fields.py`](session_fields.py) - validation shared by both session write paths
+- [`instruments.py`](instruments.py) - the canonical instrument vocabulary
+- [`fractional_indexing.py`](fractional_indexing.py) - CRDT-compatible list ordering for tune sets
+- [`recording.py`](recording.py) - session audio: S3 upload/download and chunking
+- [`email_utils.py`](email_utils.py) - SendGrid delivery
+
+**Frontend and out-of-process**
+- [`frontend/`](frontend) - Svelte sources (`src/<page>/`, shared kit in `src/lib/`), one Vite config per bundle; `frontend/tests/` is Vitest
+- [`templates/`](templates) - Jinja2: page shells for Svelte pages, full pages for the legacy ones
+- [`streaming/`](streaming) - async SSE sidecar for live logging (Starlette + asyncpg), deployed separately
+- [`jobs/`](jobs) - Render cron jobs: active-session tracking, thesession.org merge sync
+- [`abc-renderer/`](abc-renderer) - Node.js microservice, ABC notation → PNG
+- [`e2e/`](e2e) - Playwright specs; [`spike/`](spike) - standalone exploration scripts, deliberately excluded from pytest collection

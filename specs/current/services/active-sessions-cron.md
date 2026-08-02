@@ -150,7 +150,7 @@ python3 jobs/test_active_sessions.py --setup-test-data
 
 ### Documentation
 
-See `jobs/README.md` and `README-TESTING-CRON.md` for comprehensive testing guide.
+See `jobs/README.md` and [Cron Testing](active-sessions-cron-testing.md) for comprehensive testing guide.
 
 ## Monitoring
 

@@ -23,7 +23,7 @@ Provides flexible testing with:
 - Predefined scenarios
 - Test data generation
 
-See `README-TESTING-CRON.md` for full documentation.
+See [Cron Testing](../specs/current/services/active-sessions-cron-testing.md) for full documentation.
 
 **Quick examples:**
 ```bash
@@ -63,7 +63,7 @@ python3 jobs/test_active_sessions.py --setup-test-data
 
 ## Documentation
 
-- **README-TESTING-CRON.md** - Comprehensive guide for testing the cron job locally
+- **[Cron Testing](../specs/current/services/active-sessions-cron-testing.md)** - Comprehensive guide for testing the cron job locally
   - Setup instructions
   - Usage examples
   - Testing scenarios

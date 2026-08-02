@@ -12,7 +12,7 @@ Services that run independently from the main Flask app, either as separate Rend
 Microservice for converting ABC notation to PNG images (Node.js + abcjs)
 
 ### [Active Sessions Cron](active-sessions-cron.md)
-Scheduled job tracking which sessions are currently happening (runs every 15 minutes)
+Scheduled job tracking which sessions are currently happening (runs every 15 minutes). Local testing walkthrough: [Cron Testing](active-sessions-cron-testing.md)
 
 ### [thesession.org Merge Sync](thesession-merge-sync.md)
 Weekly job that diffs local tune ids against thesession.org's data dump and auto-applies upstream merges (spec 031)

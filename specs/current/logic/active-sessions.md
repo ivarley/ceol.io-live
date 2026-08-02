@@ -90,6 +90,6 @@ Real-time tracking of which sessions are happening now and which people are atte
 
 ## Testing
 
-**Manual**: `README-TESTING-CRON.md` - Create test session, run `check_active_sessions.py`, verify flags
+**Manual**: [Cron Testing](../services/active-sessions-cron-testing.md) - Create test session, run `check_active_sessions.py`, verify flags
 
 **Scripts**: `jobs/test_scenarios.py`

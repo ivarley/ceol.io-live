@@ -14,7 +14,7 @@ Irish traditional music session tracker. A web application for tracking live mus
 ## Tech Stack
 
 - **Backend**: Flask 3.1, PostgreSQL, Gunicorn
-- **Frontend**: Bootstrap 4.5, Jinja2 templates, vanilla JavaScript
+- **Frontend**: Svelte 5 for the interactive pages, Jinja2 shells around them; Bootstrap 4.5 on the older pages
 - **Authentication**: Flask-Login with email verification
 - **Deployment**: Render.com
 - **External APIs**: thesession.org (tune data), SendGrid (email)
@@ -22,36 +22,15 @@ Irish traditional music session tracker. A web application for tracking live mus
 ## Local Development
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables (see .env.example)
-export PGHOST=localhost
-export PGDATABASE=ceol
-export PGUSER=your_user
-export PGPASSWORD=your_password
-export SECRET_KEY=your_secret_key
-
-# Run development server
-flask --app app run --debug --port 3232
+./start              # http://localhost:3232
+./start --reset-db   # drop and reseed the local database first
 ```
 
-## Project Structure
-
-```
-├── app.py              # Flask app initialization
-├── web_routes.py       # HTML page routes
-├── api_routes.py       # JSON API endpoints
-├── auth.py             # User authentication
-├── database.py         # Database connection and utilities
-├── templates/          # Jinja2 HTML templates
-├── static/             # CSS, JS, images
-└── schema/             # Database schema and migrations
-```
+`./start` is idempotent and sets up whatever is missing — Postgres, the venv, the frontend bundles, `.env`, the seeded database, and the live-logging streaming sidecar.
 
 ## Documentation
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+[CLAUDE.md](CLAUDE.md) is the map: what the app is for, where the code lives, and links into `specs/` for the architecture.
 
 ## License
 
