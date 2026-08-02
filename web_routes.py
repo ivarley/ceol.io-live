@@ -129,7 +129,7 @@ def home():
             ]
 
             # In-progress logs: instances the user edited in the last 30 days
-            # that aren't marked complete
+            # that aren't marked complete and still have at least one tune logged
             cur.execute(
                 """
                 SELECT s.name, s.path, si.session_instance_id, si.date,
@@ -141,6 +141,12 @@ def home():
                   AND sit.last_modified_date >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 days'
                   AND si.log_complete_date IS NULL
                   AND si.is_cancelled = FALSE
+                  AND EXISTS (
+                    SELECT 1 FROM session_instance_tune sit2
+                    WHERE sit2.session_instance_id = si.session_instance_id
+                      AND sit2.deleted = FALSE
+                      AND sit2.record_type <> 'break'
+                  )
                 GROUP BY s.name, s.path, si.session_instance_id, si.date
                 ORDER BY last_edit DESC
                 LIMIT 3
