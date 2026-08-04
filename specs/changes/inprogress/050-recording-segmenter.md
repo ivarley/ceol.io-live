@@ -127,7 +127,17 @@ the embed and `GET /api/recordings/<id>/segmenter`).
 
 **The interaction is one key.** A cursor sits on the next tune in the log; find
 where it starts in the audio, press <kbd>M</kbd>, the cursor advances. Ends come
-free. <kbd>E</kbd> types an explicit end at the end of a set.
+free.
+
+Except at the end of a set, where an explicit end IS wanted — and there
+<kbd>M</kbd> means exactly that, rather than asking the operator to remember a
+second key at the one moment they are least likely to. Having just marked a
+set's last tune, the next press ends that set; the press after it starts the
+next tune. <kbd>E</kbd> still works and is still needed for ending a set you
+have already moved past. The banner and the mark button both switch colour and
+wording while <kbd>M</kbd> means "end", so the mode is visible rather than
+remembered — the original bug here was not the keystroke but the silence about
+which one applied.
 
 Two canvases over the same envelope:
 

@@ -187,7 +187,30 @@
     }
   }
 
+  /**
+   * The tune waiting on an explicit end, or null.
+   *
+   * True exactly when the previous log entry closed a set, has been placed, and
+   * hasn't been ended yet — i.e. the moment right after marking a set's last
+   * tune, when the only sensible next act is to say where that set stopped.
+   */
+  const pendingSetEndIndex = $derived.by(() => {
+    const prev = cursorIndex - 1
+    const tune = prev >= 0 ? tunes[prev] : null
+    if (!tune?.segment) return null
+    if (!tune.is_set_end || tune.segment.end_ms != null) return null
+    return prev
+  })
+
   function markStart() {
+    // Having marked a set's last tune, the next thing anyone does is mark where
+    // that set ended -- so M means that here, rather than making the operator
+    // remember a second key. E still works, and pressing M again once the end
+    // is set moves on to the next tune as usual.
+    if (pendingSetEndIndex != null) {
+      markEndAt(pendingSetEndIndex)
+      return
+    }
     if (!cursorTune) {
       flash('Every tune in the log is placed.', 'info')
       return
@@ -223,8 +246,12 @@
       flash('No placed tune before the playhead to end.', 'info')
       return
     }
-    const index = tunes.findIndex((t) => t.session_instance_tune_id === targetId)
+    markEndAt(tunes.findIndex((t) => t.session_instance_tune_id === targetId))
+  }
+
+  function markEndAt(index) {
     const tune = tunes[index]
+    if (!tune?.segment) return
     if (currentMs <= tune.segment.start_ms) {
       flash('The end has to come after the start.', 'error')
       return
@@ -411,15 +438,24 @@
           <span class="sg-of">of {formatTime(durationMs)}</span>
         </div>
 
-        <div class="sg-next">
-          {#if cursorTune}
-            <span class="sg-next-label">next up</span>
-            <span class="sg-next-name">{cursorTune.name}</span>
-            <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
-          {:else}
-            <span class="sg-next-label">log complete</span>
-          {/if}
-        </div>
+        {#if pendingSetEndIndex != null}
+          {@const ending = tunes[pendingSetEndIndex]}
+          <div class="sg-next is-ending">
+            <span class="sg-next-label">end of set {ending.set_number}</span>
+            <span class="sg-next-name">{ending.name}</span>
+            <span class="sg-next-meta">M marks where it stopped</span>
+          </div>
+        {:else}
+          <div class="sg-next">
+            {#if cursorTune}
+              <span class="sg-next-label">next up</span>
+              <span class="sg-next-name">{cursorTune.name}</span>
+              <span class="sg-next-meta">set {cursorTune.set_number}{cursorTune.is_set_end ? ' · last of set' : ''}</span>
+            {:else}
+              <span class="sg-next-label">log complete</span>
+            {/if}
+          </div>
+        {/if}
 
         <div class="sg-controls">
           <button type="button" onclick={() => nudge(-15000)}>−15s</button>
@@ -430,8 +466,14 @@
         </div>
 
         <div class="sg-controls sg-controls-main">
-          <button type="button" class="sg-mark" onclick={markStart} disabled={!cursorTune}>
-            Mark start <kbd>M</kbd>
+          <button
+            type="button"
+            class="sg-mark"
+            class:is-ending={pendingSetEndIndex != null}
+            onclick={markStart}
+            disabled={!cursorTune && pendingSetEndIndex == null}
+          >
+            {pendingSetEndIndex != null ? 'End of set' : 'Mark start'} <kbd>M</kbd>
           </button>
           <button type="button" class="sg-end" onclick={markEnd}>End of set <kbd>E</kbd></button>
           <button type="button" onclick={undo}>Undo <kbd>U</kbd></button>
@@ -641,6 +683,19 @@
   .sg-controls-main button {
     min-height: 52px;
     font-size: 0.95rem;
+  }
+  /* When M means "end the set", the banner and the button both switch to the
+     end colour -- the mode is never something you have to remember. */
+  .sg-next.is-ending {
+    border-color: var(--info, #5b99ea);
+    background: rgba(91, 153, 234, 0.1);
+  }
+  .sg-next.is-ending .sg-next-label {
+    color: var(--info, #5b99ea);
+  }
+  .sg-mark.is-ending {
+    border-color: var(--info, #5b99ea) !important;
+    background: rgba(91, 153, 234, 0.16) !important;
   }
   .sg-mark {
     flex-grow: 3 !important;

@@ -44,6 +44,12 @@ beforeEach(() => {
   // jsdom has no media pipeline; play/pause just need to not throw.
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
   window.HTMLMediaElement.prototype.pause = vi.fn()
+  // ...and its currentTime is read-only, so the playhead can never leave 0.
+  // Make it a plain writable property: the app both writes it (seek) and reads
+  // it back (the rAF tick), so a test can put the playhead somewhere real.
+  Object.defineProperty(window.HTMLMediaElement.prototype, 'currentTime', {
+    configurable: true, writable: true, value: 0,
+  })
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -160,7 +166,10 @@ describe('clearing a mark', () => {
   const placed = () => {
     const p = payload()
     p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 1000, end_ms: null }
-    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 9000, end_ms: null }
+    // Bravo closes set 1, so give it an explicit end: otherwise the app is in
+    // its "M means end the set" mode and these cursor assertions are testing
+    // that instead of what they mean to.
+    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 9000, end_ms: 20000 }
     return p
   }
 
@@ -201,5 +210,72 @@ describe('clearing a mark', () => {
 
     await fireEvent.keyDown(window, { key: 'u' })          // undo -> cursor back to Alpha
     await waitFor(() => expect(container.querySelector('.sg-next-name').textContent).toBe('Alpha Reel'))
+  })
+})
+
+// The app reads the playhead off the audio element on every animation frame,
+// so moving it means writing there and letting a frame go by.
+async function movePlayheadTo(container, seconds) {
+  container.querySelector('audio').currentTime = seconds
+  await new Promise((r) => setTimeout(r, 60))
+}
+
+describe('M as end-of-set', () => {
+  // Marking a set's last tune leaves that set open. The next thing anyone does
+  // is say where it stopped, so M means that rather than requiring a second key.
+  const afterMarkingLastOfSet = () => {
+    const p = payload()
+    p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 1000, end_ms: null }
+    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 9000, end_ms: null }
+    return p
+  }
+
+  it('announces the mode instead of leaving M ambiguous', () => {
+    const { container } = render(App, { props: { pageData: afterMarkingLastOfSet() } })
+    expect(container.querySelector('.sg-next.is-ending')).toBeTruthy()
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Bravo Jig')
+    expect(container.querySelector('.sg-mark').textContent).toContain('End of set')
+  })
+
+  it('M sets the end on the set\'s last tune, not a start on the next one', async () => {
+    const { container } = render(App, { props: { pageData: afterMarkingLastOfSet() } })
+    await movePlayheadTo(container, 30)   // past Bravo's 9s start
+    await fireEvent.keyDown(window, { key: 'm' })
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const [url, opts] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/recordings/7/segments/2')   // Bravo, not Charlie
+    expect(JSON.parse(opts.body).end_ms).not.toBeNull()
+  })
+
+  it('does not advance the cursor when it ends a set', async () => {
+    const { container } = render(App, { props: { pageData: afterMarkingLastOfSet() } })
+    await movePlayheadTo(container, 30)
+    await fireEvent.keyDown(window, { key: 'm' })
+    // Still pointed at the first tune of the next set, ready for the next M.
+    await waitFor(() => {
+      expect(container.querySelector('.sg-next-name').textContent).toBe('Charlie Polka')
+    })
+  })
+
+  it('goes back to marking starts once the set is closed', async () => {
+    const p = afterMarkingLastOfSet()
+    p.tunes[1].segment.end_ms = 20000        // set already ended
+    const { container } = render(App, { props: { pageData: p } })
+    expect(container.querySelector('.sg-next.is-ending')).toBeNull()
+    expect(container.querySelector('.sg-mark').textContent).toContain('Mark start')
+
+    await fireEvent.keyDown(window, { key: 'm' })
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/recordings/7/segments/3')  // Charlie
+  })
+
+  it('stays in start mode mid-set, where the end is implied anyway', () => {
+    const p = payload()
+    // Alpha is placed but is NOT the last of its set, so nothing is pending.
+    p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 1000, end_ms: null }
+    const { container } = render(App, { props: { pageData: p } })
+    expect(container.querySelector('.sg-next.is-ending')).toBeNull()
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Bravo Jig')
   })
 })
