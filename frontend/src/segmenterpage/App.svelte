@@ -233,11 +233,22 @@
     flash(`Ended "${tune.name}" at ${formatTime(currentMs)}`)
   }
 
-  async function clearAt(index) {
+  /**
+   * Unplace a tune.
+   *
+   * `moveCursor` puts the cursor back on the tune just cleared, which is what
+   * clearing MEANS when you do it by hand: you got that one wrong and want
+   * another go, so the next M belongs to it, not to whatever came after.
+   * Off by default because undo() restores its own cursor position and must
+   * not have it overwritten here.
+   */
+  async function clearAt(index, moveCursor = false) {
     const tune = tunes[index]
     if (!tune?.segment) return
     const previous = tune.segment
+    const previousCursor = cursorIndex
     tunes[index] = { ...tune, segment: null }
+    if (moveCursor) cursorIndex = index
     saving += 1
     try {
       const res = await fetch(
@@ -248,6 +259,7 @@
       if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`)
     } catch (err) {
       tunes[index] = { ...tunes[index], segment: previous }
+      if (moveCursor) cursorIndex = previousCursor
       flash(`Could not clear "${tune.name}": ${err.message}`, 'error')
     } finally {
       saving -= 1
@@ -468,7 +480,7 @@
           {cursorIndex}
           onpick={(i) => (cursorIndex = i)}
           onseek={seek}
-          onclear={clearAt}
+          onclear={(i) => clearAt(i, true)}
         />
       </section>
     </div>

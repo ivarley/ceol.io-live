@@ -155,3 +155,51 @@ describe('cursor movement', () => {
     expect(global.fetch).not.toHaveBeenCalled()
   })
 })
+
+describe('clearing a mark', () => {
+  const placed = () => {
+    const p = payload()
+    p.tunes[0].segment = { recording_tune_segment_id: 5, session_instance_tune_id: 1, start_ms: 1000, end_ms: null }
+    p.tunes[1].segment = { recording_tune_segment_id: 6, session_instance_tune_id: 2, start_ms: 9000, end_ms: null }
+    return p
+  }
+
+  it('puts the cursor back on the tune it cleared', async () => {
+    // Clearing by hand means "I got that one wrong" — the next M belongs to it,
+    // not to whatever the cursor had already moved on to.
+    const { container } = render(App, { props: { pageData: placed() } })
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Charlie Polka')
+
+    const clear = container.querySelectorAll('.tl-clear')[0]
+    await fireEvent.click(clear)
+
+    await waitFor(() => {
+      expect(container.querySelector('.sg-next-name').textContent).toBe('Alpha Reel')
+    })
+  })
+
+  it('restores both the mark and the cursor when the delete fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 500, json: async () => ({ success: false, error: 'nope' }),
+    })
+    const { container, getByText } = render(App, { props: { pageData: placed() } })
+
+    await fireEvent.click(container.querySelectorAll('.tl-clear')[0])
+
+    await waitFor(() => expect(getByText(/Could not clear "Alpha Reel"/)).toBeTruthy())
+    // Cursor back where it was, and the mark is still there.
+    expect(container.querySelector('.sg-next-name').textContent).toBe('Charlie Polka')
+    expect(container.querySelector('.sg-progress strong').textContent).toBe('2')
+  })
+
+  it('does not let clearing hijack the cursor that undo restores', async () => {
+    // undo() clears too, but it has already put the cursor back where the mark
+    // was made; clearing must not overwrite that.
+    const { container } = render(App, { props: { pageData: payload() } })
+    await fireEvent.keyDown(window, { key: 'm' })          // places Alpha, cursor -> Bravo
+    await waitFor(() => expect(container.querySelector('.sg-next-name').textContent).toBe('Bravo Jig'))
+
+    await fireEvent.keyDown(window, { key: 'u' })          // undo -> cursor back to Alpha
+    await waitFor(() => expect(container.querySelector('.sg-next-name').textContent).toBe('Alpha Reel'))
+  })
+})
