@@ -73,12 +73,33 @@ def upload_recording(file_path, storage_key, mime_type="audio/mp4"):
     return storage_key
 
 
+def check_configured():
+    """Return a human-readable reason object storage is unusable, or None.
+
+    Without this, an unset AWS_S3_BUCKET reaches boto3 as Bucket=None and comes
+    back as "expected string or bytes-like object, got 'NoneType'" -- which the
+    segmenter then shows to the operator as the reason their audio won't play.
+    Naming the missing variable turns that into a two-minute fix.
+    """
+    missing = [
+        name
+        for name in ("AWS_S3_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+        if not os.environ.get(name)
+    ]
+    if missing:
+        return f"object storage is not configured on this server ({', '.join(missing)} unset)"
+    return None
+
+
 def generate_presigned_url(storage_key, expiry=21600):
     """Presigned GET URL for a stored recording.
 
     Six hours by default: long enough that a segmenting session outlasts it only
     rarely, short enough that a leaked URL expires. The page re-fetches on load.
     """
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
     s3 = get_s3_client()
     return s3.generate_presigned_url(
         "get_object",
