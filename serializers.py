@@ -1799,6 +1799,7 @@ def build_recording_segmenter_payload(
     cur.execute(
         """
         SELECT r.recording_id, r.session_instance_id, r.person_id, r.label, r.storage_key, r.mime_type,
+               r.stream_key, r.stream_mime_type, r.stream_size_bytes,
                r.duration_ms, r.file_size_bytes, r.sample_rate, r.channels,
                r.is_clock_anchor, r.clock_offset_ms, r.started_at, r.peaks_hz, r.notes,
                (r.peaks IS NOT NULL) AS has_peaks,
@@ -1815,13 +1816,19 @@ def build_recording_segmenter_payload(
     if not row:
         return None
 
+    # Play the proxy when there is one -- it is a fraction of the size, which is
+    # the difference between a phone starting playback in seconds and appearing
+    # broken. Falls back to the master, so recordings imported before proxies
+    # existed still play. The EXPORT deliberately keeps pointing at the master:
+    # the training corpus must never be cut from a lossy 48kbps mono encode.
+    playback_key = row["stream_key"] or row["storage_key"]
     audio_url = None
     audio_error = None
     if include_audio_url:
         try:
             from recording import generate_presigned_url
 
-            audio_url = generate_presigned_url(row["storage_key"])
+            audio_url = generate_presigned_url(playback_key)
         except Exception as exc:  # object store misconfigured — the page says so
             audio_error = str(exc)
 
@@ -1879,6 +1886,9 @@ def build_recording_segmenter_payload(
             "peaks_url": f"/api/recordings/{row['recording_id']}/peaks",
             "audio_url": audio_url,
             "audio_error": audio_error,
+            "audio_mime_type": (row["stream_mime_type"] if row["stream_key"] else row["mime_type"]),
+            "is_proxy": bool(row["stream_key"]),
+            "stream_size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
             "notes": row["notes"],
         },
         "session_instance": {

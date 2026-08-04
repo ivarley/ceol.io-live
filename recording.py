@@ -108,6 +108,56 @@ def generate_presigned_url(storage_key, expiry=21600):
     )
 
 
+# Playback proxy settings. Mono because the job is hearing tune boundaries, not
+# stereo imaging; AAC because it is the one lossy codec every phone browser plays
+# without argument (Opus would be smaller, but Safari's support for it is not
+# something to bet a field tool on).
+# 48kbps at 32kHz is the default: about a fifth the size of a 256kbps stereo
+# master, with 16kHz of bandwidth -- comfortably above every fundamental and
+# most harmonics a fiddle, flute or box produces. Both are flags, because the
+# right trade-off is a judgement about ears, not something to hard-code.
+STREAM_BITRATE = "48k"
+STREAM_SAMPLE_RATE = 32000
+STREAM_MIME = "audio/mp4"
+STREAM_SUFFIX = ".stream.m4a"
+
+
+def transcode_for_streaming(src_path, dest_path, bitrate=STREAM_BITRATE, sample_rate=STREAM_SAMPLE_RATE):
+    """Write a small mono proxy of `src_path` for browser playback.
+
+    NOT for analysis: the training corpus is cut from the master. This exists
+    only so a three-hour recording starts playing on a phone in seconds rather
+    than tens of seconds.
+
+    Lowering the sample rate alongside the bitrate is what keeps a small file
+    from sounding like a broken radio: the native AAC encoder spends its bits
+    much better over 16kHz of bandwidth than it does trying to cover 22kHz.
+
+    `-movflags +faststart` puts the MP4 index at the front, so the browser can
+    start playing (and seeking) after the first range request instead of having
+    to reach the end of the file first -- on a long recording that is the
+    difference between a couple of seconds and most of the download.
+    """
+    result = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-i", src_path,
+            "-vn",
+            "-ac", "1",
+            "-ar", str(sample_rate),
+            "-c:a", "aac",
+            "-b:a", bitrate,
+            "-movflags", "+faststart",
+            dest_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg transcode failed ({result.returncode}): {result.stderr[:500]}")
+    return dest_path
+
+
 def probe_audio(file_path):
     """Read duration/sample rate/channels from an audio file via ffprobe.
 

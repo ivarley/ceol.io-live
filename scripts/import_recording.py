@@ -74,6 +74,13 @@ def main():
     )
     parser.add_argument("--skip-upload", action="store_true", help="Recompute peaks/metadata only; leave S3 alone")
     parser.add_argument(
+        "--no-stream", action="store_true",
+        help="Skip the playback proxy. The segmenter then streams the master, which on a long "
+             "recording over cellular is a slow start.",
+    )
+    parser.add_argument("--stream-bitrate", default=None, help="Proxy bitrate (default 48k)")
+    parser.add_argument("--stream-rate", type=int, default=None, help="Proxy sample rate in Hz (default 32000)")
+    parser.add_argument(
         "--database-url",
         help="Target database as a postgres:// URL (Render's External Database URL). "
              "Overrides the PG* environment variables.",
@@ -112,6 +119,21 @@ def main():
         ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
         ".opus": "audio/ogg", ".flac": "audio/flac", ".webm": "audio/webm",
     }.get(os.path.splitext(args.audio_file)[1].lower(), "audio/mpeg")
+
+    # The proxy exists only so playback starts quickly; the master stays the
+    # master, and the training corpus is always cut from it.
+    stream_path = None
+    stream_size = None
+    if not args.no_stream:
+        import tempfile
+
+        bitrate = args.stream_bitrate or rec.STREAM_BITRATE
+        rate = args.stream_rate or rec.STREAM_SAMPLE_RATE
+        print(f"Transcoding a playback proxy ({bitrate} mono @ {rate}Hz) ...")
+        stream_path = os.path.join(tempfile.mkdtemp(), "proxy" + rec.STREAM_SUFFIX)
+        rec.transcode_for_streaming(args.audio_file, stream_path, bitrate=bitrate, sample_rate=rate)
+        stream_size = os.path.getsize(stream_path)
+        print(f"  {stream_size / 1e6:.1f} MB ({size / stream_size:.1f}x smaller than the master)")
 
     if args.dry_run:
         print("\n--dry-run: nothing written.")
@@ -188,6 +210,16 @@ def main():
             rec.upload_recording(args.audio_file, storage_key, mime_type=mime)
             print("  done")
 
+        # The proxy always uploads, even with --skip-upload: that flag means
+        # "the master is already there", and the whole point of a backfill run
+        # is to add a proxy to a recording that lacks one.
+        stream_key = None
+        if stream_path:
+            stream_key = storage_key + rec.STREAM_SUFFIX
+            print(f"Uploading proxy to s3://{rec.get_s3_bucket()}/{stream_key} ...")
+            rec.upload_recording(stream_path, stream_key, mime_type=rec.STREAM_MIME)
+            print("  done")
+
         if args.recording_id:
             from database import save_to_history
 
@@ -197,11 +229,16 @@ def main():
                 UPDATE recording
                    SET label = %s, person_id = COALESCE(%s, person_id), mime_type = %s, duration_ms = %s, file_size_bytes = %s,
                        sample_rate = %s, channels = %s, is_clock_anchor = %s, clock_offset_ms = %s,
-                       started_at = COALESCE(%s, started_at), peaks = %s, peaks_hz = %s
+                       started_at = COALESCE(%s, started_at), peaks = %s, peaks_hz = %s,
+                       stream_key = COALESCE(%s, stream_key),
+                       stream_mime_type = COALESCE(%s, stream_mime_type),
+                       stream_size_bytes = COALESCE(%s, stream_size_bytes)
                  WHERE recording_id = %s
                 """,
                 (label, args.person, mime, info["duration_ms"], size, info["sample_rate"], info["channels"],
-                 is_anchor, args.offset_ms, started_at, peaks_b64, peaks_hz, args.recording_id),
+                 is_anchor, args.offset_ms, started_at, peaks_b64, peaks_hz,
+                 stream_key, rec.STREAM_MIME if stream_key else None, stream_size,
+                 args.recording_id),
             )
             recording_id = args.recording_id
             verb = "Updated"
@@ -210,13 +247,15 @@ def main():
                 """
                 INSERT INTO recording
                     (session_instance_id, person_id, label, storage_key, mime_type, duration_ms, file_size_bytes,
-                     sample_rate, channels, is_clock_anchor, clock_offset_ms, started_at, peaks, peaks_hz)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     sample_rate, channels, is_clock_anchor, clock_offset_ms, started_at, peaks, peaks_hz,
+                     stream_key, stream_mime_type, stream_size_bytes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING recording_id
                 """,
                 (args.session_instance, args.person, label, storage_key, mime, info["duration_ms"], size,
                  info["sample_rate"], info["channels"], is_anchor, args.offset_ms, started_at,
-                 peaks_b64, peaks_hz),
+                 peaks_b64, peaks_hz,
+                 stream_key, rec.STREAM_MIME if stream_key else None, stream_size),
             )
             recording_id = cur.fetchone()[0]
             verb = "Created"

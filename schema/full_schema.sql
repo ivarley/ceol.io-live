@@ -776,6 +776,11 @@ CREATE TABLE recording (
     -- decoding a 3-hour file in the browser -- is a non-starter on a phone.
     peaks TEXT,
     peaks_hz NUMERIC(6, 2),
+    -- Playback proxy (schema/051): a small mono encode used ONLY for streaming
+    -- in the segmenter. The training corpus is always cut from storage_key.
+    stream_key VARCHAR(500),
+    stream_mime_type VARCHAR(100),
+    stream_size_bytes BIGINT,
     notes TEXT,
     created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -1234,6 +1239,9 @@ CREATE TABLE recording_history (
     clock_offset_ms BIGINT,
     started_at TIMESTAMPTZ,
     peaks_hz NUMERIC(6, 2),
+    stream_key VARCHAR(500),
+    stream_mime_type VARCHAR(100),
+    stream_size_bytes BIGINT,
     notes TEXT,
     created_date TIMESTAMPTZ,
     last_modified_date TIMESTAMPTZ,

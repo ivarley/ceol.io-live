@@ -19,8 +19,14 @@ tables are dropped by `schema/049`.
 ## Design decisions
 
 - **One recording = one whole audio file**, played back through a presigned S3
-  URL. S3 honours range requests, so a browser can seek anywhere in a 3-hour,
-  77MB file without downloading it — the only reason this works on a phone.
+  URL. S3 honours range requests, so a browser can seek anywhere in a 3-hour
+  file without downloading it — the only reason this works on a phone.
+- **The master is not what gets played.** A separate small mono proxy
+  (`stream_key`, schema/051) is streamed to the browser; `storage_key` stays the
+  master and the training corpus is always cut from it. Feeding a model the
+  artefacts of a 48kbps encode instead of the real audio would be a quiet,
+  expensive mistake, so the two keys are kept apart by construction rather than
+  by remembering.
 - **Ends are implied, not typed.** Marking the next tune's start marks the
   previous tune's end. An explicit end is only needed at the end of a set, where
   minutes of chatter follow. `end_ms` is therefore nullable, and NULL means
@@ -113,8 +119,18 @@ venv/bin/python scripts/import_recording.py AUDIO_FILE --session-instance 347 \
 ```
 
 Probes with ffprobe, streams mono 16-bit PCM out of ffmpeg and reduces it bucket
-by bucket (flat memory regardless of length), uploads to S3, writes the row.
-About **19 seconds** for a 3h17m / 77MB file, upload included. Target DB comes
+by bucket (flat memory regardless of length), transcodes a playback proxy,
+uploads both to S3, writes the row.
+
+The proxy defaults to **48kbps mono at 32kHz** — about a fifth the size of a
+256kbps stereo master, with 16kHz of bandwidth, comfortably above every
+fundamental and most harmonics a fiddle, flute or box produces. `--stream-bitrate`
+and `--stream-rate` change it; `--no-stream` skips it. It carries
+`-movflags +faststart`, which puts the MP4 index at the front so the browser can
+begin playing after the first range request rather than having to reach the end
+of the file. Backfill an existing recording with
+`--recording-id N --skip-upload`: the proxy uploads even under `--skip-upload`,
+since that flag means "the master is already there". Target DB comes
 from the usual `PG*` environment variables, so pointing it at production is
 deliberately explicit.
 

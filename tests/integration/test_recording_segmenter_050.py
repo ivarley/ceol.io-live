@@ -310,3 +310,55 @@ def test_endpoints_require_admin(client, authenticated_user, committed_recording
     with authenticated_user:
         assert client.get(f"/api/recordings/{REC_ID}/segmenter").status_code == 403
         assert client.put(f"/api/recordings/{REC_ID}/segments/{sit}", json={"start_ms": 1}).status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# 4. playback proxy (spec 051)
+# --------------------------------------------------------------------------- #
+
+
+def test_payload_plays_the_proxy_when_there_is_one(db_conn, db_cursor):
+    _build(db_cursor)
+    db_cursor.execute(
+        "UPDATE recording SET stream_key = %s, stream_mime_type = 'audio/mp4', stream_size_bytes = 1234 "
+        "WHERE recording_id = %s",
+        ("recordings/test/seg050.m4a.stream.m4a", REC_ID),
+    )
+    from serializers import build_recording_segmenter_payload
+
+    payload = build_recording_segmenter_payload(db_conn, REC_ID, include_audio_url=False)
+    assert payload["recording"]["is_proxy"] is True
+    assert payload["recording"]["audio_mime_type"] == "audio/mp4"
+    assert payload["recording"]["stream_size_bytes"] == 1234
+
+
+def test_payload_falls_back_to_the_master_without_a_proxy(db_conn, db_cursor):
+    _build(db_cursor)
+    from serializers import build_recording_segmenter_payload
+
+    payload = build_recording_segmenter_payload(db_conn, REC_ID, include_audio_url=False)
+    assert payload["recording"]["is_proxy"] is False
+    assert payload["recording"]["stream_size_bytes"] is None
+
+
+def test_export_cuts_from_the_master_never_the_proxy(client, admin_user, committed_recording, db_cursor):
+    """The invariant the whole two-key split exists to protect.
+
+    A proxy is a lossy 48kbps mono encode. Training a tune-recognition model on
+    its artefacts instead of the real audio would be a quiet, expensive mistake,
+    so the export must keep naming storage_key however playback is served.
+    """
+    db_cursor.execute(
+        "UPDATE recording SET stream_key = 'recordings/test/proxy.stream.m4a' WHERE recording_id = %s",
+        (REC_ID,),
+    )
+    db_cursor.connection.commit()
+    try:
+        with admin_user:
+            client.put(f"/api/recordings/{REC_ID}/segments/{committed_recording['A']}", json={"start_ms": 1000})
+            body = client.get(f"/api/recordings/{REC_ID}/export").get_json()
+        assert body["storage_key"] == "recordings/test/seg050.m4a"
+        assert ".stream." not in body["storage_key"]
+    finally:
+        db_cursor.execute("UPDATE recording SET stream_key = NULL WHERE recording_id = %s", (REC_ID,))
+        db_cursor.connection.commit()

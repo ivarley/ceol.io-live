@@ -501,10 +501,12 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             (recording_id, operation, changed_by_user_id, session_instance_id, person_id, label, storage_key,
              mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
              clock_offset_ms, started_at, peaks_hz, notes,
+             stream_key, stream_mime_type, stream_size_bytes,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT recording_id, %s, %s, session_instance_id, person_id, label, storage_key,
                    mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
                    clock_offset_ms, started_at, peaks_hz, notes,
+                   stream_key, stream_mime_type, stream_size_bytes,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM recording WHERE recording_id = %s
         """,
