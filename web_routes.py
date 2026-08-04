@@ -3505,3 +3505,75 @@ def live_logging_screen(session_instance_id):
             "last_name": current_user.last_name,
         } if can_edit else None,
     )
+
+
+@login_required
+def admin_recordings():
+    """Index of session-audio recordings (spec 050): what's uploaded and how far
+    each one has been segmented. A plain Jinja table — non-interactive, so it
+    stays out of Svelte per spec 035 decision 2."""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
+                   si.session_instance_id, si.date, s.name, s.path,
+                   (SELECT count(*) FROM recording_tune_segment rts
+                     WHERE rts.recording_id = r.recording_id) AS segments,
+                   (SELECT count(*) FROM session_instance_tune sit
+                     WHERE sit.session_instance_id = si.session_instance_id
+                       AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes
+            FROM recording r
+            JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+            JOIN session s ON s.session_id = si.session_id
+            ORDER BY si.date DESC, r.clock_offset_ms, r.recording_id
+            """
+        )
+        recordings = [
+            {
+                "recording_id": row[0],
+                "label": row[1],
+                "duration_ms": int(row[2]),
+                "is_clock_anchor": row[3],
+                "clock_offset_ms": int(row[4]),
+                "session_instance_id": row[5],
+                "date": row[6],
+                "session_name": row[7],
+                "session_path": row[8],
+                "segments": row[9],
+                "tunes": row[10],
+            }
+            for row in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+
+    return render_template("admin_recordings.html", recordings=recordings)
+
+
+@login_required
+def segment_recording(recording_id):
+    """The audio segmenter (spec 050): a thin shell embedding the SAME payload
+    GET /api/recordings/<id>/segmenter returns, mounting the Svelte tool."""
+    if not current_user.is_system_admin:
+        flash("You must be authorized to view this page.", "error")
+        return redirect(url_for("home"))
+
+    from serializers import build_recording_segmenter_payload
+
+    conn = get_db_connection()
+    try:
+        payload = build_recording_segmenter_payload(conn, recording_id)
+    finally:
+        conn.close()
+
+    if payload is None:
+        flash("That recording doesn't exist.", "error")
+        return redirect(url_for("admin_recordings"))
+
+    return render_template("recording_segmenter.html", payload=payload)

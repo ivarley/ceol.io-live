@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Segment {{ payload.recording.label or 'recording' }} - Ceol{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='segmenterpage/page.css') }}">
+{% endblock %}
+
+{% block content %}
+{# Spec 050 thin-shell invariant: this payload and GET /api/recordings/<id>/segmenter
+   are produced by ONE function (serializers.build_recording_segmenter_payload), so
+   the tool paints the night's log instantly with no loading flash and the embed
+   cannot drift from the API. The waveform arrives separately as binary from
+   /api/recordings/<id>/peaks -- it is ~230KB and has no business blocking paint. #}
+<script>window.__PAGE_DATA__ = {{ payload | tojson }};</script>
+<div id="segmenter-root"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='segmenterpage/page.js') }}"></script>
+{% endblock %}

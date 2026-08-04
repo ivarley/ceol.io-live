@@ -61,6 +61,19 @@ The database will be a Postgres database. The basic entities in my model will be
     - setting_override - in case this instance of playing the tune differs from that which is mapped as the standard for this session.
     - started_by_person_id - foreign key to person table, optional, indicates which person started the set (applies to all tunes in the set)
 
+- **recording** - One audio file covering some or all of one session instance (spec 050). Many recordings can cover one instance (several phones, or one phone that stopped and restarted), so they share an instance timeline: exactly one recording per instance carries `is_clock_anchor` and its t=0 IS the instance's zero point; every other recording states `clock_offset_ms`, how far after that zero point its own t=0 falls. Attributes:
+    - storage_key - the S3 object key; playback is via a presigned URL, which supports range requests so a 3-hour file can be scrubbed without downloading it
+    - duration_ms, mime_type, file_size_bytes, sample_rate, channels - from ffprobe at import
+    - person_id - optional, who made the recording
+    - started_at - optional absolute wall-clock time of t=0
+    - peaks / peaks_hz - the precomputed waveform envelope (base64 of one 0-255 byte per bucket, 20 buckets/sec). Precomputed because decoding hours of audio in the browser is a non-starter on mobile.
+
+- **recording_tune_segment** - The junction between a logged tune and a time range in a recording: "Banish Misfortune runs from 19:22 to 22:04 in recording 1". Points at `session_instance_tune`, not `tune`, so a tune merge carries segments along for free via the log row. Unique on (recording_id, session_instance_tune_id). Attributes:
+    - start_ms - required
+    - end_ms - **nullable, and the nullability is the point**: the next tune's start implies the previous tune's end, so an explicit end is only recorded at the end of a set. NULL means "runs until the next segment starts", never "unknown".
+
+- **recording_tune_segment_resolved** (view) - Every segment with its end resolved (implicit ends become the next segment's start; a trailing implicit end becomes the end of the file) and its tune identified. This is the shape the ML training corpus is cut from.
+
 ## People
 
 - **person** - A person who may attend sessions or have a user account. Attributes:

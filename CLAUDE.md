@@ -13,7 +13,7 @@ The high level view of the system is documented in the /specs directory. Before 
 ## Quick Reference
 
 **Stack**: Flask 3.1 + PostgreSQL + Svelte 5 (interactive pages) + Jinja2 shells + Bootstrap 4.5 (legacy pages)
-**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON), `live_logging_routes.py` (live-logging ops)
+**Entry**: `app.py` | **Routes**: `web_routes.py` (HTML), `api_routes.py` + `api_person_tune_routes.py` (JSON), `live_logging_routes.py` (live-logging ops), `recording_routes.py` (audio segmenter)
 **Payloads**: `serializers.py` — one function per payload; the page shell's embedded `__PAGE_DATA__` and the API return the same dict (spec 035)
 **API auth**: `api_auth.py` — `@api_login_required` / `@api_admin_or_self_required` / `@public_api`; Bearer tokens via `app.py` request_loader
 **Frontend**: `frontend/src/<page>/` + shared kit `frontend/src/lib/` → Vite builds to `static/<page>/` (gitignored, rebuilt on deploy); how-to: [Svelte Pages](specs/current/ui/svelte-pages.md)
@@ -62,7 +62,7 @@ Internal services, microservices, background jobs
 - **Tune Management**: [Data](specs/current/data/tune-model.md) | [Logic](specs/current/logic/tune-logic.md)
 - **Per-Instrument Tune Status**: [Data + UI](specs/current/data/people-model.md) (`person_tune_instrument` overrides, `person_instrument.is_auto`, canonical instruments in `instruments.py`)
 - **User System**: [Data](specs/current/data/people-model.md) | [Logic](specs/current/logic/auth.md)
-- **Audio Recording (Feature 022)**: [Spec](specs/changes/022-session-audio-recording.md)
+- **Recording Segmenter (Feature 050)**: [Spec](specs/changes/inprogress/050-recording-segmenter.md) — audio → per-tune timestamps at `/admin/recordings`, the training corpus for tune recognition. Supersedes the abandoned Feature 022 audio recording.
 - **Live Logging (Feature 024)**: [Logic](specs/current/logic/live-logging.md) | [Spec](specs/changes/024-live-logging-architecture.md)
 - **Offline Support**: [Logic](specs/current/logic/offline.md)
 - **Svelte UI Consolidation (Feature 035)**: [UI](specs/current/ui/svelte-pages.md) | [Spec](specs/changes/inprogress/035-svelte-ui-consolidation.md) — `/my-tunes`, `/sessions`, `/sessions/<path>`, `/me`, `/admin/people/<id>`, `/admin/sessions/<path>` migrated to Svelte shells
@@ -106,6 +106,7 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`api_routes.py`](api_routes.py) - the bulk of the JSON API
 - [`api_person_tune_routes.py`](api_person_tune_routes.py) - my-tunes / person-tune JSON API
 - [`live_logging_routes.py`](live_logging_routes.py) - the live-logging referee: the server-authoritative op endpoint and its op vocabulary (spec 024)
+- [`recording_routes.py`](recording_routes.py) - the recording segmenter's API (spec 050)
 - [`serializers.py`](serializers.py) - page/API payload builders; one function per wire shape, shared by the page shell's `__PAGE_DATA__` and the API (spec 035)
 - [`api_auth.py`](api_auth.py) - API auth decorators and the `@public_api` marker
 
@@ -122,7 +123,7 @@ See [scripts/LOCAL_DEVELOPMENT.md](scripts/LOCAL_DEVELOPMENT.md) for detailed se
 - [`session_path.py`](session_path.py) / [`session_fields.py`](session_fields.py) - validation shared by both session write paths
 - [`instruments.py`](instruments.py) - the canonical instrument vocabulary
 - [`fractional_indexing.py`](fractional_indexing.py) - CRDT-compatible list ordering for tune sets
-- [`recording.py`](recording.py) - session audio: S3 upload/download and chunking
+- [`recording.py`](recording.py) - session audio: S3 storage and waveform-envelope extraction (spec 050)
 - [`email_utils.py`](email_utils.py) - SendGrid delivery
 
 **Frontend and out-of-process**

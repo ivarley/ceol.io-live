@@ -55,13 +55,16 @@ def _build_merge_fixture(cur):
     cur.execute("INSERT INTO session_tune_alias (session_id, tune_id, alias) VALUES (%s, %s, 'The Squirrely Hobbit')", (SID, OLD))
 
     # Log rows: one displaying the canonical (old) name, one with an explicit name.
-    cur.execute("INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type) VALUES (%s, %s, 'a0', 'tune')", (INST, OLD))
+    cur.execute("INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type) VALUES (%s, %s, 'a0', 'tune') RETURNING session_instance_tune_id", (INST, OLD))
+    sit_id = cur.fetchone()[0]
     cur.execute("INSERT INTO session_instance_tune (session_instance_id, tune_id, name, order_position, record_type) VALUES (%s, %s, 'My Custom Name', 'a1', 'tune')", (INST, OLD))
 
-    # A setting + a recording tune segment.
+    # A setting + an audio segment placed on the first log row. Since schema/049
+    # the segment points at session_instance_tune, not tune, so the merge reaches
+    # it only through that row -- which is exactly what the assertion checks.
     cur.execute("INSERT INTO tune_setting (setting_id, tune_id, key, abc) VALUES (%s, %s, 'Dmaj', 'abc')", (OLD, OLD))
-    cur.execute("INSERT INTO recording (recording_id, session_instance_id, person_id, status) VALUES (%s, %s, %s, 'stopped')", (REC, INST, P_CLEAN))
-    cur.execute("INSERT INTO recording_tune_segment (recording_id, tune_id, start_timestamp_ms, end_timestamp_ms) VALUES (%s, %s, 0, 1000)", (REC, OLD))
+    cur.execute("INSERT INTO recording (recording_id, session_instance_id, storage_key, duration_ms) VALUES (%s, %s, 'recordings/test/merge030.m4a', 600000)", (REC, INST))
+    cur.execute("INSERT INTO recording_tune_segment (recording_id, session_instance_tune_id, start_ms, end_ms) VALUES (%s, %s, 0, 1000)", (REC, sit_id))
 
 
 def _merge(cur, old=OLD, new=NEW):
@@ -134,7 +137,10 @@ def test_merge_moves_settings_segments_and_tombstones(db_cursor):
     result = _merge(db_cursor)
     db_cursor.execute("SELECT tune_id FROM tune_setting WHERE setting_id = %s", (OLD,))
     assert db_cursor.fetchone()[0] == NEW
-    db_cursor.execute("SELECT tune_id FROM recording_tune_segment WHERE recording_id = %s", (REC,))
+    # The segment itself is untouched by the merge; it follows its log row, whose
+    # tune_id the merge remapped. The resolved view is what the export reads, so
+    # assert through it rather than on the raw junction row.
+    db_cursor.execute("SELECT tune_id FROM recording_tune_segment_resolved WHERE recording_id = %s", (REC,))
     assert db_cursor.fetchone()[0] == NEW
     assert result["tables_updated"]["recording_tune_segment"]["updated"] == 1
     db_cursor.execute("SELECT redirect_to_tune_id FROM tune WHERE tune_id = %s", (OLD,))

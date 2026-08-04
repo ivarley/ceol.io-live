@@ -150,6 +150,7 @@ static/sessionadminpage/
 static/tunesheet/
 static/addsessionpage/
 static/peopleadminpage/
+static/segmenterpage/
 
 # Claude Code worktrees (each contains its own checkout)
 .claude/worktrees/

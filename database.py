@@ -493,46 +493,35 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
         )
 
     elif table_name == "recording":
+        # `peaks` is intentionally absent: a large derived blob, recomputable
+        # from the audio, that would bloat every history row (schema/049).
         cur.execute(
             """
             INSERT INTO recording_history
-            (recording_id, operation, changed_by_user_id, session_instance_id, person_id, source, status,
-             device_info, format, sample_rate, channels, bitrate, s3_prefix, total_chunks,
-             total_duration_ms, total_size_bytes, client_started_at,
+            (recording_id, operation, changed_by_user_id, session_instance_id, person_id, label, storage_key,
+             mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
+             clock_offset_ms, started_at, peaks_hz, notes,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
-            SELECT recording_id, %s, %s, session_instance_id, person_id, source, status,
-                   device_info, format, sample_rate, channels, bitrate, s3_prefix, total_chunks,
-                   total_duration_ms, total_size_bytes, client_started_at,
+            SELECT recording_id, %s, %s, session_instance_id, person_id, label, storage_key,
+                   mime_type, duration_ms, file_size_bytes, sample_rate, channels, is_clock_anchor,
+                   clock_offset_ms, started_at, peaks_hz, notes,
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM recording WHERE recording_id = %s
         """,
             (operation, user_id, record_id),
         )
 
-    elif table_name == "recording_chunk":
+    elif table_name == "recording_tune_segment":
         cur.execute(
             """
-            INSERT INTO recording_chunk_history
-            (recording_chunk_id, operation, changed_by_user_id, recording_id, sequence_number,
-             start_timestamp_ms, end_timestamp_ms, s3_key, file_size_bytes, upload_status, checksum,
-             created_date)
-            SELECT recording_chunk_id, %s, %s, recording_id, sequence_number,
-                   start_timestamp_ms, end_timestamp_ms, s3_key, file_size_bytes, upload_status, checksum,
-                   created_date
-            FROM recording_chunk WHERE recording_chunk_id = %s
-        """,
-            (operation, user_id, record_id),
-        )
-
-    elif table_name == "recording_event":
-        cur.execute(
-            """
-            INSERT INTO recording_event_history
-            (recording_event_id, operation, changed_by_user_id, recording_id, event_type,
-             event_data, client_timestamp, created_date)
-            SELECT recording_event_id, %s, %s, recording_id, event_type,
-                   event_data, client_timestamp, created_date
-            FROM recording_event WHERE recording_event_id = %s
+            INSERT INTO recording_tune_segment_history
+            (recording_tune_segment_id, operation, changed_by_user_id, recording_id,
+             session_instance_tune_id, start_ms, end_ms,
+             created_date, last_modified_date, created_by_user_id, last_modified_user_id)
+            SELECT recording_tune_segment_id, %s, %s, recording_id,
+                   session_instance_tune_id, start_ms, end_ms,
+                   created_date, last_modified_date, created_by_user_id, last_modified_user_id
+            FROM recording_tune_segment WHERE recording_tune_segment_id = %s
         """,
             (operation, user_id, record_id),
         )

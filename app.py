@@ -12,6 +12,14 @@ from auth import User, SESSION_LIFETIME_WEEKS
 from api_auth import public_api
 from api_routes import *
 from web_routes import *
+from recording_routes import (
+    get_recording_segmenter,
+    get_recording_peaks,
+    put_recording_segment,
+    delete_recording_segment,
+    get_instance_recordings,
+    export_recording_segments,
+)
 from api_person_tune_routes import (
     get_my_tunes,
     get_person_tune_detail,
@@ -1423,42 +1431,53 @@ app.add_url_rule(
     methods=["POST"],
 )
 
-# Recording routes
+# Recording segmenter (spec 050): audio -> per-tune timestamps, the data-prep
+# step for the eventual tune-recognition model. All system-admin only.
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "start_recording",
-    start_recording,
-    methods=["POST"],
+    "/admin/recordings",
+    "admin_recordings",
+    admin_recordings,
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings",
-    "list_recordings",
-    list_recordings,
+    "/admin/recordings/<int:recording_id>/segment",
+    "segment_recording",
+    segment_recording,
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segmenter",
+    "get_recording_segmenter",
+    get_recording_segmenter,
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/recordings/<int:recording_id>/chunks",
-    "upload_chunk",
-    upload_chunk,
-    methods=["POST"],
+    "/api/recordings/<int:recording_id>/peaks",
+    "get_recording_peaks",
+    get_recording_peaks,
+    methods=["GET"],
 )
 app.add_url_rule(
-    "/api/recordings/<int:recording_id>/status",
-    "update_recording_status",
-    update_recording_status,
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "put_recording_segment",
+    put_recording_segment,
     methods=["PUT"],
 )
 app.add_url_rule(
-    "/api/recordings/<int:recording_id>/playback",
-    "get_recording_playback",
-    get_recording_playback,
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>",
+    "delete_recording_segment",
+    delete_recording_segment,
+    methods=["DELETE"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/export",
+    "export_recording_segments",
+    export_recording_segments,
     methods=["GET"],
 )
 app.add_url_rule(
-    "/api/session_instance/<int:session_instance_id>/recordings/upload",
-    "upload_recording_file",
-    upload_recording_file,
-    methods=["POST"],
+    "/api/session-instances/<int:session_instance_id>/recordings",
+    "get_instance_recordings",
+    get_instance_recordings,
+    methods=["GET"],
 )
 
 # Error handlers

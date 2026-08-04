@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Recordings{% endblock %}
+
+{% block content %}
+<div class="docs-content-inner">
+    <div class="container">
+        <article class="docs-article">
+            {% set active_tab = 'recordings' %}
+            {% include 'admin_tabs.html' %}
+
+            <section class="docs-section">
+                <h2>Session recordings</h2>
+                <p class="text-muted">
+                    Audio files with tune timestamps, the training corpus for tune recognition
+                    (spec 050). Add one with
+                    <code>venv/bin/python scripts/import_recording.py FILE --session-instance ID</code>.
+                </p>
+
+                {% if recordings %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>Date</th>
+                                <th>Recording</th>
+                                <th class="text-right">Length</th>
+                                <th class="text-right">Placed</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in recordings %}
+                            <tr>
+                                <td><a href="/sessions/{{ r.session_path }}">{{ r.session_name }}</a></td>
+                                <td>{{ r.date }}</td>
+                                <td>
+                                    {{ r.label or 'recording %s'|format(r.recording_id) }}
+                                    {% if r.is_clock_anchor %}<span class="badge badge-secondary">anchor</span>
+                                    {% else %}<span class="text-muted">+{{ (r.clock_offset_ms // 1000) }}s</span>{% endif %}
+                                </td>
+                                <td class="text-right">{{ '%d:%02d'|format(r.duration_ms // 3600000, (r.duration_ms // 60000) % 60) }}</td>
+                                <td class="text-right">
+                                    {{ r.segments }} / {{ r.tunes }}
+                                </td>
+                                <td class="text-right">
+                                    <a class="btn btn-sm btn-primary" href="{{ url_for('segment_recording', recording_id=r.recording_id) }}">Segment</a>
+                                    <a class="btn btn-sm btn-outline-secondary" href="/api/recordings/{{ r.recording_id }}/export" target="_blank" rel="noopener">Export</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p>No recordings imported yet.</p>
+                {% endif %}
+            </section>
+        </article>
+    </div>
+</div>
+{% endblock %}

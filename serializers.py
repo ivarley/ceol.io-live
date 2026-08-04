@@ -1702,3 +1702,243 @@ def build_tune_detail_payload(
         },
         "session_tune": session_tune,
     }
+
+
+# ---------------------------------------------------------------------------
+# recording segmenter (spec 050) — the audio-to-tune timestamping tool.
+#
+# One payload carries everything the tool needs: the recording (with a presigned
+# audio URL), the instance's tune log flattened into set-aware order, and each
+# tune's segment if it already has one. The operator's whole job is filling in
+# the `segment` field on each of those tunes, so log and segments must arrive
+# together and in the SAME order the tunes were played.
+# ---------------------------------------------------------------------------
+
+
+def _segment_row_to_dict(row) -> Dict[str, Any]:
+    """Pure mapper: a recording_tune_segment row -> wire shape.
+
+    end_ms stays None when implicit. The client, not the server, resolves an
+    implicit end to the next tune's start, because it re-resolves live on every
+    keystroke as marks move; the DB view does the same for the export.
+    """
+    return {
+        "recording_tune_segment_id": row["recording_tune_segment_id"],
+        "session_instance_tune_id": row["session_instance_tune_id"],
+        "start_ms": int(row["start_ms"]),
+        "end_ms": int(row["end_ms"]) if row["end_ms"] is not None else None,
+    }
+
+
+def _load_instance_tune_log(conn, session_instance_id: int, session_id: int) -> List[Dict[str, Any]]:
+    """The instance's played tunes in order, with set numbers.
+
+    Set membership comes from the interleaved record_type='break' marker rows
+    (the live logger's representation), which are consumed here and never
+    surfaced: the segmenter shows tunes, grouped.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT sit.session_instance_tune_id, sit.tune_id, sit.record_type, sit.order_position,
+               COALESCE(sit.name, st.alias, t.name) AS display_name,
+               t.tune_type
+        FROM session_instance_tune sit
+        LEFT JOIN tune t ON t.tune_id = sit.tune_id
+        LEFT JOIN session_tune st ON st.tune_id = sit.tune_id AND st.session_id = %s
+        WHERE sit.session_instance_id = %s AND sit.deleted = FALSE
+        ORDER BY sit.order_position
+        """,
+        (session_id, session_instance_id),
+    )
+
+    tunes: List[Dict[str, Any]] = []
+    set_number = 1
+    position_in_set = 0
+    for row in cur.fetchall():
+        if row["record_type"] == "break":
+            # Only advance on a break that actually closed a set; leading or
+            # doubled break markers would otherwise leave gaps in the numbering.
+            if position_in_set:
+                set_number += 1
+                position_in_set = 0
+            continue
+        position_in_set += 1
+        tunes.append(
+            {
+                "session_instance_tune_id": row["session_instance_tune_id"],
+                "tune_id": row["tune_id"],
+                "name": row["display_name"] or "(unnamed)",
+                "tune_type": row["tune_type"],
+                "order_position": row["order_position"],
+                "set_number": set_number,
+                "position_in_set": position_in_set,
+                "segment": None,
+            }
+        )
+
+    # Mark the last tune of each set: those are the ones that need an EXPLICIT
+    # end, because nothing follows them closely enough to imply it.
+    for idx, tune in enumerate(tunes):
+        nxt = tunes[idx + 1] if idx + 1 < len(tunes) else None
+        tune["is_set_end"] = nxt is None or nxt["set_number"] != tune["set_number"]
+
+    return tunes
+
+
+def build_recording_segmenter_payload(
+    conn, recording_id: int, *, include_audio_url: bool = True
+) -> Optional[Dict[str, Any]]:
+    """Everything the segmenter page needs for recording `recording_id`.
+
+    GET /api/recordings/<id>/segmenter returns exactly this and the page shell
+    embeds exactly this — one function, so they cannot drift.
+    Returns None when the recording doesn't exist.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.session_instance_id, r.person_id, r.label, r.storage_key, r.mime_type,
+               r.duration_ms, r.file_size_bytes, r.sample_rate, r.channels,
+               r.is_clock_anchor, r.clock_offset_ms, r.started_at, r.peaks_hz, r.notes,
+               (r.peaks IS NOT NULL) AS has_peaks,
+               si.session_instance_id AS si_id, si.date, si.session_id,
+               s.name AS session_name, s.path AS session_path
+        FROM recording r
+        JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+        JOIN session s ON s.session_id = si.session_id
+        WHERE r.recording_id = %s
+        """,
+        (recording_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    audio_url = None
+    audio_error = None
+    if include_audio_url:
+        try:
+            from recording import generate_presigned_url
+
+            audio_url = generate_presigned_url(row["storage_key"])
+        except Exception as exc:  # object store misconfigured — the page says so
+            audio_error = str(exc)
+
+    tunes = _load_instance_tune_log(conn, row["session_instance_id"], row["session_id"])
+
+    cur.execute(
+        """
+        SELECT recording_tune_segment_id, session_instance_tune_id, start_ms, end_ms
+        FROM recording_tune_segment
+        WHERE recording_id = %s
+        """,
+        (recording_id,),
+    )
+    by_tune = {r["session_instance_tune_id"]: _segment_row_to_dict(r) for r in cur.fetchall()}
+    for tune in tunes:
+        tune["segment"] = by_tune.get(tune["session_instance_tune_id"])
+
+    cur.execute(
+        """
+        SELECT recording_id, label, duration_ms, is_clock_anchor, clock_offset_ms
+        FROM recording
+        WHERE session_instance_id = %s AND recording_id <> %s
+        ORDER BY clock_offset_ms, recording_id
+        """,
+        (row["session_instance_id"], recording_id),
+    )
+    others = [
+        {
+            "recording_id": r["recording_id"],
+            "label": r["label"],
+            "duration_ms": int(r["duration_ms"]),
+            "is_clock_anchor": r["is_clock_anchor"],
+            "clock_offset_ms": int(r["clock_offset_ms"]),
+        }
+        for r in cur.fetchall()
+    ]
+
+    return {
+        "success": True,
+        "recording": {
+            "recording_id": row["recording_id"],
+            "session_instance_id": row["session_instance_id"],
+            "person_id": row["person_id"],
+            "label": row["label"],
+            "mime_type": row["mime_type"],
+            "duration_ms": int(row["duration_ms"]),
+            "file_size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+            "sample_rate": row["sample_rate"],
+            "channels": row["channels"],
+            "is_clock_anchor": row["is_clock_anchor"],
+            "clock_offset_ms": int(row["clock_offset_ms"]),
+            "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+            "peaks_hz": float(row["peaks_hz"]) if row["peaks_hz"] is not None else None,
+            "has_peaks": row["has_peaks"],
+            "peaks_url": f"/api/recordings/{row['recording_id']}/peaks",
+            "audio_url": audio_url,
+            "audio_error": audio_error,
+            "notes": row["notes"],
+        },
+        "session_instance": {
+            "session_instance_id": row["si_id"],
+            "date": row["date"].isoformat() if row["date"] else None,
+            "session_id": row["session_id"],
+            "session_name": row["session_name"],
+            "session_path": row["session_path"],
+        },
+        "tunes": tunes,
+        "other_recordings": others,
+    }
+
+
+def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[str, Any]:
+    """Recordings attached to one session instance, with segmenting progress.
+
+    Backs GET /api/session-instances/<id>/recordings and the admin index —
+    "which nights are done" is the question this answers.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
+               r.started_at, r.mime_type, r.file_size_bytes,
+               (SELECT count(*) FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id)
+                   AS segment_count
+        FROM recording r
+        WHERE r.session_instance_id = %s
+        ORDER BY r.clock_offset_ms, r.recording_id
+        """,
+        (session_instance_id,),
+    )
+    recordings = [
+        {
+            "recording_id": r["recording_id"],
+            "label": r["label"],
+            "duration_ms": int(r["duration_ms"]),
+            "is_clock_anchor": r["is_clock_anchor"],
+            "clock_offset_ms": int(r["clock_offset_ms"]),
+            "started_at": r["started_at"].isoformat() if r["started_at"] else None,
+            "mime_type": r["mime_type"],
+            "file_size_bytes": int(r["file_size_bytes"]) if r["file_size_bytes"] else None,
+            "segment_count": r["segment_count"],
+        }
+        for r in cur.fetchall()
+    ]
+
+    cur.execute(
+        """
+        SELECT count(*) AS n FROM session_instance_tune
+        WHERE session_instance_id = %s AND deleted = FALSE AND record_type <> 'break'
+        """,
+        (session_instance_id,),
+    )
+    tune_count = cur.fetchone()["n"]
+
+    return {
+        "success": True,
+        "session_instance_id": session_instance_id,
+        "tune_count": tune_count,
+        "recordings": recordings,
+    }
