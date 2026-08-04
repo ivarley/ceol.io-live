@@ -117,10 +117,14 @@ def main():
         print("\n--dry-run: nothing written.")
         return 0
 
-    if args.database_url:
-        # A full connection URL beats exporting five PG* variables when the
-        # target is somewhere other than the local dev database -- which, for
-        # this script, is the usual case.
+    if args.database_url is not None:
+        # `--database-url "$PROD_URL"` with PROD_URL unset arrives as an empty
+        # string. Falling back to the local database there is the worst possible
+        # behaviour -- it silently writes to dev while the operator believes they
+        # are writing to production -- so an empty value is an error, not a
+        # default. (This happened.)
+        if not args.database_url.strip():
+            parser.error("--database-url is empty (an unset shell variable?). Refusing to fall back to the local database.")
         import psycopg2
 
         conn = psycopg2.connect(args.database_url, options="-c timezone=utc")
@@ -128,6 +132,12 @@ def main():
         conn = get_db_connection()
     try:
         cur = conn.cursor()
+
+        # Say where this is going before it writes anything. The only clue last
+        # time was the session's name looking subtly wrong.
+        cur.execute("SELECT current_database(), inet_server_addr()::text")
+        db_name, db_host = cur.fetchone()
+        print(f"Target database: {db_name} on {db_host or 'local socket'}")
 
         cur.execute(
             "SELECT si.date, s.name FROM session_instance si "
