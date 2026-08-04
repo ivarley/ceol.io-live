@@ -8,8 +8,8 @@ the `recording` row that /admin/recordings/<id>/segment then works against.
         --label "B.D. Riley's 2026-01-15" --started-at 2026-01-15T19:30:00-06:00
 
 Target database comes from the usual PG* environment variables (loaded from
-.env, same as the app), so pointing this at production is a matter of exporting
-the production block -- deliberately explicit, since it writes.
+.env, same as the app), or from --database-url. Either way it is stated
+explicitly rather than defaulted, since this writes.
 
 Re-running for a file already uploaded is safe: pass --recording-id to refresh
 an existing row's peaks/duration in place instead of creating a second one.
@@ -73,6 +73,11 @@ def main():
              "Pair with --skip-upload to register the same audio in another environment without re-uploading it.",
     )
     parser.add_argument("--skip-upload", action="store_true", help="Recompute peaks/metadata only; leave S3 alone")
+    parser.add_argument(
+        "--database-url",
+        help="Target database as a postgres:// URL (Render's External Database URL). "
+             "Overrides the PG* environment variables.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Probe and compute peaks, write nothing")
     args = parser.parse_args()
 
@@ -112,7 +117,15 @@ def main():
         print("\n--dry-run: nothing written.")
         return 0
 
-    conn = get_db_connection()
+    if args.database_url:
+        # A full connection URL beats exporting five PG* variables when the
+        # target is somewhere other than the local dev database -- which, for
+        # this script, is the usual case.
+        import psycopg2
+
+        conn = psycopg2.connect(args.database_url, options="-c timezone=utc")
+    else:
+        conn = get_db_connection()
     try:
         cur = conn.cursor()
 
