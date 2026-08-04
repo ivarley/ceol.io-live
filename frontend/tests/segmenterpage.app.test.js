@@ -279,3 +279,52 @@ describe('M as end-of-set', () => {
     expect(container.querySelector('.sg-next-name').textContent).toBe('Bravo Jig')
   })
 })
+
+describe('audio loading state', () => {
+  // The waveform paints instantly from precomputed peaks, so the page looks
+  // finished while a 350MB file is still loading. Without a spinner that reads
+  // as "the tool is broken" -- which is exactly how it was reported.
+  const spinner = (c) => c.querySelector('.sg-play .sg-spinner')
+
+  it('shows a spinner in the play button until the audio can play', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    expect(spinner(container)).toBeTruthy()
+    expect(container.querySelector('.sg-loading').textContent.trim()).toBe('loading audio…')
+
+    await fireEvent(container.querySelector('audio'), new Event('canplay'))
+
+    await waitFor(() => expect(spinner(container)).toBeNull())
+    expect(container.querySelector('.sg-loading')).toBeNull()
+    expect(container.querySelector('.sg-play').textContent).toContain('▶')
+  })
+
+  it('goes back to a spinner if playback runs dry mid-tune', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent(el, new Event('canplay'))
+    await waitFor(() => expect(spinner(container)).toBeNull())
+
+    await fireEvent(el, new Event('waiting'))
+    await waitFor(() => expect(spinner(container)).toBeTruthy())
+    expect(container.querySelector('.sg-loading').textContent.trim()).toBe('buffering…')
+
+    await fireEvent(el, new Event('playing'))
+    await waitFor(() => expect(spinner(container)).toBeNull())
+  })
+
+  it('never disables play while loading — tapping it is what starts the fetch', () => {
+    // preload="metadata" means the browser fetches nothing until asked, so a
+    // disabled button during "loading" would deadlock: no play, so no load, so
+    // no canplay, so no play.
+    const { container } = render(App, { props: { pageData: payload() } })
+    expect(spinner(container)).toBeTruthy()
+    expect(container.querySelector('.sg-play').disabled).toBe(false)
+  })
+
+  it('clears the spinner on error rather than spinning forever', async () => {
+    const { container, getByText } = render(App, { props: { pageData: payload() } })
+    await fireEvent(container.querySelector('audio'), new Event('error'))
+    await waitFor(() => expect(getByText(/could not be loaded/)).toBeTruthy())
+    expect(spinner(container)).toBeNull()
+  })
+})

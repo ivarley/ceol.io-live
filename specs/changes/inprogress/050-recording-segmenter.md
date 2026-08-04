@@ -160,6 +160,14 @@ optional.
 Writes are optimistic: the mark lands under the crosshair immediately, and a
 failed save rolls it back and says so.
 
+**The play button carries a spinner** until the browser can actually play, and
+again if playback runs dry. This matters more than it sounds: the waveform
+paints instantly from the precomputed peaks, so the page looks completely ready
+while a 350MB file is still loading over cellular — reported from a phone as
+"I thought it wasn't working". The button is never *disabled* while loading,
+because `preload="metadata"` means the browser fetches nothing until asked:
+disabling it would deadlock (no play → no load → no canplay → no play).
+
 ### API
 
 | Endpoint | Purpose |

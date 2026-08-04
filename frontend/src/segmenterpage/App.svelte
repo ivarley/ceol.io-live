@@ -39,11 +39,17 @@
   let status = $state('')
   let statusKind = $state('info')
   let saving = $state(0)
+  // 'loading' until the browser can play, 'buffering' when it runs dry mid-play.
+  // Starts pessimistic: a 350MB file over cellular is not ready for a while, and
+  // the waveform paints instantly from the precomputed peaks -- so the page LOOKS
+  // finished long before the audio is. That gap is what makes it read as broken.
+  let mediaState = $state('loading')
 
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
   const cursorTune = $derived(tunes[cursorIndex] ?? null)
+  const mediaBusy = $derived(mediaState === 'loading' || mediaState === 'buffering')
 
   // The tune whose resolved range covers the playhead -- what "this tune ends
   // here" refers to.
@@ -61,6 +67,9 @@
 
   onMount(() => {
     cursorIndex = Math.max(0, nextUnplacedIndex(tunes, 0))
+    // On a warm cache the element can already be playable before the handlers
+    // above are bound, and then no event ever fires to clear the spinner.
+    if (audio && audio.readyState >= 3) mediaState = 'ready'
     loadPeaks()
     const tick = () => {
       if (audio && !scrubbing) currentMs = audio.currentTime * 1000
@@ -436,6 +445,11 @@
         <div class="sg-clock">
           <span class="sg-time">{formatTime(currentMs, { millis: true })}</span>
           <span class="sg-of">of {formatTime(durationMs)}</span>
+          {#if mediaBusy}
+            <span class="sg-loading">
+              {mediaState === 'loading' ? 'loading audio…' : 'buffering…'}
+            </span>
+          {/if}
         </div>
 
         {#if pendingSetEndIndex != null}
@@ -460,7 +474,19 @@
         <div class="sg-controls">
           <button type="button" onclick={() => nudge(-15000)}>−15s</button>
           <button type="button" onclick={() => nudge(-5000)}>−5s</button>
-          <button type="button" class="sg-play" onclick={togglePlay}>{playing ? '❚❚' : '▶'}</button>
+          <button
+            type="button"
+            class="sg-play"
+            onclick={togglePlay}
+            aria-busy={mediaBusy}
+            title={mediaBusy ? 'Audio still loading' : playing ? 'Pause' : 'Play'}
+          >
+            {#if mediaBusy}
+              <span class="sg-spinner" aria-hidden="true"></span>
+            {:else}
+              {playing ? '❚❚' : '▶'}
+            {/if}
+          </button>
           <button type="button" onclick={() => nudge(5000)}>+5s</button>
           <button type="button" onclick={() => nudge(15000)}>+15s</button>
         </div>
@@ -534,7 +560,16 @@
       onplay={() => (playing = true)}
       onpause={() => (playing = false)}
       onratechange={() => audio && (speed = audio.playbackRate)}
-      onerror={() => flash('The audio file could not be loaded. The signed URL may have expired — reload the page.', 'error')}
+      onloadstart={() => (mediaState = 'loading')}
+      oncanplay={() => (mediaState = 'ready')}
+      onplaying={() => (mediaState = 'ready')}
+      onseeked={() => (mediaState = audio && audio.readyState >= 3 ? 'ready' : mediaState)}
+      onwaiting={() => (mediaState = 'buffering')}
+      onstalled={() => (mediaState = 'buffering')}
+      onerror={() => {
+        mediaState = 'error'
+        flash('The audio file could not be loaded. The signed URL may have expired — reload the page.', 'error')
+      }}
     ></audio>
   </div>
 {/if}
@@ -679,6 +714,27 @@
   .sg-play {
     max-width: 90px;
     font-size: 1.05rem !important;
+  }
+  .sg-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color, #444);
+    border-top-color: var(--warning, #f5c842);
+    border-radius: 50%;
+    animation: sg-spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes sg-spin {
+    to { transform: rotate(360deg); }
+  }
+  /* Respect a reduced-motion preference: still show the state, just don't spin. */
+  @media (prefers-reduced-motion: reduce) {
+    .sg-spinner { animation: none; }
+  }
+  .sg-loading {
+    font-size: 0.78rem;
+    color: var(--warning, #f5c842);
   }
   .sg-controls-main button {
     min-height: 52px;
