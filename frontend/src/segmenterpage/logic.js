@@ -85,13 +85,20 @@ export function groupIntoSets(tunes) {
 /**
  * Nudge a mark to the nearest onset -- where the envelope actually rises.
  *
- * Marking by eye lands a few hundred ms off, and the training corpus wants the
- * cut on the note. Scans a window around `ms` for the steepest rise measured
- * over ~250ms, and takes the point just before it. Returns `ms` unchanged when
- * nothing in the window looks like an onset (mid-tune marks, applause), so
- * snapping can never drag a mark somewhere worse than where it was put.
+ * Marking by eye lands a bit off, and the training corpus wants the cut on the
+ * note. Scans a window around `ms` for the steepest rise measured over ~250ms
+ * and moves the mark there, returning `ms` unchanged when nothing in the window
+ * looks like an onset (mid-tune marks, applause).
+ *
+ * The window is deliberately SMALL. It started at +/-1.5s, which was wide enough
+ * to walk a carefully-placed mark forward to the next loud phrase inside a tune
+ * that had already begun -- snapping confidently past the thing being marked.
+ * A correction is all this should ever apply: at +/-500ms it still fixes an
+ * eyeball error, but a deliberate placement stays put.
  */
-export function snapToOnset(peaks, peaksHz, ms, windowMs = 1500) {
+export const SNAP_WINDOW_MS = 500
+
+export function snapToOnset(peaks, peaksHz, ms, windowMs = SNAP_WINDOW_MS) {
   if (!peaks || !peaks.length || !peaksHz) return ms
   const perMs = peaksHz / 1000
   const centre = Math.round(ms * perMs)

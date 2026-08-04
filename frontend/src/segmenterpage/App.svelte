@@ -193,8 +193,18 @@
       return
     }
     const ms = snapEnabled ? snapToOnset(peaks, recording.peaks_hz, currentMs) : currentMs
+    const name = cursorTune.name
     place(cursorIndex, ms, cursorTune.segment?.end_ms ?? null)
     cursorIndex = Math.min(tunes.length - 1, cursorIndex + 1)
+
+    // Say when snap moved the mark. It used to move silently, which reads as
+    // the tool ignoring where you put the playhead -- and leaves you with no
+    // hint that S would turn it off.
+    const shift = ms - currentMs
+    if (Math.abs(shift) >= 60) {
+      const dir = shift > 0 ? '+' : '−'
+      flash(`${name} at ${formatTime(ms, { millis: true })} (snapped ${dir}${(Math.abs(shift) / 1000).toFixed(2)}s — S to turn off)`)
+    }
   }
 
   function markEnd() {

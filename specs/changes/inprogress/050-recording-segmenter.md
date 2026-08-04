@@ -138,8 +138,14 @@ Two canvases over the same envelope:
   off the mark point on a phone.
 
 **Onset snap** (on by default, <kbd>S</kbd> toggles) nudges a mark to the
-nearest sharp rise within ±1.5s, and leaves it alone when the window holds no
-real onset — so it can never drag a mark somewhere worse than where it was put.
+nearest sharp rise, and leaves it alone when the window holds no real onset.
+The window is ±500ms and that number matters: it started at ±1.5s, which was
+wide enough to walk a carefully-placed mark forward onto the next loud phrase
+of a tune that had *already begun* — snapping confidently past the thing being
+marked. Snap should only ever apply a correction. It also announces itself
+(`snapped +0.35s — S to turn off`) rather than moving silently, which was the
+worse half of that bug: no feedback, and no hint that the behaviour was
+optional.
 
 Writes are optimistic: the mark lands under the crosshair immediately, and a
 failed save rolls it back and says so.

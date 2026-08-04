@@ -125,8 +125,8 @@ describe('snapToOnset', () => {
     const peaks = new Uint8Array(400)
     peaks.fill(10, 0, 200)
     peaks.fill(200, 200, 400)
-    // Marked 500ms late by eye — snapping should land on the step.
-    expect(snapToOnset(peaks, HZ, 10500)).toBe(10000)
+    // Marked 400ms late by eye — snapping should land on the step.
+    expect(snapToOnset(peaks, HZ, 10400)).toBe(10000)
   })
 
   it('leaves a mark alone when the window has no real onset', () => {
@@ -141,6 +141,23 @@ describe('snapToOnset', () => {
     peaks.fill(200, 1000, 2000) // onset at 50 000ms
     // Marked at 10s, far from the rise: unchanged.
     expect(snapToOnset(peaks, HZ, 10000)).toBe(10000)
+  })
+
+  it('leaves a deliberate mark alone when the next attack is a second away', () => {
+    // The regression this window size exists for: the tune has already begun at
+    // the mark, and a louder phrase follows 1.3s later. Snap must not walk the
+    // mark forward onto it.
+    const peaks = new Uint8Array(600).fill(120)
+    peaks.fill(240, 246, 600) // step 1.3s after a mark at 10 000ms
+    expect(snapToOnset(peaks, HZ, 10000)).toBe(10000)
+  })
+
+  it('still corrects a small eyeball error', () => {
+    const peaks = new Uint8Array(600)
+    peaks.fill(10, 0, 208)
+    peaks.fill(200, 208, 600) // onset at 10 400ms
+    // Marked 300ms early: inside the window, so it snaps onto the note.
+    expect(snapToOnset(peaks, HZ, 10100)).toBe(10400)
   })
 
   it('is a no-op without a waveform', () => {
