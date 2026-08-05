@@ -24,7 +24,7 @@ tables are dropped by `schema/049`.
 - **The master is not what gets played.** A separate small mono proxy
   (`stream_key`, schema/051) is streamed to the browser; `storage_key` stays the
   master and the training corpus is always cut from it. Feeding a model the
-  artefacts of a 48kbps encode instead of the real audio would be a quiet,
+  artefacts of a 32kbps encode instead of the real audio would be a quiet,
   expensive mistake, so the two keys are kept apart by construction rather than
   by remembering.
 - **Ends are implied, not typed.** Marking the next tune's start marks the
@@ -122,9 +122,11 @@ Probes with ffprobe, streams mono 16-bit PCM out of ffmpeg and reduces it bucket
 by bucket (flat memory regardless of length), transcodes a playback proxy,
 uploads both to S3, writes the row.
 
-The proxy defaults to **48kbps mono at 32kHz** — about a fifth the size of a
-256kbps stereo master, with 16kHz of bandwidth, comfortably above every
-fundamental and most harmonics a fiddle, flute or box produces. `--stream-bitrate`
+The proxy defaults to **32kbps mono at 22.05kHz** — roughly an eighth the size
+of a 256kbps stereo master (45MB for a three-hour session, against 348MB), with
+11kHz of bandwidth. That sits well above every fundamental in the room and holds
+enough harmonic detail to tell one tune from another by ear, which was confirmed
+by listening to encodes of a real session at four settings rather than assumed. `--stream-bitrate`
 and `--stream-rate` change it; `--no-stream` skips it. It carries
 `-movflags +faststart`, which puts the MP4 index at the front so the browser can
 begin playing after the first range request rather than having to reach the end

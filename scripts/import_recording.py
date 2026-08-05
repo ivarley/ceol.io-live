@@ -78,8 +78,8 @@ def main():
         help="Skip the playback proxy. The segmenter then streams the master, which on a long "
              "recording over cellular is a slow start.",
     )
-    parser.add_argument("--stream-bitrate", default=None, help="Proxy bitrate (default 48k)")
-    parser.add_argument("--stream-rate", type=int, default=None, help="Proxy sample rate in Hz (default 32000)")
+    parser.add_argument("--stream-bitrate", default=None, help="Proxy bitrate (default 32k)")
+    parser.add_argument("--stream-rate", type=int, default=None, help="Proxy sample rate in Hz (default 22050)")
     parser.add_argument(
         "--database-url",
         help="Target database as a postgres:// URL (Render's External Database URL). "

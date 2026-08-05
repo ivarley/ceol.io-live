@@ -112,12 +112,14 @@ def generate_presigned_url(storage_key, expiry=21600):
 # stereo imaging; AAC because it is the one lossy codec every phone browser plays
 # without argument (Opus would be smaller, but Safari's support for it is not
 # something to bet a field tool on).
-# 48kbps at 32kHz is the default: about a fifth the size of a 256kbps stereo
-# master, with 16kHz of bandwidth -- comfortably above every fundamental and
-# most harmonics a fiddle, flute or box produces. Both are flags, because the
-# right trade-off is a judgement about ears, not something to hard-code.
-STREAM_BITRATE = "48k"
-STREAM_SAMPLE_RATE = 32000
+# 32kbps mono at 22.05kHz: roughly an eighth the size of a 256kbps stereo master
+# (45MB for a three-hour session, against 348MB). 11kHz of bandwidth, which sits
+# well above every fundamental in the room and holds enough harmonic detail to
+# tell one tune from another by ear -- confirmed by listening to encodes of a
+# real session, not assumed. Both are flags, because the right trade-off is a
+# judgement about ears rather than something to hard-code.
+STREAM_BITRATE = "32k"
+STREAM_SAMPLE_RATE = 22050
 STREAM_MIME = "audio/mp4"
 STREAM_SUFFIX = ".stream.m4a"
 
