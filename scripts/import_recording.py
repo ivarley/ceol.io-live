@@ -227,7 +227,7 @@ def main():
             cur.execute(
                 """
                 UPDATE recording
-                   SET label = %s, person_id = COALESCE(%s, person_id), mime_type = %s, duration_ms = %s, file_size_bytes = %s,
+                   SET label = COALESCE(%s, label), person_id = COALESCE(%s, person_id), mime_type = %s, duration_ms = %s, file_size_bytes = %s,
                        sample_rate = %s, channels = %s, is_clock_anchor = %s, clock_offset_ms = %s,
                        started_at = COALESCE(%s, started_at), peaks = %s, peaks_hz = %s,
                        stream_key = COALESCE(%s, stream_key),
@@ -235,7 +235,11 @@ def main():
                        stream_size_bytes = COALESCE(%s, stream_size_bytes)
                  WHERE recording_id = %s
                 """,
-                (label, args.person, mime, info["duration_ms"], size, info["sample_rate"], info["channels"],
+                # args.label, not `label`: on an update an omitted --label must LEAVE the
+                # existing one alone. It used to fall back to the filename here, which
+                # quietly renamed "B.D. Riley's 2025-03-27" to "BD-Session-2025-03-27.MP3"
+                # on a backfill run that was only meant to attach a proxy.
+                (args.label, args.person, mime, info["duration_ms"], size, info["sample_rate"], info["channels"],
                  is_anchor, args.offset_ms, started_at, peaks_b64, peaks_hz,
                  stream_key, rec.STREAM_MIME if stream_key else None, stream_size,
                  args.recording_id),
