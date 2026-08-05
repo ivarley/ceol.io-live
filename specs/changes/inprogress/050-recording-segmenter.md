@@ -21,9 +21,14 @@ tables are dropped by `schema/049`.
 - **One recording = one whole audio file**, played back through a presigned S3
   URL. S3 honours range requests, so a browser can seek anywhere in a 3-hour
   file without downloading it — the only reason this works on a phone.
-- **The master is not what gets played.** A separate small mono proxy
+- **The master is not what gets played by default.** A separate small mono proxy
   (`stream_key`, schema/051) is streamed to the browser; `storage_key` stays the
-  master and the training corpus is always cut from it. Feeding a model the
+  master and the training corpus is always cut from it. BOTH are presigned and
+  sent to the page, and an `audio` control switches between them — which one you
+  want depends on the connection you happen to be on, which import time cannot
+  know. The choice is remembered per browser. Switching preserves the playhead
+  and the play state, because changing an `<audio>` element's `src` otherwise
+  resets it to zero and throws away the spot being worked on. Feeding a model the
   artefacts of a 32kbps encode instead of the real audio would be a quiet,
   expensive mistake, so the two keys are kept apart by construction rather than
   by remembering.

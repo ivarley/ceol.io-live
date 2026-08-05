@@ -75,6 +75,12 @@ def main():
              "[order_position, record_type, tune_id, name, tune_name, tune_type, session_alias].",
     )
     parser.add_argument("--storage-key", help="S3 key the seeded recording points at")
+    parser.add_argument(
+        "--stream-key",
+        help="S3 key of the playback proxy (spec 051). Without it the fixture has a single "
+             "encode and the segmenter's quality control has nothing to switch between.",
+    )
+    parser.add_argument("--stream-size-bytes", type=int, help="Size of the proxy, for the quality control's label")
     parser.add_argument("--label", default="B.D. Riley's 2025-03-27")
     parser.add_argument("--out", default="schema/seed_recording.sql")
     args = parser.parse_args()
@@ -163,7 +169,7 @@ def main():
         w("ON CONFLICT (session_id, tune_id) DO UPDATE SET alias = EXCLUDED.alias;")
     w("")
 
-    w(f"INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time)")
+    w("INSERT INTO session_instance (session_instance_id, session_id, date, start_time, end_time)")
     w(f"VALUES ({LOCAL_INSTANCE_ID}, {LOCAL_SESSION_ID}, DATE '{instance_date}', TIME '19:00', TIME '22:30');")
     w("")
 
@@ -182,10 +188,14 @@ def main():
     w("-- The recording. peaks is the RMS envelope of the real audio (see recording.py).")
     w("INSERT INTO recording (recording_id, session_instance_id, label, storage_key, mime_type,")
     w("                       duration_ms, file_size_bytes, sample_rate, channels,")
-    w("                       is_clock_anchor, clock_offset_ms, peaks, peaks_hz) VALUES")
+    w("                       is_clock_anchor, clock_offset_ms, peaks, peaks_hz,")
+    w("                       stream_key, stream_mime_type, stream_size_bytes) VALUES")
     w(f"    ({LOCAL_RECORDING_ID}, {LOCAL_INSTANCE_ID}, {q(args.label)}, {q(args.storage_key)}, 'audio/mpeg',")
     w(f"     {audio['duration_ms']}, {audio['file_size_bytes']}, {audio['sample_rate']}, {audio['channels']},")
-    w(f"     TRUE, 0, {q(audio['peaks_b64'])}, {audio['peaks_hz']});")
+    w(f"     TRUE, 0, {q(audio['peaks_b64'])}, {audio['peaks_hz']},")
+    stream_mime = q("audio/mp4") if args.stream_key else "NULL"
+    stream_size = args.stream_size_bytes if args.stream_size_bytes else "NULL"
+    w(f"     {q(args.stream_key)}, {stream_mime}, {stream_size});")
     w("")
 
     w("-- Explicit ids above leave the sequences behind; setup_local_db.sh resyncs them")

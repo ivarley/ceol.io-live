@@ -1816,20 +1816,40 @@ def build_recording_segmenter_payload(
     if not row:
         return None
 
-    # Play the proxy when there is one -- it is a fraction of the size, which is
-    # the difference between a phone starting playback in seconds and appearing
-    # broken. Falls back to the master, so recordings imported before proxies
-    # existed still play. The EXPORT deliberately keeps pointing at the master:
-    # the training corpus must never be cut from a lossy 48kbps mono encode.
-    playback_key = row["stream_key"] or row["storage_key"]
-    audio_url = None
+    # BOTH sources go to the client, proxy first, so the operator can switch on
+    # the fly -- the right trade-off depends on the connection they happen to be
+    # on, which is not knowable at import time. Presigning is local HMAC, so a
+    # second URL costs nothing.
+    #
+    # The EXPORT deliberately ignores all of this and keeps naming the master:
+    # the training corpus must never be cut from a lossy mono encode.
+    audio_sources = []
     audio_error = None
     if include_audio_url:
         try:
             from recording import generate_presigned_url
 
-            audio_url = generate_presigned_url(playback_key)
+            if row["stream_key"]:
+                audio_sources.append(
+                    {
+                        "id": "proxy",
+                        "label": "low",
+                        "url": generate_presigned_url(row["stream_key"]),
+                        "mime_type": row["stream_mime_type"] or "audio/mp4",
+                        "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                    }
+                )
+            audio_sources.append(
+                {
+                    "id": "master",
+                    "label": "full",
+                    "url": generate_presigned_url(row["storage_key"]),
+                    "mime_type": row["mime_type"],
+                    "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+                }
+            )
         except Exception as exc:  # object store misconfigured — the page says so
+            audio_sources = []
             audio_error = str(exc)
 
     tunes = _load_instance_tune_log(conn, row["session_instance_id"], row["session_id"])
@@ -1884,11 +1904,10 @@ def build_recording_segmenter_payload(
             "peaks_hz": float(row["peaks_hz"]) if row["peaks_hz"] is not None else None,
             "has_peaks": row["has_peaks"],
             "peaks_url": f"/api/recordings/{row['recording_id']}/peaks",
-            "audio_url": audio_url,
+            # Ordered: the first entry is the default the page opens on.
+            "audio_sources": audio_sources,
             "audio_error": audio_error,
-            "audio_mime_type": (row["stream_mime_type"] if row["stream_key"] else row["mime_type"]),
-            "is_proxy": bool(row["stream_key"]),
-            "stream_size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+            "has_proxy": bool(row["stream_key"]),
             "notes": row["notes"],
         },
         "session_instance": {

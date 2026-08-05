@@ -19,7 +19,11 @@ const payload = () => ({
     peaks_hz: 20,
     has_peaks: false, // keeps the test off the binary peaks fetch
     peaks_url: '/api/recordings/7/peaks',
-    audio_url: 'blob:fake',
+    audio_sources: [
+      { id: 'proxy', label: 'low', url: 'blob:proxy', mime_type: 'audio/mp4', size_bytes: 44716235 },
+      { id: 'master', label: 'full', url: 'blob:master', mime_type: 'audio/mpeg', size_bytes: 348303266 },
+    ],
+    has_proxy: true,
     audio_error: null,
     notes: null,
   },
@@ -326,5 +330,81 @@ describe('audio loading state', () => {
     await fireEvent(container.querySelector('audio'), new Event('error'))
     await waitFor(() => expect(getByText(/could not be loaded/)).toBeTruthy())
     expect(spinner(container)).toBeNull()
+  })
+})
+
+describe('audio quality switch', () => {
+  const sel = (c) => [...c.querySelectorAll('.sg-opt select')].find((s) => s.value === 'proxy' || s.value === 'master')
+
+  beforeEach(() => {
+    try { window.localStorage.removeItem('ceol.segmenter.audioSource') } catch { /* ignore */ }
+  })
+
+  it('opens on the first source — the small one — and offers both with sizes', () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const select = sel(container)
+    expect(select.value).toBe('proxy')
+    const labels = [...select.options].map((o) => o.textContent.trim())
+    expect(labels[0]).toContain('low')
+    expect(labels[0]).toContain('45 MB')
+    expect(labels[1]).toContain('full')
+    expect(labels[1]).toContain('348 MB')
+  })
+
+  it('keeps your place when you switch encodes', async () => {
+    // The whole risk of this feature: changing src resets an <audio> to zero,
+    // so switching quality mid-session would otherwise throw away the exact
+    // spot being worked on.
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent(el, new Event('canplay'))
+    el.currentTime = 742
+
+    await fireEvent.change(sel(container), { target: { value: 'master' } })
+    await fireEvent(el, new Event('loadedmetadata'))
+
+    await waitFor(() => expect(el.getAttribute('src')).toBe('blob:master'))
+    expect(el.currentTime).toBe(742)
+  })
+
+  it('resumes playing if it was playing before the switch', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    const el = container.querySelector('audio')
+    await fireEvent(el, new Event('canplay'))
+    el.currentTime = 100
+    Object.defineProperty(el, 'paused', { configurable: true, value: false })
+
+    await fireEvent.change(sel(container), { target: { value: 'master' } })
+    await fireEvent(el, new Event('loadedmetadata'))
+
+    await waitFor(() => expect(el.play).toHaveBeenCalled())
+  })
+
+  it('shows the spinner while the new source loads', async () => {
+    const { container } = render(App, { props: { pageData: payload() } })
+    await fireEvent(container.querySelector('audio'), new Event('canplay'))
+    await waitFor(() => expect(container.querySelector('.sg-play .sg-spinner')).toBeNull())
+
+    await fireEvent.change(sel(container), { target: { value: 'master' } })
+    await waitFor(() => expect(container.querySelector('.sg-play .sg-spinner')).toBeTruthy())
+  })
+
+  it('remembers the choice for next time', async () => {
+    const { container, unmount } = render(App, { props: { pageData: payload() } })
+    await fireEvent.change(sel(container), { target: { value: 'master' } })
+    await waitFor(() => expect(window.localStorage.getItem('ceol.segmenter.audioSource')).toBe('master'))
+    unmount()
+
+    const again = render(App, { props: { pageData: payload() } })
+    expect(sel(again.container).value).toBe('master')
+  })
+
+  it('hides the control when there is only one encode', () => {
+    const p = payload()
+    p.recording.audio_sources = [p.recording.audio_sources[1]]  // master only
+    p.recording.has_proxy = false
+    const { container } = render(App, { props: { pageData: p } })
+    expect(sel(container)).toBeUndefined()
+    expect(container.querySelector('audio').getAttribute('src')).toBe('blob:master')
   })
 })

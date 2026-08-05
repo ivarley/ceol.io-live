@@ -317,7 +317,7 @@ def test_endpoints_require_admin(client, authenticated_user, committed_recording
 # --------------------------------------------------------------------------- #
 
 
-def test_payload_plays_the_proxy_when_there_is_one(db_conn, db_cursor):
+def test_payload_offers_both_encodes_proxy_first(db_conn, db_cursor):
     _build(db_cursor)
     db_cursor.execute(
         "UPDATE recording SET stream_key = %s, stream_mime_type = 'audio/mp4', stream_size_bytes = 1234 "
@@ -327,18 +327,15 @@ def test_payload_plays_the_proxy_when_there_is_one(db_conn, db_cursor):
     from serializers import build_recording_segmenter_payload
 
     payload = build_recording_segmenter_payload(db_conn, REC_ID, include_audio_url=False)
-    assert payload["recording"]["is_proxy"] is True
-    assert payload["recording"]["audio_mime_type"] == "audio/mp4"
-    assert payload["recording"]["stream_size_bytes"] == 1234
+    assert payload["recording"]["has_proxy"] is True
 
 
-def test_payload_falls_back_to_the_master_without_a_proxy(db_conn, db_cursor):
+def test_payload_offers_only_the_master_without_a_proxy(db_conn, db_cursor):
     _build(db_cursor)
     from serializers import build_recording_segmenter_payload
 
     payload = build_recording_segmenter_payload(db_conn, REC_ID, include_audio_url=False)
-    assert payload["recording"]["is_proxy"] is False
-    assert payload["recording"]["stream_size_bytes"] is None
+    assert payload["recording"]["has_proxy"] is False
 
 
 def test_export_cuts_from_the_master_never_the_proxy(client, admin_user, committed_recording, db_cursor):
@@ -362,3 +359,25 @@ def test_export_cuts_from_the_master_never_the_proxy(client, admin_user, committ
     finally:
         db_cursor.execute("UPDATE recording SET stream_key = NULL WHERE recording_id = %s", (REC_ID,))
         db_cursor.connection.commit()
+
+
+def test_payload_lists_both_urls_proxy_first(db_conn, db_cursor, monkeypatch):
+    """Both encodes reach the client so the operator can switch on the fly --
+    the right one depends on the connection they are on, which import time
+    cannot know."""
+    _build(db_cursor)
+    db_cursor.execute(
+        "UPDATE recording SET stream_key = 'k.stream.m4a', stream_mime_type = 'audio/mp4', "
+        "stream_size_bytes = 44716235, file_size_bytes = 348303266 WHERE recording_id = %s",
+        (REC_ID,),
+    )
+    import recording as rec_module
+
+    monkeypatch.setattr(rec_module, "generate_presigned_url", lambda key, **kw: f"https://signed/{key}")
+    from serializers import build_recording_segmenter_payload
+
+    sources = build_recording_segmenter_payload(db_conn, REC_ID)["recording"]["audio_sources"]
+    assert [s["id"] for s in sources] == ["proxy", "master"]
+    assert sources[0]["url"].endswith("k.stream.m4a")
+    assert sources[1]["url"].endswith("recordings/test/seg050.m4a")
+    assert sources[0]["size_bytes"] < sources[1]["size_bytes"]

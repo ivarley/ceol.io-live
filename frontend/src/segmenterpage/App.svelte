@@ -7,7 +7,7 @@
   // where it starts in the audio, press M, cursor advances. Ends come free --
   // the next tune's start IS the previous tune's end -- so an explicit end is
   // only typed at the end of a set, where chatter follows.
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import Waveform from './Waveform.svelte'
   import TuneList from './TuneList.svelte'
   import {
@@ -45,11 +45,31 @@
   // finished long before the audio is. That gap is what makes it read as broken.
   let mediaState = $state('loading')
 
+  // Which encode is being streamed. Both go down with the payload (proxy first);
+  // which one you want depends on the connection you happen to be on, so it is a
+  // control rather than a decision made at import time.
+  const SOURCE_PREF_KEY = 'ceol.segmenter.audioSource'
+  // svelte-ignore state_referenced_locally
+  let sourceId = $state(
+    (() => {
+      const available = (pageData?.recording?.audio_sources ?? []).map((s) => s.id)
+      let saved = null
+      try {
+        saved = window.localStorage.getItem(SOURCE_PREF_KEY)
+      } catch {
+        // Private browsing and friends: fall through to the default.
+      }
+      return available.includes(saved) ? saved : available[0] ?? null
+    })(),
+  )
+
   const durationMs = $derived(recording?.duration_ms ?? 0)
   const segments = $derived(resolveSegments(tunes, durationMs))
   const placedCount = $derived(tunes.filter((t) => t.segment).length)
   const cursorTune = $derived(tunes[cursorIndex] ?? null)
   const mediaBusy = $derived(mediaState === 'loading' || mediaState === 'buffering')
+  const audioSources = $derived(recording?.audio_sources ?? [])
+  const currentSource = $derived(audioSources.find((s) => s.id === sourceId) ?? audioSources[0] ?? null)
 
   // The tune whose resolved range covers the playhead -- what "this tune ends
   // here" refers to.
@@ -124,6 +144,43 @@
     } else {
       audio.pause()
     }
+  }
+
+  /**
+   * Switch encodes without losing your place.
+   *
+   * Changing an <audio> element's src resets it to zero and stops playback, so
+   * the position and play state are captured first and restored once the new
+   * source has metadata. Without that, switching quality mid-session throws away
+   * exactly the spot you were working on.
+   */
+  async function switchSource(id) {
+    if (!audio || id === sourceId || !audioSources.some((s) => s.id === id)) return
+    const resumeAt = audio.currentTime
+    const wasPlaying = !audio.paused
+    mediaState = 'loading'
+    sourceId = id
+    try {
+      window.localStorage.setItem(SOURCE_PREF_KEY, id)
+    } catch {
+      // Not being able to remember the choice is not worth failing the switch.
+    }
+    await tick() // the src attribute has now been rewritten
+
+    // Wait for metadata unconditionally, and subscribe BEFORE calling load().
+    // `load()` does not reset readyState synchronously, so checking it here
+    // reports the OLD source's value -- and restoring the position on an
+    // element that has no metadata yet wedges the load outright: networkState
+    // stays LOADING, readyState stays HAVE_NOTHING, and nothing ever buffers.
+    audio.addEventListener(
+      'loadedmetadata',
+      () => {
+        audio.currentTime = resumeAt
+        if (wasPlaying) audio.play().catch(() => {})
+      },
+      { once: true },
+    )
+    audio.load()
   }
 
   function setSpeed(value) {
@@ -522,6 +579,18 @@
             <input type="checkbox" bind:checked={snapEnabled} />
             snap to onset
           </label>
+          {#if audioSources.length > 1}
+            <label class="sg-opt">
+              audio
+              <select value={sourceId} onchange={(e) => switchSource(e.currentTarget.value)}>
+                {#each audioSources as src (src.id)}
+                  <option value={src.id}>
+                    {src.label}{src.size_bytes ? ` · ${Math.round(src.size_bytes / 1e6)} MB` : ''}
+                  </option>
+                {/each}
+              </select>
+            </label>
+          {/if}
         </div>
 
         <details class="sg-keys">
@@ -555,7 +624,7 @@
 
     <audio
       bind:this={audio}
-      src={recording.audio_url}
+      src={currentSource ? currentSource.url : ''}
       preload="metadata"
       onplay={() => (playing = true)}
       onpause={() => (playing = false)}
