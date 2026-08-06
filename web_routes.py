@@ -2950,6 +2950,7 @@ def session_admin_person(session_path, person_id):
                 sp.gets_email_followup,
                 sp.confirmed,
                 sp.archived,
+                sp.can_manage_recordings,
                 u.username,
                 u.is_system_admin
             FROM person p
@@ -2984,8 +2985,10 @@ def session_admin_person(session_path, person_id):
             # they land here and push username/is_system_admin down two.
             "confirmed": person_row[13],
             "archived": person_row[14],
-            "username": person_row[15],
-            "is_system_admin": person_row[16],
+            # schema/053 -- appended before username/is_system_admin, which shift down one.
+            "can_manage_recordings": person_row[15],
+            "username": person_row[16],
+            "is_system_admin": person_row[17],
         }
 
         # Get instruments for this person
@@ -3459,6 +3462,17 @@ def live_logging_screen(session_instance_id):
     finally:
         conn.close()
 
+    # Who may upload/timestamp this session's audio (schema/053). Resolved here so
+    # the header can decide whether the Recordings row exists at first paint; every
+    # endpoint behind it re-checks, so this only controls what is offered.
+    from recording_routes import can_manage_recordings
+
+    conn = get_db_connection()
+    try:
+        manages_recordings = can_manage_recordings(conn.cursor(), session_id)
+    finally:
+        conn.close()
+
     can_edit = bool(current_user.is_authenticated)
     streaming_base_url = os.environ.get("STREAMING_BASE_URL", "http://localhost:8080")
     return render_template(
@@ -3489,6 +3503,7 @@ def live_logging_screen(session_instance_id):
         # gated by these — that's attribution of who's actively logging.
         track_attendance=bool(track_attendance),
         track_set_starters=bool(track_set_starters),
+        can_manage_recordings=bool(manages_recordings),
         # The template has always referenced this, but the route never passed it -- so the
         # create-person form's instrument checkboxes rendered empty.
         canonical_instruments=CANONICAL_INSTRUMENTS,
@@ -3584,22 +3599,48 @@ def admin_recordings():
 @login_required
 def segment_recording(recording_id):
     """The audio segmenter (spec 050): a thin shell embedding the SAME payload
-    GET /api/recordings/<id>/segmenter returns, mounting the Svelte tool."""
-    if not current_user.is_system_admin:
-        flash("You must be authorized to view this page.", "error")
-        return redirect(url_for("home"))
+    GET /api/recordings/<id>/segmenter returns, mounting the Svelte tool.
 
+    Open to whoever may manage this recording's session (schema/053), not just
+    system admins — the whole point of the grant is that a session admin can do
+    the timestamping for their own night. Same rule as the API behind it, so the
+    page and its data can't disagree about who is allowed in.
+    """
+    from recording_routes import can_manage_recordings
     from serializers import build_recording_segmenter_payload
 
     conn = get_db_connection()
     try:
-        payload = build_recording_segmenter_payload(conn, recording_id)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT si.session_id FROM recording r "
+            "JOIN session_instance si ON si.session_instance_id = r.session_instance_id "
+            "WHERE r.recording_id = %s",
+            (recording_id,),
+        )
+        found = cur.fetchone()
+        if found and not can_manage_recordings(cur, found[0]):
+            flash("You must be authorized to view this page.", "error")
+            return redirect(url_for("home"))
+
+        payload = build_recording_segmenter_payload(conn, recording_id) if found else None
     finally:
         conn.close()
 
+    # Where to send someone who can't be shown the tool. A system admin belongs on
+    # the site-wide index; a session admin can't see that page at all, so bounce
+    # them to the night they came from rather than into a second refusal.
+    def _back():
+        if current_user.is_system_admin:
+            return redirect(url_for("admin_recordings"))
+        instance_id = payload["session_instance"]["session_instance_id"] if payload else None
+        if instance_id:
+            return redirect(url_for("live_logging_screen", session_instance_id=instance_id))
+        return redirect(url_for("home"))
+
     if payload is None:
         flash("That recording doesn't exist.", "error")
-        return redirect(url_for("admin_recordings"))
+        return _back()
 
     # Ingest fills in the waveform and the true duration minutes after the row
     # appears (schema/052). Opening the tool before that finishes would show a

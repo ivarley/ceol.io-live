@@ -7,6 +7,7 @@
   import TuneSearch from './TuneSearch.svelte'
   import { Dialog, PersonPicker, Sheet } from './lib/index.js'
   import SidePane from './SidePane.svelte'
+  import RecordingsModal from './RecordingsModal.svelte'
   import { queuePut, queueAll, queueDelete, snapshotPut, snapshotGet, matchCachePut, matchCacheGet } from './offline.js'
   import { generateAppend, generateBetween } from './fracindex.js'
   import {
@@ -777,6 +778,22 @@
   // the flags. These gate ONLY attendance + set-starters; presence, "logged by", and
   // typing are attribution of who's actively logging and are never gated. Starters
   // additionally require attendance (the DB CHECK), so trackStarters folds it in.
+  // Audio for this night (spec 050, schema/053). Off unless this viewer holds the
+  // session's recordings grant -- for everyone else the row simply isn't there,
+  // and every endpoint behind it re-checks regardless.
+  const canManageRecordings = $derived(config.canManageRecordings === true)
+  let recordingsOpen = $state(false)
+  let recordingCount = $state(null) // null until asked; the header shows a count once known
+
+  async function loadRecordingCount() {
+    if (!canManageRecordings) return
+    try {
+      const res = await fetch(`/api/session-instances/${config.sessionInstanceId}/recordings`)
+      const data = await res.json()
+      if (data.success) recordingCount = (data.recordings || []).length
+    } catch { /* the header just shows no count; Manage still works */ }
+  }
+
   const trackAttendance = $derived(config.trackAttendance !== false)
   const trackStarters = $derived(config.trackSetStarters !== false && trackAttendance)
 
@@ -3298,6 +3315,9 @@
     // a dead SSE) while the records still hydrate from cache, can't silently eat the
     // flash. autoLogTune DOES wait: appending a tune needs the loaded truth first.
     if (highlightId) highlightFromUrl(highlightId)
+    // Independent of connect(): the header's Recordings count is its own small
+    // fetch, and a slow or failed bootstrap shouldn't decide whether it appears.
+    loadRecordingCount()
     connect().then(() => {
       loaded = true
       if (autoTuneId && !highlightId) autoLogTune(autoTuneId)
@@ -3540,6 +3560,22 @@
                 {checkedIn.length ? `— ${checkedIn.map((a) => a.display_name).join(', ')}` : '— no one checked in yet'}
               </span>
               <button class="hx-act" onclick={(e) => { e.stopPropagation(); openAttendance() }}>Manage</button>
+            </div>
+          {/if}
+          {#if canManageRecordings}
+            <div class="hx-row">
+              <span class="hx-label">Recordings</span>
+              <span class="hx-val">
+                {#if recordingCount === null}
+                  —
+                {:else if recordingCount === 0}
+                  none uploaded yet
+                {:else}
+                  <b class="hx-strong">{recordingCount}</b>
+                  {recordingCount === 1 ? 'recording' : 'recordings'}
+                {/if}
+              </span>
+              <button class="hx-act" onclick={(e) => { e.stopPropagation(); recordingsOpen = true }}>Manage</button>
             </div>
           {/if}
           {#if !readOnly && roster.length}
@@ -4089,6 +4125,15 @@
     {/if}
     {/if}
   </div>
+
+  {#if recordingsOpen}
+    <!-- This night's audio (spec 050): upload, and open the timestamping tool.
+         Session and instance are fixed by the log this was opened from. -->
+    <RecordingsModal
+      sessionInstanceId={config.sessionInstanceId}
+      onclose={() => { recordingsOpen = false; loadRecordingCount() }}
+    />
+  {/if}
 
   {#if assignOpen}
     <!-- bulk Assign (spec 029 §G): the set-tray starter picker as a modal -->

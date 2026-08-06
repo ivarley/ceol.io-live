@@ -6867,8 +6867,22 @@ def update_session_player_admin_status(session_path, person_id):
         if not user_row or not user_row[0]:
             return jsonify({"success": False, "message": "Insufficient permissions"}), 403
 
-        data = request.get_json()
-        is_admin = data.get("is_admin", False)
+        data = request.get_json() or {}
+
+        # Two independent grants, saved through one endpoint because they are one
+        # decision in the UI ("what may this person do here?") and one history row.
+        # Each is applied ONLY when present in the body, so a caller that knows
+        # about just one of them cannot silently clear the other.
+        updates = {}
+        if "is_admin" in data:
+            updates["is_admin"] = bool(data.get("is_admin"))
+        if "can_manage_recordings" in data:
+            # Meaningless without is_admin (schema/053), and the permission check
+            # requires both -- but it is stored as asked rather than forced, so
+            # revoking and restoring session-admin doesn't silently lose it.
+            updates["can_manage_recordings"] = bool(data.get("can_manage_recordings"))
+        if not updates:
+            return jsonify({"success": False, "message": "Nothing to update"}), 400
 
         # Get session ID first
         cur.execute("SELECT session_id FROM session WHERE path = %s", (session_path,))
@@ -6887,14 +6901,14 @@ def update_session_player_admin_status(session_path, person_id):
             user_id=get_current_user_id(),
         )
 
-        # Update the admin status
+        assignments = ", ".join(f"{column} = %s" for column in updates)
         cur.execute(
-            """
+            f"""
             UPDATE session_person
-            SET is_admin = %s
+            SET {assignments}
             WHERE session_id = %s AND person_id = %s
         """,
-            (is_admin, session_id, person_id),
+            (*updates.values(), session_id, person_id),
         )
 
         if cur.rowcount == 0:

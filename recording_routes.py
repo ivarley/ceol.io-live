@@ -18,8 +18,13 @@ through Flask:
     POST /api/recordings               confirm it landed; row + background ingest
     GET  /api/recordings/<id>/status   poll while the waveform is built
 
-Every endpoint is system-admin only: this is a data-prep tool for building an ML
-training corpus, not a member-facing feature.
+Authorization is per SESSION, not global (schema/053). A system admin can do
+anything; anyone else needs to be an admin of the session this recording belongs
+to AND hold that session's `can_manage_recordings` bit. The person who recorded
+a night and knows what was played is usually the one running it, not whoever
+administers the site — but the grant is opt-in and one session wide, so it never
+becomes a way to reach another session's audio. Only the cross-session surfaces
+(the site-wide index, the session picker behind it) remain system-admin only.
 """
 
 import base64
@@ -33,9 +38,85 @@ from database import get_db_connection, get_current_user_id, save_to_history
 
 
 def _admin_gate():
-    """Returns an error response when the caller isn't a system admin, else None."""
+    """Returns an error response when the caller isn't a system admin, else None.
+
+    Only for the CROSS-SESSION surfaces (/admin/recordings and the session
+    picker), which show every night in the system. Anything scoped to one
+    recording uses _session_gate below.
+    """
     if not current_user.is_system_admin:
         return jsonify({"success": False, "error": "Admin access required"}), 403
+    return None
+
+
+def can_manage_recordings(cur, session_id):
+    """May the current user manage THIS session's recordings? (schema/053)
+
+    System admins always. Otherwise it takes an admin of this particular session
+    who has also been granted the recordings bit — the two together, never the
+    bit alone. A session admin without it is exactly where everyone started, and
+    a member with it somehow set has nothing, so "who can do this here" stays
+    answerable by looking at the session's admins.
+    """
+    if not current_user.is_authenticated:
+        return False
+    if current_user.is_system_admin:
+        return True
+    person_id = getattr(current_user, "person_id", None)
+    if not person_id or not session_id:
+        return False
+    cur.execute(
+        "SELECT 1 FROM session_person "
+        "WHERE session_id = %s AND person_id = %s AND is_admin = TRUE AND can_manage_recordings = TRUE",
+        (session_id, person_id),
+    )
+    return cur.fetchone() is not None
+
+
+def _session_of_recording(cur, recording_id):
+    """(session_id, session_instance_id) for a recording, or (None, None)."""
+    cur.execute(
+        "SELECT si.session_id, si.session_instance_id FROM recording r "
+        "JOIN session_instance si ON si.session_instance_id = r.session_instance_id "
+        "WHERE r.recording_id = %s",
+        (recording_id,),
+    )
+    row = cur.fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _session_of_instance(cur, session_instance_id):
+    cur.execute(
+        "SELECT session_id FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _recording_gate(cur, recording_id):
+    """Gate a per-recording endpoint. Returns an error response, or None to proceed.
+
+    404 for a recording that doesn't exist, 403 for one that does but isn't
+    yours -- deliberately distinguishable, because every caller of these
+    endpoints is already an admin of SOMETHING and hiding the difference would
+    only make a misconfigured permission look like a missing recording.
+    """
+    session_id, _ = _session_of_recording(cur, recording_id)
+    if session_id is None:
+        return jsonify({"success": False, "error": "Recording not found"}), 404
+    if not can_manage_recordings(cur, session_id):
+        return jsonify({"success": False, "error": "You can't manage this session's recordings"}), 403
+    return None
+
+
+def _instance_gate(cur, session_instance_id):
+    """Same, for endpoints addressed by session instance rather than recording."""
+    session_id = _session_of_instance(cur, session_instance_id)
+    if session_id is None:
+        return jsonify({"success": False, "error": "Session instance not found"}), 404
+    if not can_manage_recordings(cur, session_id):
+        return jsonify({"success": False, "error": "You can't manage this session's recordings"}), 403
     return None
 
 
@@ -66,14 +147,6 @@ _UPLOAD_MIME_BY_EXTENSION = {
 }
 
 
-def _instance_exists(cur, session_instance_id):
-    cur.execute(
-        "SELECT 1 FROM session_instance WHERE session_instance_id = %s",
-        (session_instance_id,),
-    )
-    return cur.fetchone() is not None
-
-
 @api_login_required
 def create_recording_upload_url():
     """POST /api/recordings/upload-url — sign a direct-to-S3 upload.
@@ -90,10 +163,6 @@ def create_recording_upload_url():
     therefore leaves an orphaned S3 object and no database row, which is the
     right way round.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     import os
 
     import recording as rec
@@ -135,8 +204,9 @@ def create_recording_upload_url():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        if not _instance_exists(cur, session_instance_id):
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+        denied = _instance_gate(cur, session_instance_id)
+        if denied:
+            return denied
     finally:
         conn.close()
 
@@ -169,10 +239,6 @@ def create_recording():
     The row starts as 'processing' and a background thread fills the rest in
     (services/recording_ingest).
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     import recording as rec
     from services.recording_ingest import DETAIL_QUEUED, start_ingest
 
@@ -209,16 +275,6 @@ def create_recording():
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
-    # Confirm the object is actually there before writing a row that claims it
-    # is. A cancelled or failed PUT would otherwise surface much later as a
-    # segmenter page that loads and then plays nothing.
-    try:
-        size = rec.stored_object_size(storage_key)
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 503
-    if size is None:
-        return jsonify({"success": False, "error": "That upload didn't finish — nothing is stored under that key"}), 400
-
     import os
 
     label = (payload.get("label") or "").strip() or None
@@ -227,14 +283,28 @@ def create_recording():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        # Permission before the object store: an unauthorised caller should be
+        # told so without a round trip to S3 on their behalf.
+        denied = _instance_gate(cur, session_instance_id)
+        if denied:
+            return denied
+
         cur.execute(
             "SELECT si.date, s.name FROM session_instance si "
             "JOIN session s ON s.session_id = si.session_id WHERE si.session_instance_id = %s",
             (session_instance_id,),
         )
         instance = cur.fetchone()
-        if not instance:
-            return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        # Confirm the object is actually there before writing a row that claims it
+        # is. A cancelled or failed PUT would otherwise surface much later as a
+        # segmenter page that loads and then plays nothing.
+        try:
+            size = rec.stored_object_size(storage_key)
+        except Exception as exc:
+            return jsonify({"success": False, "error": str(exc)}), 503
+        if size is None:
+            return jsonify({"success": False, "error": "That upload didn't finish — nothing is stored under that key"}), 400
 
         if not label:
             label = f"{instance[1]} {instance[0]}"
@@ -301,15 +371,14 @@ def get_recording_status(recording_id):
     takes, which in practice means the thread died with the dyno under it. The
     page offers a retry instead of spinning forever.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     from services.recording_ingest import INGEST_STEPS, RESUMABLE_AFTER_SECONDS, step_index_for
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
         cur.execute(
             """
             SELECT status, status_detail, duration_ms, (peaks IS NOT NULL) AS has_peaks,
@@ -356,15 +425,14 @@ def reprocess_recording(recording_id):
     ffmpeg), or a deploy killed the thread mid-run and left the row 'processing'
     forever. Idempotent — every step of ingest overwrites.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     from services.recording_ingest import DETAIL_QUEUED, RESUMABLE_AFTER_SECONDS, start_ingest
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
         cur.execute(
             "SELECT status, EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - last_modified_date) "
             "FROM recording WHERE recording_id = %s",
@@ -409,15 +477,14 @@ def delete_recording(recording_id):
     plays silence. Storage failures are reported alongside a success rather
     than raised, since by then the delete has already happened.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     import recording as rec
 
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
         cur.execute(
             "SELECT storage_key, stream_key, label FROM recording WHERE recording_id = %s",
             (recording_id,),
@@ -515,14 +582,13 @@ def get_recording_segmenter(recording_id):
 
     Identical to what the page shell embeds (serializers.build_recording_segmenter_payload).
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     from serializers import build_recording_segmenter_payload
 
     conn = get_db_connection()
     try:
+        denied = _recording_gate(conn.cursor(), recording_id)
+        if denied:
+            return denied
         payload = build_recording_segmenter_payload(conn, recording_id)
     finally:
         conn.close()
@@ -541,13 +607,12 @@ def get_recording_peaks(recording_id):
     base64 in the page blob would cost a third again in bytes and block first
     paint, where this streams alongside the audio and caches.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
         cur.execute("SELECT peaks, peaks_hz FROM recording WHERE recording_id = %s", (recording_id,))
         row = cur.fetchone()
     finally:
@@ -577,10 +642,6 @@ def put_recording_segment(recording_id, session_instance_tune_id):
     start implies it. An explicit end is only meaningful at the end of a set,
     where a stretch of chatter follows.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     payload = request.get_json(silent=True) or {}
     try:
         start_ms = _int_or_none(payload, "start_ms")
@@ -598,6 +659,10 @@ def put_recording_segment(recording_id, session_instance_tune_id):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
 
         cur.execute(
             "SELECT session_instance_id, duration_ms, status FROM recording WHERE recording_id = %s",
@@ -687,13 +752,12 @@ def put_recording_segment(recording_id, session_instance_tune_id):
 @api_login_required
 def delete_recording_segment(recording_id, session_instance_tune_id):
     """DELETE /api/recordings/<id>/segments/<sit_id> — unplace a tune."""
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        denied = _recording_gate(cur, recording_id)
+        if denied:
+            return denied
         cur.execute(
             "SELECT recording_tune_segment_id FROM recording_tune_segment "
             "WHERE recording_id = %s AND session_instance_tune_id = %s",
@@ -715,14 +779,13 @@ def delete_recording_segment(recording_id, session_instance_tune_id):
 @api_login_required
 def get_instance_recordings(session_instance_id):
     """GET /api/session-instances/<id>/recordings — recordings + segmenting progress."""
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     from serializers import build_instance_recordings_payload
 
     conn = get_db_connection()
     try:
+        denied = _instance_gate(conn.cursor(), session_instance_id)
+        if denied:
+            return denied
         payload = build_instance_recordings_payload(conn, session_instance_id)
     finally:
         conn.close()
@@ -739,14 +802,13 @@ def export_recording_segments(recording_id):
     ffmpeg and feed to a model. Reads the recording_tune_segment_resolved view
     so the export and the DB agree on that resolution by construction.
     """
-    denied = _admin_gate()
-    if denied:
-        return denied
-
     import psycopg2.extras
 
     conn = get_db_connection()
     try:
+        denied = _recording_gate(conn.cursor(), recording_id)
+        if denied:
+            return denied
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
             "SELECT storage_key, duration_ms, label FROM recording WHERE recording_id = %s",

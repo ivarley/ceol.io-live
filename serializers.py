@@ -1938,7 +1938,7 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
     cur.execute(
         """
         SELECT r.recording_id, r.label, r.duration_ms, r.is_clock_anchor, r.clock_offset_ms,
-               r.started_at, r.mime_type, r.file_size_bytes,
+               r.started_at, r.mime_type, r.file_size_bytes, r.status, r.status_detail,
                (SELECT count(*) FROM recording_tune_segment rts WHERE rts.recording_id = r.recording_id)
                    AS segment_count
         FROM recording r
@@ -1958,6 +1958,11 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
             "mime_type": r["mime_type"],
             "file_size_bytes": int(r["file_size_bytes"]) if r["file_size_bytes"] else None,
             "segment_count": r["segment_count"],
+            # Ingest state (schema/052): the in-log Recordings modal shows a
+            # freshly uploaded row while it is still being processed, so it needs
+            # to say so rather than presenting a guessed duration as fact.
+            "status": r["status"],
+            "status_detail": r["status_detail"],
         }
         for r in cur.fetchall()
     ]

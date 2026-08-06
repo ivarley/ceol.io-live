@@ -42,7 +42,15 @@ tables are dropped by `schema/049`.
 - **The envelope is RMS on a fitted dB scale**, not peak amplitude on a linear
   one. See "Why RMS in dB" below — this is the difference between a tool that
   works and one that shows a solid block.
-- **System-admin only.** This is a corpus-building tool, not a member feature.
+- **Per-session, not global.** It started system-admin only, on the grounds that
+  it is corpus-building rather than a member feature. That holds for the
+  cross-session views — `/admin/recordings` lists every night in the system — but
+  not for the work itself: the person who recorded a session and knows what was
+  played is usually the one running it. So a system admin can hand a session
+  admin the `can_manage_recordings` bit for **one session** (schema/053), and
+  they get uploading, deleting and timestamping for that session's audio alone.
+  It takes `is_admin AND can_manage_recordings` together, so the answer to "who
+  can do this here" is still found in the session's admin list.
 
 ## Data model (`schema/049_recording_tune_segments.sql`)
 
@@ -199,6 +207,21 @@ from `imageio-ffmpeg`, an ordinary wheel carrying a static binary — no build
 hook. That wheel ships ffmpeg *only*, so `probe_audio` falls back to parsing
 ffmpeg's own stream report when there is no ffprobe; `_ffmpeg_exe()` prefers
 PATH, so local development is unaffected by any of this.
+
+### From inside the log
+
+`/admin/recordings` does this across every session in the system. The same job
+scoped to one night lives in the live logger's header drawer, next to Manage
+attendance: a **Recordings** row with a Manage button, present only for whoever
+holds the grant. The modal behind it lists what has been uploaded — length,
+size, how many of the night's tunes are placed — with a link straight into the
+timestamping tool, and takes an upload with **no session or date field**, since
+the log it was opened from already answers both. Those were the two fields most
+available to be got wrong.
+
+It is the same three-call upload and the same background ingest as the admin
+page; only the two pickers are missing, and the permission check is scoped
+rather than global.
 
 ## The tool
 

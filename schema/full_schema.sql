@@ -549,6 +549,10 @@ CREATE TABLE session_person (
     confirmed BOOLEAN NOT NULL DEFAULT FALSE,
     archived BOOLEAN NOT NULL DEFAULT FALSE,
     is_admin BOOLEAN DEFAULT FALSE,
+    -- May upload, delete and timestamp this session's recordings (schema/053).
+    -- Only takes effect together with is_admin, and grants nothing on any other
+    -- session's audio or on the site-wide recordings index.
+    can_manage_recordings BOOLEAN NOT NULL DEFAULT FALSE,
     gets_email_reminder BOOLEAN DEFAULT FALSE,
     gets_email_followup BOOLEAN DEFAULT FALSE,
     created_date TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -558,6 +562,8 @@ CREATE TABLE session_person (
 );
 
 ALTER TABLE session_person ADD CONSTRAINT uk_session_person UNIQUE (session_id, person_id);
+CREATE INDEX idx_session_person_manages_recordings ON session_person(session_id, person_id)
+    WHERE can_manage_recordings;
 CREATE INDEX idx_session_person_session_id ON session_person (session_id);
 CREATE INDEX idx_session_person_person_id ON session_person (person_id);
 CREATE INDEX idx_session_person_relationship ON session_person (session_id, relationship)
@@ -1045,6 +1051,7 @@ CREATE TABLE session_person_history (
     confirmed BOOLEAN,
     archived BOOLEAN,
     is_admin BOOLEAN,
+    can_manage_recordings BOOLEAN,
     gets_email_reminder BOOLEAN,
     gets_email_followup BOOLEAN,
     created_date TIMESTAMPTZ,

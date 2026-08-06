@@ -482,10 +482,12 @@ def save_to_history(cur, table_name, operation, record_id, user_id=None):
             """
             INSERT INTO session_person_history
             (session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
-             gets_email_reminder, gets_email_followup, operation, changed_by_user_id, changed_at,
+             can_manage_recordings, gets_email_reminder, gets_email_followup,
+             operation, changed_by_user_id, changed_at,
              created_date, last_modified_date, created_by_user_id, last_modified_user_id)
             SELECT session_person_id, session_id, person_id, relationship, confirmed, archived, is_admin,
-                   gets_email_reminder, gets_email_followup, %s, %s, (NOW() AT TIME ZONE 'UTC'),
+                   can_manage_recordings, gets_email_reminder, gets_email_followup,
+                   %s, %s, (NOW() AT TIME ZONE 'UTC'),
                    created_date, last_modified_date, created_by_user_id, last_modified_user_id
             FROM session_person WHERE session_id = %s AND person_id = %s
         """,
