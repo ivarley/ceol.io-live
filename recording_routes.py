@@ -793,6 +793,36 @@ def get_instance_recordings(session_instance_id):
 
 
 @api_login_required
+def get_instance_audio(session_instance_id):
+    """GET /api/session-instances/<id>/audio — playback for the instance page.
+
+    The read side of the segmenter's work: the session-instance page asks this
+    once, in the background after bootstrap, and puts a play button on every
+    tune that came back with a mark.
+
+    Gated exactly like marking (_instance_gate), not more tightly. Anyone who
+    may place these timestamps may obviously hear what they placed, and the
+    grant is already per session — a separate, stricter rule for listening would
+    only be a second thing to keep in step with the first.
+
+    Deliberately NOT part of /bootstrap: it presigns an S3 URL, which is pointless
+    on the great majority of instances that have no audio, and a 6-hour URL has no
+    business inside a payload the service worker caches for offline use.
+    """
+    from serializers import build_instance_audio_payload
+
+    conn = get_db_connection()
+    try:
+        denied = _instance_gate(conn.cursor(), session_instance_id)
+        if denied:
+            return denied
+        payload = build_instance_audio_payload(conn, session_instance_id)
+    finally:
+        conn.close()
+    return jsonify(payload)
+
+
+@api_login_required
 def export_recording_segments(recording_id):
     """GET /api/recordings/<id>/export — the training-corpus slice list.
 

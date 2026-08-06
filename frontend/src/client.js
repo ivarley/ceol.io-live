@@ -131,6 +131,20 @@ export async function liveMatch(config, q, preferType) {
   }
 }
 
+// Recording playback for this night (spec 050 read side): the recording and one
+// {start_ms, end_ms} per timestamped tune. Fetched in the BACKGROUND after first
+// paint, like the vocabulary — nothing on the page waits for it, and the play
+// buttons simply appear when it lands. Refetched on an audio load error too,
+// since the URL inside is a presigned S3 link that expires.
+export async function instanceAudio(config) {
+  const res = await fetch(`/api/session-instances/${config.sessionInstanceId}/audio`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+  if (!res.ok) throw new Error(`instance audio failed: ${res.status}`)
+  return res.json()
+}
+
 // Tune detail for the info drawer (spec 021 §18).
 export async function tuneDetail(config, tuneId) {
   const res = await fetch(`/api/live/instances/${config.sessionInstanceId}/tune/${tuneId}`, {

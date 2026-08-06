@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp } from './client.js'
+  import { bootstrap, vocabulary, sendOp, sendTyping, liveMatch, livePeople, deepSearch, fetchIncipit, openStream, probeServers, tuneDetail, myTunesList, myTunesOp, instanceAudio } from './client.js'
   import TuneSearch from './TuneSearch.svelte'
   import { Dialog, PersonPicker, Sheet } from './lib/index.js'
   import SidePane from './SidePane.svelte'
@@ -23,6 +23,7 @@
   } from './selection.js'
   import { listStatus, statusClass, planStatusOps, applyStatusLocally, NOT_ON_LIST } from './mylist.js'
   import { instanceTimeLabel } from './shared/format.js'
+  import { resolveSegments, playbackStep, formatClock } from './shared/segments.js'
 
   let { config } = $props()
 
@@ -792,6 +793,119 @@
       const data = await res.json()
       if (data.success) recordingCount = (data.recordings || []).length
     } catch { /* the header just shows no count; Manage still works */ }
+  }
+
+  // ---------- playback (spec 050 read side) ----------
+  // A tune that was timestamped in the segmenter can be heard from its row here.
+  // Everything below is inert until loadAudio() finds a segmented recording, which
+  // most nights will not have — `resolved` stays empty and no button ever renders.
+  let audioEl = $state(null)
+  let audioRec = $state(null) // {recording_id, duration_ms, audio_url, mime_type, label}
+  // session_instance_tune_id -> {startMs, endMs, ...}, from the SHARED resolver the
+  // segmenter uses, so a tune's extent is identical in the tool and on this page.
+  let resolved = $state(new SvelteMap())
+  // The queue is ids in play order plus a cursor; null means nothing is playing.
+  let playQ = $state(null) // {ids: [sit_id], idx}
+  let playhead = $state(0) // ms into the CURRENT tune's segment
+  let audioPaused = $state(true)
+  let audioErr = $state(null)
+  let rafId = null
+  let urlRetried = false
+
+  const playingId = $derived(playQ ? playQ.ids[playQ.idx] : null)
+
+  async function loadAudio() {
+    if (!canManageRecordings) return
+    try {
+      const data = await instanceAudio(config)
+      if (!data?.recording?.audio_url) return
+      audioRec = data.recording
+      resolved = new SvelteMap(
+        resolveSegments(
+          data.segments.map((s) => ({ session_instance_tune_id: s.session_instance_tune_id, segment: s })),
+          data.recording.duration_ms,
+        ),
+      )
+    } catch { /* no play buttons; the log is unaffected */ }
+  }
+
+  /** Ids of a set's timestamped tunes, in play order, from `fromId` onward. */
+  function queueFor(setTunes, fromId = null) {
+    const ids = setTunes
+      .filter((t) => resolved.has(t.session_instance_tune_id))
+      .map((t) => t.session_instance_tune_id)
+    if (fromId == null) return ids
+    const i = ids.indexOf(fromId)
+    return i < 0 ? [] : ids.slice(i)
+  }
+
+  // A queue stops at the end of its SET rather than running on into the night. The
+  // gap to the next set is the talking, the tuning and the pint — skipping it would
+  // splice two unrelated sets together, and playing it is the one thing we said we
+  // wouldn't do.
+  function startQueue(ids) {
+    if (!audioEl || !ids.length) return
+    audioErr = null
+    playQ = { ids, idx: 0 }
+    seekToCurrent()
+    audioEl.play().catch((e) => { audioErr = String(e?.message || e); playQ = null })
+  }
+
+  function seekToCurrent() {
+    const seg = resolved.get(playQ?.ids[playQ.idx])
+    if (seg && audioEl) {
+      audioEl.currentTime = seg.startMs / 1000
+      playhead = 0
+    }
+  }
+
+  function toggleTune(setTunes, id) {
+    if (playingId === id) return audioEl?.paused ? audioEl.play() : audioEl?.pause()
+    startQueue(queueFor(setTunes, id))
+  }
+
+  function stopPlayback() {
+    audioEl?.pause()
+    playQ = null
+    playhead = 0
+  }
+
+  // One frame of playback: advance the queue when the current tune ends, seeking
+  // only across a real gap (playbackStep decides; it's pure and unit-tested).
+  function tick() {
+    rafId = null
+    if (!playQ || !audioEl) return
+    const nowMs = audioEl.currentTime * 1000
+    const step = playbackStep(playQ.ids, playQ.idx, nowMs, resolved)
+    if (step.done) return stopPlayback()
+    if (step.idx !== playQ.idx) {
+      playQ = { ...playQ, idx: step.idx }
+      if (step.seekMs != null) audioEl.currentTime = step.seekMs / 1000
+    }
+    const seg = resolved.get(playQ.ids[playQ.idx])
+    playhead = seg ? Math.max(0, nowMs - seg.startMs) : 0
+    rafId = requestAnimationFrame(tick)
+  }
+
+  function onAudioPlay() {
+    audioPaused = false
+    if (rafId == null) rafId = requestAnimationFrame(tick)
+  }
+
+  function onAudioPause() {
+    audioPaused = true
+    if (rafId != null) { cancelAnimationFrame(rafId); rafId = null }
+  }
+
+  // The URL is a presigned S3 link with a finite life, so a page left open long
+  // enough will fail to load one day. Re-ask for a fresh one, ONCE, and resume where
+  // we were — a second failure is a real error and gets shown.
+  async function onAudioError() {
+    if (urlRetried || !audioRec) { audioErr = 'Audio unavailable'; return }
+    urlRetried = true
+    const wasPlaying = playQ
+    await loadAudio()
+    if (wasPlaying) startQueue(wasPlaying.ids.slice(wasPlaying.idx))
   }
 
   const trackAttendance = $derived(config.trackAttendance !== false)
@@ -3318,6 +3432,9 @@
     // Independent of connect(): the header's Recordings count is its own small
     // fetch, and a slow or failed bootstrap shouldn't decide whether it appears.
     loadRecordingCount()
+    // Same deal for the audio: background, nothing waits on it, and the play
+    // buttons appear on the rows that have marks whenever it lands.
+    loadAudio()
     connect().then(() => {
       loaded = true
       if (autoTuneId && !highlightId) autoLogTune(autoTuneId)
@@ -3395,6 +3512,7 @@
     }
     if (reconnectTimer) clearTimeout(reconnectTimer)
     if (reconnectPoll) clearTimeout(reconnectPoll)
+    if (rafId != null) cancelAnimationFrame(rafId)
     if (es) es.close()
   })
 </script>
@@ -3750,6 +3868,18 @@
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
+        <!-- Play the whole set, from its first timestamped tune. Shown as soon as ANY
+             tune in the set has a mark, since a part-marked set still plays what's there. -->
+        {#if !selectMode && queueFor(seg.tunes).length}
+          {@const setPlaying = playQ && queueFor(seg.tunes).includes(playingId)}
+          <button
+            class="setplay-btn"
+            class:on={setPlaying}
+            title={setPlaying ? 'Stop' : 'Play this set'}
+            aria-label={setPlaying ? 'Stop' : 'Play this set'}
+            onclick={(e) => { e.stopPropagation(); setPlaying ? stopPlayback() : startQueue(queueFor(seg.tunes)) }}
+          >{setPlaying ? '■' : '▶'}</button>
+        {/if}
         {#if trackStarters && !readOnly && setStarterName(seg)}
           <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
         {/if}
@@ -3809,6 +3939,7 @@
             class:flash-remote={flashing.get(r.session_instance_tune_id)?.kind === 'remote'}
             class:flash-merge={flashing.get(r.session_instance_tune_id)?.kind === 'merge'}
             class:flash-highlight={flashing.get(r.session_instance_tune_id)?.kind === 'highlight'}
+            class:audio-playing={playingId === r.session_instance_tune_id}
             style={canEdit ? rowStyle(r) : ''}
             onclick={(e) => rowClick(r, e)}
             onkeydown={(e) => activate(e, () => rowClick(r))}
@@ -3829,6 +3960,18 @@
               <span class="actions"><span class="spinner"></span><span class="pend-label">removing</span><button class="restore" onclick={(e) => { e.stopPropagation(); restore(r.session_instance_tune_id) }}>Restore</button></span>
             {:else}
               {#if !r.tune_id && r.record_type === 'tune'}<span class="row-warn" title="Not linked to a catalog tune">⚠ unlinked</span>{/if}
+              <!-- Hear this tune. Deliberately NOT gated on canEdit (unlike ⓘ): playing
+                   back is reading, so it survives view and search mode. Only the marks
+                   gate it — a tune nobody timestamped has no button at all. -->
+              {#if !selectMode && resolved.has(r.session_instance_tune_id)}
+                <button
+                  class="play-btn"
+                  class:on={playingId === r.session_instance_tune_id}
+                  title={playingId === r.session_instance_tune_id && !audioPaused ? 'Pause' : 'Play this tune'}
+                  aria-label={playingId === r.session_instance_tune_id && !audioPaused ? 'Pause' : 'Play this tune'}
+                  onclick={(e) => { e.stopPropagation(); toggleTune(seg.tunes, r.session_instance_tune_id) }}
+                >{playingId === r.session_instance_tune_id && !audioPaused ? '❚❚' : '▶'}</button>
+              {/if}
               {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
               {#if canEdit && !selectMode && selectedId === r.session_instance_tune_id}
                 <!-- selected-row insert points: pills riding the row's edges (like the
@@ -3944,7 +4087,32 @@
     </div>
   {/if}
 
+  <!-- One element for the whole page. preload="none" so opening a night with audio
+       costs nothing until someone actually presses play; from then on S3 range
+       requests make a mid-recording seek cheap. -->
+  {#if audioRec?.audio_url}
+    <audio
+      bind:this={audioEl}
+      src={audioRec.audio_url}
+      preload="none"
+      onplay={onAudioPlay}
+      onpause={onAudioPause}
+      onended={stopPlayback}
+      onerror={onAudioError}
+    ></audio>
+  {/if}
+
   <div class="dock">
+    {#if playQ}
+      {@const seg = resolved.get(playingId)}
+      <div class="playbar" transition:fly={{ y: 8, duration: 160 }}>
+        <button class="pb-toggle" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={() => (audioPaused ? audioEl?.play() : audioEl?.pause())}>{audioPaused ? '▶' : '❚❚'}</button>
+        <span class="pb-name">{byId.get(playingId)?.name || 'Playing'}</span>
+        <span class="pb-time">{formatClock(playhead)} / {formatClock(seg ? seg.endMs - seg.startMs : 0)}</span>
+        <button class="pb-stop" title="Stop" aria-label="Stop" onclick={stopPlayback}>×</button>
+      </div>
+    {/if}
+    {#if audioErr}<div class="playbar err">{audioErr}</div>{/if}
     {#if undoDelete}
       <div class="undo-toast" transition:fly={{ y: 8, duration: 160 }}>
         <span>Deleted {undoDelete.count} tune{undoDelete.count === 1 ? '' : 's'}</span>

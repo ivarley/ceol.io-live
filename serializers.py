@@ -1982,3 +1982,100 @@ def build_instance_recordings_payload(conn, session_instance_id: int) -> Dict[st
         "tune_count": tune_count,
         "recordings": recordings,
     }
+
+
+def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, Any]:
+    """Playback data for the session-instance page: one recording and its marks.
+
+    The segmenter's payload is the wrong shape for listening — it carries the
+    whole tune log, both audio sources, the waveform, and the other recordings,
+    because its job is EDITING the marks. This one answers a much smaller
+    question: "is there audio for this night, and where does each tune sit in
+    it?" The page already knows the tune log; it only needs the offsets.
+
+    A `recording` of None is the ordinary case (most nights have no audio) and
+    is not an error — the page simply shows no play buttons.
+    """
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Only a recording that is both playable and timestamped is any use here, so
+    # segment_count > 0 is part of the selection rather than something the caller
+    # discovers afterwards. Where a night has several, the most-segmented one is
+    # the one someone actually worked on; the anchor breaks the tie because a
+    # second recording's clock_offset_ms is still unsettable in the UI (spec 050),
+    # so only the anchor's offsets can be trusted against the log.
+    cur.execute(
+        """
+        SELECT r.recording_id, r.label, r.duration_ms, r.storage_key, r.mime_type,
+               r.stream_key, r.stream_mime_type,
+               (SELECT count(*) FROM recording_tune_segment rts
+                 WHERE rts.recording_id = r.recording_id) AS segment_count
+        FROM recording r
+        WHERE r.session_instance_id = %s AND r.status = 'ready'
+        ORDER BY segment_count DESC, r.is_clock_anchor DESC, r.recording_id
+        LIMIT 1
+        """,
+        (session_instance_id,),
+    )
+    row = cur.fetchone()
+    if not row or not row["segment_count"]:
+        return {
+            "success": True,
+            "session_instance_id": session_instance_id,
+            "recording": None,
+            "segments": [],
+        }
+
+    # The PROXY, always, and only the proxy. This is listening, not corpus work:
+    # 32kbps mono is indistinguishable for "what was that tune?", and at a tenth
+    # the bytes it makes a mid-set seek on a phone instant instead of a stall.
+    # The master stays behind the segmenter, where the fidelity is the point.
+    audio_url = None
+    audio_error = None
+    key = row["stream_key"] or row["storage_key"]
+    mime = (row["stream_mime_type"] if row["stream_key"] else row["mime_type"]) or "audio/mp4"
+    try:
+        from recording import generate_presigned_url
+
+        audio_url = generate_presigned_url(key)
+    except Exception as exc:  # object store misconfigured — the page says so
+        audio_error = str(exc)
+
+    cur.execute(
+        """
+        SELECT rts.session_instance_tune_id, rts.start_ms, rts.end_ms
+        FROM recording_tune_segment rts
+        JOIN session_instance_tune sit
+          ON sit.session_instance_tune_id = rts.session_instance_tune_id
+        WHERE rts.recording_id = %s AND sit.deleted = FALSE
+        ORDER BY rts.start_ms
+        """,
+        (row["recording_id"],),
+    )
+    # end_ms stays None when implicit, exactly as the segmenter sends it: the
+    # client resolves it to the next placed tune's start with the same shared
+    # resolveSegments() both pages use, so a tune's extent can never differ
+    # between the tool that marked it and the page that plays it.
+    segments = [
+        {
+            "session_instance_tune_id": s["session_instance_tune_id"],
+            "start_ms": int(s["start_ms"]),
+            "end_ms": int(s["end_ms"]) if s["end_ms"] is not None else None,
+        }
+        for s in cur.fetchall()
+    ]
+
+    return {
+        "success": True,
+        "session_instance_id": session_instance_id,
+        "recording": {
+            "recording_id": row["recording_id"],
+            "label": row["label"],
+            "duration_ms": int(row["duration_ms"]),
+            "audio_url": audio_url,
+            "mime_type": mime,
+            "is_proxy": bool(row["stream_key"]),
+            "audio_error": audio_error,
+        },
+        "segments": segments,
+    }

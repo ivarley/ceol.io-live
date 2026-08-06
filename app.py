@@ -18,6 +18,7 @@ from recording_routes import (
     put_recording_segment,
     delete_recording_segment,
     get_instance_recordings,
+    get_instance_audio,
     export_recording_segments,
     create_recording_upload_url,
     create_recording,
@@ -1537,6 +1538,13 @@ app.add_url_rule(
     "/api/session-instances/<int:session_instance_id>/recordings",
     "get_instance_recordings",
     get_instance_recordings,
+    methods=["GET"],
+)
+# Playback: the read side of the segmenter's work, for the session-instance page.
+app.add_url_rule(
+    "/api/session-instances/<int:session_instance_id>/audio",
+    "get_instance_audio",
+    get_instance_audio,
     methods=["GET"],
 )
 

@@ -1,63 +1,19 @@
 // Pure helpers for the recording segmenter (spec 050). Kept out of the
 // components so the fiddly parts -- end resolution, onset snapping, the cursor
 // rules -- are unit-testable without a DOM.
+//
+// Clock formatting and end resolution now live in ../shared/segments.js, because
+// the session-instance page plays back what this tool marks and the two must
+// resolve a tune's extent identically. Re-exported under the names this page has
+// always used.
 
-export function formatTime(ms, { millis = false } = {}) {
-  if (ms == null || !isFinite(ms)) return '--:--'
-  const sign = ms < 0 ? '-' : ''
-  let t = Math.abs(Math.round(ms))
-  const msPart = t % 1000
-  t = Math.floor(t / 1000)
-  const s = t % 60
-  const m = Math.floor(t / 60) % 60
-  const h = Math.floor(t / 3600)
-  const base = h
-    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-    : `${m}:${String(s).padStart(2, '0')}`
-  return sign + base + (millis ? `.${String(msPart).padStart(3, '0')[0]}` : '')
-}
+export { formatClock as formatTime, resolveSegments } from '../shared/segments.js'
 
 export function formatDuration(ms) {
   if (ms == null) return ''
   const s = Math.round(ms / 1000)
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-/**
- * Resolve every placed tune's end time.
- *
- * An implicit end (end_ms == null) runs to the next PLACED tune's start -- not
- * the next tune in the log, which may never be placed at all. The last placed
- * tune, left implicit, runs to the end of the recording. This mirrors the
- * recording_tune_segment_resolved view exactly; the client re-runs it on every
- * change so the display never waits on a round trip.
- *
- * Returns a Map: session_instance_tune_id -> { startMs, endMs, explicitEnd, gapAfterMs }
- */
-export function resolveSegments(tunes, durationMs) {
-  const placed = tunes
-    .filter((t) => t.segment)
-    .map((t) => ({ id: t.session_instance_tune_id, seg: t.segment }))
-    .sort((a, b) => a.seg.start_ms - b.seg.start_ms)
-
-  const out = new Map()
-  placed.forEach((entry, i) => {
-    const next = placed[i + 1]
-    const implicitEnd = next ? next.seg.start_ms : durationMs
-    const explicit = entry.seg.end_ms != null
-    const endMs = explicit ? entry.seg.end_ms : implicitEnd
-    out.set(entry.id, {
-      startMs: entry.seg.start_ms,
-      endMs,
-      explicitEnd: explicit,
-      // Dead air between this tune's explicit end and the next tune's start.
-      // Only meaningful after an explicit end -- otherwise there is none by
-      // construction.
-      gapAfterMs: explicit && next ? next.seg.start_ms - entry.seg.end_ms : 0,
-    })
-  })
-  return out
 }
 
 /** Index of the first tune with no segment, at or after `from`. -1 if none. */

@@ -528,6 +528,65 @@ main {
 }
 .info-btn:hover { color: var(--accent); }
 
+/* ---------- recording playback (spec 050 read side) ---------- */
+/* ▶ on a tune that was timestamped in the segmenter. Muted at rest so a night with
+   audio doesn't read as a row of controls — it's an offer, not the point of the row. */
+.play-btn {
+  flex: none;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 12px; line-height: 1; padding: 3px 5px;
+  border-radius: 5px;
+}
+.play-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
+.play-btn.on { color: var(--accent); }
+/* the tune being heard right now, tinted with the accent rather than the yellow
+   used for the insertion point — playing and editing are different states and can
+   be true of two different rows at once */
+.tune-row.audio-playing {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* set-level ▶: a pill straddling the card's top border like .set-label, but at the
+   RIGHT end. In flow it would take a whole line of its own, because the type label
+   it reads as a sibling of is itself absolute (out of flow) — and anchoring it just
+   after that label would couple it to the label's variable width ("JIGS".."SLIDES").
+   Mirroring it across the card is stable and reads as a pair: type left, play right. */
+.setplay-btn {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.setplay-btn:hover { color: var(--accent); border-color: var(--accent); }
+.setplay-btn.on { color: var(--accent); border-color: var(--accent); }
+
+/* now-playing strip: first thing in the dock, so it pushes the composer up rather
+   than floating over it */
+.playbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; margin-bottom: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; font-size: 13px;
+}
+.playbar.err { color: var(--attention); justify-content: center; }
+.pb-toggle, .pb-stop {
+  flex: none; font: inherit; cursor: pointer; line-height: 1;
+  background: none; border: none; color: var(--text); padding: 4px 6px; border-radius: 6px;
+}
+.pb-toggle { color: var(--accent); font-size: 13px; }
+.pb-stop { color: var(--muted); font-size: 17px; }
+.pb-toggle:hover, .pb-stop:hover { background: rgba(255, 255, 255, 0.07); }
+.pb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 8px; }
 .row-actions button {
   font: inherit; font-size: 13px; line-height: 1;
