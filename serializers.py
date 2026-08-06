@@ -1802,6 +1802,7 @@ def build_recording_segmenter_payload(
                r.stream_key, r.stream_mime_type, r.stream_size_bytes,
                r.duration_ms, r.file_size_bytes, r.sample_rate, r.channels,
                r.is_clock_anchor, r.clock_offset_ms, r.started_at, r.peaks_hz, r.notes,
+               r.status, r.status_detail,
                (r.peaks IS NOT NULL) AS has_peaks,
                si.session_instance_id AS si_id, si.date, si.session_id,
                s.name AS session_name, s.path AS session_path
@@ -1909,6 +1910,11 @@ def build_recording_segmenter_payload(
             "audio_error": audio_error,
             "has_proxy": bool(row["stream_key"]),
             "notes": row["notes"],
+            # Ingest state (schema/052). Anything but 'ready' means the waveform
+            # and the real duration are not there yet, so the tool refuses to
+            # open rather than showing a flat line against a guessed length.
+            "status": row["status"],
+            "status_detail": row["status_detail"],
         },
         "session_instance": {
             "session_instance_id": row["si_id"],

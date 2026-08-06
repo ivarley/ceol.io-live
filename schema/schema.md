@@ -67,6 +67,8 @@ The database will be a Postgres database. The basic entities in my model will be
     - person_id - optional, who made the recording
     - started_at - optional absolute wall-clock time of t=0
     - peaks / peaks_hz - the precomputed waveform envelope (base64 of one 0-255 byte per bucket, 20 buckets/sec). Precomputed because decoding hours of audio in the browser is a non-starter on mobile.
+    - stream_key / stream_mime_type / stream_size_bytes - a small mono playback proxy (spec 051). Only ever streamed to the browser; the training corpus is always cut from `storage_key`.
+    - status / status_detail - ingest state (spec 052): `processing` | `ready` | `failed`. An in-app upload creates the row as soon as the audio reaches S3, minutes before the waveform and proxy exist, so while `processing` the `duration_ms` is the browser's provisional guess and `peaks` is NULL. `status_detail` carries the failure reason, shown on /admin/recordings with a retry.
 
 - **recording_tune_segment** - The junction between a logged tune and a time range in a recording: "Banish Misfortune runs from 19:22 to 22:04 in recording 1". Points at `session_instance_tune`, not `tune`, so a tune merge carries segments along for free via the log row. Unique on (recording_id, session_instance_tune_id). Attributes:
     - start_ms - required

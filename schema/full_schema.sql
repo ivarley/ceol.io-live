@@ -781,6 +781,13 @@ CREATE TABLE recording (
     stream_key VARCHAR(500),
     stream_mime_type VARCHAR(100),
     stream_size_bytes BIGINT,
+    -- Ingest state (schema/052). An in-app upload creates the row the moment the
+    -- audio lands in S3, minutes before the waveform and the proxy exist, so the
+    -- half-built state is written down rather than guessed at from peaks IS NULL.
+    -- While 'processing', duration_ms is the browser's provisional guess.
+    status VARCHAR(20) NOT NULL DEFAULT 'ready'
+        CONSTRAINT ck_recording_status CHECK (status IN ('processing', 'ready', 'failed')),
+    status_detail TEXT,
     notes TEXT,
     created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -790,6 +797,7 @@ CREATE TABLE recording (
 
 CREATE INDEX idx_recording_session_instance_id ON recording(session_instance_id);
 CREATE INDEX idx_recording_person_id ON recording(person_id) WHERE person_id IS NOT NULL;
+CREATE INDEX idx_recording_status ON recording(status) WHERE status <> 'ready';
 
 -- At most one clock anchor per instance.
 CREATE UNIQUE INDEX uk_recording_clock_anchor

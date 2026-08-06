@@ -19,6 +19,8 @@ visibly darker than the gaps.
 """
 
 import os
+import re
+import shutil
 import subprocess
 
 import boto3
@@ -43,6 +45,56 @@ _CEIL_PERCENTILE = 0.995
 # If a recording really is near-silent end to end, fall back to this window
 # rather than dividing by a zero-width range.
 _MIN_DB_RANGE = 6.0
+
+
+# -----------------------------------------------------------------------------
+# Finding ffmpeg
+# -----------------------------------------------------------------------------
+# The CLI importer only ever ran on a laptop, where ffmpeg is on PATH. In-app
+# upload moves the identical pipeline onto the Render web dyno, which runs
+# Render's native Python runtime: no Dockerfile, no apt step, and no ffmpeg.
+#
+# `imageio-ffmpeg` solves that without a build hook -- it is an ordinary wheel
+# carrying a static ffmpeg binary, so it installs from requirements.txt like any
+# other dependency. It ships ffmpeg ONLY, not ffprobe, which is why probe_audio
+# below has to be able to work without one.
+#
+# PATH wins whenever it has one, so local development keeps using the system
+# build (newer, and the one the CLI has always used).
+_BINARIES = {}
+
+
+def _ffmpeg_exe():
+    """Absolute path to an ffmpeg binary. Raises if there is none."""
+    if "ffmpeg" not in _BINARIES:
+        found = shutil.which("ffmpeg")
+        if not found:
+            try:
+                import imageio_ffmpeg
+
+                found = imageio_ffmpeg.get_ffmpeg_exe()
+            except Exception:  # not installed, or no binary for this platform
+                found = None
+        _BINARIES["ffmpeg"] = found
+
+    exe = _BINARIES["ffmpeg"]
+    if not exe:
+        raise RuntimeError(
+            "ffmpeg is not available on this server: it is not on PATH and the "
+            "imageio-ffmpeg fallback could not be loaded. Audio ingest cannot run."
+        )
+    return exe
+
+
+def _ffprobe_exe():
+    """Absolute path to ffprobe, or None.
+
+    None is the NORMAL case on the server (imageio-ffmpeg bundles no ffprobe);
+    probe_audio falls back to reading ffmpeg's own stream report.
+    """
+    if "ffprobe" not in _BINARIES:
+        _BINARIES["ffprobe"] = shutil.which("ffprobe")
+    return _BINARIES["ffprobe"]
 
 
 def get_s3_client():
@@ -89,6 +141,83 @@ def check_configured():
     if missing:
         return f"object storage is not configured on this server ({', '.join(missing)} unset)"
     return None
+
+
+def build_storage_key(filename, prefix="recordings"):
+    """Mint an S3 key for a newly uploaded file.
+
+    The uuid segment does two jobs: it keeps two files of the same name from
+    colliding, and it keeps the key from leaking who recorded what to anyone who
+    sees a presigned URL. The original filename rides along only so an object
+    listing is readable by a human.
+    """
+    import re as _re
+    import uuid
+
+    safe = _re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(filename or "recording")).strip("-")
+    return f"{prefix}/{uuid.uuid4().hex}/{safe or 'recording'}"
+
+
+def generate_presigned_upload(storage_key, mime_type, expiry=3600):
+    """Presigned PUT URL the browser uploads to directly.
+
+    Direct-to-S3 rather than through Flask, because a three-hour master is
+    ~350MB: routing that through the web dyno would hold a worker for the whole
+    upload, spool the file to the dyno's disk, and buy nothing -- S3 is where it
+    has to end up either way.
+
+    `mime_type` is part of the signature, so the browser MUST send exactly this
+    Content-Type or S3 rejects the PUT with SignatureDoesNotMatch.
+
+    An hour is plenty: this signs the START of the upload, not its duration, so
+    a slow three-hour transfer over a link that began inside the window still
+    completes.
+    """
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
+    s3 = get_s3_client()
+    return s3.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": get_s3_bucket(), "Key": storage_key, "ContentType": mime_type},
+        ExpiresIn=expiry,
+    )
+
+
+def stored_object_size(storage_key):
+    """Size in bytes of a stored object, or None if it isn't there.
+
+    The upload confirmation calls this before writing a `recording` row, so a PUT
+    that failed, was cancelled, or never happened cannot leave a row pointing at
+    an object that does not exist -- which would show up much later as a
+    segmenter page that loads and then plays nothing.
+    """
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
+    s3 = get_s3_client()
+    try:
+        head = s3.head_object(Bucket=get_s3_bucket(), Key=storage_key)
+    except Exception:  # 404/403 both mean "not usable", and boto3 spells them differently
+        return None
+    return head.get("ContentLength")
+
+
+def download_recording(storage_key, dest_path):
+    """Pull a stored object down to a local path.
+
+    Ingest needs the whole file on disk: ffmpeg reads it twice (once for the
+    envelope, once for the proxy), and making it fetch the object over HTTP each
+    time would double the transfer for no gain. Streams to disk, so memory stays
+    flat regardless of length.
+    """
+    problem = check_configured()
+    if problem:
+        raise RuntimeError(problem)
+    s3 = get_s3_client()
+    with open(dest_path, "wb") as fh:
+        s3.download_fileobj(get_s3_bucket(), storage_key, fh)
+    return dest_path
 
 
 def generate_presigned_url(storage_key, expiry=21600):
@@ -142,7 +271,7 @@ def transcode_for_streaming(src_path, dest_path, bitrate=STREAM_BITRATE, sample_
     """
     result = subprocess.run(
         [
-            "ffmpeg", "-v", "error", "-y",
+            _ffmpeg_exe(), "-v", "error", "-y",
             "-i", src_path,
             "-vn",
             "-ac", "1",
@@ -160,14 +289,73 @@ def transcode_for_streaming(src_path, dest_path, bitrate=STREAM_BITRATE, sample_
     return dest_path
 
 
+_DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")
+_AUDIO_STREAM_RE = re.compile(r"Stream #\d+:\d+.*: Audio: .*")
+_SAMPLE_RATE_RE = re.compile(r"(\d+)\s*Hz")
+_CHANNEL_COUNT_RE = re.compile(r"(\d+)\s*channels")
+
+# ffmpeg names the common layouts rather than counting them.
+_CHANNEL_LAYOUTS = {"mono": 1, "stereo": 2, "2.1": 3, "quad": 4, "5.0": 5, "5.1": 6, "7.1": 8}
+
+
+def _probe_with_ffmpeg(file_path):
+    """probe_audio's fallback for servers with ffmpeg but no ffprobe.
+
+    `ffmpeg -i FILE` with no output file prints the container and stream report
+    to stderr and then exits non-zero ("At least one output file must be
+    specified") -- which is exactly the report ffprobe would have formatted for
+    us, so the non-zero exit is expected and ignored.
+    """
+    proc = subprocess.run(
+        [_ffmpeg_exe(), "-hide_banner", "-i", file_path],
+        capture_output=True,
+        text=True,
+    )
+    report = proc.stderr or ""
+
+    match = _DURATION_RE.search(report)
+    if not match:
+        raise ValueError(
+            f"ffmpeg could not determine the duration of {file_path}: "
+            f"{report.strip().splitlines()[-1] if report.strip() else 'no output'}"
+        )
+    hours, minutes, seconds = int(match.group(1)), int(match.group(2)), float(match.group(3))
+    duration_ms = int(round((hours * 3600 + minutes * 60 + seconds) * 1000))
+
+    sample_rate = channels = None
+    stream = _AUDIO_STREAM_RE.search(report)
+    if stream:
+        line = stream.group(0)
+        rate = _SAMPLE_RATE_RE.search(line)
+        if rate:
+            sample_rate = int(rate.group(1))
+        counted = _CHANNEL_COUNT_RE.search(line)
+        if counted:
+            channels = int(counted.group(1))
+        else:
+            for name, count in _CHANNEL_LAYOUTS.items():
+                if re.search(rf"\b{re.escape(name)}\b", line):
+                    channels = count
+                    break
+
+    return {"duration_ms": duration_ms, "sample_rate": sample_rate, "channels": channels}
+
+
 def probe_audio(file_path):
-    """Read duration/sample rate/channels from an audio file via ffprobe.
+    """Read duration/sample rate/channels from an audio file.
+
+    Uses ffprobe when it is there and ffmpeg's own stream report when it is not
+    (see _ffprobe_exe -- the server has no ffprobe).
 
     Returns {"duration_ms": int, "sample_rate": int|None, "channels": int|None}.
     """
+    ffprobe = _ffprobe_exe()
+    if not ffprobe:
+        return _probe_with_ffmpeg(file_path)
+
     out = subprocess.run(
         [
-            "ffprobe", "-v", "error",
+            ffprobe, "-v", "error",
             "-select_streams", "a:0",
             "-show_entries", "format=duration:stream=sample_rate,channels",
             "-of", "default=noprint_wrappers=1",
@@ -242,7 +430,7 @@ def compute_peaks(file_path, peaks_hz=PEAKS_HZ):
 
     proc = subprocess.Popen(
         [
-            "ffmpeg", "-v", "error",
+            _ffmpeg_exe(), "-v", "error",
             "-i", file_path,
             "-ac", "1",
             "-ar", str(_DECODE_RATE),

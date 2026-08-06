@@ -141,6 +141,51 @@ since that flag means "the master is already there". Target DB comes
 from the usual `PG*` environment variables, so pointing it at production is
 deliberately explicit.
 
+## Uploading from the browser
+
+`/admin/recordings` also takes an upload: pick the session, pick the night, pick
+the file. The CLI above still exists and is still the faster way through a
+backlog, but it requires a checkout, a venv and the production database URL,
+which is a lot of ceremony for one phone recording.
+
+**The audio never passes through Flask.** The browser asks for a presigned PUT,
+uploads to S3 itself, and only then tells the server the object is there. A
+three-hour master is ~350MB: routing that through the web dyno would pin a
+worker for the length of the transfer, spool the whole file onto its disk, and
+deliver it to exactly the same place. The cost of that choice is a CORS rule on
+the bucket — one-time, `scripts/configure_s3_cors.py --apply` — and a failure
+mode worth naming, because a blocked preflight reaches JavaScript as `status 0`
+with no message at all. The upload UI says what it probably is rather than
+"upload failed".
+
+**Ingest runs after the row exists.** Probing, computing the envelope and
+encoding the proxy take minutes on a long file, so `POST /api/recordings`
+creates the row and returns, and a background thread does the rest
+(`services/recording_ingest`). The row therefore has a `status`
+(`processing` → `ready` | `failed`, schema/052) rather than leaving readers to
+infer half-built-ness from `peaks IS NULL`, and while it is processing its
+`duration_ms` is whatever the browser read off the file's own metadata —
+provisional, and replaced by the container's own duration when ingest finishes.
+The segmenter refuses to open a recording that isn't `ready`, and
+`PUT .../segments/...` answers 409, because a mark validated against a guessed
+duration is a mark validated against nothing.
+
+A thread rather than a job queue, deliberately: there is no worker dyno and no
+broker, and this fires a few times a week. What that costs is written down
+instead of hidden — a deploy mid-ingest strands the row in `processing`, so the
+status endpoint reports `stalled` once it has been quiet longer than any real
+run takes, and the list page offers Retry. Ingest is idempotent, and the proxy
+lands on a key derived from the master's, so retrying replaces rather than
+accumulates. Only one ingest runs at a time; two three-hour transcodes at once
+on a small dyno is how you meet the OOM killer.
+
+**ffmpeg on the server.** The whole pipeline is ffmpeg, and Render's native
+Python runtime has no Dockerfile and no apt step, so there is none. It comes
+from `imageio-ffmpeg`, an ordinary wheel carrying a static binary — no build
+hook. That wheel ships ffmpeg *only*, so `probe_audio` falls back to parsing
+ffmpeg's own stream report when there is no ffprobe; `_ffmpeg_exe()` prefers
+PATH, so local development is unaffected by any of this.
+
 ## The tool
 
 `/admin/recordings` lists what's imported and how far each is segmented.
@@ -195,6 +240,11 @@ disabling it would deadlock (no play → no load → no canplay → no play).
 
 | Endpoint | Purpose |
 |---|---|
+| `POST /api/recordings/upload-url` | sign a direct-to-S3 PUT |
+| `POST /api/recordings` | confirm the object landed; create the row, start ingest |
+| `GET /api/recordings/<id>/status` | ingest progress, for polling |
+| `POST /api/recordings/<id>/reprocess` | run ingest again after a failure or a stall |
+| `GET /api/admin/sessions/<id>/instances` | the nights to attach a recording to |
 | `GET /api/recordings/<id>/segmenter` | the full payload (= the page embed) |
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
 | `PUT /api/recordings/<id>/segments/<sit_id>` | place or move a tune (upsert) |
@@ -226,7 +276,26 @@ Working end to end. Verified against the real B.D. Riley's recording: import,
 waveform, marking, implicit/explicit ends, undo, and export all confirmed in the
 browser and in the DB.
 
-Not done, deliberately: no in-app upload (the CLI is the ingestion path), no
-multi-recording UI (the schema supports it; nothing needs it yet), and no
-audio-slicing export — `GET .../export` hands you the cut list, and ffmpeg does
-the cutting.
+In-app upload is built and covered by tests (the ingest tests run ffmpeg over a
+real file rather than mocking it), but has **not** been exercised against
+production yet. Two things stand between it and a first real upload:
+
+- the bucket needs its CORS rule (`scripts/configure_s3_cors.py --apply`) — until
+  then every upload dies in the preflight;
+- the next deploy has to install `imageio-ffmpeg`, or ingest fails on the first
+  file with "ffmpeg is not available on this server".
+
+Worth knowing before the first three-hour file: the web service is on Render's
+free plan, which is shared-CPU. Downloading the master back, decoding it twice
+and encoding the proxy is tens of minutes there, not the couple of minutes it
+takes on a laptop. Leaving the tab open matters for two reasons — the poll is
+what keeps a free dyno from idling out, and a dyno that sleeps mid-ingest is
+exactly the stall the Retry button exists for. A long backlog is still a job for
+the CLI.
+
+Not done, deliberately: no delete for a recording that failed to ingest (Retry
+covers the usual case; a genuinely bad upload leaves a row and an S3 object to
+clean up by hand), no multi-recording UI — an uploaded second recording on a
+night lands at `clock_offset_ms` 0 with no way to say otherwise, so the
+multi-recording case is still CLI-only — and no audio-slicing export:
+`GET .../export` hands you the cut list, and ffmpeg does the cutting.

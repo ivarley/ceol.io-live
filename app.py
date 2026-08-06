@@ -19,6 +19,11 @@ from recording_routes import (
     delete_recording_segment,
     get_instance_recordings,
     export_recording_segments,
+    create_recording_upload_url,
+    create_recording,
+    get_recording_status,
+    reprocess_recording,
+    get_session_instances_for_admin,
 )
 from api_person_tune_routes import (
     get_my_tunes,
@@ -1447,6 +1452,38 @@ app.add_url_rule(
     "/api/recordings/<int:recording_id>/segmenter",
     "get_recording_segmenter",
     get_recording_segmenter,
+    methods=["GET"],
+)
+# In-app upload: sign, confirm, then poll while the waveform and proxy are built.
+# The audio itself goes browser -> S3 and never touches Flask.
+app.add_url_rule(
+    "/api/recordings/upload-url",
+    "create_recording_upload_url",
+    create_recording_upload_url,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings",
+    "create_recording",
+    create_recording,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/status",
+    "get_recording_status",
+    get_recording_status,
+    methods=["GET"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/reprocess",
+    "reprocess_recording",
+    reprocess_recording,
+    methods=["POST"],
+)
+app.add_url_rule(
+    "/api/admin/sessions/<int:session_id>/instances",
+    "get_session_instances_for_admin",
+    get_session_instances_for_admin,
     methods=["GET"],
 )
 app.add_url_rule(

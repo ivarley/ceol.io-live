@@ -3516,6 +3516,8 @@ def admin_recordings():
         flash("You must be authorized to view this page.", "error")
         return redirect(url_for("home"))
 
+    from recording import check_configured
+
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -3527,7 +3529,8 @@ def admin_recordings():
                      WHERE rts.recording_id = r.recording_id) AS segments,
                    (SELECT count(*) FROM session_instance_tune sit
                      WHERE sit.session_instance_id = si.session_instance_id
-                       AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes
+                       AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes,
+                   r.status, r.status_detail
             FROM recording r
             JOIN session_instance si ON si.session_instance_id = r.session_instance_id
             JOIN session s ON s.session_id = si.session_id
@@ -3547,13 +3550,29 @@ def admin_recordings():
                 "session_path": row[8],
                 "segments": row[9],
                 "tunes": row[10],
+                "status": row[11],
+                "status_detail": row[12],
             }
             for row in cur.fetchall()
         ]
+
+        # The upload form's session picker. Small enough to embed rather than
+        # fetch — the instance dates behind it are the part that needs an API.
+        # Terminated sessions are included: an old recording of a session that
+        # has since stopped running is exactly the sort of thing being backfilled.
+        cur.execute("SELECT session_id, name, path FROM session ORDER BY name")
+        sessions = [{"session_id": r[0], "name": r[1], "path": r[2]} for r in cur.fetchall()]
     finally:
         conn.close()
 
-    return render_template("admin_recordings.html", recordings=recordings)
+    # Say up front when uploading cannot work, rather than letting the operator
+    # pick a file and discover it at the signing step.
+    return render_template(
+        "admin_recordings.html",
+        recordings=recordings,
+        sessions=sessions,
+        storage_problem=check_configured(),
+    )
 
 
 @login_required
@@ -3574,6 +3593,23 @@ def segment_recording(recording_id):
 
     if payload is None:
         flash("That recording doesn't exist.", "error")
+        return redirect(url_for("admin_recordings"))
+
+    # Ingest fills in the waveform and the true duration minutes after the row
+    # appears (schema/052). Opening the tool before that finishes would show a
+    # flat line against a guessed length and let marks be saved against it, so
+    # it says what is happening and sends the operator back to the list, where
+    # the row polls itself.
+    status = payload["recording"].get("status")
+    if status and status != "ready":
+        if status == "failed":
+            flash(
+                f"That recording could not be processed ({payload['recording'].get('status_detail') or 'no detail recorded'}). "
+                "Retry it from the list.",
+                "error",
+            )
+        else:
+            flash("That recording is still being processed — its waveform isn't ready yet.", "error")
         return redirect(url_for("admin_recordings"))
 
     return render_template("recording_segmenter.html", payload=payload)

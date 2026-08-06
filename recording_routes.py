@@ -10,11 +10,20 @@ PUT is an upsert keyed on (recording, tune) rather than a create-then-update
 pair, so a re-mark of the same tune is the same call as the first mark and the
 client never has to track whether a segment already exists.
 
+Getting audio IN is three calls rather than one, because the file never passes
+through Flask:
+
+    POST /api/recordings/upload-url    sign a direct-to-S3 PUT
+    (the browser uploads to S3 itself)
+    POST /api/recordings               confirm it landed; row + background ingest
+    GET  /api/recordings/<id>/status   poll while the waveform is built
+
 Every endpoint is system-admin only: this is a data-prep tool for building an ML
 training corpus, not a member-facing feature.
 """
 
 import base64
+import datetime
 
 from flask import jsonify, request, Response
 from flask_login import current_user
@@ -38,6 +47,390 @@ def _int_or_none(payload, key):
         return int(payload[key])
     except (TypeError, ValueError):
         raise ValueError(f"{key} must be an integer number of milliseconds")
+
+
+# Audio types the browser can hand us. The list is not about what ffmpeg can
+# read -- it reads nearly everything -- but about refusing to sign an upload for
+# something that plainly is not audio, since the signed URL is a write to the
+# bucket.
+_UPLOAD_MIME_BY_EXTENSION = {
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".mp4": "audio/mp4",
+    ".aac": "audio/aac",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".flac": "audio/flac",
+    ".webm": "audio/webm",
+}
+
+
+def _instance_exists(cur, session_instance_id):
+    cur.execute(
+        "SELECT 1 FROM session_instance WHERE session_instance_id = %s",
+        (session_instance_id,),
+    )
+    return cur.fetchone() is not None
+
+
+@api_login_required
+def create_recording_upload_url():
+    """POST /api/recordings/upload-url — sign a direct-to-S3 upload.
+
+    Body: {"session_instance_id": int, "filename": str, "content_type": str?}
+
+    The browser PUTs the audio to the returned URL itself. It does not come
+    through Flask: a three-hour master is ~350MB, and proxying that would hold a
+    worker for the whole transfer, spool the file onto the dyno's disk, and end
+    up putting it in exactly the same place.
+
+    Nothing is written here — the row is created afterwards by POST
+    /api/recordings, once the object is confirmed to exist. An abandoned upload
+    therefore leaves an orphaned S3 object and no database row, which is the
+    right way round.
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    import os
+
+    import recording as rec
+
+    problem = rec.check_configured()
+    if problem:
+        # Verbatim: the message names the missing environment variables, and
+        # anything that reshapes it (.capitalize(), say) turns AWS_S3_BUCKET into
+        # aws_s3_bucket and throws away the only actionable part.
+        return jsonify({"success": False, "error": f"Uploads are unavailable — {problem}"}), 503
+
+    payload = request.get_json(silent=True) or {}
+    filename = (payload.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"success": False, "error": "filename is required"}), 400
+
+    try:
+        session_instance_id = int(payload.get("session_instance_id"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
+
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in _UPLOAD_MIME_BY_EXTENSION:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"{extension or 'That file'} isn't an audio type this accepts "
+                             f"({', '.join(sorted(_UPLOAD_MIME_BY_EXTENSION))})",
+                }
+            ),
+            400,
+        )
+    # The extension decides, not the browser's guess: Content-Type is signed into
+    # the URL, so it has to match byte for byte what the client then sends, and
+    # the client is told which value to use rather than asked.
+    content_type = _UPLOAD_MIME_BY_EXTENSION[extension]
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if not _instance_exists(cur, session_instance_id):
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+    finally:
+        conn.close()
+
+    storage_key = rec.build_storage_key(filename)
+    try:
+        upload_url = rec.generate_presigned_upload(storage_key, content_type)
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+    return jsonify(
+        {
+            "success": True,
+            "upload_url": upload_url,
+            "storage_key": storage_key,
+            "content_type": content_type,
+        }
+    )
+
+
+@api_login_required
+def create_recording():
+    """POST /api/recordings — confirm an upload landed and start ingest.
+
+    Body: {"session_instance_id": int, "storage_key": str, "label": str?,
+           "started_at": ISO8601 with offset?, "person_id": int?,
+           "duration_ms": int?, "notes": str?}
+
+    Creates the row immediately and returns, rather than waiting: probing,
+    computing the envelope and encoding the proxy take minutes on a long file.
+    The row starts as 'processing' and a background thread fills the rest in
+    (services/recording_ingest).
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    import recording as rec
+    from services.recording_ingest import start_ingest
+
+    payload = request.get_json(silent=True) or {}
+
+    try:
+        session_instance_id = int(payload.get("session_instance_id"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "session_instance_id is required"}), 400
+
+    storage_key = (payload.get("storage_key") or "").strip()
+    if not storage_key:
+        return jsonify({"success": False, "error": "storage_key is required"}), 400
+    # Only keys this app minted. Signing is admin-gated anyway, but it keeps a
+    # typo from attaching some unrelated object in the bucket to a session.
+    if not storage_key.startswith("recordings/"):
+        return jsonify({"success": False, "error": "That isn't an upload key from this app"}), 400
+
+    started_at = None
+    if payload.get("started_at"):
+        try:
+            started_at = datetime.datetime.fromisoformat(str(payload["started_at"]).replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify({"success": False, "error": "started_at must be an ISO-8601 timestamp"}), 400
+        if started_at.tzinfo is None:
+            # Same rule the CLI importer enforces: without an offset the anchor
+            # is ambiguous, and being wrong by a timezone silently misaligns
+            # every absolute timestamp in the export.
+            return jsonify({"success": False, "error": "started_at needs a UTC offset"}), 400
+
+    try:
+        person_id = _int_or_none(payload, "person_id")
+        provisional_duration = _int_or_none(payload, "duration_ms")
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+    # Confirm the object is actually there before writing a row that claims it
+    # is. A cancelled or failed PUT would otherwise surface much later as a
+    # segmenter page that loads and then plays nothing.
+    try:
+        size = rec.stored_object_size(storage_key)
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+    if size is None:
+        return jsonify({"success": False, "error": "That upload didn't finish — nothing is stored under that key"}), 400
+
+    import os
+
+    label = (payload.get("label") or "").strip() or None
+    mime_type = _UPLOAD_MIME_BY_EXTENSION.get(os.path.splitext(storage_key)[1].lower(), "audio/mpeg")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT si.date, s.name FROM session_instance si "
+            "JOIN session s ON s.session_id = si.session_id WHERE si.session_instance_id = %s",
+            (session_instance_id,),
+        )
+        instance = cur.fetchone()
+        if not instance:
+            return jsonify({"success": False, "error": "Session instance not found"}), 404
+
+        if not label:
+            label = f"{instance[1]} {instance[0]}"
+
+        # First recording on an instance becomes the clock anchor whether or not
+        # it was asked for: an instance timeline with no zero point is
+        # meaningless. Later ones sit at offset 0 until someone says otherwise —
+        # the multi-recording case has no UI yet (spec 050).
+        cur.execute(
+            "SELECT 1 FROM recording WHERE session_instance_id = %s AND is_clock_anchor",
+            (session_instance_id,),
+        )
+        is_anchor = cur.fetchone() is None
+
+        user_id = get_current_user_id()
+
+        cur.execute(
+            """
+            INSERT INTO recording
+                (session_instance_id, person_id, label, storage_key, mime_type, duration_ms,
+                 file_size_bytes, is_clock_anchor, clock_offset_ms, started_at, notes,
+                 status, status_detail, created_by_user_id, last_modified_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'processing', %s, %s, %s)
+            RETURNING recording_id
+            """,
+            (
+                session_instance_id, person_id, label, storage_key, mime_type,
+                # Provisional: whatever the browser read off the file's metadata,
+                # or 1ms when it could not. Ingest replaces it with the container's
+                # own duration, and `status` is what tells anyone reading this row
+                # not to trust it yet.
+                max(1, provisional_duration or 1),
+                size, is_anchor, started_at, (payload.get("notes") or "").strip() or None,
+                "Queued", user_id, user_id,
+            ),
+        )
+        recording_id = cur.fetchone()[0]
+        save_to_history(cur, "recording", "INSERT", recording_id, user_id)
+        conn.commit()
+    finally:
+        conn.close()
+
+    start_ingest(recording_id, user_id)
+
+    return (
+        jsonify(
+            {
+                "success": True,
+                "recording_id": recording_id,
+                "status": "processing",
+                "is_clock_anchor": is_anchor,
+                "label": label,
+            }
+        ),
+        201,
+    )
+
+
+@api_login_required
+def get_recording_status(recording_id):
+    """GET /api/recordings/<id>/status — what ingest is doing, for polling.
+
+    `stalled` means the row has been 'processing' for longer than any real ingest
+    takes, which in practice means the thread died with the dyno under it. The
+    page offers a retry instead of spinning forever.
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    from services.recording_ingest import RESUMABLE_AFTER_SECONDS
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT status, status_detail, duration_ms, (peaks IS NOT NULL) AS has_peaks,
+                   (stream_key IS NOT NULL) AS has_proxy, file_size_bytes,
+                   EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - last_modified_date)
+            FROM recording WHERE recording_id = %s
+            """,
+            (recording_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return jsonify({"success": False, "error": "Recording not found"}), 404
+
+    idle_seconds = float(row[6] or 0)
+    return jsonify(
+        {
+            "success": True,
+            "recording_id": recording_id,
+            "status": row[0],
+            "status_detail": row[1],
+            "duration_ms": int(row[2]),
+            "has_peaks": row[3],
+            "has_proxy": row[4],
+            "file_size_bytes": int(row[5]) if row[5] else None,
+            "stalled": row[0] == "processing" and idle_seconds > RESUMABLE_AFTER_SECONDS,
+        }
+    )
+
+
+@api_login_required
+def reprocess_recording(recording_id):
+    """POST /api/recordings/<id>/reprocess — run ingest again.
+
+    For the two ways this ends up needed: ingest raised (bad file, S3 hiccup, no
+    ffmpeg), or a deploy killed the thread mid-run and left the row 'processing'
+    forever. Idempotent — every step of ingest overwrites.
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    from services.recording_ingest import RESUMABLE_AFTER_SECONDS, start_ingest
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT status, EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - last_modified_date) "
+            "FROM recording WHERE recording_id = %s",
+            (recording_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Recording not found"}), 404
+
+        # Refuse to stack a second transcode on top of a live one; allow it once
+        # the first is old enough to be presumed dead.
+        if row[0] == "processing" and float(row[1] or 0) <= RESUMABLE_AFTER_SECONDS:
+            return jsonify({"success": False, "error": "That recording is already being processed"}), 409
+
+        cur.execute(
+            "UPDATE recording SET status = 'processing', status_detail = %s WHERE recording_id = %s",
+            ("Queued", recording_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    start_ingest(recording_id, get_current_user_id())
+    return jsonify({"success": True, "recording_id": recording_id, "status": "processing"})
+
+
+@api_login_required
+def get_session_instances_for_admin(session_id):
+    """GET /api/admin/sessions/<id>/instances — dates to attach a recording to.
+
+    Carries the logged-tune count per instance because that is the number that
+    decides whether a night is worth uploading: a recording of an instance with
+    no log has nothing to segment against.
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            -- location_override is the instance's name (spec 047): at a festival
+            -- several instances share a date, so it is the only thing that tells
+            -- them apart in the picker.
+            SELECT si.session_instance_id, si.date, si.location_override,
+                   (SELECT count(*) FROM session_instance_tune sit
+                     WHERE sit.session_instance_id = si.session_instance_id
+                       AND sit.deleted = FALSE AND sit.record_type <> 'break') AS tunes,
+                   (SELECT count(*) FROM recording r
+                     WHERE r.session_instance_id = si.session_instance_id) AS recordings
+            FROM session_instance si
+            WHERE si.session_id = %s
+            ORDER BY si.date DESC
+            """,
+            (session_id,),
+        )
+        instances = [
+            {
+                "session_instance_id": row[0],
+                "date": row[1].isoformat(),
+                "name": row[2],
+                "tune_count": row[3],
+                "recording_count": row[4],
+            }
+            for row in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+
+    return jsonify({"success": True, "session_id": session_id, "instances": instances})
 
 
 @api_login_required
@@ -131,13 +524,20 @@ def put_recording_segment(recording_id, session_instance_tune_id):
         cur = conn.cursor()
 
         cur.execute(
-            "SELECT session_instance_id, duration_ms FROM recording WHERE recording_id = %s",
+            "SELECT session_instance_id, duration_ms, status FROM recording WHERE recording_id = %s",
             (recording_id,),
         )
         rec = cur.fetchone()
         if not rec:
             return jsonify({"success": False, "error": "Recording not found"}), 404
         instance_id, duration_ms = rec[0], int(rec[1])
+
+        # While ingest runs, duration_ms is the browser's provisional guess
+        # (schema/052), so the bounds check below would be measuring against a
+        # number that is about to change. Refuse rather than accept a mark whose
+        # validity depends on a value in flight.
+        if rec[2] != "ready":
+            return jsonify({"success": False, "error": "That recording is still being processed"}), 409
 
         if start_ms > duration_ms:
             return jsonify({"success": False, "error": "start_ms is past the end of the recording"}), 400
