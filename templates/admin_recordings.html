@@ -225,11 +225,18 @@
    and pulsing, the rest are hollow. The connector to the LEFT of each circle is
    what fills in, so progress reads as the line advancing between stations. */
 .ingest-steps {
+    /* The dot size and the track's offset are the SAME measurement -- the track
+       runs through the middle of the circles -- so it is stated once and the
+       offset is derived. Hardcoding both is what put the line a couple of
+       pixels high: the dot's border counts toward its height under content-box,
+       so its real centre is not half the declared size. `box-sizing` on the dot
+       below settles that, and the derivation keeps compact mode honest too. */
+    --dot-size: 1.2rem;
+    --track: 2px;
     display: flex;
     list-style: none;
     margin: 1.25rem 0 0.75rem;
     padding: 0;
-    counter-reset: ingest-step;
 }
 
 .ingest-steps .step {
@@ -237,15 +244,21 @@
     position: relative;
     text-align: center;
     min-width: 0;
+    /* Zeroing the <ol> is not enough: a global stylesheet pads <li> by 8px, which
+       pushed every dot 8px below the track while the track stayed put -- the
+       track is absolutely positioned against the step's padding box, the dot
+       flows inside its content box. That gap was the whole misalignment. */
+    margin: 0;
+    padding: 0;
 }
 
 .ingest-steps .step::before {
     content: "";
     position: absolute;
-    top: 0.6rem;
+    top: calc((var(--dot-size) - var(--track)) / 2);
     right: 50%;
     left: -50%;
-    height: 2px;
+    height: var(--track);
     background: var(--border-color, #2a2a30);
 }
 
@@ -264,16 +277,20 @@
 
 .ingest-steps .dot {
     position: relative;
-    z-index: 1;
+    z-index: 1;   /* over the track, so the line passes behind the circles */
     display: block;
-    width: 1.2rem;
-    height: 1.2rem;
+    /* border-box explicitly: the declared size has to BE the drawn size, or the
+       2px border pushes the real centre below where the track is drawn. */
+    box-sizing: border-box;
+    width: var(--dot-size);
+    height: var(--dot-size);
     margin: 0 auto 0.4rem;
     border-radius: 50%;
-    border: 2px solid var(--border-color, #2a2a30);
+    border: var(--track) solid var(--border-color, #2a2a30);
     background: var(--bg-color, #1a1a1f);
-    line-height: 1rem;
+    line-height: calc(var(--dot-size) - var(--track) * 2);
     font-size: 0.7rem;
+    text-align: center;
     color: #fff;
 }
 
@@ -337,6 +354,9 @@
 /* The in-table copy is the same component with the labels dropped: a row has no
    room for six words, and the sentence underneath already names the stage. */
 .ingest-steps.compact {
+    /* One measurement changes; the track re-centres itself. */
+    --dot-size: 0.85rem;
+    --track: 2px;
     margin: 0.35rem 0 0;
     max-width: 12rem;
 }
@@ -346,15 +366,8 @@
 }
 
 .ingest-steps.compact .dot {
-    width: 0.8rem;
-    height: 0.8rem;
     margin-bottom: 0;
-    line-height: 0.6rem;
     font-size: 0.5rem;
-}
-
-.ingest-steps.compact .step::before {
-    top: 0.4rem;
 }
 
 .row-status {
