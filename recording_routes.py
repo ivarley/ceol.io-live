@@ -386,6 +386,76 @@ def reprocess_recording(recording_id):
 
 
 @api_login_required
+def delete_recording(recording_id):
+    """DELETE /api/recordings/<id> — remove a recording and its audio.
+
+    This is the one destructive operation in the tool, and what it destroys is
+    not the audio (that can be re-uploaded) but the SEGMENTS: every tune the
+    operator placed by hand, which is the whole product of an evening's work.
+    The count is therefore returned so the UI can say what is about to be lost,
+    and every segment is written to history on the way out — recording_tune_segment_history
+    has no foreign key to the live rows, so those timestamps survive the delete
+    and can be read back if someone asks for them later.
+
+    Order matters. The row goes first and the objects second, because the two
+    failure modes are not equal: an object outliving its row costs storage,
+    while a row outliving its object is a segmenter page that loads and then
+    plays silence. Storage failures are reported alongside a success rather
+    than raised, since by then the delete has already happened.
+    """
+    denied = _admin_gate()
+    if denied:
+        return denied
+
+    import recording as rec
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT storage_key, stream_key, label FROM recording WHERE recording_id = %s",
+            (recording_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Recording not found"}), 404
+        storage_key, stream_key, label = row
+
+        user_id = get_current_user_id()
+
+        cur.execute(
+            "SELECT recording_tune_segment_id FROM recording_tune_segment WHERE recording_id = %s",
+            (recording_id,),
+        )
+        segment_ids = [r[0] for r in cur.fetchall()]
+        for segment_id in segment_ids:
+            save_to_history(cur, "recording_tune_segment", "DELETE", segment_id, user_id)
+
+        save_to_history(cur, "recording", "DELETE", recording_id, user_id)
+        # The segments go with it via ON DELETE CASCADE (schema/049); their
+        # history rows were just written above and do not.
+        cur.execute("DELETE FROM recording WHERE recording_id = %s", (recording_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    failures = rec.delete_stored_objects(storage_key, stream_key)
+
+    return jsonify(
+        {
+            "success": True,
+            "recording_id": recording_id,
+            "label": label,
+            "segments_deleted": len(segment_ids),
+            "storage_warning": (
+                "The recording is deleted, but its audio could not be removed from storage: "
+                + "; ".join(reason for _, reason in failures)
+            ) if failures else None,
+        }
+    )
+
+
+@api_login_required
 def get_session_instances_for_admin(session_id):
     """GET /api/admin/sessions/<id>/instances — dates to attach a recording to.
 

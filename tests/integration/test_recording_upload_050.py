@@ -331,7 +331,128 @@ def test_reprocess_restarts_a_failed_recording(
 
 
 # --------------------------------------------------------------------------- #
-# 4. the instance picker
+# 4. deleting
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def deletable_recording(client, admin_user, committed_instance, fake_s3, no_ingest, db_cursor):
+    """A ready recording with one tune placed on it, committed."""
+    with admin_user:
+        recording_id = _create(client, fake_s3).get_json()["recording_id"]
+
+    db_cursor.execute("INSERT INTO tune (tune_id, name, tune_type) VALUES (95220, 'Delete Reel', 'Reel')")
+    db_cursor.execute(
+        "INSERT INTO session_instance_tune (session_instance_id, tune_id, order_position, record_type) "
+        "VALUES (%s, 95220, 'a0', 'tune') RETURNING session_instance_tune_id",
+        (UP_INSTANCE,),
+    )
+    sit = db_cursor.fetchone()[0]
+    db_cursor.execute(
+        "UPDATE recording SET status = 'ready', stream_key = storage_key || '.stream.m4a' "
+        "WHERE recording_id = %s",
+        (recording_id,),
+    )
+    db_cursor.connection.commit()
+
+    with admin_user:
+        client.put(f"/api/recordings/{recording_id}/segments/{sit}", json={"start_ms": 1000})
+
+    yield recording_id, sit
+
+    db_cursor.execute("DELETE FROM recording_tune_segment_history WHERE recording_id = %s", (recording_id,))
+    db_cursor.execute("DELETE FROM session_instance_tune WHERE session_instance_tune_id = %s", (sit,))
+    db_cursor.execute("DELETE FROM tune WHERE tune_id = 95220")
+    db_cursor.connection.commit()
+
+
+def test_delete_removes_the_row_its_segments_and_both_objects(
+    client, admin_user, deletable_recording, monkeypatch, db_cursor
+):
+    import recording as rec
+
+    deleted = []
+    monkeypatch.setattr(rec, "delete_stored_objects", lambda *keys: deleted.extend(keys) or [])
+
+    recording_id, _ = deletable_recording
+    with admin_user:
+        resp = client.delete(f"/api/recordings/{recording_id}")
+
+    body = resp.get_json()
+    assert resp.status_code == 200
+    # The count is what the UI warns with, so it has to be the real one.
+    assert body["segments_deleted"] == 1
+    assert body["storage_warning"] is None
+
+    # The master AND the proxy — leaving the proxy behind is a silent storage leak.
+    assert len(deleted) == 2
+    assert any(k.endswith(".stream.m4a") for k in deleted)
+
+    db_cursor.execute("SELECT count(*) FROM recording WHERE recording_id = %s", (recording_id,))
+    assert db_cursor.fetchone()[0] == 0
+    db_cursor.execute(
+        "SELECT count(*) FROM recording_tune_segment WHERE recording_id = %s", (recording_id,)
+    )
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_delete_preserves_the_segment_timestamps_in_history(
+    client, admin_user, deletable_recording, monkeypatch, db_cursor
+):
+    """The placements are the product of the work. recording_tune_segment_history
+    has no FK to the live rows, so a delete can still be answered for later."""
+    import recording as rec
+
+    monkeypatch.setattr(rec, "delete_stored_objects", lambda *keys: [])
+    recording_id, sit = deletable_recording
+
+    with admin_user:
+        client.delete(f"/api/recordings/{recording_id}")
+
+    db_cursor.execute(
+        "SELECT operation, session_instance_tune_id, start_ms FROM recording_tune_segment_history "
+        "WHERE recording_id = %s ORDER BY history_id",
+        (recording_id,),
+    )
+    rows = db_cursor.fetchall()
+    assert ("DELETE", sit, 1000) in rows
+
+    db_cursor.execute(
+        "SELECT operation FROM recording_history WHERE recording_id = %s ORDER BY history_id",
+        (recording_id,),
+    )
+    assert [r[0] for r in db_cursor.fetchall()] == ["INSERT", "DELETE"]
+
+
+def test_delete_reports_a_storage_failure_without_claiming_it_failed(
+    client, admin_user, deletable_recording, monkeypatch, db_cursor
+):
+    """The row is already gone by the time storage is touched, so an object that
+    outlives it is a housekeeping note, not a failed delete."""
+    import recording as rec
+
+    monkeypatch.setattr(rec, "delete_stored_objects", lambda *keys: [(keys[0], "bucket unreachable")])
+    recording_id, _ = deletable_recording
+
+    with admin_user:
+        resp = client.delete(f"/api/recordings/{recording_id}")
+
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["success"] is True
+    assert "bucket unreachable" in body["storage_warning"]
+
+    db_cursor.execute("SELECT count(*) FROM recording WHERE recording_id = %s", (recording_id,))
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_delete_404s_for_an_unknown_recording(client, admin_user, committed_instance):
+    with admin_user:
+        assert client.delete("/api/recordings/987654321").status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# 5. the instance picker
 # --------------------------------------------------------------------------- #
 
 

@@ -203,6 +203,34 @@ def stored_object_size(storage_key):
     return head.get("ContentLength")
 
 
+def delete_stored_objects(*storage_keys):
+    """Remove objects from the bucket. Returns a list of (key, reason) failures.
+
+    Failures are RETURNED rather than raised because of where this is called
+    from: the database row is already gone by then, and an object that outlives
+    it costs storage and nothing else. Raising would report a delete that
+    actually happened as a failure, which is the more confusing outcome.
+
+    A key that isn't there is not a failure — S3's delete is idempotent, and
+    that is exactly the state a retried delete should be able to reach.
+    """
+    problem = check_configured()
+    if problem:
+        return [(key, problem) for key in storage_keys if key]
+
+    s3 = get_s3_client()
+    bucket = get_s3_bucket()
+    failures = []
+    for key in storage_keys:
+        if not key:
+            continue
+        try:
+            s3.delete_object(Bucket=bucket, Key=key)
+        except Exception as exc:
+            failures.append((key, str(exc)))
+    return failures
+
+
 def download_recording(storage_key, dest_path):
     """Pull a stored object down to a local path.
 

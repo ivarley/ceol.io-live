@@ -244,6 +244,7 @@ disabling it would deadlock (no play → no load → no canplay → no play).
 | `POST /api/recordings` | confirm the object landed; create the row, start ingest |
 | `GET /api/recordings/<id>/status` | ingest progress, for polling |
 | `POST /api/recordings/<id>/reprocess` | run ingest again after a failure or a stall |
+| `DELETE /api/recordings/<id>` | remove the recording, its segments, and its audio |
 | `GET /api/admin/sessions/<id>/instances` | the nights to attach a recording to |
 | `GET /api/recordings/<id>/segmenter` | the full payload (= the page embed) |
 | `GET /api/recordings/<id>/peaks` | the envelope as raw bytes, cached |
@@ -293,9 +294,29 @@ what keeps a free dyno from idling out, and a dyno that sleeps mid-ingest is
 exactly the stall the Retry button exists for. A long backlog is still a job for
 the CLI.
 
-Not done, deliberately: no delete for a recording that failed to ingest (Retry
-covers the usual case; a genuinely bad upload leaves a row and an S3 object to
-clean up by hand), no multi-recording UI — an uploaded second recording on a
+## Deleting
+
+`DELETE /api/recordings/<id>` removes the row, its segments (by cascade), and
+both S3 objects. What it destroys is not the audio — that can be uploaded again
+— but the **segments**: every tune placed by hand, which is the entire product
+of an evening. So:
+
+- the confirm names the placement count rather than the file, because that is
+  the number worth hesitating over;
+- every segment is written to `recording_tune_segment_history` on the way out.
+  That table has no foreign key to the live rows, so the timestamps survive the
+  delete and the question "what was on that recording" stays answerable;
+- the row is deleted **before** the objects. The two failure modes are not
+  equal: an object outliving its row costs storage, while a row outliving its
+  object is a segmenter page that loads and plays silence. A storage failure is
+  therefore reported next to a success rather than raised, since by then the
+  delete has already happened.
+
+This needs `s3:DeleteObject` on the app's IAM user, which is a real widening —
+before it, the worst a leaked key could do to the corpus was add to it. Bucket
+versioning is the companion move if that trade ever looks uncomfortable.
+
+Not done, deliberately: no multi-recording UI — an uploaded second recording on a
 night lands at `clock_offset_ms` 0 with no way to say otherwise, so the
 multi-recording case is still CLI-only — and no audio-slicing export:
 `GET .../export` hands you the cut list, and ffmpeg does the cutting.

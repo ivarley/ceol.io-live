@@ -80,8 +80,12 @@
                     <div id="rec-status" class="upload-status"></div>
                 </div>
 
-                <div id="rec-error" class="alert alert-danger" hidden></div>
                 {% endif %}
+
+                {# Outside the storage-configured branch on purpose: the row
+                   actions below (Retry, Delete) report through here too, and
+                   they still work when uploading doesn't. #}
+                <div id="rec-error" class="alert alert-danger" hidden></div>
             </section>
 
             <section class="docs-section">
@@ -133,6 +137,10 @@
                                     {% else %}
                                     <button type="button" class="btn btn-sm btn-outline-secondary rec-retry" data-recording-id="{{ r.recording_id }}">Retry</button>
                                     {% endif %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger rec-delete"
+                                            data-recording-id="{{ r.recording_id }}"
+                                            data-label="{{ r.label or 'recording %s'|format(r.recording_id) }}"
+                                            data-segments="{{ r.segments }}">Delete</button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -229,7 +237,6 @@
 }
 </style>
 
-{% if not storage_problem %}
 <script>
 (function () {
     var sessionSelect = document.getElementById('rec-session');
@@ -269,6 +276,10 @@
         uploadBtn.disabled = !(instanceSelect.value && fileInput.files.length);
     }
 
+    // The upload form is absent when object storage isn't configured; the row
+    // actions further down are not, and are wired either way.
+    var canUpload = !!uploadBtn;
+
     function humanSize(bytes) {
         if (!bytes) { return ''; }
         return bytes >= 1e9
@@ -284,6 +295,7 @@
         return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
     }
 
+    if (canUpload) {
     sessionSelect.addEventListener('change', function () {
         instanceSelect.innerHTML = '<option value="">Loading&hellip;</option>';
         instanceSelect.disabled = true;
@@ -474,6 +486,7 @@
                 uploadBtn.disabled = false;
             });
     });
+    }  // end if (canUpload)
 
     // Rows that were mid-ingest when the page loaded: keep them honest without
     // making the operator refresh by hand.
@@ -519,7 +532,43 @@
                 });
         });
     });
+
+    document.querySelectorAll('.rec-delete').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var placed = parseInt(button.dataset.segments, 10) || 0;
+            // Name the segments, not the audio. The audio can be uploaded again;
+            // the placements are an evening of somebody's attention and are the
+            // thing actually being thrown away here.
+            var warning = 'Delete “' + button.dataset.label + '”?\n\n';
+            warning += placed
+                ? 'This also deletes the ' + placed + ' tune placement' + (placed === 1 ? '' : 's')
+                  + ' marked on it, and removes the audio from storage.\n\nThis cannot be undone.'
+                : 'Nothing has been marked on it yet. The audio is removed from storage.\n\nThis cannot be undone.';
+            if (!window.confirm(warning)) { return; }
+
+            clearError();
+            button.disabled = true;
+            button.textContent = 'Deleting…';
+            fetch('/api/recordings/' + button.dataset.recordingId, { method: 'DELETE' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) { throw new Error(data.error || 'Could not delete that recording'); }
+                    if (data.storage_warning) {
+                        // The row is gone either way; this is a housekeeping note,
+                        // so say it and still refresh rather than looking failed.
+                        showError(data.storage_warning);
+                        button.closest('tr').remove();
+                        return;
+                    }
+                    window.location.reload();
+                })
+                .catch(function (err) {
+                    button.disabled = false;
+                    button.textContent = 'Delete';
+                    showError(err.message);
+                });
+        });
+    });
 })();
 </script>
-{% endif %}
 {% endblock %}

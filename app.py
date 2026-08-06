@@ -23,6 +23,7 @@ from recording_routes import (
     create_recording,
     get_recording_status,
     reprocess_recording,
+    delete_recording,
     get_session_instances_for_admin,
 )
 from api_person_tune_routes import (
@@ -1479,6 +1480,12 @@ app.add_url_rule(
     "reprocess_recording",
     reprocess_recording,
     methods=["POST"],
+)
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>",
+    "delete_recording",
+    delete_recording,
+    methods=["DELETE"],
 )
 app.add_url_rule(
     "/api/admin/sessions/<int:session_id>/instances",
