@@ -116,7 +116,23 @@ login_manager.login_message = "Please log in to access this page."
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.get_by_id(int(user_id))
+    """Resolve the signed session cookie's user id.
+
+    Returning None means "not logged in", which is the right answer for a cookie
+    this app did not mint -- and it WILL see some. Cookies are scoped by host and
+    ignore the port, so every other Flask app on localhost shares this jar and
+    the last one to log in wins the `session` cookie. A neighbour that keys users
+    by UUID used to take the whole site down with
+
+        ValueError: invalid literal for int() with base 10: '00000000-...-0001'
+
+    on every request, since this runs before any route. A foreign cookie should
+    log you out, not 500 you, so anything unparseable is simply nobody.
+    """
+    try:
+        return User.get_by_id(int(user_id))
+    except (TypeError, ValueError):
+        return None
 
 @login_manager.request_loader
 def load_user_from_request(req):
