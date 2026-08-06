@@ -3517,6 +3517,7 @@ def admin_recordings():
         return redirect(url_for("home"))
 
     from recording import check_configured
+    from services.recording_ingest import INGEST_STEPS, step_index_for
 
     conn = get_db_connection()
     try:
@@ -3552,6 +3553,10 @@ def admin_recordings():
                 "tunes": row[10],
                 "status": row[11],
                 "status_detail": row[12],
+                # Which stage circle to light on first paint. Computed here rather
+                # than left to the first poll, so a reload mid-ingest doesn't show
+                # an empty track for five seconds.
+                "ingest_step": (len(INGEST_STEPS) - 1) if row[11] == "ready" else step_index_for(row[12]),
             }
             for row in cur.fetchall()
         ]
@@ -3571,6 +3576,7 @@ def admin_recordings():
         "admin_recordings.html",
         recordings=recordings,
         sessions=sessions,
+        ingest_steps=INGEST_STEPS,
         storage_problem=check_configured(),
     )
 

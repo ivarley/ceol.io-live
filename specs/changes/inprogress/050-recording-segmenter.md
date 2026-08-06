@@ -170,6 +170,20 @@ The segmenter refuses to open a recording that isn't `ready`, and
 `PUT .../segments/...` answers 409, because a mark validated against a guessed
 duration is a mark validated against nothing.
 
+**The stages are shown, not just the fact of waiting.** Ingest is a fixed
+sequence — Queued, Download, Inspect, Waveform, Proxy, Ready — and on a real
+recording it runs long enough that "how far along is it" is a fair question. It
+is drawn as circles on a line: filled and ticked behind, ringed at the stage in
+flight, hollow ahead. The stage list is declared once in
+`services/recording_ingest` and travels to the browser in the status payload, so
+the display cannot drift from what the pipeline runs; a test walks a real ingest
+and fails if any stage it reports has no circle, or if they ever go backwards.
+
+A failure records the stage it died on as well as the error
+(`"Encoding the playback proxy — ffmpeg transcode failed (127)"`), which marks
+the failing circle red and is most of the diagnosis on its own: a Download
+failure and a Proxy failure point at completely different problems.
+
 A thread rather than a job queue, deliberately: there is no worker dyno and no
 broker, and this fires a few times a week. What that costs is written down
 instead of hidden — a deploy mid-ingest strands the row in `processing`, so the

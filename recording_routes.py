@@ -174,7 +174,7 @@ def create_recording():
         return denied
 
     import recording as rec
-    from services.recording_ingest import start_ingest
+    from services.recording_ingest import DETAIL_QUEUED, start_ingest
 
     payload = request.get_json(silent=True) or {}
 
@@ -268,7 +268,7 @@ def create_recording():
                 # not to trust it yet.
                 max(1, provisional_duration or 1),
                 size, is_anchor, started_at, (payload.get("notes") or "").strip() or None,
-                "Queued", user_id, user_id,
+                DETAIL_QUEUED, user_id, user_id,
             ),
         )
         recording_id = cur.fetchone()[0]
@@ -305,7 +305,7 @@ def get_recording_status(recording_id):
     if denied:
         return denied
 
-    from services.recording_ingest import RESUMABLE_AFTER_SECONDS
+    from services.recording_ingest import INGEST_STEPS, RESUMABLE_AFTER_SECONDS, step_index_for
 
     conn = get_db_connection()
     try:
@@ -327,12 +327,18 @@ def get_recording_status(recording_id):
         return jsonify({"success": False, "error": "Recording not found"}), 404
 
     idle_seconds = float(row[6] or 0)
+    # A finished recording is at the last step; otherwise the step comes from the
+    # detail the pipeline last wrote. None means a row from before the stages
+    # existed, and the display falls back to the sentence alone.
+    step = len(INGEST_STEPS) - 1 if row[0] == "ready" else step_index_for(row[1])
     return jsonify(
         {
             "success": True,
             "recording_id": recording_id,
             "status": row[0],
             "status_detail": row[1],
+            "steps": INGEST_STEPS,
+            "step": step,
             "duration_ms": int(row[2]),
             "has_peaks": row[3],
             "has_proxy": row[4],
@@ -354,7 +360,7 @@ def reprocess_recording(recording_id):
     if denied:
         return denied
 
-    from services.recording_ingest import RESUMABLE_AFTER_SECONDS, start_ingest
+    from services.recording_ingest import DETAIL_QUEUED, RESUMABLE_AFTER_SECONDS, start_ingest
 
     conn = get_db_connection()
     try:
@@ -375,7 +381,7 @@ def reprocess_recording(recording_id):
 
         cur.execute(
             "UPDATE recording SET status = 'processing', status_detail = %s WHERE recording_id = %s",
-            ("Queued", recording_id),
+            (DETAIL_QUEUED, recording_id),
         )
         conn.commit()
     finally:

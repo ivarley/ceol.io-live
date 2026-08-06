@@ -77,6 +77,9 @@
                     <div class="progress">
                         <div id="rec-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                     </div>
+                    {# The transfer has a bar because its length is known; ingest has
+                       circles because its length isn't, but its SHAPE is. #}
+                    <ol id="rec-steps" class="ingest-steps" hidden></ol>
                     <div id="rec-status" class="upload-status"></div>
                 </div>
 
@@ -118,6 +121,15 @@
                                     {{ r.label or 'recording %s'|format(r.recording_id) }}
                                     {% if r.is_clock_anchor %}<span class="badge badge-secondary">anchor</span>
                                     {% else %}<span class="text-muted">+{{ (r.clock_offset_ms // 1000) }}s</span>{% endif %}
+                                    {% if r.status != 'ready' %}
+                                    {# Painted by renderSteps() from these attributes on load,
+                                       then repainted from each poll. One generator, so the
+                                       first frame and every later one agree. #}
+                                    <ol class="ingest-steps compact rec-row-steps"
+                                        data-steps='{{ ingest_steps | tojson }}'
+                                        data-step="{{ r.ingest_step if r.ingest_step is not none else '' }}"
+                                        data-status="{{ r.status }}" hidden></ol>
+                                    {% endif %}
                                     {% if r.status == 'processing' %}
                                     <div class="row-status processing">Processing&hellip; <span class="detail">{{ r.status_detail or '' }}</span></div>
                                     {% elif r.status == 'failed' %}
@@ -208,6 +220,143 @@
     color: var(--success, #28a745);
 }
 
+/* Ingest stages: one circle per stage, joined by the line they sit on.
+   Stages behind the current one are filled and ticked, the current one is ringed
+   and pulsing, the rest are hollow. The connector to the LEFT of each circle is
+   what fills in, so progress reads as the line advancing between stations. */
+.ingest-steps {
+    display: flex;
+    list-style: none;
+    margin: 1.25rem 0 0.75rem;
+    padding: 0;
+    counter-reset: ingest-step;
+}
+
+.ingest-steps .step {
+    flex: 1 1 0;
+    position: relative;
+    text-align: center;
+    min-width: 0;
+}
+
+.ingest-steps .step::before {
+    content: "";
+    position: absolute;
+    top: 0.6rem;
+    right: 50%;
+    left: -50%;
+    height: 2px;
+    background: var(--border-color, #2a2a30);
+}
+
+.ingest-steps .step:first-child::before {
+    display: none;
+}
+
+.ingest-steps .step.done::before,
+.ingest-steps .step.current::before {
+    background: var(--primary, #007bff);
+}
+
+.ingest-steps .step.failed::before {
+    background: var(--danger, #dc3545);
+}
+
+.ingest-steps .dot {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 1.2rem;
+    height: 1.2rem;
+    margin: 0 auto 0.4rem;
+    border-radius: 50%;
+    border: 2px solid var(--border-color, #2a2a30);
+    background: var(--bg-color, #1a1a1f);
+    line-height: 1rem;
+    font-size: 0.7rem;
+    color: #fff;
+}
+
+.ingest-steps .step.done .dot {
+    border-color: var(--primary, #007bff);
+    background: var(--primary, #007bff);
+}
+
+.ingest-steps .step.done .dot::after {
+    content: "✓";
+}
+
+.ingest-steps .step.current .dot {
+    border-color: var(--primary, #007bff);
+    background: var(--bg-color, #1a1a1f);
+    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.18);
+    animation: ingest-pulse 1.4s ease-in-out infinite;
+}
+
+.ingest-steps .step.failed .dot {
+    border-color: var(--danger, #dc3545);
+    background: var(--danger, #dc3545);
+}
+
+.ingest-steps .step.failed .dot::after {
+    content: "×";
+    font-size: 0.85rem;
+    line-height: 0.9rem;
+}
+
+@keyframes ingest-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.10); }
+    50%      { box-shadow: 0 0 0 6px rgba(0, 123, 255, 0.28); }
+}
+
+/* Respect a system-level preference against motion: the pulse is decoration,
+   and the ring alone still says which stage is live. */
+@media (prefers-reduced-motion: reduce) {
+    .ingest-steps .step.current .dot { animation: none; }
+}
+
+.ingest-steps .label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--secondary-text, #999);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ingest-steps .step.current .label {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.ingest-steps .step.failed .label {
+    color: var(--danger, #dc3545);
+    font-weight: 600;
+}
+
+/* The in-table copy is the same component with the labels dropped: a row has no
+   room for six words, and the sentence underneath already names the stage. */
+.ingest-steps.compact {
+    margin: 0.35rem 0 0;
+    max-width: 12rem;
+}
+
+.ingest-steps.compact .label {
+    display: none;
+}
+
+.ingest-steps.compact .dot {
+    width: 0.8rem;
+    height: 0.8rem;
+    margin-bottom: 0;
+    line-height: 0.6rem;
+    font-size: 0.5rem;
+}
+
+.ingest-steps.compact .step::before {
+    top: 0.4rem;
+}
+
 .row-status {
     font-size: 0.85rem;
     margin-top: 0.2rem;
@@ -279,6 +428,40 @@
     // The upload form is absent when object storage isn't configured; the row
     // actions further down are not, and are wired either way.
     var canUpload = !!uploadBtn;
+
+    // Paint the stage circles into `el` from a /status response. The stage list
+    // comes from the server (services/recording_ingest) rather than being
+    // duplicated here, so it cannot drift from what the pipeline runs.
+    function renderSteps(el, data) {
+        if (!el) { return; }
+        var steps = data.steps || [];
+        var at = data.step;
+        if (!steps.length || at === null || at === undefined) {
+            // A row from before the stages existed. The sentence still shows.
+            el.hidden = true;
+            return;
+        }
+        var failed = data.status === 'failed';
+        el.innerHTML = '';
+        steps.forEach(function (label, index) {
+            var li = document.createElement('li');
+            li.className = 'step ' + (
+                index < at ? 'done'
+                    : index > at ? 'todo'
+                        : failed ? 'failed'
+                            : data.status === 'ready' ? 'done' : 'current'
+            );
+            var dot = document.createElement('span');
+            dot.className = 'dot';
+            var text = document.createElement('span');
+            text.className = 'label';
+            text.textContent = label;
+            li.appendChild(dot);
+            li.appendChild(text);
+            el.appendChild(li);
+        });
+        el.hidden = false;
+    }
 
     function humanSize(bytes) {
         if (!bytes) { return ''; }
@@ -400,6 +583,7 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data.success) { throw new Error(data.error || 'Lost track of that recording'); }
+                renderSteps(document.getElementById('rec-steps'), data);
                 if (data.status === 'ready') {
                     setStatus('Ready — ' + humanDuration(data.duration_ms) + '. Reloading…', true);
                     setTimeout(function () { window.location.reload(); }, 1200);
@@ -488,6 +672,16 @@
     });
     }  // end if (canUpload)
 
+    // Paint the row steppers from what the server already rendered, so a reload
+    // mid-ingest shows the right circle immediately instead of after a poll.
+    document.querySelectorAll('.rec-row-steps').forEach(function (el) {
+        renderSteps(el, {
+            steps: JSON.parse(el.dataset.steps || '[]'),
+            step: el.dataset.step === '' ? null : parseInt(el.dataset.step, 10),
+            status: el.dataset.status
+        });
+    });
+
     // Rows that were mid-ingest when the page loaded: keep them honest without
     // making the operator refresh by hand.
     var pendingRows = document.querySelectorAll('tr[data-recording-id]');
@@ -499,6 +693,7 @@
                     .then(function (data) {
                         if (!data.success) { return; }
                         if (data.status === 'ready') { window.location.reload(); return; }
+                        renderSteps(row.querySelector('.rec-row-steps'), data);
                         var el = row.querySelector('.row-status');
                         if (!el) { return; }
                         if (data.status === 'failed') {

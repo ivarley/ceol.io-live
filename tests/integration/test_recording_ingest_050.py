@@ -190,7 +190,7 @@ def test_ingest_is_repeatable(committed_recording, fake_bucket, db_cursor):
 
 def test_ingest_leaves_a_readable_reason_when_it_fails(committed_recording, monkeypatch, db_cursor):
     import recording as rec
-    from services.recording_ingest import ingest_recording
+    from services.recording_ingest import DETAIL_DOWNLOADING, ingest_recording, step_index_for
 
     monkeypatch.setattr(rec, "check_configured", lambda: None)
 
@@ -204,8 +204,58 @@ def test_ingest_leaves_a_readable_reason_when_it_fails(committed_recording, monk
 
     assert row["status"] == "failed"
     assert "the bucket said no" in row["status_detail"]
+    # Which stage it died on, not just that it died: "Download — ..." and
+    # "Proxy — ..." point at completely different problems, and the stage
+    # display marks the failing circle from this.
+    assert row["status_detail"].startswith(DETAIL_DOWNLOADING)
+    assert step_index_for(row["status_detail"]) == 1
     # The row still describes an uploaded file; only the derived parts are absent.
     assert row["peaks"] is None
+
+
+def test_ingest_fails_at_the_stage_that_actually_broke(committed_recording, fake_bucket, monkeypatch, db_cursor):
+    """The download works here and the transcode doesn't, so the recorded stage
+    has to be the proxy one -- a stage tracker that just says "the first step"
+    would pass the test above and be wrong every other time."""
+    import recording as rec
+    from services.recording_ingest import DETAIL_ENCODING, ingest_recording, step_index_for
+
+    def _boom(src, dest, **kwargs):
+        raise RuntimeError("ffmpeg fell over")
+
+    monkeypatch.setattr(rec, "transcode_for_streaming", _boom)
+
+    ingest_recording(committed_recording)
+    row = _row(db_cursor, committed_recording)
+
+    assert row["status"] == "failed"
+    assert row["status_detail"].startswith(DETAIL_ENCODING)
+    assert step_index_for(row["status_detail"]) == 4
+
+
+def test_every_stage_the_pipeline_writes_maps_to_a_circle(committed_recording, fake_bucket, db_cursor, monkeypatch):
+    """The stage list and the sentences the pipeline writes are declared next to
+    each other; this is what stops one being edited without the other. An
+    unmapped detail shows as no progress at all, silently."""
+    import services.recording_ingest as ingest
+
+    seen = []
+    original = ingest._set_status
+
+    def _record(conn, recording_id, status, detail=None):
+        if status == "processing":
+            seen.append(detail)
+        return original(conn, recording_id, status, detail)
+
+    monkeypatch.setattr(ingest, "_set_status", _record)
+    ingest.ingest_recording(committed_recording)
+
+    assert seen, "ingest reported no stages at all"
+    unmapped = [d for d in seen if ingest.step_index_for(d) is None]
+    assert not unmapped, f"stages with no circle: {unmapped}"
+    # And they only ever move forward.
+    indexes = [ingest.step_index_for(d) for d in seen]
+    assert indexes == sorted(indexes), f"stages went backwards: {seen}"
 
 
 def test_ingest_records_a_history_row_for_the_metadata_it_writes(committed_recording, fake_bucket, db_cursor):
