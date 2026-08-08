@@ -176,26 +176,37 @@ def test_create_refuses_a_key_this_app_never_minted(client, admin_user, committe
     assert not no_ingest
 
 
-def test_create_writes_a_processing_row_and_starts_ingest(
+def test_create_queues_the_row_and_starts_ingest(
     client, admin_user, committed_instance, fake_s3, no_ingest, db_cursor
 ):
+    """The row lands as 'queued', not 'processing'.
+
+    The thread is the fast path, not the guarantee: if it never starts -- or the
+    dyno dies between the INSERT and the first stage -- 'queued' is what tells
+    the sweeper cron this still needs doing. Claiming is what moves it on.
+    """
     with admin_user:
         resp = _create(client, fake_s3)
 
     assert resp.status_code == 201
     body = resp.get_json()
     recording_id = body["recording_id"]
-    assert body["status"] == "processing"
     assert no_ingest == [recording_id]
 
     db_cursor.execute(
-        "SELECT status, status_detail, duration_ms, peaks, is_clock_anchor, label, file_size_bytes "
+        "SELECT status, status_detail, duration_ms, peaks, is_clock_anchor, label, file_size_bytes, "
+        "       ingest_attempts, ingest_heartbeat_at "
         "FROM recording WHERE recording_id = %s",
         (recording_id,),
     )
-    status, detail, duration_ms, peaks, is_anchor, label, size = db_cursor.fetchone()
-    assert status == "processing"
+    (status, detail, duration_ms, peaks, is_anchor, label, size,
+     attempts, heartbeat) = db_cursor.fetchone()
+    assert status == "queued"
     assert detail  # something for the page to show while it waits
+    # Nobody has claimed it yet, so no attempt has been spent and nothing is
+    # claiming to be alive. Both are what make it sweepable.
+    assert attempts == 0
+    assert heartbeat is None
     # The browser's guess, carried so the row reads sensibly until ingest
     # replaces it with the container's own duration.
     assert duration_ms == 5_400_000
@@ -255,11 +266,13 @@ def test_status_reports_what_ingest_is_doing(client, admin_user, committed_insta
         resp = client.get(f"/api/recordings/{recording_id}/status")
 
     body = resp.get_json()
-    assert body["status"] == "processing"
+    assert body["status"] == "queued"
     assert body["has_peaks"] is False
     assert body["has_proxy"] is False
-    # Freshly created, so nothing to presume dead yet.
-    assert body["stalled"] is False
+    # Queued with no heartbeat reads as unattended -- which it is. Nothing is
+    # working on it; the sweeper will be.
+    assert body["stalled"] is True
+    assert body["attempts"] == 0
 
 
 def test_segments_cannot_be_placed_while_the_duration_is_still_a_guess(
@@ -300,14 +313,44 @@ def test_segmenter_page_sends_a_processing_recording_back_to_the_list(
 
 
 def test_reprocess_wont_stack_a_second_run_on_a_live_one(
-    client, admin_user, committed_instance, fake_s3, no_ingest
+    client, admin_user, committed_instance, fake_s3, no_ingest, db_cursor
 ):
+    """"Live" is a fresh heartbeat, not a guess at how long a run should take."""
     with admin_user:
         recording_id = _create(client, fake_s3).get_json()["recording_id"]
+    db_cursor.execute(
+        "UPDATE recording SET status = 'processing', "
+        "ingest_heartbeat_at = (NOW() AT TIME ZONE 'UTC') WHERE recording_id = %s",
+        (recording_id,),
+    )
+    db_cursor.connection.commit()
+
+    with admin_user:
         resp = client.post(f"/api/recordings/{recording_id}/reprocess")
 
     assert resp.status_code == 409
     assert no_ingest == [recording_id]  # still just the original
+
+
+def test_reprocess_takes_over_a_run_that_stopped_beating(
+    client, admin_user, committed_instance, fake_s3, no_ingest, db_cursor
+):
+    """The counterpart: a dead run is claimable within 90 seconds, not two hours."""
+    with admin_user:
+        recording_id = _create(client, fake_s3).get_json()["recording_id"]
+    db_cursor.execute(
+        "UPDATE recording SET status = 'processing', "
+        "ingest_heartbeat_at = (NOW() AT TIME ZONE 'UTC') - INTERVAL '10 minutes' "
+        "WHERE recording_id = %s",
+        (recording_id,),
+    )
+    db_cursor.connection.commit()
+
+    with admin_user:
+        resp = client.post(f"/api/recordings/{recording_id}/reprocess")
+
+    assert resp.status_code == 200
+    assert no_ingest == [recording_id, recording_id]
 
 
 def test_reprocess_restarts_a_failed_recording(
@@ -326,8 +369,12 @@ def test_reprocess_restarts_a_failed_recording(
 
     assert resp.status_code == 200
     assert no_ingest == [recording_id, recording_id]
-    db_cursor.execute("SELECT status FROM recording WHERE recording_id = %s", (recording_id,))
-    assert db_cursor.fetchone()[0] == "processing"
+    db_cursor.execute(
+        "SELECT status, ingest_attempts FROM recording WHERE recording_id = %s", (recording_id,)
+    )
+    # Back to 'queued' so the sweeper would take it even if the thread doesn't,
+    # and with a full budget: a person asking again is not the sweeper looping.
+    assert db_cursor.fetchone() == ("queued", 0)
 
 
 # --------------------------------------------------------------------------- #

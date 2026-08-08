@@ -606,8 +606,11 @@
                     throw new Error('Processing failed: ' + (data.status_detail || 'no detail recorded'));
                 }
                 if (data.stalled) {
-                    throw new Error('Processing stopped partway (the server most likely restarted). '
-                                    + 'Reload and use Retry on that row.');
+                    // No longer an error: the sweeper cron picks these up within
+                    // ten minutes. Say what is happening and keep watching.
+                    setStatus('Waiting to be picked up — the server will finish this shortly.');
+                    setTimeout(function () { pollStatus(recordingId); }, 5000);
+                    return;
                 }
                 setStatus('Processing — ' + (data.status_detail || 'working') + '…');
                 setTimeout(function () { pollStatus(recordingId); }, 3000);
@@ -674,7 +677,13 @@
                 if (!result.ok || !result.data.success) {
                     throw new Error(result.data.error || 'Could not register the recording');
                 }
-                setStatus('Processing — building the waveform and playback proxy…');
+                // Handed off. Ingest runs on the server and a ten-minute cron
+                // finishes whatever a sleeping dyno or a deploy interrupts, so the
+                // form comes back now rather than after the transcode. The poll
+                // below is only for whoever stays to watch.
+                uploadBtn.disabled = false;
+                fileInput.value = '';
+                setStatus('Uploaded — processing continues in the background. You can leave this page.');
                 return pollStatus(result.data.recording_id);
             })
             .catch(function (err) {
@@ -714,7 +723,10 @@
                             el.textContent = 'Ingest failed: ' + (data.status_detail || 'no detail recorded');
                         } else {
                             el.className = 'row-status processing';
-                            el.textContent = (data.stalled ? 'Stopped partway — ' : 'Processing… ')
+                            // `stalled` means nothing is working on it right now,
+                            // which the sweeper resolves on its own — a note, not
+                            // an alarm.
+                            el.textContent = (data.stalled ? 'Waiting to be picked up — ' : 'Processing… ')
                                 + (data.status_detail || '');
                         }
                     })

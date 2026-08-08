@@ -327,7 +327,7 @@ def create_recording():
                 (session_instance_id, person_id, label, storage_key, mime_type, duration_ms,
                  file_size_bytes, is_clock_anchor, clock_offset_ms, started_at, notes,
                  status, status_detail, created_by_user_id, last_modified_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'processing', %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'queued', %s, %s, %s)
             RETURNING recording_id
             """,
             (
@@ -367,11 +367,13 @@ def create_recording():
 def get_recording_status(recording_id):
     """GET /api/recordings/<id>/status — what ingest is doing, for polling.
 
-    `stalled` means the row has been 'processing' for longer than any real ingest
-    takes, which in practice means the thread died with the dyno under it. The
-    page offers a retry instead of spinning forever.
+    `stalled` means nothing is working on this recording: the run that had it
+    stopped heartbeating. It is now a note rather than a call to action -- the
+    sweeper cron picks these up within ten minutes -- but the page still says so,
+    because "processing" with nobody processing is exactly the state that used to
+    leave people watching a spinner for two hours.
     """
-    from services.recording_ingest import INGEST_STEPS, RESUMABLE_AFTER_SECONDS, step_index_for
+    from services.recording_ingest import HEARTBEAT_STALE_SECONDS, INGEST_STEPS, step_index_for
 
     conn = get_db_connection()
     try:
@@ -383,7 +385,8 @@ def get_recording_status(recording_id):
             """
             SELECT status, status_detail, duration_ms, (peaks IS NOT NULL) AS has_peaks,
                    (stream_key IS NOT NULL) AS has_proxy, file_size_bytes,
-                   EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - last_modified_date)
+                   EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - ingest_heartbeat_at),
+                   ingest_attempts
             FROM recording WHERE recording_id = %s
             """,
             (recording_id,),
@@ -395,7 +398,12 @@ def get_recording_status(recording_id):
     if not row:
         return jsonify({"success": False, "error": "Recording not found"}), 404
 
-    idle_seconds = float(row[6] or 0)
+    # No heartbeat at all means nobody has started yet ('queued'), which is not
+    # stale -- it is waiting, and the sweeper will take it.
+    since_beat = row[6]
+    unattended = row[0] in ("queued", "processing") and (
+        since_beat is None or float(since_beat) > HEARTBEAT_STALE_SECONDS
+    )
     # A finished recording is at the last step; otherwise the step comes from the
     # detail the pipeline last wrote. None means a row from before the stages
     # existed, and the display falls back to the sentence alone.
@@ -412,7 +420,9 @@ def get_recording_status(recording_id):
             "has_peaks": row[3],
             "has_proxy": row[4],
             "file_size_bytes": int(row[5]) if row[5] else None,
-            "stalled": row[0] == "processing" and idle_seconds > RESUMABLE_AFTER_SECONDS,
+            # Kept as `stalled` for the clients that already read it.
+            "stalled": unattended,
+            "attempts": row[7],
         }
     )
 
@@ -421,11 +431,15 @@ def get_recording_status(recording_id):
 def reprocess_recording(recording_id):
     """POST /api/recordings/<id>/reprocess — run ingest again.
 
-    For the two ways this ends up needed: ingest raised (bad file, S3 hiccup, no
-    ffmpeg), or a deploy killed the thread mid-run and left the row 'processing'
-    forever. Idempotent — every step of ingest overwrites.
+    Mostly needed now for a recording ingest genuinely could not read — a deploy
+    or a sleeping dyno is picked up by the sweeper cron without anyone asking.
+    Idempotent: every step of ingest overwrites.
+
+    Resets `ingest_attempts`, because a person choosing to try again is a
+    different event from the sweeper looping, and should get a full budget rather
+    than inheriting an exhausted one.
     """
-    from services.recording_ingest import DETAIL_QUEUED, RESUMABLE_AFTER_SECONDS, start_ingest
+    from services.recording_ingest import DETAIL_QUEUED, HEARTBEAT_STALE_SECONDS, start_ingest
 
     conn = get_db_connection()
     try:
@@ -434,7 +448,7 @@ def reprocess_recording(recording_id):
         if denied:
             return denied
         cur.execute(
-            "SELECT status, EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - last_modified_date) "
+            "SELECT status, EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC') - ingest_heartbeat_at) "
             "FROM recording WHERE recording_id = %s",
             (recording_id,),
         )
@@ -442,13 +456,15 @@ def reprocess_recording(recording_id):
         if not row:
             return jsonify({"success": False, "error": "Recording not found"}), 404
 
-        # Refuse to stack a second transcode on top of a live one; allow it once
-        # the first is old enough to be presumed dead.
-        if row[0] == "processing" and float(row[1] or 0) <= RESUMABLE_AFTER_SECONDS:
+        # Refuse to stack a second transcode on top of a live one. "Live" is now
+        # a heartbeat rather than a guess at how long a run should take, so this
+        # says yes within 90 seconds of a run dying instead of two hours.
+        if row[0] == "processing" and row[1] is not None and float(row[1]) <= HEARTBEAT_STALE_SECONDS:
             return jsonify({"success": False, "error": "That recording is already being processed"}), 409
 
         cur.execute(
-            "UPDATE recording SET status = 'processing', status_detail = %s WHERE recording_id = %s",
+            "UPDATE recording SET status = 'queued', status_detail = %s, "
+            "ingest_attempts = 0, ingest_heartbeat_at = NULL WHERE recording_id = %s",
             (DETAIL_QUEUED, recording_id),
         )
         conn.commit()

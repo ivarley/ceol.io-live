@@ -792,8 +792,14 @@ CREATE TABLE recording (
     -- half-built state is written down rather than guessed at from peaks IS NULL.
     -- While 'processing', duration_ms is the browser's provisional guess.
     status VARCHAR(20) NOT NULL DEFAULT 'ready'
-        CONSTRAINT ck_recording_status CHECK (status IN ('processing', 'ready', 'failed')),
+        CONSTRAINT ck_recording_status CHECK (status IN ('queued', 'processing', 'ready', 'failed')),
     status_detail TEXT,
+    -- Ingest liveness and retry budget (schema/054). The heartbeat is written
+    -- every 30s by whoever is running the ingest; older than 90s means that run
+    -- died and the row can be claimed again. Same mechanism as
+    -- tune_merge_scan.heartbeat_at (spec 031).
+    ingest_heartbeat_at TIMESTAMPTZ,
+    ingest_attempts SMALLINT NOT NULL DEFAULT 0,
     notes TEXT,
     created_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     last_modified_date TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -803,7 +809,8 @@ CREATE TABLE recording (
 
 CREATE INDEX idx_recording_session_instance_id ON recording(session_instance_id);
 CREATE INDEX idx_recording_person_id ON recording(person_id) WHERE person_id IS NOT NULL;
-CREATE INDEX idx_recording_status ON recording(status) WHERE status <> 'ready';
+CREATE INDEX idx_recording_pending_ingest ON recording(status, ingest_heartbeat_at)
+    WHERE status IN ('queued', 'processing');
 
 -- At most one clock anchor per instance.
 CREATE UNIQUE INDEX uk_recording_clock_anchor

@@ -192,14 +192,36 @@ A failure records the stage it died on as well as the error
 the failing circle red and is most of the diagnosis on its own: a Download
 failure and a Proxy failure point at completely different problems.
 
-A thread rather than a job queue, deliberately: there is no worker dyno and no
-broker, and this fires a few times a week. What that costs is written down
-instead of hidden — a deploy mid-ingest strands the row in `processing`, so the
-status endpoint reports `stalled` once it has been quiet longer than any real
-run takes, and the list page offers Retry. Ingest is idempotent, and the proxy
-lands on a key derived from the master's, so retrying replaces rather than
-accumulates. Only one ingest runs at a time; two three-hour transcodes at once
-on a small dyno is how you meet the OOM killer.
+**You can close the tab.** Ingest runs on the server, so walking away never
+stopped the work — what stopped it was the dyno. Render's free tier idles a web
+service out after ~15 minutes without traffic, and the upload page's own poll was
+the only thing keeping it awake, so leaving a long file could put the dyno to
+sleep mid-transcode and leave the row saying `processing` while nothing was.
+
+Three things fix that (schema/054), and they are lifted from the spec-031 merge
+scan rather than invented — one mechanism in the codebase for "long job, thread
+plus cron, might get killed":
+
+- **A heartbeat, not an inference.** The running ingest refreshes
+  `ingest_heartbeat_at` every 30s. Liveness used to be read off
+  `last_modified_date`, which only moves at stage boundaries — Waveform and Proxy
+  each run for minutes — so "presumed dead" had to be two hours or a live run
+  would be reaped. With a real heartbeat it is 90 seconds.
+- **A claim, not a check-then-act.** `claim_recording_for_ingest` is one
+  conditional UPDATE, so the web thread and the cron cannot both start the same
+  transcode however their timing lines up.
+- **A sweeper.** `jobs/process_pending_recordings.py` runs every ten minutes,
+  claims anything `queued` or abandoned, and finishes it. It needs the `AWS_*`
+  variables, unlike the other cron jobs.
+
+The thread is now the fast path rather than the guarantee, and rows are created
+`queued` so a dyno that dies before the thread starts loses nothing. Ingest is
+idempotent and the proxy lands on a key derived from the master's, so a resumed
+run replaces rather than accumulates. `ingest_attempts` caps automatic retries at
+3, because a file ffmpeg genuinely cannot read would otherwise be retried every
+ten minutes forever; a clean failure short-circuits that immediately, and an
+explicit Retry resets the budget. Only one ingest runs at a time per process; two
+three-hour transcodes at once on a small dyno is how you meet the OOM killer.
 
 **ffmpeg on the server.** The whole pipeline is ffmpeg, and Render's native
 Python runtime has no Dockerfile and no apt step, so there is none. It comes

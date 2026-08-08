@@ -108,6 +108,43 @@ services:
       - key: PGPORT
         value: "5432"
 
+  # Unfinished recording ingests (spec 050). Uploading starts a thread on the web
+  # dyno; this is what makes it safe to close the tab. The free tier idles a web
+  # service out after ~15 minutes without traffic, so a long transcode can be
+  # killed halfway with nobody watching -- this picks those up and finishes them.
+  #
+  # NOTE: unlike the other cron jobs, this one needs the AWS_* variables. Without
+  # object storage it can download nothing and every sweep no-ops (it says so in
+  # the log and exits non-zero rather than pretending to work).
+  - type: cron
+    name: ceol-io-process-recordings
+    env: python
+    schedule: "*/10 * * * *"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python3 jobs/process_pending_recordings.py"
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: PGHOST
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGPORT
+        value: "5432"
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_S3_REGION
+        sync: false
+
   - type: web
     name: abc-renderer
     runtime: node

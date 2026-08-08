@@ -26,12 +26,17 @@
   // Upload form
   let file = $state(null)
   let label = $state('')
+  // `uploading` covers only the part that genuinely needs this tab open: the
+  // bytes going to S3. Once they have landed the work is the server's, and the
+  // form comes back so another file can follow it.
   let uploading = $state(false)
   let progress = $state(0)
   let stage = $state('')
   let steps = $state([])
   let stepAt = $state(null)
   let stepStatus = $state('processing')
+  let handedOff = $state(false)      // uploaded; processing continues without us
+  let watching = $state(null)        // recording_id being polled, purely for show
 
   let pollTimer = null
   onDestroy(() => clearTimeout(pollTimer))
@@ -72,6 +77,7 @@
 
   function pickFile(event) {
     error = ''
+    handedOff = false
     file = event.target.files?.[0] || null
   }
 
@@ -97,25 +103,24 @@
     })
   }
 
+  // Watching is now optional. Ingest runs on the server and a ten-minute cron
+  // finishes anything a sleeping dyno or a deploy interrupted, so this poll only
+  // keeps the list fresh for someone who happens to still be looking — nothing
+  // depends on it, and closing the modal costs nothing.
   async function pollIngest(recordingId) {
     const res = await fetch(`/api/recordings/${recordingId}/status`)
     const data = await res.json()
-    if (!data.success) throw new Error(data.error || 'Lost track of that recording')
+    if (!data.success) return   // gone, or no longer ours; the list will say so
     steps = data.steps || []
     stepAt = data.step
     stepStatus = data.status
-    if (data.status === 'ready') {
-      stage = ''
-      uploading = false
-      file = null
-      label = ''
+    if (data.status === 'ready' || data.status === 'failed') {
+      watching = null
       await load()
       return
     }
-    if (data.status === 'failed') throw new Error(data.status_detail || 'Processing failed')
-    if (data.stalled) throw new Error('Processing stopped partway — try again from this list.')
     stage = data.status_detail || 'working'
-    pollTimer = setTimeout(() => pollIngest(recordingId).catch(fail), 3000)
+    pollTimer = setTimeout(() => pollIngest(recordingId).catch(() => {}), 3000)
   }
 
   function fail(e) {
@@ -177,9 +182,17 @@
       const created = await createRes.json()
       if (!createRes.ok || !created.success) throw new Error(created.error || 'Could not register the recording')
 
+      // Handed off. Everything after this point happens on the server whether or
+      // not this tab exists, so give the form back rather than holding someone
+      // hostage to a transcode.
+      uploading = false
+      handedOff = true
+      file = null
+      label = ''
+      progress = 0
+      watching = created.recording_id
       await load()               // the new row shows straight away, mid-ingest
-      stage = 'Processing…'
-      await pollIngest(created.recording_id)
+      pollIngest(created.recording_id).catch(() => {})
     } catch (e) {
       fail(e)
     }
@@ -243,9 +256,21 @@
           {:else if r.status === 'failed'}
             <span class="rec-failed">Processing failed — {r.status_detail || 'no detail recorded'}</span>
           {:else}
-            <span class="rec-working">Processing… {r.status_detail || ''}</span>
+            <span class="rec-working">{r.status_detail || 'Processing…'}</span>
           {/if}
         </div>
+        {#if r.status !== 'ready' && watching === r.recording_id && steps.length && stepAt !== null}
+          <!-- Stages for the one being watched right now. Not fetched for every
+               row: the list would then be N status calls a tick, and a row you
+               are not looking at only needs to say that it is working. -->
+          <ol class="rec-steps">
+            {#each steps as _, i}
+              <li class="rec-step {i < stepAt ? 'done' : i > stepAt ? 'todo' : (stepStatus === 'failed' ? 'failed' : 'current')}">
+                <span class="rec-dot"></span>
+              </li>
+            {/each}
+          </ol>
+        {/if}
         <div class="rec-actions">
           {#if r.status === 'ready'}
             <a class="hx-act" href={`/admin/recordings/${r.recording_id}/segment`}>Add timestamps</a>
@@ -262,18 +287,16 @@
     <!-- No session or date field: this modal belongs to one log, which is the
          whole reason it exists separately from the admin page. -->
     {#if uploading}
+      <!-- The only part that needs this tab: the bytes going to S3. -->
       <div class="rec-progress"><div class="rec-bar" style={`width:${progress}%`}></div></div>
-      {#if steps.length && stepAt !== null}
-        <ol class="rec-steps">
-          {#each steps as s, i}
-            <li class="rec-step {i < stepAt ? 'done' : i > stepAt ? 'todo' : (stepStatus === 'failed' ? 'failed' : 'current')}">
-              <span class="rec-dot"></span>
-            </li>
-          {/each}
-        </ol>
-      {/if}
       <p class="rec-stage">{stage}</p>
     {:else}
+      {#if handedOff}
+        <p class="rec-handoff">
+          Uploaded. Processing carries on in the background — you can close this
+          and come back whenever.
+        </p>
+      {/if}
       <input type="file" accept=".mp3,.m4a,.mp4,.aac,.wav,.ogg,.opus,.flac,.webm,audio/*" onchange={pickFile} />
       {#if file}
         <input class="rec-label" type="text" placeholder="Label (optional)" bind:value={label} />
@@ -327,10 +350,15 @@
   .rec-progress { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
   .rec-bar { height: 100%; background: var(--accent); transition: width 0.2s ease; }
   .rec-stage { font-size: 12px; color: var(--muted); margin: 0; }
+  .rec-handoff {
+    font-size: 12px;
+    color: var(--accent);
+    margin: 0;
+  }
 
   /* Same stage model as the admin page, dots only — the sentence below says
      which stage, and a modal this narrow has no room for six labels. */
-  .rec-steps { display: flex; list-style: none; margin: 0; padding: 0; }
+  .rec-steps { display: flex; list-style: none; margin: 4px 0 0; padding: 0; max-width: 10rem; }
   .rec-step { flex: 1 1 0; position: relative; }
   .rec-step::before {
     content: "";

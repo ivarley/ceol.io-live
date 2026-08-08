@@ -13,6 +13,26 @@ This directory contains scheduled job scripts for the application.
 
 **Do not modify this file for testing.** Use `test_active_sessions.py` instead.
 
+### process_pending_recordings.py
+**Production cron job** that runs every 10 minutes to finish recording ingests
+nobody is working on (spec 050).
+
+Uploading audio starts a background thread on the web dyno; this is the safety
+net that makes it safe to close the tab. The free tier idles a web service out
+after ~15 minutes without traffic, so a long transcode can be killed halfway with
+nobody watching. This claims any recording that is `queued`, or `processing` with
+a heartbeat older than 90 seconds, and finishes it here instead.
+
+- Runs the ingest **synchronously** — in a cron process the work is the point.
+- Takes at most 2 per run, so one long file can't eat a whole window.
+- Gives up after 3 attempts and marks the row `failed`, so an unreadable file
+  fails visibly instead of being retried forever. An explicit Retry in the UI
+  resets that budget.
+
+**Needs the `AWS_*` variables**, unlike the other jobs here: without object
+storage it can download nothing. It says so and exits non-zero rather than
+sweeping and quietly achieving nothing.
+
 ### test_active_sessions.py
 **Development testing wrapper** for the active session cron job.
 
