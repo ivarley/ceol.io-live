@@ -89,6 +89,51 @@ describe('playbackStep', () => {
       idx: 1, seekMs: null, done: false,
     })
   })
+
+  describe('repeat one', () => {
+    it('loops back to the same tune instead of advancing', () => {
+      expect(playbackStep([1, 2, 3], 0, 129990, contiguous, { repeatOne: true })).toEqual({
+        idx: 0, seekMs: 10000, done: false,
+      })
+    })
+
+    it('loops the LAST tune of a queue rather than ending it', () => {
+      expect(playbackStep([1, 2, 3], 2, 600000, contiguous, { repeatOne: true })).toEqual({
+        idx: 2, seekMs: 250000, done: false,
+      })
+    })
+
+    it('does nothing mid-tune', () => {
+      expect(playbackStep([1, 2, 3], 0, 60000, contiguous, { repeatOne: true })).toEqual({
+        idx: 0, seekMs: null, done: false,
+      })
+    })
+
+    it('wins over auto-continue — "repeat this" is the more specific instruction', () => {
+      expect(playbackStep([1, 2, 3], 0, 129990, contiguous, {
+        repeatOne: true, autoContinue: true,
+      }).idx).toBe(0)
+    })
+  })
+
+  describe('auto-continue off', () => {
+    it('stops at the end of the tune instead of running into the next', () => {
+      expect(playbackStep([1, 2, 3], 0, 129990, contiguous, { autoContinue: false })).toEqual({
+        idx: 0, seekMs: null, done: true,
+      })
+    })
+
+    it('still leaves the tune itself alone until it ends', () => {
+      expect(playbackStep([1, 2, 3], 0, 60000, contiguous, { autoContinue: false })).toEqual({
+        idx: 0, seekMs: null, done: false,
+      })
+    })
+  })
+
+  it('defaults to the pre-toggle behaviour when given no options', () => {
+    // The toggles were added after the fact; omitting them must keep advancing.
+    expect(playbackStep([1, 2, 3], 0, 129990, contiguous).idx).toBe(1)
+  })
 })
 
 describe('formatClock', () => {

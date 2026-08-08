@@ -317,6 +317,44 @@ def transcode_for_streaming(src_path, dest_path, bitrate=STREAM_BITRATE, sample_
     return dest_path
 
 
+def slice_segment(source, start_ms, end_ms, dest_path, timeout=120):
+    """Cut [start_ms, end_ms) out of `source` into `dest_path`.
+
+    `source` is normally a presigned S3 URL rather than a local file: ffmpeg
+    speaks HTTP and honours range requests, so putting `-ss` BEFORE `-i` makes it
+    seek to the cut point and pull only the minute or two it needs. Reading a
+    three-hour master end-to-end to take 90 seconds out of the middle would cost
+    hundreds of megabytes per download.
+
+    Stream copy (`-c copy`), never a re-encode: the cut is a handful of frames
+    from a file that is already compressed, and re-encoding would be both slower
+    and lossy on top of lossy. The price is that the cut lands on a frame
+    boundary rather than an exact millisecond -- tens of milliseconds out, which
+    is far below the accuracy of the marks themselves.
+    """
+    duration_ms = end_ms - start_ms
+    if duration_ms <= 0:
+        raise ValueError("end_ms must be after start_ms")
+    args = [
+        _ffmpeg_exe(), "-v", "error", "-y",
+        "-ss", f"{start_ms / 1000:.3f}",
+        "-i", source,
+        "-t", f"{duration_ms / 1000:.3f}",
+        "-vn",  # cover art would otherwise be copied through as a video stream
+        "-c", "copy",
+    ]
+    # An MP4-family output needs its index at the front to be seekable; the flag
+    # is meaningless (and rejected) on other muxers, so it is applied by target.
+    if dest_path.lower().endswith((".m4a", ".mp4", ".mov", ".m4b")):
+        args += ["-movflags", "+faststart"]
+    args.append(dest_path)
+
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg slice failed ({result.returncode}): {result.stderr[:500]}")
+    return dest_path
+
+
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d\d):(\d\d(?:\.\d+)?)")
 _AUDIO_STREAM_RE = re.compile(r"Stream #\d+:\d+.*: Audio: .*")
 _SAMPLE_RATE_RE = re.compile(r"(\d+)\s*Hz")

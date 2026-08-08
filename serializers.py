@@ -2007,7 +2007,7 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
     cur.execute(
         """
         SELECT r.recording_id, r.label, r.duration_ms, r.storage_key, r.mime_type,
-               r.stream_key, r.stream_mime_type,
+               r.file_size_bytes, r.stream_key, r.stream_mime_type, r.stream_size_bytes,
                (SELECT count(*) FROM recording_tune_segment rts
                  WHERE rts.recording_id = r.recording_id) AS segment_count
         FROM recording r
@@ -2026,19 +2026,46 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
             "segments": [],
         }
 
-    # The PROXY, always, and only the proxy. This is listening, not corpus work:
-    # 32kbps mono is indistinguishable for "what was that tune?", and at a tenth
-    # the bytes it makes a mid-set seek on a phone instant instead of a stall.
-    # The master stays behind the segmenter, where the fidelity is the point.
-    audio_url = None
+    # Both encodes, proxy FIRST -- the page opens on it, because this is listening
+    # rather than corpus work: 32kbps mono is indistinguishable for "what was that
+    # tune?" and at a fraction of the bytes it makes a mid-set seek on a phone
+    # instant instead of a stall. The master rides along as the HD option for
+    # someone on a connection that can take it.
+    #
+    # Both go down in ONE payload rather than the page re-asking when HD is
+    # picked: presigning is local HMAC, so the second URL is free, and having it
+    # in hand is what lets the switch keep the listener's place instead of
+    # stalling on a round trip mid-tune.
+    #
+    # `size_bytes` is not decoration -- it is the only honest basis the listener
+    # has for deciding whether HD is a good idea on the connection they're on.
+    audio_sources = []
     audio_error = None
-    key = row["stream_key"] or row["storage_key"]
-    mime = (row["stream_mime_type"] if row["stream_key"] else row["mime_type"]) or "audio/mp4"
     try:
         from recording import generate_presigned_url
 
-        audio_url = generate_presigned_url(key)
+        if row["stream_key"]:
+            audio_sources.append(
+                {
+                    "id": "proxy",
+                    "url": generate_presigned_url(row["stream_key"]),
+                    "mime_type": row["stream_mime_type"] or "audio/mp4",
+                    "size_bytes": int(row["stream_size_bytes"]) if row["stream_size_bytes"] else None,
+                }
+            )
+        # Always present: the HD option when a proxy exists, and the only thing
+        # there is to play when one doesn't (ingest predating schema/051, or a
+        # transcode that failed).
+        audio_sources.append(
+            {
+                "id": "master",
+                "url": generate_presigned_url(row["storage_key"]),
+                "mime_type": row["mime_type"] or "audio/mp4",
+                "size_bytes": int(row["file_size_bytes"]) if row["file_size_bytes"] else None,
+            }
+        )
     except Exception as exc:  # object store misconfigured — the page says so
+        audio_sources = []
         audio_error = str(exc)
 
     cur.execute(
@@ -2072,9 +2099,8 @@ def build_instance_audio_payload(conn, session_instance_id: int) -> Dict[str, An
             "recording_id": row["recording_id"],
             "label": row["label"],
             "duration_ms": int(row["duration_ms"]),
-            "audio_url": audio_url,
-            "mime_type": mime,
-            "is_proxy": bool(row["stream_key"]),
+            # Ordered: the first entry is the one the page opens on.
+            "audio_sources": audio_sources,
             "audio_error": audio_error,
         },
         "segments": segments,

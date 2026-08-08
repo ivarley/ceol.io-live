@@ -166,14 +166,55 @@ def test_an_implicit_end_stays_null_on_the_wire(client, playback_world):
     assert data["segments"][1]["end_ms"] is None
 
 
-def test_playback_gets_the_proxy_not_the_master(client, playback_world):
-    """32kbps mono is indistinguishable for 'what was that tune?' and a tenth the
-    bytes. The master stays behind the segmenter, where fidelity is the point."""
+def test_playback_opens_on_the_proxy_with_the_master_behind_it(client, playback_world):
+    """Order is the contract: the page plays audio_sources[0]. The proxy leads
+    because 32kbps mono is indistinguishable for 'what was that tune?' at a
+    fraction of the bytes; the master rides along as the HD option."""
     with as_the_grantee(client):
         rec = _fetch(client).get_json()["recording"]
-    assert "proxy.m4a" in rec["audio_url"]
-    assert "master.wav" not in rec["audio_url"]
-    assert rec["is_proxy"] is True
+    assert [s["id"] for s in rec["audio_sources"]] == ["proxy", "master"]
+    assert "proxy.m4a" in rec["audio_sources"][0]["url"]
+    assert "master.wav" in rec["audio_sources"][1]["url"]
+
+
+def test_both_encodes_are_signed_in_one_payload(client, playback_world):
+    """So switching to HD keeps the listener's place instead of stalling on a
+    round trip mid-tune. Presigning is local HMAC — the second URL is free."""
+    with as_the_grantee(client):
+        rec = _fetch(client).get_json()["recording"]
+    assert all(s["url"] for s in rec["audio_sources"])
+
+
+def test_sizes_ride_along_so_hd_is_an_informed_choice(client, playback_world):
+    """The size is the only honest basis a listener has for deciding whether HD
+    is a good idea on the connection they're on, so the button can show it."""
+    conn, cur = playback_world
+    cur.execute(
+        "UPDATE recording SET file_size_bytes = 348303266, stream_size_bytes = 44716235 "
+        "WHERE recording_id = %s",
+        (PB_RECORDING,),
+    )
+    conn.commit()
+    with as_the_grantee(client):
+        sources = _fetch(client).get_json()["recording"]["audio_sources"]
+    assert {s["id"]: s["size_bytes"] for s in sources} == {
+        "proxy": 44716235,
+        "master": 348303266,
+    }
+
+
+def test_no_proxy_means_the_master_is_the_only_source(client, playback_world):
+    """An ingest predating schema/051, or a transcode that failed. The master is
+    all there is, and the page must not offer an 'HD' switch to the same file."""
+    conn, cur = playback_world
+    cur.execute(
+        "UPDATE recording SET stream_key = NULL, stream_mime_type = NULL WHERE recording_id = %s",
+        (PB_RECORDING,),
+    )
+    conn.commit()
+    with as_the_grantee(client):
+        sources = _fetch(client).get_json()["recording"]["audio_sources"]
+    assert [s["id"] for s in sources] == ["master"]
 
 
 def test_the_most_segmented_recording_wins(client, playback_world):
@@ -230,6 +271,98 @@ def test_a_tune_deleted_from_the_log_drops_out(client, playback_world):
     with as_the_grantee(client):
         segments = _fetch(client).get_json()["segments"]
     assert [s["session_instance_tune_id"] for s in segments] == [PB_TUNE_BASE + 1]
+
+
+# --------------------------------------------------------------------------- #
+# downloading one tune
+# --------------------------------------------------------------------------- #
+
+
+def _dl(client, sit_id, recording_id=PB_RECORDING, source=None):
+    """GET the download with S3 presigning stubbed.
+
+    `source` lets a test hand ffmpeg a LOCAL path instead of a URL — ffmpeg
+    doesn't care which it gets, so the cut can be exercised for real without
+    touching the network.
+    """
+    url = source or "https://s3.test/master.wav"
+    with patch("recording.generate_presigned_url", return_value=url):
+        return client.get(f"/api/recordings/{recording_id}/segments/{sit_id}/download")
+
+
+def test_download_cuts_the_tune_out_for_real(client, playback_world, tmp_path):
+    """End to end through ffmpeg: a 4-minute tone in, one tune's worth out.
+
+    The segment is 10s->130s, so the cut must be ~120s — not the whole file.
+    """
+    import subprocess
+
+    from recording import _ffmpeg_exe, probe_audio
+
+    src = tmp_path / "master.wav"
+    subprocess.run(
+        [_ffmpeg_exe(), "-v", "error", "-y", "-f", "lavfi",
+         "-i", "sine=frequency=440:sample_rate=22050:duration=240", str(src)],
+        check=True,
+    )
+    with as_the_grantee(client):
+        resp = _dl(client, PB_TUNE_BASE, source=str(src))
+    assert resp.status_code == 200
+
+    out = tmp_path / "out.wav"
+    out.write_bytes(resp.data)
+    # ~120s out of a 240s source: proof it cut rather than passing the file through.
+    assert abs(probe_audio(str(out))["duration_ms"] - 120000) < 1500
+
+
+def test_download_uses_the_resolved_end_for_an_implicit_segment(client, playback_world):
+    """Tune 2 has end_ms NULL, so it must be cut to where playback would stop —
+    the recording's end (600000), since nothing is placed after it."""
+    captured = {}
+
+    def fake_slice(source, start_ms, end_ms, dest_path, **kw):
+        captured.update(start=start_ms, end=end_ms)
+        open(dest_path, "wb").write(b"RIFFfake")
+        return dest_path
+
+    with as_the_grantee(client), patch("recording.slice_segment", side_effect=fake_slice):
+        resp = _dl(client, PB_TUNE_BASE + 1)
+    assert resp.status_code == 200
+    assert captured == {"start": 150000, "end": 600000}
+
+
+def test_download_is_named_for_the_tune_and_the_night(client, playback_world):
+    with as_the_grantee(client), patch(
+        "recording.slice_segment",
+        side_effect=lambda s, a, b, dest, **kw: (open(dest, "wb").write(b"x"), dest)[1],
+    ):
+        resp = _dl(client, PB_TUNE_BASE)
+    disposition = resp.headers["Content-Disposition"]
+    assert "attachment" in disposition
+    assert "Playback Tune 0 (2026-07-01).wav" in disposition
+
+
+def test_download_cuts_from_the_master_not_the_proxy(client, playback_world):
+    """A file someone keeps shouldn't be the 32kbps mono playback encode."""
+    with as_the_grantee(client), patch(
+        "recording.generate_presigned_url", return_value="https://s3.test/x.wav"
+    ) as presign, patch(
+        "recording.slice_segment",
+        side_effect=lambda s, a, b, dest, **kw: (open(dest, "wb").write(b"x"), dest)[1],
+    ):
+        client.get(f"/api/recordings/{PB_RECORDING}/segments/{PB_TUNE_BASE}/download")
+    assert presign.call_args[0][0] == "recordings/pb/master.wav"
+
+
+def test_download_404s_for_a_tune_with_no_segment(client, playback_world):
+    with as_the_grantee(client):
+        assert _dl(client, PB_TUNE_BASE + 2).status_code == 404
+
+
+def test_download_takes_the_same_grant_as_everything_else(client, playback_world):
+    assert client.get(
+        f"/api/recordings/{PB_RECORDING}/segments/{PB_TUNE_BASE}/download"
+    ).status_code == 401
 
 
 # --------------------------------------------------------------------------- #

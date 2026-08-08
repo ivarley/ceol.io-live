@@ -70,19 +70,34 @@ export const CONTIGUOUS_MS = 200
  *
  * The queue is session_instance_tune_ids in play order. Returns the index that
  * should now be playing, the position to seek to (null = let it run on), and
- * whether the queue is finished. Pure, so the awkward part -- skipping the dead
- * air between an explicit end and the next tune's start -- is testable without
- * an <audio> element.
+ * whether the queue is finished. Pure, so the awkward parts -- skipping the dead
+ * air between an explicit end and the next tune's start, and the two transport
+ * modes -- are testable without an <audio> element.
+ *
+ * Options:
+ *   repeatOne    loop the current tune instead of moving on. Wins over
+ *                autoContinue: "repeat this" is the more specific instruction.
+ *   autoContinue false stops at the end of the current tune rather than running
+ *                into the next one. Defaults true -- the behaviour before there
+ *                was a toggle.
  */
 export function playbackStep(queue, idx, nowMs, resolved, opts = {}) {
   const lead = opts.leadMs ?? HANDOVER_LEAD_MS
   const contiguous = opts.contiguousMs ?? CONTIGUOUS_MS
+  const repeatOne = opts.repeatOne ?? false
+  const autoContinue = opts.autoContinue ?? true
   const cur = resolved.get(queue[idx])
   if (!cur) return { idx, seekMs: null, done: true }
 
   // Still inside this tune. Also covers a playhead that has somehow run BEFORE
   // the current tune (a user scrub), which is not this function's business.
   if (nowMs < cur.endMs - lead) return { idx, seekMs: null, done: false }
+
+  // Loop: back to this tune's own start, never "done". The caller must ignore
+  // steps while the element is still seeking, or the stale playhead re-triggers
+  // this branch for the frame or two the seek takes to land.
+  if (repeatOne) return { idx, seekMs: cur.startMs, done: false }
+  if (!autoContinue) return { idx, seekMs: null, done: true }
 
   const nextIdx = idx + 1
   if (nextIdx >= queue.length) return { idx, seekMs: null, done: true }

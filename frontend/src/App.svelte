@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy, untrack } from 'svelte'
+  import { onMount, onDestroy, untrack, tick } from 'svelte'
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
@@ -811,14 +811,44 @@
   let audioErr = $state(null)
   let rafId = null
   let urlRetried = false
+  // Transport panel (the playbar expanded). All of this is session-only by
+  // design -- these are "for this listen" choices, not settings, and persisting
+  // them would mean a page opened tomorrow silently repeats one tune forever.
+  let playerOpen = $state(false)
+  let repeatOne = $state(false)
+  let autoContinue = $state(true)
+  // Dragging the scrubber: the rAF loop must not fight the thumb, so while a
+  // drag is live the slider shows scrubMs and the playhead is left alone.
+  let scrubbing = $state(false)
+  let scrubMs = $state(0)
+
+  // Which encode is playing. Session-only like the other panel toggles: a page
+  // opened tomorrow starts on the cheap one again, which is the safe default to
+  // land on when you don't yet know what connection you're on.
+  let audioSourceId = $state('proxy')
+  const audioSources = $derived(audioRec?.audio_sources || [])
+  const currentSource = $derived(
+    audioSources.find((s) => s.id === audioSourceId) || audioSources[0] || null,
+  )
+  // Only worth offering when there are genuinely two things to choose between --
+  // with no proxy the master IS the only encode, and an "HD" button that just
+  // reloads the same file would be a lie.
+  const canSwitchHd = $derived(audioSources.length > 1)
+  const hdOn = $derived(currentSource?.id === 'master')
 
   const playingId = $derived(playQ ? playQ.ids[playQ.idx] : null)
+  const playingSeg = $derived(playingId != null ? resolved.get(playingId) : null)
+  const tuneLenMs = $derived(playingSeg ? playingSeg.endMs - playingSeg.startMs : 0)
+  const scrubValue = $derived(scrubbing ? scrubMs : playhead)
+  // "Previous" restarts the current tune when you're already into it -- the
+  // transport convention, and it keeps the button useful on the first tune.
+  const RESTART_BEFORE_PREV_MS = 3000
 
   async function loadAudio() {
     if (!canManageRecordings) return
     try {
       const data = await instanceAudio(config)
-      if (!data?.recording?.audio_url) return
+      if (!data?.recording?.audio_sources?.length) return
       audioRec = data.recording
       resolved = new SvelteMap(
         resolveSegments(
@@ -843,12 +873,28 @@
   // gap to the next set is the talking, the tuning and the pint — skipping it would
   // splice two unrelated sets together, and playing it is the one thing we said we
   // wouldn't do.
+  /**
+   * play(), distinguishing the two very different reasons it rejects.
+   *
+   * An AbortError means a load() or pause() landed on top of a play() that was
+   * still pending — routine every time the HD switch reloads the element, and no
+   * reason to tell anyone or to tear the player down. Anything else (the autoplay
+   * policy refusing, a decode failure) is real and the listener needs it said.
+   */
+  function playAudio(onFail) {
+    audioEl?.play().catch((e) => {
+      if (e?.name === 'AbortError') return
+      audioErr = String(e?.message || e)
+      onFail?.()
+    })
+  }
+
   function startQueue(ids) {
     if (!audioEl || !ids.length) return
     audioErr = null
     playQ = { ids, idx: 0 }
     seekToCurrent()
-    audioEl.play().catch((e) => { audioErr = String(e?.message || e); playQ = null })
+    playAudio(() => (playQ = null))
   }
 
   function seekToCurrent() {
@@ -868,28 +914,167 @@
     audioEl?.pause()
     playQ = null
     playhead = 0
+    playerOpen = false
+    scrubbing = false
+  }
+
+  // ---- transport ----
+  function jumpTo(idx) {
+    if (!playQ || idx < 0 || idx >= playQ.ids.length) return
+    playQ = { ...playQ, idx }
+    seekToCurrent()
+  }
+
+  function nextTune() {
+    if (!playQ) return
+    if (playQ.idx + 1 >= playQ.ids.length) return stopPlayback()
+    jumpTo(playQ.idx + 1)
+  }
+
+  function prevTune() {
+    if (!playQ) return
+    // Past the first few seconds, or already at the head of the queue: restart
+    // this tune rather than doing nothing.
+    if (playhead > RESTART_BEFORE_PREV_MS || playQ.idx === 0) return seekToCurrent()
+    jumpTo(playQ.idx - 1)
+  }
+
+  function togglePlayPause() {
+    if (!audioEl) return
+    if (audioEl.paused) playAudio()
+    else audioEl.pause()
+  }
+
+  /**
+   * Switch encode without losing your place.
+   *
+   * Changing an <audio> element's src resets it to zero and stops playback, so
+   * position and play state are captured first and restored once the NEW source
+   * has metadata. The ordering below is load-bearing and matches the segmenter's
+   * switchSource(): subscribe to loadedmetadata BEFORE calling load(), because
+   * load() doesn't reset readyState synchronously — and writing currentTime on an
+   * element that has no metadata yet wedges the load outright (networkState stuck
+   * at LOADING, nothing ever buffers).
+   */
+  async function switchAudioSource(id) {
+    if (!audioEl || id === audioSourceId || !audioSources.some((s) => s.id === id)) return
+    const resumeAt = audioEl.currentTime
+    const wasPlaying = !audioEl.paused
+    audioSourceId = id
+    audioErr = null
+    await tick() // the src attribute has now been rewritten
+    audioEl.addEventListener(
+      'loadedmetadata',
+      () => {
+        audioEl.currentTime = resumeAt
+        if (wasPlaying) playAudio()
+      },
+      { once: true },
+    )
+    audioEl.load()
+  }
+
+  // Tunes whose slice is being cut server-side right now, so the row can spin.
+  const downloading = new SvelteSet()
+
+  /** Pull the server's filename out of Content-Disposition, RFC 5987 form first. */
+  function filenameFrom(disposition) {
+    if (!disposition) return null
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+    if (star) { try { return decodeURIComponent(star[1]) } catch { /* fall through */ } }
+    const plain = /filename="([^"]+)"/i.exec(disposition)
+    return plain ? plain[1] : null
+  }
+
+  /**
+   * Download one tune.
+   *
+   * Fetched rather than left to the browser's own download of the href, because
+   * cutting the slice takes a couple of seconds server-side and the row needs to
+   * say so. The cost is that the browser's native progress UI is out of the loop,
+   * which is why the spinner exists — and why the element stays an <a href>, so
+   * middle-click and "Save link as" still work the plain way.
+   */
+  async function downloadTune(r) {
+    const id = r.session_instance_tune_id
+    if (downloading.has(id) || !audioRec) return
+    downloading.add(id)
+    audioErr = null
+    try {
+      const res = await fetch(`/api/recordings/${audioRec.recording_id}/segments/${id}/download`, {
+        credentials: 'same-origin',
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null)
+        throw new Error(detail?.error || `Download failed (${res.status})`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filenameFrom(res.headers.get('Content-Disposition')) || `${r.name || 'tune'}.mp3`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      // Firefox needs the object URL to outlive the click; revoking immediately
+      // cancels the save it just started.
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    } catch (e) {
+      audioErr = String(e?.message || e)
+    } finally {
+      downloading.delete(id)
+    }
+  }
+
+  /** Bytes -> "43 MB" / "348 MB". The listener's only honest basis for judging HD. */
+  function formatBytes(n) {
+    if (!n) return null
+    const mb = n / 1e6
+    return mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`
+  }
+
+  // Drag: `input` fires continuously, `change` on release. Seeking only on
+  // release keeps a drag across a 40-minute recording from firing a range
+  // request per pixel; the label still tracks the thumb live.
+  function onScrubInput(e) {
+    scrubbing = true
+    scrubMs = Number(e.currentTarget.value)
+  }
+
+  function onScrubCommit(e) {
+    const ms = Number(e.currentTarget.value)
+    scrubbing = false
+    if (!audioEl || !playingSeg) return
+    playhead = ms
+    audioEl.currentTime = (playingSeg.startMs + ms) / 1000
   }
 
   // One frame of playback: advance the queue when the current tune ends, seeking
   // only across a real gap (playbackStep decides; it's pure and unit-tested).
-  function tick() {
+  function playTick() {
     rafId = null
     if (!playQ || !audioEl) return
-    const nowMs = audioEl.currentTime * 1000
-    const step = playbackStep(playQ.ids, playQ.idx, nowMs, resolved)
-    if (step.done) return stopPlayback()
-    if (step.idx !== playQ.idx) {
-      playQ = { ...playQ, idx: step.idx }
-      if (step.seekMs != null) audioEl.currentTime = step.seekMs / 1000
+    // A seek in flight means currentTime is still the OLD position. Acting on it
+    // would re-fire whichever branch issued the seek (repeat-one loops on itself
+    // this way), so wait for it to land.
+    if (audioEl.seeking) {
+      rafId = requestAnimationFrame(playTick)
+      return
     }
+    const nowMs = audioEl.currentTime * 1000
+    const step = playbackStep(playQ.ids, playQ.idx, nowMs, resolved, { repeatOne, autoContinue })
+    if (step.done) return stopPlayback()
+    if (step.idx !== playQ.idx) playQ = { ...playQ, idx: step.idx }
+    if (step.seekMs != null) audioEl.currentTime = step.seekMs / 1000
     const seg = resolved.get(playQ.ids[playQ.idx])
-    playhead = seg ? Math.max(0, nowMs - seg.startMs) : 0
-    rafId = requestAnimationFrame(tick)
+    // Mid-drag the thumb owns the readout; writing playhead here would yank it back.
+    if (!scrubbing) playhead = seg ? Math.max(0, nowMs - seg.startMs) : 0
+    rafId = requestAnimationFrame(playTick)
   }
 
   function onAudioPlay() {
     audioPaused = false
-    if (rafId == null) rafId = requestAnimationFrame(tick)
+    if (rafId == null) rafId = requestAnimationFrame(playTick)
   }
 
   function onAudioPause() {
@@ -3868,21 +4053,26 @@
     {#each displaySegments as seg, si (seg.tunes[0].session_instance_tune_id)}
       <div class="set">
         <button class="set-label" class:open={openTrayId === seg.tunes[0].session_instance_tune_id} onclick={(e) => { e.stopPropagation(); toggleTray(seg.tunes[0].session_instance_tune_id) }}>{setLabel(seg.tunes)}</button>
-        <!-- Play the whole set, from its first timestamped tune. Shown as soon as ANY
-             tune in the set has a mark, since a part-marked set still plays what's there. -->
-        {#if !selectMode && queueFor(seg.tunes).length}
-          {@const setPlaying = playQ && queueFor(seg.tunes).includes(playingId)}
-          <button
-            class="setplay-btn"
-            class:on={setPlaying}
-            title={setPlaying ? 'Stop' : 'Play this set'}
-            aria-label={setPlaying ? 'Stop' : 'Play this set'}
-            onclick={(e) => { e.stopPropagation(); setPlaying ? stopPlayback() : startQueue(queueFor(seg.tunes)) }}
-          >{setPlaying ? '■' : '▶'}</button>
-        {/if}
-        {#if trackStarters && !readOnly && setStarterName(seg)}
-          <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
-        {/if}
+        <!-- Both of these ride the card's top-right corner, so they share ONE
+             positioned row rather than each claiming the same coordinates. The ▶ is
+             last, keeping it in the very corner whether or not a starter is named. -->
+        <div class="set-topright">
+          {#if trackStarters && !readOnly && setStarterName(seg)}
+            <button class="starter-pill" class:flash={starterFlashId === seg.tunes[0].session_instance_tune_id} title="Started by {setStarterName(seg)}" onclick={(e) => { e.stopPropagation(); openTrayId = seg.tunes[0].session_instance_tune_id }}>▸ {setStarterName(seg)}</button>
+          {/if}
+          <!-- Play the whole set, from its first timestamped tune. Shown as soon as ANY
+               tune in the set has a mark, since a part-marked set still plays what's there. -->
+          {#if !selectMode && queueFor(seg.tunes).length}
+            {@const setPlaying = playQ && queueFor(seg.tunes).includes(playingId)}
+            <button
+              class="setplay-btn"
+              class:on={setPlaying}
+              title={setPlaying ? 'Stop' : 'Play this set'}
+              aria-label={setPlaying ? 'Stop' : 'Play this set'}
+              onclick={(e) => { e.stopPropagation(); setPlaying ? stopPlayback() : startQueue(queueFor(seg.tunes)) }}
+            >{setPlaying ? '■' : '▶'}</button>
+          {/if}
+        </div>
         <!-- The tray holds only people facts (starter, logger), so signed out it has
              nothing to show and never opens. -->
         {#if !readOnly && openTrayId === seg.tunes[0].session_instance_tune_id}
@@ -3971,6 +4161,34 @@
                   aria-label={playingId === r.session_instance_tune_id && !audioPaused ? 'Pause' : 'Play this tune'}
                   onclick={(e) => { e.stopPropagation(); toggleTune(seg.tunes, r.session_instance_tune_id) }}
                 >{playingId === r.session_instance_tune_id && !audioPaused ? '❚❚' : '▶'}</button>
+                <!-- Circular, because the glyph it replaced (⤓) carries its mass in the
+                     bar at the bottom and read as sitting lower than the ▶ beside it. A
+                     ring is symmetric about its own centre, so the two line up whatever
+                     the arrow inside is doing. The ring doubles as the spinner.
+                     Still an <a href>: the click is intercepted for the spinner, but
+                     middle-click and "Save link as" keep working the plain way. -->
+                {@const busy = downloading.has(r.session_instance_tune_id)}
+                <a
+                  class="dl-btn"
+                  class:busy
+                  href={`/api/recordings/${audioRec.recording_id}/segments/${r.session_instance_tune_id}/download`}
+                  title={busy ? 'Preparing the file…' : 'Download this tune'}
+                  aria-label={busy ? 'Preparing the file' : 'Download this tune'}
+                  aria-busy={busy}
+                  download
+                  onclick={(e) => { e.stopPropagation(); e.preventDefault(); downloadTune(r) }}
+                >
+                  <svg class="dl-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                    {#if busy}
+                      <!-- same ring, opened into an arc and spun; dasharray is a quarter
+                           of the r=9 circumference (~56.5) -->
+                      <circle class="dl-arc" cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="14 43" />
+                    {:else}
+                      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+                      <path d="M12 7.4 V14.8 M8.9 11.7 L12 14.8 L15.1 11.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                    {/if}
+                  </svg>
+                </a>
               {/if}
               {#if canEdit && !selectMode && r.tune_id}<button class="info-btn" title="Tune details" onclick={(e) => { e.stopPropagation(); openDrawer(r) }}>ⓘ</button>{/if}
               {#if canEdit && !selectMode && selectedId === r.session_instance_tune_id}
@@ -4090,10 +4308,10 @@
   <!-- One element for the whole page. preload="none" so opening a night with audio
        costs nothing until someone actually presses play; from then on S3 range
        requests make a mid-recording seek cheap. -->
-  {#if audioRec?.audio_url}
+  {#if currentSource}
     <audio
       bind:this={audioEl}
-      src={audioRec.audio_url}
+      src={currentSource.url}
       preload="none"
       onplay={onAudioPlay}
       onpause={onAudioPause}
@@ -4104,12 +4322,65 @@
 
   <div class="dock">
     {#if playQ}
-      {@const seg = resolved.get(playingId)}
-      <div class="playbar" transition:fly={{ y: 8, duration: 160 }}>
-        <button class="pb-toggle" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={() => (audioPaused ? audioEl?.play() : audioEl?.pause())}>{audioPaused ? '▶' : '❚❚'}</button>
-        <span class="pb-name">{byId.get(playingId)?.name || 'Playing'}</span>
-        <span class="pb-time">{formatClock(playhead)} / {formatClock(seg ? seg.endMs - seg.startMs : 0)}</span>
-        <button class="pb-stop" title="Stop" aria-label="Stop" onclick={stopPlayback}>×</button>
+      <!-- in:, NOT transition:. stopPlayback() collapses the panel and drops the
+           player in the same tick, so an OUTRO would be animating a container whose
+           height is changing underneath it — it never completes, and the dock is left
+           holding a dead `inert` panel. Nothing is lost: the entrance is the part with
+           anything to say, and dismissal is already an explicit tap. -->
+      <div class="player" class:open={playerOpen} in:fly={{ y: 8, duration: 160 }}>
+        {#if playerOpen}
+          <div class="pp-body">
+            <!-- The scrubber is scoped to THIS TUNE, not the whole recording: the
+                 recording is three hours long and the thing being listened to is
+                 ninety seconds of it, so a full-length bar would make the tune an
+                 unclickable sliver. -->
+            <input
+              class="pp-scrub"
+              type="range"
+              min="0"
+              max={Math.max(1, tuneLenMs)}
+              step="100"
+              value={scrubValue}
+              aria-label="Position within this tune"
+              oninput={onScrubInput}
+              onchange={onScrubCommit}
+            />
+            <div class="pp-times">
+              <span>{formatClock(scrubValue)}</span>
+              <span class="pp-pos">{playQ.idx + 1} of {playQ.ids.length}</span>
+              <span>−{formatClock(Math.max(0, tuneLenMs - scrubValue))}</span>
+            </div>
+            <div class="pp-transport">
+              <button class="pp-btn" title="Previous tune" aria-label="Previous tune" onclick={prevTune}>⏮</button>
+              <button class="pp-btn big" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
+              <button class="pp-btn" title="Next tune" aria-label="Next tune" disabled={playQ.idx + 1 >= playQ.ids.length} onclick={nextTune}>⏭</button>
+              <button class="pp-btn" title="Stop" aria-label="Stop" onclick={stopPlayback}>■</button>
+            </div>
+            <div class="pp-modes">
+              <button class="pp-mode" class:on={repeatOne} aria-pressed={repeatOne} onclick={() => (repeatOne = !repeatOne)}>Repeat 1</button>
+              <button class="pp-mode" class:on={autoContinue} aria-pressed={autoContinue} onclick={() => (autoContinue = !autoContinue)}>Auto-continue</button>
+              {#if canSwitchHd}
+                {@const hdSize = formatBytes(audioSources.find((s) => s.id === 'master')?.size_bytes)}
+                <button
+                  class="pp-mode"
+                  class:on={hdOn}
+                  aria-pressed={hdOn}
+                  title={hdOn ? 'Back to the smaller stream' : `Play the full-quality file${hdSize ? ` (${hdSize})` : ''} — best on a fast connection`}
+                  onclick={() => switchAudioSource(hdOn ? 'proxy' : 'master')}
+                >HD{#if hdSize && !hdOn}<span class="pp-mode-sub">{hdSize}</span>{/if}</button>
+              {/if}
+            </div>
+          </div>
+        {/if}
+        <div class="playbar">
+          <button class="pb-toggle" title={audioPaused ? 'Play' : 'Pause'} aria-label={audioPaused ? 'Play' : 'Pause'} onclick={togglePlayPause}>{audioPaused ? '▶' : '❚❚'}</button>
+          <button class="pb-open" aria-expanded={playerOpen} title={playerOpen ? 'Hide controls' : 'Show controls'} onclick={() => (playerOpen = !playerOpen)}>
+            <span class="pb-name">{byId.get(playingId)?.name || 'Playing'}</span>
+            <span class="pb-time">{formatClock(playhead)} / {formatClock(tuneLenMs)}</span>
+            <span class="pb-chev" aria-hidden="true">{playerOpen ? '⌄' : '⌃'}</span>
+          </button>
+          <button class="pb-stop" title="Stop" aria-label="Stop" onclick={stopPlayback}>×</button>
+        </div>
       </div>
     {/if}
     {#if audioErr}<div class="playbar err">{audioErr}</div>{/if}

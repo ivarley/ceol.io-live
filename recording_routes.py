@@ -793,6 +793,82 @@ def get_instance_recordings(session_instance_id):
 
 
 @api_login_required
+def download_recording_segment(recording_id, session_instance_tune_id):
+    """GET /api/recordings/<id>/segments/<sit_id>/download — one tune, as a file.
+
+    The only place audio passes THROUGH Flask. Everything else in spec 050 is
+    browser-to-S3 by design, but a slice cannot be: a byte range out of an
+    encoded file is not a playable file, so something has to cut it, and the
+    browser can't (the bucket serves no CORS headers, and re-encoding in a tab to
+    save ninety seconds of audio is absurd). The cut is a stream copy from a
+    range-requested URL, so the cost is a couple of seconds and a couple of
+    megabytes, not the whole recording.
+
+    Cut from the MASTER, not the playback proxy. This is a file someone keeps —
+    to practise against, or to send to whoever else was in the room — and 32kbps
+    mono is a poor thing to be left holding. The proxy exists so playback starts
+    quickly, which is not a constraint here.
+
+    The end comes from recording_tune_segment_resolved, so a tune whose end was
+    left implicit is cut to exactly where playback would have stopped.
+    """
+    import os
+    import tempfile
+    from io import BytesIO
+
+    import psycopg2.extras
+    from flask import send_file
+
+    conn = get_db_connection()
+    try:
+        denied = _recording_gate(conn.cursor(), recording_id)
+        if denied:
+            return denied
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            """
+            SELECT v.display_name, v.start_ms, v.resolved_end_ms, v.storage_key, si.date
+            FROM recording_tune_segment_resolved v
+            JOIN recording r ON r.recording_id = v.recording_id
+            JOIN session_instance si ON si.session_instance_id = r.session_instance_id
+            WHERE v.recording_id = %s AND v.session_instance_tune_id = %s
+            """,
+            (recording_id, session_instance_tune_id),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return jsonify({"success": False, "error": "No segment for that tune"}), 404
+
+    suffix = os.path.splitext(row["storage_key"])[1].lower() or ".m4a"
+    mime = _UPLOAD_MIME_BY_EXTENSION.get(suffix, "application/octet-stream")
+    # "The Bank Of Turf (2025-03-27).mp3" — the tune, and which night it was.
+    # send_file does the RFC 5987 encoding, so accented tune names survive.
+    stem = (row["display_name"] or f"tune-{session_instance_tune_id}").strip()
+    stem = "".join(c for c in stem if c not in '\\/:*?"<>|').strip() or "tune"
+    date = row["date"].isoformat() if row["date"] else ""
+    download_name = f"{stem}{f' ({date})' if date else ''}{suffix}"
+
+    from recording import generate_presigned_url, slice_segment
+
+    try:
+        source = generate_presigned_url(row["storage_key"])
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, f"segment{suffix}")
+            slice_segment(source, int(row["start_ms"]), int(row["resolved_end_ms"]), dest)
+            with open(dest, "rb") as fh:
+                data = fh.read()
+    except Exception as exc:
+        # The temp dir is gone by now either way; read it into memory first so the
+        # response can outlive it.
+        return jsonify({"success": False, "error": f"Could not cut that tune: {exc}"}), 500
+
+    return send_file(BytesIO(data), mimetype=mime, as_attachment=True, download_name=download_name)
+
+
+@api_login_required
 def get_instance_audio(session_instance_id):
     """GET /api/session-instances/<id>/audio — playback for the instance page.
 

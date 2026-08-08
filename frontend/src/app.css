@@ -444,10 +444,20 @@ main {
 .starter-value:hover { border-color: var(--accent); color: var(--text); }
 .starter-value.open { border-color: var(--accent); color: var(--text); }
 /* right-aligned "started by" pill on the set card (mirrors the type label) */
-.starter-pill {
+/* The set card's top-right corner, shared. Both children used to be absolute at the
+   same top/right and simply drew on top of each other; the row positions them once
+   and they lay out side by side. max-width here (not on the pill) so a long starter
+   name is what gives way, never the ▶. */
+.set-topright {
   position: absolute; top: -10px; right: 12px;
+  display: flex; align-items: center; gap: 6px;
+  max-width: 70%;
+}
+.set-topright:empty { display: none; }
+.starter-pill {
+  min-width: 0; /* lets the flex row shrink it instead of overflowing the card */
   font: inherit; font-size: 11px; font-weight: 700;
-  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--bg); color: var(--accent);
   border: 1px solid var(--border); border-radius: 10px; padding: 1px 9px; cursor: pointer;
 }
@@ -539,6 +549,26 @@ main {
 }
 .play-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
 .play-btn.on { color: var(--accent); }
+/* download this one tune — quieter than ▶ until hovered, since it's the rarer of
+   the two things you'd want from a row */
+.dl-btn {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); line-height: 0;
+  padding: 3px 5px; border-radius: 5px;
+  text-decoration: none;
+}
+.dl-btn:hover { color: var(--accent); background: rgba(255, 255, 255, 0.06); }
+.dl-btn.busy { color: var(--accent); cursor: progress; }
+/* the icon is drawn on a symmetric 24x24 ring, so `display:block` (killing the
+   inline baseline gap) is all it takes to sit level with the ▶ next to it */
+.dl-icon { display: block; }
+.dl-arc { transform-origin: 50% 50%; animation: dl-spin 0.75s linear infinite; }
+@keyframes dl-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  /* no spin; the arc still reads as "not the resting icon" */
+  .dl-arc { animation: none; }
+}
 /* the tune being heard right now, tinted with the accent rather than the yellow
    used for the insertion point — playing and editing are different states and can
    be true of two different rows at once */
@@ -547,14 +577,10 @@ main {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 /* set-level ▶: a pill straddling the card's top border like .set-label, but at the
-   RIGHT end. In flow it would take a whole line of its own, because the type label
-   it reads as a sibling of is itself absolute (out of flow) — and anchoring it just
-   after that label would couple it to the label's variable width ("JIGS".."SLIDES").
-   Mirroring it across the card is stable and reads as a pair: type left, play right. */
+   RIGHT end — positioned by .set-topright, which it may share with the starter pill.
+   Mirroring the type label across the card reads as a pair: type left, play right. */
 .setplay-btn {
-  position: absolute;
-  top: -10px;
-  right: 12px;
+  flex: none;
   font: inherit;
   font-size: 10px;
   line-height: 1;
@@ -568,15 +594,20 @@ main {
 .setplay-btn:hover { color: var(--accent); border-color: var(--accent); }
 .setplay-btn.on { color: var(--accent); border-color: var(--accent); }
 
-/* now-playing strip: first thing in the dock, so it pushes the composer up rather
-   than floating over it */
-.playbar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px; margin-bottom: 8px;
+/* now-playing player: first thing in the dock, so it pushes the composer up
+   rather than floating over it. Collapsed it's the one-line .playbar; tapping
+   the name expands .pp-body ABOVE that line, so the bar itself never moves. */
+.player {
+  margin-bottom: 8px;
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 10px; font-size: 13px;
 }
-.playbar.err { color: var(--attention); justify-content: center; }
+.playbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; }
+/* the standalone error strip keeps the old flat look */
+.playbar.err {
+  color: var(--attention); justify-content: center; margin-bottom: 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
 .pb-toggle, .pb-stop {
   flex: none; font: inherit; cursor: pointer; line-height: 1;
   background: none; border: none; color: var(--text); padding: 4px 6px; border-radius: 6px;
@@ -584,8 +615,53 @@ main {
 .pb-toggle { color: var(--accent); font-size: 13px; }
 .pb-stop { color: var(--muted); font-size: 17px; }
 .pb-toggle:hover, .pb-stop:hover { background: rgba(255, 255, 255, 0.07); }
+/* the expand target: everything between the two end buttons is one big tap
+   area, so reaching the controls on a phone doesn't need a precise hit */
+.pb-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  font: inherit; text-align: left; cursor: pointer;
+  background: none; border: none; color: var(--text);
+  padding: 4px 2px; border-radius: 6px;
+}
+.pb-open:hover { background: rgba(255, 255, 255, 0.04); }
 .pb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pb-time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.pb-chev { flex: none; color: var(--muted); font-size: 11px; }
+
+/* ---- expanded transport ---- */
+.pp-body { padding: 12px 12px 4px; border-bottom: 1px solid var(--border); }
+.pp-scrub {
+  display: block; width: 100%; margin: 0; cursor: pointer;
+  accent-color: var(--accent); /* one line gets the thumb + fill in both engines */
+  background: transparent;
+}
+.pp-times {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 2px; color: var(--muted); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.pp-pos { letter-spacing: 0.04em; text-transform: uppercase; }
+.pp-transport { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; }
+.pp-btn {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  background: none; border: 1px solid transparent; color: var(--text);
+  padding: 8px 14px; border-radius: 8px;
+}
+.pp-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+.pp-btn:disabled { color: var(--muted); opacity: 0.4; cursor: default; }
+.pp-btn.big { color: var(--accent); font-size: 17px; border-color: var(--border); padding: 8px 22px; }
+.pp-modes { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+/* Session-only toggles, so they read as pressed state rather than saved settings. */
+.pp-mode {
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  padding: 6px 12px; border-radius: 14px;
+}
+.pp-mode:hover { color: var(--text); }
+.pp-mode.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+/* the download size on the HD button: quieter than the label, because it's the
+   caveat rather than the offer */
+.pp-mode-sub { margin-left: 5px; opacity: 0.65; font-size: 10px; font-weight: 400; }
 
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 8px; }
 .row-actions button {

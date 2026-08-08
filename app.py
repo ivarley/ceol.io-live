@@ -19,6 +19,7 @@ from recording_routes import (
     delete_recording_segment,
     get_instance_recordings,
     get_instance_audio,
+    download_recording_segment,
     export_recording_segments,
     create_recording_upload_url,
     create_recording,
@@ -1545,6 +1546,13 @@ app.add_url_rule(
     "/api/session-instances/<int:session_instance_id>/audio",
     "get_instance_audio",
     get_instance_audio,
+    methods=["GET"],
+)
+# One tune, cut out of the master as a file. The only audio that goes through Flask.
+app.add_url_rule(
+    "/api/recordings/<int:recording_id>/segments/<int:session_instance_tune_id>/download",
+    "download_recording_segment",
+    download_recording_segment,
     methods=["GET"],
 )
 
